@@ -1,0 +1,75 @@
+/****************************************************************************
+**
+** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Contact: http://www.qt-project.org/legal
+**
+** This file is part of the documentation of the Qt Toolkit.
+**
+** $QT_BEGIN_LICENSE:FDL$
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and Digia.  For licensing terms and
+** conditions see http://qt.digia.com/licensing.  For further information
+** use the contact form at http://qt.digia.com/contact-us.
+**
+** GNU Free Documentation License Usage
+** Alternatively, this file may be used under the terms of the GNU Free
+** Documentation License version 1.3 as published by the Free Software
+** Foundation and appearing in the file included in the packaging of
+** this file.  Please review the following information to ensure
+** the GNU Free Documentation License version 1.3 requirements
+** will be met: http://www.gnu.org/copyleft/fdl.html.
+** $QT_END_LICENSE$
+**
+****************************************************************************/
+
+/*!
+    \title Qt Quick Examples - Animation
+    \example animation
+    \brief This is a collection of QML Animation examples.
+    \image qml-animations-example.png
+    \ingroup qtquickexamples
+
+    This is a collection of small QML examples relating to animation. Each example is
+    a small QML file emphasizing a particular type or feature.
+
+    ColorAnimation demonstrates using a color animation to fade a sky from day to night.
+    \snippet animation/basics/color-animation.qml 0
+
+    PropertyAnimation demonstrates using a number animation to bounce a circle up and down.
+    \snippet animation/basics/property-animation.qml 0
+
+    Animators demonstrates using a animators to bounce an icon up and down.
+    \snippet animation/basics/animators.qml 0
+
+    Behaviors demonstrates using behaviors to animate moving a rectangle to whereever you click.
+    \snippet animation/behaviors/behavior-example.qml 0
+
+    Wiggly Text demonstrates using more complex behaviors to animate and wiggle some text around as you drag it.
+    It does this by assigning a complex binding to each letter:
+    \snippet animation/behaviors/wigglytext.qml 0
+    Then, it uses behaviors to animate the movement on each letter:
+    \snippet animation/behaviors/wigglytext.qml 1
+
+    Tv Tennis demonstrates using more complex behaviors to get paddles following a ball for an infinite game.
+    Again a binding which depends on other values is applied to the position and a behavior provided the animation.
+    \snippet animation/behaviors/tvtennis.qml 0
+
+    Easing Curves shows off all the easing curves available in Qt Quick animations.
+
+    States demonstrates how the properties of an item can vary between states.
+    It defines several states:
+    \snippet animation/states/states.qml 0
+    Note that there is also the implicit 'base state' from properties set directly on objects.
+
+    Transitions takes the States example and animates the property changes by setting transitions:
+    \snippet animation/states/transitions.qml 0
+
+    PathAnimation animates an image along a beizer curve using a PathAnimation.
+    \snippet animation/pathanimation/pathanimation.qml 0
+
+    PathInterpolator animates an image along the same beizer curve, using a PathInterpolator instead.
+    \snippet animation/pathinterpolator/pathinterpolator.qml 0
+*/
