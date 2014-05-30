@@ -1,0 +1,7 @@
+build-*
+*.so
+*.a
+*.user
+*.orig
+*~
+*.pyc
