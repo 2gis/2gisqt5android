@@ -5,3 +5,6 @@ build-*
 *.orig
 *~
 *.pyc
+Makefile
+.qmake.cache
+.qmake.super
