@@ -1,0 +1,156 @@
+/****************************************************************************
+**
+** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Contact: http://www.qt-project.org/legal
+**
+** This file is part of the documentation of the Qt Toolkit.
+**
+** $QT_BEGIN_LICENSE:FDL$
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and Digia.  For licensing terms and
+** conditions see http://qt.digia.com/licensing.  For further information
+** use the contact form at http://qt.digia.com/contact-us.
+**
+** GNU Free Documentation License Usage
+** Alternatively, this file may be used under the terms of the GNU Free
+** Documentation License version 1.3 as published by the Free Software
+** Foundation and appearing in the file included in the packaging of
+** this file.  Please review the following information to ensure
+** the GNU Free Documentation License version 1.3 requirements
+** will be met: http://www.gnu.org/copyleft/fdl.html.
+** $QT_END_LICENSE$
+**
+****************************************************************************/
+
+/*!
+    \externalpage http://qt-project.org/wiki/Building_Qt_5_from_Git
+    \title Building Qt 5 From Git
+*/
+
+/*!
+    \externalpage http://qt-project.org/contribute
+    \title Contributing to Qt
+*/
+
+/*!
+    \externalpage http://itunes.apple.com/us/app/xcode/id497799835?ls=1&mt=12
+    \title Xcode
+*/
+
+/*!
+    \externalpage https://developer.apple.com/news/?id=12172013a
+    \title Xcode5Req
+*/
+
+/*!
+    \externalpage http://opensource.org/licenses/bsd-license.php
+    \title New and Modified BSD Licenses
+*/
+
+/*!
+    \externalpage http://qt-project.org/downloads
+    \title Opensource Downloads
+*/
+/*!
+    \externalpage http://qt.digia.com/licensing/
+    \title Qt Licensing Overview
+*/
+
+/*!
+    \externalpage http://www.gnu.org/licenses/gpl.html
+    \title GNU General Public License
+*/
+
+/*!
+    \externalpage http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html
+    \title GNU Lesser General Public License, version 2.1
+*/
+
+/*!
+    \externalpage http://qt-project.org/faq/answer/how_to_compress_data_with_qt
+    \title How to compress data with Qt?
+*/
+
+/*!
+    \externalpage http://qt-project.org/wiki/Category:Add-ons
+    \title Qt Add-ons
+*/
+
+/*!
+    \externalpage https://play.google.com/store/apps/details?id=com.digia.Qt5Intro
+    \title Google Play: Introduction to Qt 5
+*/
+
+/*!
+    \externalpage https://play.google.com/store/apps/details?id=com.digia.Qt5Everywhere
+    \title Google Play: Qt 5 Everywhere
+*/
+
+/*!
+    \externalpage https://itunes.apple.com/us/app/subattack/id659283830
+    \title iTunes: SubAttack
+*/
+
+/*!
+    \externalpage https://itunes.apple.com/us/app/qtquicksand/id666273528
+    \title iTunes: QtQuicksand
+*/
+
+/*!
+    \externalpage http://www.gnu.org/copyleft/fdl.html
+    \title GNU Free Documentation License
+*/
+
+/*!
+    \externalpage http://qt-project.org/doc/qbs/index.html
+    \title Qbs Manual
+*/
+
+/*!
+    \externalpage https://play.google.com/apps/publish
+    \title Google Play Developer Console
+*/
+
+/*!
+    \externalpage http://qt.digia.com/Try-Buy/
+    \title Try Qt Enterprise
+*/
+/*!
+    \externalpage http://qt.digia.com/
+    \title Qt Enterprise
+*/
+/*!
+    \externalpage https://sailfishos.org/
+    \title Sailfish OS
+*/
+/*!
+    \externalpage https://www.tizen.org/
+    \title Tizen
+*/
+/*!
+    \externalpage http://developer.android.com/guide/topics/manifest/manifest-intro.html
+    \title Android: App Manifest
+*/
+/*!
+    \externalpage http://engin.io
+    \title Enginio Data Storage
+*/
+/*!
+    \externalpage http://qt-project.org/doc/qtcreator/creator-configuring.html
+    \title Configuring Qt Creator
+*/
+/*!
+    \externalpage http://qt-project.org/doc/qtcreator/creator-build-example-application.html
+    \title Building and Running Example
+*/
+/*!
+    \externalpage http://qt-project.org/doc/qtcreator/creator-mobile-app-tutorial.html
+    \title Creating a Mobile Application
+*/
+/*!
+    \externalpage http://qt-project.org/wiki/Qt5ForAndroidBuilding
+    \title Building Qt 5 for Android
+*/

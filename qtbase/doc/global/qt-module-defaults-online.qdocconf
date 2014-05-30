@@ -1,0 +1,14 @@
+#The online onfiguration for a Qt 5 module, including Add-Ons and Tools.
+#Online version contains a different header.
+#Include this file for a standard Qt 5 module; builds with the online style.
+
+#include standard set of macros and C++ defines and ignores
+include(macros.qdocconf)
+include(qt-cpp-defines.qdocconf)
+include(compat.qdocconf)
+include(manifest-meta.qdocconf)
+include(fileextensions.qdocconf)
+include(qt-html-templates-online.qdocconf)
+
+#extra configuration data DITA information
+include(config.qdocconf)
