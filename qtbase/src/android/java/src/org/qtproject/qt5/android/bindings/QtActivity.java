@@ -55,6 +55,9 @@ import org.kde.necessitas.ministro.IMinistroCallback;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.Dialog;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.graphics.drawable.BitmapDrawable;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.DialogInterface;
@@ -69,6 +72,7 @@ import android.content.res.Resources.Theme;
 import android.content.res.AssetManager;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
+import android.graphics.Paint;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -873,7 +877,33 @@ public class QtActivity extends Activity
         if (null == getLastNonConfigurationInstance()) {
             // if splash screen is defined, then show it
             if (m_activityInfo.metaData.containsKey("android.app.splash_screen_drawable"))
-                getWindow().setBackgroundDrawableResource(m_activityInfo.metaData.getInt("android.app.splash_screen_drawable"));
+            {
+                int res_id = m_activityInfo.metaData.getInt("android.app.splash_screen_drawable");
+
+                // Prevent any bitmap scaling. The splash should be crisp and sparkling exactly as it has been painted.
+                BitmapFactory.Options ops = new BitmapFactory.Options();
+                ops.inScaled = false;
+                ops.inDensity = 0;
+                ops.inTargetDensity = 0;
+                ops.inScreenDensity = 0;
+                final Bitmap image = BitmapFactory.decodeResource(getResources(), res_id, ops);
+                BitmapDrawable drawable = new BitmapDrawable(image){
+                    Paint mPaint = new Paint();
+                    @Override
+                    public void draw(Canvas canvas)
+                    {
+                        if (image != null) {
+                            canvas.drawColor(image.getPixel(0, 0));
+                            canvas.setDensity(Bitmap.DENSITY_NONE);
+                            canvas.drawBitmap(image,
+                                (canvas.getWidth() - image.getWidth()) / 2,
+                                (canvas.getHeight() - image.getHeight()) / 2,
+                                mPaint);
+                        }
+                    }
+                };
+                getWindow().setBackgroundDrawable(drawable);
+            }
             startApp(true);
         }
     }
