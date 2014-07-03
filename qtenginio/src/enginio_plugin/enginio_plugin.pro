@@ -41,3 +41,5 @@ copy2build.commands = $$QMAKE_COPY ${QMAKE_FILE_IN} ${QMAKE_FILE_OUT}
 copy2build.name = COPY ${QMAKE_FILE_IN}
 copy2build.CONFIG += no_link
 force_independent: QMAKE_EXTRA_COMPILERS += copy2build
+
+DEFINES +=  "ENGINIO_VERSION=\\\"$$MODULE_VERSION\\\""

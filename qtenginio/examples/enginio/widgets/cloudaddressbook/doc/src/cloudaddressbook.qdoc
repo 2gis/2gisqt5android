@@ -28,26 +28,26 @@
 /*!
     \title Enginio C++ Examples - Cloud Address Book
     \example cloudaddressbook
-    \brief The Cloud Address Book example shows sorting, filtering and the full text search functionality
+    \brief The Cloud Address Book demonstrates how to use sorting, filtering, and the full text search functionality.
     \ingroup enginio-examples
     \inmodule enginio-qt
 
-    This example explains how to use the full text search feature of Enginio and how to sort and filter data
-    showed from the EnginioModel. To present that. a simple address book like application, will be created.
-    This example doesn't cover security or multi-user management, for such topics please refer
-    to Social Todo example.
+    This example explains how to use the full text search feature of Enginio, and how to sort and filter data
+    showed from the EnginioModel. A simple addressbook-like application will be created to illustrate this.
+    This example doesn't cover security or multi-user management. For such topics, please refer to the
+    Social Todo example.
 
     \image cloudaddressbook-example.png
 
     \section1 Preconditions
-    To start the example, a backend id and a backend secret have to be provided to an existing and configured
-    Enginio backend. The backend can be created using dashboard, the Cloud Address Book pre-configured backend
+    To start the example, a \e {backend id} and a \e {backend secret} have to be provided for an existing and configured
+    Enginio backend. The backend can be created using the dashboard, where the Cloud Address Book preconfigured backend
     can be chosen.
 
     \section1 Backend description
-    We recommend to use pre-configured backend, because it contain already all data and structures that are
-    needed to run this examples, but it is not difficult to create the backend from scratch too.
-    The backend should contain one custom object type "objects.addressbook" having properties:
+    We recommend to use preconfigured backend, because it contains already all data and structures that are
+    needed to run these examples, but it is not difficult to create the backend from scratch too.
+    The backend should contain one custom object type \c objects.addressbook having properties:
     \list
         \li firstName
         \li lastName
@@ -55,62 +55,64 @@
         \li phone
         \li address
     \endlist
-    All properties are of string type and have to be indexed, because only indexed properties will be searched
+    All properties are of \c string type and have to be indexed, because only indexed properties will be searched
     by the full text search.
 
     \section1 Application design
-    The application's ui mainly consist of a table showing all addresses and a text filed where a query
+    The application's ui mainly consists of a table showing all addresses and a text filed where a query
     can be typed. A user should be able to sort addresses or highlight an address containing a specified phrase.
 
     \section1 Implementation
-    From a developer point of view the application from a few simple components:
+    From a developer point of view the application consists of a few simple components:
     \list
-        \li EnginioClient which encapsulates all information that are needed to keep connection to the backend
-        \li EnginioModel which queries all addresses
-        \li QSortFilterProxy which sorts the data
-        \li QTableView which shows the data
+        \li \l EnginioClient which encapsulates all information needed to keep the connection to the backend
+        \li \l EnginioModel which queries all addresses
+        \li \l QSortFilterProxy which sorts the data
+        \li \l QTableView which shows the data
     \endlist
 
-    The first thing to be done is to construct connection to Enginio service. We need to specify backend id as well
-    as backend secret.
+    First we need to establish a connection to the Enginio service. We need to specify the \e{backend id} as well
+    as \e {backend secret}.
     \snippet cloudaddressbook/mainwindow.cpp client
 
     The second step is to create EnginioModel which queries all data from the backend. The query is quite simple,
-    it specifies an object type of which all objects needs to be returned.
+    it specifies an object type of which all objects need to be returned.
     \snippet cloudaddressbook/mainwindow.cpp model
 
-    EnginioModel can sort or filter data only initially, which means that for example a newly added
+    EnginioModel can sort or filter data only initially, which means that, for example, a newly added
     item will not be placed correctly. To solve the problem QSortFilterProxy has to be used.
     \snippet cloudaddressbook/mainwindow.cpp assignProxyModel
 
-    Now it is a time to look deeper into EngnioModel. EnginioModel should define data roles.
+    Now is a time to look deeper into EngnioModel. EnginioModel should define data roles.
     \snippet cloudaddressbook/addressbookmodel.h Roles
     \snippet cloudaddressbook/addressbookmodel.cpp Roles
 
-    and as always \l{EnginioModel::data()}{data()} \l{EnginioModel::setData()}{setData()} functions have to be overridden
-    to provide Qt::DisplayRole in the way it is needed to nicely cooperate with QTableView.
+    and as always the \l{EnginioModel::data()}{data()} and \l{EnginioModel::setData()}{setData()} functions
+    have to be overridden to provide Qt::DisplayRole in such a way as to nicely cooperate with QTableView.
     \snippet cloudaddressbook/addressbookmodel.cpp data
 
-    Usage of QTableView requires to provide columns headers, so they can be shown in the user interface
+    QTableView requires the specification of columns headers, so that they can be shown in the user interface:
     \snippet cloudaddressbook/addressbookmodel.cpp tableViewIntegration
 
     Integration of the full text search is the last step in this tutorial. The goal is to highlight items that
-    contains a given phrase. The highlighting is done by \l{EnginioModel::data()}{data()}, which returns a bold font
-    for Qt::FontRole, if an item is matching the search query. This example for simplicity assumes that matching
-    items count is not big and can be kept in a QSet, which would be recreated on each search.
+    contain a given phrase. The highlighting is done by \l{EnginioModel::data()}{data()}, which returns a bold font
+    for Qt::FontRole if an item is matching the search query. For reasons of simplicity, this example assumes that
+    the matching items count is not big and can be kept in a QSet, which would be recreated on each search.
 
-    To do a full text search, a JSON query needs to be constructed.
+    To do a full text search, a JSON query needs to be constructed:
+
     \snippet cloudaddressbook/addressbookmodel.cpp query
-    The query contains "objectTypes" property (mark 's' at the end) which is an array of all object types which
-    have to be searched. In this case, it is only one type "objects.addressbook". Next "search" property has to
-    be filed. It is an object that is required to have "phrase" property. The property is exactly the search
-    phrase that has to be found. Please mark '*' characters, without them the full text search would find
-    only full words. To avoid founding substrings, for example in on object id, which is not visible for a user
-    the search has to limit scanned property list, by "properties" array.
 
-    When the search query is constructed it is enough to call \l{EnginioClient::fullTextSearch()}{fullTextSearch()}:
+    The query contains \c objectTypes property (note the 's' at the end) which is an array of all object types which
+    have to be searched. In this case, it is only one type: \c objects.addressbook. Next the \c search property has to
+    be specified. It is an object that is required to have a \c phrase property, containing the phrase to search for.
+    phrase that has to be found. Please use the wildcard  \c * in the search criteria, otherwise only full words will
+    be found. To avoid substrings, for example in an \c {object id}, which is not visible for a user,
+    the search is limited to a selected array of \c {properties}.
+    When the search query is constructed, it is enough to call \l{EnginioClient::fullTextSearch()}{fullTextSearch()}:
     \snippet cloudaddressbook/addressbookmodel.cpp callSearch
-    The result will be delivered to the searchResultsArrived slot. In which from result array all objects ids
-    are gathered in \a markedItems set.
+    The result will be delivered to the \c searchResultsArrived slot. All objects ids found will be gathered in a
+    \c markedItems set.
+
     \snippet cloudaddressbook/addressbookmodel.cpp results
 */

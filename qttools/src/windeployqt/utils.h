@@ -95,27 +95,43 @@ inline std::wostream &operator<<(std::wostream &str, const QString &s)
 // Container class for JSON output
 class JsonOutput
 {
+    typedef QPair<QString, QString> SourceTargetMapping;
+    typedef QList<SourceTargetMapping> SourceTargetMappings;
+
 public:
     void addFile(const QString &source, const QString &target)
     {
-        QJsonObject object;
-        object.insert(QStringLiteral("source"), QDir::toNativeSeparators(source));
-        object.insert(QStringLiteral("target"), QDir::toNativeSeparators(target));
-        m_files.append(object);
+        m_files.append(SourceTargetMapping(source, target));
     }
+
+    void removeTargetDirectory(const QString &targetDirectory)
+    {
+        for (int i = m_files.size() - 1; i >= 0; --i) {
+            if (m_files.at(i).second == targetDirectory)
+                m_files.removeAt(i);
+        }
+    }
+
     QByteArray toJson() const
     {
         QJsonObject document;
-        document.insert(QStringLiteral("files"), m_files);
+        QJsonArray files;
+        foreach (const SourceTargetMapping &mapping, m_files) {
+            QJsonObject object;
+            object.insert(QStringLiteral("source"), QDir::toNativeSeparators(mapping.first));
+            object.insert(QStringLiteral("target"), QDir::toNativeSeparators(mapping.second));
+            files.append(object);
+        }
+        document.insert(QStringLiteral("files"), files);
         return QJsonDocument(document).toJson();
     }
     QByteArray toList(ListOption option, const QDir &base) const
     {
         QByteArray list;
-        foreach (const QJsonValue &file, m_files) {
-            const QString source = file.toObject().value(QStringLiteral("source")).toString();
-            const QString fileName = QFileInfo(source).fileName();
-            const QString target = file.toObject().value(QStringLiteral("target")).toString() + QDir::separator() + fileName;
+        foreach (const SourceTargetMapping &mapping, m_files) {
+            const QString source = QDir::toNativeSeparators(mapping.first);
+            const QString fileName = QFileInfo(mapping.first).fileName();
+            const QString target = QDir::toNativeSeparators(mapping.second) + QDir::separator() + fileName;
             switch (option) {
             case ListNone:
                 break;
@@ -136,7 +152,7 @@ public:
         return list;
     }
 private:
-    QJsonArray m_files;
+    SourceTargetMappings m_files;
 };
 
 #ifdef Q_OS_WIN
@@ -201,7 +217,8 @@ extern int optVerboseLevel;
 // to obtain the files.
 enum UpdateFileFlag  {
     ForceUpdateFile = 0x1,
-    SkipUpdateFile = 0x2
+    SkipUpdateFile = 0x2,
+    RemoveEmptyQmlDirectories = 0x4
 };
 
 template <class DirectoryFileEntryFunction>
@@ -257,6 +274,7 @@ bool updateFile(const QString &sourceFileName,
     } // Source is symbolic link
 
     if (sourceFileInfo.isDir()) {
+        bool created = false;
         if (targetFileInfo.exists()) {
             if (!targetFileInfo.isDir()) {
                 *errorMessage = QString::fromLatin1("%1 already exists and is not a directory.")
@@ -267,10 +285,13 @@ bool updateFile(const QString &sourceFileName,
             QDir d(targetDirectory);
             if (optVerboseLevel)
                 std::wcout << "Creating " << targetFileName << ".\n";
-            if (!(flags & SkipUpdateFile) && !d.mkdir(sourceFileInfo.fileName())) {
-                *errorMessage = QString::fromLatin1("Cannot create directory %1 under %2.")
-                                .arg(sourceFileInfo.fileName(), QDir::toNativeSeparators(targetDirectory));
-                return false;
+            if (!(flags & SkipUpdateFile)) {
+                created = d.mkdir(sourceFileInfo.fileName());
+                if (!created) {
+                    *errorMessage = QString::fromLatin1("Cannot create directory %1 under %2.")
+                            .arg(sourceFileInfo.fileName(), QDir::toNativeSeparators(targetDirectory));
+                    return false;
+                }
             }
         }
         // Recurse into directory
@@ -280,6 +301,20 @@ bool updateFile(const QString &sourceFileName,
         foreach (const QString &entry, allEntries)
             if (!updateFile(sourceFileName + QLatin1Char('/') + entry, directoryFileEntryFunction, targetFileName, flags, json, errorMessage))
                 return false;
+        // Remove empty directories, for example QML import folders for which the filter did not match.
+        if (created && (flags & RemoveEmptyQmlDirectories)) {
+            QDir d(targetFileName);
+            const QStringList entries = d.entryList(QStringList(), QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot);
+            if (entries.isEmpty() || (entries.size() == 1 && entries.first() == QLatin1String("qmldir"))) {
+                if (!d.removeRecursively()) {
+                    *errorMessage = QString::fromLatin1("Cannot remove empty directory %1.")
+                            .arg(QDir::toNativeSeparators(targetFileName));
+                    return false;
+                }
+                if (json)
+                    json->removeTargetDirectory(targetFileName);
+            }
+        }
         return true;
     } // Source is directory.
 

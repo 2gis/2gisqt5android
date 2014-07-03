@@ -1333,6 +1333,7 @@ void QQuickKeysAttached::keyPressed(QKeyEvent *event, bool post)
         for (int ii = 0; ii < d->targets.count(); ++ii) {
             QQuickItem *i = d->targets.at(ii);
             if (i && i->isVisible()) {
+                event->accept();
                 QCoreApplication::sendEvent(i, event);
                 if (event->isAccepted()) {
                     d->inPress = false;
@@ -1375,6 +1376,7 @@ void QQuickKeysAttached::keyReleased(QKeyEvent *event, bool post)
         for (int ii = 0; ii < d->targets.count(); ++ii) {
             QQuickItem *i = d->targets.at(ii);
             if (i && i->isVisible()) {
+                event->accept();
                 QCoreApplication::sendEvent(i, event);
                 if (event->isAccepted()) {
                     d->inRelease = false;
@@ -5691,10 +5693,12 @@ void QQuickItem::setAntialiasing(bool aa)
 {
     Q_D(QQuickItem);
 
-    bool changed = (aa != antialiasing());
-    d->antialiasingValid = true;
+    if (!d->antialiasingValid) {
+        d->antialiasingValid = true;
+        d->antialiasing = d->implicitAntialiasing;
+    }
 
-    if (!changed)
+    if (aa == d->antialiasing)
         return;
 
     d->antialiasing = aa;

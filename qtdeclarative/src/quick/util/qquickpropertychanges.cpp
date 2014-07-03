@@ -102,7 +102,7 @@ QT_BEGIN_NAMESPACE
 
     \note PropertyChanges can be used to change anchor margins, but not other anchor
     values; use AnchorChanges for this instead. Similarly, to change an \l Item's
-    \l {Item::}{parent} value, use ParentChanges instead.
+    \l {Item::}{parent} value, use ParentChange instead.
 
 
     \section2 Resetting property values
@@ -324,7 +324,11 @@ void QQuickPropertyChangesPrivate::decode()
             ds >> id;
         } else if (type == QV4::CompiledData::Binding::Type_Translation
                    || type == QV4::CompiledData::Binding::Type_TranslationById) {
-            ds >> tsd.commentIndex >> tsd.number;
+            quint32 commentIndex;
+            qint32 number;
+            ds >> commentIndex >> number;
+            tsd.commentIndex = commentIndex;
+            tsd.number = number;
         }
 
         ds >> data;

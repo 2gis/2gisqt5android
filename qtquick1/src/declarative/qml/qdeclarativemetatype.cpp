@@ -191,13 +191,13 @@ QDeclarativeTypePrivate::QDeclarativeTypePrivate()
 }
 
 
-QDeclarativeType::QDeclarativeType(int index, const QDeclarativePrivate::RegisterInterface &interface)
+QDeclarativeType::QDeclarativeType(int index, const QDeclarativePrivate::RegisterInterface &iface)
 : d(new QDeclarativeTypePrivate)
 {
     d->m_isInterface = true;
-    d->m_iid = interface.iid;
-    d->m_typeId = interface.typeId;
-    d->m_listId = interface.listId;
+    d->m_iid = iface.iid;
+    d->m_typeId = iface.typeId;
+    d->m_listId = iface.listId;
     d->m_newFunc = 0;
     d->m_index = index;
     d->m_isSetup = true;
@@ -598,9 +598,9 @@ int registerAutoParentFunction(QDeclarativePrivate::RegisterAutoParent &autopare
     return data->parentFunctions.count() - 1;
 }
 
-int registerInterface(const QDeclarativePrivate::RegisterInterface &interface)
+int registerInterface(const QDeclarativePrivate::RegisterInterface &iface)
 {
-    if (interface.version > 0) 
+    if (iface.version > 0)
         qFatal("qmlRegisterType(): Cannot mix incompatible QML versions.");
 
     QWriteLocker lock(metaTypeDataLock());
@@ -608,7 +608,7 @@ int registerInterface(const QDeclarativePrivate::RegisterInterface &interface)
 
     int index = data->types.count();
 
-    QDeclarativeType *type = new QDeclarativeType(index, interface);
+    QDeclarativeType *type = new QDeclarativeType(index, iface);
 
     data->types.append(type);
     data->idToType.insert(type->typeId(), type);
@@ -617,12 +617,12 @@ int registerInterface(const QDeclarativePrivate::RegisterInterface &interface)
     if (!type->qmlTypeName().isEmpty())
         data->nameToType.insert(type->qmlTypeName(), type);
 
-    if (data->interfaces.size() <= interface.typeId)
-        data->interfaces.resize(interface.typeId + 16);
-    if (data->lists.size() <= interface.listId)
-        data->lists.resize(interface.listId + 16);
-    data->interfaces.setBit(interface.typeId, true);
-    data->lists.setBit(interface.listId, true);
+    if (data->interfaces.size() <= iface.typeId)
+        data->interfaces.resize(iface.typeId + 16);
+    if (data->lists.size() <= iface.listId)
+        data->lists.resize(iface.listId + 16);
+    data->interfaces.setBit(iface.typeId, true);
+    data->lists.setBit(iface.listId, true);
 
     return index;
 }

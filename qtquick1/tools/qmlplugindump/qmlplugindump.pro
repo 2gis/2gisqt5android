@@ -2,7 +2,7 @@ TARGET = qml1plugindump
 
 QT += core-private declarative-private widgets
 
-CONFIG += qpa_minimal_plugin
+QTPLUGIN.platforms = qminimal
 
 SOURCES += \
     main.cpp \

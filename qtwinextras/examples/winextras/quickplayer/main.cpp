@@ -1,6 +1,6 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the examples of the Qt Toolkit.
@@ -41,6 +41,9 @@
 #include <QQmlApplicationEngine>
 #include <QGuiApplication>
 #include <QWindow>
+#include <QQmlContext>
+#include <QStandardPaths>
+#include <QDir>
 
 int main(int argc, char *argv[])
 {
@@ -50,7 +53,14 @@ int main(int argc, char *argv[])
     app.setOrganizationDomain("qt-project.org");
     app.setApplicationDisplayName("QtWinExtras Quick Player");
 
-    QQmlApplicationEngine engine(QUrl("qrc:/main.qml"));
+    QQmlApplicationEngine engine;
+    const QStringList musicPaths = QStandardPaths::standardLocations(QStandardPaths::MusicLocation);
+    const QUrl musicUrl = QUrl::fromLocalFile(musicPaths.isEmpty() ? QDir::homePath() : musicPaths.first());
+    engine.rootContext()->setContextProperty(QStringLiteral("musicUrl"), musicUrl);
+    const QStringList arguments = QCoreApplication::arguments();
+    const QUrl commandLineUrl = arguments.size() > 1 ? QUrl::fromLocalFile(arguments.at(1)) : QUrl();
+    engine.rootContext()->setContextProperty(QStringLiteral("url"), commandLineUrl);
+    engine.load(QUrl("qrc:/main.qml"));
     QObject* root = engine.rootObjects().value(0);
     if (QWindow *window = qobject_cast<QWindow *>(root))
         window->show();

@@ -81,8 +81,9 @@ int main(int argc, char *argv[])
     associateFileTypes(QStringList(".mp3"));
 
     MusicPlayer player;
-    if (argc > 1)
-        player.playFile(app.arguments().value(1));
+    const QStringList arguments = QCoreApplication::arguments();
+    if (arguments.size() > 1)
+        player.playFile(arguments.at(1));
     player.resize(300, 60);
     player.show();
 

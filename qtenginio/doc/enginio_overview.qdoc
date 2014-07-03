@@ -55,13 +55,13 @@ When using Enginio (with Qt Quick or C++), the API is following a general patter
 This section gives a short, high-level overview of the concepts used throughout the library.
 
 The Qt library is a client-side library to communicate with the server at \l {http://engin.io}.
-Several backends can exist for each account on the server.
-For all communication with the server, the backend is determined by its ID.
-When shipping an application built with Enginio, the backend id will be the same for all users of that application.
+Several \e backends can exist for each account on the server.
+For all communication with the server, the \e backend is determined by its \e id.
+When shipping an application built with Enginio, the \c {backend id} will be the same for all users of that application.
 
 \section2 Objects
 
-Enginio provides several types of objects: "custom objects", "users", "user groups", "files" and more.
+Enginio provides several types of objects: \c {custom objects}, \c users, \c {user groups}, \e files, and more.
 All communication with the backend uses JSON. When writing QML, JSON can simply be written inline.
 On the C++ side, \l QJsonObject and \l QJsonValue are used.
 
@@ -100,7 +100,8 @@ For file management, the operations are slightly different.
 Files are always attached to objects and can only be referenced through them.
 The Qt library provides convenient functions to upload and download files.
 
-The entire Enginio documentation including backend and client is available here: \l{http://engin.io/documentation/}{Enginio Documentation}
+The entire Enginio documentation, including backend and client, is available here:
+\l{http://engin.io/documentation/}{Enginio Documentation}
 */
 
 /*!
@@ -146,7 +147,7 @@ To use Enginio's QML API, you have to import the library.
 import Enginio 1.0
 \endcode
 
-Initialize the \l{EnginioClientQml}{EnginioClient} with the backend id value, which can be copied from the Dashboard.
+Initialize the \l{EnginioClientQml}{EnginioClient} with the \c {backend id} value, which can be copied from the Dashboard.
 
 Go to Dashboard ⇒ Your Backend home-view ⇒ See ’Keys box’ ⇒ Copy backend id value.
 
@@ -159,7 +160,7 @@ EnginioClient {
 
 \section1 Store your first Object
 
-Now you can store an Object with Enginio. First, create an object in JSON format and fill it with data as needed.
+Now you can store an \e object with Enginio. First, create an \e object in JSON format and fill it with data as needed.
 Then call create on the client with the JSON object as a parameter.
 
 \code
@@ -200,16 +201,19 @@ To use the Enginio Qt library in your code, you have to include relevant library
  #include <Enginio/Enginio>
 \endcode
 Before making any calls to the Enginio API, the \l EnginioClient needs to be instantiated.
-They can be copied from the Dashboard.
+To do this, you will also need the \c {id} of the backend, which can be copied from the Dashboard.
 Go to the \l{https://dashboard.engin.io/}{Enginio Dashboard} and select a backend.
-Copy the backend id value.
+Copy the \c {backend id} value.
 
 \code
 QByteArray backendId("YOUR_OWN_BACKEND_ID");
 EnginioClient *client = new EnginioClient;
 client->setBackendId(backendId);
 \endcode
-For testing purposes, it is easiest to hardcode the backend id directly into application code. However, this might not be always the best choice, and sometimes it might be beneficial to put the backend configuration in a separate configuration file.
+For testing purposes, it is easiest to hardcode the \c {backend id} directly into application code.
+However, this might not be always the best choice, and sometimes it might be beneficial
+to put the backend configuration in a separate configuration file.
+
 \section1 Store your first Object
 
 Create an object in JSON format and fill in the data:
@@ -241,8 +245,8 @@ When you have successfully stored objects with Qt C++ or QML code, go to your \l
 and check the status there.
 
 \list
-\li Select the ’Objects’ view from the top navigation bar.
-\li Make sure that objects.city is selected in the type drop-down.
+\li Select the Objects view from the top navigation bar.
+\li Make sure that \gui objects.city is selected in the type drop-down.
 \li The list should now show a row for the object which was just uploaded.
 \endlist
 \image object_browser_first_city_object.png

@@ -45,17 +45,14 @@
 
 #include "qserialport_p.h"
 
+#include <QtCore/qhash.h>
+
 #include <qt_windows.h>
 
-#ifndef Q_OS_WINCE
-#include <QtCore/qhash.h>
 QT_BEGIN_NAMESPACE
+
 class QWinEventNotifier;
-#else
-#include <QtCore/qmutex.h>
-QT_BEGIN_NAMESPACE
-class QThread;
-#endif
+class QTimer;
 
 class QSerialPortPrivate : public QSerialPortPrivateData
 {
@@ -91,9 +88,9 @@ public:
     bool setFlowControl(QSerialPort::FlowControl flowControl);
     bool setDataErrorPolicy(QSerialPort::DataErrorPolicy policy);
 
-    void processIoErrors(bool error);
+    void handleLineStatusErrors();
     QSerialPort::SerialPortError decodeSystemError() const;
-#ifndef Q_OS_WINCE
+
     void _q_completeAsyncCommunication();
     void _q_completeAsyncRead();
     void _q_completeAsyncWrite();
@@ -104,10 +101,6 @@ public:
 
     bool emulateErrorPolicy();
     void emitReadyRead();
-#else
-    bool notifyRead();
-    bool notifyWrite();
-#endif
 
     static QString portNameToSystemLocation(const QString &port);
     static QString portNameFromSystemLocation(const QString &location);
@@ -123,36 +116,25 @@ public:
     COMMTIMEOUTS restoredCommTimeouts;
     HANDLE handle;
     bool parityErrorOccurred;
-
-#ifndef Q_OS_WINCE
     QByteArray readChunkBuffer;
     bool readyReadEmitted;
     bool writeStarted;
     QWinEventNotifier *communicationNotifier;
     QWinEventNotifier *readCompletionNotifier;
     QWinEventNotifier *writeCompletionNotifier;
+    QTimer *startAsyncWriteTimer;
     OVERLAPPED communicationOverlapped;
     OVERLAPPED readCompletionOverlapped;
     OVERLAPPED writeCompletionOverlapped;
     DWORD originalEventMask;
     DWORD triggeredEventMask;
-#else
-    QThread *eventNotifier;
-    QMutex settingsChangeMutex;
-#endif
 
 private:
     bool updateDcb();
     bool updateCommTimeouts();
 
 
-#ifndef Q_OS_WINCE
     bool waitAnyEvent(int msecs, bool *timedOut, HANDLE *triggeredEvent);
-#else
-    bool waitForReadOrWrite(bool *selectForRead, bool *selectForWrite,
-                            bool checkRead, bool checkWrite,
-                            int msecs, bool *timedOut);
-#endif
 
 };
 

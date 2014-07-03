@@ -286,6 +286,8 @@ void EnginioClientConnectionPrivate::init()
     QObject::connect(static_cast<EnginioClient*>(q_ptr), &EnginioClient::sessionTerminated, AuthenticationStateTrackerFunctor(this));
     QObject::connect(static_cast<EnginioClient*>(q_ptr), &EnginioClient::sessionAuthenticated, AuthenticationStateTrackerFunctor(this, Enginio::Authenticated));
     QObject::connect(static_cast<EnginioClient*>(q_ptr), &EnginioClient::sessionAuthenticationError, AuthenticationStateTrackerFunctor(this, Enginio::AuthenticationFailure));
+    _request.setHeader(QNetworkRequest::UserAgentHeader,
+                          QByteArrayLiteral("Qt:" QT_VERSION_STR " Enginio:" ENGINIO_VERSION " Language:C++"));
 }
 
 void EnginioClientConnectionPrivate::replyFinished(QNetworkReply *nreply)

@@ -189,8 +189,8 @@ enum PropertyFlag {
     Attr_Invalid = 0xff
 };
 
-Q_DECLARE_FLAGS(PropertyFlags, PropertyFlag);
-Q_DECLARE_OPERATORS_FOR_FLAGS(PropertyFlags);
+Q_DECLARE_FLAGS(PropertyFlags, PropertyFlag)
+Q_DECLARE_OPERATORS_FOR_FLAGS(PropertyFlags)
 
 struct PropertyAttributes
 {

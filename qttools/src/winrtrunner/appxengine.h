@@ -50,37 +50,25 @@
 
 QT_USE_NAMESPACE
 
+struct IAppxManifestReader;
 class AppxEnginePrivate;
 class AppxEngine : public RunnerEngine
 {
 public:
-    static bool canHandle(Runner *runner);
-    static RunnerEngine *create(Runner *runner);
-    static QStringList deviceNames();
-
-    bool install(bool removeFirst = false) Q_DECL_OVERRIDE;
-    bool remove() Q_DECL_OVERRIDE;
-    bool start() Q_DECL_OVERRIDE;
-    bool enableDebugging(const QString &debuggerExecutable,
-                        const QString &debuggerArguments) Q_DECL_OVERRIDE;
-    bool disableDebugging() Q_DECL_OVERRIDE;
-    bool suspend() Q_DECL_OVERRIDE;
-    bool waitForFinished(int secs) Q_DECL_OVERRIDE;
-    bool stop() Q_DECL_OVERRIDE;
     qint64 pid() const Q_DECL_OVERRIDE;
     int exitCode() const Q_DECL_OVERRIDE;
-
     QString executable() const Q_DECL_OVERRIDE;
-    QString devicePath(const QString &relativePath) const Q_DECL_OVERRIDE;
-    bool sendFile(const QString &localFile, const QString &deviceFile) Q_DECL_OVERRIDE;
-    bool receiveFile(const QString &deviceFile, const QString &localFile) Q_DECL_OVERRIDE;
 
-private:
-    explicit AppxEngine(Runner *runner);
+protected:
+    explicit AppxEngine(Runner *runner, AppxEnginePrivate *dd);
     ~AppxEngine();
 
+    virtual QString extensionSdkPath() const = 0;
+    virtual bool installPackage(IAppxManifestReader *reader, const QString &filePath) = 0;
+
     bool installDependencies();
-    bool installPackage(const QString &filePath);
+    bool createPackage(const QString &packageFileName);
+    static bool getManifestFile(const QString &fileName, QString *manifest = 0);
 
     QScopedPointer<AppxEnginePrivate> d_ptr;
     Q_DECLARE_PRIVATE(AppxEngine)

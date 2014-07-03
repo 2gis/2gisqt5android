@@ -1,6 +1,6 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the documentation of the Qt Toolkit.
@@ -43,7 +43,7 @@ To use the \l{Qt Quick} module, a QML document needs to
 import it. The import syntax looks like this:
 
 \code
-import QtQuick 2.0
+import QtQuick 2.3
 \endcode
 
 The types and functionality that \l{Qt Quick} provides can now
@@ -84,7 +84,7 @@ by the \c{QtQuick} import. Putting the import and object declaration
 together, we get a complete QML document:
 
 \qml
-import QtQuick 2.0
+import QtQuick 2.3
 
 Rectangle {
     width: 200
@@ -103,17 +103,19 @@ If we save that document as "HelloWorld.qml", we can load and display it.
 \section1 Loading and Displaying the QML Document
 
 To display the graphical scene defined by the QML document, it may be loaded
-with the \l{Prototyping with qmlscene}{qmlscene} tool. The
-\l{Prototyping with qmlscene}{qmlscene} tool should be installed into the
-Qt installation directory. Assuming that the Qt binaries are installed into
-or are available in the system executable path, you can display the QML
-document with the following command:
+with \l{Qt Creator Manual}{Qt Creator}. For simple UI files such as this one,
+select \gui{File > New File or Project > Applications > Qt Quick UI} from
+within Qt Creator.
 
-\code
-qmlscene HelloWorld.qml
-\endcode
+Pressing the green \gui{Run} button runs the application. You should see the
+text \gui{Hello, World!} in the center of a red rectangle.
 
-You should see the text "Hello, World!" in the center of a red rectangle.
+For more information about creating and running projects in Qt Creator, visit
+the following pages:
+\list
+\li \l{Qt Creator: Creating Qt Quick Projects}{Creating Qt Quick Projects}
+\li \l{Qt Creator: Building and Running an Example}{Building and Running an Example}
+\endlist
 
 \section1 Handling User Input
 
@@ -125,7 +127,7 @@ as \l{Signal and Handler Event System}{signals} and these signals are handled by
 
 For example, consider the following example:
 \qml
-import QtQuick 2.0
+import QtQuick 2.3
 
 Rectangle {
     width: 200
@@ -152,7 +154,7 @@ signal for touch events, so this code will also work on a mobile device.
 Keyboard user input can be similarly handled with a simple expression:
 
 \qml
-import QtQuick 2.0
+import QtQuick 2.3
 
 Rectangle {
     width: 200
@@ -189,7 +191,7 @@ were to change, the geometry of each child \l Rectangle would automatically
 update due to the property bindings.
 
 \qml
-import QtQuick 2.0
+import QtQuick 2.3
 
 Rectangle {
     width: 400
@@ -216,7 +218,7 @@ to a property's value. In the following example, a property is animated which
 then gets displayed in a \l Text area:
 
 \qml
-import QtQuick 2.0
+import QtQuick 2.3
 
 Rectangle {
     color: "lightgray"

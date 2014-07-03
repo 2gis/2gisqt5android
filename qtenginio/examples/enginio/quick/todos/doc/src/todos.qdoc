@@ -32,13 +32,13 @@
     \inmodule enginio-qml
 
     In this example a simple list of objects is displayed in a ListView.
-    Each item in the list is a "To Do" object which can be "done" or "not yet done".
+    Each item in the list is a "To Do" object which can be \e done or \e{not yet done}.
     Todos can be added and removed (when hovering with the mouse).
     \image todolist.png
 
     In this simple schema the objects will only have two properties that are added
-    to the default properties (such as creation date which always exists).
-    A string "title" and a bool "completed". The object type will be created
+    to the default properties (such as creation date, which always exists):
+    a string \c title and a bool \c completed. The object type will be created
     when a call to create, or, in this case, a call to \l{Enginio::EnginioModel::append()}{EnginioModel::append()} is made.
 
     A todo object will look like this (in JSON):
@@ -64,22 +64,23 @@
     properties of the Enginio objects are used.
     \snippet todos/todo.qml view
 
-    It is easy to add a new object to the model.
-    By using a TextField's onAccepted function, the data is
-    appended to the model. After appending the new Todo, the text gets cleared
-    so that a new Todo can be entered.
+    It is easy to add a new object to the model.  By using the \l onAccepted
+    signal handler of a \l TextField, the data is appended to the model. After appending
+    the new Todo, the text gets cleared so that a new Todo can be entered.
+
     \snippet todos/todo.qml append
 
     Inside the delegate, the data for the index is available by using the property names (\e title and \e completed).
     The \e title property is directly assigned to the text displayed on each list item. The \e completed
     boolean is used to display the item with a strikeout font and a light color.
+
     \snippet todos/todo.qml delegate-properties
 
     The \l Enginio::EnginioModel::setProperty() function is called to update the data in the Enginio backend.
 
     \snippet todos/todo.qml setProperty
 
-    The _synced property can be used to ascertain whether an item has been synced or not.
+    The \c _synced property can be used to ascertain whether an item has been synced or not.
     It is always available in the delegate, and may be used, for example, to disable the user interface
     until syncing has completed.
 
@@ -87,5 +88,6 @@
 
     Finally, a remove button is visible when hovering over an item with the mouse.
     Removal is implemented by calling \l{Enginio::EnginioModel::remove()}{EnginioModel::remove()} with the row of the item.
+
     \snippet todos/todo.qml remove
 */

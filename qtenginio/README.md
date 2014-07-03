@@ -1,11 +1,11 @@
 # Enginio Qt Library development branch
-Client library for accessing Enginio service from Qt and QML code. 
+Client library for accessing Enginio service from Qt and QML code.
 
 # System Requirements
 * Qt 5.1 or newer
 * OpenSSL library
-  * Mac OS X: OpenSSL library should be preinstalled.
-  * Linux: Most distributions have preinstalled OpenSSL library. If yours doesn't, seach for `libssl` in package repository.
+  * Mac OS X: the OpenSSL library should be preinstalled.
+  * Linux: Most distributions have a preinstalled OpenSSL library. If yours doesn't, seach for `libssl` in the package repository.
   * Windows: Get the installer from http://slproweb.com/products/Win32OpenSSL.html (light version is enough, copy DLLs to windows system directory when asked).
 * Perl 5.10 or newer
   * Mac and Linux: Perl should be preinstalled.
@@ -16,10 +16,10 @@ Client library for accessing Enginio service from Qt and QML code.
     * Produces shared library and installs it as a globally available Qt5 module
 
 # Usage
-* In C++ applications 
+* In C++ applications
     * Use Enginio module by adding `QT += enginio` to application `.pro` file
-    * Include Enginio headers with `<Enginio/...>` (for example: `#include <Enginio/enginioclient.h>`) 
-* In QML applications 
+    * Include Enginio headers with `<Enginio/...>` (for example: `#include <Enginio/enginioclient.h>`)
+* In QML applications
     * Import Enginio components with `import Enginio 1.0`
 
 # Contributing
@@ -33,7 +33,7 @@ Client library for accessing Enginio service from Qt and QML code.
 
 # Copyright
 Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
-Contact http://qt.digia.com/contact-us 
+Contact http://qt.digia.com/contact-us
 
 
 # License

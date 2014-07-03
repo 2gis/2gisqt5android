@@ -1,6 +1,6 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the examples of the Qt Toolkit.
@@ -118,6 +118,7 @@ Window {
     MediaPlayer {
         id: mediaPlayer
         autoPlay: true
+        source : url
         readonly property string title: !!metaData.author && !!metaData.title
                                         ? qsTr("%1 - %2").arg(metaData.author).arg(metaData.title)
                                         : metaData.author || metaData.title || source
@@ -153,6 +154,7 @@ Window {
                 FileDialog {
                     id: fileDialog
 
+                    folder : musicUrl
                     title: qsTr("Open file")
                     nameFilters: [qsTr("MP3 files (*.mp3)"), qsTr("All files (*.*)")]
                     onAccepted: mediaPlayer.source = fileDialog.fileUrl

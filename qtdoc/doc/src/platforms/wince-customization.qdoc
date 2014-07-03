@@ -180,7 +180,7 @@
     distribution of Perl on Windows.)
     \endlist
 
-    So lets assume you have installed Qt in \c{C:\Qt\5.3.0} and you want
+    So lets assume you have installed Qt in \c{C:\Qt\5.3.1} and you want
     to create a shadow build in \c{C:\Qt\mobile5-shadow}:
 
     \list
