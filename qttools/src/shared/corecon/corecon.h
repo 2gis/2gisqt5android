@@ -46,35 +46,32 @@
 #include <QtCore/QScopedPointer>
 #include <QtCore/QLoggingCategory>
 
-struct ICcDevice;
-struct ICcServer;
-
 QT_USE_NAMESPACE
 
 class CoreConDevicePrivate;
 class CoreConDevice
 {
 public:
-    explicit CoreConDevice();
+    explicit CoreConDevice(int version);
     ~CoreConDevice();
     QString name() const;
     QString id() const;
     bool isEmulator() const;
-    ICcDevice *handle() const;
+    Qt::HANDLE handle() const;
 private:
     QScopedPointer<CoreConDevicePrivate> d_ptr;
     Q_DECLARE_PRIVATE(CoreConDevice)
-friend class CoreConServer;
+friend class CoreConServerPrivate;
 };
 
 class CoreConServerPrivate;
 class CoreConServer
 {
 public:
-    CoreConServer();
+    explicit CoreConServer(int version);
     ~CoreConServer();
     bool initialize();
-    ICcServer *handle() const;
+    Qt::HANDLE handle() const;
     QList<CoreConDevice *> devices() const;
     QString formatError(HRESULT hr) const;
 private:

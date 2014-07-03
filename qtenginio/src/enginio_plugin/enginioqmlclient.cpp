@@ -284,6 +284,8 @@ void EnginioQmlClientPrivate::init()
     QObject::connect(q, &EnginioQmlClient::sessionTerminated, AuthenticationStateTrackerFunctor(this));
     QObject::connect(q, &EnginioQmlClient::sessionAuthenticated, AuthenticationStateTrackerFunctor(this, Enginio::Authenticated));
     QObject::connect(q, &EnginioQmlClient::sessionAuthenticationError, AuthenticationStateTrackerFunctor(this, Enginio::AuthenticationFailure));
+    _request.setHeader(QNetworkRequest::UserAgentHeader,
+                          QByteArrayLiteral("Qt:" QT_VERSION_STR " Enginio:" ENGINIO_VERSION " Language:QML"));
 }
 
 EnginioQmlReply *EnginioQmlClient::fullTextSearch(const QJSValue &query)

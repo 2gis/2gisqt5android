@@ -115,7 +115,13 @@ static void printDisassembledOutputWithCalls(QByteArray processedOutput, const Q
          it != end; ++it) {
         QByteArray ptrString = QByteArray::number(quintptr(it.key()), 16);
         ptrString.prepend("0x");
-        processedOutput = processedOutput.replace(ptrString, it.value());
+        int idx = processedOutput.indexOf(ptrString);
+        if (idx < 0)
+            continue;
+        idx = processedOutput.lastIndexOf('\n', idx);
+        if (idx < 0)
+            continue;
+        processedOutput = processedOutput.insert(idx, QByteArrayLiteral("                          ; call ") + it.value());
     }
     fprintf(stderr, "%s\n", processedOutput.constData());
     fflush(stderr);
@@ -143,7 +149,7 @@ JSC::MacroAssemblerCodeRef Assembler::link(int *codeSize)
     QHash<void*, const char*> functions;
     foreach (CallToLink ctl, _callsToLink) {
         linkBuffer.link(ctl.call, ctl.externalFunction);
-        functions[ctl.externalFunction.value()] = ctl.functionName;
+        functions[linkBuffer.locationOf(ctl.label).dataLocation()] = ctl.functionName;
     }
 
     foreach (const DataLabelPatch &p, _dataLabelPatches)
@@ -262,7 +268,6 @@ static QVector<int> getIntRegisters()
 static QVector<int> getFpRegisters()
 {
     static const QVector<int> fpRegisters = QVector<int>()
-            << JSC::ARMRegisters::d1
             << JSC::ARMRegisters::d2
             << JSC::ARMRegisters::d3
             << JSC::ARMRegisters::d4
@@ -336,12 +341,14 @@ void InstructionSelection::run(int functionIndex)
     _as->storePtr(Assembler::LocalsRegister, Address(Assembler::ScratchRegister, qOffsetOf(ExecutionEngine, jsStackTop)));
 
     int lastLine = 0;
-    for (int i = 0, ei = _function->basicBlocks.size(); i != ei; ++i) {
-        IR::BasicBlock *nextBlock = (i < ei - 1) ? _function->basicBlocks[i + 1] : 0;
-        _block = _function->basicBlocks[i];
+    for (int i = 0, ei = _function->basicBlockCount(); i != ei; ++i) {
+        IR::BasicBlock *nextBlock = (i < ei - 1) ? _function->basicBlock(i + 1) : 0;
+        _block = _function->basicBlock(i);
+        if (_block->isRemoved())
+            continue;
         _as->registerBlock(_block, nextBlock);
 
-        foreach (IR::Stmt *s, _block->statements) {
+        foreach (IR::Stmt *s, _block->statements()) {
             if (s->location.isValid()) {
                 if (int(s->location.startLine) != lastLine) {
                     Assembler::Address lineAddr(Assembler::ContextRegister, qOffsetOf(QV4::ExecutionContext, lineNumber));
@@ -366,14 +373,14 @@ void InstructionSelection::run(int functionIndex)
     qSwap(_removableJumps, removableJumps);
 }
 
-void *InstructionSelection::addConstantTable(QVector<Primitive> *values)
+const void *InstructionSelection::addConstantTable(QVector<Primitive> *values)
 {
     compilationUnit->constantValues.append(*values);
     values->clear();
 
     QVector<QV4::Primitive> &finalValues = compilationUnit->constantValues.last();
     finalValues.squeeze();
-    return finalValues.data();
+    return finalValues.constData();
 }
 
 QV4::CompiledData::CompilationUnit *InstructionSelection::backendCompileStep()
@@ -1612,10 +1619,10 @@ Assembler::ImplicitAddress Assembler::ConstantTable::loadValueAddress(const Prim
 
 void Assembler::ConstantTable::finalize(JSC::LinkBuffer &linkBuffer, InstructionSelection *isel)
 {
-    void *tablePtr = isel->addConstantTable(&_values);
+    const void *tablePtr = isel->addConstantTable(&_values);
 
     foreach (DataLabelPtr label, _toPatch)
-        linkBuffer.patch(label, tablePtr);
+        linkBuffer.patch(label, const_cast<void *>(tablePtr));
 }
 
 bool InstructionSelection::visitCJumpDouble(IR::AluOp op, IR::Expr *left, IR::Expr *right,

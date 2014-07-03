@@ -558,7 +558,7 @@ ScrollView {
         id: listView
         focus: true
         activeFocusOnTab: root.activeFocusOnTab
-        anchors.topMargin: tableHeader.height
+        anchors.topMargin: headerVisible ? tableHeader.height : 0
         anchors.fill: parent
         currentIndex: -1
         visible: columnCount > 0
@@ -708,7 +708,7 @@ ScrollView {
             property int rowHeight: rowSizeItem.implicitHeight
             property int paddedRowCount: height/rowHeight
 
-            y: listView.contentHeight
+            y: listView.contentHeight - listView.contentY + listView.originY
             width: parent.width
             visible: alternatingRowColors
             height: viewport.height - listView.contentHeight
@@ -819,7 +819,7 @@ ScrollView {
                 rowItemContainer.height = Qt.binding( function() { return rowItem.height });
 
                 // Reassign row-specific bindings
-                rowItem.rowIndex = model.index;
+                rowItem.rowIndex = Qt.binding( function() { return model.index });
                 rowItem.itemModelData = Qt.binding( function() { return typeof modelData === "undefined" ? null : modelData });
                 rowItem.itemModel = Qt.binding( function() { return model });
                 rowItem.parent = rowItemContainer;
@@ -918,8 +918,6 @@ ScrollView {
             }
         }
 
-        Text{ id:text }
-
         Item {
             id: tableHeader
             clip: true
@@ -953,10 +951,10 @@ ScrollView {
                     delegate: Item {
                         id: headerRowDelegate
                         z:-index
-                        width: columnCount === 1 ? viewport.width + __verticalScrollBar.width : modelData.width
-                        implicitWidth: headerStyle.implicitWidth
+                        width: modelData.width
+                        implicitWidth: columnCount === 1 ? viewport.width + __verticalScrollBar.width : headerStyle.implicitWidth
                         visible: modelData.visible
-                        height: headerVisible ? headerStyle.height : 0
+                        height: headerStyle.height
 
                         Loader {
                             id: headerStyle
@@ -969,6 +967,7 @@ ScrollView {
                                 readonly property bool containsMouse: headerClickArea.containsMouse
                                 readonly property int column: index
                                 readonly property int textAlignment: modelData.horizontalAlignment
+                                readonly property bool resizable: modelData.resizable
                             }
                         }
                         Rectangle{
@@ -1035,11 +1034,16 @@ ScrollView {
                                 readonly property int textAlignment: modelData.horizontalAlignment
                             }
                             parent: tableHeader
-                            x: headerRowDelegate.x - listView.contentX
+                            x: __implicitX
+                            property double __implicitX: headerRowDelegate.x - listView.contentX
                             width: modelData.width
                             height: parent.height
                             sourceComponent: root.headerDelegate
                             visible: headerClickArea.pressed
+                            onVisibleChanged: {
+                                if (!visible)
+                                    x = Qt.binding(function () { return __implicitX })
+                            }
                             opacity: 0.5
                         }
 
@@ -1047,13 +1051,13 @@ ScrollView {
                         MouseArea {
                             id: headerResizeHandle
                             property int offset: 0
-                            property int minimumSize: 20
+                            readonly property int minimumSize: 20
                             preventStealing: true
                             anchors.rightMargin: -width/2
                             width: Settings.hasTouchScreen ? Screen.pixelDensity * 3.5 : 16
                             height: parent.height
                             anchors.right: parent.right
-                            enabled: modelData.resizable && columnCount > 1
+                            enabled: modelData.resizable && columnCount > 0
                             onPositionChanged:  {
                                 var newHeaderWidth = modelData.width + (mouseX - offset)
                                 modelData.width = Math.max(minimumSize, newHeaderWidth)

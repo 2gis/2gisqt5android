@@ -36,18 +36,18 @@
     \image gallery-example.png
 
     \section1 Backend configuration
-    The Enginio backend needs to be set up in order to get this example working.
+    The \e Enginio \e backend needs to be set up in order to get this example working.
 
-    Go to the Enginio Dashboard and create a new backend with the 'Image Gallery' template.
+    Go to the \e {Enginio Dashboard} and create a new backend with the \gui {Image Gallery} template.
     The template will construct a new custom backend by executing these steps:
     \list
-        \li Create a new object type "objects.image" (on the Object Types page).
+        \li Create a new object type \c objects.image (on the \gui {Object Types} page).
 
             Add two properties to the image object:
             name:"name", type: "String" and name: "file", type: "Ref" with target "files".
 
-        \li Add a file processor by clicking the "file" property.
-            Choose "Image processor" and in "Variants" enter:
+        \li Add a file processor by clicking the \c file property.
+            Choose \gui {Image processor} and in \gui {Variants} enter:
             \code
             {
                 "thumbnail": { "crop":"100x100" }
@@ -58,15 +58,15 @@
             when the thumbnail is clicked.
     \endlist
 
-    Copy the backend Id from the Enginio dashboard and use them when requested.
+    Copy the backend id from the Enginio dashboard, and use them when requested.
 
-    \section1 The example code
+    \section1 The Example Code
 
     The example consists of three classes.
     ImageModel is a subclass of \l {EnginioModelCpp}{EnginioModel}
     that exposes the images in the \l Qt::DecorationRole for the list view.
-    In the MainWindow, a normal QListView is used to display the model contents.
-    The ImageObject is a class that takes care of the download and emits a signal
+    In the \c {MainWindow}, a normal QListView is used to display the model contents.
+    The ImageObject is a class that takes care of the download, and emits a signal
     when an image has been downloaded.
 
 

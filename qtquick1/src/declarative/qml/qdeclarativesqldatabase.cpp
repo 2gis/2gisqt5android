@@ -386,7 +386,6 @@ static QScriptValue qmlsqldatabase_open_sync(QScriptContext *context, QScriptEng
                 THROW_SQL(VERSION_ERR,QDeclarativeEngine::tr("SQL: database version mismatch"));
         } else {
             created = !QFile::exists(basename+QLatin1String(".sqlite"));
-            database = QSqlDatabase::addDatabase(QLatin1String("QSQLITE"), dbid);
             if (created) {
                 ini.setValue(QLatin1String("Name"), dbname);
                 if (dbcreationCallback.isFunction())
@@ -402,6 +401,7 @@ static QScriptValue qmlsqldatabase_open_sync(QScriptContext *context, QScriptEng
                 }
                 version = ini.value(QLatin1String("Version")).toString();
             }
+            database = QSqlDatabase::addDatabase(QLatin1String("QSQLITE"), dbid);
             database.setDatabaseName(basename+QLatin1String(".sqlite"));
         }
         if (!database.isOpen())

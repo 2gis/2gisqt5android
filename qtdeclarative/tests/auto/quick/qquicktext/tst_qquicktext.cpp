@@ -732,10 +732,15 @@ void tst_qquicktext::horizontalAlignment()
 
 void tst_qquicktext::horizontalAlignment_RightToLeft()
 {
+#if defined(Q_OS_BLACKBERRY)
+    QQuickWindow dummy;      // On BlackBerry first window is always full screen,
+    dummy.showFullScreen();  // so make test window a second window.
+#endif
+
     QQuickView *window = createView(testFile("horizontalAlignment_RightToLeft.qml"));
     QQuickText *text = window->rootObject()->findChild<QQuickText*>("text");
     QVERIFY(text != 0);
-    window->show();
+    window->showNormal();
 
     QQuickTextPrivate *textPrivate = QQuickTextPrivate::get(text);
     QVERIFY(textPrivate != 0);
@@ -1334,6 +1339,13 @@ void tst_qquicktext::antialiasing()
     text->resetAntialiasing();
     QCOMPARE(text->antialiasing(), true);
     QCOMPARE(spy.count(), 2);
+
+    // QTBUG-39047
+    component.setData("import QtQuick 2.0\n Text { antialiasing: true }", QUrl());
+    object.reset(component.create());
+    text = qobject_cast<QQuickText *>(object.data());
+    QVERIFY(text);
+    QCOMPARE(text->antialiasing(), true);
 }
 
 void tst_qquicktext::weight()

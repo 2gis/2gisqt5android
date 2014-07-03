@@ -55,9 +55,6 @@ import org.kde.necessitas.ministro.IMinistroCallback;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.Dialog;
-import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
-import android.graphics.drawable.BitmapDrawable;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.DialogInterface;
@@ -71,7 +68,10 @@ import android.content.res.Configuration;
 import android.content.res.Resources.Theme;
 import android.content.res.AssetManager;
 import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
+import android.graphics.drawable.ColorDrawable;
+import android.graphics.drawable.BitmapDrawable;
 import android.graphics.Paint;
 import android.net.Uri;
 import android.os.Build;
@@ -904,6 +904,8 @@ public class QtActivity extends Activity
                 };
                 getWindow().setBackgroundDrawable(drawable);
             }
+            else
+                getWindow().setBackgroundDrawable(new ColorDrawable(0xff000000));
             startApp(true);
         }
     }

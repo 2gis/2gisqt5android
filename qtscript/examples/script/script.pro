@@ -1,7 +1,7 @@
 TEMPLATE = subdirs
-SUBDIRS = \
-    customclass \
-    qsdbg
+SUBDIRS = customclass
+
+qtHaveModule(gui): SUBDIRS += qsdbg
 
 qtHaveModule(widgets) {
     SUBDIRS += \
@@ -22,8 +22,7 @@ qtHaveModule(widgets) {
 }
 
 !wince {
-    SUBDIRS += \
-        marshal
+    qtHaveModule(gui): SUBDIRS += marshal
 }
 
 maemo5: CONFIG += qt_example

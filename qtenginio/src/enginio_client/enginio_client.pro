@@ -43,3 +43,5 @@ HEADERS += \
     enginiooauth2authentication.h \
     enginioreplystate.h
 
+
+DEFINES +=  "ENGINIO_VERSION=\\\"$$MODULE_VERSION\\\""

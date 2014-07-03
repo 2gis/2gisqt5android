@@ -41,6 +41,8 @@ DEFINES += BUILDING_QT__ BUILDING_JavaScriptCore BUILDING_WTF
 win32-* {
 #   Prevent definition of min, max macros in windows.h
     DEFINES+=NOMINMAX
+#   Enables rand_s
+    msvc: DEFINES += _CRT_RAND_S
     LIBS_PRIVATE += -lwinmm
 }
 contains(JAVASCRIPTCORE_JIT,yes) {

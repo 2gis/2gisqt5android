@@ -640,8 +640,8 @@ void QQuickGridViewPrivate::layoutVisibleItems(int fromModelIndex)
         if (colPos != col * colSize()) {
             colPos = col * colSize();
             firstItem->setPosition(colPos, rowPos);
-            firstItem->setVisible(firstItem->rowPos() + rowSize() >= from && firstItem->rowPos() <= to);
         }
+        firstItem->setVisible(firstItem->rowPos() + rowSize() >= from && firstItem->rowPos() <= to);
         for (int i = 1; i < visibleItems.count(); ++i) {
             FxGridItemSG *item = static_cast<FxGridItemSG*>(visibleItems.at(i));
             if (++col >= columns) {
@@ -1524,7 +1524,7 @@ void QQuickGridView::setHighlightFollowsCurrentItem(bool autoHighlight)
     This property determines whether delegates are retained outside the
     visible area of the view.
 
-    If non-zero the view may keep as many delegates
+    If this value is greater than zero, the view may keep as many delegates
     instantiated as will fit within the buffer specified.  For example,
     if in a vertical view the delegate is 20 pixels high, there are 3
     columns and \c cacheBuffer is
@@ -1535,7 +1535,7 @@ void QQuickGridView::setHighlightFollowsCurrentItem(bool autoHighlight)
     delegates outside the visible area are not painted.
 
     The default value of this property is platform dependent, but will usually
-    be a non-zero value.
+    be a value greater than zero. Negative values are ignored.
 
     Note that cacheBuffer is not a pixel buffer - it only maintains additional
     instantiated delegates.

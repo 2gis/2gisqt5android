@@ -36,7 +36,7 @@ demonstrating the user management and access control features of Enginio.
 \section1 Introduction
 
 Social Todos is a simple todo list application with a social twist, demonstrating the user management and access control features of the Enginio service.
-The application allows the end-user to register a new user account, log in, and create and delete task lists, manage tasks on those lists and share lists with selected other users.
+The application allows the end user to register a new user account, log in, and create and delete task lists, manage tasks on those lists and share lists with selected other users.
 
 \image socialtodo-example.png
 
@@ -46,7 +46,7 @@ The application data is modeled as \e {todo items} and \e {todo lists}.
         Todo item contais a textual description of the task and a boolean status flag telling whether the task is completed or not.
     \li A \e {todo list} represents a list of tasks.
         Todo list contains zero or more todo items and each todo item belongs to just one todo list.
-        Todo lists are created by the application end-users and by default only the user who created a list can access it and its todo items.
+        Todo lists are created by the application end users. By default only the user who created a list can access it and its todo items.
         However, the creator can share the list with other users.
 \endlist
 
@@ -55,8 +55,8 @@ The Social Todos example uses the following Enginio features:
     \table
         \row
             \li \b {User management with integrated Enginio accounts}
-            \li Enables end-users to register and login.
-                End-users are identified by user-name and password.
+            \li Enables end users to register and login.
+                end users are identified by username and password.
         \row
             \li \b {Object storage}
             \li Provides shared persistent storage for task lists and tasks.
@@ -65,8 +65,7 @@ The Social Todos example uses the following Enginio features:
             \li Enforces required data structure for task lists and tasks.
         \row
             \li \b {Access control mechanisms}
-            \li Restricts access to application data so that it is available only to authenticated (logged-in) end-users.
-                End-users can see and manipulate only those task lists and tasks which they are entitled to.
+            \li Restricts access to application data so that it is available only to authenticated (logged-in) end users. End users can see and manipulate only those task lists and tasks which they are entitled to.
     \endtable
 \enddiv
 
@@ -100,11 +99,11 @@ A big part of the backend configuration is related to restricting who can create
 
         \row
             \li \b {Data access controls}
-            \li To todo lists and todo items the data access (and manipulation) is allowed only for logged-in users.
+            \li Data access (and manipulation) to todo lists and todo items is allowed only for logged-in users.
                 By default only the user who creates the todo list can access the list and its todo items.
 
                 However, the creator can share the list with other users.
-                List sharing happens by granting to selected other users right to access the list.
+                List sharing happens by granting the right to access the list to selected other users.
 
                 Access permissions are explicitly managed only for todo lists.
                 Todo items are configured to inherit permissions from the todo list which they belong to.
@@ -120,9 +119,8 @@ A big part of the backend configuration is related to restricting who can create
 \section2 1. Create 'allUsers' Usergroup
 
 Create a new usergroup \c {allUsers}.
-The usergroup will be used to restrict that only registered application end-users can store new todo lists and items to backend.
+The usergroup will be used to restrict that only registered application end users can store new todo lists and items to the backend.
 The usergroup itself is secured with suitable data access permissions.
-
 
 First create the usergroup:
 \list
@@ -144,7 +142,7 @@ Then secure the usergroup by configuring suitable permission settings:
             \li
         \row
             \li \b {Object permissions}
-            \li Configure following permissions:
+            \li Configure the following permissions:
                 \list
                     \li Grant \c {read} permission to \c {all}.
                     \li Clear other permission grants.
@@ -154,14 +152,14 @@ Then secure the usergroup by configuring suitable permission settings:
                 In this case read-only access is given to everybody, so the QML application can read the \c {allUsers} data even when the application doesn't have any logged in user.
         \row
             \li \b {Member management permissions}
-            \li Configure following permissions:
+            \li Configure the following permissions:
                 \list
                     \li Grant \c {create} permission to \c {all}.
                     \li Clear other permission grants.
                 \endlist
-            \li \e {Member management permissions} control who can add new memebrs to \c {allUsers} usergroup or remove existing ones.
+            \li \e {Member management permissions} control who can add new members to the \c {allUsers} usergroup or remove existing ones.
 
-                Now member add right is given to everybody and thus the QML application can add the end-user to \c {allUsers} usergroup.
+                Now everyone can add members, and consequently the QML application can add the end user to the \c {allUsers} usergroup.
                 However, since other permissions are not granted, usergroup members can not be listed or removed.
     \endtable
 \enddiv
@@ -171,7 +169,7 @@ Then secure the usergroup by configuring suitable permission settings:
 \section2 2. Create 'todoLists' Object Type
 
 Create a new object type \c {objects.todoLists}.
-The object type defines data schema and other settings for todo list objects.
+The object type defines the data schema and other settings for todo list objects.
 
 Create the object type:
 \list
@@ -309,7 +307,7 @@ Then configure the object type with needed details:
 \section2 4. Configure 'users' Object Type
 
 Configure built-in \c {users} object type with needed security permissions.
-The \c {users} object type defines data schema and other settings for user objects, modeling application end-users.
+The \c {users} object type defines data schema and other settings for user objects, modeling application end users.
 
 \list
     \li In Dashboard: select \b {Object Types}, open \b {users} object type for editing, apply the configurations below, and finally select \b {Save} in object type editor.
@@ -384,13 +382,13 @@ The \c {usergroups} object type defines data schema and other settings for userg
                             \li No changes.
                         \endlist
                 \endlist
-            \li \e {Collection permissions} control who is able to create new \c {usergroups} objects or list existing ones.
+            \li \e {Collection permissions} control which users are able to create new \c {usergroups} objects or list existing ones.
                 In this case listing rights are granted for everyone (i.e. those are publicly readable).
-                Thus the QML application can locate \c {allUsers} usergoup in the application startup phase, even before the end-user logs-in to system.
+                Thus the QML application can locate the \c {allUsers} usergoup in the application startup phase, even before the end user logs in to the system.
                 However, since create right is not granted to anyone, new usergroups can not be created.
 
-                \e {Object permissions template} define how object level permissions will be initially set for created \c {usergroups} objects.
-                Since new usergoups will not be created dynamcally, there is no need to modify the permission template.
+                \e {Object permissions template} define how object level permissions will be set initially for the created \c {usergroups} objects.
+                Since new usergoups will not be created dynamically, there is no need to modify the permission template.
                 Note that changes made in the permissions template will effect existing \c {usergroups} objects and thus the \c {allUsers} group as well.
     \endtable
 \enddiv

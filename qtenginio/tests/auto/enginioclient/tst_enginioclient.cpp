@@ -98,6 +98,7 @@ private slots:
     void lifeTimeOfNetworkManager();
     void fullTextSearch();
     void assignUserToGroup();
+    void userAgent();
 
 private:
     QString usergroupId(EnginioClient *client)
@@ -796,6 +797,34 @@ void tst_EnginioClient::assignUserToGroup()
         QCOMPARE(results.count(), 1);
         QCOMPARE(results[0].toObject()["id"].toString(), userId);
     }
+}
+
+static void checkUserAgent(QNetworkReply *reply)
+{
+    QNetworkRequest request = reply->request();
+    QVERIFY(request.rawHeaderList().contains("User-Agent"));
+    QByteArray agent = request.rawHeader("User-Agent");
+    QVERIFY(!agent.isEmpty());
+    QVERIFY(agent.contains("Qt:"));
+    QVERIFY(agent.contains("Enginio:"));
+    QVERIFY(agent.contains("Language:"));
+}
+
+void tst_EnginioClient::userAgent()
+{
+    EnginioClient client;
+    client.setBackendId(_backendId);
+    client.setServiceUrl(EnginioTests::TESTAPP_URL);
+
+    QNetworkAccessManager *qnam = client.networkManager();
+    QObject::connect(qnam, &QNetworkAccessManager::finished, &client, checkUserAgent);
+
+    QVector<EnginioReply *> replies;
+    replies.append(client.query(QJsonObject(), Enginio::UserOperation));
+    replies.append(client.create(QJsonObject(), Enginio::UserOperation));
+
+    foreach (EnginioReply *reply, replies)
+        QTRY_VERIFY(reply->isFinished());
 }
 
 struct DeleteReplyCountHelper

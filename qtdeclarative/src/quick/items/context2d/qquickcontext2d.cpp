@@ -1774,10 +1774,12 @@ QV4::ReturnedValue QQuickJSContext2DPrototype::method_createPattern(QV4::CallCon
                     pattern->patternRepeatY = true;
                 } else if (repetition == QStringLiteral("repeat-x")) {
                     pattern->patternRepeatX = true;
+                    pattern->patternRepeatY = false;
                 } else if (repetition == QStringLiteral("repeat-y")) {
+                    pattern->patternRepeatX = false;
                     pattern->patternRepeatY = true;
                 } else if (repetition == QStringLiteral("no-repeat")) {
-                    pattern->patternRepeatY = false;
+                    pattern->patternRepeatX = false;
                     pattern->patternRepeatY = false;
                 } else {
                     //TODO: exception: SYNTAX_ERR
@@ -3175,11 +3177,6 @@ QV4::ReturnedValue QQuickJSContext2DPixelData::getIndexed(QV4::Managed *m, uint 
     QV4::ExecutionEngine *v4 = m->engine();
     QV4::Scope scope(v4);
     QV4::Scoped<QQuickJSContext2DPixelData> r(scope, m->as<QQuickJSContext2DPixelData>());
-    if (!m) {
-        if (hasProperty)
-            *hasProperty = false;
-        return m->engine()->currentContext()->throwTypeError();
-    }
 
     if (r && index < static_cast<quint32>(r->image.width() * r->image.height() * 4)) {
         if (hasProperty)
@@ -3316,7 +3313,7 @@ QV4::ReturnedValue QQuickJSContext2DPrototype::method_getImageData(QV4::CallCont
         qreal y = ctx->callData->args[1].toNumber();
         qreal w = ctx->callData->args[2].toNumber();
         qreal h = ctx->callData->args[3].toNumber();
-        if (!qIsFinite(x) || !qIsFinite(y) || !qIsFinite(w) || !qIsFinite(w))
+        if (!qIsFinite(x) || !qIsFinite(y) || !qIsFinite(w) || !qIsFinite(h))
             V4THROW_DOM(DOMEXCEPTION_NOT_SUPPORTED_ERR, "getImageData(): Invalid arguments");
 
         if (w <= 0 || h <= 0)
@@ -3608,10 +3605,12 @@ void QQuickContext2D::clip()
 
     QPainterPath clipPath = m_path;
     clipPath.closeSubpath();
-    if (!state.clipPath.isEmpty())
+    if (state.clip) {
         state.clipPath = clipPath.intersected(state.clipPath);
-    else
+    } else {
+        state.clip = true;
         state.clipPath = clipPath;
+    }
     buffer()->clip(state.clipPath);
 }
 
@@ -4280,9 +4279,8 @@ void QQuickContext2D::popState()
     if (newState.miterLimit != state.miterLimit)
         buffer()->setMiterLimit(newState.miterLimit);
 
-    if (newState.clipPath != state.clipPath) {
+    if (newState.clip && (!state.clip || newState.clipPath != state.clipPath))
         buffer()->clip(newState.clipPath);
-    }
 
     if (newState.shadowBlur != state.shadowBlur)
         buffer()->setShadowBlur(newState.shadowBlur);
@@ -4310,12 +4308,6 @@ void QQuickContext2D::reset()
 
     m_path = QPainterPath();
 
-    QPainterPath defaultClipPath;
-
-    QRect r(0, 0, m_canvas->canvasSize().width(), m_canvas->canvasSize().height());
-    r = r.united(m_canvas->canvasWindow().toRect());
-    defaultClipPath.addRect(r);
-    newState.clipPath = defaultClipPath;
     newState.clipPath.setFillRule(Qt::WindingFill);
 
     m_stateStack.clear();

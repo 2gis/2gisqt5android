@@ -710,7 +710,7 @@ ScrollView {
             onWrapModeChanged: edit.doLayout()
 
             renderType: __style ? __style.renderType : Text.NativeRendering
-            font: __style ? __style.font : font
+            font: __style ? __style.font : TextSingleton.font
             color: __style ? __style.textColor : "darkgray"
             selectionColor: __style ? __style.selectionColor : "darkred"
             selectedTextColor: __style ? __style.selectedTextColor : "white"

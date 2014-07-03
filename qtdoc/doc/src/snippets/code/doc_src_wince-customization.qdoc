@@ -61,7 +61,7 @@ set PATH=C:\Qt\mobile5-shadow\bin;%PATH%
 
 //! [4]
 cd c:\Qt\mobile5-shadow
-C:\Qt\5.3.0\configure.exe -xplatform wincewm50pocket-msvc2005 -prefix %INSTALLDIR%
+C:\Qt\5.3.1\configure.exe -xplatform wincewm50pocket-msvc2005 -prefix %INSTALLDIR%
 //! [4]
 
 

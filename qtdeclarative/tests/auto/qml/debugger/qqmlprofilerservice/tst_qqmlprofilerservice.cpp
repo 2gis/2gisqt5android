@@ -136,7 +136,10 @@ public:
     {
     }
 
-    QList<QQmlProfilerData> traceMessages;
+    QList<QQmlProfilerData> qmlMessages;
+    QList<QQmlProfilerData> javascriptMessages;
+    QList<QQmlProfilerData> asynchronousMessages;
+    QList<QQmlProfilerData> pixmapMessages;
 
     void setTraceState(bool enabled) {
         QByteArray message;
@@ -171,6 +174,7 @@ private:
     QQmlProfilerClient *m_client;
 
     void connect(bool block, const QString &testFile);
+    void checkTraceReceived();
 
 private slots:
     void cleanup();
@@ -305,7 +309,15 @@ void QQmlProfilerClient::messageReceived(const QByteArray &message)
         break;
     }
     QVERIFY(stream.atEnd());
-    traceMessages.append(data);
+    if (data.messageType == QQmlProfilerClient::PixmapCacheEvent)
+        pixmapMessages.append(data);
+    else if (data.messageType == QQmlProfilerClient::SceneGraphFrame ||
+            data.messageType == QQmlProfilerClient::Event)
+        asynchronousMessages.append(data);
+    else if (data.detailType == QQmlProfilerClient::Javascript)
+        javascriptMessages.append(data);
+    else
+        qmlMessages.append(data);
 }
 
 void tst_QQmlProfilerService::connect(bool block, const QString &testFile)
@@ -331,9 +343,51 @@ void tst_QQmlProfilerService::connect(bool block, const QString &testFile)
     m_connection->connectToHost(QLatin1String("127.0.0.1"), port);
 }
 
+void tst_QQmlProfilerService::checkTraceReceived()
+{
+    QVERIFY2(QQmlDebugTest::waitForSignal(m_client, SIGNAL(complete())), "No trace received in time.");
+    QVERIFY(m_client->asynchronousMessages.count());
+
+    // must start with "StartTrace"
+    QCOMPARE(m_client->asynchronousMessages.first().messageType, (int)QQmlProfilerClient::Event);
+    QCOMPARE(m_client->asynchronousMessages.first().detailType, (int)QQmlProfilerClient::StartTrace);
+
+    // must end with "EndTrace"
+    QCOMPARE(m_client->asynchronousMessages.last().messageType, (int)QQmlProfilerClient::Event);
+    QCOMPARE(m_client->asynchronousMessages.last().detailType, (int)QQmlProfilerClient::EndTrace);
+}
+
 void tst_QQmlProfilerService::cleanup()
 {
     if (QTest::currentTestFailed()) {
+        qDebug() << "QML Messages:" << m_client->qmlMessages.count();
+        int i = 0;
+        foreach (const QQmlProfilerData &data, m_client->qmlMessages) {
+            qDebug() << i++ << data.time << data.messageType << data.detailType << data.detailData
+                     << data.line << data.column;
+        }
+        qDebug() << " ";
+        qDebug() << "JavaScript Messages:" << m_client->javascriptMessages.count();
+        i = 0;
+        foreach (const QQmlProfilerData &data, m_client->javascriptMessages) {
+            qDebug() << i++ << data.time << data.messageType << data.detailType << data.detailData
+                     << data.line << data.column;
+        }
+        qDebug() << " ";
+        qDebug() << "Asynchronous Messages:" << m_client->asynchronousMessages.count();
+        i = 0;
+        foreach (const QQmlProfilerData &data, m_client->asynchronousMessages) {
+            qDebug() << i++ << data.time << data.messageType << data.detailType << data.detailData
+                     << data.framerate << data.animationcount << data.line << data.column;
+        }
+        qDebug() << " ";
+        qDebug() << "Pixmap Cache Messages:" << m_client->pixmapMessages.count();
+        i = 0;
+        foreach (const QQmlProfilerData &data, m_client->pixmapMessages) {
+            qDebug() << i++ << data.time << data.messageType << data.detailType << data.detailData
+                     << data.line << data.column;
+        }
+        qDebug() << " ";
         qDebug() << "Process State:" << (m_process ? m_process->state() : QLatin1String("null"));
         qDebug() << "Application Output:" << (m_process ? m_process->output() : QLatin1String("null"));
         qDebug() << "Connection State:" << (m_connection ? m_connection->stateString() : QLatin1String("null"));
@@ -355,16 +409,7 @@ void tst_QQmlProfilerService::blockingConnectWithTraceEnabled()
 
     m_client->setTraceState(true);
     m_client->setTraceState(false);
-    QVERIFY2(QQmlDebugTest::waitForSignal(m_client, SIGNAL(complete())), "No trace received in time.");
-
-    QVERIFY(m_client->traceMessages.count());
-    // must start with "StartTrace"
-    QCOMPARE(m_client->traceMessages.first().messageType, (int)QQmlProfilerClient::Event);
-    QCOMPARE(m_client->traceMessages.first().detailType, (int)QQmlProfilerClient::StartTrace);
-
-    // must end with "EndTrace"
-    QCOMPARE(m_client->traceMessages.last().messageType, (int)QQmlProfilerClient::Event);
-    QCOMPARE(m_client->traceMessages.last().detailType, (int)QQmlProfilerClient::EndTrace);
+    checkTraceReceived();
 }
 
 void tst_QQmlProfilerService::blockingConnectWithTraceDisabled()
@@ -376,17 +421,7 @@ void tst_QQmlProfilerService::blockingConnectWithTraceDisabled()
     m_client->setTraceState(false);
     m_client->setTraceState(true);
     m_client->setTraceState(false);
-    QVERIFY2(QQmlDebugTest::waitForSignal(m_client, SIGNAL(complete())), "No trace received in time.");
-
-    QVERIFY(m_client->traceMessages.count());
-
-    // must start with "StartTrace"
-    QCOMPARE(m_client->traceMessages.first().messageType, (int)QQmlProfilerClient::Event);
-    QCOMPARE(m_client->traceMessages.first().detailType, (int)QQmlProfilerClient::StartTrace);
-
-    // must end with "EndTrace"
-    QCOMPARE(m_client->traceMessages.last().messageType, (int)QQmlProfilerClient::Event);
-    QCOMPARE(m_client->traceMessages.last().detailType, (int)QQmlProfilerClient::EndTrace);
+    checkTraceReceived();
 }
 
 void tst_QQmlProfilerService::nonBlockingConnect()
@@ -397,15 +432,7 @@ void tst_QQmlProfilerService::nonBlockingConnect()
 
     m_client->setTraceState(true);
     m_client->setTraceState(false);
-    QVERIFY2(QQmlDebugTest::waitForSignal(m_client, SIGNAL(complete())), "No trace received in time.");
-
-    // must start with "StartTrace"
-    QCOMPARE(m_client->traceMessages.first().messageType, (int)QQmlProfilerClient::Event);
-    QCOMPARE(m_client->traceMessages.first().detailType, (int)QQmlProfilerClient::StartTrace);
-
-    // must end with "EndTrace"
-    QCOMPARE(m_client->traceMessages.last().messageType, (int)QQmlProfilerClient::Event);
-    QCOMPARE(m_client->traceMessages.last().detailType, (int)QQmlProfilerClient::EndTrace);
+    checkTraceReceived();
 }
 
 void tst_QQmlProfilerService::pixmapCacheData()
@@ -423,34 +450,27 @@ void tst_QQmlProfilerService::pixmapCacheData()
 
     m_client->setTraceState(false);
 
-    QVERIFY2(QQmlDebugTest::waitForSignal(m_client, SIGNAL(complete())), "No trace received in time.");
-    QVERIFY(m_client->traceMessages.count() >= 20);
-
-    // must start with "StartTrace"
-    QCOMPARE(m_client->traceMessages.first().messageType, (int)QQmlProfilerClient::Event);
-    QCOMPARE(m_client->traceMessages.first().detailType, (int)QQmlProfilerClient::StartTrace);
+    checkTraceReceived();
+    QVERIFY2(m_client->pixmapMessages.count() >= 4,
+             QString::number(m_client->pixmapMessages.count()).toUtf8().constData());
 
     // image starting to load
-    QCOMPARE(m_client->traceMessages[16].messageType, (int)QQmlProfilerClient::PixmapCacheEvent);
-    QCOMPARE(m_client->traceMessages[16].detailType, (int)QQmlProfilerClient::PixmapLoadingStarted);
+    QCOMPARE(m_client->pixmapMessages[0].messageType, (int)QQmlProfilerClient::PixmapCacheEvent);
+    QCOMPARE(m_client->pixmapMessages[0].detailType, (int)QQmlProfilerClient::PixmapLoadingStarted);
 
     // image size
-    QCOMPARE(m_client->traceMessages[17].messageType, (int)QQmlProfilerClient::PixmapCacheEvent);
-    QCOMPARE(m_client->traceMessages[17].detailType, (int)QQmlProfilerClient::PixmapSizeKnown);
-    QCOMPARE(m_client->traceMessages[17].line, 2); // width
-    QCOMPARE(m_client->traceMessages[17].column, 2); // height
+    QCOMPARE(m_client->pixmapMessages[1].messageType, (int)QQmlProfilerClient::PixmapCacheEvent);
+    QCOMPARE(m_client->pixmapMessages[1].detailType, (int)QQmlProfilerClient::PixmapSizeKnown);
+    QCOMPARE(m_client->pixmapMessages[1].line, 2); // width
+    QCOMPARE(m_client->pixmapMessages[1].column, 2); // height
 
     // image loaded
-    QCOMPARE(m_client->traceMessages[18].messageType, (int)QQmlProfilerClient::PixmapCacheEvent);
-    QCOMPARE(m_client->traceMessages[18].detailType, (int)QQmlProfilerClient::PixmapLoadingFinished);
+    QCOMPARE(m_client->pixmapMessages[2].messageType, (int)QQmlProfilerClient::PixmapCacheEvent);
+    QCOMPARE(m_client->pixmapMessages[2].detailType, (int)QQmlProfilerClient::PixmapLoadingFinished);
 
     // cache size
-    QCOMPARE(m_client->traceMessages[19].messageType, (int)QQmlProfilerClient::PixmapCacheEvent);
-    QCOMPARE(m_client->traceMessages[19].detailType, (int)QQmlProfilerClient::PixmapCacheCountChanged);
-
-    // must end with "EndTrace"
-    QCOMPARE(m_client->traceMessages.last().messageType, (int)QQmlProfilerClient::Event);
-    QCOMPARE(m_client->traceMessages.last().detailType, (int)QQmlProfilerClient::EndTrace);
+    QCOMPARE(m_client->pixmapMessages[3].messageType, (int)QQmlProfilerClient::PixmapCacheEvent);
+    QCOMPARE(m_client->pixmapMessages[3].detailType, (int)QQmlProfilerClient::PixmapCacheCountChanged);
 
 }
 
@@ -466,8 +486,7 @@ void tst_QQmlProfilerService::scenegraphData()
         QVERIFY(QQmlDebugTest::waitForSignal(m_process, SIGNAL(readyReadStandardOutput())));
     m_client->setTraceState(false);
 
-    QVERIFY2(QQmlDebugTest::waitForSignal(m_client, SIGNAL(complete())), "No trace received in time.");
-    QVERIFY(m_client->traceMessages.count());
+    checkTraceReceived();
 
     // check that at least one frame was rendered
     // there should be a SGPolishAndSync + SGRendererFrame + SGRenderLoopFrame sequence
@@ -475,7 +494,7 @@ void tst_QQmlProfilerService::scenegraphData()
     //
     // since the rendering happens in a different thread, there could be other unrelated events interleaved
     int loopcheck = 0;
-    foreach (const QQmlProfilerData &msg, m_client->traceMessages) {
+    foreach (const QQmlProfilerData &msg, m_client->asynchronousMessages) {
         if (msg.messageType == QQmlProfilerClient::SceneGraphFrame) {
             if (loopcheck == 0 && msg.detailType == QQmlProfilerClient::SceneGraphContextFrame)
                 loopcheck = 1;
@@ -496,16 +515,7 @@ void tst_QQmlProfilerService::profileOnExit()
 
     m_client->setTraceState(true);
 
-    QVERIFY2(QQmlDebugTest::waitForSignal(m_client, SIGNAL(complete())), "No trace received in time.");
-    QVERIFY(m_client->traceMessages.count() >= 2);
-
-    // must start with "StartTrace"
-    QCOMPARE(m_client->traceMessages.first().messageType, (int)QQmlProfilerClient::Event);
-    QCOMPARE(m_client->traceMessages.first().detailType, (int)QQmlProfilerClient::StartTrace);
-
-    // must end with "EndTrace"
-    QCOMPARE(m_client->traceMessages.last().messageType, (int)QQmlProfilerClient::Event);
-    QCOMPARE(m_client->traceMessages.last().detailType, (int)QQmlProfilerClient::EndTrace);
+    checkTraceReceived();
 }
 
 void tst_QQmlProfilerService::controlFromJS()
@@ -515,16 +525,7 @@ void tst_QQmlProfilerService::controlFromJS()
     QTRY_COMPARE(m_client->state(), QQmlDebugClient::Enabled);
 
     m_client->setTraceState(false);
-    QVERIFY2(QQmlDebugTest::waitForSignal(m_client, SIGNAL(complete())), "No trace received in time.");
-    QVERIFY(m_client->traceMessages.count() >= 2);
-
-    // must start with "StartTrace"
-    QCOMPARE(m_client->traceMessages.first().messageType, (int)QQmlProfilerClient::Event);
-    QCOMPARE(m_client->traceMessages.first().detailType, (int)QQmlProfilerClient::StartTrace);
-
-    // must end with "EndTrace"
-    QCOMPARE(m_client->traceMessages.last().messageType, (int)QQmlProfilerClient::Event);
-    QCOMPARE(m_client->traceMessages.last().detailType, (int)QQmlProfilerClient::EndTrace);
+    checkTraceReceived();
 }
 
 void tst_QQmlProfilerService::signalSourceLocation()
@@ -537,28 +538,24 @@ void tst_QQmlProfilerService::signalSourceLocation()
     while (!(m_process->output().contains(QLatin1String("500"))))
         QVERIFY(QQmlDebugTest::waitForSignal(m_process, SIGNAL(readyReadStandardOutput())));
     m_client->setTraceState(false);
-    QVERIFY2(QQmlDebugTest::waitForSignal(m_client, SIGNAL(complete())), "No trace received in time.");
+    checkTraceReceived();
 
-    QVERIFY(m_client->traceMessages.count() >= 20);
-    // must start with "StartTrace"
-    QCOMPARE(m_client->traceMessages.first().messageType, (int)QQmlProfilerClient::Event);
-    QCOMPARE(m_client->traceMessages.first().detailType, (int)QQmlProfilerClient::StartTrace);
+    QVERIFY2(m_client->qmlMessages.count() >= 16,
+             QString::number(m_client->qmlMessages.count()).toUtf8().constData());
 
-    QVERIFY(m_client->traceMessages[14].messageType == QQmlProfilerClient::RangeLocation);
-    QVERIFY(m_client->traceMessages[14].detailType == QQmlProfilerClient::HandlingSignal);
-    QVERIFY(m_client->traceMessages[14].detailData.endsWith("signalSourceLocation.qml"));
-    QVERIFY(m_client->traceMessages[14].line == 8);
-    QVERIFY(m_client->traceMessages[14].column == 28);
+    QCOMPARE(m_client->qmlMessages[13].messageType, (int)QQmlProfilerClient::RangeLocation);
+    QCOMPARE(m_client->qmlMessages[13].detailType, (int)QQmlProfilerClient::HandlingSignal);
+    QVERIFY2(m_client->qmlMessages[13].detailData.endsWith("signalSourceLocation.qml"),
+             m_client->qmlMessages[13].detailData.toUtf8().constData());
+    QCOMPARE(m_client->qmlMessages[13].line, 8);
+    QCOMPARE(m_client->qmlMessages[13].column, 28);
 
-    QVERIFY(m_client->traceMessages[19].messageType == QQmlProfilerClient::RangeLocation);
-    QVERIFY(m_client->traceMessages[19].detailType == QQmlProfilerClient::HandlingSignal);
-    QVERIFY(m_client->traceMessages[19].detailData.endsWith("signalSourceLocation.qml"));
-    QVERIFY(m_client->traceMessages[19].line == 7);
-    QVERIFY(m_client->traceMessages[19].column == 21);
-
-    // must end with "EndTrace"
-    QCOMPARE(m_client->traceMessages.last().messageType, (int)QQmlProfilerClient::Event);
-    QCOMPARE(m_client->traceMessages.last().detailType, (int)QQmlProfilerClient::EndTrace);
+    QCOMPARE(m_client->qmlMessages[15].messageType, (int)QQmlProfilerClient::RangeLocation);
+    QCOMPARE(m_client->qmlMessages[15].detailType, (int)QQmlProfilerClient::HandlingSignal);
+    QVERIFY2(m_client->qmlMessages[15].detailData.endsWith("signalSourceLocation.qml"),
+             m_client->qmlMessages[15].detailData.toUtf8().constData());
+    QCOMPARE(m_client->qmlMessages[15].line, 7);
+    QCOMPARE(m_client->qmlMessages[15].column, 21);
 }
 
 void tst_QQmlProfilerService::javascript()
@@ -571,32 +568,28 @@ void tst_QQmlProfilerService::javascript()
     while (!(m_process->output().contains(QLatin1String("done"))))
         QVERIFY(QQmlDebugTest::waitForSignal(m_process, SIGNAL(readyReadStandardOutput())));
     m_client->setTraceState(false);
-    QVERIFY2(QQmlDebugTest::waitForSignal(m_client, SIGNAL(complete())), "No trace received in time.");
+    checkTraceReceived();
 
-    QVERIFY(m_client->traceMessages.count() >= 36);
-    // must start with "StartTrace"
-    QCOMPARE(m_client->traceMessages.first().messageType, (int)QQmlProfilerClient::Event);
-    QCOMPARE(m_client->traceMessages.first().detailType, (int)QQmlProfilerClient::StartTrace);
+    QVERIFY2(m_client->javascriptMessages.count() >= 22,
+             QString::number(m_client->javascriptMessages.count()).toUtf8().constData());
 
-    QVERIFY(m_client->traceMessages[32].messageType == QQmlProfilerClient::RangeStart);
-    QVERIFY(m_client->traceMessages[32].detailType == QQmlProfilerClient::Javascript);
+    QCOMPARE(m_client->javascriptMessages[6].messageType, (int)QQmlProfilerClient::RangeStart);
+    QCOMPARE(m_client->javascriptMessages[6].detailType, (int)QQmlProfilerClient::Javascript);
 
-    QVERIFY(m_client->traceMessages[33].messageType == QQmlProfilerClient::RangeLocation);
-    QVERIFY(m_client->traceMessages[33].detailType == QQmlProfilerClient::Javascript);
-    QVERIFY(m_client->traceMessages[33].detailData.endsWith("javascript.qml"));
-    QVERIFY(m_client->traceMessages[33].line == 4);
-    QVERIFY(m_client->traceMessages[33].column == 5);
+    QCOMPARE(m_client->javascriptMessages[7].messageType, (int)QQmlProfilerClient::RangeLocation);
+    QCOMPARE(m_client->javascriptMessages[7].detailType, (int)QQmlProfilerClient::Javascript);
+    QVERIFY2(m_client->javascriptMessages[7].detailData.endsWith("javascript.qml"),
+             m_client->javascriptMessages[7].detailData.toUtf8().constData());
+    QCOMPARE(m_client->javascriptMessages[7].line, 4);
+    QCOMPARE(m_client->javascriptMessages[7].column, 5);
 
-    QVERIFY(m_client->traceMessages[34].messageType == QQmlProfilerClient::RangeData);
-    QVERIFY(m_client->traceMessages[34].detailType == QQmlProfilerClient::Javascript);
-    QVERIFY(m_client->traceMessages[34].detailData == "something");
+    QCOMPARE(m_client->javascriptMessages[8].messageType, (int)QQmlProfilerClient::RangeData);
+    QCOMPARE(m_client->javascriptMessages[8].detailType, (int)QQmlProfilerClient::Javascript);
+    QVERIFY2(m_client->javascriptMessages[8].detailData == "something",
+             m_client->javascriptMessages[8].detailData.toUtf8().constData());
 
-    QVERIFY(m_client->traceMessages[35].messageType == QQmlProfilerClient::RangeEnd);
-    QVERIFY(m_client->traceMessages[35].detailType == QQmlProfilerClient::Javascript);
-
-    // must end with "EndTrace"
-    QCOMPARE(m_client->traceMessages.last().messageType, (int)QQmlProfilerClient::Event);
-    QCOMPARE(m_client->traceMessages.last().detailType, (int)QQmlProfilerClient::EndTrace);
+    QCOMPARE(m_client->javascriptMessages[21].messageType, (int)QQmlProfilerClient::RangeEnd);
+    QCOMPARE(m_client->javascriptMessages[21].detailType, (int)QQmlProfilerClient::Javascript);
 }
 
 QTEST_MAIN(tst_QQmlProfilerService)

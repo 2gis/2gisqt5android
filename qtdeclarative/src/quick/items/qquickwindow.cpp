@@ -687,6 +687,13 @@ void QQuickWindowPrivate::translateTouchEvent(QTouchEvent *touchEvent)
     touchEvent->setTouchPoints(touchPoints);
 }
 
+
+static inline bool windowHasFocus(QQuickWindow *win)
+{
+    const QWindow *focusWindow = QGuiApplication::focusWindow();
+    return win == focusWindow || QQuickRenderControl::renderWindowFor(win) == focusWindow;
+}
+
 /*!
 Set the focus inside \a scope to be \a item.
 If the scope contains the active focus item, it will be changed to \a item.
@@ -762,7 +769,7 @@ void QQuickWindowPrivate::setFocusInScope(QQuickItem *scope, QQuickItem *item, Q
     }
 
     if (!(options & DontChangeFocusProperty)) {
-        if (item != contentItem || QGuiApplication::focusWindow() == q) {
+        if (item != contentItem || windowHasFocus(q)) {
             itemPrivate->focus = true;
             changed << item;
         }
@@ -1291,9 +1298,11 @@ bool QQuickWindow::event(QEvent *e)
         QTouchEvent *touch = static_cast<QTouchEvent*>(e);
         d->translateTouchEvent(touch);
         d->deliverTouchEvent(touch);
-        // we consume all touch events ourselves to avoid duplicate
-        // mouse delivery by QtGui mouse synthesis
-        e->accept();
+        if (Q_LIKELY(qApp->testAttribute(Qt::AA_SynthesizeMouseForUnhandledTouchEvents))) {
+            // we consume all touch events ourselves to avoid duplicate
+            // mouse delivery by QtGui mouse synthesis
+            e->accept();
+        }
         return true;
     }
         break;
@@ -2447,6 +2456,7 @@ void QQuickWindowPrivate::cleanupNodesOnShutdown()
     QSet<QQuickItem *>::const_iterator it = parentlessItems.begin();
     for (; it != parentlessItems.end(); ++it)
         cleanupNodesOnShutdown(*it);
+    animationController->windowNodesDestroyed();
     q->cleanupSceneGraph();
 }
 
