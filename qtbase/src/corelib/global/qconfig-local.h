@@ -37,9 +37,6 @@
 #endif
 
 /* Styles */
-#ifndef QT_NO_STYLE_FUSION
-#  define QT_NO_STYLE_FUSION
-#endif
 #ifndef QT_NO_STYLE_WINDOWSCE
 #  define QT_NO_STYLE_WINDOWSCE
 #endif
