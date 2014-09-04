@@ -9,7 +9,6 @@ build-*
 Makefile
 .qmake.cache
 .qmake.super
-
 qtbase/include/QtCore/QtConfig
 qtbase/include/QtCore/qconfig.h
 qtbase/include/QtCore/qfeatures.h
