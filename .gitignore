@@ -12,3 +12,7 @@ Makefile
 qtbase/include/QtCore/QtConfig
 qtbase/include/QtCore/qconfig.h
 qtbase/include/QtCore/qfeatures.h
+*.BACKUP.*
+*.BASE.*
+*.LOCAL.*
+*.REMOTE.*
