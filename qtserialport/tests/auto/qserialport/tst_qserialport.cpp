@@ -46,6 +46,7 @@
 Q_DECLARE_METATYPE(QSerialPort::SerialPortError);
 Q_DECLARE_METATYPE(QIODevice::OpenMode);
 Q_DECLARE_METATYPE(QIODevice::OpenModeFlag);
+Q_DECLARE_METATYPE(Qt::ConnectionType);
 
 class tst_QSerialPort : public QObject
 {
@@ -104,13 +105,23 @@ private slots:
     void waitForReadyReadWithOneByte();
     void waitForReadyReadWithAlphabet();
 
+    void twoStageSynchronousLoopback();
+
+    void synchronousReadWrite();
+
+    void asynchronousWriteByBytesWritten_data();
+    void asynchronousWriteByBytesWritten();
+
+    void asynchronousWriteByTimer_data();
+    void asynchronousWriteByTimer();
+
 protected slots:
     void handleBytesWrittenAndExitLoopSlot(qint64 bytesWritten);
     void handleBytesWrittenAndExitLoopSlot2(qint64 bytesWritten);
 
 private:
 #ifdef Q_OS_WIN
-    void clearReceiver();
+    void clearReceiver(const QString &customReceiverName = QString());
 #endif
 
     QString m_senderPortName;
@@ -142,9 +153,10 @@ tst_QSerialPort::tst_QSerialPort()
 // not expected). It is recommended to use this method for cleaning of
 // read FIFO of receiver for those tests in which reception of data is
 // required.
-void tst_QSerialPort::clearReceiver()
+void tst_QSerialPort::clearReceiver(const QString &customReceiverName)
 {
-    QSerialPort receiver(m_receiverPortName);
+    QSerialPort receiver(customReceiverName.isEmpty()
+                         ? m_receiverPortName : customReceiverName);
     if (receiver.open(QIODevice::ReadOnly))
         enterLoopMsecs(100);
 }
@@ -436,6 +448,222 @@ void tst_QSerialPort::waitForReadyReadWithAlphabet()
 
     QCOMPARE(receiverSerialPort.error(), QSerialPort::NoError);
     QVERIFY(readyReadSpy.count() > 0);
+}
+
+void tst_QSerialPort::twoStageSynchronousLoopback()
+{
+#ifdef Q_OS_WIN
+    clearReceiver();
+    clearReceiver(m_senderPortName);
+#endif
+
+    QSerialPort senderPort(m_senderPortName);
+    QVERIFY(senderPort.open(QSerialPort::ReadWrite));
+
+    QSerialPort receiverPort(m_receiverPortName);
+    QVERIFY(receiverPort.open(QSerialPort::ReadWrite));
+
+    const int waitMsecs = 50;
+
+    // first stage
+    senderPort.write(newlineArray);
+    senderPort.waitForBytesWritten(waitMsecs);
+    QTest::qSleep(waitMsecs);
+    receiverPort.waitForReadyRead(waitMsecs);
+    QCOMPARE(newlineArray.size(), receiverPort.bytesAvailable());
+    receiverPort.write(receiverPort.readAll());
+    receiverPort.waitForBytesWritten(waitMsecs);
+    QTest::qSleep(waitMsecs);
+    senderPort.waitForReadyRead(waitMsecs);
+    QCOMPARE(newlineArray.size(), senderPort.bytesAvailable());
+    QCOMPARE(newlineArray, senderPort.readAll());
+
+    // second stage
+    senderPort.write(newlineArray);
+    senderPort.waitForBytesWritten(waitMsecs);
+    QTest::qSleep(waitMsecs);
+    receiverPort.waitForReadyRead(waitMsecs);
+    QCOMPARE(newlineArray.size(), receiverPort.bytesAvailable());
+    receiverPort.write(receiverPort.readAll());
+    receiverPort.waitForBytesWritten(waitMsecs);
+    QTest::qSleep(waitMsecs);
+    senderPort.waitForReadyRead(waitMsecs);
+    QCOMPARE(newlineArray.size(), senderPort.bytesAvailable());
+    QCOMPARE(newlineArray, senderPort.readAll());
+}
+
+void tst_QSerialPort::synchronousReadWrite()
+{
+#ifdef Q_OS_WIN
+    clearReceiver();
+#endif
+
+    QSerialPort senderPort(m_senderPortName);
+    QVERIFY(senderPort.open(QSerialPort::WriteOnly));
+
+    QSerialPort receiverPort(m_receiverPortName);
+    QVERIFY(receiverPort.open(QSerialPort::ReadOnly));
+
+    QByteArray writeData;
+    for (int i = 0; i < 1024; ++i)
+        writeData.append(static_cast<char>(i));
+
+    senderPort.write(writeData);
+    senderPort.waitForBytesWritten(-1);
+
+    QByteArray readData;
+    while ((readData.size() < writeData.size()) && receiverPort.waitForReadyRead(100))
+        readData.append(receiverPort.readAll());
+
+    QCOMPARE(writeData, readData);
+}
+
+class AsyncReader : public QObject
+{
+    Q_OBJECT
+public:
+    explicit AsyncReader(QSerialPort &port, Qt::ConnectionType connectionType, int expectedBytesCount)
+        : serialPort(port), expectedBytesCount(expectedBytesCount)
+    {
+        connect(&serialPort, SIGNAL(readyRead()), this, SLOT(receive()), connectionType);
+    }
+
+private slots:
+    void receive()
+    {
+        if (serialPort.bytesAvailable() < expectedBytesCount)
+            return;
+        tst_QSerialPort::exitLoop();
+    }
+
+private:
+    QSerialPort &serialPort;
+    const int expectedBytesCount;
+};
+
+class AsyncWriterByBytesWritten : public QObject
+{
+    Q_OBJECT
+public:
+    explicit AsyncWriterByBytesWritten(
+            QSerialPort &port, Qt::ConnectionType connectionType, const QByteArray &dataToWrite)
+        : serialPort(port), writeChunkSize(0)
+    {
+        writeBuffer.setData(dataToWrite);
+        writeBuffer.open(QIODevice::ReadOnly);
+        connect(&serialPort, SIGNAL(bytesWritten(qint64)), this, SLOT(send()), connectionType);
+        send();
+    }
+
+private slots:
+    void send()
+    {
+        if (writeBuffer.bytesAvailable() > 0)
+            serialPort.write(writeBuffer.read(++writeChunkSize));
+    }
+
+private:
+    QSerialPort &serialPort;
+    QBuffer writeBuffer;
+    int writeChunkSize;
+};
+
+void tst_QSerialPort::asynchronousWriteByBytesWritten_data()
+{
+    QTest::addColumn<Qt::ConnectionType>("readConnectionType");
+    QTest::addColumn<Qt::ConnectionType>("writeConnectionType");
+
+    QTest::newRow("BothQueued") << Qt::QueuedConnection << Qt::QueuedConnection;
+    QTest::newRow("BothDirect") << Qt::DirectConnection << Qt::DirectConnection;
+    QTest::newRow("ReadDirectWriteQueued") << Qt::DirectConnection << Qt::QueuedConnection;
+    QTest::newRow("ReadQueuedWriteDirect") << Qt::QueuedConnection << Qt::DirectConnection;
+}
+
+void tst_QSerialPort::asynchronousWriteByBytesWritten()
+{
+#ifdef Q_OS_WIN
+    clearReceiver();
+#endif
+
+    QFETCH(Qt::ConnectionType, readConnectionType);
+    QFETCH(Qt::ConnectionType, writeConnectionType);
+
+    QSerialPort receiverPort(m_receiverPortName);
+    QVERIFY(receiverPort.open(QSerialPort::ReadOnly));
+    AsyncReader reader(receiverPort, readConnectionType, alphabetArray.size());
+
+    QSerialPort senderPort(m_senderPortName);
+    QVERIFY(senderPort.open(QSerialPort::WriteOnly));
+    AsyncWriterByBytesWritten writer(senderPort, writeConnectionType, alphabetArray);
+
+    enterLoop(1);
+    QVERIFY2(!timeout(), "Timed out when waiting for the read or write.");
+    QCOMPARE(receiverPort.bytesAvailable(), qint64(alphabetArray.size()));
+    QCOMPARE(receiverPort.readAll(), alphabetArray);
+}
+
+class AsyncWriterByTimer : public QObject
+{
+    Q_OBJECT
+public:
+    explicit AsyncWriterByTimer(
+            QSerialPort &port, Qt::ConnectionType connectionType, const QByteArray &dataToWrite)
+        : serialPort(port), writeChunkSize(0)
+    {
+        writeBuffer.setData(dataToWrite);
+        writeBuffer.open(QIODevice::ReadOnly);
+        connect(&timer, SIGNAL(timeout()), this, SLOT(send()), connectionType);
+        timer.start(0);
+    }
+
+private slots:
+    void send()
+    {
+        if (writeBuffer.bytesAvailable() > 0)
+            serialPort.write(writeBuffer.read(++writeChunkSize));
+        else
+            timer.stop();
+    }
+
+private:
+    QSerialPort &serialPort;
+    QBuffer writeBuffer;
+    int writeChunkSize;
+    QTimer timer;
+};
+
+void tst_QSerialPort::asynchronousWriteByTimer_data()
+{
+    QTest::addColumn<Qt::ConnectionType>("readConnectionType");
+    QTest::addColumn<Qt::ConnectionType>("writeConnectionType");
+
+    QTest::newRow("BothQueued") << Qt::QueuedConnection << Qt::QueuedConnection;
+    QTest::newRow("BothDirect") << Qt::DirectConnection << Qt::DirectConnection;
+    QTest::newRow("ReadDirectWriteQueued") << Qt::DirectConnection << Qt::QueuedConnection;
+    QTest::newRow("ReadQueuedWriteDirect") << Qt::QueuedConnection << Qt::DirectConnection;
+}
+
+void tst_QSerialPort::asynchronousWriteByTimer()
+{
+#ifdef Q_OS_WIN
+    clearReceiver();
+#endif
+
+    QFETCH(Qt::ConnectionType, readConnectionType);
+    QFETCH(Qt::ConnectionType, writeConnectionType);
+
+    QSerialPort receiverPort(m_receiverPortName);
+    QVERIFY(receiverPort.open(QSerialPort::ReadOnly));
+    AsyncReader reader(receiverPort, readConnectionType, alphabetArray.size());
+
+    QSerialPort senderPort(m_senderPortName);
+    QVERIFY(senderPort.open(QSerialPort::WriteOnly));
+    AsyncWriterByTimer writer(senderPort, writeConnectionType, alphabetArray);
+
+    enterLoop(1);
+    QVERIFY2(!timeout(), "Timed out when waiting for the read or write.");
+    QCOMPARE(receiverPort.bytesAvailable(), qint64(alphabetArray.size()));
+    QCOMPARE(receiverPort.readAll(), alphabetArray);
 }
 
 QTEST_MAIN(tst_QSerialPort)

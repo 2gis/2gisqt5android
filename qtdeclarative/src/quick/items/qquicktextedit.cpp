@@ -112,7 +112,7 @@ TextEdit {
     You can translate between cursor positions (characters from the start of the document) and pixel
     points using positionAt() and positionToRectangle().
 
-    \sa Text, TextInput, {examples/quick/text/textselection}{Text Selection example}
+    \sa Text, TextInput
 */
 
 /*!
@@ -1777,8 +1777,12 @@ QSGNode *QQuickTextEdit::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData *
 
     d->updateType = QQuickTextEditPrivate::UpdateNone;
 
-    if (!oldNode) // If we had any text node references, they were deleted along with the root node
+    if (!oldNode) {
+        // If we had any QQuickTextNode node references, they were deleted along with the root node
+        // But here we must delete the Node structures in textNodeMap
+        qDeleteAll(d->textNodeMap);
         d->textNodeMap.clear();
+    }
 
     RootNode *rootNode = static_cast<RootNode *>(oldNode);
     TextNodeIterator nodeIterator = d->textNodeMap.begin();

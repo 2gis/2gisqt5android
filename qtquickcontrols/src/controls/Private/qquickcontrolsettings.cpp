@@ -53,7 +53,7 @@ QT_BEGIN_NAMESPACE
 static QString defaultStyleName()
 {
     //Only enable QStyle support when we are using QApplication
-#if !defined(Q_OS_IOS) && !defined(Q_OS_ANDROID) && !defined (Q_OS_BLACKBERRY)
+#if defined(QT_WIDGETS_LIB) && !defined(Q_OS_IOS) && !defined(Q_OS_ANDROID) && !defined(Q_OS_BLACKBERRY) && !defined(Q_OS_QNX) && !defined(Q_OS_WINRT)
     if (QCoreApplication::instance()->inherits("QApplication"))
         return QLatin1String("Desktop");
 #endif
@@ -90,7 +90,9 @@ static QString styleImportPath(QQmlEngine *engine, const QString &styleName)
 {
     QString path = qgetenv("QT_QUICK_CONTROLS_STYLE");
     QFileInfo info(path);
-    if (info.isRelative()) {
+    if (fromResource(path)) {
+        path = info.path();
+    } else if (info.isRelative()) {
         bool found = false;
         foreach (const QString &import, engine->importPathList()) {
             QDir dir(import + QLatin1String("/QtQuick/Controls/Styles"));

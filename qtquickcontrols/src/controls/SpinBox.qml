@@ -49,6 +49,8 @@ import QtQuick.Controls.Private 1.0
     \ingroup controls
     \brief Provides a spin box control.
 
+    \image spinbox.png
+
     SpinBox allows the user to choose a value by clicking the up or down buttons, or by
     pressing up or down on the keyboard. The user can also type the value in manually.
 
@@ -162,7 +164,8 @@ Control {
 
         This property indicates whether the control is being hovered.
     */
-    readonly property alias hovered: mouseArea.containsMouse
+    readonly property bool hovered: mouseArea.containsMouse || cursorArea.containsMouse
+                                    || mouseUp.containsMouse || mouseDown.containsMouse
 
     /*!
         \qmlsignal SpinBox::editingFinished()
@@ -288,6 +291,14 @@ Control {
         function selectValue() {
             select(prefix.length, text.length - suffix.length)
         }
+
+        MouseArea {
+            id: cursorArea
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.IBeamCursor
+            acceptedButtons: Qt.NoButton
+        }
     }
 
     // Spinbox increment button
@@ -309,7 +320,7 @@ Control {
         height: upRect ? upRect.height : 0
 
         onClicked: __increment()
-        onPressed: if (activeFocusOnPress) input.forceActiveFocus()
+        onPressed: if (!Settings.hasTouchScreen && activeFocusOnPress) input.forceActiveFocus()
 
         property bool autoincrement: false;
         onReleased: autoincrement = false
@@ -325,7 +336,7 @@ Control {
         hoverEnabled: true
 
         onClicked: __decrement()
-        onPressed: if (activeFocusOnPress) input.forceActiveFocus()
+        onPressed: if (!Settings.hasTouchScreen && activeFocusOnPress) input.forceActiveFocus()
 
         property var downRect: __panel ? __panel.downRect : null
 

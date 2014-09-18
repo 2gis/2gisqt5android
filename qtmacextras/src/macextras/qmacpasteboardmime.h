@@ -42,7 +42,7 @@
 #if !defined(QMACMIME_H) && !defined(QMIME_H)
 #define QMACMIME_H
 
-#include "qmacextrasglobal.h"
+#include "QtMacExtras/qmacextrasglobal.h"
 
 #include <QtCore>
 

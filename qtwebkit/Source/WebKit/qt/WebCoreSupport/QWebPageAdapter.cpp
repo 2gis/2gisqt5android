@@ -258,8 +258,10 @@ void QWebPageAdapter::initializeWebCorePage()
         m_deviceMotionClient = new DeviceMotionClientQt;
     }
 #endif
-    WebCore::provideDeviceOrientationTo(page, m_deviceOrientationClient);
-    WebCore::provideDeviceMotionTo(page, m_deviceMotionClient);
+    if (m_deviceOrientationClient)
+        WebCore::provideDeviceOrientationTo(page, m_deviceOrientationClient);
+    if (m_deviceMotionClient)
+        WebCore::provideDeviceMotionTo(page, m_deviceMotionClient);
 #endif
 
     // By default each page is put into their own unique page group, which affects popup windows
@@ -1113,10 +1115,10 @@ void QWebPageAdapter::triggerAction(QWebPageAdapter::MenuAction action, QWebHitT
 #if defined(Q_WS_X11)
         bool oldSelectionMode = Pasteboard::generalPasteboard()->isSelectionMode();
         Pasteboard::generalPasteboard()->setSelectionMode(true);
-        editor.copyURL(hitTestResult->linkUrl, WTF::String());
+        editor.copyURL(hitTestResult->linkUrl, hitTestResult->linkText);
         Pasteboard::generalPasteboard()->setSelectionMode(oldSelectionMode);
 #endif
-        editor.copyURL(hitTestResult->linkUrl, WTF::String());
+        editor.copyURL(hitTestResult->linkUrl, hitTestResult->linkText);
         break;
     }
     case OpenImageInNewWindow:

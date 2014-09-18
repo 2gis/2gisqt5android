@@ -50,8 +50,10 @@
 QT_BEGIN_NAMESPACE
 
 QQuickMenuPopupWindow::QQuickMenuPopupWindow() :
-    QQuickPopupWindow(), m_itemAt(0)
-{ }
+    m_itemAt(0),
+    m_logicalParentWindow(0)
+{
+}
 
 void QQuickMenuPopupWindow::show()
 {
@@ -59,13 +61,20 @@ void QQuickMenuPopupWindow::show()
     // show() will reposition the popup at the last moment,
     // so its initial position must be captured after the call.
     m_initialPos = position();
+    if (m_logicalParentWindow && m_logicalParentWindow->parent()) {
+        // This must be a QQuickWindow embedded via createWindowContainer.
+        m_initialPos += m_logicalParentWindow->geometry().topLeft();
+    }
 }
 
 void QQuickMenuPopupWindow::setParentItem(QQuickItem *item)
 {
     QQuickPopupWindow::setParentItem(item);
-    if (item)
-        setParentWindow(item->window());
+    if (item) {
+        QWindow *parentWindow = item->window();
+        QWindow *renderWindow = QQuickRenderControl::renderWindowFor(static_cast<QQuickWindow *>(parentWindow));
+        setParentWindow(renderWindow ? renderWindow : parentWindow, item->window());
+    }
 }
 
 void QQuickMenuPopupWindow::setItemAt(QQuickItem *menuItem)
@@ -83,12 +92,13 @@ void QQuickMenuPopupWindow::setItemAt(QQuickItem *menuItem)
     }
 }
 
-void QQuickMenuPopupWindow::setParentWindow(QQuickWindow *parentWindow)
+void QQuickMenuPopupWindow::setParentWindow(QWindow *effectiveParentWindow, QQuickWindow *parentWindow)
 {
-    QWindow *proxyWindow = QQuickRenderControl::renderWindowFor(parentWindow);
-    QWindow *renderWindow = proxyWindow ? proxyWindow : parentWindow;
-    if (transientParent() != renderWindow)
-        setTransientParent(renderWindow);
+    while (effectiveParentWindow && effectiveParentWindow->parent())
+        effectiveParentWindow = effectiveParentWindow->parent();
+    if (transientParent() != effectiveParentWindow)
+        setTransientParent(effectiveParentWindow);
+    m_logicalParentWindow = parentWindow;
     if (parentWindow) {
         connect(parentWindow, SIGNAL(destroyed()), this, SLOT(dismissPopup()));
         if (QQuickMenuPopupWindow *pw = qobject_cast<QQuickMenuPopupWindow *>(parentWindow))
@@ -125,12 +135,11 @@ void QQuickMenuPopupWindow::setGeometry(int posx, int posy, int w, int h)
 
 void QQuickMenuPopupWindow::updateSize()
 {
-    QSize contentSize = popupContentItem()->childrenRect().size().toSize();
     qreal x = m_initialPos.x();
     qreal y = m_initialPos.y();
     if (qGuiApp->layoutDirection() == Qt::RightToLeft)
-        x -= contentSize.width();
-    setGeometry(x, y, contentSize.width(), contentSize.height());
+        x -= popupContentItem()->width();
+    setGeometry(x, y, popupContentItem()->width(), popupContentItem()->height());
 }
 
 void QQuickMenuPopupWindow::updatePosition()

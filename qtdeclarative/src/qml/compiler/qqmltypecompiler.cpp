@@ -277,12 +277,12 @@ bool QQmlTypeCompiler::compile()
                 if (qmlType->parserStatusCast() != -1)
                     ++parserStatusCount;
             }
+            ++objectCount;
             if (typeRef->component) {
                 bindingCount += typeRef->component->totalBindingsCount;
                 parserStatusCount += typeRef->component->totalParserStatusCount;
                 objectCount += typeRef->component->totalObjectCount;
-            } else
-                ++objectCount;
+            }
         }
     }
 
@@ -541,12 +541,14 @@ bool QQmlPropertyCacheCreator::buildMetaObjectRecursively(int objectIndex, int r
         Q_ASSERT(baseTypeCache);
     }
 
-    if (needVMEMetaObject) {
-        if (!createMetaObject(objectIndex, obj, baseTypeCache))
-            return false;
-    } else if (baseTypeCache) {
-        propertyCaches[objectIndex] = baseTypeCache;
-        baseTypeCache->addref();
+    if (baseTypeCache) {
+        if (needVMEMetaObject) {
+            if (!createMetaObject(objectIndex, obj, baseTypeCache))
+                return false;
+        } else {
+            propertyCaches[objectIndex] = baseTypeCache;
+            baseTypeCache->addref();
+        }
     }
 
     if (propertyCaches.at(objectIndex)) {

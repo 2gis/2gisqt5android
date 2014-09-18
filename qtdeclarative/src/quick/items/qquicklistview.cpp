@@ -1937,7 +1937,7 @@ QQuickListView::~QQuickListView()
     highlight item is \c 0.
 
     \sa highlightItem, highlightFollowsCurrentItem,
-    {Qt Quick Examples - Views#Highlight demonstrates adding a custom highlight to a ListView.}{ListView highlight example}
+    {Qt Quick Examples - Views#Highlight}{ListView highlight example}
 */
 
 /*!
@@ -2070,7 +2070,7 @@ void QQuickListView::setOrientation(QQuickListView::Orientation orientation)
             setFlickableDirection(HorizontalFlick);
             setContentY(0);
         }
-        d->regenerate();
+        d->regenerate(true);
         emit orientationChanged();
     }
 }
@@ -2252,7 +2252,7 @@ void QQuickListView::setOrientation(QQuickListView::Orientation orientation)
     differing sections will result in a section header being created
     even if that section exists elsewhere.
 
-    \sa {quick/views/listview}{ListView examples}
+    \sa {Qt Quick Examples - Views}{ListView examples}
 */
 QQuickViewSection *QQuickListView::sectionCriteria()
 {

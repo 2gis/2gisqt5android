@@ -54,6 +54,7 @@
 #include <QtCore/qstring.h>
 #include <QtCore/quuid.h>
 #include <QtNetwork/qtcpsocket.h>
+#include <QtCore/qdebug.h>
 
 #define CRLF QLatin1String("\r\n")
 

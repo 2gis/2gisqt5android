@@ -51,6 +51,8 @@ import QtQuick.Controls.Private 1.0
     \ingroup applicationwindow
     \brief Provides a top-level application window.
 
+    \image applicationwindow.png
+
     ApplicationWindow is a \l Window that adds convenience for positioning items,
     such as \l MenuBar, \l ToolBar, and \l StatusBar in a platform independent
     manner.
@@ -58,6 +60,8 @@ import QtQuick.Controls.Private 1.0
     \code
     ApplicationWindow {
         id: window
+        visible: true
+
         menuBar: MenuBar {
             Menu { MenuItem {...} }
             Menu { MenuItem {...} }
@@ -77,6 +81,11 @@ import QtQuick.Controls.Private 1.0
         }
     }
     \endcode
+
+    \note By default, an ApplicationWindow is not visible.
+
+    The \l{Qt Quick Controls - Gallery} example is a good starting
+    point to explore this type.
 */
 
 Window {
@@ -182,15 +191,13 @@ Window {
     /*! \internal */
     default property alias data: contentArea.data
 
-    color: syspal.window
+    color: SystemPaletteSingleton.window(true)
 
     flags: Qt.Window | Qt.WindowFullscreenButtonHint |
         Qt.WindowTitleHint | Qt.WindowSystemMenuHint | Qt.WindowMinMaxButtonsHint |
         Qt.WindowCloseButtonHint | Qt.WindowFullscreenButtonHint
     // QTBUG-35049: Windows is removing features we didn't ask for, even though Qt::CustomizeWindowHint is not set
     // Otherwise Qt.Window | Qt.WindowFullscreenButtonHint would be enough
-
-    SystemPalette {id: syspal}
 
     Item {
         id: backgroundItem

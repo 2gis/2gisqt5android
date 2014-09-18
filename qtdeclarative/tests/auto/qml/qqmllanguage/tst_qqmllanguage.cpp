@@ -240,6 +240,8 @@ private slots:
 
     void noChildEvents();
 
+    void earlyIdObjectAccess();
+
 private:
     QQmlEngine engine;
     QStringList defaultImportPathList;
@@ -347,6 +349,7 @@ void tst_qqmllanguage::errors_data()
     QTest::newRow("nonexistantProperty.5") << "nonexistantProperty.5.qml" << "nonexistantProperty.5.errors.txt" << false;
     QTest::newRow("nonexistantProperty.6") << "nonexistantProperty.6.qml" << "nonexistantProperty.6.errors.txt" << false;
     QTest::newRow("nonexistantProperty.7") << "nonexistantProperty.7.qml" << "nonexistantProperty.7.errors.txt" << false;
+    QTest::newRow("nonexistantProperty.8") << "nonexistantProperty.8.qml" << "nonexistantProperty.8.errors.txt" << false;
 
     QTest::newRow("wrongType (string for int)") << "wrongType.1.qml" << "wrongType.1.errors.txt" << false;
     QTest::newRow("wrongType (int for bool)") << "wrongType.2.qml" << "wrongType.2.errors.txt" << false;
@@ -3789,6 +3792,14 @@ void tst_qqmllanguage::noChildEvents()
     MyQmlObject *object = qobject_cast<MyQmlObject*>(component.create());
     QVERIFY(object != 0);
     QCOMPARE(object->childAddedEventCount(), 0);
+}
+
+void tst_qqmllanguage::earlyIdObjectAccess()
+{
+    QQmlComponent component(&engine, testFileUrl("earlyIdObjectAccess.qml"));
+    QScopedPointer<QObject> o(component.create());
+    QVERIFY(!o.isNull());
+    QVERIFY(o->property("success").toBool());
 }
 
 QTEST_MAIN(tst_qqmllanguage)

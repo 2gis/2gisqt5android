@@ -738,7 +738,7 @@
 
     \list
     \li \c{C:/customPath/plugins}
-    \li \c{C:/Qt/5.3.1/plugins}
+    \li \c{C:/Qt/5.3.2/plugins}
     \li \c{E:/myApplication/directory}
     \endlist
 
@@ -845,7 +845,7 @@ Arguments:
     \section1 Step 2: Unpack the Archive
 
         Uncompress the files into the directory you want Qt installed;
-        e.g. \c{C:\Qt\5.3.1}.
+        e.g. \c{C:\Qt\5.3.2}.
 
         \note The install path must not contain any spaces or Windows specific
         file system characters.
@@ -863,10 +863,14 @@ Arguments:
         and the Qt folder is called \c qt-5 and located under \c C:\qt:
 
         \code
-        REM Set up Windows SDK for 64bit
-        CALL "C:\Program Files (x86)\MSVC10\VC\vcvarsall.bat" amd64
-        set PATH=c:\qt\qt-5\qtbase\bin;c:\qt\qt-5\qtrepotools\bin;c:\qt\qt-5\gnuwin32\bin;%PATH%
-        set QMAKESPEC=win32-msvc2010
+        REM Set up \Microsoft Visual Studio 2013, where <arch> is \c amd64, \c x86, etc.
+        CALL "C:\Program Files (x86)\Microsoft Visual Studio 12.0\VC\vcvarsall.bat" <arch>
+        SET _ROOT=C:\qt\qt-5
+        SET PATH=%_ROOT%\qtbase\bin;%_ROOT%\gnuwin32\bin;%PATH%
+        REM Uncomment the below line when using a git checkout of the source repository
+        REM SET PATH=%_ROOT%\qtrepotools\bin;%PATH%
+        SET QMAKESPEC=win32-msvc2013
+        SET _ROOT=
         \endcode
 
         A desktop link can then be created by specifying the command

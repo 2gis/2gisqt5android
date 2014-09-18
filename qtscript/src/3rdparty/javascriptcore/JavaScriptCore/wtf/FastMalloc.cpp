@@ -2635,8 +2635,11 @@ void* TCMalloc_Central_FreeList::FetchFromSpansSafe() {
 }
 
 void* TCMalloc_Central_FreeList::FetchFromSpans() {
-  if (DLL_IsEmpty(&nonempty_)) return NULL;
+// Intel compiler bug; issue id 6000056746
+//  if (DLL_IsEmpty(&nonempty_)) return NULL;
   Span* span = nonempty_.next;
+  if (span == &nonempty_)
+    return NULL;
 
   ASSERT(span->objects != NULL);
   ASSERT_SPAN_COMMITTED(span);

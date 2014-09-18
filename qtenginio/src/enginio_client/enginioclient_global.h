@@ -43,12 +43,15 @@
 #define ENGINIOCLIENT_GLOBAL_H
 
 #include <QtCore/qglobal.h>
-#include <QDebug>
 
-#if defined(ENGINIOCLIENT_LIBRARY)
-#  define ENGINIOCLIENT_EXPORT Q_DECL_EXPORT
+#if defined(QT_SHARED) || !defined(QT_STATIC)
+#  if defined(ENGINIOCLIENT_LIBRARY)
+#    define ENGINIOCLIENT_EXPORT Q_DECL_EXPORT
+#  else
+#    define ENGINIOCLIENT_EXPORT Q_DECL_IMPORT
+#  endif
 #else
-#  define ENGINIOCLIENT_EXPORT Q_DECL_IMPORT
+#  define ENGINIOCLIENT_EXPORT
 #endif
 
 QT_BEGIN_NAMESPACE

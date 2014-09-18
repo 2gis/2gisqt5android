@@ -72,9 +72,10 @@ QT_BEGIN_NAMESPACE
   QMacToolBar provides a Qt-based API for NSToolBar. The toolbar displays one or
   more \e items. Each toolbar item has an icon and a text label.
 
-  The toolbar must be attached to a QWindow with \fn attachToWindow in order to be
-  visible. The toolbar is attached to the native NSWindow and is displayed above
-  the QWindow. QMacToolBar visibility follows window visibility.
+  The toolbar must be attached to a QWindow using the
+  \l{QWindow::attachToWindow}{attachToWindow} method in order to be visible.
+  The toolbar is attached to the native NSWindow and is displayed above the
+  QWindow. QMacToolBar visibility follows window visibility.
 
   Add items by calling addItem(). The toolbar has a customization menu which
   is available to the user from the toolbar context menu. Use addAllowedItem() to

@@ -1,6 +1,6 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
@@ -810,7 +810,7 @@ int ListElement::setDoubleProperty(const ListLayout::Role &role, double d)
 
     if (role.type == ListLayout::Role::Number) {
         char *mem = getPropertyMemory(role);
-        double *value = new (mem) double;
+        double *value = reinterpret_cast<double *>(mem);
         bool changed = *value != d;
         *value = d;
         if (changed)
@@ -826,7 +826,7 @@ int ListElement::setBoolProperty(const ListLayout::Role &role, bool b)
 
     if (role.type == ListLayout::Role::Bool) {
         char *mem = getPropertyMemory(role);
-        bool *value = new (mem) bool;
+        bool *value = reinterpret_cast<bool *>(mem);
         bool changed = *value != b;
         *value = b;
         if (changed)
@@ -842,8 +842,8 @@ int ListElement::setListProperty(const ListLayout::Role &role, ListModel *m)
 
     if (role.type == ListLayout::Role::List) {
         char *mem = getPropertyMemory(role);
-        ListModel **value = new (mem) ListModel *;
-        if (*value) {
+        ListModel **value = reinterpret_cast<ListModel **>(mem);
+        if (*value && *value != m) {
             (*value)->destroy();
             delete *value;
         }
@@ -1526,7 +1526,7 @@ QQmlListModelParser::ListInstruction *QQmlListModelParser::ListModelData::instru
     You must call sync() or else the changes made to the list from that
     thread will not be reflected in the list model in the main thread.
 
-    \sa {qml-data-models}{Data Models}, {declarative/threading/threadedlistmodel}{Threaded ListModel example}, {Qt QML}
+    \sa {qml-data-models}{Data Models}, {Qt Quick Examples - Threading}, {Qt QML}
 */
 
 QQmlListModel::QQmlListModel(QObject *parent)

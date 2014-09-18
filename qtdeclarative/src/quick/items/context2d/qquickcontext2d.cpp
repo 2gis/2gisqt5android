@@ -70,6 +70,11 @@
 #include <private/qv4objectproto_p.h>
 #include <private/qv4scopedvalue_p.h>
 
+#include <private/qguiapplication_p.h>
+#include <qpa/qplatformintegration.h>
+
+#include <QtCore/QRunnable>
+
 #if defined(Q_OS_QNX) || defined(Q_OS_ANDROID)
 #include <ctype.h>
 #endif
@@ -2168,7 +2173,7 @@ QV4::ReturnedValue QQuickJSContext2DPrototype::method_fillRect(QV4::CallContext 
 }
 
 /*!
-  \qmlmethod object QtQuick::Context2D::fillRect(real x, real y, real w, real h)
+  \qmlmethod object QtQuick::Context2D::strokeRect(real x, real y, real w, real h)
    Stroke the specified rectangle's path using the strokeStyle, lineWidth, lineJoin,
    and (if appropriate) miterLimit attributes.
 
@@ -2871,7 +2876,7 @@ QV4::ReturnedValue QQuickJSContext2DPrototype::method_strokeText(QV4::CallContex
     \brief Provides a Context2D TextMetrics interface
 
     The TextMetrics object can be created by QtQuick::Context2D::measureText method.
-    See \l{http://www.w3.org/TR/2dcontext/#textmetrics}{W3C 2d context TexMetrics} for more details.
+    See \l{http://www.w3.org/TR/2dcontext/#textmetrics}{W3C 2d context TextMetrics} for more details.
 
     \sa Context2D::measureText
     \sa width
@@ -4061,6 +4066,29 @@ bool QQuickContext2D::isPointInPath(qreal x, qreal y) const
     return contains;
 }
 
+class QQuickContext2DThreadCleanup : public QObject
+{
+public:
+    QQuickContext2DThreadCleanup(QOpenGLContext *gl, QQuickContext2DTexture *t, QOffscreenSurface *s)
+        : context(gl), texture(t), surface(s)
+    { }
+
+    ~QQuickContext2DThreadCleanup()
+    {
+        context->makeCurrent(surface);
+        delete texture;
+        context->doneCurrent();
+        delete context;
+        surface->deleteLater();
+    }
+
+    QOpenGLContext *context;
+    QQuickContext2DTexture *texture;
+    QOffscreenSurface *surface;
+};
+
+QMutex QQuickContext2D::mutex;
+
 QQuickContext2D::QQuickContext2D(QObject *parent)
     : QQuickCanvasContext(parent)
     , m_buffer(new QQuickContext2DCommandBuffer)
@@ -4074,8 +4102,32 @@ QQuickContext2D::QQuickContext2D(QObject *parent)
 
 QQuickContext2D::~QQuickContext2D()
 {
+    mutex.lock();
+    m_texture->setItem(0);
     delete m_buffer;
-    m_texture->deleteLater();
+
+    if (m_renderTarget == QQuickCanvasItem::FramebufferObject) {
+        if (m_renderStrategy == QQuickCanvasItem::Immediate && m_glContext) {
+            Q_ASSERT(QThread::currentThread() == m_glContext->thread());
+            m_glContext->makeCurrent(m_surface.data());
+            delete m_texture;
+            m_glContext->doneCurrent();
+            delete m_glContext;
+        } else if (m_texture->isOnCustomThread()) {
+            Q_ASSERT(m_glContext);
+            QQuickContext2DThreadCleanup *cleaner = new QQuickContext2DThreadCleanup(m_glContext, m_texture, m_surface.take());
+            cleaner->moveToThread(m_texture->thread());
+            cleaner->deleteLater();
+        } else {
+            m_texture->deleteLater();
+        }
+    } else {
+        // Image based does not have GL resources, but must still be deleted
+        // on its designated thread after it has completed whatever it might
+        // currently be doing.
+        m_texture->deleteLater();
+    }
+    mutex.unlock();
 }
 
 QV4::ReturnedValue QQuickContext2D::v4value() const
@@ -4106,6 +4158,13 @@ void QQuickContext2D::init(QQuickCanvasItem *canvasItem, const QVariantMap &args
         m_renderTarget = QQuickCanvasItem::Image;
     }
 #endif
+
+    // Disable threaded background rendering if the platform has issues with it
+    if (m_renderTarget == QQuickCanvasItem::FramebufferObject
+            && m_renderStrategy == QQuickCanvasItem::Threaded
+            && !QGuiApplicationPrivate::platformIntegration()->hasCapability(QPlatformIntegration::ThreadedOpenGL)) {
+        m_renderTarget = QQuickCanvasItem::Image;
+    }
 
     switch (m_renderTarget) {
     case QQuickCanvasItem::Image:
@@ -4146,6 +4205,7 @@ void QQuickContext2D::init(QQuickCanvasItem *canvasItem, const QVariantMap &args
          m_glContext->setShareContext(cc);
          if (renderThread != QThread::currentThread())
              m_glContext->moveToThread(renderThread);
+         m_texture->initializeOpenGL(m_glContext, m_surface.data());
     }
 
     connect(m_texture, SIGNAL(textureChanged()), SIGNAL(textureChanged()));
@@ -4333,12 +4393,6 @@ void QQuickContext2D::setV8Engine(QV8Engine *engine)
         wrapper->context = this;
         m_v4value = wrapper;
     }
-}
-
-QQuickContext2DCommandBuffer* QQuickContext2D::nextBuffer()
-{
-    QMutexLocker lock(&m_mutex);
-    return m_bufferQueue.isEmpty() ? 0 : m_bufferQueue.dequeue();
 }
 
 QT_END_NAMESPACE

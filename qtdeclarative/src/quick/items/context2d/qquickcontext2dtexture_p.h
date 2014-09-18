@@ -107,10 +107,16 @@ public:
     bool setDirtyRect(const QRect &dirtyRect);
     bool canvasDestroyed();
     void setOnCustomThread(bool is) { m_onCustomThread = is; }
+    bool isOnCustomThread() const { return m_onCustomThread; }
 
     // Called during sync() on the scene graph thread while GUI is blocked.
     virtual QSGTexture *textureForNextFrame(QSGTexture *lastFrame) = 0;
     bool event(QEvent *e);
+
+    void initializeOpenGL(QOpenGLContext *gl, QOffscreenSurface *s) {
+        m_gl = gl;
+        m_surface = s;
+    }
 
 Q_SIGNALS:
     void textureChanged();
@@ -134,7 +140,10 @@ protected:
     QRect createTiles(const QRect& window);
 
     QList<QQuickContext2DTile*> m_tiles;
-    QQuickContext2D* m_context;
+    QQuickContext2D *m_context;
+
+    QOpenGLContext *m_gl;
+    QSurface *m_surface;
 
     QQuickContext2D::State m_state;
 

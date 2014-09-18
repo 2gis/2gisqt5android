@@ -53,7 +53,7 @@ public:
     QQuickMenuPopupWindow();
 
     void setItemAt(QQuickItem *menuItem);
-    void setParentWindow(QQuickWindow *parentWindow);
+    void setParentWindow(QWindow *effectiveParentWindow, QQuickWindow *parentWindow);
     void setGeometry(int posx, int posy, int w, int h);
 
     void setParentItem(QQuickItem *);
@@ -69,6 +69,7 @@ private:
     QQuickItem *m_itemAt;
     QPointF m_oldItemPos;
     QPointF m_initialPos;
+    QQuickWindow *m_logicalParentWindow;
 };
 
 QT_END_NAMESPACE

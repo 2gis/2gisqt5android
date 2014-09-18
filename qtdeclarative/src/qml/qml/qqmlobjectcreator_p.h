@@ -50,6 +50,8 @@
 #include <private/qrecursionwatcher_p.h>
 #include <private/qqmlprofiler_p.h>
 
+#include <qpointer.h>
+
 QT_BEGIN_NAMESPACE
 
 class QQmlAbstractBinding;
@@ -57,13 +59,14 @@ struct QQmlTypeCompiler;
 class QQmlInstantiationInterrupt;
 struct QQmlVmeProfiler;
 
-struct QQmlObjectCreatorSharedState
+struct QQmlObjectCreatorSharedState : public QSharedData
 {
     QQmlContextData *rootContext;
     QQmlContextData *creationContext;
     QFiniteStack<QQmlAbstractBinding*> allCreatedBindings;
     QFiniteStack<QQmlParserStatus*> allParserStatusCallbacks;
-    QFiniteStack<QObject*> allCreatedObjects;
+    QFiniteStack<QPointer<QObject> > allCreatedObjects;
+    QV4::Value *allJavaScriptObjects; // pointer to vector on JS stack to reference JS wrappers during creation phase.
     QQmlComponentAttached *componentAttached;
     QList<QQmlEnginePrivate::FinalizeCallback> finalizeCallbacks;
     QQmlVmeProfiler profiler;
@@ -88,8 +91,8 @@ public:
 
     QList<QQmlError> errors;
 
-    QQmlContextData *parentContextData() const { return parentContext; }
-    QFiniteStack<QObject*> &allCreatedObjects() const { return sharedState->allCreatedObjects; }
+    QQmlContextData *parentContextData() { return parentContext.contextData(); }
+    QFiniteStack<QPointer<QObject> > &allCreatedObjects() const { return sharedState->allCreatedObjects; }
 
 private:
     QQmlObjectCreator(QQmlContextData *contextData, QQmlCompiledData *compiledData, QQmlObjectCreatorSharedState *inheritedSharedState);
@@ -110,6 +113,8 @@ private:
     QString stringAt(int idx) const { return qmlUnit->header.stringAt(idx); }
     void recordError(const QV4::CompiledData::Location &location, const QString &description);
 
+    void registerObjectWithContextById(int objectIndex, QObject *instance) const;
+
     enum Phase {
         Startup,
         CreatingObjects,
@@ -122,13 +127,14 @@ private:
     QQmlEngine *engine;
     QQmlCompiledData *compiledData;
     const QV4::CompiledData::QmlUnit *qmlUnit;
-    QQmlContextData *parentContext;
+    QQmlGuardedContextData parentContext;
     QQmlContextData *context;
     const QHash<int, QQmlCompiledData::TypeReference*> &resolvedTypes;
     const QVector<QQmlPropertyCache *> &propertyCaches;
     const QVector<QByteArray> &vmeMetaObjectData;
     QHash<int, int> objectIndexToId;
-    QFlagPointer<QQmlObjectCreatorSharedState> sharedState;
+    QExplicitlySharedDataPointer<QQmlObjectCreatorSharedState> sharedState;
+    bool topLevelCreator;
     void *activeVMEDataForRootContext;
 
     QObject *_qobject;
@@ -142,6 +148,19 @@ private:
     QQmlVMEMetaObject *_vmeMetaObject;
     QQmlListProperty<void> _currentList;
     QV4::ExecutionContext *_qmlContext;
+
+    friend struct QQmlObjectCreatorRecursionWatcher;
+};
+
+struct QQmlObjectCreatorRecursionWatcher
+{
+    QQmlObjectCreatorRecursionWatcher(QQmlObjectCreator *creator);
+
+    bool hasRecursed() const { return watcher.hasRecursed(); }
+
+private:
+    QExplicitlySharedDataPointer<QQmlObjectCreatorSharedState> sharedState;
+    QRecursionWatcher<QQmlObjectCreatorSharedState, &QQmlObjectCreatorSharedState::recursionNode> watcher;
 };
 
 QT_END_NAMESPACE

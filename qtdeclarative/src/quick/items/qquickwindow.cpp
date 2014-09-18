@@ -943,7 +943,7 @@ void QQuickWindowPrivate::cleanup(QSGNode *n)
 
     To use this type, you will need to import the module with the following line:
     \code
-    import QtQuick.Window 2.1
+    import QtQuick.Window 2.2
     \endcode
 
     Omitting this import will allow you to have a QML environment without
@@ -1093,6 +1093,7 @@ QQuickWindow::~QQuickWindow()
         d->windowManager->windowDestroyed(this);
     }
 
+    QCoreApplication::removePostedEvents(this, QEvent::DeferredDelete);
     QCoreApplication::sendPostedEvents(0, QEvent::DeferredDelete);
     delete d->incubationController; d->incubationController = 0;
 #ifndef QT_NO_DRAGANDDROP
@@ -3081,6 +3082,8 @@ QQmlIncubationController *QQuickWindow::incubationController() const
     \warning Make very sure that a signal handler for beforeSynchronizing leaves the GL
     context in the same state as it was when the signal handler was entered. Failing to
     do so can result in the scene not rendering properly.
+
+    \sa resetOpenGLState()
 */
 
 /*!
@@ -3102,6 +3105,7 @@ QQmlIncubationController *QQuickWindow::incubationController() const
     do so can result in the scene not rendering properly.
 
     \since 5.3
+    \sa resetOpenGLState()
  */
 
 /*!
@@ -3122,6 +3126,8 @@ QQmlIncubationController *QQuickWindow::incubationController() const
     \warning Make very sure that a signal handler for beforeRendering leaves the GL
     context in the same state as it was when the signal handler was entered. Failing to
     do so can result in the scene not rendering properly.
+
+    \sa resetOpenGLState()
 */
 
 /*!
@@ -3141,6 +3147,8 @@ QQmlIncubationController *QQuickWindow::incubationController() const
     \warning Make very sure that a signal handler for afterRendering() leaves the GL
     context in the same state as it was when the signal handler was entered. Failing to
     do so can result in the scene not rendering properly.
+
+    \sa resetOpenGLState()
  */
 
 /*!
@@ -3193,7 +3201,7 @@ QQmlIncubationController *QQuickWindow::incubationController() const
     context in the same state as it was when the signal handler was entered. Failing to
     do so can result in the scene not rendering properly.
 
-    \sa sceneGraphInvalidated()
+    \sa sceneGraphInvalidated(), resetOpenGLState()
     \since 5.3
  */
 
@@ -3260,7 +3268,7 @@ QSGTexture *QQuickWindow::createTextureFromImage(const QImage &image) const
 
     \warning The returned texture is not memory managed by the scene graph and
     must be explicitly deleted by the caller on the rendering thread.
-    This is acheived by deleting the texture from a QSGNode destructor
+    This is achieved by deleting the texture from a QSGNode destructor
     or by using deleteLater() in the case where the texture already has affinity
     to the rendering thread.
 

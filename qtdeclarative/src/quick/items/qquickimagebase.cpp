@@ -292,10 +292,10 @@ void QQuickImageBase::handleWindowChanged(QQuickWindow* window)
         connect(window, SIGNAL(screenChanged(QScreen*)), this, SLOT(handleScreenChanged(QScreen*)));
 }
 
-void QQuickImageBase::handleScreenChanged(QScreen*)
+void QQuickImageBase::handleScreenChanged(QScreen* screen)
 {
     // Screen DPI might have changed, reload images on screen change.
-    if (isComponentComplete())
+    if (screen && isComponentComplete())
         load();
 }
 
@@ -331,6 +331,11 @@ void QQuickImageBase::resolve2xLocalFile(const QUrl &url, qreal targetDevicePixe
 {
     Q_ASSERT(sourceUrl);
     Q_ASSERT(sourceDevicePixelRatio);
+
+    // Bail out if "@2x" image loading is disabled, don't change the source url or devicePixelRatio.
+    static bool disable2xImageLoading = !qgetenv("QT_HIGHDPI_DISABLE_2X_IMAGE_LOADING").isEmpty();
+    if (disable2xImageLoading)
+        return;
 
     QString localFile = QQmlFile::urlToLocalFileOrQrc(url);
 

@@ -42,6 +42,7 @@
 #ifndef ENGINIOREPLY_P_H
 #define ENGINIOREPLY_P_H
 
+#include <QtCore/qdebug.h>
 #include <QtCore/qhash.h>
 #include <QtCore/qstring.h>
 #include <QtCore/qbytearray.h>

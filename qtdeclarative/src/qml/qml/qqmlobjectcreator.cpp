@@ -91,11 +91,12 @@ QQmlObjectCreator::QQmlObjectCreator(QQmlContextData *parentContext, QQmlCompile
     init(parentContext);
 
     sharedState = new QQmlObjectCreatorSharedState;
-    sharedState.setFlag(); // We own it, so we must delete it
+    topLevelCreator = true;
     sharedState->componentAttached = 0;
     sharedState->allCreatedBindings.allocate(compiledData->totalBindingsCount);
     sharedState->allParserStatusCallbacks.allocate(compiledData->totalParserStatusCount);
     sharedState->allCreatedObjects.allocate(compiledData->totalObjectCount);
+    sharedState->allJavaScriptObjects = 0;
     sharedState->creationContext = creationContext;
     sharedState->rootContext = 0;
 
@@ -115,6 +116,7 @@ QQmlObjectCreator::QQmlObjectCreator(QQmlContextData *parentContext, QQmlCompile
     init(parentContext);
 
     sharedState = inheritedSharedState;
+    topLevelCreator = false;
 }
 
 void QQmlObjectCreator::init(QQmlContextData *providedParentContext)
@@ -139,9 +141,9 @@ void QQmlObjectCreator::init(QQmlContextData *providedParentContext)
 
 QQmlObjectCreator::~QQmlObjectCreator()
 {
-    if (sharedState.flag()) {
+    if (topLevelCreator) {
         {
-            QRecursionWatcher<QQmlObjectCreatorSharedState, &QQmlObjectCreatorSharedState::recursionNode> watcher(sharedState.data());
+            QQmlObjectCreatorRecursionWatcher watcher(this);
         }
         for (int i = 0; i < sharedState->allCreatedBindings.count(); ++i) {
             QQmlAbstractBinding *b = sharedState->allCreatedBindings.at(i);
@@ -153,7 +155,10 @@ QQmlObjectCreator::~QQmlObjectCreator()
             if (ps)
                 ps->d = 0;
         }
-        delete sharedState.data();
+        while (sharedState->componentAttached) {
+            QQmlComponentAttached *a = sharedState->componentAttached;
+            a->rem();
+        }
     }
 }
 
@@ -191,6 +196,13 @@ QObject *QQmlObjectCreator::create(int subComponentIndex, QObject *parent, QQmlI
         sharedState->rootContext->isRootObjectInCreation = true;
     }
 
+    QV4::ExecutionEngine *v4 = QV8Engine::getV4(engine);
+    QV4::Scope scope(v4);
+
+    Q_ASSERT(sharedState->allJavaScriptObjects || topLevelCreator);
+    if (topLevelCreator)
+        sharedState->allJavaScriptObjects = scope.alloc(compiledData->totalObjectCount);
+
     QVector<QQmlContextData::ObjectIdMapping> mapping(objectIndexToId.count());
     for (QHash<int, int>::ConstIterator it = objectIndexToId.constBegin(), end = objectIndexToId.constEnd();
          it != end; ++it) {
@@ -204,8 +216,6 @@ QObject *QQmlObjectCreator::create(int subComponentIndex, QObject *parent, QQmlI
     context->setIdPropertyData(mapping);
 
     if (subComponentIndex == -1) {
-        QV4::ExecutionEngine *v4 = QV8Engine::getV4(engine);
-        QV4::Scope scope(v4);
         QV4::ScopedObject scripts(scope, v4->newArrayObject(compiledData->scripts.count()));
         context->importedScripts = scripts;
         for (int i = 0; i < compiledData->scripts.count(); ++i) {
@@ -225,6 +235,9 @@ QObject *QQmlObjectCreator::create(int subComponentIndex, QObject *parent, QQmlI
         ddata->compiledData = compiledData;
         ddata->compiledData->addref();
     }
+
+    if (topLevelCreator)
+        sharedState->allJavaScriptObjects = 0;
 
     phase = CreatingObjectsPhase2;
 
@@ -254,8 +267,11 @@ bool QQmlObjectCreator::populateDeferredProperties(QObject *instance)
 
     QV4::ExecutionEngine *v4 = QV8Engine::getV4(engine);
     QV4::Scope valueScope(v4);
-    QV4::ScopedValue scopeObjectProtector(valueScope, declarativeData->jsWrapper.value());
-    Q_UNUSED(scopeObjectProtector);
+
+    Q_ASSERT(topLevelCreator);
+    Q_ASSERT(!sharedState->allJavaScriptObjects);
+    sharedState->allJavaScriptObjects = valueScope.alloc(compiledData->totalObjectCount);
+
     QV4::ScopedObject qmlScope(valueScope, QV4::QmlContextWrapper::qmlScope(QV8Engine::get(engine), context, _scopeObject));
     QV4::Scoped<QV4::QmlBindingWrapper> qmlBindingWrapper(valueScope, new (v4->memoryManager) QV4::QmlBindingWrapper(v4->rootContext, qmlScope));
     QV4::ExecutionContext *qmlContext = qmlBindingWrapper->context();
@@ -1013,6 +1029,13 @@ void QQmlObjectCreator::recordError(const QV4::CompiledData::Location &location,
     errors << error;
 }
 
+void QQmlObjectCreator::registerObjectWithContextById(int objectIndex, QObject *instance) const
+{
+    QHash<int, int>::ConstIterator idEntry = objectIndexToId.find(objectIndex);
+    if (idEntry != objectIndexToId.constEnd())
+        context->setIdProperty(idEntry.value(), instance);
+}
+
 QObject *QQmlObjectCreator::createInstance(int index, QObject *parent, bool isContextObject)
 {
     QQmlObjectCreationProfiler profiler(sharedState->profiler.profiler);
@@ -1112,10 +1135,6 @@ QObject *QQmlObjectCreator::createInstance(int index, QObject *parent, bool isCo
         parserStatus->d = &sharedState->allParserStatusCallbacks.top();
     }
 
-    QHash<int, int>::ConstIterator idEntry = objectIndexToId.find(index);
-    if (idEntry != objectIndexToId.constEnd())
-        context->setIdProperty(idEntry.value(), instance);
-
     // Register the context object in the context early on in order for pending binding
     // initialization to find it available.
     if (isContextObject)
@@ -1130,8 +1149,10 @@ QObject *QQmlObjectCreator::createInstance(int index, QObject *parent, bool isCo
         }
     }
 
-    if (isComponent)
+    if (isComponent) {
+        registerObjectWithContextById(index, instance);
         return instance;
+    }
 
     QQmlRefPointer<QQmlPropertyCache> cache = propertyCaches.at(index);
     Q_ASSERT(!cache.isNull());
@@ -1146,9 +1167,12 @@ QObject *QQmlObjectCreator::createInstance(int index, QObject *parent, bool isCo
     qSwap(_scopeObject, scopeObject);
 
     QV4::ExecutionEngine *v4 = QV8Engine::getV4(engine);
+
+    Q_ASSERT(sharedState->allJavaScriptObjects);
+    QV4::ValueRef ref = QV4::ValueRef::fromRawValue(sharedState->allJavaScriptObjects++);
+    ref = QV4::QObjectWrapper::wrap(v4, instance);
+
     QV4::Scope valueScope(v4);
-    QV4::ScopedValue scopeObjectProtector(valueScope, ddata ? ddata->jsWrapper.value() : 0);
-    Q_UNUSED(scopeObjectProtector);
     QV4::ScopedObject qmlScope(valueScope, QV4::QmlContextWrapper::qmlScope(QV8Engine::get(engine), context, _scopeObject));
     QV4::Scoped<QV4::QmlBindingWrapper> qmlBindingWrapper(valueScope, new (v4->memoryManager) QV4::QmlBindingWrapper(v4->rootContext, qmlScope));
     QV4::ExecutionContext *qmlContext = qmlBindingWrapper->context();
@@ -1168,7 +1192,7 @@ QQmlContextData *QQmlObjectCreator::finalize(QQmlInstantiationInterrupt &interru
     Q_ASSERT(phase == ObjectsCreated || phase == Finalizing);
     phase = Finalizing;
 
-    QRecursionWatcher<QQmlObjectCreatorSharedState, &QQmlObjectCreatorSharedState::recursionNode> watcher(sharedState.data());
+    QQmlObjectCreatorRecursionWatcher watcher(this);
     ActiveOCRestorer ocRestorer(this, QQmlEnginePrivate::get(engine));
 
     {
@@ -1253,6 +1277,11 @@ void QQmlObjectCreator::clear()
     while (!sharedState->allCreatedObjects.isEmpty())
         delete sharedState->allCreatedObjects.pop();
 
+    while (sharedState->componentAttached) {
+        QQmlComponentAttached *a = sharedState->componentAttached;
+        a->rem();
+    }
+
     phase = Done;
 }
 
@@ -1288,6 +1317,9 @@ bool QQmlObjectCreator::populateInstance(int index, QObject *instance, QObject *
     } else {
         vmeMetaObject = QQmlVMEMetaObject::get(_qobject);
     }
+
+    registerObjectWithContextById(index, _qobject);
+
     qSwap(_propertyCache, cache);
     qSwap(_vmeMetaObject, vmeMetaObject);
 
@@ -1325,3 +1357,10 @@ bool QQmlObjectCreator::populateInstance(int index, QObject *instance, QObject *
 }
 
 
+
+
+QQmlObjectCreatorRecursionWatcher::QQmlObjectCreatorRecursionWatcher(QQmlObjectCreator *creator)
+    : sharedState(creator->sharedState)
+    , watcher(creator->sharedState.data())
+{
+}
