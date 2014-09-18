@@ -327,7 +327,7 @@ bool QQuickFlickablePrivate::flick(AxisData &data, qreal minExtent, qreal maxExt
         maxDistance = qAbs(maxExtent - data.move.value());
         data.flickTarget = maxExtent;
     }
-    if (maxDistance > 0) {
+    if (maxDistance > 0 || boundsBehavior == QQuickFlickable::DragAndOvershootBounds) {
         qreal v = velocity;
         if (maxVelocity != -1 && maxVelocity < qAbs(v)) {
             if (v < 0)
@@ -677,7 +677,7 @@ is finished.
     \dots 8
     \snippet qml/flickableScrollbar.qml 1
 
-    \sa {declarative/customitems/scrollbar}{scrollbar example}
+    \sa {customitems/scrollbar}{UI Components: Scrollbar Example}
 */
 QQuickFlickable::QQuickFlickable(QQuickItem *parent)
   : QQuickItem(*(new QQuickFlickablePrivate), parent)
@@ -763,15 +763,8 @@ void QQuickFlickable::setInteractive(bool interactive)
     Q_D(QQuickFlickable);
     if (interactive != d->interactive) {
         d->interactive = interactive;
-        if (!interactive && (d->hData.flicking || d->vData.flicking)) {
-            d->clearTimeline();
-            d->hData.vTime = d->vData.vTime = d->timeline.time();
-            d->hData.flicking = false;
-            d->vData.flicking = false;
-            emit flickingChanged();
-            emit flickingHorizontallyChanged();
-            emit flickingVerticallyChanged();
-            emit flickEnded();
+        if (!interactive) {
+            d->cancelInteraction();
         }
         emit interactiveChanged();
     }
@@ -1374,15 +1367,15 @@ void QQuickFlickablePrivate::replayDelayedPress()
         delayedPressTimer.stop();
 
         // If we have the grab, release before delivering the event
-        QQuickWindow *w = q->window();
-        if (w && (w->mouseGrabberItem() == q)) {
-            q->ungrabMouse();
-        }
+        if (QQuickWindow *w = q->window()) {
+            if (w->mouseGrabberItem() == q)
+                q->ungrabMouse();
 
-        // Use the event handler that will take care of finding the proper item to propagate the event
-        replayingPressEvent = true;
-        QQuickWindowPrivate::get(w)->deliverMouseEvent(mouseEvent.data());
-        replayingPressEvent = false;
+            // Use the event handler that will take care of finding the proper item to propagate the event
+            replayingPressEvent = true;
+            QQuickWindowPrivate::get(w)->deliverMouseEvent(mouseEvent.data());
+            replayingPressEvent = false;
+        }
     }
 }
 
@@ -1541,6 +1534,10 @@ void QQuickFlickable::geometryChanged(const QRectF &newGeometry,
 void QQuickFlickable::flick(qreal xVelocity, qreal yVelocity)
 {
     Q_D(QQuickFlickable);
+    d->hData.reset();
+    d->vData.reset();
+    d->hData.velocity = xVelocity;
+    d->vData.velocity = yVelocity;
     bool flickedX = d->flickX(xVelocity);
     bool flickedY = d->flickY(yVelocity);
     d->flickingStarted(flickedX, flickedY);
@@ -2011,18 +2008,24 @@ bool QQuickFlickable::yflick() const
 void QQuickFlickable::mouseUngrabEvent()
 {
     Q_D(QQuickFlickable);
-    if (d->pressed) {
-        // if our mouse grab has been removed (probably by another Flickable),
-        // fix our state
-        d->clearDelayedPress();
-        d->pressed = false;
-        d->draggingEnding();
-        d->stealMouse = false;
-        setKeepMouseGrab(false);
-        d->fixupX();
-        d->fixupY();
-        if (!d->isViewMoving())
-            movementEnding();
+    // if our mouse grab has been removed (probably by another Flickable),
+    // fix our state
+    d->cancelInteraction();
+}
+
+void QQuickFlickablePrivate::cancelInteraction()
+{
+    Q_Q(QQuickFlickable);
+    if (pressed) {
+        clearDelayedPress();
+        pressed = false;
+        draggingEnding();
+        stealMouse = false;
+        q->setKeepMouseGrab(false);
+        fixupX();
+        fixupY();
+        if (!isViewMoving())
+            q->movementEnding();
     }
 }
 

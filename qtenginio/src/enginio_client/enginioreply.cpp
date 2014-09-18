@@ -39,6 +39,7 @@
 **
 ****************************************************************************/
 
+#include <QtCore/qdebug.h>
 #include <QtCore/qstring.h>
 #include <QtCore/qjsonobject.h>
 #include <QtCore/qjsondocument.h>
@@ -344,6 +345,7 @@ QDebug operator<<(QDebug d, const EnginioReply *reply)
     d << ")";
     return d.space();
 }
+#endif // QT_NO_DEBUG_STREAM
 
 EnginioReplyState::EnginioReplyState(EnginioClientConnectionPrivate *parent, QNetworkReply *reply, EnginioReplyStatePrivate *priv)
     : QObject(*priv, parent->q_ptr)
@@ -374,4 +376,3 @@ QJsonObject EnginioReplyState::data() const
 
 QT_END_NAMESPACE
 
-#endif // QT_NO_DEBUG_STREAM

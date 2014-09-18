@@ -22,7 +22,7 @@ SOURCES += \
     $$PWD/qquickabstractstyle.cpp
 
 
-!android: !ios: !blackberry: qtHaveModule(widgets) {
+!no_desktop {
     QT += widgets
     HEADERS += $$PWD/qquickstyleitem_p.h
     SOURCES += $$PWD/qquickstyleitem.cpp
@@ -46,6 +46,7 @@ PRIVATE_QML_FILES += \
     $$PWD/StackView.js \
     $$PWD/ScrollViewHelper.qml \
     $$PWD/ScrollBar.qml \
+    $$PWD/SystemPaletteSingleton.qml \
     $$PWD/TableViewSelection.qml \
     $$PWD/TextSingleton.qml \
     $$PWD/FocusFrame.qml \

@@ -70,7 +70,7 @@ static void initResources()
 QT_BEGIN_NAMESPACE
 
 /*!
-    \qmlmodule QtQuick.Dialogs 1.1
+    \qmlmodule QtQuick.Dialogs 1.2
     \title Qt Quick Dialogs QML Types
     \ingroup qmlmodules
     \brief Provides QML types for standard file, color picker and message dialogs
@@ -80,7 +80,7 @@ QT_BEGIN_NAMESPACE
     To use the types in this module, import the module with the following line:
 
     \code
-    import QtQuick.Dialogs 1.1
+    import QtQuick.Dialogs 1.2
     \endcode
 */
 
@@ -197,7 +197,7 @@ protected:
         // If there is a qmldir and we have a QApplication instance (as opposed to a
         // widget-free QGuiApplication), assume that the widget-based dialog will work.
         if (hasTopLevelWindows && widgetsDir.exists("qmldir") &&
-                !qstrcmp(QCoreApplication::instance()->metaObject()->className(), "QApplication")) {
+                QCoreApplication::instance()->inherits("QApplication")) {
             QUrl dialogQmlPath =  m_useResources ?
                 QUrl(QString("qrc:/QtQuick/Dialogs/Widget%1.qml").arg(qmlName)) :
                 QUrl::fromLocalFile(qmlDir.filePath(QString("Widget%1.qml").arg(qmlName)));

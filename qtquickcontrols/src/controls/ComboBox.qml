@@ -49,7 +49,10 @@ import QtQuick.Controls.Private 1.0
     \ingroup controls
     \brief Provides a drop-down list functionality.
 
-    Add items to the comboBox by assigning it a ListModel, or a list of strings to the \l model property.
+    \image combobox.png
+
+    Add items to the ComboBox by assigning it a ListModel, or a list of strings
+    to the \l model property.
 
     \qml
        ComboBox {
@@ -153,13 +156,13 @@ Control {
     /*! \qmlproperty bool ComboBox::pressed
 
         This property holds whether the button is being pressed. */
-    readonly property bool pressed: mouseArea.pressed && mouseArea.containsMouse || popup.__popupVisible
+    readonly property bool pressed: mouseArea.effectivePressed || popup.__popupVisible
 
     /*! \qmlproperty bool ComboBox::hovered
 
         This property indicates whether the control is being hovered.
     */
-    readonly property alias hovered: mouseArea.containsMouse
+    readonly property bool hovered: mouseArea.containsMouse || cursorArea.containsMouse
 
     /*! \qmlproperty int ComboBox::count
         \since QtQuick.Controls 1.1
@@ -309,12 +312,23 @@ Control {
 
     MouseArea {
         id: mouseArea
+        property bool overridePressed: false
+        readonly property bool effectivePressed: (pressed || overridePressed) && containsMouse
         anchors.fill: parent
         hoverEnabled: true
         onPressed: {
             if (comboBox.activeFocusOnPress)
                 forceActiveFocus()
-            popup.show()
+            if (!Settings.hasTouchScreen)
+                popup.show()
+            else
+                overridePressed = true
+        }
+        onCanceled: overridePressed = false
+        onClicked: {
+            if (Settings.hasTouchScreen)
+                popup.show()
+            overridePressed = false
         }
         onWheel: {
             if (wheel.angleDelta.y > 0) {
@@ -360,9 +374,9 @@ Control {
 
         renderType: __style ? __style.renderType : Text.NativeRendering
         selectByMouse: true
-        color: __style.__syspal.text
-        selectionColor: __style.__syspal.highlight
-        selectedTextColor: __style.__syspal.highlightedText
+        color: SystemPaletteSingleton.text(enabled)
+        selectionColor: SystemPaletteSingleton.highlight(enabled)
+        selectedTextColor: SystemPaletteSingleton.highlightedText(enabled)
         onAccepted: {
             var idx = input.find(editText, Qt.MatchFixedString)
             if (idx > -1) {
@@ -446,6 +460,14 @@ Control {
                 }
             }
             prevText = text
+        }
+
+        MouseArea {
+            id: cursorArea
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.IBeamCursor
+            acceptedButtons: Qt.NoButton
         }
     }
 

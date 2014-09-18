@@ -43,6 +43,17 @@
 #ifndef QSERIALPORT_WIN_P_H
 #define QSERIALPORT_WIN_P_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include "qserialport_p.h"
 
 #include <QtCore/qhash.h>
@@ -91,13 +102,13 @@ public:
     void handleLineStatusErrors();
     QSerialPort::SerialPortError decodeSystemError() const;
 
-    void _q_completeAsyncCommunication();
-    void _q_completeAsyncRead();
-    void _q_completeAsyncWrite();
+    bool _q_completeAsyncCommunication();
+    bool _q_completeAsyncRead();
+    bool _q_completeAsyncWrite();
 
     bool startAsyncCommunication();
     bool startAsyncRead();
-    bool startAsyncWrite();
+    bool _q_startAsyncWrite();
 
     bool emulateErrorPolicy();
     void emitReadyRead();
@@ -130,9 +141,10 @@ public:
     DWORD triggeredEventMask;
 
 private:
+    bool initialize(QIODevice::OpenMode mode);
     bool updateDcb();
     bool updateCommTimeouts();
-
+    qint64 handleOverlappedResult(int direction, OVERLAPPED &overlapped);
 
     bool waitAnyEvent(int msecs, bool *timedOut, HANDLE *triggeredEvent);
 

@@ -104,6 +104,7 @@ QQuickPathViewPrivate::QQuickPathViewPrivate()
     , stealMouse(false), ownModel(false), interactive(true), haveHighlightRange(true)
     , autoHighlight(true), highlightUp(false), layoutScheduled(false)
     , moving(false), flicking(false), dragging(false), inRequest(false), delegateValidated(false)
+    , inRefill(false)
     , dragMargin(0), deceleration(100), maximumFlickVelocity(QML_FLICK_DEFAULTMAXVELOCITY)
     , moveOffset(this, &QQuickPathViewPrivate::setAdjustedOffset), flickDuration(0)
     , firstIndex(-1), pathItems(-1), requestedIndex(-1), cacheSize(0), requestedZ(0)
@@ -1598,6 +1599,7 @@ void QQuickPathViewPrivate::handleMousePressEvent(QMouseEvent *event)
         return;
 
     startPoint = pointNear(event->localPos(), &startPc);
+    startPos = event->localPos();
     if (idx == items.count()) {
         qreal distance = qAbs(event->localPos().x() - startPoint.x()) + qAbs(event->localPos().y() - startPoint.y());
         if (distance > dragMargin)
@@ -1620,8 +1622,6 @@ void QQuickPathView::mouseMoveEvent(QMouseEvent *event)
     Q_D(QQuickPathView);
     if (d->interactive) {
         d->handleMouseMoveEvent(event);
-        if (d->stealMouse)
-            setKeepMouseGrab(true);
         event->accept();
     } else {
         QQuickItem::mouseMoveEvent(event);
@@ -1638,9 +1638,17 @@ void QQuickPathViewPrivate::handleMouseMoveEvent(QMouseEvent *event)
     qreal newPc;
     QPointF pathPoint = pointNear(event->localPos(), &newPc);
     if (!stealMouse) {
-        QPointF delta = pathPoint - startPoint;
-        if (qAbs(delta.x()) > qApp->styleHints()->startDragDistance() || qAbs(delta.y()) > qApp->styleHints()->startDragDistance()) {
-            stealMouse = true;
+        QPointF posDelta = event->localPos() - startPos;
+        if (QQuickWindowPrivate::dragOverThreshold(posDelta.y(), Qt::YAxis, event) || QQuickWindowPrivate::dragOverThreshold(posDelta.x(), Qt::XAxis, event)) {
+            // The touch has exceeded the threshold. If the movement along the path is close to the drag threshold
+            // then we'll assume that this gesture targets the PathView. This ensures PathView gesture grabbing
+            // is in sync with other items.
+            QPointF pathDelta = pathPoint - startPoint;
+            if (qAbs(pathDelta.x()) > qApp->styleHints()->startDragDistance() * 0.8
+                    || qAbs(pathDelta.y()) > qApp->styleHints()->startDragDistance() * 0.8) {
+                stealMouse = true;
+                q->setKeepMouseGrab(true);
+            }
         }
     } else {
         moveReason = QQuickPathViewPrivate::Mouse;
@@ -1873,10 +1881,17 @@ void QQuickPathView::refill()
 {
     Q_D(QQuickPathView);
 
+    if (d->inRefill) {
+        d->scheduleLayout();
+        return;
+    }
+
     d->layoutScheduled = false;
 
     if (!d->isValid() || !isComponentComplete())
         return;
+
+    d->inRefill = true;
 
     bool currentVisible = false;
     int count = d->pathItems == -1 ? d->modelCount : qMin(d->pathItems, d->modelCount);
@@ -2010,6 +2025,8 @@ void QQuickPathView::refill()
     }
     while (d->itemCache.count())
         d->releaseItem(d->itemCache.takeLast());
+
+    d->inRefill = false;
 }
 
 void QQuickPathView::modelUpdated(const QQmlChangeSet &changeSet, bool reset)

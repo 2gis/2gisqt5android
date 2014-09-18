@@ -81,6 +81,7 @@ public:
     Q_INVOKABLE QJSValue __standardButtonsRightModel();
 
     QString title() const { return m_title; }
+    virtual void setVisible(bool v);
 
 public Q_SLOTS:
     virtual void setTitle(const QString &arg);
@@ -105,15 +106,14 @@ protected:
 protected Q_SLOTS:
     virtual void accept();
     virtual void reject();
-    void clicked();
 
 private:
     void updateStandardButtons();
 
 private:
     QString m_title;
-    StandardButton m_clickedButton;
     StandardButtons m_enabledButtons;
+    StandardButton m_clickedButton;
     QJSValue m_standardButtonsLeftModel;
     QJSValue m_standardButtonsRightModel;
     Q_DISABLE_COPY(QQuickDialog)

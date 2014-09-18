@@ -116,23 +116,23 @@ void QQuickWidgetPrivate::init(QQmlEngine* e)
     QObject::connect(renderControl, SIGNAL(sceneChanged()), q, SLOT(triggerUpdate()));
 }
 
-void QQuickWidgetPrivate::stopRenderControl()
+void QQuickWidgetPrivate::invalidateRenderControl()
 {
     if (!context) // this is not an error, could be called before creating the context, or multiple times
         return;
 
     bool success = context->makeCurrent(offscreenSurface);
     if (!success) {
-        qWarning("QQuickWidget::stopRenderControl could not make context current");
+        qWarning("QQuickWidget::invalidateRenderControl could not make context current");
         return;
     }
 
-    renderControl->stop();
+    renderControl->invalidate();
 }
 
 void QQuickWidgetPrivate::handleWindowChange()
 {
-    stopRenderControl();
+    invalidateRenderControl();
     destroyContext();
 }
 
@@ -158,7 +158,7 @@ QQuickWidgetPrivate::~QQuickWidgetPrivate()
     if (QQmlDebugService::isDebuggingEnabled())
         QQmlInspectorService::instance()->removeView(q_func());
 
-    stopRenderControl();
+    invalidateRenderControl();
 
     // context and offscreenSurface are current at this stage, if the context was created.
     Q_ASSERT(!context || (QOpenGLContext::currentContext() == context && context->surface() == offscreenSurface));
@@ -875,8 +875,19 @@ void QQuickWidget::resizeEvent(QResizeEvent *e)
         d->renderControl->sync();
     }
 
-    d->createContext();
-    createFramebufferObject();
+    if (d->context) {
+        // Bail out in the special case of receiving a resize after
+        // scenegraph invalidation during application exit.
+        if (!d->fbo && !d->offscreenWindow->openglContext())
+            return;
+        if (!d->fbo || d->fbo->size() != size() * devicePixelRatio())
+            createFramebufferObject();
+    } else {
+        // This will result in a scenegraphInitialized() signal which
+        // is connected to createFramebufferObject().
+        d->createContext();
+    }
+
     d->offscreenWindow->resizeEvent(e);
     d->offscreenWindow->setGeometry(0, 0, e->size().width(), e->size().height());
 
@@ -953,7 +964,7 @@ void QQuickWidget::showEvent(QShowEvent *)
 void QQuickWidget::hideEvent(QHideEvent *)
 {
     Q_D(QQuickWidget);
-    d->stopRenderControl();
+    d->invalidateRenderControl();
 }
 
 /*! \reimp */

@@ -47,6 +47,7 @@
 #include <QtQml/qqmlexpression.h>
 #include <QtQml/qqmlincubator.h>
 #include <QtQuick/private/qquickpathview_p.h>
+#include <QtQuick/private/qquickflickable_p.h>
 #include <QtQuick/private/qquickpath_p.h>
 #include <QtQuick/private/qquicktext_p.h>
 #include <QtQuick/private/qquickrectangle_p.h>
@@ -142,6 +143,9 @@ private slots:
     void indexAt_itemAt();
     void indexAt_itemAt_data();
     void cacheItemCount();
+    void changePathDuringRefill();
+    void nestedinFlickable();
+    void flickableDelegate();
 };
 
 class TestObject : public QObject
@@ -2120,7 +2124,156 @@ void tst_QQuickPathView::cacheItemCount()
         bool b = true;
         controller.incubateWhile(&b);
     }
+}
 
+static void testCurrentIndexChange(QQuickPathView *pathView, const QStringList &objectNamesInOrder)
+{
+    for (int visualIndex = 0; visualIndex < objectNamesInOrder.size() - 1; ++visualIndex) {
+        QQuickRectangle *delegate = findItem<QQuickRectangle>(pathView, objectNamesInOrder.at(visualIndex));
+        QVERIFY(delegate);
+
+        QQuickRectangle *nextDelegate = findItem<QQuickRectangle>(pathView, objectNamesInOrder.at(visualIndex + 1));
+        QVERIFY(nextDelegate);
+
+        QVERIFY(delegate->y() < nextDelegate->y());
+    }
+}
+
+void tst_QQuickPathView::changePathDuringRefill()
+{
+    QScopedPointer<QQuickView> window(createView());
+
+    window->setSource(testFileUrl("changePathDuringRefill.qml"));
+    window->show();
+    QVERIFY(QTest::qWaitForWindowActive(window.data()));
+    QCOMPARE(window.data(), qGuiApp->focusWindow());
+
+    QQuickPathView *pathView = qobject_cast<QQuickPathView*>(window->rootObject());
+    QVERIFY(pathView != 0);
+
+    testCurrentIndexChange(pathView, QStringList() << "delegateC" << "delegateA" << "delegateB");
+
+    pathView->incrementCurrentIndex();
+    /*
+        Decrementing moves delegateA down, resulting in an offset of 1,
+        so incrementing will move it up, resulting in an offset of 2:
+
+        delegateC    delegateA
+        delegateA => delegateB
+        delegateB    delegateC
+    */
+    QTRY_COMPARE(pathView->offset(), 2.0);
+    testCurrentIndexChange(pathView, QStringList() << "delegateA" << "delegateB" << "delegateC");
+}
+
+void tst_QQuickPathView::nestedinFlickable()
+{
+    QScopedPointer<QQuickView> window(createView());
+    QQuickViewTestUtil::moveMouseAway(window.data());
+    window->setSource(testFileUrl("nestedInFlickable.qml"));
+    window->show();
+    window->requestActivate();
+    QVERIFY(QTest::qWaitForWindowActive(window.data()));
+    QCOMPARE(window.data(), qGuiApp->focusWindow());
+
+    QQuickPathView *pathview = findItem<QQuickPathView>(window->rootObject(), "pathView");
+    QVERIFY(pathview != 0);
+
+    QQuickFlickable *flickable = qobject_cast<QQuickFlickable*>(window->rootObject());
+    QVERIFY(flickable != 0);
+
+    QSignalSpy movingSpy(pathview, SIGNAL(movingChanged()));
+    QSignalSpy moveStartedSpy(pathview, SIGNAL(movementStarted()));
+    QSignalSpy moveEndedSpy(pathview, SIGNAL(movementEnded()));
+
+    QSignalSpy fflickingSpy(flickable, SIGNAL(flickingChanged()));
+    QSignalSpy fflickStartedSpy(flickable, SIGNAL(flickStarted()));
+    QSignalSpy fflickEndedSpy(flickable, SIGNAL(flickEnded()));
+
+    int waitInterval = 5;
+
+    QTest::mousePress(window.data(), Qt::LeftButton, 0, QPoint(23,218));
+
+    QTest::mouseMove(window.data(), QPoint(25,218), waitInterval);
+    QTest::mouseMove(window.data(), QPoint(26,218), waitInterval);
+    QTest::mouseMove(window.data(), QPoint(28,219), waitInterval);
+    QTest::mouseMove(window.data(), QPoint(31,219), waitInterval);
+    QTest::mouseMove(window.data(), QPoint(39,219), waitInterval);
+
+    // first move beyond threshold does not trigger drag
+    QVERIFY(!pathview->isMoving());
+    QVERIFY(!pathview->isDragging());
+    QCOMPARE(movingSpy.count(), 0);
+    QCOMPARE(moveStartedSpy.count(), 0);
+    QCOMPARE(moveEndedSpy.count(), 0);
+    QCOMPARE(fflickingSpy.count(), 0);
+    QCOMPARE(fflickStartedSpy.count(), 0);
+    QCOMPARE(fflickEndedSpy.count(), 0);
+
+    // no further moves after the initial move beyond threshold
+    QTest::mouseRelease(window.data(), Qt::LeftButton, 0, QPoint(53,219));
+    QTRY_COMPARE(movingSpy.count(), 2);
+    QTRY_COMPARE(moveEndedSpy.count(), 1);
+    QCOMPARE(moveStartedSpy.count(), 1);
+    // Flickable should not handle this
+    QCOMPARE(fflickingSpy.count(), 0);
+    QCOMPARE(fflickStartedSpy.count(), 0);
+    QCOMPARE(fflickEndedSpy.count(), 0);
+}
+
+void tst_QQuickPathView::flickableDelegate()
+{
+    QScopedPointer<QQuickView> window(createView());
+    QQuickViewTestUtil::moveMouseAway(window.data());
+    window->setSource(testFileUrl("flickableDelegate.qml"));
+    window->show();
+    window->requestActivate();
+    QVERIFY(QTest::qWaitForWindowActive(window.data()));
+    QCOMPARE(window.data(), qGuiApp->focusWindow());
+
+    QQuickPathView *pathview = qobject_cast<QQuickPathView*>(window->rootObject());
+    QVERIFY(pathview != 0);
+
+    QQuickFlickable *flickable = qobject_cast<QQuickFlickable*>(pathview->currentItem());
+    QVERIFY(flickable != 0);
+
+    QSignalSpy movingSpy(pathview, SIGNAL(movingChanged()));
+    QSignalSpy moveStartedSpy(pathview, SIGNAL(movementStarted()));
+    QSignalSpy moveEndedSpy(pathview, SIGNAL(movementEnded()));
+
+    QSignalSpy fflickingSpy(flickable, SIGNAL(flickingChanged()));
+    QSignalSpy fflickStartedSpy(flickable, SIGNAL(flickStarted()));
+    QSignalSpy fflickEndedSpy(flickable, SIGNAL(flickEnded()));
+
+    int waitInterval = 5;
+
+    QTest::mousePress(window.data(), Qt::LeftButton, 0, QPoint(23,100));
+
+    QTest::mouseMove(window.data(), QPoint(25,100), waitInterval);
+    QTest::mouseMove(window.data(), QPoint(26,100), waitInterval);
+    QTest::mouseMove(window.data(), QPoint(28,100), waitInterval);
+    QTest::mouseMove(window.data(), QPoint(31,100), waitInterval);
+    QTest::mouseMove(window.data(), QPoint(39,100), waitInterval);
+
+    // first move beyond threshold does not trigger drag
+    QVERIFY(!flickable->isMoving());
+    QVERIFY(!flickable->isDragging());
+    QCOMPARE(movingSpy.count(), 0);
+    QCOMPARE(moveStartedSpy.count(), 0);
+    QCOMPARE(moveEndedSpy.count(), 0);
+    QCOMPARE(fflickingSpy.count(), 0);
+    QCOMPARE(fflickStartedSpy.count(), 0);
+    QCOMPARE(fflickEndedSpy.count(), 0);
+
+    // no further moves after the initial move beyond threshold
+    QTest::mouseRelease(window.data(), Qt::LeftButton, 0, QPoint(53,100));
+    QTRY_COMPARE(fflickingSpy.count(), 2);
+    QTRY_COMPARE(fflickStartedSpy.count(), 1);
+    QCOMPARE(fflickEndedSpy.count(), 1);
+    // PathView should not handle this
+    QTRY_COMPARE(movingSpy.count(), 0);
+    QTRY_COMPARE(moveEndedSpy.count(), 0);
+    QCOMPARE(moveStartedSpy.count(), 0);
 }
 
 QTEST_MAIN(tst_QQuickPathView)

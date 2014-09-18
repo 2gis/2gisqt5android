@@ -150,7 +150,7 @@ V8_DEFINE_EXTENSION(QQmlComponentExtension, componentExtension);
         // QQmlEngine *engine = qmlContext(this)->engine();
         QQmlComponent component(engine, QUrl::fromLocalFile("MyItem.qml"));
         QQuickItem *childItem = qobject_cast<QQuickItem*>(component.create());
-        childItem->setParent(this);
+        childItem->setParentItem(this);
     }
     \endcode
 
@@ -265,7 +265,7 @@ V8_DEFINE_EXTENSION(QQmlComponentExtension, componentExtension);
 /*!
     \qmlattachedsignal Component::completed()
 
-    Emitted after component "startup" has completed. This can be used to
+    Emitted after the object has been instantiated. This can be used to
     execute script code at startup, once the full QML environment has been
     established.
 
@@ -286,14 +286,13 @@ V8_DEFINE_EXTENSION(QQmlComponentExtension, componentExtension);
 /*!
     \qmlattachedsignal Component::destruction()
 
-    Emitted as the component begins destruction. This can be used to undo
+    Emitted as the object begins destruction. This can be used to undo
     work done in response to the \l {completed}{completed()} signal, or other
     imperative code in your application.
 
     The corresponding handler is \c onDestruction. It can be declared on
-    any object. However, it applies to the destruction of the component as
-    a whole, and not the destruction of the specific object. The order of
-    running the \c onDestruction handlers is undefined.
+    any object. The order of running the \c onDestruction handlers is
+    undefined.
 
     \qml
     Rectangle {
@@ -780,6 +779,11 @@ QQmlComponent::QQmlComponent(QQmlComponentPrivate &dd, QObject *parent)
 
     The ownership of the returned object instance is transferred to the caller.
 
+    If the object being created from this component is a visual item, it must
+    have a visual parent, which can be set by calling
+    QQuickItem::setParentItem(). See \l {Concepts - Visual Parent in Qt Quick}
+    for more details.
+
     \sa QQmlEngine::ObjectOwnership
 */
 QObject *QQmlComponent::create(QQmlContext *context)
@@ -880,7 +884,7 @@ QQmlComponentPrivate::beginCreate(QQmlContextData *context)
 
     enginePriv->referenceScarceResources();
     QObject *rv = 0;
-    state.creator = new QQmlObjectCreator(context, cc, creationContext);
+    state.creator.reset(new QQmlObjectCreator(context, cc, creationContext));
     rv = state.creator->create(start);
     if (!rv)
         state.errors = state.creator->errors;
@@ -920,7 +924,7 @@ void QQmlComponentPrivate::beginDeferred(QQmlEnginePrivate *enginePriv,
     Q_ASSERT(ddata->deferredData);
     QQmlData::DeferredData *deferredData = ddata->deferredData;
     QQmlContextData *creationContext = 0;
-    state->creator = new QQmlObjectCreator(deferredData->context->parent, deferredData->compiledData, creationContext);
+    state->creator.reset(new QQmlObjectCreator(deferredData->context->parent, deferredData->compiledData, creationContext));
     if (!state->creator->populateDeferredProperties(object))
         state->errors << state->creator->errors;
 }
@@ -1535,7 +1539,6 @@ void QmlIncubatorObject::statusChanged(QQmlIncubator::Status s)
         callData->args[0] = QV4::Primitive::fromUInt32(s);
         f->call(callData);
         if (scope.hasException()) {
-            ctx->catchException();
             QQmlError error = QV4::ExecutionEngine::catchExceptionAsQmlError(ctx);
             QQmlEnginePrivate::warning(QQmlEnginePrivate::get(v8->engine()), error);
         }

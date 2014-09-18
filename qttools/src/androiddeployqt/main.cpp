@@ -126,6 +126,7 @@ struct Options
 
     // External tools
     QString sdkPath;
+    QString sdkBuildToolsVersion;
     QString ndkPath;
     QString antTool;
     QString jdkPath;
@@ -634,10 +635,17 @@ bool readInputFile(Options *options)
                 return false;
         } else {
             if (!QDir(options->sdkPath + QLatin1String("/platforms/") + options->androidPlatform).exists()) {
-                fprintf(stderr, "Warning: Android platform '%s' does not exist in NDK.\n",
+                fprintf(stderr, "Warning: Android platform '%s' does not exist in SDK.\n",
                         qPrintable(options->androidPlatform));
             }
         }
+    }
+
+    {
+
+        QJsonValue value = jsonObject.value("sdkBuildToolsRevision");
+        if (!value.isUndefined())
+            options->sdkBuildToolsVersion = value.toString();
     }
 
     {
@@ -1364,6 +1372,17 @@ bool readDependencies(Options *options)
     if (!readDependenciesFromElf(options, options->applicationBinary, &usedDependencies, &remainingDependencies))
         return false;
 
+    // Until we have support non-gui applications on Android, always add Qt Gui
+    // as a dependency (otherwise the platform plugin cannot be deployed, and
+    // the application will not run).
+    QLatin1String guiLib("lib/libQt5Gui.so");
+    if (!options->qtDependencies.contains(guiLib)) {
+        options->qtDependencies.append(guiLib);
+        usedDependencies.insert(guiLib);
+        if (!readAndroidDependencyXml(options, QLatin1String("Qt5Gui"), &usedDependencies, &remainingDependencies))
+            return false;
+    }
+
     QString qtDir = options->qtInstallDirectory + QLatin1Char('/');
 
     while (!remainingDependencies.isEmpty()) {
@@ -2075,8 +2094,14 @@ bool signPackage(const Options &options)
 #endif
 
     if (!QFile::exists(zipAlignTool)) {
-        fprintf(stderr, "zipalign tool not found: %s\n", qPrintable(zipAlignTool));
-        return false;
+        zipAlignTool = options.sdkPath + QLatin1String("/build-tools/") + options.sdkBuildToolsVersion + QLatin1String("/zipalign");
+#if defined(Q_OS_WIN32)
+        zipAlignTool += QLatin1String(".exe");
+#endif
+        if (!QFile::exists(zipAlignTool)) {
+            fprintf(stderr, "zipalign tool not found: %s\n", qPrintable(zipAlignTool));
+            return false;
+        }
     }
 
     zipAlignTool = QString::fromLatin1("%1%2 -f 4 %3 %4")

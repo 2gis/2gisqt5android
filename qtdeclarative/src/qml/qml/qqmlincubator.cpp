@@ -292,10 +292,7 @@ void QQmlIncubatorPrivate::incubate(QQmlInstantiationInterrupt &i)
     QQmlEngine *engine = compiledData->engine;
     QQmlEnginePrivate *enginePriv = QQmlEnginePrivate::get(engine);
 
-    bool guardOk = vmeGuard.isOK();
-    vmeGuard.clear();
-
-    if (!guardOk) {
+    if (!vmeGuard.isOK()) {
         QQmlError error;
         error.setUrl(compiledData->url);
         error.setDescription(QQmlComponent::tr("Object destroyed during incubation"));
@@ -304,6 +301,8 @@ void QQmlIncubatorPrivate::incubate(QQmlInstantiationInterrupt &i)
 
         goto finishIncubate;
     }
+
+    vmeGuard.clear();
 
     if (progress == QQmlIncubatorPrivate::Execute) {
         enginePriv->referenceScarceResources();
@@ -385,7 +384,7 @@ finishIncubate:
                 enginePriv->erroredBindings->removeError();
             }
         }
-    } else {
+    } else if (!creator.isNull()) {
         vmeGuard.guard(creator.data());
     }
 }

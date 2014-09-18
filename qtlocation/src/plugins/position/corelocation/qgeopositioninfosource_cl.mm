@@ -46,13 +46,13 @@
 
 #define MINIMUM_UPDATE_INTERVAL 1000
 
-@interface locationDelegate : NSObject <CLLocationManagerDelegate>
+@interface PositionLocationDelegate : NSObject <CLLocationManagerDelegate>
 {
     QGeoPositionInfoSourceCL *m_positionInfoSource;
 }
 @end
 
-@implementation locationDelegate
+@implementation PositionLocationDelegate
 - (id)initWithInfoSource:(QGeoPositionInfoSourceCL*) positionInfoSource
 {
     self = [super init];
@@ -78,10 +78,14 @@
                                              newLocation.coordinate.longitude,
                                              newLocation.altitude),
                                              timeStamp);
-    location.setAttribute(QGeoPositionInfo::HorizontalAccuracy, newLocation.horizontalAccuracy);
-    location.setAttribute(QGeoPositionInfo::VerticalAccuracy, newLocation.verticalAccuracy);
-    location.setAttribute(QGeoPositionInfo::Direction, newLocation.course);
-    location.setAttribute(QGeoPositionInfo::GroundSpeed, newLocation.speed);
+    if (newLocation.horizontalAccuracy >= 0)
+        location.setAttribute(QGeoPositionInfo::HorizontalAccuracy, newLocation.horizontalAccuracy);
+    if (newLocation.verticalAccuracy >= 0)
+        location.setAttribute(QGeoPositionInfo::VerticalAccuracy, newLocation.verticalAccuracy);
+    if (newLocation.course >= 0)
+        location.setAttribute(QGeoPositionInfo::Direction, newLocation.course);
+    if (newLocation.speed >= 0)
+        location.setAttribute(QGeoPositionInfo::GroundSpeed, newLocation.speed);
 
     m_positionInfoSource->locationDataAvailable(location);
 }
@@ -132,7 +136,7 @@ bool QGeoPositionInfoSourceCL::enableLocationManager()
     if (!m_locationManager) {
         m_locationManager = [[CLLocationManager alloc] init];
         m_locationManager.desiredAccuracy = kCLLocationAccuracyBest;
-        m_locationManager.delegate = [[locationDelegate alloc] initWithInfoSource:this];
+        m_locationManager.delegate = [[PositionLocationDelegate alloc] initWithInfoSource:this];
     }
 
     return (m_locationManager != 0);

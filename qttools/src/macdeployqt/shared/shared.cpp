@@ -163,8 +163,7 @@ FrameworkInfo parseOtoolLibraryLine(const QString &line, bool useDebugLibs)
         if (state == QtPath) {
             // Check for library name part
             if (part < parts.count() && parts.at(part).contains(".dylib ")) {
-                state = DylibName;
-                info.installName += "/" + (qtPath + "lib/").simplified();
+                info.installName += "/" + (qtPath + currentPart + "/").simplified();
                 info.frameworkDirectory = info.installName;
                 state = DylibName;
                 continue;
@@ -567,6 +566,15 @@ void deployPlugins(const ApplicationBundleInfo &appBundleInfo, const QString &pl
     // Cocoa print support
     pluginList.append("printsupport/libcocoaprintersupport.dylib");
 
+    // Network
+    if (deploymentInfo.deployedFrameworks.contains(QStringLiteral("QtNetwork.framework"))) {
+        QStringList bearerPlugins = QDir(pluginSourcePath +  QStringLiteral("/bearer")).entryList(QStringList() << QStringLiteral("*.dylib"));
+        foreach (const QString &plugin, bearerPlugins) {
+            if (!plugin.endsWith(QStringLiteral("_debug.dylib")))
+                pluginList.append(QStringLiteral("bearer/") + plugin);
+        }
+    }
+
     // Accessibility
     if (deploymentInfo.deployedFrameworks.contains(QStringLiteral("QtWidgets.framework")))
         pluginList.append("accessible/libqtaccessiblewidgets.dylib");
@@ -716,6 +724,24 @@ void deployQmlImports(const QString &appBundlePath, QStringList &qmlDirs)
         QJsonObject import = importValue.toObject();
         QString name = import["name"].toString();
         QString path = import["path"].toString();
+        QString type = import["type"].toString();
+
+        LogNormal() << "Deploying QML import" << name;
+
+        // Skip imports with missing info - path will be empty if the import is not found.
+        if (name.isEmpty() || path.isEmpty()) {
+            LogNormal() << "  Skip import: name or path is empty";
+            LogNormal() << "";
+            continue;
+        }
+
+        // Deploy module imports only, skip directory (local/remote) and js imports. These
+        // should be deployed as a part of the application build.
+        if (type != QStringLiteral("module")) {
+            LogNormal() << "  Skip non-module import";
+            LogNormal() << "";
+            continue;
+        }
 
         // Create the destination path from the name
         // and version (grabbed from the source path)

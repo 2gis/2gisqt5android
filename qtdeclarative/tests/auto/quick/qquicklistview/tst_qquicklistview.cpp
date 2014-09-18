@@ -41,6 +41,8 @@
 
 #include <QtTest/QtTest>
 #include <QtCore/QStringListModel>
+#include <QtCore/QSortFilterProxyModel>
+#include <QtGui/QStandardItemModel>
 #include <QtQuick/qquickview.h>
 #include <QtQml/qqmlengine.h>
 #include <QtQml/qqmlcontext.h>
@@ -50,11 +52,13 @@
 #include <QtQuick/private/qquicktext_p.h>
 #include <QtQml/private/qqmlobjectmodel_p.h>
 #include <QtQml/private/qqmllistmodel_p.h>
+#include <QtQml/private/qqmldelegatemodel_p.h>
 #include "../../shared/util.h"
 #include "../shared/viewtestutil.h"
 #include "../shared/visualtestutil.h"
 #include "incrementalmodel.h"
 #include "proxytestinnermodel.h"
+#include "randomsortmodel.h"
 #include <math.h>
 
 Q_DECLARE_METATYPE(Qt::LayoutDirection)
@@ -62,6 +66,7 @@ Q_DECLARE_METATYPE(QQuickItemView::VerticalLayoutDirection)
 Q_DECLARE_METATYPE(QQuickItemView::PositionMode)
 Q_DECLARE_METATYPE(QQuickListView::Orientation)
 Q_DECLARE_METATYPE(Qt::Key)
+Q_DECLARE_METATYPE(QPersistentModelIndex)
 
 using namespace QQuickViewTestUtil;
 using namespace QQuickVisualTestUtil;
@@ -227,6 +232,14 @@ private slots:
 
     void roundingErrors();
     void roundingErrors_data();
+
+    void QTBUG_38209();
+    void programmaticFlickAtBounds();
+
+    void layoutChange();
+
+    void QTBUG_39492_data();
+    void QTBUG_39492();
 
 private:
     template <class T> void items(const QUrl &source);
@@ -4078,12 +4091,13 @@ void tst_QQuickListView::resetModel_headerFooter()
 
     model.reset();
 
-    header = findItem<QQuickItem>(contentItem, "header");
-    QVERIFY(header);
+    // A reset should not force a new header or footer to be created.
+    QQuickItem *newHeader = findItem<QQuickItem>(contentItem, "header");
+    QVERIFY(newHeader == header);
     QCOMPARE(header->y(), -header->height());
 
-    footer = findItem<QQuickItem>(contentItem, "footer");
-    QVERIFY(footer);
+    QQuickItem *newFooter = findItem<QQuickItem>(contentItem, "footer");
+    QVERIFY(newFooter == footer);
     QCOMPARE(footer->y(), 30.*4);
 
     delete window;
@@ -7309,8 +7323,172 @@ void tst_QQuickListView::roundingErrors_data()
     QTest::newRow("pixelAligned=false") << false;
 }
 
+void tst_QQuickListView::QTBUG_38209()
+{
+    QScopedPointer<QQuickView> window(createView());
+    window->setSource(testFileUrl("simplelistview.qml"));
+    window->show();
+    QVERIFY(QTest::qWaitForWindowExposed(window.data()));
+
+    QQuickListView *listview = qobject_cast<QQuickListView *>(window->rootObject());
+    QVERIFY(listview);
+
+    // simulate mouse flick
+    flick(window.data(), QPoint(200, 200), QPoint(200, 50), 100);
+    QTRY_VERIFY(listview->isMoving() == false);
+    qreal contentY = listview->contentY();
+
+    // flick down
+    listview->flick(0, 1000);
+
+    // ensure we move more than just a couple pixels
+    QTRY_VERIFY(contentY - listview->contentY() > qreal(100.0));
+}
+
+void tst_QQuickListView::programmaticFlickAtBounds()
+{
+    QScopedPointer<QQuickView> window(createView());
+    window->setSource(testFileUrl("simplelistview.qml"));
+    window->show();
+    QVERIFY(QTest::qWaitForWindowExposed(window.data()));
+
+    QQuickListView *listview = qobject_cast<QQuickListView *>(window->rootObject());
+    QVERIFY(listview);
+    QSignalSpy spy(listview, SIGNAL(contentYChanged()));
+
+    // flick down
+    listview->flick(0, 1000);
+
+    // verify that there is movement beyond bounds
+    QVERIFY(spy.wait(100));
+
+    // reset, and test with StopAtBounds
+    listview->cancelFlick();
+    listview->returnToBounds();
+    QTRY_COMPARE(listview->contentY(), qreal(0.0));
+    listview->setBoundsBehavior(QQuickFlickable::StopAtBounds);
+
+    // flick down
+    listview->flick(0, 1000);
+
+    // verify that there is no movement beyond bounds
+    QVERIFY(!spy.wait(100));
+}
+
+void tst_QQuickListView::layoutChange()
+{
+    RandomSortModel *model = new RandomSortModel;
+    QSortFilterProxyModel *sortModel = new QSortFilterProxyModel;
+    sortModel->setSourceModel(model);
+    sortModel->setSortRole(Qt::UserRole);
+    sortModel->setDynamicSortFilter(true);
+    sortModel->sort(0);
+
+    QScopedPointer<QQuickView> window(createView());
+    window->rootContext()->setContextProperty("testModel", QVariant::fromValue(sortModel));
+    window->setSource(testFileUrl("layoutChangeSort.qml"));
+    window->show();
+    QVERIFY(QTest::qWaitForWindowExposed(window.data()));
+
+    QQuickListView *listview = window->rootObject()->findChild<QQuickListView *>("listView");
+    QVERIFY(listview);
+
+    for (int iter = 0; iter < 100; iter++) {
+        for (int i = 0; i < sortModel->rowCount(); ++i) {
+            QQuickItem *delegateItem = listview->itemAt(10, 10 + 2 * i * 20 + 20); // item + group
+            QVERIFY(delegateItem);
+            QQuickItem *delegateText = delegateItem->findChild<QQuickItem *>("delegateText");
+            QVERIFY(delegateText);
+
+            QCOMPARE(delegateText->property("text").toString(),
+                     sortModel->index(i, 0, QModelIndex()).data().toString());
+        }
+
+        model->randomize();
+        listview->forceLayout();
+        QTest::qWait(5); // give view a chance to update
+    }
+}
+
+void tst_QQuickListView::QTBUG_39492_data()
+{
+    QStandardItemModel *sourceModel = new QStandardItemModel(this);
+    for (int i = 0; i < 5; ++i) {
+        QStandardItem *item = new QStandardItem(QString::number(i));
+        for (int j = 0; j < 5; ++j) {
+            QStandardItem *subItem = new QStandardItem(QString("%1-%2").arg(i).arg(j));
+            item->appendRow(subItem);
+        }
+        sourceModel->appendRow(item);
+    }
+
+    QSortFilterProxyModel *sortModel = new QSortFilterProxyModel(this);
+    sortModel->setSourceModel(sourceModel);
+
+    QTest::addColumn<QSortFilterProxyModel*>("model");
+    QTest::addColumn<QPersistentModelIndex>("rootIndex");
+
+    QTest::newRow("invalid rootIndex")
+        << sortModel
+        << QPersistentModelIndex();
+
+    QTest::newRow("rootIndex 1")
+        << sortModel
+        << QPersistentModelIndex(sortModel->index(1, 0));
+
+    QTest::newRow("rootIndex 3")
+        << sortModel
+        << QPersistentModelIndex(sortModel->index(3, 0));
+
+    const QModelIndex rootIndex2 = sortModel->index(2, 0);
+    QTest::newRow("rootIndex 2-1")
+        << sortModel
+        << QPersistentModelIndex(sortModel->index(1, 0, rootIndex2));
+}
+
+void tst_QQuickListView::QTBUG_39492()
+{
+    QFETCH(QSortFilterProxyModel*, model);
+    QFETCH(QPersistentModelIndex, rootIndex);
+
+    QQuickView *window = getView();
+    window->rootContext()->setContextProperty("testModel", QVariant::fromValue(model));
+    window->setSource(testFileUrl("qtbug39492.qml"));
+
+    QQuickListView *listview = window->rootObject()->findChild<QQuickListView *>("listView");
+    QVERIFY(listview);
+
+    QQmlDelegateModel *delegateModel = window->rootObject()->findChild<QQmlDelegateModel *>("delegateModel");
+    QVERIFY(delegateModel);
+
+    delegateModel->setRootIndex(QVariant::fromValue(QModelIndex(rootIndex)));
+    model->sort(0, Qt::AscendingOrder);
+    listview->forceLayout();
+
+    for (int i = 0; i < model->rowCount(rootIndex); ++i) {
+        QQuickItem *delegateItem = listview->itemAt(10, 10 + i * 20);
+        QVERIFY(delegateItem);
+        QQuickItem *delegateText = delegateItem->findChild<QQuickItem *>("delegateText");
+        QVERIFY(delegateText);
+        QCOMPARE(delegateText->property("text").toString(),
+                 model->index(i, 0, rootIndex).data().toString());
+    }
+
+    model->sort(0, Qt::DescendingOrder);
+    listview->forceLayout();
+
+    for (int i = 0; i < model->rowCount(rootIndex); ++i) {
+        QQuickItem *delegateItem = listview->itemAt(10, 10 + i * 20);
+        QVERIFY(delegateItem);
+        QQuickItem *delegateText = delegateItem->findChild<QQuickItem *>("delegateText");
+        QVERIFY(delegateText);
+        QCOMPARE(delegateText->property("text").toString(),
+                 model->index(i, 0, rootIndex).data().toString());
+    }
+
+    releaseView(window);
+}
+
 QTEST_MAIN(tst_QQuickListView)
 
 #include "tst_qquicklistview.moc"
-
-

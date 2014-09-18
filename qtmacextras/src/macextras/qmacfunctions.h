@@ -46,7 +46,7 @@
 #pragma qt_class(QtMac)
 #endif
 
-#include "qmacextrasglobal.h"
+#include "QtMacExtras/qmacextrasglobal.h"
 
 typedef struct CGImage *CGImageRef;
 typedef struct CGContext *CGContextRef;

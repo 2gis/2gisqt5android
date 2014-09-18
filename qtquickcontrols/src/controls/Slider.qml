@@ -49,13 +49,15 @@ import QtQuick.Controls.Private 1.0
     \ingroup controls
     \brief Provides a vertical or horizontal slider control.
 
+    \image slider.png
+
     The slider is the classic control for providing a bounded value. It lets
     the user move a slider handle along a horizontal or vertical groove
     and translates the handle's position into a value within the legal range.
 
     \code
     Slider {
-        onValueChanged: print(value)
+        value: 0.5
     }
     \endcode
 
@@ -229,18 +231,22 @@ Control {
         onMouseXChanged: {
             if (pressed && __horizontal) {
                 var pos = clamp (mouse.x + clickOffset - fakeHandle.width/2)
-                fakeHandle.x = pos
-                if (Math.abs(mouse.x - pressX) >= Settings.dragThreshold)
+                var overThreshold = Math.abs(mouse.x - pressX) >= Settings.dragThreshold
+                if (overThreshold)
                     preventStealing = true
+                if (overThreshold || !Settings.hasTouchScreen)
+                    fakeHandle.x = pos
             }
         }
 
         onMouseYChanged: {
             if (pressed && !__horizontal) {
                 var pos = clamp (mouse.y + clickOffset- fakeHandle.height/2)
-                fakeHandle.y = pos
-                if (Math.abs(mouse.y - pressY) >= Settings.dragThreshold)
+                var overThreshold = Math.abs(mouse.y - pressY) >= Settings.dragThreshold
+                if (overThreshold)
                     preventStealing = true
+                if (overThreshold || !Settings.hasTouchScreen)
+                    fakeHandle.y = pos
             }
         }
 

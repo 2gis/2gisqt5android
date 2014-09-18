@@ -63,6 +63,9 @@
 #include <QtCore/qbuffer.h>
 #include <QtCore/qlinkedlist.h>
 #include <QtCore/quuid.h>
+#include <QtCore/qset.h>
+#include <QtCore/qlogging.h>
+#include <QtCore/qdebug.h>
 
 #include <QtCore/private/qobject_p.h>
 

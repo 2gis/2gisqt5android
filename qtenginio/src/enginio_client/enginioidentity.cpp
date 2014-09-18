@@ -224,11 +224,11 @@ public:
 
   To authenticate an instance of EnginioClient called \a client such code may be used:
   \code
-    EnginioOAuth2Authentication identity;
-    identity.setUser(_user);
-    identity.setPassword(_user);
+    EnginioOAuth2Authentication *identity = new EnginioOAuth2Authentication(client);
+    identity->setUser(_user);
+    identity->setPassword(_password);
 
-    client.setIdentity(&identity);
+    client->setIdentity(identity);
   \endcode
 
   Setting the identity will trigger an asynchronous request, resulting in EnginioClient::authenticationState()

@@ -103,6 +103,7 @@ private:
 Q_DECLARE_TYPEINFO(const EnginioReply*, Q_PRIMITIVE_TYPE);
 
 #ifndef QT_NO_DEBUG_STREAM
+class QDebug;
 ENGINIOCLIENT_EXPORT QDebug operator<<(QDebug d, const EnginioReply *reply);
 #endif
 
