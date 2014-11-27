@@ -1,6 +1,6 @@
 build-*
-*.so
 *.a
+*.so
 *.user
 *.orig
 *~
