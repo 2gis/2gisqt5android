@@ -11,4 +11,7 @@ qmake.name = QMAKE
 qmake.value = $$shell_path($$QMAKE_QMAKE)
 QT_TOOL_ENV += qmake
 
+# Required for declarations of popen/pclose on Windows
+windows: QMAKE_CXXFLAGS += -U__STRICT_ANSI__
+
 load(qt_tool)
