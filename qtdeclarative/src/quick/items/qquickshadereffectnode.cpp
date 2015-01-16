@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtQuick module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -41,11 +33,11 @@
 
 #include <private/qquickshadereffectnode_p.h>
 
-#include "qquickshadereffectmesh_p.h"
 #include "qquickshadereffect_p.h"
 #include <QtQuick/qsgtextureprovider.h>
 #include <QtQuick/private/qsgrenderer_p.h>
 #include <QtQuick/private/qsgshadersourcebuilder_p.h>
+#include <QtQuick/private/qsgtexture_p.h>
 
 QT_BEGIN_NAMESPACE
 
@@ -65,8 +57,8 @@ protected:
     virtual const char *fragmentShader() const;
 
     const QQuickShaderEffectMaterialKey m_key;
+    QVector<QByteArray> m_attributes;
     QVector<const char *> m_attributeNames;
-    const QVector<QByteArray> m_attributes;
     QString m_log;
     bool m_compiled;
 
@@ -80,15 +72,15 @@ QQuickCustomMaterialShader::QQuickCustomMaterialShader(const QQuickShaderEffectM
     , m_compiled(false)
     , m_initialized(false)
 {
-    for (int i = 0; i < attributes.count(); ++i)
-        m_attributeNames.append(attributes.at(i).constData());
+    for (int i = 0; i < m_attributes.count(); ++i)
+        m_attributeNames.append(m_attributes.at(i).constData());
     m_attributeNames.append(0);
 }
 
 void QQuickCustomMaterialShader::deactivate()
 {
     QSGMaterialShader::deactivate();
-    glDisable(GL_CULL_FACE);
+    QOpenGLContext::currentContext()->functions()->glDisable(GL_CULL_FACE);
 }
 
 void QQuickCustomMaterialShader::updateState(const RenderState &state, QSGMaterial *newEffect, QSGMaterial *oldEffect)
@@ -136,17 +128,23 @@ void QQuickCustomMaterialShader::updateState(const RenderState &state, QSGMateri
                 functions->glActiveTexture(GL_TEXTURE0 + idx);
                 if (QSGTextureProvider *provider = material->textureProviders.at(idx)) {
                     if (QSGTexture *texture = provider->texture()) {
+
+#ifndef QT_NO_DEBUG
+                        if (!qsg_safeguard_texture(texture))
+                            continue;
+#endif
+
                         if (loc >= 0) {
                             QRectF r = texture->normalizedTextureSubRect();
                             program()->setUniformValue(loc, r.x(), r.y(), r.width(), r.height());
-                        } else if (texture->isAtlasTexture()) {
+                        } else if (texture->isAtlasTexture() && (idx != 0 || !material->supportsAtlasTextures)) {
                             texture = texture->removedFromAtlas();
                         }
                         texture->bind();
                         continue;
                     }
                 }
-                glBindTexture(GL_TEXTURE_2D, 0);
+                functions->glBindTexture(GL_TEXTURE_2D, 0);
             } else if (d.specialType == UniformData::Opacity) {
                 program()->setUniformValue(loc, state.opacity());
             } else if (d.specialType == UniformData::Matrix) {
@@ -217,15 +215,15 @@ void QQuickCustomMaterialShader::updateState(const RenderState &state, QSGMateri
     if (oldEffect == 0 || material->cullMode != oldMaterial->cullMode) {
         switch (material->cullMode) {
         case QQuickShaderEffectMaterial::FrontFaceCulling:
-            glEnable(GL_CULL_FACE);
-            glCullFace(GL_FRONT);
+            functions->glEnable(GL_CULL_FACE);
+            functions->glCullFace(GL_FRONT);
             break;
         case QQuickShaderEffectMaterial::BackFaceCulling:
-            glEnable(GL_CULL_FACE);
-            glCullFace(GL_BACK);
+            functions->glEnable(GL_CULL_FACE);
+            functions->glCullFace(GL_BACK);
             break;
         default:
-            glDisable(GL_CULL_FACE);
+            functions->glDisable(GL_CULL_FACE);
             break;
         }
     }
@@ -256,7 +254,7 @@ void QQuickCustomMaterialShader::compile()
     char const *const *attr = attributeNames();
 #ifndef QT_NO_DEBUG
     int maxVertexAttribs = 0;
-    glGetIntegerv(GL_MAX_VERTEX_ATTRIBS, &maxVertexAttribs);
+    QOpenGLContext::currentContext()->functions()->glGetIntegerv(GL_MAX_VERTEX_ATTRIBS, &maxVertexAttribs);
     int attrCount = 0;
     while (attrCount < maxVertexAttribs && attr[attrCount])
         ++attrCount;
@@ -325,6 +323,11 @@ bool QQuickShaderEffectMaterialKey::operator == (const QQuickShaderEffectMateria
     return true;
 }
 
+bool QQuickShaderEffectMaterialKey::operator != (const QQuickShaderEffectMaterialKey &other) const
+{
+    return !(*this == other);
+}
+
 uint qHash(const QQuickShaderEffectMaterialKey &key)
 {
     uint hash = qHash((void *)key.className);
@@ -339,6 +342,7 @@ QHash<QQuickShaderEffectMaterialKey, QSharedPointer<QSGMaterialType> > QQuickSha
 
 QQuickShaderEffectMaterial::QQuickShaderEffectMaterial(QQuickShaderEffectNode *node)
     : cullMode(NoCulling)
+    , supportsAtlasTextures(false)
     , m_node(node)
     , m_emittedLogChanged(false)
 {
@@ -355,9 +359,40 @@ QSGMaterialShader *QQuickShaderEffectMaterial::createShader() const
     return new QQuickCustomMaterialShader(m_source, attributes);
 }
 
-int QQuickShaderEffectMaterial::compare(const QSGMaterial *other) const
+bool QQuickShaderEffectMaterial::UniformData::operator == (const UniformData &other) const
 {
-    return this - static_cast<const QQuickShaderEffectMaterial *>(other);
+    if (specialType != other.specialType)
+        return false;
+    if (name != other.name)
+        return false;
+
+    if (specialType == UniformData::Sampler) {
+        QQuickItem *source = qobject_cast<QQuickItem *>(qvariant_cast<QObject *>(value));
+        QQuickItem *otherSource = qobject_cast<QQuickItem *>(qvariant_cast<QObject *>(other.value));
+        if (!source || !otherSource || !source->isTextureProvider() || !otherSource->isTextureProvider())
+            return false;
+        return source->textureProvider()->texture()->textureId() == otherSource->textureProvider()->texture()->textureId();
+    } else {
+        return value == other.value;
+    }
+}
+
+int QQuickShaderEffectMaterial::compare(const QSGMaterial *o) const
+{
+    const QQuickShaderEffectMaterial *other = static_cast<const QQuickShaderEffectMaterial *>(o);
+    if (!supportsAtlasTextures || !other->supportsAtlasTextures)
+        return 1;
+    if (bool(flags() & QSGMaterial::RequiresFullMatrix) || bool(other->flags() & QSGMaterial::RequiresFullMatrix))
+        return 1;
+    if (cullMode != other->cullMode)
+        return 1;
+    if (m_source != other->m_source)
+        return 1;
+    for (int shaderType = 0; shaderType < QQuickShaderEffectMaterialKey::ShaderTypeCount; ++shaderType) {
+        if (uniforms[shaderType] != other->uniforms[shaderType])
+            return 1;
+    }
+    return 0;
 }
 
 void QQuickShaderEffectMaterial::setProgramSource(const QQuickShaderEffectMaterialKey &source)
@@ -375,7 +410,7 @@ void QQuickShaderEffectMaterial::updateTextures() const
 {
     for (int i = 0; i < textureProviders.size(); ++i) {
         if (QSGTextureProvider *provider = textureProviders.at(i)) {
-            if (QSGDynamicTexture *texture = qobject_cast<QSGDynamicTexture *>(provider->texture()))
+            if (QSGLayer *texture = qobject_cast<QSGLayer *>(provider->texture()))
                 texture->updateTexture();
         }
     }

@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtQuick module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -483,6 +475,10 @@ qreal QQuickMouseArea::mouseY() const
     \qmlproperty bool QtQuick::MouseArea::enabled
     This property holds whether the item accepts mouse events.
 
+    \note Due to historical reasons, this property is not equivalent to
+    Item.enabled. It only affects mouse events, and its effect does not
+    propagate to child items.
+
     By default, this property is true.
 */
 bool QQuickMouseArea::isEnabled() const
@@ -719,7 +715,9 @@ void QQuickMouseArea::mouseMoveEvent(QMouseEvent *event)
                 || QQuickWindowPrivate::dragOverThreshold(dragPos.y() - startPos.y(), Qt::YAxis, event, d->drag->threshold()))) {
             setKeepMouseGrab(true);
             d->stealMouse = true;
-            d->startScene = event->windowPos();
+
+            if (d->drag->smoothed())
+                d->startScene = event->windowPos();
         }
 
         d->moved = true;
@@ -845,6 +843,7 @@ void QQuickMouseArea::ungrabMouse()
         // state
         d->pressed = 0;
         d->stealMouse = false;
+        d->doubleClick = false;
         setKeepMouseGrab(false);
 
 #ifndef QT_NO_DRAGANDDROP
@@ -854,6 +853,7 @@ void QQuickMouseArea::ungrabMouse()
 
         emit canceled();
         emit pressedChanged();
+        emit containsPressChanged();
         emit pressedButtonsChanged();
 
         if (d->hovered && !isUnderMouse()) {
@@ -911,6 +911,7 @@ bool QQuickMouseArea::sendMouseEvent(QMouseEvent *event)
                     ungrabMouse();
                 emit canceled();
                 emit pressedChanged();
+                emit containsPressChanged();
                 if (d->hovered) {
                     d->hovered = false;
                     emit hoveredChanged();
@@ -1056,6 +1057,24 @@ bool QQuickMouseArea::pressed() const
     return d->pressed;
 }
 
+/*!
+    \qmlproperty bool QtQuick::MouseArea::containsPress
+    \since 5.4
+    This is a convenience property equivalent to \c {pressed && containsMouse},
+    i.e. it holds whether any of the \l acceptedButtons are currently pressed
+    and the mouse is currently within the MouseArea.
+
+    This property is particularly useful for highlighting an item while the mouse
+    is pressed within its bounds.
+
+    \sa pressed, containsMouse
+*/
+bool QQuickMouseArea::containsPress() const
+{
+    Q_D(const QQuickMouseArea);
+    return d->pressed && d->hovered;
+}
+
 void QQuickMouseArea::setHovered(bool h)
 {
     Q_D(QQuickMouseArea);
@@ -1063,6 +1082,8 @@ void QQuickMouseArea::setHovered(bool h)
         d->hovered = h;
         emit hoveredChanged();
         d->hovered ? emit entered() : emit exited();
+        if (d->pressed)
+            emit containsPressChanged();
     }
 }
 
@@ -1122,15 +1143,19 @@ bool QQuickMouseArea::setPressed(Qt::MouseButton button, bool p)
             emit mouseXChanged(&me);
             me.setPosition(d->lastPos);
             emit mouseYChanged(&me);
-            if (!oldPressed)
+            if (!oldPressed) {
                 emit pressedChanged();
+                emit containsPressChanged();
+            }
             emit pressedButtonsChanged();
         } else {
             d->pressed &= ~button;
             emit released(&me);
             me.setPosition(d->lastPos);
-            if (!d->pressed)
+            if (!d->pressed) {
                 emit pressedChanged();
+                emit containsPressChanged();
+            }
             emit pressedButtonsChanged();
             if (isclick && !d->longPress && !d->doubleClick){
                 me.setAccepted(d->isClickConnected());
@@ -1245,6 +1270,10 @@ void QQuickMouseArea::setCursorShape(Qt::CursorShape shape)
     \c drag.threshold determines the threshold in pixels of when the drag operation should
     start. By default this is bound to a platform dependent value. This property was added in
     Qt Quick 2.2.
+
+    If \c drag.smoothed is \c true, the target will be moved only after the drag operation has
+    started. If set to \c false, the target will be moved straight to the current mouse position.
+    By default, this property is \c true. This property was added in Qt Quick 2.4
 
     \snippet qml/mousearea/mouseareadragfilter.qml dragfilter
 

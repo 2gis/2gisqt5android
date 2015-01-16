@@ -1,6 +1,6 @@
 import QtQuick 1.0
 
-Image { 
+Image {
     property int widthChange: 0
     property int heightChange: 0
     source: "heart.png"

@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the Qt Quick Controls module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -50,6 +42,8 @@
 #include <qsgsimpletexturenode.h>
 #include <qquickwindow.h>
 #include "private/qguiapplication_p.h"
+#include <QtQuick/private/qquickwindow_p.h>
+#include <QtQuick/private/qquickitem_p.h>
 #include <QtGui/qpa/qplatformtheme.h>
 #include "../qquickmenuitem_p.h"
 
@@ -96,7 +90,7 @@ CGContextRef qt_mac_cg_context(const QPaintDevice *pdev)
 
 #endif
 
-class QQuickStyleNode : public QSGGeometryNode
+class QQuickStyleNode : public QSGNinePatchNode
 {
 public:
     QQuickStyleNode()
@@ -114,38 +108,58 @@ public:
         delete m_material.texture();
     }
 
-    void initialize(QSGTexture *texture,
-                    const QRectF &bounds, qreal devicePixelRatio,
-                    int left, int top, int right, int bottom) {
-
+    virtual void setTexture(QSGTexture *texture)
+    {
         delete m_material.texture();
         m_material.setTexture(texture);
+    }
 
-        if (left <= 0 && top <= 0 && right <= 0 && bottom <= 0) {
+    virtual void setBounds(const QRectF &bounds)
+    {
+        m_bounds = bounds;
+    }
+
+    virtual void setDevicePixelRatio(qreal ratio)
+    {
+        m_devicePixelRatio = ratio;
+    }
+
+    virtual void setPadding(qreal left, qreal top, qreal right, qreal bottom)
+    {
+        m_paddingLeft = left;
+        m_paddingTop = top;
+        m_paddingRight = right;
+        m_paddingBottom = bottom;
+    }
+
+    virtual void update() {
+        QSGTexture *texture = m_material.texture();
+
+        if (m_paddingLeft <= 0 && m_paddingTop <= 0 && m_paddingRight <= 0 && m_paddingBottom <= 0) {
             m_geometry.allocate(4, 0);
-            QSGGeometry::updateTexturedRectGeometry(&m_geometry, bounds, texture->normalizedTextureSubRect());
+            QSGGeometry::updateTexturedRectGeometry(&m_geometry, m_bounds, texture->normalizedTextureSubRect());
             markDirty(QSGNode::DirtyGeometry | QSGNode::DirtyMaterial);
             return;
         }
 
         QRectF tc = texture->normalizedTextureSubRect();
         QSize ts = texture->textureSize();
-        ts.setHeight(ts.height() / devicePixelRatio);
-        ts.setWidth(ts.width() / devicePixelRatio);
+        ts.setHeight(ts.height() / m_devicePixelRatio);
+        ts.setWidth(ts.width() / m_devicePixelRatio);
 
         qreal invtw = tc.width() / ts.width();
         qreal invth = tc.height() / ts.height();
 
         struct Coord { qreal p; qreal t; };
-        Coord cx[4] = { { bounds.left(), tc.left() },
-                        { bounds.left() + left, tc.left() + left * invtw },
-                        { bounds.right() - right, tc.right() - right * invtw },
-                        { bounds.right(), tc.right() }
+        Coord cx[4] = { { m_bounds.left(), tc.left() },
+                        { m_bounds.left() + m_paddingLeft, tc.left() + m_paddingLeft * invtw },
+                        { m_bounds.right() - m_paddingRight, tc.right() - m_paddingRight * invtw },
+                        { m_bounds.right(), tc.right() }
                       };
-        Coord cy[4] = { { bounds.top(), tc.top() },
-                        { bounds.top() + top, tc.top() + top * invth },
-                        { bounds.bottom() - bottom, tc.bottom() - bottom * invth },
-                        { bounds.bottom(), tc.bottom() }
+        Coord cy[4] = { { m_bounds.top(), tc.top() },
+                        { m_bounds.top() + m_paddingTop, tc.top() + m_paddingTop * invth },
+                        { m_bounds.bottom() - m_paddingBottom, tc.bottom() - m_paddingBottom * invth },
+                        { m_bounds.bottom(), tc.bottom() }
                       };
 
         m_geometry.allocate(16, 28);
@@ -182,6 +196,12 @@ public:
 
     }
 
+    QRectF m_bounds;
+    qreal m_devicePixelRatio;
+    qreal m_paddingLeft;
+    qreal m_paddingTop;
+    qreal m_paddingRight;
+    qreal m_paddingBottom;
     QSGGeometry m_geometry;
     QSGTextureMaterial m_material;
 };
@@ -334,6 +354,8 @@ void QQuickStyleItem::initStyleOption()
         opt->features = QStyleOptionViewItem::HasDisplay;
         opt->text = text();
         opt->textElideMode = Qt::ElideRight;
+        opt->displayAlignment = Qt::AlignLeft | Qt::AlignVCenter;
+        opt->decorationAlignment = Qt::AlignCenter;
         resolvePalette();
         needsResolvePalette = false;
         QPalette pal = m_styleoption->palette;
@@ -757,6 +779,15 @@ void QQuickStyleItem::initStyleOption()
     if (m_horizontal)
         m_styleoption->state |= QStyle::State_Horizontal;
 
+    // some styles don't draw a focus rectangle if
+    // QStyle::State_KeyboardFocusChange is not set
+    if (window()) {
+         Qt::FocusReason lastFocusReason = QQuickWindowPrivate::get(window())->lastFocusReason;
+         if (lastFocusReason == Qt::TabFocusReason || lastFocusReason == Qt::BacktabFocusReason) {
+             m_styleoption->state |= QStyle::State_KeyboardFocusChange;
+         }
+    }
+
     if (sizeHint == "mini") {
         m_styleoption->state |= QStyle::State_Mini;
     } else if (sizeHint == "small") {
@@ -975,7 +1006,7 @@ QSize QQuickStyleItem::sizeFromContents(int width, int height)
             size = qApp->style()->sizeFromContents(QStyle::CT_SpinBox, m_styleoption, QSize(width, height + 5));
             break;
         }
-#endif // fall trough if not mac
+#endif // fall through if not mac
     case Edit:
 #ifdef Q_OS_OSX
         if (style() =="mac") {
@@ -1752,9 +1783,12 @@ QSGNode *QQuickStyleItem::updatePaintNode(QSGNode *node, UpdatePaintNodeData *)
         return 0;
     }
 
-    QQuickStyleNode *styleNode = static_cast<QQuickStyleNode *>(node);
-    if (!styleNode)
-        styleNode = new QQuickStyleNode;
+    QSGNinePatchNode *styleNode = static_cast<QSGNinePatchNode *>(node);
+    if (!styleNode) {
+        styleNode = QQuickItemPrivate::get(this)->sceneGraphContext()->createNinePatchNode();
+        if (!styleNode)
+            styleNode = new QQuickStyleNode;
+    }
 
 #ifdef QSG_RUNTIME_DESCRIPTION
     qsgnode_set_description(styleNode,
@@ -1764,10 +1798,12 @@ QSGNode *QQuickStyleItem::updatePaintNode(QSGNode *node, UpdatePaintNodeData *)
                             .arg(text()));
 #endif
 
-    styleNode->initialize(window()->createTextureFromImage(m_image, QQuickWindow::TextureCanUseAtlas),
-                          boundingRect(),
-                          window()->devicePixelRatio(),
-                          m_border.left(), m_border.top(), m_border.right(), m_border.bottom());
+    styleNode->setTexture(window()->createTextureFromImage(m_image, QQuickWindow::TextureCanUseAtlas));
+    styleNode->setBounds(boundingRect());
+    styleNode->setDevicePixelRatio(window()->devicePixelRatio());
+    styleNode->setPadding(m_border.left(), m_border.top(), m_border.right(), m_border.bottom());
+    styleNode->update();
+
     return styleNode;
 }
 

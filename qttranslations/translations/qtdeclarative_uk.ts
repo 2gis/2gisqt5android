@@ -2,76 +2,6 @@
 <!DOCTYPE TS>
 <TS version="2.1" language="uk_UA">
 <context>
-    <name>DefaultColorDialog</name>
-    <message>
-        <source>Hue</source>
-        <translation type="vanished">Відтінок</translation>
-    </message>
-    <message>
-        <source>Saturation</source>
-        <translation type="vanished">Насиченість</translation>
-    </message>
-    <message>
-        <source>Luminosity</source>
-        <translation type="vanished">Світність</translation>
-    </message>
-    <message>
-        <source>Alpha</source>
-        <translation type="vanished">Альфа</translation>
-    </message>
-</context>
-<context>
-    <name>DefaultFontDialog</name>
-    <message>
-        <source>Writing System</source>
-        <translation type="vanished">Система письма</translation>
-    </message>
-    <message>
-        <source>Font</source>
-        <translation type="vanished">Шрифт</translation>
-    </message>
-    <message>
-        <source>Size</source>
-        <translation type="vanished">Розмір</translation>
-    </message>
-    <message>
-        <source>Weight</source>
-        <translation type="vanished">Жирність</translation>
-    </message>
-    <message>
-        <source>Style</source>
-        <translation type="vanished">Стиль</translation>
-    </message>
-    <message>
-        <source>Sample</source>
-        <translation type="vanished">Приклад</translation>
-    </message>
-    <message>
-        <source>Italic</source>
-        <translation type="vanished">Курсив</translation>
-    </message>
-    <message>
-        <source>Underline</source>
-        <translation type="vanished">Підкреслений</translation>
-    </message>
-    <message>
-        <source>Overline</source>
-        <translation type="vanished">Надкреслений</translation>
-    </message>
-    <message>
-        <source>Strikeout</source>
-        <translation type="vanished">Перекреслений</translation>
-    </message>
-    <message>
-        <source>Cancel</source>
-        <translation type="vanished">Скасувати</translation>
-    </message>
-    <message>
-        <source>OK</source>
-        <translation type="vanished">OK</translation>
-    </message>
-</context>
-<context>
     <name>Object</name>
     <message>
         <source>Duplicate method name</source>
@@ -866,6 +796,10 @@
         <translation>статичний додаток для модуля &quot;%1&quot; з назвою &quot;%2&quot; не має URI для метаданих</translation>
     </message>
     <message>
+        <source>module does not support the designer &quot;%1&quot;</source>
+        <translation>модуль не підтримує дизайнер інтерфейсів &quot;%1&quot;</translation>
+    </message>
+    <message>
         <source>plugin cannot be loaded for module &quot;%1&quot;: %2</source>
         <translation>неможливо завантажити додаток для модуля &quot;%1&quot;: %2</translation>
     </message>
@@ -1403,8 +1337,12 @@
         <translation>Неправильне присвоєння властивості: очікувався регулярний вираз, використовуйте синтаксис /pattern/</translation>
     </message>
     <message>
+        <source>Invalid property assignment: number or array of numbers expected</source>
+        <translation>Неправильне присвоєння властивості: очікувались число або масив чисел</translation>
+    </message>
+    <message>
         <source>Invalid property assignment: real or array of reals expected</source>
-        <translation>Неправильне присвоєння властивості: очікувались дійсне число або масив дійсних чисел</translation>
+        <translation type="vanished">Неправильне присвоєння властивості: очікувались дійсне число або масив дійсних чисел</translation>
     </message>
     <message>
         <source>Invalid property assignment: int or array of ints expected</source>
@@ -1807,6 +1745,13 @@
     </message>
 </context>
 <context>
+    <name>QQuickOpenGLInfo</name>
+    <message>
+        <source>OpenGLInfo is only available via attached properties</source>
+        <translation>OpenGLInfo доступна лише через прикріплені властивості</translation>
+    </message>
+</context>
+<context>
     <name>QQuickPaintedItem</name>
     <message>
         <source>Cannot create instance of abstract class PaintedItem</source>
@@ -2091,6 +2036,10 @@ Install a driver providing OpenGL 2.0 or higher, or, if this is not possible, ma
         <source>Failed to create %1 context for format %2</source>
         <extracomment>%1 Context type (Open GL, EGL), %2 format specification</extracomment>
         <translation>Збій створення контексту %1 для формату %2</translation>
+    </message>
+    <message>
+        <source>Window is available via attached properties</source>
+        <translation type="vanished">Window доступне лише через прикріплені властивості</translation>
     </message>
 </context>
 <context>

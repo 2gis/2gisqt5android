@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -323,7 +315,7 @@ void tst_qdeclarativevaluetypes::vector2d()
 
         QCOMPARE((float)object->property("v_x").toDouble(), (float)32.88);
         QCOMPARE((float)object->property("v_y").toDouble(), (float)1.3);
-        QCOMPARE(object->property("copy"), QVariant(QVector2D(32.88, 1.3)));
+        QCOMPARE(object->property("copy"), QVariant(QVector2D(32.88f, 1.3f)));
 
         delete object;
     }
@@ -333,7 +325,7 @@ void tst_qdeclarativevaluetypes::vector2d()
         MyTypeObject *object = qobject_cast<MyTypeObject *>(component.create());
         QVERIFY(object != 0);
 
-        QCOMPARE(object->vector2(), QVector2D(-0.3, -12.9));
+        QCOMPARE(object->vector2(), QVector2D(-0.3f, -12.9f));
 
         delete object;
     }
@@ -349,7 +341,7 @@ void tst_qdeclarativevaluetypes::vector3d()
         QCOMPARE((float)object->property("v_x").toDouble(), (float)23.88);
         QCOMPARE((float)object->property("v_y").toDouble(), (float)3.1);
         QCOMPARE((float)object->property("v_z").toDouble(), (float)4.3);
-        QCOMPARE(object->property("copy"), QVariant(QVector3D(23.88, 3.1, 4.3)));
+        QCOMPARE(object->property("copy"), QVariant(QVector3D(23.88f, 3.1f, 4.3f)));
 
         delete object;
     }
@@ -359,7 +351,7 @@ void tst_qdeclarativevaluetypes::vector3d()
         MyTypeObject *object = qobject_cast<MyTypeObject *>(component.create());
         QVERIFY(object != 0);
 
-        QCOMPARE(object->vector(), QVector3D(-0.3, -12.9, 907.4));
+        QCOMPARE(object->vector(), QVector3D(-0.3f, -12.9f, 907.4f));
 
         delete object;
     }
@@ -376,7 +368,7 @@ void tst_qdeclarativevaluetypes::vector4d()
         QCOMPARE((float)object->property("v_y").toDouble(), (float)23.88);
         QCOMPARE((float)object->property("v_z").toDouble(), (float)3.1);
         QCOMPARE((float)object->property("v_w").toDouble(), (float)4.3);
-        QCOMPARE(object->property("copy"), QVariant(QVector4D(54.2, 23.88, 3.1, 4.3)));
+        QCOMPARE(object->property("copy"), QVariant(QVector4D(54.2f, 23.88f, 3.1f, 4.3f)));
 
         delete object;
     }
@@ -386,7 +378,7 @@ void tst_qdeclarativevaluetypes::vector4d()
         MyTypeObject *object = qobject_cast<MyTypeObject *>(component.create());
         QVERIFY(object != 0);
 
-        QCOMPARE(object->vector4(), QVector4D(-0.3, -12.9, 907.4, 88.5));
+        QCOMPARE(object->vector4(), QVector4D(-0.3f, -12.9f, 907.4f, 88.5f));
 
         delete object;
     }
@@ -403,7 +395,7 @@ void tst_qdeclarativevaluetypes::quaternion()
         QCOMPARE((float)object->property("v_x").toDouble(), (float)54.2);
         QCOMPARE((float)object->property("v_y").toDouble(), (float)23.88);
         QCOMPARE((float)object->property("v_z").toDouble(), (float)3.1);
-        QCOMPARE(object->property("copy"), QVariant(QQuaternion(4.3, 54.2, 23.88, 3.1)));
+        QCOMPARE(object->property("copy"), QVariant(QQuaternion(4.3f, 54.2f, 23.88f, 3.1f)));
 
         delete object;
     }
@@ -413,7 +405,7 @@ void tst_qdeclarativevaluetypes::quaternion()
         MyTypeObject *object = qobject_cast<MyTypeObject *>(component.create());
         QVERIFY(object != 0);
 
-        QCOMPARE(object->quaternion(), QQuaternion(88.5, -0.3, -12.9, 907.4));
+        QCOMPARE(object->quaternion(), QQuaternion(88.5f, -0.3f, -12.9f, 907.4f));
 
         delete object;
     }
@@ -811,10 +803,10 @@ void tst_qdeclarativevaluetypes::cppClasses()
     CPP_TEST(QDeclarativeSizeFValueType, QSizeF(-100.7, 18.2));
     CPP_TEST(QDeclarativeRectValueType, QRect(13, 39, 10928, 88));
     CPP_TEST(QDeclarativeRectFValueType, QRectF(88.2, -90.1, 103.2, 118));
-    CPP_TEST(QDeclarativeVector2DValueType, QVector2D(19.7, 1002));
-    CPP_TEST(QDeclarativeVector3DValueType, QVector3D(18.2, 19.7, 1002));
-    CPP_TEST(QDeclarativeVector4DValueType, QVector4D(18.2, 19.7, 1002, 54));
-    CPP_TEST(QDeclarativeQuaternionValueType, QQuaternion(18.2, 19.7, 1002, 54));
+    CPP_TEST(QDeclarativeVector2DValueType, QVector2D(19.7f, 1002));
+    CPP_TEST(QDeclarativeVector3DValueType, QVector3D(18.2f, 19.7f, 1002));
+    CPP_TEST(QDeclarativeVector4DValueType, QVector4D(18.2f, 19.7f, 1002, 54));
+    CPP_TEST(QDeclarativeQuaternionValueType, QQuaternion(18.2f, 19.7f, 1002, 54));
     CPP_TEST(QDeclarativeMatrix4x4ValueType,
              QMatrix4x4(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16));
     CPP_TEST(QDeclarativeFontValueType, QFont("Helvetica"));

@@ -44,7 +44,7 @@ import "Core/screenorientation.js" as ScreenOrientation
 
 Rectangle {
     id: window
-    width: 360  
+    width: 360
     height: 640
     color: "white"
 
@@ -57,7 +57,7 @@ Rectangle {
         property bool inPortrait: (activeOrientation == Orientation.Portrait || activeOrientation == Orientation.PortraitInverted);
 
         // rotation correction for landscape devices like N900
-        property bool landscapeWindow: window.width > window.height 
+        property bool landscapeWindow: window.width > window.height
         property variant rotationDelta: landscapeWindow ? -90 : 0
         rotation: rotationDelta
 
@@ -95,7 +95,7 @@ Rectangle {
         Column {
             width: centeredText.width
             anchors.verticalCenter: parent.verticalCenter
-            anchors.horizontalCenter: parent.horizontalCenter 
+            anchors.horizontalCenter: parent.horizontalCenter
             anchors.verticalCenterOffset: 30
             Text {
                 text: "Orientation"
@@ -157,7 +157,7 @@ Rectangle {
         states: [
             State {
                 name: "orientation " + Orientation.Landscape
-                PropertyChanges { 
+                PropertyChanges {
                     target: main
                     rotation: ScreenOrientation.getAngle(Orientation.Landscape)+rotationDelta
                     width: baseHeight
@@ -166,7 +166,7 @@ Rectangle {
             },
             State {
                 name: "orientation " + Orientation.PortraitInverted
-                PropertyChanges { 
+                PropertyChanges {
                     target: main
                     rotation: ScreenOrientation.getAngle(Orientation.PortraitInverted)+rotationDelta
                     width: baseWidth
@@ -175,7 +175,7 @@ Rectangle {
             },
             State {
                 name: "orientation " + Orientation.LandscapeInverted
-                PropertyChanges { 
+                PropertyChanges {
                     target: main
                     rotation: ScreenOrientation.getAngle(Orientation.LandscapeInverted)+rotationDelta
                     width: baseHeight
@@ -185,15 +185,15 @@ Rectangle {
         ]
         transitions: Transition {
             ParallelAnimation {
-                RotationAnimation { 
+                RotationAnimation {
                     direction: RotationAnimation.Shortest
                     duration: 300
-                    easing.type: Easing.InOutQuint 
+                    easing.type: Easing.InOutQuint
                 }
-                NumberAnimation { 
+                NumberAnimation {
                     properties: "x,y,width,height"
                     duration: 300
-                    easing.type: Easing.InOutQuint 
+                    easing.type: Easing.InOutQuint
                 }
             }
         }

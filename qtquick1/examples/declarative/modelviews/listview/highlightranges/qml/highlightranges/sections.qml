@@ -59,7 +59,7 @@ Rectangle {
     }
 
     // The delegate for each section header
-    Component { 
+    Component {
         id: sectionHeading
         Rectangle {
             width: container.width

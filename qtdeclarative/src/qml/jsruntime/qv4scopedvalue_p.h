@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -117,6 +109,18 @@ struct ScopedValue
 #endif
     }
 
+    ScopedValue(const Scope &scope, HeapObject *o)
+    {
+        ptr = scope.engine->jsStackTop++;
+        ptr->m = reinterpret_cast<Managed *>(o);
+#if QT_POINTER_SIZE == 4
+        ptr->tag = QV4::Value::Managed_Type;
+#endif
+#ifndef QT_NO_DEBUG
+        ++scope.size;
+#endif
+    }
+
     ScopedValue(const Scope &scope, Managed *m)
     {
         ptr = scope.engine->jsStackTop++;
@@ -147,6 +151,14 @@ struct ScopedValue
 
     ScopedValue &operator=(const Value &v) {
         *ptr = v;
+        return *this;
+    }
+
+    ScopedValue &operator=(HeapObject *o) {
+        ptr->m = reinterpret_cast<Managed *>(o);
+#if QT_POINTER_SIZE == 4
+        ptr->tag = QV4::Value::Managed_Type;
+#endif
         return *this;
     }
 
@@ -215,6 +227,19 @@ struct Scoped
         ++scope.size;
 #endif
     }
+    Scoped(const Scope &scope, HeapObject *o)
+    {
+        Value v;
+        v.m = reinterpret_cast<Managed *>(o);
+#if QT_POINTER_SIZE == 4
+        v.tag = QV4::Value::Managed_Type;
+#endif
+        ptr = scope.engine->jsStackTop++;
+        setPointer(value_cast<T>(v));
+#ifndef QT_NO_DEBUG
+        ++scope.size;
+#endif
+    }
     Scoped(const Scope &scope, const ScopedValue &v)
     {
         ptr = scope.engine->jsStackTop++;
@@ -263,6 +288,16 @@ struct Scoped
 #endif
     }
 
+    template<typename X>
+    Scoped(const Scope &scope, Returned<X> *x, _Cast)
+    {
+        ptr = scope.engine->jsStackTop++;
+        setPointer(managed_cast<T>(x->getPointer()));
+#ifndef QT_NO_DEBUG
+        ++scope.size;
+#endif
+    }
+
     Scoped(const Scope &scope, const ReturnedValue &v)
     {
         ptr = scope.engine->jsStackTop++;
@@ -280,6 +315,15 @@ struct Scoped
 #endif
     }
 
+    Scoped<T> &operator=(HeapObject *o) {
+        Value v;
+        v.m = reinterpret_cast<Managed *>(o);
+#if QT_POINTER_SIZE == 4
+        v.tag = QV4::Value::Managed_Type;
+#endif
+        setPointer(value_cast<T>(v));
+        return *this;
+    }
     Scoped<T> &operator=(const Value &v) {
         setPointer(value_cast<T>(v));
         return *this;
@@ -308,6 +352,9 @@ struct Scoped
         return *this;
     }
 
+    operator T *() {
+        return static_cast<T *>(ptr->managed());
+    }
 
     T *operator->() {
         return static_cast<T *>(ptr->managed());
@@ -379,10 +426,6 @@ struct ScopedCallData {
 };
 
 
-struct StringRef;
-struct ObjectRef;
-struct FunctionObjectRef;
-
 template<typename T>
 inline Scoped<T>::Scoped(const Scope &scope, const ValueRef &v)
 {
@@ -399,38 +442,6 @@ inline Scoped<T> &Scoped<T>::operator=(const ValueRef &v)
     setPointer(value_cast<T>(*v.operator ->()));
     return *this;
 }
-
-struct CallDataRef {
-    CallDataRef(const ScopedCallData &c)
-        : ptr(c.ptr) {}
-    CallDataRef(CallData *v) { ptr = v; }
-    // Important: Do NOT add a copy constructor to this class
-    // adding a copy constructor actually changes the calling convention, ie.
-    // is not even binary compatible. Adding it would break assumptions made
-    // in the jit'ed code.
-    CallDataRef &operator=(const ScopedCallData &c)
-    { *ptr = *c.ptr; return *this; }
-    CallDataRef &operator=(const CallDataRef &o)
-    { *ptr = *o.ptr; return *this; }
-
-    operator const CallData *() const {
-        return ptr;
-    }
-    const CallData *operator->() const {
-        return ptr;
-    }
-
-    operator CallData *() {
-        return ptr;
-    }
-    CallData *operator->() {
-        return ptr;
-    }
-
-private:
-    CallData *ptr;
-};
-
 
 template <typename T>
 inline Value &Value::operator=(Returned<T> *t)
@@ -467,14 +478,20 @@ inline Returned<T> *Value::as()
 template<typename T>
 inline TypedValue<T> &TypedValue<T>::operator =(T *t)
 {
-    val = t->asReturnedValue();
+    m = t;
+#if QT_POINTER_SIZE == 4
+    tag = Managed_Type;
+#endif
     return *this;
 }
 
 template<typename T>
 inline TypedValue<T> &TypedValue<T>::operator =(const Scoped<T> &v)
 {
-    val = v.ptr->val;
+    m = v.ptr->managed();
+#if QT_POINTER_SIZE == 4
+    tag = Managed_Type;
+#endif
     return *this;
 }
 
@@ -517,20 +534,10 @@ PersistentValue::PersistentValue(Returned<T> *obj)
 {
 }
 
-inline PersistentValue::PersistentValue(const ManagedRef obj)
-    : d(new PersistentValuePrivate(obj.asReturnedValue()))
-{
-}
-
 template<typename T>
 inline PersistentValue &PersistentValue::operator=(Returned<T> *obj)
 {
     return operator=(QV4::Value::fromManaged(obj->getPointer()).asReturnedValue());
-}
-
-inline PersistentValue &PersistentValue::operator=(const ManagedRef obj)
-{
-    return operator=(obj.asReturnedValue());
 }
 
 inline PersistentValue &PersistentValue::operator=(const ScopedValue &other)
@@ -571,18 +578,6 @@ inline ValueRef &ValueRef::operator=(const ScopedValue &o)
 {
     *ptr = *o.ptr;
     return *this;
-}
-
-
-inline Value *extractValuePointer(const ScopedValue &v)
-{
-    return v.ptr;
-}
-
-template<typename T>
-Value *extractValuePointer(const Scoped<T> &v)
-{
-    return v.ptr;
 }
 
 struct ScopedProperty

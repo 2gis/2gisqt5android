@@ -64,7 +64,7 @@ Rectangle {
                 buttonColor: "lightgrey"
                 label: "Cut"
             }
-            
+
             Button{
                 buttonColor: "grey"
                 id: saveButton

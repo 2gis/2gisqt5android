@@ -36,5 +36,5 @@
 
     \include examples-run.qdocinc
 
-    \sa {Qt for Mac OS X}, {Qt Mac Extras}
+    \sa {Qt for OS X}, {Qt Mac Extras}
 */

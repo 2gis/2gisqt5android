@@ -16,4 +16,4 @@ Rectangle {
         }
         color: "white"
     }
-} 
+}

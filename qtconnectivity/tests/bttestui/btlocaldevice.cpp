@@ -5,35 +5,27 @@
 **
 ** This file is part of the QtBluetooth module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -149,10 +141,20 @@ void BtLocalDevice::requestPairingUpdate(bool isPairing)
     if (baddr.isNull())
         return;
 
-    if (isPairing)
-        localDevice->requestPairing(baddr, QBluetoothLocalDevice::Paired);
-    else
+
+
+    if (isPairing) {
+        //toggle between authorized and non-authorized pairing to achieve better
+        //level of testing
+        static short pairing = 0;
+        if ((pairing%2) == 1)
+            localDevice->requestPairing(baddr, QBluetoothLocalDevice::Paired);
+        else
+            localDevice->requestPairing(baddr, QBluetoothLocalDevice::AuthorizedPaired);
+        pairing++;
+    } else {
         localDevice->requestPairing(baddr, QBluetoothLocalDevice::Unpaired);
+    }
 
     for (int i = 0; i < foundTestServers.count(); i++) {
         if (isPairing)
@@ -296,11 +298,11 @@ void BtLocalDevice::stopServiceDiscovery()
 
 void BtLocalDevice::serviceDiscovered(const QBluetoothServiceInfo &info)
 {
-    QString classIds;
-    foreach (const QBluetoothUuid uuid, info.serviceClassUuids())
-        classIds += uuid.toString() + QLatin1Char(' ');
+    QStringList classIds;
+    foreach (const QBluetoothUuid &uuid, info.serviceClassUuids())
+        classIds.append(uuid.toString());
     qDebug() << "$$ Found new service" << info.device().address().toString()
-             << info.serviceUuid() << info.serviceName() << classIds;
+             << info.serviceUuid() << info.serviceName() << info.serviceDescription() << classIds;
 
     if (info.serviceUuid() == QBluetoothUuid(QString(TEST_SERVICE_UUID))
             || info.serviceClassUuids().contains(QBluetoothUuid(QString(TEST_SERVICE_UUID))))
@@ -348,7 +350,7 @@ void BtLocalDevice::dumpServiceDiscovery()
         qDebug() << "Discovered Devices:" << list.count();
 
         foreach (const QBluetoothDeviceInfo &info, list)
-            qDebug() << info.name() << info.address().toString();
+            qDebug() << info.name() << info.address().toString() << info.rssi();
     }
     if (serviceAgent) {
         qDebug() << "Service Discovery active:" << serviceAgent->isActive();
@@ -490,7 +492,10 @@ void BtLocalDevice::readData()
     if (socket) {
         while (socket->canReadLine()) {
             QByteArray line = socket->readLine().trimmed();
-            qDebug() << ">>>>" << QString::fromUtf8(line.constData(), line.length());
+            qDebug() << ">> peer(" << socket->peerName() << socket->peerAddress()
+                     << socket->peerPort() << ") local("
+                     << socket->localName() << socket->localAddress() << socket->localPort()
+                     << ")>>" << QString::fromUtf8(line.constData(), line.length());
         }
     }
 }
@@ -633,7 +638,7 @@ void BtLocalDevice::clientSocketReadyRead()
     while (socket->canReadLine()) {
         const QByteArray line = socket->readLine().trimmed();
         QString lineString = QString::fromUtf8(line.constData(), line.length());
-        qDebug() <<  ">>(" << socket->peerName() << ")>>"
+        qDebug() <<  ">>(" << server->serverAddress() << server->serverPort()  <<")>>"
                  << lineString;
 
         //when using the tst_QBluetoothSocket we echo received text back

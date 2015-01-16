@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtSG module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -268,8 +260,6 @@ QQuickPinchArea::QQuickPinchArea(QQuickItem *parent)
 {
     Q_D(QQuickPinchArea);
     d->init();
-    setAcceptedMouseButtons(Qt::LeftButton);
-    setFiltersChildMouseEvents(true);
 #ifdef Q_OS_OSX
     setAcceptHoverEvents(true); // needed to enable touch events on mouse hover.
 #endif
@@ -320,7 +310,6 @@ void QQuickPinchArea::touchEvent(QTouchEvent *event)
     // it's always going to accept the touches, and that means the item underneath
     // will not get them (unless the PA's parent is doing parent filtering,
     // as the Flickable does, for example).
-
     switch (event->type()) {
     case QEvent::TouchBegin:
     case QEvent::TouchUpdate:
@@ -333,17 +322,51 @@ void QQuickPinchArea::touchEvent(QTouchEvent *event)
         updatePinch();
         break;
     case QEvent::TouchEnd:
-        d->touchPoints.clear();
-        updatePinch();
+        clearPinch();
         break;
     default:
         QQuickItem::event(event);
     }
 }
 
+void QQuickPinchArea::clearPinch()
+{
+    Q_D(QQuickPinchArea);
+
+    d->touchPoints.clear();
+    if (d->inPinch) {
+        d->inPinch = false;
+        QPointF pinchCenter = mapFromScene(d->sceneLastCenter);
+        QQuickPinchEvent pe(pinchCenter, d->pinchLastScale, d->pinchLastAngle, d->pinchRotation);
+        pe.setStartCenter(d->pinchStartCenter);
+        pe.setPreviousCenter(pinchCenter);
+        pe.setPreviousAngle(d->pinchLastAngle);
+        pe.setPreviousScale(d->pinchLastScale);
+        pe.setStartPoint1(mapFromScene(d->sceneStartPoint1));
+        pe.setStartPoint2(mapFromScene(d->sceneStartPoint2));
+        pe.setPoint1(mapFromScene(d->lastPoint1));
+        pe.setPoint2(mapFromScene(d->lastPoint2));
+        emit pinchFinished(&pe);
+        if (d->pinch && d->pinch->target())
+            d->pinch->setActive(false);
+    }
+    d->pinchStartDist = 0;
+    d->pinchActivated = false;
+    d->initPinch = false;
+    d->pinchRejected = false;
+    d->stealMouse = false;
+    d->id1 = -1;
+    QQuickWindow *win = window();
+    if (win && win->mouseGrabberItem() == this)
+        ungrabMouse();
+    setKeepMouseGrab(false);
+}
+
 void QQuickPinchArea::updatePinch()
 {
     Q_D(QQuickPinchArea);
+
+    QQuickWindow *win = window();
 
     if (d->touchPoints.count() < 2) {
         setKeepMouseGrab(false);
@@ -379,6 +402,13 @@ void QQuickPinchArea::updatePinch()
 
     QTouchEvent::TouchPoint touchPoint1 = d->touchPoints.at(0);
     QTouchEvent::TouchPoint touchPoint2 = d->touchPoints.at(d->touchPoints. count() >= 2 ? 1 : 0);
+
+    if (touchPoint1.state() == Qt::TouchPointPressed)
+        d->sceneStartPoint1 = touchPoint1.scenePos();
+
+    if (touchPoint2.state() == Qt::TouchPointPressed)
+        d->sceneStartPoint2 = touchPoint2.scenePos();
+
     QRectF bounds = clipRect();
     // Pinch is not started unless there are exactly two touch points
     // AND one or more of the points has just now been pressed (wasn't pressed already)
@@ -387,10 +417,15 @@ void QQuickPinchArea::updatePinch()
             && (touchPoint1.state() & Qt::TouchPointPressed || touchPoint2.state() & Qt::TouchPointPressed) &&
             bounds.contains(touchPoint1.pos()) && bounds.contains(touchPoint2.pos())) {
         d->id1 = touchPoint1.id();
-        d->sceneStartPoint1 = touchPoint1.scenePos();
-        d->sceneStartPoint2 = touchPoint2.scenePos();
         d->pinchActivated = true;
         d->initPinch = true;
+
+        int touchMouseId = QQuickWindowPrivate::get(win)->touchMouseId;
+        if (touchPoint1.id() == touchMouseId || touchPoint2.id() == touchMouseId) {
+            if (win && win->mouseGrabberItem() != this) {
+                grabMouse();
+            }
+        }
     }
     if (d->pinchActivated && !d->pinchRejected) {
         const int dragThreshold = qApp->styleHints()->startDragDistance();
@@ -449,10 +484,12 @@ void QQuickPinchArea::updatePinch()
                     if (pe.accepted()) {
                         d->inPinch = true;
                         d->stealMouse = true;
-                        QQuickWindow *c = window();
-                        if (c && c->mouseGrabberItem() != this)
+                        if (win && win->mouseGrabberItem() != this)
                             grabMouse();
                         setKeepMouseGrab(true);
+                        grabTouchPoints(QVector<int>() << touchPoint1.id() << touchPoint2.id());
+                        d->inPinch = true;
+                        d->stealMouse = true;
                         if (d->pinch && d->pinch->target()) {
                             d->pinchStartPos = pinch()->target()->position();
                             d->pinchStartScale = d->pinch->target()->scale();
@@ -528,22 +565,19 @@ bool QQuickPinchArea::childMouseEventFilter(QQuickItem *i, QEvent *e)
         return QQuickItem::childMouseEventFilter(i, e);
     switch (e->type()) {
     case QEvent::TouchBegin:
+        clearPinch(); // fall through
     case QEvent::TouchUpdate: {
-            QTouchEvent *touch = static_cast<QTouchEvent*>(e);
-            if (touch->touchPoints().count() > 1) {
-                touchEvent(touch);
-            } else {
-                d->touchPoints.clear();
-                for (int i = 0; i < touch->touchPoints().count(); ++i)
-                    if (!(touch->touchPoints().at(i).state() & Qt::TouchPointReleased))
-                        d->touchPoints << touch->touchPoints().at(i);
-                updatePinch();
-            }
+             QTouchEvent *touch = static_cast<QTouchEvent*>(e);
+            d->touchPoints.clear();
+            for (int i = 0; i < touch->touchPoints().count(); ++i)
+                if (!(touch->touchPoints().at(i).state() & Qt::TouchPointReleased))
+                    d->touchPoints << touch->touchPoints().at(i);
+            updatePinch();
         }
+        e->setAccepted(d->inPinch);
         return d->inPinch;
     case QEvent::TouchEnd:
-        d->touchPoints.clear();
-        updatePinch();
+        clearPinch();
         break;
     default:
         break;

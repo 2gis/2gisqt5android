@@ -80,6 +80,14 @@ Control {
     property bool checked: false
 
     /*!
+        \qmlproperty bool Switch::pressed
+        \since QtQuick.Controls 1.3
+
+        This property is \c true when the control is pressed.
+    */
+    readonly property alias pressed: internal.pressed
+
+    /*!
         This property is \c true if the control takes the focus when it is
         pressed; \l{QQuickItem::forceActiveFocus()}{forceActiveFocus()} will be
         called on the control.
@@ -90,6 +98,13 @@ Control {
         This property stores the ExclusiveGroup that the control belongs to.
     */
     property ExclusiveGroup exclusiveGroup: null
+
+    /*!
+        \since QtQuick.Controls 1.3
+
+        This signal is emitted when the control is clicked.
+    */
+    signal clicked
 
     Keys.onPressed: {
         if (event.key === Qt.Key_Space && !event.isAutoRepeat)
@@ -129,6 +144,8 @@ Control {
                 checked = (handle.x === max) ? false : true
             }
         }
+
+        onClicked: root.clicked()
     }
 
     onCheckedChanged:  {

@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtQuick module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -48,6 +40,7 @@
 #include <private/qqmlengine_p.h>
 
 #include <QtGui/private/qguiapplication_p.h>
+#include <QtGui/private/qimage_p.h>
 #include <qpa/qplatformintegration.h>
 
 #include <QtQuick/private/qsgtexture_p.h>
@@ -77,6 +70,8 @@
 #define IMAGEREQUEST_MAX_REDIRECT_RECURSION 16
 #define CACHE_EXPIRE_TIME 30
 #define CACHE_REMOVAL_FRACTION 4
+
+#define PIXMAP_PROFILE(Code) Q_QUICK_PROFILE(QQuickProfiler::ProfilePixmapCache, Code)
 
 QT_BEGIN_NAMESPACE
 
@@ -337,6 +332,29 @@ QNetworkAccessManager *QQuickPixmapReader::networkAccessManager()
     return accessManager;
 }
 
+static void maybeRemoveAlpha(QImage *image)
+{
+    // If the image
+    if (image->hasAlphaChannel() && image->data_ptr()
+            && !image->data_ptr()->checkForAlphaPixels()) {
+        switch (image->format()) {
+        case QImage::Format_RGBA8888:
+        case QImage::Format_RGBA8888_Premultiplied:
+            *image = image->convertToFormat(QImage::Format_RGBX8888);
+            break;
+        case QImage::Format_A2BGR30_Premultiplied:
+            *image = image->convertToFormat(QImage::Format_BGR30);
+            break;
+        case QImage::Format_A2RGB30_Premultiplied:
+            *image = image->convertToFormat(QImage::Format_RGB30);
+            break;
+        default:
+            *image = image->convertToFormat(QImage::Format_RGB32);
+            break;
+        }
+    }
+}
+
 static bool readImage(const QUrl& url, QIODevice *dev, QImage *image, QString *errorString, QSize *impsize,
                       const QSize &requestSize)
 {
@@ -366,6 +384,7 @@ static bool readImage(const QUrl& url, QIODevice *dev, QImage *image, QString *e
         *impsize = imgio.size();
 
     if (imgio.read(image)) {
+        maybeRemoveAlpha(image);
         if (impsize && impsize->width() < 0)
             *impsize = image->size();
         return true;
@@ -508,6 +527,7 @@ void QQuickPixmapReader::processJobs()
                     replies.remove(reply);
                     reply->close();
                 }
+                PIXMAP_PROFILE(pixmapStateChanged<QQuickProfiler::PixmapLoadingError>(job->url));
                 // deleteLater, since not owned by this thread
                 job->deleteLater();
             }
@@ -519,7 +539,7 @@ void QQuickPixmapReader::processJobs()
             runningJob->loading = true;
 
             QUrl url = runningJob->url;
-            Q_QUICK_PROFILE(pixmapStateChanged<QQuickProfiler::PixmapLoadingStarted>(url));
+            PIXMAP_PROFILE(pixmapStateChanged<QQuickProfiler::PixmapLoadingStarted>(url));
 
             QSize requestSize = runningJob->requestSize;
             locker.unlock();
@@ -664,7 +684,11 @@ void QQuickPixmapReader::cancel(QQuickPixmapReply *reply)
         // XXX
         if (threadObject) threadObject->processJobs();
     } else {
-        jobs.removeAll(reply);
+        // If loading was started (reply removed from jobs) but the reply was never processed
+        // (otherwise it would have deleted itself) we need to profile an error.
+        if (jobs.removeAll(reply) == 0) {
+            PIXMAP_PROFILE(pixmapStateChanged<QQuickProfiler::PixmapLoadingError>(reply->url));
+        }
         delete reply;
     }
     mutex.unlock();
@@ -897,16 +921,20 @@ bool QQuickPixmapReply::event(QEvent *event)
             if (data->pixmapStatus == QQuickPixmap::Ready) {
                 data->textureFactory = de->textureFactory;
                 data->implicitSize = de->implicitSize;
-                Q_QUICK_PROFILE(pixmapLoadingFinished(data->url,
-                        data->requestSize.width() > 0 ? data->requestSize : data->implicitSize));
+                PIXMAP_PROFILE(pixmapLoadingFinished(data->url,
+                        data->textureFactory != 0 && data->textureFactory->textureSize().isValid() ?
+                        data->textureFactory->textureSize() :
+                        (data->requestSize.isValid() ? data->requestSize : data->implicitSize)));
             } else {
-                Q_QUICK_PROFILE(pixmapStateChanged<QQuickProfiler::PixmapLoadingError>(data->url));
+                PIXMAP_PROFILE(pixmapStateChanged<QQuickProfiler::PixmapLoadingError>(data->url));
                 data->errorString = de->errorString;
                 data->removeFromCache(); // We don't continue to cache error'd pixmaps
             }
 
             data->reply = 0;
             emit finished();
+        } else {
+            PIXMAP_PROFILE(pixmapStateChanged<QQuickProfiler::PixmapLoadingError>(url));
         }
 
         delete this;
@@ -926,7 +954,7 @@ int QQuickPixmapData::cost() const
 void QQuickPixmapData::addref()
 {
     ++refCount;
-    Q_QUICK_PROFILE(pixmapCountChanged<QQuickProfiler::PixmapReferenceCountChanged>(url, refCount));
+    PIXMAP_PROFILE(pixmapCountChanged<QQuickProfiler::PixmapReferenceCountChanged>(url, refCount));
     if (prevUnreferencedPtr)
         pixmapStore()->referencePixmap(this);
 }
@@ -935,7 +963,7 @@ void QQuickPixmapData::release()
 {
     Q_ASSERT(refCount > 0);
     --refCount;
-    Q_QUICK_PROFILE(pixmapCountChanged<QQuickProfiler::PixmapReferenceCountChanged>(url, refCount));
+    PIXMAP_PROFILE(pixmapCountChanged<QQuickProfiler::PixmapReferenceCountChanged>(url, refCount));
     if (refCount == 0) {
         if (reply) {
             QQuickPixmapReply *cancelReply = reply;
@@ -966,7 +994,7 @@ void QQuickPixmapData::addToCache()
         QQuickPixmapKey key = { &url, &requestSize };
         pixmapStore()->m_cache.insert(key, this);
         inCache = true;
-        Q_QUICK_PROFILE(pixmapCountChanged<QQuickProfiler::PixmapCacheCountChanged>(
+        PIXMAP_PROFILE(pixmapCountChanged<QQuickProfiler::PixmapCacheCountChanged>(
                 url, pixmapStore()->m_cache.count()));
     }
 }
@@ -975,10 +1003,10 @@ void QQuickPixmapData::removeFromCache()
 {
     if (inCache) {
         QQuickPixmapKey key = { &url, &requestSize };
-        Q_QUICK_PROFILE(pixmapCountChanged<QQuickProfiler::PixmapCacheCountChanged>(
-                url, pixmapStore()->m_cache.count()));
         pixmapStore()->m_cache.remove(key);
         inCache = false;
+        PIXMAP_PROFILE(pixmapCountChanged<QQuickProfiler::PixmapCacheCountChanged>(
+                url, pixmapStore()->m_cache.count()));
     }
 }
 
@@ -1075,6 +1103,12 @@ QQuickPixmap::QQuickPixmap(QQmlEngine *engine, const QUrl &url, const QSize &siz
     load(engine, url, size);
 }
 
+QQuickPixmap::QQuickPixmap(const QUrl &url, const QImage &image)
+{
+    d = new QQuickPixmapData(this, url, new QQuickDefaultTextureFactory(image), image.size(), QSize());
+    d->addToCache();
+}
+
 QQuickPixmap::~QQuickPixmap()
 {
     if (d) {
@@ -1167,6 +1201,17 @@ void QQuickPixmap::setImage(const QImage &p)
         d = new QQuickPixmapData(this, textureFactoryForImage(p));
 }
 
+void QQuickPixmap::setPixmap(const QQuickPixmap &other)
+{
+    clear();
+
+    if (other.d) {
+        d = other.d;
+        d->addref();
+        d->declarativePixmaps.insert(this);
+    }
+}
+
 int QQuickPixmap::width() const
 {
     if (d && d->textureFactory)
@@ -1239,17 +1284,16 @@ void QQuickPixmap::load(QQmlEngine *engine, const QUrl &url, const QSize &reques
 
         if (!(options & QQuickPixmap::Asynchronous)) {
             bool ok = false;
-            Q_QUICK_PROFILE(pixmapStateChanged<QQuickProfiler::PixmapLoadingStarted>(url));
+            PIXMAP_PROFILE(pixmapStateChanged<QQuickProfiler::PixmapLoadingStarted>(url));
             d = createPixmapDataSync(this, engine, url, requestSize, &ok);
             if (ok) {
-                Q_QUICK_PROFILE(pixmapLoadingFinished(url,
-                        d->requestSize.width() > 0 ? d->requestSize : d->implicitSize));
+                PIXMAP_PROFILE(pixmapLoadingFinished(url, QSize(width(), height())));
                 if (options & QQuickPixmap::Cache)
                     d->addToCache();
                 return;
             }
             if (d) { // loadable, but encountered error while loading
-                Q_QUICK_PROFILE(pixmapStateChanged<QQuickProfiler::PixmapLoadingError>(url));
+                PIXMAP_PROFILE(pixmapStateChanged<QQuickProfiler::PixmapLoadingError>(url));
                 return;
             }
         }
@@ -1289,6 +1333,14 @@ void QQuickPixmap::clear(QObject *obj)
         d->release();
         d = 0;
     }
+}
+
+bool QQuickPixmap::isCached(const QUrl &url, const QSize &requestSize)
+{
+    QQuickPixmapKey key = { &url, &requestSize };
+    QQuickPixmapStore *store = pixmapStore();
+
+    return store->m_cache.contains(key);
 }
 
 bool QQuickPixmap::connectFinished(QObject *object, const char *method)

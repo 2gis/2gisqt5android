@@ -2,7 +2,7 @@ QT += declarative
 
 SOURCES += main.cpp \
            person.cpp \
-           birthdayparty.cpp 
+           birthdayparty.cpp
 HEADERS += person.h \
            birthdayparty.h
 RESOURCES += grouped.qrc

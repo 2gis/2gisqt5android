@@ -100,7 +100,7 @@ class Directory : public QObject {
         //Registered to QML in a plugin. Accessible from QML as a property of Directory
         QList<File *> m_fileList;
 
-        //refresh content of the directory 
+        //refresh content of the directory
         void refresh();
 };
 

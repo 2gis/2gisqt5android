@@ -156,7 +156,7 @@ qreal GraphicsGridLayoutObject::spacing() const
 {
     if (verticalSpacing() == horizontalSpacing())
         return verticalSpacing();
-    return -1; 
+    return -1;
 }
 
 qreal GraphicsGridLayoutObject::contentsMargin() const

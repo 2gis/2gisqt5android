@@ -15,7 +15,7 @@ Rectangle {
                 anchors.centerIn: parent
                 width: 60
                 height: 60
-                color: name 
+                color: name
             }
         }
         model: ListModel {

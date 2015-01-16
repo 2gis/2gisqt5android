@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -51,6 +43,7 @@
 #include "qv4property_p.h"
 #include "qv4function_p.h"
 #include "qv4objectiterator_p.h"
+#include "qv4mm_p.h"
 
 #include <QtCore/QString>
 #include <QtCore/QHash>
@@ -94,7 +87,17 @@ struct InternalClass;
 struct Lookup;
 
 struct Q_QML_EXPORT FunctionObject: Object {
-    V4_OBJECT
+    struct Q_QML_PRIVATE_EXPORT Data : Object::Data {
+        Data(ExecutionContext *scope, String *name, bool createProto = false);
+        Data(ExecutionContext *scope, const QString &name = QString(), bool createProto = false);
+        Data(ExecutionContext *scope, const ReturnedValue name);
+        Data(InternalClass *ic);
+        ~Data();
+
+        ExecutionContext *scope;
+        Function *function;
+    };
+    V4_OBJECT(Object)
     Q_MANAGED_TYPE(FunctionObject)
     enum {
         IsFunctionObject = true
@@ -111,18 +114,15 @@ struct Q_QML_EXPORT FunctionObject: Object {
         Index_ProtoConstructor = 0
     };
 
-    ExecutionContext *scope;
+
+    ExecutionContext *scope() { return d()->scope; }
+    Function *function() { return d()->function; }
+
     ReturnedValue name();
-    unsigned int formalParameterCount() { return function ? function->compiledFunction->nFormals : 0; }
-    unsigned int varCount() { return function ? function->compiledFunction->nLocals : 0; }
-    Function *function;
+    unsigned int formalParameterCount() { return function() ? function()->compiledFunction->nFormals : 0; }
+    unsigned int varCount() { return function() ? function()->compiledFunction->nLocals : 0; }
 
-    FunctionObject(ExecutionContext *scope, const StringRef name, bool createProto = false);
-    FunctionObject(ExecutionContext *scope, const QString &name = QString(), bool createProto = false);
-    FunctionObject(ExecutionContext *scope, const ReturnedValue name);
-    ~FunctionObject();
-
-    void init(const StringRef name, bool createProto);
+    void init(String *name, bool createProto);
 
     ReturnedValue newInstance();
 
@@ -130,6 +130,9 @@ struct Q_QML_EXPORT FunctionObject: Object {
     using Object::call;
     static ReturnedValue construct(Managed *that, CallData *);
     static ReturnedValue call(Managed *that, CallData *d);
+    static void destroy(Managed *m) {
+        static_cast<FunctionObject *>(m)->d()->~Data();
+    }
 
     static FunctionObject *cast(const Value &v) {
         return v.asFunctionObject();
@@ -137,14 +140,13 @@ struct Q_QML_EXPORT FunctionObject: Object {
 
     static FunctionObject *createScriptFunction(ExecutionContext *scope, Function *function, bool createProto = true);
 
-    ReturnedValue protoProperty() { return memberData[Index_Prototype].asReturnedValue(); }
+    ReturnedValue protoProperty() { return memberData()[Index_Prototype].asReturnedValue(); }
 
-protected:
-    FunctionObject(InternalClass *ic);
+    bool needsActivation() const { return d()->needsActivation; }
+    bool strictMode() const { return d()->strictMode; }
+    bool bindingKeyFlag() const { return d()->bindingKeyFlag; }
 
     static void markObjects(Managed *that, ExecutionEngine *e);
-    static void destroy(Managed *that)
-    { static_cast<FunctionObject*>(that)->~FunctionObject(); }
 };
 
 template<>
@@ -152,12 +154,13 @@ inline FunctionObject *value_cast(const Value &v) {
     return v.asFunctionObject();
 }
 
-DEFINE_REF(FunctionObject, Object);
-
 struct FunctionCtor: FunctionObject
 {
-    V4_OBJECT
-    FunctionCtor(ExecutionContext *scope);
+    struct Data : FunctionObject::Data {
+        Data(ExecutionContext *scope);
+    };
+
+    V4_OBJECT(FunctionObject)
 
     static ReturnedValue construct(Managed *that, CallData *callData);
     static ReturnedValue call(Managed *that, CallData *callData);
@@ -165,8 +168,12 @@ struct FunctionCtor: FunctionObject
 
 struct FunctionPrototype: FunctionObject
 {
-    FunctionPrototype(InternalClass *ic);
-    void init(ExecutionEngine *engine, ObjectRef ctor);
+    struct Data : FunctionObject::Data {
+        Data(InternalClass *ic);
+    };
+    V4_OBJECT(FunctionObject)
+
+    void init(ExecutionEngine *engine, Object *ctor);
 
     static ReturnedValue method_toString(CallContext *ctx);
     static ReturnedValue method_apply(CallContext *ctx);
@@ -174,11 +181,17 @@ struct FunctionPrototype: FunctionObject
     static ReturnedValue method_bind(CallContext *ctx);
 };
 
-struct BuiltinFunction: FunctionObject {
-    V4_OBJECT
-    ReturnedValue (*code)(CallContext *);
+struct Q_QML_EXPORT BuiltinFunction: FunctionObject {
+    struct Q_QML_EXPORT Data : FunctionObject::Data {
+        Data(ExecutionContext *scope, String *name, ReturnedValue (*code)(CallContext *));
+        ReturnedValue (*code)(CallContext *);
+    };
+    V4_OBJECT(FunctionObject)
 
-    BuiltinFunction(ExecutionContext *scope, const StringRef name, ReturnedValue (*code)(CallContext *));
+    static BuiltinFunction *create(ExecutionContext *scope, String *name, ReturnedValue (*code)(CallContext *))
+    {
+        return scope->engine()->memoryManager->alloc<BuiltinFunction>(scope, name, code);
+    }
 
     static ReturnedValue construct(Managed *, CallData *);
     static ReturnedValue call(Managed *that, CallData *callData);
@@ -186,18 +199,18 @@ struct BuiltinFunction: FunctionObject {
 
 struct IndexedBuiltinFunction: FunctionObject
 {
-    V4_OBJECT
-
-    ReturnedValue (*code)(CallContext *ctx, uint index);
-    uint index;
-
-    IndexedBuiltinFunction(ExecutionContext *scope, uint index, ReturnedValue (*code)(CallContext *ctx, uint index))
-        : FunctionObject(scope)
-        , code(code)
-        , index(index)
-    {
-        setVTable(staticVTable());
-    }
+    struct Data : FunctionObject::Data {
+        Data(ExecutionContext *scope, uint index, ReturnedValue (*code)(CallContext *ctx, uint index))
+            : FunctionObject::Data(scope),
+              code(code)
+            , index(index)
+        {
+            setVTable(staticVTable());
+        }
+        ReturnedValue (*code)(CallContext *, uint index);
+        uint index;
+    };
+    V4_OBJECT(FunctionObject)
 
     static ReturnedValue construct(Managed *m, CallData *)
     {
@@ -209,8 +222,10 @@ struct IndexedBuiltinFunction: FunctionObject
 
 
 struct SimpleScriptFunction: FunctionObject {
-    V4_OBJECT
-    SimpleScriptFunction(ExecutionContext *scope, Function *function, bool createProto);
+    struct Data : FunctionObject::Data {
+        Data(ExecutionContext *scope, Function *function, bool createProto);
+    };
+    V4_OBJECT(FunctionObject)
 
     static ReturnedValue construct(Managed *, CallData *callData);
     static ReturnedValue call(Managed *that, CallData *callData);
@@ -219,8 +234,10 @@ struct SimpleScriptFunction: FunctionObject {
 };
 
 struct ScriptFunction: SimpleScriptFunction {
-    V4_OBJECT
-    ScriptFunction(ExecutionContext *scope, Function *function);
+    struct Data : SimpleScriptFunction::Data {
+        Data(ExecutionContext *scope, Function *function);
+    };
+    V4_OBJECT(FunctionObject)
 
     static ReturnedValue construct(Managed *, CallData *callData);
     static ReturnedValue call(Managed *that, CallData *callData);
@@ -228,19 +245,26 @@ struct ScriptFunction: SimpleScriptFunction {
 
 
 struct BoundFunction: FunctionObject {
-    V4_OBJECT
-    FunctionObject *target;
-    Value boundThis;
-    QVector<Value> boundArgs;
+    struct Data : FunctionObject::Data {
+        Data(ExecutionContext *scope, FunctionObject *target, const ValueRef boundThis, const Members &boundArgs);
+        FunctionObject *target;
+        Value boundThis;
+        Members boundArgs;
+    };
+    V4_OBJECT(FunctionObject)
 
-    BoundFunction(ExecutionContext *scope, FunctionObjectRef target, const ValueRef boundThis, const QVector<Value> &boundArgs);
-    ~BoundFunction() {}
+    static BoundFunction *create(ExecutionContext *scope, FunctionObject *target, const ValueRef boundThis, const QV4::Members &boundArgs)
+    {
+        return scope->engine()->memoryManager->alloc<BoundFunction>(scope, target, boundThis, boundArgs);
+    }
 
+    FunctionObject *target() { return d()->target; }
+    Value boundThis() const { return d()->boundThis; }
+    Members boundArgs() const { return d()->boundArgs; }
 
     static ReturnedValue construct(Managed *, CallData *d);
     static ReturnedValue call(Managed *that, CallData *dd);
 
-    static void destroy(Managed *);
     static void markObjects(Managed *that, ExecutionEngine *e);
 };
 

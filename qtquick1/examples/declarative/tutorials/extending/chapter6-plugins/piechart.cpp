@@ -55,7 +55,7 @@ void PieChart::setName(const QString &name)
     m_name = name;
 }
 
-QDeclarativeListProperty<PieSlice> PieChart::slices() 
+QDeclarativeListProperty<PieSlice> PieChart::slices()
 {
     return QDeclarativeListProperty<PieSlice>(this, 0, &PieChart::append_slice);
 }

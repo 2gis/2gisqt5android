@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtQuick module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -45,16 +37,20 @@
 #include <QtQuick/private/qsgdefaultdistancefieldglyphcache_p.h>
 #include <QtQuick/private/qsgdefaultrectanglenode_p.h>
 #include <QtQuick/private/qsgdefaultimagenode_p.h>
+#include <QtQuick/private/qsgdefaultpainternode_p.h>
 #include <QtQuick/private/qsgdefaultglyphnode_p.h>
 #include <QtQuick/private/qsgdistancefieldglyphnode_p.h>
 #include <QtQuick/private/qsgdistancefieldglyphnode_p_p.h>
 #include <QtQuick/private/qsgshareddistancefieldglyphcache_p.h>
 #include <QtQuick/private/qsgatlastexture_p.h>
+#include <QtQuick/private/qsgrenderloop_p.h>
+#include <QtQuick/private/qsgdefaultlayer_p.h>
 
 #include <QtQuick/private/qsgtexture_p.h>
 #include <QtQuick/private/qquickpixmapcache_p.h>
 
 #include <QGuiApplication>
+#include <QScreen>
 #include <QOpenGLContext>
 #include <QQuickWindow>
 #include <QtGui/qopenglframebufferobject.h>
@@ -63,6 +59,7 @@
 
 #include <QtQuick/private/qsgtexture_p.h>
 #include <QtGui/private/qguiapplication_p.h>
+#include <QtCore/private/qabstractanimation_p.h>
 #include <qpa/qplatformintegration.h>
 
 #include <qpa/qplatformsharedgraphicscache.h>
@@ -93,6 +90,30 @@ DEFINE_BOOL_CONFIG_OPTION(qmlDisableDistanceField, QML_DISABLE_DISTANCEFIELD)
 
 QT_BEGIN_NAMESPACE
 
+// Used for very high-level info about the renderering and gl context
+// Includes GL_VERSION, type of render loop, atlas size, etc.
+Q_LOGGING_CATEGORY(QSG_LOG_INFO,                "qt.scenegraph.info")
+
+// Used to debug the renderloop logic. Primarily useful for platform integrators
+// and when investigating the render loop logic.
+Q_LOGGING_CATEGORY(QSG_LOG_RENDERLOOP,          "qt.scenegraph.renderloop")
+
+
+// GLSL shader compilation
+Q_LOGGING_CATEGORY(QSG_LOG_TIME_COMPILATION,    "qt.scenegraph.time.compilation")
+
+// polish, animations, sync, render and swap in the render loop
+Q_LOGGING_CATEGORY(QSG_LOG_TIME_RENDERLOOP,     "qt.scenegraph.time.renderloop")
+
+// Texture uploads and swizzling
+Q_LOGGING_CATEGORY(QSG_LOG_TIME_TEXTURE,        "qt.scenegraph.time.texture")
+
+// Glyph preparation (only for distance fields atm)
+Q_LOGGING_CATEGORY(QSG_LOG_TIME_GLYPH,          "qt.scenegraph.time.glyph")
+
+// Timing inside the renderer base class
+Q_LOGGING_CATEGORY(QSG_LOG_TIME_RENDERER,       "qt.scenegraph.time.renderer")
+
 class QSGContextPrivate : public QObjectPrivate
 {
 public:
@@ -113,6 +134,136 @@ public:
     bool distanceFieldDisabled;
     QSGDistanceFieldGlyphNode::AntialiasingMode distanceFieldAntialiasing;
     bool distanceFieldAntialiasingDecided;
+};
+
+static bool qsg_useConsistentTiming()
+{
+    static int use = -1;
+    if (use < 0) {
+        QByteArray fixed = qgetenv("QSG_FIXED_ANIMATION_STEP");
+        use = !(fixed.isEmpty() || fixed == "no");
+        qCDebug(QSG_LOG_INFO, "Using %s", bool(use) ? "fixed animation steps" : "sg animation driver");
+    }
+    return bool(use);
+}
+
+class QSGAnimationDriver : public QAnimationDriver
+{
+    Q_OBJECT
+public:
+    enum Mode {
+        VSyncMode,
+        TimerMode
+    };
+
+    QSGAnimationDriver(QObject *parent)
+        : QAnimationDriver(parent)
+        , m_time(0)
+        , m_vsync(0)
+        , m_mode(VSyncMode)
+        , m_lag(0)
+        , m_bad(0)
+        , m_good(0)
+    {
+        QScreen *screen = QGuiApplication::primaryScreen();
+        if (screen && !qsg_useConsistentTiming()) {
+            m_vsync = 1000.0 / screen->refreshRate();
+            if (m_vsync <= 0)
+                m_mode = TimerMode;
+        } else {
+            m_mode = TimerMode;
+            if (qsg_useConsistentTiming())
+                QUnifiedTimer::instance(true)->setConsistentTiming(true);
+        }
+        if (m_mode == VSyncMode)
+            qCDebug(QSG_LOG_INFO, "Animation Driver: using vsync: %.2f ms", m_vsync);
+        else
+            qCDebug(QSG_LOG_INFO, "Animation Driver: using walltime");
+    }
+
+    void start() Q_DECL_OVERRIDE
+    {
+        m_time = 0;
+        m_timer.start();
+        m_wallTime.restart();
+        QAnimationDriver::start();
+    }
+
+    qint64 elapsed() const Q_DECL_OVERRIDE
+    {
+        return m_mode == VSyncMode
+                ? qint64(m_time)
+                : qint64(m_time) + m_wallTime.elapsed();
+    }
+
+    void advance() Q_DECL_OVERRIDE
+    {
+        qint64 delta = m_timer.restart();
+
+        if (m_mode == VSyncMode) {
+            // If a frame is skipped, either because rendering was slow or because
+            // the QML was slow, we accept it and continue advancing with a single
+            // vsync tick. The reason for this is that by the time we notice this
+            // on the GUI thread, the temporal distortion has already gone to screen
+            // and by catching up, we will introduce a second distortion which will
+            // worse. We accept that the animation time falls behind wall time because
+            // it comes out looking better.
+            // Only when multiple bad frames are hit in a row, do we consider
+            // switching. A few really bad frames and we switch right away. For frames
+            // just above the vsync delta, we tolerate a bit more since a buffered
+            // driver can have vsync deltas on the form: 4, 21, 21, 2, 23, 16, and
+            // still manage to put the frames to screen at 16 ms intervals. In addition
+            // to that, we tolerate a 25% margin of error on the value of m_vsync
+            // reported from the system as this value is often not precise.
+
+            m_time += m_vsync;
+
+            if (delta > m_vsync * 1.25) {
+                m_lag += (delta / m_vsync);
+                m_bad++;
+               // We tolerate one bad frame without resorting to timer based. This is
+                // done to cope with a slow loader frame followed by smooth animation.
+                // However, on the second frame with massive lag, we switch.
+                if (m_lag > 10 && m_bad > 2) {
+                    m_mode = TimerMode;
+                    qCDebug(QSG_LOG_INFO, "animation driver switched to timer mode");
+                    m_wallTime.restart();
+                }
+            } else {
+                m_lag = 0;
+                m_bad = 0;
+            }
+
+        } else {
+            if (delta < 1.25 * m_vsync) {
+                ++m_good;
+            } else {
+                m_good = 0;
+            }
+
+            // We've been solid for a while, switch back to vsync mode. Tolerance
+            // for switching back is lower than switching to timer mode, as we
+            // want to stay in vsync mode as much as possible.
+            if (m_good > 10 && !qsg_useConsistentTiming()) {
+                m_time = elapsed();
+                m_mode = VSyncMode;
+                m_bad = 0;
+                m_lag = 0;
+                qCDebug(QSG_LOG_INFO, "animation driver switched to vsync mode");
+            }
+        }
+
+        advanceAnimation();
+    }
+
+    float m_time;
+    float m_vsync;
+    Mode m_mode;
+    QElapsedTimer m_timer;
+    QElapsedTimer m_wallTime;
+    float m_lag;
+    int m_bad;
+    int m_good;
 };
 
 class QSGTextureCleanupEvent : public QEvent
@@ -161,6 +312,15 @@ QSGContext::QSGContext(QObject *parent) :
         d->distanceFieldAntialiasing = QSGGlyphNode::LowQualitySubPixelAntialiasing;
     else if (mode == "gray")
         d->distanceFieldAntialiasing = QSGGlyphNode::GrayAntialiasing;
+
+    // Adds compatibility with Qt 5.3 and earlier's QSG_RENDER_TIMING
+    if (qEnvironmentVariableIsSet("QSG_RENDER_TIMING")) {
+        ((QLoggingCategory &) QSG_LOG_TIME_GLYPH()).setEnabled(QtDebugMsg, true);
+        ((QLoggingCategory &) QSG_LOG_TIME_TEXTURE()).setEnabled(QtDebugMsg, true);
+        ((QLoggingCategory &) QSG_LOG_TIME_RENDERER()).setEnabled(QtDebugMsg, true);
+        ((QLoggingCategory &) QSG_LOG_TIME_RENDERLOOP()).setEnabled(QtDebugMsg, true);
+        ((QLoggingCategory &) QSG_LOG_TIME_COMPILATION()).setEnabled(QtDebugMsg, true);
+    }
 }
 
 
@@ -204,19 +364,21 @@ void QSGContext::renderContextInitialized(QSGRenderContext *renderContext)
     }
 
     static bool dumped = false;
-    if (!dumped && qEnvironmentVariableIsSet("QSG_INFO")) {
+    if (!dumped && QSG_LOG_INFO().isDebugEnabled()) {
         dumped = true;
         QSurfaceFormat format = renderContext->openglContext()->format();
-        qDebug() << "R/G/B/A Buffers:   " << format.redBufferSize() << format.greenBufferSize() << format.blueBufferSize() << format.alphaBufferSize();
-        qDebug() << "Depth Buffer:      " << format.depthBufferSize();
-        qDebug() << "Stencil Buffer:    " << format.stencilBufferSize();
-        qDebug() << "Samples:           " << format.samples();
-        qDebug() << "GL_VENDOR:         " << (const char *) glGetString(GL_VENDOR);
-        qDebug() << "GL_RENDERER:       " << (const char *) glGetString(GL_RENDERER);
-        qDebug() << "GL_VERSION:        " << (const char *) glGetString(GL_VERSION);
+        QOpenGLFunctions *funcs = QOpenGLContext::currentContext()->functions();
+        qCDebug(QSG_LOG_INFO) << "R/G/B/A Buffers:   " << format.redBufferSize() << format.greenBufferSize() << format.blueBufferSize() << format.alphaBufferSize();
+        qCDebug(QSG_LOG_INFO) << "Depth Buffer:      " << format.depthBufferSize();
+        qCDebug(QSG_LOG_INFO) << "Stencil Buffer:    " << format.stencilBufferSize();
+        qCDebug(QSG_LOG_INFO) << "Samples:           " << format.samples();
+        qCDebug(QSG_LOG_INFO) << "GL_VENDOR:         " << (const char *) funcs->glGetString(GL_VENDOR);
+        qCDebug(QSG_LOG_INFO) << "GL_RENDERER:       " << (const char *) funcs->glGetString(GL_RENDERER);
+        qCDebug(QSG_LOG_INFO) << "GL_VERSION:        " << (const char *) funcs->glGetString(GL_VERSION);
         QSet<QByteArray> exts = renderContext->openglContext()->extensions();
         QByteArray all; foreach (const QByteArray &e, exts) all += ' ' + e;
-        qDebug() << "GL_EXTENSIONS:    " << all.constData();
+        qCDebug(QSG_LOG_INFO) << "GL_EXTENSIONS:    " << all.constData();
+        qCDebug(QSG_LOG_INFO) << "Max Texture Size: " << renderContext->maxTextureSize();
     }
 
     d->mutex.unlock();
@@ -224,6 +386,19 @@ void QSGContext::renderContextInitialized(QSGRenderContext *renderContext)
 
 void QSGContext::renderContextInvalidated(QSGRenderContext *)
 {
+}
+
+
+/*!
+    Convenience factory function for creating a colored rectangle with the given geometry.
+ */
+QSGRectangleNode *QSGContext::createRectangleNode(const QRectF &rect, const QColor &c)
+{
+    QSGRectangleNode *node = createRectangleNode();
+    node->setRect(rect);
+    node->setColor(c);
+    node->update();
+    return node;
 }
 
 /*!
@@ -249,6 +424,14 @@ QSGImageNode *QSGContext::createImageNode()
 }
 
 /*!
+    Factory function for scene graph backends of Painter elements
+ */
+QSGPainterNode *QSGContext::createPainterNode(QQuickPaintedItem *item)
+{
+    return new QSGDefaultPainterNode(item);
+}
+
+/*!
     Factory function for scene graph backends of the Text elements;
  */
 QSGGlyphNode *QSGContext::createGlyphNode(QSGRenderContext *rc, bool preferNativeGlyphNode)
@@ -264,9 +447,26 @@ QSGGlyphNode *QSGContext::createGlyphNode(QSGRenderContext *rc, bool preferNativ
     }
 }
 
+/*!
+ * Factory function for scene graph backends of the QStyle stylable elements. Returns a
+ * null pointer if the backend doesn't provide its own node type.
+ */
+QSGNinePatchNode *QSGContext::createNinePatchNode()
+{
+    return 0;
+}
+
+/*!
+    Factory function for scene graph backends of layers.
+ */
+QSGLayer *QSGContext::createLayer(QSGRenderContext *renderContext)
+{
+    return new QSGDefaultLayer(renderContext);
+}
+
 QSurfaceFormat QSGContext::defaultSurfaceFormat() const
 {
-    QSurfaceFormat format;
+    QSurfaceFormat format = QSurfaceFormat::defaultFormat();
     static bool useDepth = qEnvironmentVariableIsEmpty("QSG_NO_DEPTH_BUFFER");
     static bool useStencil = qEnvironmentVariableIsEmpty("QSG_NO_STENCIL_BUFFER");
     format.setDepthBufferSize(useDepth ? 24 : 0);
@@ -284,10 +484,10 @@ QSurfaceFormat QSGContext::defaultSurfaceFormat() const
 QSize QSGContext::minimumFBOSize() const
 {
 #ifdef Q_OS_MAC
-    return QSize(33, 33);
-#else
-    return QSize(1, 1);
+    if (QSysInfo::MacintoshVersion < QSysInfo::MV_10_8)
+        return QSize(33, 33);
 #endif
+    return QSize(1, 1);
 }
 
 
@@ -317,7 +517,7 @@ bool QSGContext::isDistanceFieldEnabled() const
 
 QAnimationDriver *QSGContext::createAnimationDriver(QObject *parent)
 {
-    return new QAnimationDriver(parent);
+    return new QSGAnimationDriver(parent);
 }
 
 QSGRenderContext::QSGRenderContext(QSGContext *context)
@@ -326,8 +526,10 @@ QSGRenderContext::QSGRenderContext(QSGContext *context)
     , m_atlasManager(0)
     , m_depthStencilManager(0)
     , m_distanceFieldCacheManager(0)
+    , m_maxTextureSize(0)
     , m_brokenIBOs(false)
     , m_serializedRender(false)
+    , m_attachToGLContext(true)
 {
 }
 
@@ -349,12 +551,7 @@ void QSGRenderContext::renderNextFrame(QSGRenderer *renderer, GLuint fboId)
     if (m_serializedRender)
         qsg_framerender_mutex.lock();
 
-    if (fboId) {
-        QSGBindableFboId bindable(fboId);
-        renderer->renderScene(bindable);
-    } else {
-        renderer->renderScene();
-    }
+    renderer->renderScene(fboId);
 
     if (m_serializedRender)
         qsg_framerender_mutex.unlock();
@@ -406,6 +603,12 @@ QSGDistanceFieldGlyphCache *QSGRenderContext::distanceFieldGlyphCache(const QRaw
     return cache;
 }
 
+void QSGRenderContext::setAttachToGLContext(bool attach)
+{
+    Q_ASSERT(!isValid());
+    m_attachToGLContext = attach;
+}
+
 #define QSG_RENDERCONTEXT_PROPERTY "_q_sgrendercontext"
 
 QSGRenderContext *QSGRenderContext::from(QOpenGLContext *context)
@@ -425,6 +628,9 @@ void QSGRenderContext::registerFontengineForCleanup(QFontEngine *engine)
  */
 void QSGRenderContext::initialize(QOpenGLContext *context)
 {
+    QOpenGLFunctions *funcs = QOpenGLContext::currentContext()->functions();
+    funcs->glGetIntegerv(GL_MAX_TEXTURE_SIZE, &m_maxTextureSize);
+
     // Sanity check the surface format, in case it was overridden by the application
     QSurfaceFormat requested = m_sg->defaultSurfaceFormat();
     QSurfaceFormat actual = context->format();
@@ -438,14 +644,17 @@ void QSGRenderContext::initialize(QOpenGLContext *context)
 
     Q_ASSERT_X(!m_gl, "QSGRenderContext::initialize", "already initialized!");
     m_gl = context;
-    m_gl->setProperty(QSG_RENDERCONTEXT_PROPERTY, QVariant::fromValue(this));
+    if (m_attachToGLContext) {
+        Q_ASSERT(!context->property(QSG_RENDERCONTEXT_PROPERTY).isValid());
+        context->setProperty(QSG_RENDERCONTEXT_PROPERTY, QVariant::fromValue(this));
+    }
     m_sg->renderContextInitialized(this);
 
 #ifdef Q_OS_LINUX
-    const char *vendor = (const char *) glGetString(GL_VENDOR);
+    const char *vendor = (const char *) funcs->glGetString(GL_VENDOR);
     if (strstr(vendor, "nouveau"))
         m_brokenIBOs = true;
-    const char *renderer = (const char *) glGetString(GL_RENDERER);
+    const char *renderer = (const char *) funcs->glGetString(GL_RENDERER);
     if (strstr(renderer, "llvmpipe"))
         m_serializedRender = true;
     if (strstr(vendor, "Hisilicon Technologies") && strstr(renderer, "Immersion.16"))
@@ -505,7 +714,8 @@ void QSGRenderContext::invalidate()
     delete m_distanceFieldCacheManager;
     m_distanceFieldCacheManager = 0;
 
-    m_gl->setProperty(QSG_RENDERCONTEXT_PROPERTY, QVariant());
+    if (m_gl->property(QSG_RENDERCONTEXT_PROPERTY) == QVariant::fromValue(this))
+        m_gl->setProperty(QSG_RENDERCONTEXT_PROPERTY, QVariant());
     m_gl = 0;
 
     m_sg->renderContextInvalidated(this);
@@ -555,6 +765,8 @@ QSGDepthStencilBufferManager *QSGRenderContext::depthStencilBufferManager()
 
 QSGTexture *QSGRenderContext::createTexture(const QImage &image) const
 {
+    if (!openglContext())
+        return 0;
     QSGTexture *t = m_atlasManager->create(image);
     if (t)
         return t;
@@ -642,7 +854,10 @@ void QSGRenderContext::compile(QSGMaterialShader *shader, QSGMaterial *material,
 
 void QSGRenderContext::initialize(QSGMaterialShader *shader)
 {
+    shader->program()->bind();
     shader->initialize();
 }
+
+#include "qsgcontext.moc"
 
 QT_END_NAMESPACE

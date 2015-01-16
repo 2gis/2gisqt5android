@@ -5,35 +5,27 @@
 **
 ** This file is part of the QtNfc module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -135,7 +127,7 @@ public:
     QNearFieldTarget::RequestId readNdefMessages()
     {
         for (int i = 0; i < m_ndefMessages.size(); i++) {
-            Q_EMIT QNearFieldTarget::ndefMessageRead(m_ndefMessages.at(i));
+            emit QNearFieldTarget::ndefMessageRead(m_ndefMessages.at(i));
         }
         QNearFieldTarget::RequestId requestId = QNearFieldTarget::RequestId(new QNearFieldTarget::RequestIdPrivate());
         QMetaObject::invokeMethod(this, "requestCompleted", Qt::QueuedConnection,
@@ -160,7 +152,7 @@ public:
                 tagType = TAG_TYPE_ISO_15693_3;
                 //We don't support this tag
                 if (!isSupported) {
-                    Q_EMIT QNearFieldTarget::error(QNearFieldTarget::UnsupportedError, QNearFieldTarget::RequestId());
+                    emit QNearFieldTarget::error(QNearFieldTarget::UnsupportedError, QNearFieldTarget::RequestId());
                     return QNearFieldTarget::RequestId();
                 }
             }
@@ -168,11 +160,11 @@ public:
         m_cmdRespons = reinterpret_cast<char *> malloc (max_nfc_command_length);
         nfc_result_t result = nfc_tag_transceive (m_target, tagType, command.data(), command.length(), m_cmdRespons, max_nfc_command_length, &m_cmdResponseLength);
         if (result != NFC_RESULT_SUCCESS) {
-            Q_EMIT QNearFieldTarget::error(QNearFieldTarget::UnknownError, QNearFieldTarget::RequestId());
+            emit QNearFieldTarget::error(QNearFieldTarget::UnknownError, QNearFieldTarget::RequestId());
             qWarning() << Q_FUNC_INFO << "nfc_tag_transceive failed"
         }
     #else
-        Q_EMIT QNearFieldTarget::error(QNearFieldTarget::UnsupportedError, QNearFieldTarget::RequestId());
+        emit QNearFieldTarget::error(QNearFieldTarget::UnsupportedError, QNearFieldTarget::RequestId());
         return QNearFieldTarget::RequestId();
     #endif
     }
@@ -196,7 +188,7 @@ public:
             if (result != NFC_RESULT_SUCCESS) {
                 qWarning() << Q_FUNC_INFO << "Could not convert QNdefMessage to byte array" << result;
                 nfc_delete_ndef_message(newMessage, true);
-                Q_EMIT QNearFieldTarget::error(QNearFieldTarget::UnknownError,
+                emit QNearFieldTarget::error(QNearFieldTarget::UnknownError,
                              QNearFieldTarget::RequestId());
                 return QNearFieldTarget::RequestId();
             }
@@ -206,7 +198,7 @@ public:
 
             if (result != NFC_RESULT_SUCCESS) {
                 qWarning() << Q_FUNC_INFO << "Could not write message";
-                Q_EMIT QNearFieldTarget::error(QNearFieldTarget::NdefWriteError,
+                emit QNearFieldTarget::error(QNearFieldTarget::NdefWriteError,
                              QNearFieldTarget::RequestId());
 
                 return QNearFieldTarget::RequestId();

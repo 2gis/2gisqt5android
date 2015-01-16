@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtDeclarative module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -1283,7 +1275,7 @@ void QDeclarativeGridViewPrivate::flick(AxisData &data, qreal minExtent, qreal m
     QAbstractListModel.
 
     A GridView has a \l model, which defines the data to be displayed, and
-    a \l delegate, which defines how the data should be displayed. Items in a 
+    a \l delegate, which defines how the data should be displayed. Items in a
     GridView are laid out horizontally or vertically. Grid views are inherently flickable
     as GridView inherits from \l Flickable.
 
@@ -1317,7 +1309,7 @@ void QDeclarativeGridViewPrivate::flick(AxisData &data, qreal minExtent, qreal m
     The view will create a new delegate for each item in the model. Note that the delegate
     is able to access the model's \c name and \c portrait data directly.
 
-    An improved grid view is shown below. The delegate is visually improved and is moved 
+    An improved grid view is shown below. The delegate is visually improved and is moved
     into a separate \c contactDelegate component.
 
     \clearfloat
@@ -1558,10 +1550,10 @@ void QDeclarativeGridView::setDelegate(QDeclarativeComponent *delegate)
     \c currentItem holds the current item.  Setting the currentIndex to -1
     will clear the highlight and set currentItem to null.
 
-    If highlightFollowsCurrentItem is \c true, setting either of these 
-    properties will smoothly scroll the GridView so that the current 
+    If highlightFollowsCurrentItem is \c true, setting either of these
+    properties will smoothly scroll the GridView so that the current
     item becomes visible.
-    
+
     Note that the position of the current item
     may only be approximate until it becomes visible in the view.
 */
@@ -1661,8 +1653,8 @@ void QDeclarativeGridView::setHighlight(QDeclarativeComponent *highlight)
     If this property is true (the default value), the highlight is moved smoothly
     to follow the current item.  Otherwise, the
     highlight is not moved by the view, and any movement must be implemented
-    by the highlight.  
-    
+    by the highlight.
+
     Here is a highlight with its motion defined by a \l {SpringAnimation} item:
 
     \snippet doc/src/snippets/declarative/gridview/gridview.qml highlightFollowsCurrentItem
@@ -1725,12 +1717,12 @@ void QDeclarativeGridView::setHighlightMoveDuration(int duration)
 
     These properties define the preferred range of the highlight (for the current item)
     within the view. The \c preferredHighlightBegin value must be less than the
-    \c preferredHighlightEnd value. 
+    \c preferredHighlightEnd value.
 
     These properties affect the position of the current item when the view is scrolled.
     For example, if the currently selected item should stay in the middle of the
-    view when it is scrolled, set the \c preferredHighlightBegin and 
-    \c preferredHighlightEnd values to the top and bottom coordinates of where the middle 
+    view when it is scrolled, set the \c preferredHighlightBegin and
+    \c preferredHighlightEnd values to the top and bottom coordinates of where the middle
     item would be. If the \c currentItem is changed programmatically, the view will
     automatically scroll so that the current item is in the middle of the view.
     Furthermore, the behavior of the current item index will occur whether or not a
@@ -2767,8 +2759,10 @@ void QDeclarativeGridView::trackedPositionChanged()
 void QDeclarativeGridView::itemsInserted(int modelIndex, int count)
 {
     Q_D(QDeclarativeGridView);
-    if (!isComponentComplete())
+    if (!isComponentComplete()) {
+        emit countChanged();
         return;
+    }
 
     int index = d->visibleItems.count() ? d->mapFromModel(modelIndex) : 0;
     if (index < 0) {
@@ -2903,8 +2897,10 @@ void QDeclarativeGridView::itemsInserted(int modelIndex, int count)
 void QDeclarativeGridView::itemsRemoved(int modelIndex, int count)
 {
     Q_D(QDeclarativeGridView);
-    if (!isComponentComplete())
+    if (!isComponentComplete()) {
+        emit countChanged();
         return;
+    }
 
     d->itemCount -= count;
     bool currentRemoved = d->currentIndex >= modelIndex && d->currentIndex < modelIndex + count;

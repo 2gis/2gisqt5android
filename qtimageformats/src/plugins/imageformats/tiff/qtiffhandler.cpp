@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the plugins of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -267,8 +259,12 @@ bool QTiffHandler::read(QImage *image)
                 // free redTable, greenTable and greenTable done by libtiff
             }
         } else {
-            if (image->size() != QSize(width, height) || image->format() != QImage::Format_ARGB32)
-                *image = QImage(width, height, QImage::Format_ARGB32);
+            QImage::Format format = QImage::Format_ARGB32;
+            if (samplesPerPixel < 4 && image->format() != QImage::Format_ARGB32)
+                format = QImage::Format_RGB32;
+
+            if (image->size() != QSize(width, height) || image->format() != format)
+                *image = QImage(width, height, format);
             if (!image->isNull()) {
                 const int stopOnError = 1;
                 if (TIFFReadRGBAImageOriented(tiff, width, height, reinterpret_cast<uint32 *>(image->bits()), ORIENTATION_TOPLEFT, stopOnError)) {
@@ -315,7 +311,7 @@ bool QTiffHandler::read(QImage *image)
     // rotate the image if the orientation is defined in the file
     uint16 orientationTag;
     if (TIFFGetField(tiff, TIFFTAG_ORIENTATION, &orientationTag)) {
-        if (image->format() == QImage::Format_ARGB32) {
+        if (image->format() == QImage::Format_ARGB32 || image->format() == QImage::Format_RGB32) {
             // TIFFReadRGBAImageOriented() flip the image but does not rotate them
             switch (orientationTag) {
             case 5:
@@ -552,6 +548,33 @@ bool QTiffHandler::write(const QImage &image)
         }
         TIFFClose(tiff);
 
+    } else if (!image.hasAlphaChannel()) {
+        if (!TIFFSetField(tiff, TIFFTAG_PHOTOMETRIC, PHOTOMETRIC_RGB)
+            || !TIFFSetField(tiff, TIFFTAG_COMPRESSION, compression == NoCompression ? COMPRESSION_NONE : COMPRESSION_LZW)
+            || !TIFFSetField(tiff, TIFFTAG_SAMPLESPERPIXEL, 3)
+            || !TIFFSetField(tiff, TIFFTAG_BITSPERSAMPLE, 8)) {
+            TIFFClose(tiff);
+            return false;
+        }
+        // try to do the RGB888 conversion in chunks no greater than 16 MB
+        const int chunks = (width * height * 3 / (1024 * 1024 * 16)) + 1;
+        const int chunkHeight = qMax(height / chunks, 1);
+
+        int y = 0;
+        while (y < height) {
+            const QImage chunk = image.copy(0, y, width, qMin(chunkHeight, height - y)).convertToFormat(QImage::Format_RGB888);
+
+            int chunkStart = y;
+            int chunkEnd = y + chunk.height();
+            while (y < chunkEnd) {
+                if (TIFFWriteScanline(tiff, (void*)chunk.scanLine(y - chunkStart), y) != 1) {
+                    TIFFClose(tiff);
+                    return false;
+                }
+                ++y;
+            }
+        }
+        TIFFClose(tiff);
     } else {
         if (!TIFFSetField(tiff, TIFFTAG_PHOTOMETRIC, PHOTOMETRIC_RGB)
             || !TIFFSetField(tiff, TIFFTAG_COMPRESSION, compression == NoCompression ? COMPRESSION_NONE : COMPRESSION_LZW)
@@ -561,17 +584,17 @@ bool QTiffHandler::write(const QImage &image)
             return false;
         }
         // try to do the RGBA8888 conversion in chunks no greater than 16 MB
-        int chunks = (width * height * 4 / (1024 * 1024 * 16)) + 1;
-        int chunkHeight = qMax(height / chunks, 1);
+        const int chunks = (width * height * 4 / (1024 * 1024 * 16)) + 1;
+        const int chunkHeight = qMax(height / chunks, 1);
 
         int y = 0;
         while (y < height) {
-            QImage chunk = image.copy(0, y, width, qMin(chunkHeight, height - y)).convertToFormat(QImage::Format_RGBA8888);
+            const QImage chunk = image.copy(0, y, width, qMin(chunkHeight, height - y)).convertToFormat(QImage::Format_RGBA8888);
 
             int chunkStart = y;
             int chunkEnd = y + chunk.height();
             while (y < chunkEnd) {
-                if (TIFFWriteScanline(tiff, reinterpret_cast<uint32 *>(chunk.scanLine(y - chunkStart)), y) != 1) {
+                if (TIFFWriteScanline(tiff, (void*)chunk.scanLine(y - chunkStart), y) != 1) {
                     TIFFClose(tiff);
                     return false;
                 }

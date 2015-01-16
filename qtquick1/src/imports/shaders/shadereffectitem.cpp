@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QML Shaders plugin of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -437,36 +429,33 @@ void ShaderEffectItem::renderEffect(QPainter *painter, const QMatrix4x4 &matrix)
     bindGeometry();
 
     // Optimization, disable depth test when we know we don't need it.
+    QOpenGLFunctions *f = QOpenGLContext::currentContext()->functions();
     if (m_defaultVertexShader) {
-        glDepthMask(false);
-        glDisable(GL_DEPTH_TEST);
+        f->glDepthMask(false);
+        f->glDisable(GL_DEPTH_TEST);
     } else {
-        glEnable(GL_DEPTH_TEST);
-        glDepthFunc(GL_GREATER);
-        glDepthMask(true);
-#if defined(QT_OPENGL_ES)
-        glClearDepthf(0);
-#else
-        glClearDepth(0);
-#endif
-        glClearColor(0, 0, 0, 0);
-        glClear(GL_DEPTH_BUFFER_BIT);
+        f->glEnable(GL_DEPTH_TEST);
+        f->glDepthFunc(GL_GREATER);
+        f->glDepthMask(true);
+        f->glClearDepthf(0);
+        f->glClearColor(0, 0, 0, 0);
+        f->glClear(GL_DEPTH_BUFFER_BIT);
     }
 
     if (m_blending){
-        glEnable(GL_BLEND);
-        glBlendFunc (GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+        f->glEnable(GL_BLEND);
+        f->glBlendFunc (GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
     } else {
-        glDisable(GL_BLEND);
+        f->glDisable(GL_BLEND);
     }
 
     if (m_geometry.indexCount())
-        glDrawElements(m_geometry.drawingMode(), m_geometry.indexCount(), m_geometry.indexType(), m_geometry.indexData());
+        f->glDrawElements(m_geometry.drawingMode(), m_geometry.indexCount(), m_geometry.indexType(), m_geometry.indexData());
     else
-        glDrawArrays(m_geometry.drawingMode(), 0, m_geometry.vertexCount());
+        f->glDrawArrays(m_geometry.drawingMode(), 0, m_geometry.vertexCount());
 
-    glDepthMask(false);
-    glDisable(GL_DEPTH_TEST);
+    f->glDepthMask(false);
+    f->glDisable(GL_DEPTH_TEST);
 
    for (int i = 0; i < m_attributeNames.size(); ++i)
         m_program->disableAttributeArray(m_geometry.attributes()[i].position);

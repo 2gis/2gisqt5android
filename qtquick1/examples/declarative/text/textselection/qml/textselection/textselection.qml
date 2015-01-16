@@ -131,8 +131,8 @@ Rectangle {
                         }
                     }
 
-                    function hitHandle(h,x,y) { 
-                        return x>=h.x+flick.contentX && x<h.x+flick.contentX+h.width && y>=h.y+flick.contentY && y<h.y+flick.contentY+h.height 
+                    function hitHandle(h,x,y) {
+                        return x>=h.x+flick.contentX && x<h.x+flick.contentX+h.width && y>=h.y+flick.contentY && y<h.y+flick.contentY+h.height
                     }
 
                     onPressed: {
@@ -215,9 +215,9 @@ Rectangle {
 
                     Text { anchors.centerIn: parent; text: "Cut" }
 
-                    MouseArea { 
+                    MouseArea {
                         anchors.fill: parent
-                        onClicked: { edit.cut(); editor.state = "" } 
+                        onClicked: { edit.cut(); editor.state = "" }
                     }
                 }
 
@@ -230,9 +230,9 @@ Rectangle {
 
                     Text { anchors.centerIn: parent; text: "Copy" }
 
-                    MouseArea { 
+                    MouseArea {
                         anchors.fill: parent
-                        onClicked: { edit.copy(); editor.state = "selection" } 
+                        onClicked: { edit.copy(); editor.state = "selection" }
                     }
                 }
 
@@ -245,9 +245,9 @@ Rectangle {
 
                     Text { anchors.centerIn: parent; text: "Paste" }
 
-                    MouseArea { 
+                    MouseArea {
                         anchors.fill: parent
-                        onClicked: { edit.paste(); edit.cursorPosition = edit.selectionEnd; editor.state = "" } 
+                        onClicked: { edit.paste(); edit.cursorPosition = edit.selectionEnd; editor.state = "" }
                     }
                 }
 
@@ -260,13 +260,13 @@ Rectangle {
 
                     Text { anchors.centerIn: parent; text: "Deselect" }
 
-                    MouseArea { 
+                    MouseArea {
                         anchors.fill: parent
-                        onClicked: { 
+                        onClicked: {
                             edit.cursorPosition = edit.selectionEnd;
                             edit.select(edit.cursorPosition, edit.cursorPosition);
-                            editor.state = "" 
-                        } 
+                            editor.state = ""
+                        }
                     }
                 }
             }

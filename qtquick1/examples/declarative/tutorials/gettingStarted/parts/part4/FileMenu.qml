@@ -49,13 +49,13 @@ Rectangle {
     //generous amount of screen space that will allow the buttons to fit
     height: 480; width:1000
 
-    color: "#6C646A" 
+    color: "#6C646A"
         gradient: Gradient{
                         GradientStop { position: 0.0; color: "#6C646A" }
                         GradientStop { position: 1.0; color: Qt.darker("#6A6D6A") }
         }
 
-    //a sub-rectangle allows the flexibility of setting the row area 
+    //a sub-rectangle allows the flexibility of setting the row area
     Rectangle{
         id:actionContainer
 
@@ -74,7 +74,7 @@ Rectangle {
                 buttonColor: "lightgrey"
                 label: "Load"
             }
-            
+
             Button{
                 buttonColor: "grey"
                 id: saveButton

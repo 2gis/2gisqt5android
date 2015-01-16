@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -58,7 +50,7 @@
 #include <math.h>
 #include <qmath.h>
 
-#ifdef Q_OS_MAC
+#ifdef Q_OS_OSX
 #include <Carbon/Carbon.h>
 #endif
 
@@ -231,6 +223,8 @@ private slots:
     void fixup();
     void baselineOffset_data();
     void baselineOffset();
+
+    void ensureVisible();
 
 private:
     void simulateKey(QWindow *, int key);
@@ -2232,24 +2226,33 @@ void tst_qquicktextinput::inputMethods()
     QTRY_COMPARE(qGuiApp->focusObject(), input);
     QGuiApplication::sendEvent(input, &event);
     QCOMPARE(input->text(), QString("My Hello world!"));
+    QCOMPARE(input->displayText(), QString("My Hello world!"));
 
     input->setCursorPosition(2);
     event.setCommitString("Your", -2, 2);
     QGuiApplication::sendEvent(input, &event);
     QCOMPARE(input->text(), QString("Your Hello world!"));
+    QCOMPARE(input->displayText(), QString("Your Hello world!"));
     QCOMPARE(input->cursorPosition(), 4);
 
     input->setCursorPosition(7);
     event.setCommitString("Goodbye", -2, 5);
     QGuiApplication::sendEvent(input, &event);
     QCOMPARE(input->text(), QString("Your Goodbye world!"));
+    QCOMPARE(input->displayText(), QString("Your Goodbye world!"));
     QCOMPARE(input->cursorPosition(), 12);
 
     input->setCursorPosition(8);
     event.setCommitString("Our", -8, 4);
     QGuiApplication::sendEvent(input, &event);
     QCOMPARE(input->text(), QString("Our Goodbye world!"));
+    QCOMPARE(input->displayText(), QString("Our Goodbye world!"));
     QCOMPARE(input->cursorPosition(), 7);
+
+    QInputMethodEvent preeditEvent("PREEDIT", QList<QInputMethodEvent::Attribute>());
+    QGuiApplication::sendEvent(input, &preeditEvent);
+    QCOMPARE(input->text(), QString("Our Goodbye world!"));
+    QCOMPARE(input->displayText(), QString("Our GooPREEDITdbye world!"));
 
     // input should reset selection even if replacement parameters are out of bounds
     input->setText("text");
@@ -2258,6 +2261,8 @@ void tst_qquicktextinput::inputMethods()
     event.setCommitString("replacement", -input->text().length(), input->text().length());
     QGuiApplication::sendEvent(input, &event);
     QCOMPARE(input->selectionStart(), input->selectionEnd());
+    QCOMPARE(input->text(), QString("replacement"));
+    QCOMPARE(input->displayText(), QString("replacement"));
 
     QInputMethodQueryEvent enabledQueryEvent(Qt::ImEnabled);
     QGuiApplication::sendEvent(input, &enabledQueryEvent);
@@ -2490,7 +2495,7 @@ void tst_qquicktextinput::copyAndPaste()
     QCOMPARE(textInput->selectedText(), QString("Hello world!"));
     QCOMPARE(textInput->selectedText().length(), 12);
     textInput->setCursorPosition(0);
-    QVERIFY(textInput->canPaste());
+    QTRY_VERIFY(textInput->canPaste());
     textInput->paste();
     QCOMPARE(textInput->text(), QString("Hello world!Hello world!"));
     QCOMPARE(textInput->text().length(), 24);
@@ -2544,7 +2549,7 @@ void tst_qquicktextinput::copyAndPaste()
     QClipboard *clipboard = QGuiApplication::clipboard();
     QVERIFY(clipboard);
     clipboard->clear();
-    QVERIFY(!textInput->canPaste());
+    QTRY_VERIFY(!textInput->canPaste());
 
     // test that copy functionality is disabled
     // when echo mode is set to hide text/password mode
@@ -2612,7 +2617,7 @@ void tst_qquicktextinput::copyAndPasteKeySequence()
     QClipboard *clipboard = QGuiApplication::clipboard();
     QVERIFY(clipboard);
     clipboard->clear();
-    QVERIFY(!textInput->canPaste());
+    QTRY_VERIFY(!textInput->canPaste());
 
     // test that copy functionality is disabled
     // when echo mode is set to hide text/password mode
@@ -2853,7 +2858,8 @@ void tst_qquicktextinput::cursorDelegate()
 
 void tst_qquicktextinput::remoteCursorDelegate()
 {
-    TestHTTPServer server(SERVER_PORT);
+    TestHTTPServer server;
+    QVERIFY2(server.listen(SERVER_PORT), qPrintable(server.errorString()));
     server.serveDirectory(dataDirectory(), TestHTTPServer::Delay);
 
     QQuickView view;
@@ -6269,13 +6275,11 @@ void tst_qquicktextinput::hasAcceptableInputMask()
     textInput->setText(invalid);
     QVERIFY(textInput->hasAcceptableInput());
 
-    // at the moment we don't strip the blank character if it is valid input, this makes the test between x vs X useless
-    QEXPECT_FAIL( "Any optional and required", "To eat blanks or not? Known issue. Task 43172", Abort);
-
     // test requiredMask
     textInput->setInputMask(requiredMask);
     textInput->setText(invalid);
-    QVERIFY(!textInput->hasAcceptableInput());
+    // invalid text gets the input mask applied when setting, text becomes acceptable.
+    QVERIFY(textInput->hasAcceptableInput());
 
     textInput->setText(valid);
     QVERIFY(textInput->hasAcceptableInput());
@@ -6461,6 +6465,50 @@ void tst_qquicktextinput::baselineOffset()
         if (setHeight >= 0)
             item->setHeight(setHeight);
     }
+}
+
+void tst_qquicktextinput::ensureVisible()
+{
+    QQmlComponent component(&engine);
+    component.setData("import QtQuick 2.0\n TextInput {}", QUrl());
+    QScopedPointer<QObject> object(component.create());
+    QQuickTextInput *input = qobject_cast<QQuickTextInput *>(object.data());
+    QVERIFY(input);
+
+    input->setWidth(QFontMetrics(input->font()).averageCharWidth() * 3);
+    input->setText("Hello World");
+
+    QTextLayout layout;
+    layout.setText(input->text());
+    layout.setFont(input->font());
+
+    if (!qmlDisableDistanceField()) {
+        QTextOption option;
+        option.setUseDesignMetrics(true);
+        layout.setTextOption(option);
+    }
+    layout.beginLayout();
+    QTextLine line = layout.createLine();
+    layout.endLayout();
+
+    input->ensureVisible(0);
+
+    QCOMPARE(input->boundingRect().x(), qreal(0));
+    QCOMPARE(input->boundingRect().y(), qreal(0));
+    QCOMPARE(input->boundingRect().width(), line.naturalTextWidth() + input->cursorRectangle().width());
+    QCOMPARE(input->boundingRect().height(), line.height());
+
+    QSignalSpy cursorSpy(input, SIGNAL(cursorRectangleChanged()));
+    QVERIFY(cursorSpy.isValid());
+
+    input->ensureVisible(input->length());
+
+    QCOMPARE(cursorSpy.count(), 1);
+
+    QCOMPARE(input->boundingRect().x(), input->width() - line.naturalTextWidth());
+    QCOMPARE(input->boundingRect().y(), qreal(0));
+    QCOMPARE(input->boundingRect().width(), line.naturalTextWidth() + input->cursorRectangle().width());
+    QCOMPARE(input->boundingRect().height(), line.height());
 }
 
 QTEST_MAIN(tst_qquicktextinput)

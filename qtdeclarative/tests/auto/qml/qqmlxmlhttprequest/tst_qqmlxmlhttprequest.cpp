@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -240,13 +232,12 @@ void tst_qqmlxmlhttprequest::open()
     QFETCH(QString, url);
     QFETCH(bool, remote);
 
-    QScopedPointer<TestHTTPServer> server; // ensure deletion in case test fails
+    TestHTTPServer server;
     if (remote) {
-        server.reset(new TestHTTPServer(SERVER_PORT));
-        QVERIFY(server->isValid());
-        QVERIFY(server->wait(testFileUrl("open_network.expect"),
-                             testFileUrl("open_network.reply"),
-                             testFileUrl("testdocument.html")));
+        QVERIFY2(server.listen(SERVER_PORT), qPrintable(server.errorString()));
+        QVERIFY(server.wait(testFileUrl("open_network.expect"),
+                            testFileUrl("open_network.reply"),
+                            testFileUrl("testdocument.html")));
     }
 
     QQmlComponent component(&engine, qmlFile);
@@ -322,8 +313,8 @@ void tst_qqmlxmlhttprequest::open_arg_count()
 // Test valid setRequestHeader() calls
 void tst_qqmlxmlhttprequest::setRequestHeader()
 {
-    TestHTTPServer server(SERVER_PORT);
-    QVERIFY(server.isValid());
+    TestHTTPServer server;
+    QVERIFY2(server.listen(SERVER_PORT), qPrintable(server.errorString()));
     QVERIFY(server.wait(testFileUrl("setRequestHeader.expect"),
                         testFileUrl("setRequestHeader.reply"),
                         testFileUrl("testdocument.html")));
@@ -340,8 +331,8 @@ void tst_qqmlxmlhttprequest::setRequestHeader()
 // Test valid setRequestHeader() calls with different header cases
 void tst_qqmlxmlhttprequest::setRequestHeader_caseInsensitive()
 {
-    TestHTTPServer server(SERVER_PORT);
-    QVERIFY(server.isValid());
+    TestHTTPServer server;
+    QVERIFY2(server.listen(SERVER_PORT), qPrintable(server.errorString()));
     QVERIFY(server.wait(testFileUrl("setRequestHeader.expect"),
                         testFileUrl("setRequestHeader.reply"),
                         testFileUrl("testdocument.html")));
@@ -397,8 +388,8 @@ void tst_qqmlxmlhttprequest::setRequestHeader_illegalName()
 {
     QFETCH(QString, name);
 
-    TestHTTPServer server(SERVER_PORT);
-    QVERIFY(server.isValid());
+    TestHTTPServer server;
+    QVERIFY2(server.listen(SERVER_PORT), qPrintable(server.errorString()));
     QVERIFY(server.wait(testFileUrl("open_network.expect"),
                         testFileUrl("open_network.reply"),
                         testFileUrl("testdocument.html")));
@@ -423,8 +414,8 @@ void tst_qqmlxmlhttprequest::setRequestHeader_illegalName()
 // Test that attempting to set a header after a request is sent throws an exception
 void tst_qqmlxmlhttprequest::setRequestHeader_sent()
 {
-    TestHTTPServer server(SERVER_PORT);
-    QVERIFY(server.isValid());
+    TestHTTPServer server;
+    QVERIFY2(server.listen(SERVER_PORT), qPrintable(server.errorString()));
     QVERIFY(server.wait(testFileUrl("open_network.expect"),
                         testFileUrl("open_network.reply"),
                         testFileUrl("testdocument.html")));
@@ -475,8 +466,8 @@ void tst_qqmlxmlhttprequest::send_alreadySent()
 void tst_qqmlxmlhttprequest::send_ignoreData()
 {
     {
-        TestHTTPServer server(SERVER_PORT);
-        QVERIFY(server.isValid());
+        TestHTTPServer server;
+        QVERIFY2(server.listen(SERVER_PORT), qPrintable(server.errorString()));
         QVERIFY(server.wait(testFileUrl("send_ignoreData_GET.expect"),
                             testFileUrl("send_ignoreData.reply"),
                             testFileUrl("testdocument.html")));
@@ -492,8 +483,8 @@ void tst_qqmlxmlhttprequest::send_ignoreData()
     }
 
     {
-        TestHTTPServer server(SERVER_PORT);
-        QVERIFY(server.isValid());
+        TestHTTPServer server;
+        QVERIFY2(server.listen(SERVER_PORT), qPrintable(server.errorString()));
         QVERIFY(server.wait(testFileUrl("send_ignoreData_HEAD.expect"),
                             testFileUrl("send_ignoreData.reply"),
                             QUrl()));
@@ -509,8 +500,8 @@ void tst_qqmlxmlhttprequest::send_ignoreData()
     }
 
     {
-        TestHTTPServer server(SERVER_PORT);
-        QVERIFY(server.isValid());
+        TestHTTPServer server;
+        QVERIFY2(server.listen(SERVER_PORT), qPrintable(server.errorString()));
         QVERIFY(server.wait(testFileUrl("send_ignoreData_DELETE.expect"),
                             testFileUrl("send_ignoreData.reply"),
                             QUrl()));
@@ -532,8 +523,8 @@ void tst_qqmlxmlhttprequest::send_withdata()
     QFETCH(QString, file_expected);
     QFETCH(QString, file_qml);
 
-    TestHTTPServer server(SERVER_PORT);
-    QVERIFY(server.isValid());
+    TestHTTPServer server;
+    QVERIFY2(server.listen(SERVER_PORT), qPrintable(server.errorString()));
     QVERIFY(server.wait(testFileUrl(file_expected),
                         testFileUrl("send_data.reply"),
                         testFileUrl("testdocument.html")));
@@ -602,8 +593,8 @@ void tst_qqmlxmlhttprequest::abort_opened()
 // Test abort() aborts in progress send
 void tst_qqmlxmlhttprequest::abort()
 {
-    TestHTTPServer server(SERVER_PORT);
-    QVERIFY(server.isValid());
+    TestHTTPServer server;
+    QVERIFY2(server.listen(SERVER_PORT), qPrintable(server.errorString()));
     QVERIFY(server.wait(testFileUrl("abort.expect"),
                         testFileUrl("abort.reply"),
                         testFileUrl("testdocument.html")));
@@ -626,8 +617,8 @@ void tst_qqmlxmlhttprequest::getResponseHeader()
 {
     QQmlEngine engine; // Avoid cookie contamination
 
-    TestHTTPServer server(SERVER_PORT);
-    QVERIFY(server.isValid());
+    TestHTTPServer server;
+    QVERIFY2(server.listen(SERVER_PORT), qPrintable(server.errorString()));
     QVERIFY(server.wait(testFileUrl("getResponseHeader.expect"),
                         testFileUrl("getResponseHeader.reply"),
                         testFileUrl("testdocument.html")));
@@ -693,8 +684,8 @@ void tst_qqmlxmlhttprequest::getAllResponseHeaders()
 {
     QQmlEngine engine; // Avoid cookie contamination
 
-    TestHTTPServer server(SERVER_PORT);
-    QVERIFY(server.isValid());
+    TestHTTPServer server;
+    QVERIFY2(server.listen(SERVER_PORT), qPrintable(server.errorString()));
     QVERIFY(server.wait(testFileUrl("getResponseHeader.expect"),
                         testFileUrl("getResponseHeader.reply"),
                         testFileUrl("testdocument.html")));
@@ -754,8 +745,8 @@ void tst_qqmlxmlhttprequest::status()
     QFETCH(QUrl, replyUrl);
     QFETCH(int, status);
 
-    TestHTTPServer server(SERVER_PORT);
-    QVERIFY(server.isValid());
+    TestHTTPServer server;
+    QVERIFY2(server.listen(SERVER_PORT), qPrintable(server.errorString()));
     QVERIFY(server.wait(testFileUrl("status.expect"),
                         replyUrl,
                         testFileUrl("testdocument.html")));
@@ -793,8 +784,8 @@ void tst_qqmlxmlhttprequest::statusText()
     QFETCH(QUrl, replyUrl);
     QFETCH(QString, statusText);
 
-    TestHTTPServer server(SERVER_PORT);
-    QVERIFY(server.isValid());
+    TestHTTPServer server;
+    QVERIFY2(server.listen(SERVER_PORT), qPrintable(server.errorString()));
     QVERIFY(server.wait(testFileUrl("status.expect"),
                         replyUrl,
                         testFileUrl("testdocument.html")));
@@ -833,8 +824,8 @@ void tst_qqmlxmlhttprequest::responseText()
     QFETCH(QUrl, bodyUrl);
     QFETCH(QString, responseText);
 
-    TestHTTPServer server(SERVER_PORT);
-    QVERIFY(server.isValid());
+    TestHTTPServer server;
+    QVERIFY2(server.listen(SERVER_PORT), qPrintable(server.errorString()));
     QVERIFY(server.wait(testFileUrl("status.expect"),
                         replyUrl,
                         bodyUrl));
@@ -934,8 +925,8 @@ void tst_qqmlxmlhttprequest::invalidMethodUsage()
 void tst_qqmlxmlhttprequest::redirects()
 {
     {
-        TestHTTPServer server(SERVER_PORT);
-        QVERIFY(server.isValid());
+        TestHTTPServer server;
+        QVERIFY2(server.listen(SERVER_PORT), qPrintable(server.errorString()));
         server.addRedirect("redirect.html", "http://127.0.0.1:14445/redirecttarget.html");
         server.serveDirectory(dataDirectory());
 
@@ -951,8 +942,8 @@ void tst_qqmlxmlhttprequest::redirects()
     }
 
     {
-        TestHTTPServer server(SERVER_PORT);
-        QVERIFY(server.isValid());
+        TestHTTPServer server;
+        QVERIFY2(server.listen(SERVER_PORT), qPrintable(server.errorString()));
         server.addRedirect("redirect.html", "http://127.0.0.1:14445/redirectmissing.html");
         server.serveDirectory(dataDirectory());
 
@@ -968,8 +959,8 @@ void tst_qqmlxmlhttprequest::redirects()
     }
 
     {
-        TestHTTPServer server(SERVER_PORT);
-        QVERIFY(server.isValid());
+        TestHTTPServer server;
+        QVERIFY2(server.listen(SERVER_PORT), qPrintable(server.errorString()));
         server.addRedirect("redirect.html", "http://127.0.0.1:14445/redirect.html");
         server.serveDirectory(dataDirectory());
 
@@ -1070,8 +1061,8 @@ void tst_qqmlxmlhttprequest::stateChangeCallingContext()
     // ensure that we don't crash by attempting to evaluate
     // without a valid calling context.
 
-    TestHTTPServer server(SERVER_PORT);
-    QVERIFY(server.isValid());
+    TestHTTPServer server;
+    QVERIFY2(server.listen(SERVER_PORT), qPrintable(server.errorString()));
     server.serveDirectory(dataDirectory(), TestHTTPServer::Delay);
 
     QQmlComponent component(&engine, testFileUrl("stateChangeCallingContext.qml"));

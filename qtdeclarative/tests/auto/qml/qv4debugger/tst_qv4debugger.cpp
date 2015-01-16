@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -89,7 +81,7 @@ public:
         QV4::Scope scope(v4);
 
         QV4::Scoped<QV4::String> name(scope, v4->newString(functionName));
-        QV4::ScopedValue function(scope, v4->newBuiltinFunction(v4->rootContext, name, injectedFunction));
+        QV4::ScopedValue function(scope, BuiltinFunction::create(v4->rootContext, name, injectedFunction));
         v4->globalObject->put(name, function);
     }
 
@@ -266,6 +258,7 @@ private slots:
     void removePendingBreakPoint();
     void addBreakPointWhilePaused();
     void removeBreakPointForNextInstruction();
+    void conditionalBreakPoint();
 
     // context access:
     void readArguments();
@@ -393,7 +386,7 @@ void tst_qv4debugger::addBreakPointWhilePaused()
 
 static QV4::ReturnedValue someCall(QV4::CallContext *ctx)
 {
-    ctx->engine->debugger->removeBreakPoint("removeBreakPointForNextInstruction", 2);
+    ctx->d()->engine->debugger->removeBreakPoint("removeBreakPointForNextInstruction", 2);
     return QV4::Encode::undefined();
 }
 
@@ -410,6 +403,29 @@ void tst_qv4debugger::removeBreakPointForNextInstruction()
 
     evaluateJavaScript(script, "removeBreakPointForNextInstruction");
     QVERIFY(!m_debuggerAgent->m_wasPaused);
+}
+
+void tst_qv4debugger::conditionalBreakPoint()
+{
+    m_debuggerAgent->m_captureContextInfo = true;
+    QString script =
+            "function test() {\n"
+            "    for (var i = 0; i < 15; ++i) {\n"
+            "        var x = i;\n"
+            "    }\n"
+            "}\n"
+            "test()\n";
+
+    m_debuggerAgent->addBreakPoint("conditionalBreakPoint", 3, /*enabled*/true, QStringLiteral("i > 10"));
+    evaluateJavaScript(script, "conditionalBreakPoint");
+    QVERIFY(m_debuggerAgent->m_wasPaused);
+    QCOMPARE(m_debuggerAgent->m_statesWhenPaused.count(), 4);
+    QV4::Debugging::Debugger::ExecutionState state = m_debuggerAgent->m_statesWhenPaused.first();
+    QCOMPARE(state.fileName, QString("conditionalBreakPoint"));
+    QCOMPARE(state.lineNumber, 3);
+    QCOMPARE(m_debuggerAgent->m_capturedLocals[0].size(), 2);
+    QVERIFY(m_debuggerAgent->m_capturedLocals[0].contains(QStringLiteral("i")));
+    QCOMPARE(m_debuggerAgent->m_capturedLocals[0]["i"].toInt(), 11);
 }
 
 void tst_qv4debugger::readArguments()

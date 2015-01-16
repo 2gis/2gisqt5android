@@ -1,46 +1,38 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the tools applications of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
-#include <QApplication>
 #include <QDebug>
 #include <QFile>
+#include <QDir>
 
 #include "codegenerator.h"
 using namespace CodeGenerator;
@@ -90,80 +82,81 @@ Item Line(Item item)
     return item + "\n";
 }
 
-Item generateRunFunctions(int repeats)
+Item generateRunFunctions(int repeats, bool withExplicitPoolArg)
 {
     Item functionPointerType = "T (*)(" + parameterTypesNoPrefix + ")";
 
     Item functionPointerParameter = "T (*functionPointer)(" + parameterTypesNoPrefix + ")";
 
-
+    const Item pool = withExplicitPoolArg ? "QThreadPool *pool, " : "";
+    const char * const startArg = withExplicitPoolArg ? "pool" : "";
 
     // plain functions
     Repeater functions = Line ("template <typename T" + typenameTypes + ">") +
-                         Line ("QFuture<T> run(" + functionPointerParameter + functionParameters + ")")  +
+                         Line ("QFuture<T> run(" + pool + functionPointerParameter + functionParameters + ")")  +
                          Line("{") +
-                         Line("    return (new QT_TYPENAME SelectStoredFunctorCall" + Counter() + "<T, " +
-                                   functionPointerType + argumentTypes + ">::type(functionPointer" + arguments + "))->start();") +
+                         Line("    return (new StoredFunctorCall" + Counter() + "<T, " +
+                                   functionPointerType + argumentTypes + ">(functionPointer" + arguments + "))->start(" + startArg + ");") +
                          Line("}");
     functions.setRepeatCount(repeats);
 
     // function objects by value
     Repeater functionObjects =  Line ("template <typename FunctionObject" + typenameArgumentTypes + ">") +
-                                Line ("QFuture<typename FunctionObject::result_type> run(FunctionObject functionObject" + functionParameters + ")") +
+                                Line ("QFuture<typename FunctionObject::result_type> run(" + pool + "FunctionObject functionObject" + functionParameters + ")") +
                                 Line("{") +
-                                Line("    return (new QT_TYPENAME SelectStoredFunctorCall" + Counter() +
-                                     "<QT_TYPENAME FunctionObject::result_type, FunctionObject" +
-                                     argumentTypes + ">::type(functionObject" + arguments + "))->start();") +
+                                Line("    return (new StoredFunctorCall" + Counter() +
+                                     "<typename FunctionObject::result_type, FunctionObject" +
+                                     argumentTypes + ">(functionObject" + arguments + "))->start(" + startArg + ");") +
                                 Line("}");
     functionObjects.setRepeatCount(repeats);
 
     // function objects by pointer
     Repeater functionObjectsPointer =  Line ("template <typename FunctionObject" + typenameArgumentTypes + ">") +
-                                Line ("QFuture<typename FunctionObject::result_type> run(FunctionObject *functionObject" + functionParameters + ")") +
+                                Line ("QFuture<typename FunctionObject::result_type> run(" + pool + "FunctionObject *functionObject" + functionParameters + ")") +
                                 Line("{") +
-                                Line("    return (new QT_TYPENAME SelectStoredFunctorPointerCall" + Counter() +
-                                     "<QT_TYPENAME FunctionObject::result_type, FunctionObject" +
-                                     argumentTypes + ">::type(functionObject" + arguments + "))->start();") +
+                                Line("    return (new typename SelectStoredFunctorPointerCall" + Counter() +
+                                     "<typename FunctionObject::result_type, FunctionObject" +
+                                     argumentTypes + ">::type(functionObject" + arguments + "))->start(" + startArg + ");") +
                                 Line("}");
     functionObjectsPointer.setRepeatCount(repeats);
 
     // member functions by value
     Repeater memberFunction =  Line ("template <typename T, typename Class" + typenameTypes + ">") +
-                                Line ("QFuture<T> run(const Class &object, T (Class::*fn)(" + parameterTypesNoPrefix  + ")" + functionParameters + ")") +
+                                Line ("QFuture<T> run(" + pool + "const Class &object, T (Class::*fn)(" + parameterTypesNoPrefix  + ")" + functionParameters + ")") +
                                 Line("{") +
-                                Line("    return (new QT_TYPENAME SelectStoredMemberFunctionCall" + Counter() +
+                                Line("    return (new typename SelectStoredMemberFunctionCall" + Counter() +
                                      "<T, Class" +
-                                     types + ">::type(fn, object" + arguments + "))->start();") +
+                                     types + ">::type(fn, object" + arguments + "))->start(" + startArg + ");") +
                                 Line("}");
     memberFunction.setRepeatCount(repeats);
 
     // const member functions by value
     Repeater constMemberFunction =  Line ("template <typename T, typename Class" + typenameTypes + ">") +
-                                Line ("QFuture<T> run(const Class &object, T (Class::*fn)(" + parameterTypesNoPrefix  + ") const" + functionParameters + ")") +
+                                Line ("QFuture<T> run(" + pool + "const Class &object, T (Class::*fn)(" + parameterTypesNoPrefix  + ") const" + functionParameters + ")") +
                                 Line("{") +
-                                Line("    return (new QT_TYPENAME SelectStoredConstMemberFunctionCall" + Counter() +
+                                Line("    return (new typename SelectStoredConstMemberFunctionCall" + Counter() +
                                      "<T, Class" +
-                                     types + ">::type(fn, object" + arguments + "))->start();") +
+                                     types + ">::type(fn, object" + arguments + "))->start(" + startArg + ");") +
                                 Line("}");
     constMemberFunction.setRepeatCount(repeats);
 
     // member functions by class pointer
     Repeater memberFunctionPointer =  Line ("template <typename T, typename Class" + typenameTypes + ">") +
-                                Line ("QFuture<T> run(Class *object, T (Class::*fn)(" + parameterTypesNoPrefix  + ")" + functionParameters + ")") +
+                                Line ("QFuture<T> run(" + pool + "Class *object, T (Class::*fn)(" + parameterTypesNoPrefix  + ")" + functionParameters + ")") +
                                 Line("{") +
-                                Line("    return (new QT_TYPENAME SelectStoredMemberFunctionPointerCall" + Counter() +
+                                Line("    return (new typename SelectStoredMemberFunctionPointerCall" + Counter() +
                                      "<T, Class" +
-                                     types + ">::type(fn, object" + arguments + "))->start();") +
+                                     types + ">::type(fn, object" + arguments + "))->start(" + startArg + ");") +
                                 Line("}");
     memberFunctionPointer.setRepeatCount(repeats);
 
     // const member functions by class pointer
     Repeater constMemberFunctionPointer =  Line ("template <typename T, typename Class" + typenameTypes + ">") +
-                                Line ("QFuture<T> run(const Class *object, T (Class::*fn)(" + parameterTypesNoPrefix  + ") const" + functionParameters + ")") +
+                                Line ("QFuture<T> run(" + pool + "const Class *object, T (Class::*fn)(" + parameterTypesNoPrefix  + ") const" + functionParameters + ")") +
                                 Line("{") +
-                                Line("    return (new QT_TYPENAME SelectStoredConstMemberFunctionPointerCall" + Counter() +
+                                Line("    return (new typename SelectStoredConstMemberFunctionPointerCall" + Counter() +
                                      "<T, Class" +
-                                     types + ">::type(fn, object" + arguments + "))->start();") +
+                                     types + ">::type(fn, object" + arguments + "))->start(" + startArg + ");") +
                                 Line("}");
     constMemberFunctionPointer.setRepeatCount(repeats);
 
@@ -173,21 +166,21 @@ Item generateRunFunctions(int repeats)
 /*
     // QFutureInterface functions
     Repeater interfaceFunctions = Line ("template <typename T" + typenameTypes + ">") +
-                         Line ("QFuture<T> run(" + interfaceFunctionPointerParameter + functionParameters + ")")  +
+                         Line ("QFuture<T> run(" + pool + interfaceFunctionPointerParameter + functionParameters + ")")  +
                          Line("{") +
                          Line("    return (new StoredInterfaceFunctionCall" + Counter() + "<T, " +
-                                   interfaceFunctionPointerType + typenameArgumentTypes + ">(functionPointer" + arguments + "))->start();") +
+                                   interfaceFunctionPointerType + typenameArgumentTypes + ">(functionPointer" + arguments + "))->start(" + startArg + ");") +
                          Line("}");
     functions.setRepeatCount(repeats);
     interfaceFunctions.setRepeatCount(repeats);
 
     // member functions by class pointer
     Repeater interfaceMemberFunction =  Line ("template <typename Class, typename T" + typenameTypes + ">") +
-                                Line ("QFuture<T> run(void (Class::*fn)(QFutureInterface<T> &), Class *object" + functionParameters + ")") +
+                                Line ("QFuture<T> run(" + pool + "void (Class::*fn)(QFutureInterface<T> &), Class *object" + functionParameters + ")") +
                                 Line("{") +
                                 Line("    return (new StoredInterfaceMemberFunctionCall" + Counter() +
                                      "<T, void (Class::*)(QFutureInterface<T> &), Class" +
-                                     typenameArgumentTypes + ">(fn, object" + arguments + "))->start();") +
+                                     typenameArgumentTypes + ">(fn, object" + arguments + "))->start(" + startArg + ");") +
                                 Line("}");
     memberFunctionPointer.setRepeatCount(repeats);
 */
@@ -318,8 +311,19 @@ Item dollarQuote(Item item)
     return Item("$") + item + Item("$");
 }
 
-int main()
+static int usage(const char *executable)
 {
+    qDebug("Usage: %s path/to/qtconcurrent", executable);
+    return EXIT_FAILURE;
+}
+
+int main(int argc, char *argv[])
+{
+    if (argc !=2)
+        return usage(argv[0]);
+
+    const QDir outdir(QFile::decodeName(argv[1]));
+
     const int repeats = 6;
     init();
     Item run =  (
@@ -336,22 +340,25 @@ int main()
                        Line("#ifndef QTCONCURRENT_RUN_H") +
                        Line("#define QTCONCURRENT_RUN_H") +
                        Line("") +
+                       Line("#include <QtConcurrent/qtconcurrentcompilertest.h>") +
+                       Line("") +
                        Line("#ifndef QT_NO_CONCURRENT") +
                        Line("") +
-                       Line("#include <QtCore/qtconcurrentrunbase.h>") +
-                       Line("#include <QtCore/qtconcurrentstoredfunctioncall.h>") +
+                       Line("#include <QtConcurrent/qtconcurrentrunbase.h>") +
+                       Line("#include <QtConcurrent/qtconcurrentstoredfunctioncall.h>") +
                        Line("") +
-                       Line("QT_BEGIN_HEADER") +
                        Line("QT_BEGIN_NAMESPACE") +
                        Line("") +
-                       Line("QT_MODULE(Core)") +
                        Line("") +
-                       Line("#ifdef qdoc") +
+                       Line("#ifdef Q_QDOC") +
                        Line("") +
                        Line("namespace QtConcurrent {") +
                        Line("") +
                        Line("    template <typename T>") +
                        Line("    QFuture<T> run(Function function, ...);") +
+                       Line("") +
+                       Line("    template <typename T>") +
+                       Line("    QFuture<T> run(QThreadPool *pool, Function function, ...);") +
                        Line("") +
                        Line("} // namespace QtConcurrent") +
                        Line("") +
@@ -359,18 +366,21 @@ int main()
                        Line("") +
                        Line("namespace QtConcurrent {") +
                        Line("") +
-                       generateRunFunctions(repeats) +
+                       generateRunFunctions(repeats, false) +
+                       Line("") +
+                       generateRunFunctions(repeats, true) +
                        Line("} //namespace QtConcurrent") +
                        Line("") +
-                       Line("#endif // qdoc") +
+                       Line("#endif // Q_QDOC") +
                        Line("") +
                        Line("QT_END_NAMESPACE") +
-                       Line("QT_END_HEADER") +
+                       Line("") +
+                       Line("#endif // QT_NO_CONCURRENT") +
                        Line("") +
                        Line("#endif")
                       );
 
-    writeFile("../../../src/corelib/concurrent/qtconcurrentrun.h", run.generate());
+    writeFile(outdir.filePath("qtconcurrentrun.h"), run.generate());
 
     Item storedFunctionCall = (
                                      Line("/****************************************************************************") +
@@ -389,30 +399,26 @@ int main()
                                      Line("#include <QtCore/qglobal.h>") +
                                      Line("") +
                                      Line("#ifndef QT_NO_CONCURRENT") +
-                                     Line("#include <QtCore/qtconcurrentrunbase.h>") +
+                                     Line("#include <QtConcurrent/qtconcurrentrunbase.h>") +
                                      Line("") +
-                                     Line("QT_BEGIN_HEADER") +
                                      Line("QT_BEGIN_NAMESPACE") +
                                      Line("") +
-                                     Line("QT_MODULE(Core)") +
-                                     Line("") +
-                                     Line("#ifndef qdoc") +
+                                     Line("#ifndef Q_QDOC") +
                                      Line("") +
                                      Line("namespace QtConcurrent {") +
                                      generateSFCs(repeats) +
                                      Line("} //namespace QtConcurrent") +
                                      Line("") +
-                                     Line("#endif // qdoc") +
+                                     Line("#endif // Q_QDOC") +
                                      Line("") +
                                      Line("QT_END_NAMESPACE") +
-                                     Line("QT_END_HEADER") +
                                      Line("") +
                                      Line("#endif // QT_NO_CONCURRENT") +
                                      Line("") +
                                      Line("#endif")
                                     );
 
-    writeFile("../../../src/corelib/concurrent/qtconcurrentstoredfunctioncall.h", storedFunctionCall.generate());
+    writeFile(outdir.filePath("qtconcurrentstoredfunctioncall.h"), storedFunctionCall.generate());
 }
 
 

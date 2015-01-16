@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -304,7 +296,7 @@ Text {
 
 \section1 Enums
 
-The Qt object contains the enums available in the \l {Qt Namespace}. For example, you can access
+The Qt object contains the enums available in the \l [QtCore]{Qt}{Qt Namespace}. For example, you can access
 the \l Qt::LeftButton and \l Qt::RightButton enumeration values as \c Qt.LeftButton and \c Qt.RightButton.
 
 
@@ -499,6 +491,12 @@ The following functions are also on the Qt object.
     \li \c application.domain
     \li This is the organization domain set on the QCoreApplication instance. This property can be written
     to in order to set the organization domain.
+
+    \row
+    \li \c application.supportsMultipleWindows
+    \li This read-only property can be used to determine whether or not the
+        platform supports multiple windows. Some embedded platforms do not support
+        multiple windows, for example.
     \endtable
 
     The object also has one signal, aboutToQuit(), which is the same as \l QCoreApplication::aboutToQuit().
@@ -584,9 +582,6 @@ QQmlEnginePrivate::~QQmlEnginePrivate()
 
     if (incubationController) incubationController->d = 0;
     incubationController = 0;
-
-    delete rootContext;
-    rootContext = 0;
 
     for(QHash<const QMetaObject *, QQmlPropertyCache *>::Iterator iter = propertyCache.begin(); iter != propertyCache.end(); ++iter)
         (*iter)->release();
@@ -907,6 +902,8 @@ QQmlEngine::~QQmlEngine()
     if (d->isDebugging)
         QQmlDebugServer::instance()->removeEngine(this);
 
+    d->typeLoader.invalidate();
+
     // Emit onDestruction signals for the root context before
     // we destroy the contexts, engine, Singleton Types etc. that
     // may be required to handle the destruction signal.
@@ -919,6 +916,9 @@ QQmlEngine::~QQmlEngine()
     QList<QQmlType*> singletonTypes = QQmlMetaType::qmlSingletonTypes();
     foreach (QQmlType *currType, singletonTypes)
         currType->singletonInstanceInfo()->destroy(this);
+
+    delete d->rootContext;
+    d->rootContext = 0;
 }
 
 /*! \fn void QQmlEngine::quit()
@@ -1029,7 +1029,7 @@ QQmlAbstractUrlInterceptor *QQmlEngine::urlInterceptor() const
 void QQmlEngine::setNetworkAccessManagerFactory(QQmlNetworkAccessManagerFactory *factory)
 {
     Q_D(QQmlEngine);
-    QMutexLocker locker(&d->mutex);
+    QMutexLocker locker(&d->networkAccessManagerMutex);
     d->networkAccessManagerFactory = factory;
 }
 
@@ -1056,7 +1056,7 @@ void QQmlEnginePrivate::registerFinalizeCallback(QObject *obj, int index)
 
 QNetworkAccessManager *QQmlEnginePrivate::createNetworkAccessManager(QObject *parent) const
 {
-    QMutexLocker locker(&mutex);
+    QMutexLocker locker(&networkAccessManagerMutex);
     QNetworkAccessManager *nam;
     if (networkAccessManagerFactory) {
         nam = networkAccessManagerFactory->create(parent);
@@ -1253,42 +1253,38 @@ void QQmlEngine::setContextForObject(QObject *object, QQmlContext *context)
 /*!
   \enum QQmlEngine::ObjectOwnership
 
-  Ownership controls whether or not QML automatically destroys the
-  QObject when the object is garbage collected by the JavaScript
-  engine.  The two ownership options are:
+  ObjectOwnership controls whether or not QML automatically destroys the
+  QObject when the corresponding JavaScript object is garbage collected by the
+  engine. The two ownership options are:
 
-  \value CppOwnership The object is owned by C++ code, and will
-  never be deleted by QML.  The JavaScript destroy() method cannot be
-  used on objects with CppOwnership.  This option is similar to
-  QScriptEngine::QtOwnership.
+  \value CppOwnership The object is owned by C++ code and QML will never delete
+  it. The JavaScript destroy() method cannot be used on these objects. This
+  option is similar to QScriptEngine::QtOwnership.
 
-  \value JavaScriptOwnership The object is owned by JavaScript.
-  When the object is returned to QML as the return value of a method
-  call or property access, QML will track it, and delete the object
-  if there are no remaining JavaScript references to it and it has no
-  QObject::parent().  An object tracked by one QQmlEngine
-  will be deleted during that QQmlEngine's destructor, and thus
-  JavaScript references between objects with JavaScriptOwnership from
-  two different engines will not be valid after the deletion of one of
-  those engines.  This option is similar to QScriptEngine::ScriptOwnership.
+  \value JavaScriptOwnership The object is owned by JavaScript. When the object
+  is returned to QML as the return value of a method call, QML will track it
+  and delete it if there are no remaining JavaScript references to it and
+  it has no QObject::parent(). An object tracked by one QQmlEngine will be
+  deleted during that QQmlEngine's destructor. Thus, JavaScript references
+  between objects with JavaScriptOwnership from two different engines will
+  not be valid if one of these engines is deleted. This option is similar to
+  QScriptEngine::ScriptOwnership.
 
   Generally an application doesn't need to set an object's ownership
-  explicitly.  QML uses a heuristic to set the default object
-  ownership.  By default, an object that is created by QML has
-  JavaScriptOwnership.  The exception to this are the root objects
-  created by calling QQmlComponent::create() or
-  QQmlComponent::beginCreate() which have CppOwnership by
-  default.  The ownership of these root-level objects is considered to
-  have been transferred to the C++ caller.
+  explicitly. QML uses a heuristic to set the default ownership. By default, an
+  object that is created by QML has JavaScriptOwnership. The exception to this
+  are the root objects created by calling QQmlComponent::create() or
+  QQmlComponent::beginCreate(), which have CppOwnership by default. The
+  ownership of these root-level objects is considered to have been transferred
+  to the C++ caller.
 
-  Objects not-created by QML have CppOwnership by default.  The
-  exception to this is objects returned from C++ method calls; in these cases,
-  the ownership of the returned objects will be set to JavaScriptOwnerShip.
-  Note this applies only to explicit invocations of Q_INVOKABLE methods or slots,
-  and not to property getter invocations.
+  Objects not-created by QML have CppOwnership by default. The exception to this
+  are objects returned from C++ method calls; their ownership will be set to
+  JavaScriptOwnership. This applies only to explicit invocations of Q_INVOKABLE
+  methods or slots, but not to property getter invocations.
 
-  Calling setObjectOwnership() overrides the default ownership
-  heuristic used by QML.
+  Calling setObjectOwnership() overrides the default ownership heuristic used by
+  QML.
 */
 
 /*!
@@ -2315,8 +2311,12 @@ static inline QString shellNormalizeFileName(const QString &name)
         return name;
 #endif
     TCHAR buffer[MAX_PATH];
-    if (!SHGetPathFromIDList(file, buffer))
+    bool gotPath = SHGetPathFromIDList(file, buffer);
+    ILFree(file);
+
+    if (!gotPath)
         return name;
+
     QString canonicalName = QString::fromWCharArray(buffer);
     // Upper case drive letter
     if (canonicalName.size() > 2 && canonicalName.at(1) == QLatin1Char(':'))

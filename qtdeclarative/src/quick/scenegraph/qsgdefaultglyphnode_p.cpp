@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtQuick module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -49,6 +41,7 @@
 #include <private/qfontengine_p.h>
 #include <private/qopenglextensions_p.h>
 
+#include <QtQuick/qquickwindow.h>
 #include <QtQuick/private/qsgtexture_p.h>
 
 #include <private/qrawfont_p.h>
@@ -64,6 +57,21 @@ static inline QVector4D qsg_premultiply(const QVector4D &c, float globalOpacity)
 {
     float o = c.w() * globalOpacity;
     return QVector4D(c.x() * o, c.y() * o, c.z() * o, o);
+}
+
+static inline int qsg_device_pixel_ratio(QOpenGLContext *ctx)
+{
+    int devicePixelRatio = 1;
+    if (ctx->surface()->surfaceClass() == QSurface::Window) {
+        QWindow *w = static_cast<QWindow *>(ctx->surface());
+        if (QQuickWindow *qw = qobject_cast<QQuickWindow *>(w))
+            devicePixelRatio = qw->effectiveDevicePixelRatio();
+        else
+            devicePixelRatio = w->devicePixelRatio();
+    } else {
+        devicePixelRatio = ctx->screen()->devicePixelRatio();
+    }
+    return devicePixelRatio;
 }
 
 class QSGTextMaskShader : public QSGMaterialShader
@@ -109,6 +117,7 @@ void QSGTextMaskShader::initialize()
     m_matrix_id = program()->uniformLocation("matrix");
     m_color_id = program()->uniformLocation("color");
     m_textureScale_id = program()->uniformLocation("textureScale");
+    program()->setUniformValue("dpr", (float) qsg_device_pixel_ratio(QOpenGLContext::currentContext()));
 }
 
 void QSGTextMaskShader::updateState(const RenderState &state, QSGMaterial *newEffect, QSGMaterial *oldEffect)
@@ -125,38 +134,19 @@ void QSGTextMaskShader::updateState(const RenderState &state, QSGMaterial *newEf
             || oldMaterial->texture()->textureId() != material->texture()->textureId()) {
         program()->setUniformValue(m_textureScale_id, QVector2D(1.0 / material->cacheTextureWidth(),
                                                                1.0 / material->cacheTextureHeight()));
-        glBindTexture(GL_TEXTURE_2D, material->texture()->textureId());
+        QOpenGLFunctions *funcs = QOpenGLContext::currentContext()->functions();
+        funcs->glBindTexture(GL_TEXTURE_2D, material->texture()->textureId());
 
         // Set the mag/min filters to be nearest. We only need to do this when the texture
         // has been recreated.
         if (updated) {
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+            funcs->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+            funcs->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
         }
     }
 
-    if (state.isMatrixDirty()) {
-        QMatrix4x4 transform = state.modelViewMatrix();
-        qreal xTranslation = transform(0, 3);
-        qreal yTranslation = transform(1, 3);
-
-        // Remove translation and check identity to see if matrix is only translating.
-        // If it is, we can round the translation to make sure the text is pixel aligned,
-        // which is the only thing that works with GL_NEAREST filtering. Adding rotations
-        // and scales to native rendered text is not a prioritized use case, since the
-        // default rendering type is designed for that.
-        transform(0, 3) = 0.0;
-        transform(1, 3) = 0.0;
-        if (transform.isIdentity()) {
-            transform(0, 3) = qRound(xTranslation);
-            transform(1, 3) = qRound(yTranslation);
-
-            transform = state.projectionMatrix() * transform;
-            program()->setUniformValue(m_matrix_id, transform);
-        } else {
-            program()->setUniformValue(m_matrix_id, state.combinedMatrix());
-        }
-    }
+    if (state.isMatrixDirty())
+        program()->setUniformValue(m_matrix_id, state.combinedMatrix());
 }
 
 class QSG8BitTextMaskShader : public QSGTextMaskShader
@@ -215,16 +205,18 @@ void QSG24BitTextMaskShader::initialize()
 
 void QSG24BitTextMaskShader::activate()
 {
-    glBlendFunc(GL_CONSTANT_COLOR, GL_ONE_MINUS_SRC_COLOR);
+    QOpenGLFunctions *funcs = QOpenGLContext::currentContext()->functions();
+    funcs->glBlendFunc(GL_CONSTANT_COLOR, GL_ONE_MINUS_SRC_COLOR);
     if (m_useSRGB)
-        glEnable(GL_FRAMEBUFFER_SRGB);
+        funcs->glEnable(GL_FRAMEBUFFER_SRGB);
 }
 
 void QSG24BitTextMaskShader::deactivate()
 {
-    glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+    QOpenGLFunctions *funcs = QOpenGLContext::currentContext()->functions();
+    funcs->glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
     if (m_useSRGB)
-        glDisable(GL_FRAMEBUFFER_SRGB);
+        funcs->glDisable(GL_FRAMEBUFFER_SRGB);
 }
 
 static inline qreal qt_sRGB_to_linear_RGB(qreal f)
@@ -250,7 +242,7 @@ void QSG24BitTextMaskShader::updateState(const RenderState &state, QSGMaterial *
         QVector4D color = material->color();
         if (m_useSRGB)
             color = qt_sRGB_to_linear_RGB(color);
-        state.context()->functions()->glBlendColor(color.x(), color.y(), color.z(), color.w());
+        QOpenGLContext::currentContext()->functions()->glBlendColor(color.x(), color.y(), color.z(), color.w());
         color = qsg_premultiply(color, state.opacity());
         program()->setUniformValue(m_color_id, color.w());
     }
@@ -313,13 +305,14 @@ void QSGStyledTextShader::updateState(const RenderState &state,
             || oldMaterial->texture()->textureId() != material->texture()->textureId()) {
         program()->setUniformValue(m_textureScale_id, QVector2D(1.0 / material->cacheTextureWidth(),
                                                                 1.0 / material->cacheTextureHeight()));
-        glBindTexture(GL_TEXTURE_2D, material->texture()->textureId());
+        QOpenGLFunctions *funcs = QOpenGLContext::currentContext()->functions();
+        funcs->glBindTexture(GL_TEXTURE_2D, material->texture()->textureId());
 
         // Set the mag/min filters to be linear. We only need to do this when the texture
         // has been recreated.
         if (updated) {
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+            funcs->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+            funcs->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
         }
     }
 
@@ -374,8 +367,8 @@ void QSGTextMaskMaterial::init(QFontEngine::GlyphFormat glyphFormat)
                         : QFontEngine::Format_A32;
         }
 
-        qreal devicePixelRatio = ctx->surface()->surfaceClass() == QSurface::Window ?
-            static_cast<QWindow *>(ctx->surface())->devicePixelRatio() : ctx->screen()->devicePixelRatio();
+        qreal devicePixelRatio = qsg_device_pixel_ratio(ctx);
+
 
         QTransform glyphCacheTransform = QTransform::fromScale(devicePixelRatio, devicePixelRatio);
         if (!fontEngine->supportsTransformation(glyphCacheTransform))

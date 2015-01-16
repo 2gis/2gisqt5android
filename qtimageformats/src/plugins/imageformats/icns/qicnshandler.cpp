@@ -1,40 +1,32 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Copyright (C) 2013 Alex Char.
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the plugins of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -372,7 +364,8 @@ static inline bool isIconCompressed(const ICNSEntry &icon)
 
 static inline bool isMaskSuitable(const ICNSEntry &mask, const ICNSEntry &icon, ICNSEntry::Depth target)
 {
-    return mask.depth == target && mask.height == icon.height && mask.width == icon.width;
+    return mask.variant == icon.variant && mask.depth == target
+            && mask.height == icon.height && mask.width == icon.width;
 }
 
 static inline QByteArray nameFromOSType(quint32 ostype)
@@ -664,12 +657,15 @@ bool QICNSHandler::canRead(QIODevice *device)
         return false;
     }
 
-    if (device->isSequential()) {
-        qWarning("QICNSHandler::canRead() called on a sequential device");
-        return false;
+    if (device->peek(4) == QByteArrayLiteral("icns")) {
+        if (device->isSequential()) {
+            qWarning("QICNSHandler::canRead() called on a sequential device");
+            return false;
+        }
+        return true;
     }
 
-    return device->peek(4) == QByteArrayLiteral("icns");
+    return false;
 }
 
 bool QICNSHandler::canRead() const
@@ -813,6 +809,8 @@ QVariant QICNSHandler::option(ImageOption option) const
     if (option == SubType) {
         if (imageCount() > 0 && m_currentIconIndex <= imageCount()) {
             const ICNSEntry &icon = m_icons.at(m_currentIconIndex);
+            if (icon.variant != 0)
+                return nameFromOSType(icon.variant) + '-' + nameFromOSType(icon.ostype);
             return nameFromOSType(icon.ostype);
         }
     }
@@ -852,11 +850,12 @@ bool QICNSHandler::ensureScanned() const
     return m_state == ScanSuccess;
 }
 
-bool QICNSHandler::addEntry(const ICNSBlockHeader &header, qint64 imgDataOffset)
+bool QICNSHandler::addEntry(const ICNSBlockHeader &header, qint64 imgDataOffset, quint32 variant)
 {
     // Note: This function returns false only when a device positioning error occurred
     ICNSEntry entry;
     entry.ostype = header.ostype;
+    entry.variant = variant;
     entry.dataOffset = imgDataOffset;
     entry.dataLength = header.length - ICNSBlockHeaderSize;
     // Check for known magic numbers:
@@ -919,6 +918,37 @@ bool QICNSHandler::scanDevice()
         case ICNSBlockHeader::TypeClut:
             // We don't have a good use for these blocks... yet.
             stream.skipRawData(blockDataLength);
+            break;
+        case ICNSBlockHeader::TypeTile:
+        case ICNSBlockHeader::TypeOver:
+        case ICNSBlockHeader::TypeOpen:
+        case ICNSBlockHeader::TypeDrop:
+        case ICNSBlockHeader::TypeOdrp:
+            // Icns container seems to have an embedded icon variant container
+            // Let's start a scan for entries
+            while (device()->pos() < nextBlockOffset) {
+                ICNSBlockHeader icon;
+                stream >> icon;
+                // Check for incorrect variant entry header and stop scan
+                if (!isBlockHeaderValid(icon, blockDataLength))
+                    break;
+                if (!addEntry(icon, device()->pos(), blockHeader.ostype))
+                    return false;
+                if (stream.skipRawData(icon.length - ICNSBlockHeaderSize) < 0)
+                    return false;
+            }
+            if (device()->pos() != nextBlockOffset) {
+                // Scan of this container didn't end where we expected.
+                // Let's generate some output about this incident:
+                qWarning("Scan of the icon variant container (\"%s\") failed at pos %s.\n" \
+                         "Reason: Scan didn't reach the end of this container's block, " \
+                         "delta: %s bytes. This file may be corrupted.",
+                         nameFromOSType(blockHeader.ostype).constData(),
+                         QByteArray::number(device()->pos()).constData(),
+                         QByteArray::number(nextBlockOffset - device()->pos()).constData());
+                if (!device()->seek(nextBlockOffset))
+                    return false;
+            }
             break;
         case ICNSBlockHeader::TypeToc: {
             // Quick scan, table of contents

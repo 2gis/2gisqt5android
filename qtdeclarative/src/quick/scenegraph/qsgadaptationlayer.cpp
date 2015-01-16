@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtQuick module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -44,6 +36,7 @@
 #include <qmath.h>
 #include <QtQuick/private/qsgdistancefieldutil_p.h>
 #include <QtQuick/private/qsgdistancefieldglyphnode_p.h>
+#include <QtQuick/private/qsgcontext_p.h>
 #include <private/qrawfont_p.h>
 #include <QtGui/qguiapplication.h>
 #include <qdir.h>
@@ -53,10 +46,7 @@
 
 QT_BEGIN_NAMESPACE
 
-#ifndef QSG_NO_RENDER_TIMING
-static bool qsg_render_timing = !qgetenv("QSG_RENDER_TIMING").isEmpty();
 static QElapsedTimer qsg_render_timer;
-#endif
 
 QSGDistanceFieldGlyphCache::Texture QSGDistanceFieldGlyphCache::s_emptyTexture;
 
@@ -163,11 +153,10 @@ void QSGDistanceFieldGlyphCache::update()
     if (m_pendingGlyphs.isEmpty())
         return;
 
-#ifndef QSG_NO_RENDER_TIMING
-    bool profileFrames = qsg_render_timing || QQuickProfiler::enabled;
+    bool profileFrames = QSG_LOG_TIME_GLYPH().isDebugEnabled() ||
+            QQuickProfiler::profilingSceneGraph();
     if (profileFrames)
         qsg_render_timer.start();
-#endif
 
     QList<QDistanceField> distanceFields;
     for (int i = 0; i < m_pendingGlyphs.size(); ++i) {
@@ -176,31 +165,33 @@ void QSGDistanceFieldGlyphCache::update()
                                              m_doubleGlyphResolution));
     }
 
-#ifndef QSG_NO_RENDER_TIMING
     qint64 renderTime = 0;
     int count = m_pendingGlyphs.size();
     if (profileFrames)
         renderTime = qsg_render_timer.nsecsElapsed();
-#endif
 
     m_pendingGlyphs.reset();
 
     storeGlyphs(distanceFields);
 
-#ifndef QSG_NO_RENDER_TIMING
-    if (qsg_render_timing) {
-        qDebug("   - glyphs: count=%d, render=%d, store=%d, total=%d",
-               count,
-               int(renderTime/1000000),
-               (int) qsg_render_timer.elapsed() - int(renderTime/1000000),
-               (int) qsg_render_timer.elapsed());
+#if defined(QSG_DISTANCEFIELD_CACHE_DEBUG)
+    foreach (Texture texture, m_textures)
+        saveTexture(texture.textureId, texture.size.width(), texture.size.height());
+#endif
 
+    if (QSG_LOG_TIME_GLYPH().isDebugEnabled()) {
+        quint64 now = qsg_render_timer.elapsed();
+        qCDebug(QSG_LOG_TIME_GLYPH,
+                "distancefield: %d glyphs prepared in %dms, rendering=%d, upload=%d",
+                count,
+                (int) now,
+                int(renderTime / 1000000),
+                int((now - (renderTime / 1000000))));
     }
-    Q_QUICK_SG_PROFILE1(QQuickProfiler::SceneGraphAdaptationLayerFrame, (
+    Q_QUICK_SG_PROFILE(QQuickProfiler::SceneGraphAdaptationLayerFrame, (
             count,
             renderTime,
             qsg_render_timer.nsecsElapsed() - renderTime));
-#endif
 }
 
 void QSGDistanceFieldGlyphCache::setGlyphsPosition(const QList<GlyphPosition> &glyphs)
@@ -294,6 +285,218 @@ void QSGDistanceFieldGlyphCache::updateTexture(GLuint oldTex, GLuint newTex, con
             tex.textureId = newTex;
             tex.size = newTexSize;
             return;
+        }
+    }
+}
+
+#if defined(QSG_DISTANCEFIELD_CACHE_DEBUG)
+#include <QtGui/qopenglfunctions.h>
+
+void QSGDistanceFieldGlyphCache::saveTexture(GLuint textureId, int width, int height) const
+{
+    QOpenGLFunctions *functions = QOpenGLContext::currentContext()->functions();
+
+    GLuint fboId;
+    functions->glGenFramebuffers(1, &fboId);
+
+    GLuint tmpTexture = 0;
+    functions->glGenTextures(1, &tmpTexture);
+    functions->glBindTexture(GL_TEXTURE_2D, tmpTexture);
+    functions->glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+    functions->glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    functions->glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    functions->glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    functions->glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    functions->glBindTexture(GL_TEXTURE_2D, 0);
+
+    functions->glBindFramebuffer(GL_FRAMEBUFFER_EXT, fboId);
+    functions->glFramebufferTexture2D(GL_FRAMEBUFFER_EXT, GL_COLOR_ATTACHMENT0_EXT, GL_TEXTURE_2D,
+                                      tmpTexture, 0);
+
+    functions->glActiveTexture(GL_TEXTURE0);
+    functions->glBindTexture(GL_TEXTURE_2D, textureId);
+
+    functions->glDisable(GL_STENCIL_TEST);
+    functions->glDisable(GL_DEPTH_TEST);
+    functions->glDisable(GL_SCISSOR_TEST);
+    functions->glDisable(GL_BLEND);
+
+    GLfloat textureCoordinateArray[8];
+    textureCoordinateArray[0] = 0.0f;
+    textureCoordinateArray[1] = 0.0f;
+    textureCoordinateArray[2] = 1.0f;
+    textureCoordinateArray[3] = 0.0f;
+    textureCoordinateArray[4] = 1.0f;
+    textureCoordinateArray[5] = 1.0f;
+    textureCoordinateArray[6] = 0.0f;
+    textureCoordinateArray[7] = 1.0f;
+
+    GLfloat vertexCoordinateArray[8];
+    vertexCoordinateArray[0] = -1.0f;
+    vertexCoordinateArray[1] = -1.0f;
+    vertexCoordinateArray[2] =  1.0f;
+    vertexCoordinateArray[3] = -1.0f;
+    vertexCoordinateArray[4] =  1.0f;
+    vertexCoordinateArray[5] =  1.0f;
+    vertexCoordinateArray[6] = -1.0f;
+    vertexCoordinateArray[7] =  1.0f;
+
+    functions->glViewport(0, 0, width, height);
+    functions->glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, vertexCoordinateArray);
+    functions->glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, textureCoordinateArray);
+
+    {
+        static const char *vertexShaderSource =
+                "attribute vec4      vertexCoordsArray; \n"
+                "attribute vec2      textureCoordArray; \n"
+                "varying   vec2      textureCoords;     \n"
+                "void main(void) \n"
+                "{ \n"
+                "    gl_Position = vertexCoordsArray;   \n"
+                "    textureCoords = textureCoordArray; \n"
+                "} \n";
+
+        static const char *fragmentShaderSource =
+                "varying   vec2      textureCoords; \n"
+                "uniform   sampler2D         texture;       \n"
+                "void main() \n"
+                "{ \n"
+                "    gl_FragColor = texture2D(texture, textureCoords); \n"
+                "} \n";
+
+        GLuint vertexShader = functions->glCreateShader(GL_VERTEX_SHADER);
+        GLuint fragmentShader = functions->glCreateShader(GL_FRAGMENT_SHADER);
+
+        if (vertexShader == 0 || fragmentShader == 0) {
+            GLenum error = functions->glGetError();
+            qWarning("QSGDistanceFieldGlyphCache::saveTexture: Failed to create shaders. (GL error: %x)",
+                     error);
+            return;
+        }
+
+        functions->glShaderSource(vertexShader, 1, &vertexShaderSource, NULL);
+        functions->glShaderSource(fragmentShader, 1, &fragmentShaderSource, NULL);
+        functions->glCompileShader(vertexShader);
+
+        GLint len = 1;
+        functions->glGetShaderiv(vertexShader, GL_INFO_LOG_LENGTH, &len);
+
+        char infoLog[2048];
+        functions->glGetShaderInfoLog(vertexShader, 2048, NULL, infoLog);
+        if (qstrlen(infoLog) > 0)
+            qWarning("Problems compiling vertex shader:\n %s", infoLog);
+
+        functions->glCompileShader(fragmentShader);
+        functions->glGetShaderInfoLog(fragmentShader, 2048, NULL, infoLog);
+        if (qstrlen(infoLog) > 0)
+            qWarning("Problems compiling fragment shader:\n %s", infoLog);
+
+        GLuint shaderProgram = functions->glCreateProgram();
+        functions->glAttachShader(shaderProgram, vertexShader);
+        functions->glAttachShader(shaderProgram, fragmentShader);
+
+        functions->glBindAttribLocation(shaderProgram, 0, "vertexCoordsArray");
+        functions->glBindAttribLocation(shaderProgram, 1, "textureCoordArray");
+
+        functions->glLinkProgram(shaderProgram);
+        functions->glGetProgramInfoLog(shaderProgram, 2048, NULL, infoLog);
+        if (qstrlen(infoLog) > 0)
+            qWarning("Problems linking shaders:\n %s", infoLog);
+
+        functions->glUseProgram(shaderProgram);
+        functions->glEnableVertexAttribArray(0);
+        functions->glEnableVertexAttribArray(1);
+
+        int textureUniformLocation = functions->glGetUniformLocation(shaderProgram, "texture");
+        functions->glUniform1i(textureUniformLocation, 0);
+    }
+
+    functions->glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
+
+    {
+        GLenum error = functions->glGetError();
+        if (error != GL_NO_ERROR)
+            qWarning("glDrawArrays reported error 0x%x", error);
+    }
+
+    uchar *data = new uchar[width * height * 4];
+
+    functions->glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, data);
+
+    QImage image(data, width, height, QImage::Format_ARGB32);
+
+    QByteArray fileName = m_referenceFont.familyName().toLatin1() + '_' + QByteArray::number(textureId);
+    fileName = fileName.replace('/', '_').replace(' ', '_') + ".png";
+
+    image.save(QString::fromLocal8Bit(fileName));
+
+    {
+        GLenum error = functions->glGetError();
+        if (error != GL_NO_ERROR)
+            qWarning("glReadPixels reported error 0x%x", error);
+    }
+
+    functions->glDisableVertexAttribArray(0);
+    functions->glDisableVertexAttribArray(1);
+
+    functions->glDeleteFramebuffers(1, &fboId);
+    functions->glDeleteTextures(1, &tmpTexture);
+
+    delete[] data;
+}
+#endif
+
+void QSGNodeVisitorEx::visitChildren(QSGNode *node)
+{
+    for (QSGNode *child = node->firstChild(); child; child = child->nextSibling()) {
+        switch (child->type()) {
+        case QSGNode::ClipNodeType: {
+            QSGClipNode *c = static_cast<QSGClipNode*>(child);
+            if (visit(c))
+                visitChildren(c);
+            endVisit(c);
+            break;
+        }
+        case QSGNode::TransformNodeType: {
+            QSGTransformNode *c = static_cast<QSGTransformNode*>(child);
+            if (visit(c))
+                visitChildren(c);
+            endVisit(c);
+            break;
+        }
+        case QSGNode::OpacityNodeType: {
+            QSGOpacityNode *c = static_cast<QSGOpacityNode*>(child);
+            if (visit(c))
+                visitChildren(c);
+            endVisit(c);
+            break;
+        }
+        case QSGNode::GeometryNodeType: {
+            if (child->flags() & QSGNode::IsVisitableNode) {
+                QSGVisitableNode *v = static_cast<QSGVisitableNode*>(child);
+                v->accept(this);
+            } else {
+                QSGGeometryNode *c = static_cast<QSGGeometryNode*>(child);
+                if (visit(c))
+                    visitChildren(c);
+                endVisit(c);
+            }
+            break;
+        }
+        case QSGNode::RootNodeType: {
+            QSGRootNode *root = static_cast<QSGRootNode*>(child);
+            if (visit(root))
+                visitChildren(root);
+            endVisit(root);
+            break;
+        }
+        case QSGNode::BasicNodeType: {
+            visitChildren(child);
+            break;
+        }
+        default:
+            Q_UNREACHABLE();
+            break;
         }
     }
 }

@@ -7,35 +7,27 @@
 **
 ** This file is part of the QtSerialPort module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -80,13 +72,21 @@ QString serialPortLockFilePath(const QString &portName)
 #endif
     ;
 
+    QString fileName = portName;
+    fileName.replace(QLatin1Char('/'), QLatin1Char('_'));
+    fileName.prepend(QStringLiteral("/LCK.."));
+
     QString lockFilePath;
 
     foreach (const QString &lockDirectoryPath, lockDirectoryPaths) {
+        const QString filePath = lockDirectoryPath + fileName;
+
         QFileInfo lockDirectoryInfo(lockDirectoryPath);
-        if (lockDirectoryInfo.isReadable() && lockDirectoryInfo.isWritable()) {
-            lockFilePath = lockDirectoryPath;
-            break;
+        if (lockDirectoryInfo.isReadable()) {
+            if (QFile::exists(filePath) || lockDirectoryInfo.isWritable()) {
+                lockFilePath = filePath;
+                break;
+            }
         }
     }
 
@@ -96,11 +96,6 @@ QString serialPortLockFilePath(const QString &portName)
             qWarning("\t%s\n", qPrintable(lockDirectoryPath));
         return QString();
     }
-
-    QString replacedPortName = portName;
-
-    lockFilePath.append(QStringLiteral("/LCK.."));
-    lockFilePath.append(replacedPortName.replace(QLatin1Char('/'), QLatin1Char('_')));
 
     return lockFilePath;
 }
@@ -377,10 +372,9 @@ bool QSerialPortPrivate::setBreakEnabled(bool set)
     return true;
 }
 
-void QSerialPortPrivate::startWriting()
+qint64 QSerialPortPrivate::readData(char *data, qint64 maxSize)
 {
-    if (!isWriteNotificationEnabled())
-        setWriteNotificationEnabled(true);
+    return readBuffer.read(data, maxSize);
 }
 
 bool QSerialPortPrivate::waitForReadyRead(int msecs)
@@ -504,15 +498,19 @@ QSerialPortPrivate::setCustomBaudRate(qint32 baudRate, QSerialPort::Directions d
     if (::ioctl(descriptor, TIOCGSERIAL, &currentSerialInfo) == -1)
         return decodeSystemError();
 
-    if (currentSerialInfo.baud_base % baudRate != 0)
-        return QSerialPort::UnsupportedOperationError;
-
     currentSerialInfo.flags &= ~ASYNC_SPD_MASK;
     currentSerialInfo.flags |= (ASYNC_SPD_CUST /* | ASYNC_LOW_LATENCY*/);
     currentSerialInfo.custom_divisor = currentSerialInfo.baud_base / baudRate;
 
     if (currentSerialInfo.custom_divisor == 0)
         return QSerialPort::UnsupportedOperationError;
+
+    if (currentSerialInfo.custom_divisor * baudRate != currentSerialInfo.baud_base) {
+        qWarning("Baud rate of serial port %s is set to %d instead of %d: divisor %f unsupported",
+            qPrintable(systemLocation),
+            currentSerialInfo.baud_base / currentSerialInfo.custom_divisor,
+            baudRate, (float)currentSerialInfo.baud_base / baudRate);
+    }
 
     if (::ioctl(descriptor, TIOCSSERIAL, &currentSerialInfo) == -1)
         return decodeSystemError();
@@ -874,6 +872,19 @@ inline bool QSerialPortPrivate::initialize(QIODevice::OpenMode mode)
         setReadNotificationEnabled(true);
 
     return true;
+}
+
+qint64 QSerialPortPrivate::bytesToWrite() const
+{
+    return writeBuffer.size();
+}
+
+qint64 QSerialPortPrivate::writeData(const char *data, qint64 maxSize)
+{
+    ::memcpy(writeBuffer.reserve(maxSize), data, maxSize);
+    if (!writeBuffer.isEmpty() && !isWriteNotificationEnabled())
+        setWriteNotificationEnabled(true);
+    return maxSize;
 }
 
 bool QSerialPortPrivate::updateTermios()

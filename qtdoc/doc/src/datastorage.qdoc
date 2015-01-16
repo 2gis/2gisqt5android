@@ -49,7 +49,7 @@ from and write to that process.
 \li \l {Serializing Qt Data Types}
 \endlist
 
-\section1 SQL support in Qt
+\section1 SQL Support in Qt
 
 The \l {Qt SQL} module uses driver plugins to communicate with several database
 APIs. Qt has drivers for SQLite, MySQL, DB2, Borland InterBase, Oracle, ODBC,
@@ -84,7 +84,7 @@ Qt's SQL classes can be divided in 3 layers:
 \endtable
 
 With the MySQL driver, it is possible to connect to a MySQL server. In order to
-build the QMYSQL Plugin for Unix or Mac OS X, you need the MySQL header files
+build the QMYSQL Plugin for Unix or OS X, you need the MySQL header files
 as well as the shared library, libmysqlclient.so. To compile the plugin
 for Windows, install MySQL.
 
@@ -230,7 +230,7 @@ Storage API.
 \li \l {Qt Quick Local Storage QML Types}
 \endlist
 
-\section1 QSettings
+\section1 QSettings Class
 
 The QSettings class provides persistent storage of application settings.
 An application usually remembers its settings from the previous session.
@@ -277,15 +277,14 @@ drive. Examples of archive files are ZIP, TAR, RAR and 7z.
 Qt has support for archives produced by zlib (see
 \l{How to compress data with Qt?}{qCompress() and qUncompress()}).
 
-\section1 Enginio Data Storage
-
-Enginio is a storage service for applications. New in Qt 5.3, \l{Enginio
-Manual}{Enginio} combines a \e{no-SQL} object approach with JSON and Qt APIs to
-provide applications reliable and powerful storage capabilities. The C++ and
-QML APIs interact with the \l{Enginio Data Storage} servers from Digia.
+\section1 Enginio Data Storage Backend
+Enginio is a backend for Qt Cloud services. New in Qt 5.3, the \l{Enginio
+Manual}{Enginio} mondule combines a \e{no-SQL} object approach with JSON and Qt APIs
+to provide applications a reliable and powerful storage capability. The C++ and
+QML APIs interact with the \l{Qt Cloud Services}{Qt Cloud} servers from Digia.
 
 \list
-\li \l{Enginio Data Storage}{Enginio by Digia}
+\li \l{Qt Cloud Services} by Digia
 \li \l{Enginio Manual}{Enginio} - API for developers
 \endlist
 

@@ -1,6 +1,6 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the documentation of the Qt Toolkit.
@@ -58,14 +58,37 @@
     \li \l{All Namespaces}
     \li \l{All Classes by Module}
     \li \l{Obsolete Classes}
-    \li \l{New Classes and Functions in Qt 5.3}
+    \li \l{New Classes and Functions in Qt 5.4}
     \endlist
 
     For more reference pages including QML types, visit \l{Qt Reference Pages}.
 
-    \generatelist classes
+    \generatelist classes Q
 
     \sa {All Modules}, {Obsolete Classes}
+*/
+
+/*!
+    \page qmlbasictypes.html
+    \title All QML Basic Types
+    \ingroup classlists
+
+    \brief A list of QML basic types in this Qt release.
+
+    This is a list of all QML basic types. The following pages contain different
+    API listings in different categories:
+
+    \list
+    \li \l{All QML Types}
+    \li \l{All QML APIs by Module}
+    \li \l{Obsolete QML Types}
+    \li \l{New Classes and Functions in Qt 5.4}
+    \endlist
+
+    For more reference pages including C++ APIs, visit \l{Qt Reference Pages}.
+
+    \generatelist qmlbasictypes
+
 */
 
 /*!
@@ -75,11 +98,17 @@
 
     \brief A list of QML types in this Qt release.
 
-    This is a list of all QML types. The \l{All QML APIs by Module} contains a
-    list of the QML APIs by module. For types that have been deprecated, see the
-    \l{Obsolete QML Types} list.
+    This is a list of all QML types, including QML basic types. The following
+    pages contain different API listings in different categories:
 
-    \b{See also} \l{Class and Function Documentation}.
+    \list
+    \li \l{All QML Basic Types}
+    \li \l{All QML APIs by Module}
+    \li \l{Obsolete QML Types}
+    \li \l{New Classes and Functions in Qt 5.4}
+    \endlist
+
+    For more reference pages including C++ APIs, visit \l{Qt Reference Pages}.
 
     \generatelist qmltypes
 

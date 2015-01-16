@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtQuick module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -55,10 +47,12 @@ class QQuickFramebufferObjectPrivate : public QQuickItemPrivate
 public:
     QQuickFramebufferObjectPrivate()
         : followsItemSize(true)
+        , node(0)
     {
     }
 
     bool followsItemSize;
+    mutable QSGFramebufferObjectNode *node;
 };
 
 /*!
@@ -98,6 +92,11 @@ public:
  * the item. If a fixed size is preferred, set textureFollowsItemSize
  * to \c false and return a texture of your choosing from
  * QQuickFramebufferObject::Renderer::createFramebufferObject().
+ *
+ * Starting Qt 5.4, the QQuickFramebufferObject class is a
+ * \l{QSGTextureProvider}{texture provider}
+ * and can be used directly in \l {ShaderEffect}{ShaderEffects} and other
+ * classes that consume texture providers.
  *
  * \sa {Scene Graph - Rendering FBOs}, {Scene Graph and Rendering}
  */
@@ -150,7 +149,7 @@ void QQuickFramebufferObject::geometryChanged(const QRectF &newGeometry, const Q
         update();
 }
 
-class QSGFramebufferObjectNode : public QObject, public QSGSimpleTextureNode
+class QSGFramebufferObjectNode : public QSGTextureProvider, public QSGSimpleTextureNode
 {
     Q_OBJECT
 
@@ -162,8 +161,9 @@ public:
         , renderer(0)
         , renderPending(true)
         , invalidatePending(false)
+        , devicePixelRatio(1)
     {
-
+        qsgnode_set_description(this, QStringLiteral("fbonode"));
     }
 
     ~QSGFramebufferObjectNode()
@@ -180,18 +180,34 @@ public:
         window->update();
     }
 
+    QSGTexture *texture() const Q_DECL_OVERRIDE
+    {
+        return QSGSimpleTextureNode::texture();
+    }
+
 public Q_SLOTS:
     void render()
     {
         if (renderPending) {
             renderPending = false;
             fbo->bind();
-            glViewport(0, 0, fbo->width(), fbo->height());
+            QOpenGLContext::currentContext()->functions()->glViewport(0, 0, fbo->width(), fbo->height());
             renderer->render();
             fbo->bindDefault();
 
             if (msDisplayFbo)
                 QOpenGLFramebufferObject::blitFramebuffer(msDisplayFbo, fbo);
+
+            markDirty(QSGNode::DirtyMaterial);
+            emit textureChanged();
+        }
+    }
+
+    void handleScreenChange()
+    {
+        if (window->effectiveDevicePixelRatio() != devicePixelRatio) {
+            renderer->invalidateFramebufferObject();
+            quickFbo->update();
         }
     }
 
@@ -200,9 +216,12 @@ public:
     QOpenGLFramebufferObject *fbo;
     QOpenGLFramebufferObject *msDisplayFbo;
     QQuickFramebufferObject::Renderer *renderer;
+    QQuickFramebufferObject *quickFbo;
 
     bool renderPending;
     bool invalidatePending;
+
+    int devicePixelRatio;
 };
 
 /*!
@@ -223,14 +242,18 @@ QSGNode *QQuickFramebufferObject::updatePaintNode(QSGNode *node, UpdatePaintNode
     Q_D(QQuickFramebufferObject);
 
     if (!n) {
-        n = new QSGFramebufferObjectNode;
-        n->window = window();
+        if (!d->node)
+            d->node = new QSGFramebufferObjectNode;
+        n = d->node;
     }
 
     if (!n->renderer) {
+        n->window = window();
         n->renderer = createRenderer();
         n->renderer->data = n;
+        n->quickFbo = this;
         connect(window(), SIGNAL(beforeRendering()), n, SLOT(render()));
+        connect(window(), SIGNAL(screenChanged(QScreen*)), n, SLOT(handleScreenChange()));
     }
 
     n->renderer->synchronize(this);
@@ -239,12 +262,16 @@ QSGNode *QQuickFramebufferObject::updatePaintNode(QSGNode *node, UpdatePaintNode
     QSize desiredFboSize(qMax<int>(minFboSize.width(), width()),
                          qMax<int>(minFboSize.height(), height()));
 
+    n->devicePixelRatio = window()->effectiveDevicePixelRatio();
+    desiredFboSize *= n->devicePixelRatio;
+
     if (n->fbo && (d->followsItemSize || n->invalidatePending)) {
         if (n->fbo->size() != desiredFboSize) {
             delete n->fbo;
             n->fbo = 0;
             delete n->msDisplayFbo;
             n->msDisplayFbo = 0;
+            n->invalidatePending = false;
         }
     }
 
@@ -269,6 +296,39 @@ QSGNode *QQuickFramebufferObject::updatePaintNode(QSGNode *node, UpdatePaintNode
     n->scheduleRender();
 
     return n;
+}
+
+bool QQuickFramebufferObject::isTextureProvider() const
+{
+    return true;
+}
+
+QSGTextureProvider *QQuickFramebufferObject::textureProvider() const
+{
+    Q_D(const QQuickFramebufferObject);
+    QQuickWindow *w = window();
+    if (!w || !w->openglContext() || QThread::currentThread() != w->openglContext()->thread()) {
+        qWarning("QQuickFramebufferObject::textureProvider: can only be queried on the rendering thread of an exposed window");
+        return 0;
+    }
+    if (!d->node)
+        d->node = new QSGFramebufferObjectNode;
+    return d->node;
+}
+
+void QQuickFramebufferObject::releaseResources()
+{
+    // When release resources is called on the GUI thread, we only need to
+    // forget about the node. Since it is the node we returned from updatePaintNode
+    // it will be managed by the scene graph.
+    Q_D(QQuickFramebufferObject);
+    d->node = 0;
+}
+
+void QQuickFramebufferObject::invalidateSceneGraph()
+{
+    Q_D(QQuickFramebufferObject);
+    d->node = 0;
 }
 
 /*!
@@ -371,6 +431,12 @@ void QQuickFramebufferObject::Renderer::invalidateFramebufferObject()
  * \note Some hardware has issues with small FBO sizes. \a size takes that into account, so
  * be cautious when overriding the size with a fixed size. A minimal size of 64x64 should
  * always work.
+ *
+ * \note \a size takes the device pixel ratio into account, meaning that it is
+ * already multiplied by the correct scale factor. When moving the window
+ * containing the QQuickFramebufferObject item to a screen with different
+ * settings, the FBO is automatically recreated and this function is invoked
+ * with the correct size.
  */
 QOpenGLFramebufferObject *QQuickFramebufferObject::Renderer::createFramebufferObject(const QSize &size)
 {

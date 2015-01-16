@@ -34,14 +34,11 @@
 #include <GraphicsLayer.h>
 #endif
 
-#if USE(3D_GRAPHICS)
-#include <GraphicsContext3D.h>
-#endif
-
 #include <QPalette>
 #include <QRect>
 
 QT_BEGIN_NAMESPACE
+class QOpenGLContext;
 class QStyle;
 class QWindow;
 QT_END_NAMESPACE
@@ -62,6 +59,7 @@ public:
     virtual void setInputMethodEnabled(bool enable) = 0;
     virtual bool inputMethodEnabled() const = 0;
     virtual bool makeOpenGLContextCurrentIfAvailable() { return false; }
+    virtual QOpenGLContext* openGLContextIfAvailable() { return 0; }
 
     virtual void setInputMethodHints(Qt::InputMethodHints hint) = 0;
 

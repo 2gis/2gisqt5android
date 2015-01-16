@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtQuick module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -52,10 +44,12 @@ public:
         : QSGGeometryNodePrivate()
         , m_texCoordMode(QSGSimpleTextureNode::NoTransform)
         , isAtlasTexture(false)
+        , ownsTexture(false)
     {}
 
     QSGSimpleTextureNode::TextureCoordinatesTransformMode m_texCoordMode;
     uint isAtlasTexture : 1;
+    uint ownsTexture : 1;
 };
 
 static void qsgsimpletexturenode_update(QSGGeometry *g,
@@ -110,6 +104,16 @@ QSGSimpleTextureNode::QSGSimpleTextureNode()
 #ifdef QSG_RUNTIME_DESCRIPTION
     qsgnode_set_description(this, QLatin1String("simpletexture"));
 #endif
+}
+
+/*!
+    Destroys the texture node
+ */
+QSGSimpleTextureNode::~QSGSimpleTextureNode()
+{
+    Q_D(QSGSimpleTextureNode);
+    if (d->ownsTexture)
+        delete m_material.texture();
 }
 
 /*!
@@ -169,6 +173,10 @@ QRectF QSGSimpleTextureNode::rect() const
 
 /*!
     Sets the texture of this texture node to \a texture.
+
+    Use setOwnsTexture() to set whether the node should take
+    ownership of the texture. By default, the node does not
+    take ownership.
 
     \warning A texture node must have a texture before being added
     to the scenegraph to be rendered.
@@ -244,6 +252,28 @@ QSGSimpleTextureNode::TextureCoordinatesTransformMode QSGSimpleTextureNode::text
 {
     Q_D(const QSGSimpleTextureNode);
     return d->m_texCoordMode;
+}
+
+/*!
+    Sets whether the node takes ownership of the texture to \a owns.
+
+    By default, the node does not take ownership of the texture.
+
+    \sa setTexture()
+ */
+void QSGSimpleTextureNode::setOwnsTexture(bool owns)
+{
+    Q_D(QSGSimpleTextureNode);
+    d->ownsTexture = owns;
+}
+
+/*!
+   Returns \c true if the node takes ownership of the texture; otherwise returns \c false.
+ */
+bool QSGSimpleTextureNode::ownsTexture() const
+{
+    Q_D(const QSGSimpleTextureNode);
+    return d->ownsTexture;
 }
 
 QT_END_NAMESPACE

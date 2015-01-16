@@ -71,7 +71,7 @@ Rectangle {
             }
             Text {
                 height: header.height; anchors.centerIn: header
-                text: "files:" 
+                text: "files:"
                 color: "lightblue"
                 font.weight: Font.Light
                 font.italic: true

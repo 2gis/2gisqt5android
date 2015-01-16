@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -199,6 +191,9 @@ private slots:
 
     void populateTransitions();
     void populateTransitions_data();
+    void sizeTransitions();
+    void sizeTransitions_data();
+
     void addTransitions();
     void addTransitions_data();
     void moveTransitions();
@@ -230,6 +225,9 @@ private slots:
     void QTBUG_36481();
     void QTBUG_35920();
 
+    void stickyPositioning();
+    void stickyPositioning_data();
+
     void roundingErrors();
     void roundingErrors_data();
 
@@ -240,6 +238,8 @@ private slots:
 
     void QTBUG_39492_data();
     void QTBUG_39492();
+
+    void jsArrayChange();
 
 private:
     template <class T> void items(const QUrl &source);
@@ -5814,6 +5814,56 @@ void tst_QQuickListView::populateTransitions_data()
     QTest::newRow("empty to start with, no populate") << false << false << false;
 }
 
+
+/*
+ * Tests if the first visible item is not repositioned if the same item
+ * resized + changes position during a transition. The test does not test the
+ * actual position while it is transitioning (since its timing sensitive), but
+ * rather tests if the transition has reached its target state properly.
+ **/
+void tst_QQuickListView::sizeTransitions()
+{
+    QFETCH(bool, topToBottom);
+    QQuickView *window = getView();
+    QQmlContext *ctxt = window->rootContext();
+    QaimModel model;
+    ctxt->setContextProperty("testModel", &model);
+    ctxt->setContextProperty("topToBottom", topToBottom);
+    TestObject *testObject = new TestObject;
+    ctxt->setContextProperty("testObject", &model);
+    window->setSource(testFileUrl("sizeTransitions.qml"));
+    window->show();
+    QVERIFY(QTest::qWaitForWindowExposed(window));
+
+    QQuickListView *listview = findItem<QQuickListView>(window->rootObject(), "list");
+    QTRY_VERIFY(listview != 0);
+    QTRY_COMPARE(QQuickItemPrivate::get(listview)->polishScheduled, false);
+
+    // the following will start the transition
+    model.addItem(QLatin1String("Test"), "");
+
+    // This ensures early failure in case of failure (in which case
+    // transitionFinished == true and scriptActionExecuted == false)
+    QTRY_COMPARE(listview->property("scriptActionExecuted").toBool() ||
+                 listview->property("transitionFinished").toBool(), true);
+    QCOMPARE(listview->property("scriptActionExecuted").toBool(), true);
+    QCOMPARE(listview->property("transitionFinished").toBool(), true);
+
+    releaseView(window);
+    delete testObject;
+}
+
+void tst_QQuickListView::sizeTransitions_data()
+{
+    QTest::addColumn<bool>("topToBottom");
+
+    QTest::newRow("TopToBottom")
+            << true;
+
+    QTest::newRow("LeftToRight")
+            << false;
+}
+
 void tst_QQuickListView::addTransitions()
 {
     QFETCH(int, initialItemCount);
@@ -7266,6 +7316,412 @@ void tst_QQuickListView::QTBUG_35920()
     QTest::mouseRelease(window.data(), Qt::LeftButton, 0, QPoint(10,100));
 }
 
+Q_DECLARE_METATYPE(Qt::Orientation)
+
+void tst_QQuickListView::stickyPositioning()
+{
+    QFETCH(QString, fileName);
+
+    QFETCH(Qt::Orientation, orientation);
+    QFETCH(Qt::LayoutDirection, layoutDirection);
+    QFETCH(QQuickItemView::VerticalLayoutDirection, verticalLayoutDirection);
+
+    QFETCH(int, positionIndex);
+    QFETCH(QQuickItemView::PositionMode, positionMode);
+    QFETCH(QList<QPointF>, movement);
+
+    QFETCH(QPointF, headerPos);
+    QFETCH(QPointF, footerPos);
+
+    QQuickView *window = createView();
+
+    QaimModel model;
+    for (int i = 0; i < 20; i++)
+        model.addItem(QString::number(i), QString::number(i/10));
+
+    QQmlContext *ctxt = window->rootContext();
+    ctxt->setContextProperty("testModel", &model);
+    ctxt->setContextProperty("testOrientation", orientation);
+    ctxt->setContextProperty("testLayoutDirection", layoutDirection);
+    ctxt->setContextProperty("testVerticalLayoutDirection", verticalLayoutDirection);
+
+    window->setSource(testFileUrl(fileName));
+    window->show();
+    QVERIFY(QTest::qWaitForWindowExposed(window));
+
+    QQuickListView *listview = findItem<QQuickListView>(window->rootObject(), "list");
+    QVERIFY(listview);
+
+    QQuickItem *contentItem = listview->contentItem();
+    QVERIFY(contentItem);
+
+    listview->positionViewAtIndex(positionIndex, positionMode);
+
+    foreach (const QPointF &offset, movement) {
+        listview->setContentX(listview->contentX() + offset.x());
+        listview->setContentY(listview->contentY() + offset.y());
+    }
+
+    if (listview->header()) {
+        QQuickItem *headerItem = listview->headerItem();
+        QVERIFY(headerItem);
+        QPointF actualPos = listview->mapFromItem(contentItem, headerItem->position());
+        QCOMPARE(actualPos, headerPos);
+    }
+
+    if (listview->footer()) {
+        QQuickItem *footerItem = listview->footerItem();
+        QVERIFY(footerItem);
+        QPointF actualPos = listview->mapFromItem(contentItem, footerItem->position());
+        QCOMPARE(actualPos, footerPos);
+    }
+
+    delete window;
+}
+
+void tst_QQuickListView::stickyPositioning_data()
+{
+    qRegisterMetaType<Qt::Orientation>();
+    qRegisterMetaType<Qt::LayoutDirection>();
+    qRegisterMetaType<QQuickItemView::VerticalLayoutDirection>();
+    qRegisterMetaType<QQuickItemView::PositionMode>();
+
+    QTest::addColumn<QString>("fileName");
+
+    QTest::addColumn<Qt::Orientation>("orientation");
+    QTest::addColumn<Qt::LayoutDirection>("layoutDirection");
+    QTest::addColumn<QQuickItemView::VerticalLayoutDirection>("verticalLayoutDirection");
+
+    QTest::addColumn<int>("positionIndex");
+    QTest::addColumn<QQuickItemView::PositionMode>("positionMode");
+    QTest::addColumn<QList<QPointF> >("movement");
+
+    QTest::addColumn<QPointF>("headerPos");
+    QTest::addColumn<QPointF>("footerPos");
+
+    // header at the top
+    QTest::newRow("top header") << "stickyPositioning-header.qml"
+            << Qt::Vertical << Qt::LeftToRight << QQuickListView::TopToBottom
+            << 0 << QQuickItemView::Beginning << QList<QPointF>()
+            << QPointF(0,-10) << QPointF();
+
+    QTest::newRow("top header: 1/2 up") << "stickyPositioning-header.qml"
+            << Qt::Vertical << Qt::LeftToRight << QQuickListView::TopToBottom
+            << 1 << QQuickItemView::Beginning << (QList<QPointF>() << QPointF(0,-5))
+            << QPointF(0,-5) << QPointF();
+
+    QTest::newRow("top header: up") << "stickyPositioning-header.qml"
+            << Qt::Vertical << Qt::LeftToRight << QQuickListView::TopToBottom
+            << 2 << QQuickItemView::Beginning << (QList<QPointF>() << QPointF(0,-15))
+            << QPointF(0,0) << QPointF();
+
+    QTest::newRow("top header: 1/2 down") << "stickyPositioning-header.qml"
+            << Qt::Vertical << Qt::LeftToRight << QQuickListView::TopToBottom
+            << 3 << QQuickItemView::Beginning << (QList<QPointF>() << QPointF(0,-15) << QPointF(0,5))
+            << QPointF(0,-5) << QPointF();
+
+    QTest::newRow("top header: down") << "stickyPositioning-header.qml"
+            << Qt::Vertical << Qt::LeftToRight << QQuickListView::TopToBottom
+            << 4 << QQuickItemView::Beginning << (QList<QPointF>() << QPointF(0,-15) << QPointF(0,10))
+            << QPointF(0,-10) << QPointF();
+
+
+    // footer at the top
+    QTest::newRow("top footer") << "stickyPositioning-footer.qml"
+            << Qt::Vertical << Qt::LeftToRight << QQuickListView::BottomToTop
+            << 19 << QQuickItemView::End << QList<QPointF>()
+            << QPointF() << QPointF(0,-10);
+
+    QTest::newRow("top footer: 1/2 up") << "stickyPositioning-footer.qml"
+            << Qt::Vertical << Qt::LeftToRight << QQuickListView::BottomToTop
+            << 18 << QQuickItemView::End << (QList<QPointF>() << QPointF(0,-5))
+            << QPointF() << QPointF(0,-5);
+
+    QTest::newRow("top footer: up") << "stickyPositioning-footer.qml"
+            << Qt::Vertical << Qt::LeftToRight << QQuickListView::BottomToTop
+            << 17 << QQuickItemView::End << (QList<QPointF>() << QPointF(0,-15))
+            << QPointF() << QPointF(0,0);
+
+    QTest::newRow("top footer: 1/2 down") << "stickyPositioning-footer.qml"
+            << Qt::Vertical << Qt::LeftToRight << QQuickListView::BottomToTop
+            << 16 << QQuickItemView::End << (QList<QPointF>() << QPointF(0,-15) << QPointF(0,5))
+            << QPointF() << QPointF(0,-5);
+
+    QTest::newRow("top footer: down") << "stickyPositioning-footer.qml"
+            << Qt::Vertical << Qt::LeftToRight << QQuickListView::BottomToTop
+            << 15 << QQuickItemView::End << (QList<QPointF>() << QPointF(0,-15) << QPointF(0,10))
+            << QPointF() << QPointF(0,-10);
+
+
+    // header at the bottom
+    QTest::newRow("bottom header") << "stickyPositioning-header.qml"
+            << Qt::Vertical << Qt::LeftToRight << QQuickListView::BottomToTop
+            << 0 << QQuickItemView::Beginning << QList<QPointF>()
+            << QPointF(0,100) << QPointF();
+
+    QTest::newRow("bottom header: 1/2 down") << "stickyPositioning-header.qml"
+            << Qt::Vertical << Qt::LeftToRight << QQuickListView::BottomToTop
+            << 1 << QQuickItemView::Beginning << (QList<QPointF>() << QPointF(0,5))
+            << QPointF(0,95) << QPointF();
+
+    QTest::newRow("bottom header: down") << "stickyPositioning-header.qml"
+            << Qt::Vertical << Qt::LeftToRight << QQuickListView::BottomToTop
+            << 2 << QQuickItemView::Beginning << (QList<QPointF>() << QPointF(0,15))
+            << QPointF(0,90) << QPointF();
+
+    QTest::newRow("bottom header: 1/2 up") << "stickyPositioning-header.qml"
+            << Qt::Vertical << Qt::LeftToRight << QQuickListView::BottomToTop
+            << 3 << QQuickItemView::Beginning << (QList<QPointF>() << QPointF(0,15) << QPointF(0,-5))
+            << QPointF(0,95) << QPointF();
+
+    QTest::newRow("bottom header: up") << "stickyPositioning-header.qml"
+            << Qt::Vertical << Qt::LeftToRight << QQuickListView::BottomToTop
+            << 4 << QQuickItemView::Beginning << (QList<QPointF>() << QPointF(0,15) << QPointF(0,-10))
+            << QPointF(0,100) << QPointF();
+
+
+    // footer at the bottom
+    QTest::newRow("bottom footer") << "stickyPositioning-footer.qml"
+            << Qt::Vertical << Qt::LeftToRight << QQuickListView::TopToBottom
+            << 19 << QQuickItemView::End << QList<QPointF>()
+            << QPointF() << QPointF(0,100);
+
+    QTest::newRow("bottom footer: 1/2 down") << "stickyPositioning-footer.qml"
+            << Qt::Vertical << Qt::LeftToRight << QQuickListView::TopToBottom
+            << 18 << QQuickItemView::End << (QList<QPointF>() << QPointF(0,5))
+            << QPointF() << QPointF(0,95);
+
+    QTest::newRow("bottom footer: down") << "stickyPositioning-footer.qml"
+            << Qt::Vertical << Qt::LeftToRight << QQuickListView::TopToBottom
+            << 17 << QQuickItemView::End << (QList<QPointF>() << QPointF(0,15))
+            << QPointF() << QPointF(0,90);
+
+    QTest::newRow("bottom footer: 1/2 up") << "stickyPositioning-footer.qml"
+            << Qt::Vertical << Qt::LeftToRight << QQuickListView::TopToBottom
+            << 16 << QQuickItemView::End << (QList<QPointF>() << QPointF(0,15) << QPointF(0,-5))
+            << QPointF() << QPointF(0,95);
+
+    QTest::newRow("bottom footer: up") << "stickyPositioning-footer.qml"
+            << Qt::Vertical << Qt::LeftToRight << QQuickListView::TopToBottom
+            << 15 << QQuickItemView::End << (QList<QPointF>() << QPointF(0,15) << QPointF(0,-10))
+            << QPointF() << QPointF(0,100);
+
+
+    // header at the top (& footer at the bottom)
+    QTest::newRow("top header & bottom footer") << "stickyPositioning-both.qml"
+            << Qt::Vertical << Qt::LeftToRight << QQuickListView::TopToBottom
+            << 0 << QQuickItemView::Beginning << QList<QPointF>()
+            << QPointF(0,-10) << QPointF(0,90);
+
+    QTest::newRow("top header & bottom footer: 1/2 up") << "stickyPositioning-both.qml"
+            << Qt::Vertical << Qt::LeftToRight << QQuickListView::TopToBottom
+            << 1 << QQuickItemView::Beginning << (QList<QPointF>() << QPointF(0,-5))
+            << QPointF(0,-5) << QPointF(0,95);
+
+    QTest::newRow("top header & bottom footer: up") << "stickyPositioning-both.qml"
+            << Qt::Vertical << Qt::LeftToRight << QQuickListView::TopToBottom
+            << 2 << QQuickItemView::Beginning << (QList<QPointF>() << QPointF(0,-15))
+            << QPointF(0,0) << QPointF(0,100);
+
+    QTest::newRow("top header & bottom footer: 1/2 down") << "stickyPositioning-both.qml"
+            << Qt::Vertical << Qt::LeftToRight << QQuickListView::TopToBottom
+            << 3 << QQuickItemView::Beginning << (QList<QPointF>() << QPointF(0,-15) << QPointF(0,5))
+            << QPointF(0,-5) << QPointF(0,95);
+
+    QTest::newRow("top header & bottom footer: down") << "stickyPositioning-both.qml"
+            << Qt::Vertical << Qt::LeftToRight << QQuickListView::TopToBottom
+            << 4 << QQuickItemView::Beginning << (QList<QPointF>() << QPointF(0,-15) << QPointF(0,10))
+            << QPointF(0,-10) << QPointF(0,90);
+
+
+    // footer at the bottom (& header at the top)
+    QTest::newRow("bottom footer & top header") << "stickyPositioning-both.qml"
+            << Qt::Vertical << Qt::LeftToRight << QQuickListView::TopToBottom
+            << 1 << QQuickItemView::Beginning << QList<QPointF>()
+            << QPointF(0,-10) << QPointF(0,90);
+
+    QTest::newRow("bottom footer & top header: 1/2 down") << "stickyPositioning-both.qml"
+            << Qt::Vertical << Qt::LeftToRight << QQuickListView::TopToBottom
+            << 1 << QQuickItemView::Beginning << (QList<QPointF>() << QPointF(0,5))
+            << QPointF(0,-10) << QPointF(0,90);
+
+    QTest::newRow("bottom footer & top header: down") << "stickyPositioning-both.qml"
+            << Qt::Vertical << Qt::LeftToRight << QQuickListView::TopToBottom
+            << 2 << QQuickItemView::Beginning << (QList<QPointF>() << QPointF(0,15))
+            << QPointF(0,-10) << QPointF(0,90);
+
+    QTest::newRow("bottom footer & top header: 1/2 up") << "stickyPositioning-both.qml"
+            << Qt::Vertical << Qt::LeftToRight << QQuickListView::TopToBottom
+            << 3 << QQuickItemView::Beginning << (QList<QPointF>() << QPointF(0,15) << QPointF(0,-5))
+            << QPointF(0,-5) << QPointF(0,95);
+
+    QTest::newRow("bottom footer & top header: up") << "stickyPositioning-both.qml"
+            << Qt::Vertical << Qt::LeftToRight << QQuickListView::TopToBottom
+            << 4 << QQuickItemView::Beginning << (QList<QPointF>() << QPointF(0,15) << QPointF(0,-10))
+            << QPointF(0,0) << QPointF(0,100);
+
+    // header on the left
+    QTest::newRow("left header") << "stickyPositioning-header.qml"
+            << Qt::Horizontal << Qt::LeftToRight << QQuickListView::TopToBottom
+            << 0 << QQuickItemView::Beginning << QList<QPointF>()
+            << QPointF(-10,0) << QPointF();
+
+    QTest::newRow("left header: 1/2 left") << "stickyPositioning-header.qml"
+            << Qt::Horizontal << Qt::LeftToRight << QQuickListView::TopToBottom
+            << 1 << QQuickItemView::Beginning << (QList<QPointF>() << QPointF(-5,0))
+            << QPointF(-5,0) << QPointF();
+
+    QTest::newRow("left header: left") << "stickyPositioning-header.qml"
+            << Qt::Horizontal << Qt::LeftToRight << QQuickListView::TopToBottom
+            << 2 << QQuickItemView::Beginning << (QList<QPointF>() << QPointF(-15,0))
+            << QPointF(0,0) << QPointF();
+
+    QTest::newRow("left header: 1/2 right") << "stickyPositioning-header.qml"
+            << Qt::Horizontal << Qt::LeftToRight << QQuickListView::TopToBottom
+            << 3 << QQuickItemView::Beginning << (QList<QPointF>() << QPointF(-15,0) << QPointF(5,0))
+            << QPointF(-5,0) << QPointF();
+
+    QTest::newRow("left header: right") << "stickyPositioning-header.qml"
+            << Qt::Horizontal << Qt::LeftToRight << QQuickListView::TopToBottom
+            << 4 << QQuickItemView::Beginning << (QList<QPointF>() << QPointF(-15,0) << QPointF(10,0))
+            << QPointF(-10,0) << QPointF();
+
+
+    // footer on the left
+    QTest::newRow("left footer") << "stickyPositioning-footer.qml"
+            << Qt::Horizontal << Qt::RightToLeft << QQuickListView::TopToBottom
+            << 19 << QQuickItemView::End << QList<QPointF>()
+            << QPointF() << QPointF(-10,0);
+
+    QTest::newRow("left footer: 1/2 left") << "stickyPositioning-footer.qml"
+            << Qt::Horizontal << Qt::RightToLeft << QQuickListView::TopToBottom
+            << 18 << QQuickItemView::End << (QList<QPointF>() << QPointF(-5,0))
+            << QPointF() << QPointF(-5,0);
+
+    QTest::newRow("left footer: left") << "stickyPositioning-footer.qml"
+            << Qt::Horizontal << Qt::RightToLeft << QQuickListView::TopToBottom
+            << 17 << QQuickItemView::End << (QList<QPointF>() << QPointF(-15,0))
+            << QPointF() << QPointF(0,0);
+
+    QTest::newRow("left footer: 1/2 right") << "stickyPositioning-footer.qml"
+            << Qt::Horizontal << Qt::RightToLeft << QQuickListView::TopToBottom
+            << 16 << QQuickItemView::End << (QList<QPointF>() << QPointF(-15,0) << QPointF(5,0))
+            << QPointF() << QPointF(-5,0);
+
+    QTest::newRow("left footer: right") << "stickyPositioning-footer.qml"
+            << Qt::Horizontal << Qt::RightToLeft << QQuickListView::TopToBottom
+            << 15 << QQuickItemView::End << (QList<QPointF>() << QPointF(-15,0) << QPointF(10,0))
+            << QPointF() << QPointF(-10,0);
+
+
+    // header on the right
+    QTest::newRow("right header") << "stickyPositioning-header.qml"
+            << Qt::Horizontal << Qt::RightToLeft << QQuickListView::TopToBottom
+            << 0 << QQuickItemView::Beginning << QList<QPointF>()
+            << QPointF(100,0) << QPointF();
+
+    QTest::newRow("right header: 1/2 right") << "stickyPositioning-header.qml"
+            << Qt::Horizontal << Qt::RightToLeft << QQuickListView::TopToBottom
+            << 1 << QQuickItemView::Beginning << (QList<QPointF>() << QPointF(5,0))
+            << QPointF(95,0) << QPointF();
+
+    QTest::newRow("right header: right") << "stickyPositioning-header.qml"
+            << Qt::Horizontal << Qt::RightToLeft << QQuickListView::TopToBottom
+            << 2 << QQuickItemView::Beginning << (QList<QPointF>() << QPointF(15,0))
+            << QPointF(90,0) << QPointF();
+
+    QTest::newRow("right header: 1/2 left") << "stickyPositioning-header.qml"
+            << Qt::Horizontal << Qt::RightToLeft << QQuickListView::TopToBottom
+            << 3 << QQuickItemView::Beginning << (QList<QPointF>() << QPointF(15,0) << QPointF(-5,0))
+            << QPointF(95,0) << QPointF();
+
+    QTest::newRow("right header: left") << "stickyPositioning-header.qml"
+            << Qt::Horizontal << Qt::RightToLeft << QQuickListView::TopToBottom
+            << 4 << QQuickItemView::Beginning << (QList<QPointF>() << QPointF(15,0) << QPointF(-10,0))
+            << QPointF(100,0) << QPointF();
+
+
+    // footer on the right
+    QTest::newRow("right footer") << "stickyPositioning-footer.qml"
+            << Qt::Horizontal << Qt::LeftToRight << QQuickListView::TopToBottom
+            << 19 << QQuickItemView::End << QList<QPointF>()
+            << QPointF() << QPointF(100,0);
+
+    QTest::newRow("right footer: 1/2 right") << "stickyPositioning-footer.qml"
+            << Qt::Horizontal << Qt::LeftToRight << QQuickListView::TopToBottom
+            << 18 << QQuickItemView::End << (QList<QPointF>() << QPointF(5,0))
+            << QPointF() << QPointF(95,0);
+
+    QTest::newRow("right footer: right") << "stickyPositioning-footer.qml"
+            << Qt::Horizontal << Qt::LeftToRight << QQuickListView::TopToBottom
+            << 17 << QQuickItemView::End << (QList<QPointF>() << QPointF(15,0))
+            << QPointF() << QPointF(90,0);
+
+    QTest::newRow("right footer: 1/2 left") << "stickyPositioning-footer.qml"
+            << Qt::Horizontal << Qt::LeftToRight << QQuickListView::TopToBottom
+            << 16 << QQuickItemView::End << (QList<QPointF>() << QPointF(15,0) << QPointF(-5,0))
+            << QPointF() << QPointF(95,0);
+
+    QTest::newRow("right footer: left") << "stickyPositioning-footer.qml"
+            << Qt::Horizontal << Qt::LeftToRight << QQuickListView::TopToBottom
+            << 15 << QQuickItemView::End << (QList<QPointF>() << QPointF(15,0) << QPointF(-10,0))
+            << QPointF() << QPointF(100,0);
+
+
+    // header on the left (& footer on the right)
+    QTest::newRow("left header & right footer") << "stickyPositioning-both.qml"
+            << Qt::Horizontal << Qt::LeftToRight << QQuickListView::TopToBottom
+            << 0 << QQuickItemView::Beginning << QList<QPointF>()
+            << QPointF(-10,0) << QPointF(90,0);
+
+    QTest::newRow("left header & right footer: 1/2 left") << "stickyPositioning-both.qml"
+            << Qt::Horizontal << Qt::LeftToRight << QQuickListView::TopToBottom
+            << 1 << QQuickItemView::Beginning << (QList<QPointF>() << QPointF(-5,0))
+            << QPointF(-5,0) << QPointF(95,0);
+
+    QTest::newRow("left header & right footer: left") << "stickyPositioning-both.qml"
+            << Qt::Horizontal << Qt::LeftToRight << QQuickListView::TopToBottom
+            << 2 << QQuickItemView::Beginning << (QList<QPointF>() << QPointF(-15,0))
+            << QPointF(0,0) << QPointF(100,0);
+
+    QTest::newRow("left header & right footer: 1/2 right") << "stickyPositioning-both.qml"
+            << Qt::Horizontal << Qt::LeftToRight << QQuickListView::TopToBottom
+            << 3 << QQuickItemView::Beginning << (QList<QPointF>() << QPointF(-15,0) << QPointF(5,0))
+            << QPointF(-5,0) << QPointF(95,0);
+
+    QTest::newRow("left header & right footer: right") << "stickyPositioning-both.qml"
+            << Qt::Horizontal << Qt::LeftToRight << QQuickListView::TopToBottom
+            << 4 << QQuickItemView::Beginning << (QList<QPointF>() << QPointF(-15,0) << QPointF(10,0))
+            << QPointF(-10,0) << QPointF(90,0);
+
+
+    // footer on the right (& header on the left)
+    QTest::newRow("right footer & left header") << "stickyPositioning-both.qml"
+            << Qt::Horizontal << Qt::LeftToRight << QQuickListView::TopToBottom
+            << 1 << QQuickItemView::Beginning << QList<QPointF>()
+            << QPointF(-10,0) << QPointF(90,0);
+
+    QTest::newRow("right footer & left header: 1/2 right") << "stickyPositioning-both.qml"
+            << Qt::Horizontal << Qt::LeftToRight << QQuickListView::TopToBottom
+            << 1 << QQuickItemView::Beginning << (QList<QPointF>() << QPointF(5,0))
+            << QPointF(-10,0) << QPointF(90,0);
+
+    QTest::newRow("right footer & left header: right") << "stickyPositioning-both.qml"
+            << Qt::Horizontal << Qt::LeftToRight << QQuickListView::TopToBottom
+            << 2 << QQuickItemView::Beginning << (QList<QPointF>() << QPointF(15,0))
+            << QPointF(-10,0) << QPointF(90,0);
+
+    QTest::newRow("right footer & left header: 1/2 left") << "stickyPositioning-both.qml"
+            << Qt::Horizontal << Qt::LeftToRight << QQuickListView::TopToBottom
+            << 3 << QQuickItemView::Beginning << (QList<QPointF>() << QPointF(15,0) << QPointF(-5,0))
+            << QPointF(-5,0) << QPointF(95,0);
+
+    QTest::newRow("right footer & left header: left") << "stickyPositioning-both.qml"
+            << Qt::Horizontal << Qt::LeftToRight << QQuickListView::TopToBottom
+            << 4 << QQuickItemView::Beginning << (QList<QPointF>() << QPointF(15,0) << QPointF(-10,0))
+            << QPointF(0,0) << QPointF(100,0);
+}
+
 void tst_QQuickListView::roundingErrors()
 {
     QFETCH(bool, pixelAligned);
@@ -7347,6 +7803,8 @@ void tst_QQuickListView::QTBUG_38209()
 
 void tst_QQuickListView::programmaticFlickAtBounds()
 {
+    QSKIP("Disabled due to false negatives (QTBUG-41228)");
+
     QScopedPointer<QQuickView> window(createView());
     window->setSource(testFileUrl("simplelistview.qml"));
     window->show();
@@ -7487,6 +7945,33 @@ void tst_QQuickListView::QTBUG_39492()
     }
 
     releaseView(window);
+}
+
+void tst_QQuickListView::jsArrayChange()
+{
+    QQmlEngine engine;
+    QQmlComponent component(&engine);
+    component.setData("import QtQuick 2.4; ListView {}", QUrl());
+
+    QScopedPointer<QQuickListView> view(qobject_cast<QQuickListView *>(component.create()));
+    QVERIFY(!view.isNull());
+
+    QSignalSpy spy(view.data(), SIGNAL(modelChanged()));
+    QVERIFY(spy.isValid());
+
+    QJSValue array1 = engine.newArray(3);
+    QJSValue array2 = engine.newArray(3);
+    for (int i = 0; i < 3; ++i) {
+        array1.setProperty(i, i);
+        array2.setProperty(i, i);
+    }
+
+    view->setModel(QVariant::fromValue(array1));
+    QCOMPARE(spy.count(), 1);
+
+    // no change
+    view->setModel(QVariant::fromValue(array2));
+    QCOMPARE(spy.count(), 1);
 }
 
 QTEST_MAIN(tst_QQuickListView)

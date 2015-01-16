@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtQuick module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -615,9 +607,13 @@ QVariant QQuickPathView::model() const
     return d->modelVariant;
 }
 
-void QQuickPathView::setModel(const QVariant &model)
+void QQuickPathView::setModel(const QVariant &m)
 {
     Q_D(QQuickPathView);
+    QVariant model = m;
+    if (model.userType() == qMetaTypeId<QJSValue>())
+        model = model.value<QJSValue>().toVariant();
+
     if (d->modelVariant == model)
         return;
 
@@ -1995,12 +1991,14 @@ void QQuickPathView::refill()
         }
     }
 
+    bool currentChanged = false;
     if (!currentVisible) {
         d->currentItemOffset = 1.0;
         if (d->currentItem) {
             d->updateItem(d->currentItem, 1.0);
         } else if (!waiting && d->currentIndex >= 0 && d->currentIndex < d->modelCount) {
             if ((d->currentItem = d->getItem(d->currentIndex, d->currentIndex))) {
+                currentChanged = true;
                 d->updateItem(d->currentItem, 1.0);
                 if (QQuickPathViewAttached *att = d->attached(d->currentItem))
                     att->setIsCurrentItem(true);
@@ -2008,6 +2006,7 @@ void QQuickPathView::refill()
         }
     } else if (!waiting && !d->currentItem) {
         if ((d->currentItem = d->getItem(d->currentIndex, d->currentIndex))) {
+            currentChanged = true;
             d->currentItem->setFocus(true);
             if (QQuickPathViewAttached *att = d->attached(d->currentItem))
                 att->setIsCurrentItem(true);
@@ -2027,6 +2026,8 @@ void QQuickPathView::refill()
         d->releaseItem(d->itemCache.takeLast());
 
     d->inRefill = false;
+    if (currentChanged)
+        emit currentItemChanged();
 }
 
 void QQuickPathView::modelUpdated(const QQmlChangeSet &changeSet, bool reset)
@@ -2050,7 +2051,7 @@ void QQuickPathView::modelUpdated(const QQmlChangeSet &changeSet, bool reset)
     int moveOffset = 0;
     bool currentChanged = false;
     bool changedOffset = false;
-    foreach (const QQmlChangeSet::Remove &r, changeSet.removes()) {
+    foreach (const QQmlChangeSet::Change &r, changeSet.removes()) {
         if (moveId == -1 && d->currentIndex >= r.index + r.count) {
             d->currentIndex -= r.count;
             currentChanged = true;
@@ -2076,7 +2077,7 @@ void QQuickPathView::modelUpdated(const QQmlChangeSet &changeSet, bool reset)
         }
         d->modelCount -= r.count;
     }
-    foreach (const QQmlChangeSet::Insert &i, changeSet.inserts()) {
+    foreach (const QQmlChangeSet::Change &i, changeSet.inserts()) {
         if (d->modelCount) {
             if (moveId == -1 && i.index <= d->currentIndex) {
                 d->currentIndex += i.count;

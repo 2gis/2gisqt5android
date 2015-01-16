@@ -5,35 +5,27 @@
 **
 ** This file is part of the QtBluetooth module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -55,22 +47,21 @@ QT_BEGIN_NAMESPACE
 
 Q_DECLARE_LOGGING_CATEGORY(QT_BT_ANDROID)
 
-Q_GLOBAL_STATIC_WITH_ARGS(QUuid, btBaseUuid, ("{00000000-0000-1000-8000-00805F9B34FB}"))
-
 QBluetoothServiceDiscoveryAgentPrivate::QBluetoothServiceDiscoveryAgentPrivate(
-        const QBluetoothAddress &deviceAdapter)
+        const QBluetoothAddress &/*deviceAdapter*/)
     : error(QBluetoothServiceDiscoveryAgent::NoError),
       state(Inactive), deviceDiscoveryAgent(0),
       mode(QBluetoothServiceDiscoveryAgent::MinimalDiscovery),
       singleDevice(false), receiver(0), localDeviceReceiver(0)
 {
     QList<QBluetoothHostInfo> devices = QBluetoothLocalDevice::allDevices();
-    Q_ASSERT(devices.count() == 1); //Android only supports one device at the moment
+    Q_ASSERT(devices.count() <= 1); //Android only supports one device at the moment
 
-    if (deviceAdapter.isNull() && devices.count() > 0 )
-        m_deviceAdapterAddress = devices.at(0).address();
-    else
-        m_deviceAdapterAddress = deviceAdapter;
+    if (devices.isEmpty()) {
+        error = QBluetoothServiceDiscoveryAgent::InvalidBluetoothAdapterError;
+        errorString = QBluetoothServiceDiscoveryAgent::tr("Invalid Bluetooth adapter address");
+        return;
+    }
 
     if (QtAndroidPrivate::androidSdkVersion() < 15)
         qCWarning(QT_BT_ANDROID)
@@ -79,13 +70,10 @@ QBluetoothServiceDiscoveryAgentPrivate::QBluetoothServiceDiscoveryAgentPrivate(
             << "Service discovery will return empty list.";
 
 
-        /*  We assume that the current local adapter has been passed.
-            Android only supports one adapter at the moment. If m_deviceAdapterAddress
-            doesn't match the local adapter then we won't get to this point since
-            we have an InvalidBluetoothAdapter error.
-
-            The logic below must change once there is more than one adapter.
-        */
+    /*
+      We assume that the current local adapter has been passed.
+      The logic below must change once there is more than one adapter.
+    */
 
     btAdapter = QAndroidJniObject::callStaticObjectMethod("android/bluetooth/BluetoothAdapter",
                                                            "getDefaultAdapter",
@@ -304,80 +292,6 @@ void QBluetoothServiceDiscoveryAgentPrivate::_q_processFetchedUuids(
     }
 }
 
-
-static QString serviceNameForClassUuid(const uint value)
-{
-    switch (value & 0xffff) {
-    case QBluetoothUuid::ServiceDiscoveryServer: return QBluetoothServiceDiscoveryAgent::tr("Service Discovery");
-    //case QBluetoothUuid::BrowseGroupDescriptor: return QString();
-    //case QBluetoothUuid::PublicBrowseGroup: return QString();
-    case QBluetoothUuid::SerialPort: return QBluetoothServiceDiscoveryAgent::tr("Serial Port Profile");
-    case QBluetoothUuid::LANAccessUsingPPP: return QBluetoothServiceDiscoveryAgent::tr("LAN Access Profile");
-    case QBluetoothUuid::DialupNetworking: return QBluetoothServiceDiscoveryAgent::tr("Dial-up Networking");
-    case QBluetoothUuid::IrMCSync: return QBluetoothServiceDiscoveryAgent::tr("Synchronization");
-    case QBluetoothUuid::ObexObjectPush: return QBluetoothServiceDiscoveryAgent::tr("Object Push");
-    case QBluetoothUuid::OBEXFileTransfer: return QBluetoothServiceDiscoveryAgent::tr("File Transfer");
-    case QBluetoothUuid::IrMCSyncCommand: return QBluetoothServiceDiscoveryAgent::tr("Synchronization Command");
-    case QBluetoothUuid::Headset: return QBluetoothServiceDiscoveryAgent::tr("Headset");
-    case QBluetoothUuid::AudioSource: return QBluetoothServiceDiscoveryAgent::tr("Advanced Audio Distribution Source");
-    case QBluetoothUuid::AudioSink: return QBluetoothServiceDiscoveryAgent::tr("Advanced Audio Distribution Sink");
-    case QBluetoothUuid::AV_RemoteControlTarget: return QBluetoothServiceDiscoveryAgent::tr("Audio/Video Remote Control Target");
-    case QBluetoothUuid::AdvancedAudioDistribution: return QBluetoothServiceDiscoveryAgent::tr("Advanced Audio Distribution");
-    case QBluetoothUuid::AV_RemoteControl: return QBluetoothServiceDiscoveryAgent::tr("Audio/Video Remote Control");
-    case QBluetoothUuid::AV_RemoteControlController: return QBluetoothServiceDiscoveryAgent::tr("Audio/Video Remote Control Controller");
-    case QBluetoothUuid::HeadsetAG: return QBluetoothServiceDiscoveryAgent::tr("Headset AG");
-    case QBluetoothUuid::PANU: return QBluetoothServiceDiscoveryAgent::tr("Personal Area Networking (PANU)");
-    case QBluetoothUuid::NAP: return QBluetoothServiceDiscoveryAgent::tr("Personal Area Networking (NAP)");
-    case QBluetoothUuid::GN: return QBluetoothServiceDiscoveryAgent::tr("Personal Area Networking (GN)");
-    case QBluetoothUuid::DirectPrinting: return QBluetoothServiceDiscoveryAgent::tr("Basic Direct Printing (BPP)");
-    case QBluetoothUuid::ReferencePrinting: return QBluetoothServiceDiscoveryAgent::tr("Basic Reference Printing (BPP)");
-    case QBluetoothUuid::BasicImage: return QBluetoothServiceDiscoveryAgent::tr("Basic Imaging Profile");
-    case QBluetoothUuid::ImagingResponder: return QBluetoothServiceDiscoveryAgent::tr("Basic Imaging Responder");
-    case QBluetoothUuid::ImagingAutomaticArchive: return QBluetoothServiceDiscoveryAgent::tr("Basic Imaging Archive");
-    case QBluetoothUuid::ImagingReferenceObjects: return QBluetoothServiceDiscoveryAgent::tr("Basic Imaging Ref Objects");
-    case QBluetoothUuid::Handsfree: return QBluetoothServiceDiscoveryAgent::tr("Hands-Free");
-    case QBluetoothUuid::HandsfreeAudioGateway: return QBluetoothServiceDiscoveryAgent::tr("Hands-Free AG");
-    case QBluetoothUuid::DirectPrintingReferenceObjectsService: return QBluetoothServiceDiscoveryAgent::tr("Basic Printing RefObject Service");
-    case QBluetoothUuid::ReflectedUI: return QBluetoothServiceDiscoveryAgent::tr("Basic Printing Reflected UI");
-    case QBluetoothUuid::BasicPrinting: return QBluetoothServiceDiscoveryAgent::tr("Basic Printing");
-    case QBluetoothUuid::PrintingStatus: return QBluetoothServiceDiscoveryAgent::tr("Basic Printing Status");
-    case QBluetoothUuid::HumanInterfaceDeviceService: return QBluetoothServiceDiscoveryAgent::tr("Human Interface Device");
-    case QBluetoothUuid::HardcopyCableReplacement: return QBluetoothServiceDiscoveryAgent::tr("Hardcopy Cable Replacement");
-    case QBluetoothUuid::HCRPrint: return QBluetoothServiceDiscoveryAgent::tr("Hardcopy Cable Replacement Print");
-    case QBluetoothUuid::HCRScan: return QBluetoothServiceDiscoveryAgent::tr("Hardcopy Cable Replacement Scan");
-    case QBluetoothUuid::SIMAccess: return QBluetoothServiceDiscoveryAgent::tr("SIM Access");
-    case QBluetoothUuid::PhonebookAccessPCE: return QBluetoothServiceDiscoveryAgent::tr("Phonebook Access PCE");
-    case QBluetoothUuid::PhonebookAccessPSE: return QBluetoothServiceDiscoveryAgent::tr("Phonebook Access PSE");
-    case QBluetoothUuid::PhonebookAccess: return QBluetoothServiceDiscoveryAgent::tr("Phonebook Access");
-    case QBluetoothUuid::HeadsetHS: return QBluetoothServiceDiscoveryAgent::tr("Headset HS");
-    case QBluetoothUuid::MessageAccessServer: return QBluetoothServiceDiscoveryAgent::tr("Message Access Server");
-    case QBluetoothUuid::MessageNotificationServer: return QBluetoothServiceDiscoveryAgent::tr("Message Notification Server");
-    case QBluetoothUuid::MessageAccessProfile: return QBluetoothServiceDiscoveryAgent::tr("Message Access");
-    case QBluetoothUuid::GNSS: return QBluetoothServiceDiscoveryAgent::tr("Global Navigation Satellite System");
-    case QBluetoothUuid::GNSSServer: return QBluetoothServiceDiscoveryAgent::tr("Global Navigation Satellite System Server");
-    case QBluetoothUuid::Display3D: return QBluetoothServiceDiscoveryAgent::tr("3D Synchronization Display");
-    case QBluetoothUuid::Glasses3D: return QBluetoothServiceDiscoveryAgent::tr("3D Synchronization Glasses");
-    case QBluetoothUuid::Synchronization3D: return QBluetoothServiceDiscoveryAgent::tr("3D Synchronization");
-    case QBluetoothUuid::MPSProfile: return QBluetoothServiceDiscoveryAgent::tr("Multi-Profile Specification (Profile)");
-    case QBluetoothUuid::MPSService: return QBluetoothServiceDiscoveryAgent::tr("Multi-Profile Specification");
-    case QBluetoothUuid::PnPInformation: return QBluetoothServiceDiscoveryAgent::tr("Device Identification");
-    //case QBluetoothUuid::GenericNetworking: return QBluetoothServiceDiscoveryAgent::tr("");
-    //case QBluetoothUuid::GenericFileTransfer: return QBluetoothServiceDiscoveryAgent::tr("");
-    //case QBluetoothUuid::GenericAudio: return QBluetoothServiceDiscoveryAgent::tr("");
-    //case QBluetoothUuid::GenericTelephony: return QBluetoothServiceDiscoveryAgent::tr("");
-    case QBluetoothUuid::VideoSource: return QBluetoothServiceDiscoveryAgent::tr("Video Source");
-    case QBluetoothUuid::VideoSink: return QBluetoothServiceDiscoveryAgent::tr("Video Sink");
-    case QBluetoothUuid::VideoDistribution: return QBluetoothServiceDiscoveryAgent::tr("Video Distribution");
-    case QBluetoothUuid::HDP: return QBluetoothServiceDiscoveryAgent::tr("Health Device");
-    case QBluetoothUuid::HDPSource: return QBluetoothServiceDiscoveryAgent::tr("Health Device Source");
-    case QBluetoothUuid::HDPSink: return QBluetoothServiceDiscoveryAgent::tr("Health Device Sink");
-    default:
-        break;
-    }
-
-    return QString();
-}
-
 void QBluetoothServiceDiscoveryAgentPrivate::populateDiscoveredServices(const QBluetoothDeviceInfo &remoteDevice, const QList<QBluetoothUuid> &uuids)
 {
     /* Android doesn't provide decent SDP data. A list of uuids is close to meaning-less
@@ -403,21 +317,14 @@ void QBluetoothServiceDiscoveryAgentPrivate::populateDiscoveredServices(const QB
         if (uuid.isNull())
             continue;
 
-        bool isBaseUuuidSuffix = false;
-        if (btBaseUuid()->data2 == uuid.data2 && btBaseUuid()->data3 == uuid.data3
-                   && btBaseUuid()->data4[0] == uuid.data4[0] && btBaseUuid()->data4[1] == uuid.data4[1]
-                   && btBaseUuid()->data4[2] == uuid.data4[2] && btBaseUuid()->data4[3] == uuid.data4[3]
-                   && btBaseUuid()->data4[4] == uuid.data4[4] && btBaseUuid()->data4[5] == uuid.data4[5]
-                   && btBaseUuid()->data4[6] == uuid.data4[6] && btBaseUuid()->data4[7] == uuid.data4[7])
-        {
-            isBaseUuuidSuffix = true;
-        }
-
         //check for SPP protocol
-        if (isBaseUuuidSuffix && ((uuid.data1 & 0xffff) == QBluetoothUuid::SerialPort))
+        bool ok = false;
+        quint16 uuid16 = uuid.toUInt16(&ok);
+        if (ok && uuid16 == QBluetoothUuid::SerialPort)
             sppIndex = i;
 
-        if (!isBaseUuuidSuffix)
+        //check for custom uuid
+        if (uuid.minimumSize() == 16)
             customUuids.append(i);
     }
 
@@ -428,8 +335,12 @@ void QBluetoothServiceDiscoveryAgentPrivate::populateDiscoveredServices(const QB
         QBluetoothServiceInfo serviceInfo;
         serviceInfo.setDevice(remoteDevice);
 
-        QBluetoothServiceInfo::Sequence  protocolDescriptorList;
-        protocolDescriptorList << QVariant::fromValue(QBluetoothUuid(QBluetoothUuid::L2cap));
+        QBluetoothServiceInfo::Sequence protocolDescriptorList;
+        {
+            QBluetoothServiceInfo::Sequence protocol;
+            protocol << QVariant::fromValue(QBluetoothUuid(QBluetoothUuid::L2cap));
+            protocolDescriptorList.append(QVariant::fromValue(protocol));
+        }
 
         if (customUuids.contains(i) && sppIndex > -1) {
             //we have a custom uuid of service class type SPP
@@ -483,22 +394,13 @@ void QBluetoothServiceDiscoveryAgentPrivate::populateDiscoveredServices(const QB
             QBluetoothServiceInfo::Sequence classId;
             classId << QVariant::fromValue(uuids.at(i));
             serviceInfo.setAttribute(QBluetoothServiceInfo::ServiceClassIds, classId);
-            serviceInfo.setServiceName(serviceNameForClassUuid(uuids.at(i).data1));
+            QBluetoothUuid::ServiceClassUuid clsId
+                = static_cast<QBluetoothUuid::ServiceClassUuid>(uuids.at(i).toUInt16());
+            serviceInfo.setServiceName(QBluetoothUuid::serviceClassToString(clsId));
         }
 
         //don't include the service if we already discovered it before
-        bool alreadyDiscovered = false;
-        for (int j = 0; j < discoveredServices.count(); j++) {
-            const QBluetoothServiceInfo &info = discoveredServices.at(j);
-            if (info.device() == serviceInfo.device()
-                    && info.serviceClassUuids() == serviceInfo.serviceClassUuids()
-                    && info.serviceUuid() == serviceInfo.serviceUuid()) {
-                alreadyDiscovered = true;
-                break;
-            }
-        }
-
-        if (!alreadyDiscovered) {
+        if (!isDuplicatedService(serviceInfo)) {
             discoveredServices << serviceInfo;
             //qCDebug(QT_BT_ANDROID) << serviceInfo;
             emit q->serviceDiscovered(serviceInfo);

@@ -53,7 +53,7 @@ Rectangle {
         Text { text: "Click"; font.pixelSize: 16; anchors.centerIn: parent }
 
         MouseArea {
-            anchors.fill: parent 
+            anchors.fill: parent
             hoverEnabled: true
             acceptedButtons: Qt.LeftButton | Qt.RightButton
 
@@ -61,7 +61,7 @@ Rectangle {
             onExited: info.text = 'Exited (pressed=' + pressed + ')'
 
             onPressed: {
-                info.text = 'Pressed (button=' + (mouse.button == Qt.RightButton ? 'right' : 'left') 
+                info.text = 'Pressed (button=' + (mouse.button == Qt.RightButton ? 'right' : 'left')
                     + ' shift=' + (mouse.modifiers & Qt.ShiftModifier ? 'true' : 'false') + ')'
                 var posInBox = redSquare.mapToItem(box, mouse.x, mouse.y)
                 posInfo.text = + mouse.x + ',' + mouse.y + ' in square'

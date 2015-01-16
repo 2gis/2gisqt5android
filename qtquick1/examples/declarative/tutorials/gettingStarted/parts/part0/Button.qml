@@ -43,13 +43,13 @@ import QtQuick 1.0
 
 Rectangle {
     id: simplebutton
-    color: "grey"    
+    color: "grey"
     width: 150; height: 75
-    
+
     Text{
         id: buttonLabel
         anchors.centerIn: parent
-        text: "button label"    
+        text: "button label"
     }
 }
 //! [document]

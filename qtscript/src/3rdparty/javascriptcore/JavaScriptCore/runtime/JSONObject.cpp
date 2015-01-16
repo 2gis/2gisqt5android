@@ -399,7 +399,7 @@ Stringifier::StringifyResult Stringifier::appendStringifiedValue(StringBuilder& 
 
     double numericValue;
     if (value.getNumber(numericValue)) {
-        if (!isfinite(numericValue))
+        if (!std::isfinite(numericValue))
             builder.append("null");
         else
             builder.append(UString::from(numericValue));

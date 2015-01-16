@@ -69,7 +69,7 @@ Image {
 
     onCreatedChanged: {
         if (created) {
-            sun.z = 1;    // above the sky but below the ground layer 
+            sun.z = 1;    // above the sky but below the ground layer
             window.activeSuns++;
         } else {
             window.activeSuns--;

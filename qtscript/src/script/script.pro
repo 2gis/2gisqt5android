@@ -75,8 +75,4 @@ integrity {
     CFLAGS += --diag_remark=236,82
 }
 
-# WebKit doesn't compile in C++0x mode
-*-g++*:QMAKE_CXXFLAGS -= -std=c++0x -std=gnu++0x
-CONFIG -= c++11
-
 TR_EXCLUDE = $$WEBKITDIR/*

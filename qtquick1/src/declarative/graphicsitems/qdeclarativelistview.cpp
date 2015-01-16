@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtDeclarative module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -1597,7 +1589,7 @@ void QDeclarativeListViewPrivate::flick(AxisData &data, qreal minExtent, qreal m
     for its delegate. The view will create a new \l Text component for each item in the model. Notice
     the delegate is able to access the model's \c name and \c number data directly.
 
-    An improved list view is shown below. The delegate is visually improved and is moved 
+    An improved list view is shown below. The delegate is visually improved and is moved
     into a separate \c contactDelegate component.
 
     \snippet doc/src/snippets/declarative/listview/listview.qml classdocs advanced
@@ -1871,10 +1863,10 @@ void QDeclarativeListView::setDelegate(QDeclarativeComponent *delegate)
     \c currentItem holds the current item.   Setting the currentIndex to -1
     will clear the highlight and set currentItem to null.
 
-    If highlightFollowsCurrentItem is \c true, setting either of these 
-    properties will smoothly scroll the ListView so that the current 
+    If highlightFollowsCurrentItem is \c true, setting either of these
+    properties will smoothly scroll the ListView so that the current
     item becomes visible.
-    
+
     Note that the position of the current item
     may only be approximate until it becomes visible in the view.
 */
@@ -1977,8 +1969,8 @@ void QDeclarativeListView::setHighlight(QDeclarativeComponent *highlight)
     If this property is true (the default value), the highlight is moved smoothly
     to follow the current item.  Otherwise, the
     highlight is not moved by the view, and any movement must be implemented
-    by the highlight.  
-    
+    by the highlight.
+
     Here is a highlight with its motion defined by a \l {SpringAnimation} item:
 
     \snippet doc/src/snippets/declarative/listview/listview.qml highlightFollowsCurrentItem
@@ -2020,12 +2012,12 @@ void QDeclarativeListView::setHighlightFollowsCurrentItem(bool autoHighlight)
 
     These properties define the preferred range of the highlight (for the current item)
     within the view. The \c preferredHighlightBegin value must be less than the
-    \c preferredHighlightEnd value. 
+    \c preferredHighlightEnd value.
 
     These properties affect the position of the current item when the list is scrolled.
     For example, if the currently selected item should stay in the middle of the
-    list when the view is scrolled, set the \c preferredHighlightBegin and 
-    \c preferredHighlightEnd values to the top and bottom coordinates of where the middle 
+    list when the view is scrolled, set the \c preferredHighlightBegin and
+    \c preferredHighlightEnd values to the top and bottom coordinates of where the middle
     item would be. If the \c currentItem is changed programmatically, the list will
     automatically scroll so that the current item is in the middle of the view.
     Furthermore, the behavior of the current item index will occur whether or not a
@@ -2228,7 +2220,7 @@ Qt::LayoutDirection QDeclarativeListView::effectiveLayoutDirection() const
 
 /*!
     \qmlproperty bool ListView::keyNavigationWraps
-    This property holds whether the list wraps key navigation. 
+    This property holds whether the list wraps key navigation.
 
     If this is true, key navigation that would move the current item selection
     past the end of the list instead wraps around and moves the selection to
@@ -2299,7 +2291,7 @@ void QDeclarativeListView::setCacheBuffer(int b)
     The \l section attached property enables a ListView to be visually
     separated into different parts. These properties determine how sections
     are created.
-    
+
     \c section.property holds the name of the property that is the basis
     of each section.
 
@@ -2310,7 +2302,7 @@ void QDeclarativeListView::setCacheBuffer(int b)
     \li ViewSection.FullString (default) - sections are created based on the
     \c section.property value.
     \li ViewSection.FirstCharacter - sections are created based on the first
-    character of the \c section.property value (for example, 'A', 'B', 'C' 
+    character of the \c section.property value (for example, 'A', 'B', 'C'
     sections, etc. for an address book)
     \endlist
 
@@ -2320,13 +2312,13 @@ void QDeclarativeListView::setCacheBuffer(int b)
     \c ListView.previousSection and \c ListView.nextSection.  These may be
     used to place a section header for related items.
 
-    For example, here is a ListView that displays a list of animals, separated 
-    into sections. Each item in the ListView is placed in a different section 
+    For example, here is a ListView that displays a list of animals, separated
+    into sections. Each item in the ListView is placed in a different section
     depending on the "size" property of the model item. The \c sectionHeading
     delegate component provides the light blue bar that marks the beginning of
     each section.
 
-       
+
     \snippet examples/declarative/modelviews/listview/sections.qml 0
 
     \image qml-listview-sections-example.png
@@ -3211,8 +3203,10 @@ void QDeclarativeListView::trackedPositionChanged()
 void QDeclarativeListView::itemsInserted(int modelIndex, int count)
 {
     Q_D(QDeclarativeListView);
-    if (!isComponentComplete())
+    if (!isComponentComplete()) {
+        emit countChanged();
         return;
+    }
     d->updateUnrequestedIndexes();
     d->moveReason = QDeclarativeListViewPrivate::Other;
 
@@ -3364,8 +3358,10 @@ void QDeclarativeListView::itemsInserted(int modelIndex, int count)
 void QDeclarativeListView::itemsRemoved(int modelIndex, int count)
 {
     Q_D(QDeclarativeListView);
-    if (!isComponentComplete())
+    if (!isComponentComplete()) {
+        emit countChanged();
         return;
+    }
     d->moveReason = QDeclarativeListViewPrivate::Other;
     d->updateUnrequestedIndexes();
     d->itemCount -= count;

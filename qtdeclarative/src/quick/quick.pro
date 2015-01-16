@@ -18,7 +18,8 @@ QMAKE_DOCS = $$PWD/doc/qtquick.qdocconf
 ANDROID_LIB_DEPENDENCIES = \
     lib/libQt5QuickParticles.so
 MODULE_PLUGIN_TYPES += \
-    accessible/libqtaccessiblequick.so
+    accessible/libqtaccessiblequick.so \
+    scenegraph
 ANDROID_BUNDLED_FILES += \
     qml \
     lib/libQt5QuickParticles.so
@@ -29,6 +30,9 @@ include(util/util.pri)
 include(scenegraph/scenegraph.pri)
 include(items/items.pri)
 include(designer/designer.pri)
+contains(QT_CONFIG, accessibility) {
+    include(accessible/accessible.pri)
+}
 
 HEADERS += \
     qtquickglobal.h \

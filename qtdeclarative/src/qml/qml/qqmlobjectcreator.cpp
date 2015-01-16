@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the tools applications of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -101,7 +93,7 @@ QQmlObjectCreator::QQmlObjectCreator(QQmlContextData *parentContext, QQmlCompile
     sharedState->rootContext = 0;
 
     QQmlProfiler *profiler = QQmlEnginePrivate::get(engine)->profiler;
-    Q_QML_PROFILE_IF_ENABLED(profiler,
+    Q_QML_PROFILE_IF_ENABLED(QQmlProfilerDefinitions::ProfileCreating, profiler,
             sharedState->profiler.init(profiler, compiledData->totalParserStatusCount));
 }
 
@@ -127,7 +119,7 @@ void QQmlObjectCreator::init(QQmlContextData *providedParentContext)
     if (!compiledData->isInitialized())
         compiledData->initialize(engine);
 
-    qmlUnit = compiledData->qmlUnit;
+    qmlUnit = compiledData->compilationUnit->data;
     context = 0;
     _qobject = 0;
     _scopeObject = 0;
@@ -184,10 +176,11 @@ QObject *QQmlObjectCreator::create(int subComponentIndex, QObject *parent, QQmlI
 
     context = new QQmlContextData;
     context->isInternal = true;
-    context->url = compiledData->url;
-    context->urlString = compiledData->name;
+    context->url = compiledData->url();
+    context->urlString = compiledData->fileName();
     context->imports = compiledData->importCache;
     context->imports->addref();
+    context->typeCompilationUnit = compiledData->compilationUnit;
     context->setParent(parentContext);
 
     if (!sharedState->rootContext) {
@@ -273,7 +266,7 @@ bool QQmlObjectCreator::populateDeferredProperties(QObject *instance)
     sharedState->allJavaScriptObjects = valueScope.alloc(compiledData->totalObjectCount);
 
     QV4::ScopedObject qmlScope(valueScope, QV4::QmlContextWrapper::qmlScope(QV8Engine::get(engine), context, _scopeObject));
-    QV4::Scoped<QV4::QmlBindingWrapper> qmlBindingWrapper(valueScope, new (v4->memoryManager) QV4::QmlBindingWrapper(v4->rootContext, qmlScope));
+    QV4::Scoped<QV4::QmlBindingWrapper> qmlBindingWrapper(valueScope, v4->memoryManager->alloc<QV4::QmlBindingWrapper>(v4->rootContext, qmlScope));
     QV4::ExecutionContext *qmlContext = qmlBindingWrapper->context();
 
     qSwap(_qmlContext, qmlContext);
@@ -323,7 +316,7 @@ void QQmlObjectCreator::setPropertyValue(QQmlPropertyData *property, const QV4::
             propertyType = QMetaType::Int;
         } else {
             // ### This should be resolved earlier at compile time and the binding value should be changed accordingly.
-            QVariant value = binding->valueAsString(&qmlUnit->header);
+            QVariant value = binding->valueAsString(qmlUnit);
             bool ok = QQmlPropertyPrivate::write(_qobject, *property, value, context);
             Q_ASSERT(ok);
             Q_UNUSED(ok);
@@ -362,7 +355,7 @@ void QQmlObjectCreator::setPropertyValue(QQmlPropertyData *property, const QV4::
                 QMetaObject::metacall(_qobject, QMetaObject::WriteProperty, property->coreIndex, argv);
             }
         } else {
-            QString stringValue = binding->valueAsString(&qmlUnit->header);
+            QString stringValue = binding->valueAsString(qmlUnit);
             if (property->isVarProperty()) {
                 QV4::ScopedString s(scope, v4->newString(stringValue));
                 _vmeMetaObject->setVMEProperty(property->coreIndex, s);
@@ -376,31 +369,31 @@ void QQmlObjectCreator::setPropertyValue(QQmlPropertyData *property, const QV4::
     break;
     case QVariant::String: {
         Q_ASSERT(binding->evaluatesToString());
-        QString value = binding->valueAsString(&qmlUnit->header);
+        QString value = binding->valueAsString(qmlUnit);
         argv[0] = &value;
         QMetaObject::metacall(_qobject, QMetaObject::WriteProperty, property->coreIndex, argv);
     }
     break;
     case QVariant::StringList: {
         Q_ASSERT(binding->evaluatesToString());
-        QStringList value(binding->valueAsString(&qmlUnit->header));
+        QStringList value(binding->valueAsString(qmlUnit));
         argv[0] = &value;
         QMetaObject::metacall(_qobject, QMetaObject::WriteProperty, property->coreIndex, argv);
     }
     break;
     case QVariant::ByteArray: {
         Q_ASSERT(binding->type == QV4::CompiledData::Binding::Type_String);
-        QByteArray value(binding->valueAsString(&qmlUnit->header).toUtf8());
+        QByteArray value(binding->valueAsString(qmlUnit).toUtf8());
         argv[0] = &value;
         QMetaObject::metacall(_qobject, QMetaObject::WriteProperty, property->coreIndex, argv);
     }
     break;
     case QVariant::Url: {
         Q_ASSERT(binding->type == QV4::CompiledData::Binding::Type_String);
-        QString string = binding->valueAsString(&qmlUnit->header);
+        QString string = binding->valueAsString(qmlUnit);
         // Encoded dir-separators defeat QUrl processing - decode them first
         string.replace(QLatin1String("%2f"), QLatin1String("/"), Qt::CaseInsensitive);
-        QUrl value = string.isEmpty() ? QUrl() : compiledData->url.resolved(QUrl(string));
+        QUrl value = string.isEmpty() ? QUrl() : compiledData->url().resolved(QUrl(string));
         // Apply URL interceptor
         if (engine->urlInterceptor())
             value = engine->urlInterceptor()->intercept(value, QQmlAbstractUrlInterceptor::UrlString);
@@ -442,7 +435,7 @@ void QQmlObjectCreator::setPropertyValue(QQmlPropertyData *property, const QV4::
     break;
     case QVariant::Color: {
         bool ok = false;
-        uint colorValue = QQmlStringConverters::rgbaFromString(binding->valueAsString(&qmlUnit->header), &ok);
+        uint colorValue = QQmlStringConverters::rgbaFromString(binding->valueAsString(qmlUnit), &ok);
         Q_ASSERT(ok);
         struct { void *data[4]; } buffer;
         if (QQml_valueTypeProvider()->storeValueType(property->propType, &colorValue, &buffer, sizeof(buffer))) {
@@ -454,7 +447,7 @@ void QQmlObjectCreator::setPropertyValue(QQmlPropertyData *property, const QV4::
 #ifndef QT_NO_DATESTRING
     case QVariant::Date: {
         bool ok = false;
-        QDate value = QQmlStringConverters::dateFromString(binding->valueAsString(&qmlUnit->header), &ok);
+        QDate value = QQmlStringConverters::dateFromString(binding->valueAsString(qmlUnit), &ok);
         Q_ASSERT(ok);
         argv[0] = &value;
         QMetaObject::metacall(_qobject, QMetaObject::WriteProperty, property->coreIndex, argv);
@@ -462,7 +455,7 @@ void QQmlObjectCreator::setPropertyValue(QQmlPropertyData *property, const QV4::
     break;
     case QVariant::Time: {
         bool ok = false;
-        QTime value = QQmlStringConverters::timeFromString(binding->valueAsString(&qmlUnit->header), &ok);
+        QTime value = QQmlStringConverters::timeFromString(binding->valueAsString(qmlUnit), &ok);
         Q_ASSERT(ok);
         argv[0] = &value;
         QMetaObject::metacall(_qobject, QMetaObject::WriteProperty, property->coreIndex, argv);
@@ -470,7 +463,7 @@ void QQmlObjectCreator::setPropertyValue(QQmlPropertyData *property, const QV4::
     break;
     case QVariant::DateTime: {
         bool ok = false;
-        QDateTime value = QQmlStringConverters::dateTimeFromString(binding->valueAsString(&qmlUnit->header), &ok);
+        QDateTime value = QQmlStringConverters::dateTimeFromString(binding->valueAsString(qmlUnit), &ok);
         // ### VME compatibility :(
         {
             const qint64 date = value.date().toJulianDay();
@@ -485,7 +478,7 @@ void QQmlObjectCreator::setPropertyValue(QQmlPropertyData *property, const QV4::
 #endif // QT_NO_DATESTRING
     case QVariant::Point: {
         bool ok = false;
-        QPoint value = QQmlStringConverters::pointFFromString(binding->valueAsString(&qmlUnit->header), &ok).toPoint();
+        QPoint value = QQmlStringConverters::pointFFromString(binding->valueAsString(qmlUnit), &ok).toPoint();
         Q_ASSERT(ok);
         argv[0] = &value;
         QMetaObject::metacall(_qobject, QMetaObject::WriteProperty, property->coreIndex, argv);
@@ -493,7 +486,7 @@ void QQmlObjectCreator::setPropertyValue(QQmlPropertyData *property, const QV4::
     break;
     case QVariant::PointF: {
         bool ok = false;
-        QPointF value = QQmlStringConverters::pointFFromString(binding->valueAsString(&qmlUnit->header), &ok);
+        QPointF value = QQmlStringConverters::pointFFromString(binding->valueAsString(qmlUnit), &ok);
         Q_ASSERT(ok);
         argv[0] = &value;
         QMetaObject::metacall(_qobject, QMetaObject::WriteProperty, property->coreIndex, argv);
@@ -501,7 +494,7 @@ void QQmlObjectCreator::setPropertyValue(QQmlPropertyData *property, const QV4::
     break;
     case QVariant::Size: {
         bool ok = false;
-        QSize value = QQmlStringConverters::sizeFFromString(binding->valueAsString(&qmlUnit->header), &ok).toSize();
+        QSize value = QQmlStringConverters::sizeFFromString(binding->valueAsString(qmlUnit), &ok).toSize();
         Q_ASSERT(ok);
         argv[0] = &value;
         QMetaObject::metacall(_qobject, QMetaObject::WriteProperty, property->coreIndex, argv);
@@ -509,7 +502,7 @@ void QQmlObjectCreator::setPropertyValue(QQmlPropertyData *property, const QV4::
     break;
     case QVariant::SizeF: {
         bool ok = false;
-        QSizeF value = QQmlStringConverters::sizeFFromString(binding->valueAsString(&qmlUnit->header), &ok);
+        QSizeF value = QQmlStringConverters::sizeFFromString(binding->valueAsString(qmlUnit), &ok);
         Q_ASSERT(ok);
         argv[0] = &value;
         QMetaObject::metacall(_qobject, QMetaObject::WriteProperty, property->coreIndex, argv);
@@ -517,7 +510,7 @@ void QQmlObjectCreator::setPropertyValue(QQmlPropertyData *property, const QV4::
     break;
     case QVariant::Rect: {
         bool ok = false;
-        QRect value = QQmlStringConverters::rectFFromString(binding->valueAsString(&qmlUnit->header), &ok).toRect();
+        QRect value = QQmlStringConverters::rectFFromString(binding->valueAsString(qmlUnit), &ok).toRect();
         Q_ASSERT(ok);
         argv[0] = &value;
         QMetaObject::metacall(_qobject, QMetaObject::WriteProperty, property->coreIndex, argv);
@@ -525,7 +518,7 @@ void QQmlObjectCreator::setPropertyValue(QQmlPropertyData *property, const QV4::
     break;
     case QVariant::RectF: {
         bool ok = false;
-        QRectF value = QQmlStringConverters::rectFFromString(binding->valueAsString(&qmlUnit->header), &ok);
+        QRectF value = QQmlStringConverters::rectFFromString(binding->valueAsString(qmlUnit), &ok);
         Q_ASSERT(ok);
         argv[0] = &value;
         QMetaObject::metacall(_qobject, QMetaObject::WriteProperty, property->coreIndex, argv);
@@ -544,7 +537,7 @@ void QQmlObjectCreator::setPropertyValue(QQmlPropertyData *property, const QV4::
             float yp;
             float zy;
         } vec;
-        bool ok = QQmlStringConverters::createFromString(QMetaType::QVector3D, binding->valueAsString(&qmlUnit->header), &vec, sizeof(vec));
+        bool ok = QQmlStringConverters::createFromString(QMetaType::QVector3D, binding->valueAsString(qmlUnit), &vec, sizeof(vec));
         Q_ASSERT(ok);
         Q_UNUSED(ok);
         argv[0] = reinterpret_cast<void *>(&vec);
@@ -558,7 +551,7 @@ void QQmlObjectCreator::setPropertyValue(QQmlPropertyData *property, const QV4::
             float zy;
             float wp;
         } vec;
-        bool ok = QQmlStringConverters::createFromString(QMetaType::QVector4D, binding->valueAsString(&qmlUnit->header), &vec, sizeof(vec));
+        bool ok = QQmlStringConverters::createFromString(QMetaType::QVector4D, binding->valueAsString(qmlUnit), &vec, sizeof(vec));
         Q_ASSERT(ok);
         Q_UNUSED(ok);
         argv[0] = reinterpret_cast<void *>(&vec);
@@ -594,8 +587,8 @@ void QQmlObjectCreator::setPropertyValue(QQmlPropertyData *property, const QV4::
             break;
         } else if (property->propType == qMetaTypeId<QList<QUrl> >()) {
             Q_ASSERT(binding->type == QV4::CompiledData::Binding::Type_String);
-            QString urlString = binding->valueAsString(&qmlUnit->header);
-            QUrl u = urlString.isEmpty() ? QUrl() : compiledData->url.resolved(QUrl(urlString));
+            QString urlString = binding->valueAsString(qmlUnit);
+            QUrl u = urlString.isEmpty() ? QUrl() : compiledData->url().resolved(QUrl(urlString));
             QList<QUrl> value;
             value.append(u);
             argv[0] = reinterpret_cast<void *>(&value);
@@ -604,7 +597,7 @@ void QQmlObjectCreator::setPropertyValue(QQmlPropertyData *property, const QV4::
         } else if (property->propType == qMetaTypeId<QList<QString> >()) {
             Q_ASSERT(binding->evaluatesToString());
             QList<QString> value;
-            value.append(binding->valueAsString(&qmlUnit->header));
+            value.append(binding->valueAsString(qmlUnit));
             argv[0] = reinterpret_cast<void *>(&value);
             QMetaObject::metacall(_qobject, QMetaObject::WriteProperty, property->coreIndex, argv);
             break;
@@ -619,7 +612,7 @@ void QQmlObjectCreator::setPropertyValue(QQmlPropertyData *property, const QV4::
                 } else
                     value = QJSValue(n);
             } else {
-                value = QJSValue(binding->valueAsString(&qmlUnit->header));
+                value = QJSValue(binding->valueAsString(qmlUnit));
             }
             argv[0] = reinterpret_cast<void *>(&value);
             QMetaObject::metacall(_qobject, QMetaObject::WriteProperty, property->coreIndex, argv);
@@ -627,7 +620,7 @@ void QQmlObjectCreator::setPropertyValue(QQmlPropertyData *property, const QV4::
         }
 
         // otherwise, try a custom type assignment
-        QString stringValue = binding->valueAsString(&qmlUnit->header);
+        QString stringValue = binding->valueAsString(qmlUnit);
         QQmlMetaType::StringConverter converter = QQmlMetaType::customStringConverter(property->propType);
         Q_ASSERT(converter);
         QVariant value = (*converter)(stringValue);
@@ -760,8 +753,8 @@ bool QQmlObjectCreator::setPropertyBinding(QQmlPropertyData *property, const QV4
 
     // ### resolve this at compile time
     if (property && property->propType == qMetaTypeId<QQmlScriptString>()) {
-        QQmlScriptString ss(binding->valueAsScriptString(&qmlUnit->header), context->asQQmlContext(), _scopeObject);
-        ss.d.data()->bindingId = binding->value.compiledScriptIndex;
+        QQmlScriptString ss(binding->valueAsScriptString(qmlUnit), context->asQQmlContext(), _scopeObject);
+        ss.d.data()->bindingId = binding->type == QV4::CompiledData::Binding::Type_Script ? binding->value.compiledScriptIndex : QQmlBinding::Invalid;
         ss.d.data()->lineNumber = binding->location.line;
         ss.d.data()->columnNumber = binding->location.column;
         ss.d.data()->isStringLiteral = binding->type == QV4::CompiledData::Binding::Type_String;
@@ -1022,7 +1015,7 @@ void QQmlObjectCreator::setupFunctions()
 void QQmlObjectCreator::recordError(const QV4::CompiledData::Location &location, const QString &description)
 {
     QQmlError error;
-    error.setUrl(compiledData->url);
+    error.setUrl(compiledData->url());
     error.setLine(location.line);
     error.setColumn(location.column);
     error.setDescription(description);
@@ -1086,9 +1079,9 @@ QObject *QQmlObjectCreator::createInstance(int index, QObject *parent, bool isCo
             sharedState->allCreatedObjects.push(instance);
         } else {
             Q_ASSERT(typeRef->component);
-            Q_QML_OC_PROFILE(sharedState->profiler, profiler.update(typeRef->component->name,
+            Q_QML_OC_PROFILE(sharedState->profiler, profiler.update(typeRef->component->fileName(),
                     context->url, obj->location.line, obj->location.column));
-            if (typeRef->component->qmlUnit->isSingleton())
+            if (typeRef->component->compilationUnit->data->isSingleton())
             {
                 recordError(obj->location, tr("Composite Singleton Type %1 is not creatable").arg(stringAt(obj->inheritedTypeNameIndex)));
                 return 0;
@@ -1142,10 +1135,19 @@ QObject *QQmlObjectCreator::createInstance(int index, QObject *parent, bool isCo
 
     QBitArray bindingsToSkip;
     if (customParser) {
-        QHash<int, QQmlCompiledData::CustomParserData>::ConstIterator entry = compiledData->customParserData.find(index);
-        if (entry != compiledData->customParserData.constEnd()) {
-            customParser->setCustomData(instance, entry->compilationArtifact, compiledData);
-            bindingsToSkip = entry->bindings;
+        QHash<int, QBitArray>::ConstIterator customParserBindings = compiledData->customParserBindings.find(index);
+        if (customParserBindings != compiledData->customParserBindings.constEnd()) {
+            customParser->imports = compiledData->importCache;
+
+            QList<const QV4::CompiledData::Binding *> bindings;
+            const QV4::CompiledData::Object *obj = qmlUnit->objectAt(index);
+            for (int i = 0; i < customParserBindings->count(); ++i)
+                if (customParserBindings->testBit(i))
+                    bindings << obj->bindingTable() + i;
+            customParser->applyBindings(instance, compiledData, bindings);
+
+            customParser->imports = (QQmlTypeNameCache*)0;
+            bindingsToSkip = *customParserBindings;
         }
     }
 
@@ -1174,7 +1176,7 @@ QObject *QQmlObjectCreator::createInstance(int index, QObject *parent, bool isCo
 
     QV4::Scope valueScope(v4);
     QV4::ScopedObject qmlScope(valueScope, QV4::QmlContextWrapper::qmlScope(QV8Engine::get(engine), context, _scopeObject));
-    QV4::Scoped<QV4::QmlBindingWrapper> qmlBindingWrapper(valueScope, new (v4->memoryManager) QV4::QmlBindingWrapper(v4->rootContext, qmlScope));
+    QV4::Scoped<QV4::QmlBindingWrapper> qmlBindingWrapper(valueScope, v4->memoryManager->alloc<QV4::QmlBindingWrapper>(v4->rootContext, qmlScope));
     QV4::ExecutionContext *qmlContext = qmlBindingWrapper->context();
 
     qSwap(_qmlContext, qmlContext);

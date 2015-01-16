@@ -64,5 +64,7 @@ int main(int argc, char *argv[])
     QObject* root = engine.rootObjects().value(0);
     if (QWindow *window = qobject_cast<QWindow *>(root))
         window->show();
+    else
+        return -1;
     return app.exec();
 }

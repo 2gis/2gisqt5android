@@ -43,7 +43,7 @@ import "FocusCore"
 
 Rectangle {
     id: window
-    
+
     width: 800; height: 480
     color: "#3E606F"
 
@@ -66,11 +66,11 @@ Rectangle {
             y: 320; width: parent.width; height: 320
         }
 
-        Rectangle { 
+        Rectangle {
             id: shade
             anchors.fill: parent
             color: "black"
-            opacity: 0 
+            opacity: 0
         }
 
         states: State {

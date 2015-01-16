@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -69,8 +61,6 @@ struct WithContext;
 
 struct Q_QML_EXPORT ExecutionContext : public Managed
 {
-    V4_MANAGED
-    Q_MANAGED_TYPE(ExecutionContext)
     enum {
         IsExecutionContext = true
     };
@@ -83,48 +73,66 @@ struct Q_QML_EXPORT ExecutionContext : public Managed
         Type_CallContext = 0x5,
         Type_QmlContext = 0x6
     };
-
-    ExecutionContext(ExecutionEngine *engine, ContextType t)
-        : Managed(engine->executionContextClass)
-    {
-        this->type = t;
-        strictMode = false;
-        this->engine = engine;
-        this->parent = engine->currentContext();
-        outer = 0;
-        lookups = 0;
-        compilationUnit = 0;
-        currentEvalCode = 0;
-        lineNumber = -1;
-        engine->current = this;
-    }
-
-    ContextType type;
-    bool strictMode;
-
-    CallData *callData;
-
-    ExecutionEngine *engine;
-    ExecutionContext *parent;
-    ExecutionContext *outer;
-    Lookup *lookups;
-    CompiledData::CompilationUnit *compilationUnit;
-
     struct EvalCode
     {
         Function *function;
         EvalCode *next;
     };
-    EvalCode *currentEvalCode;
 
-    int lineNumber;
+    struct Data : Managed::Data {
+        Data(ExecutionEngine *engine, ContextType t)
+            : Managed::Data(engine->executionContextClass)
+            , type(t)
+            , strictMode(false)
+            , engine(engine)
+            , parent(engine->currentContext())
+            , outer(0)
+            , lookups(0)
+            , compilationUnit(0)
+            , currentEvalCode(0)
+            , lineNumber(-1)
+        {
+            engine->current = reinterpret_cast<ExecutionContext *>(this);
+        }
+        ContextType type;
+        bool strictMode;
 
-    CallContext *newCallContext(FunctionObject *f, CallData *callData);
-    WithContext *newWithContext(ObjectRef with);
-    CatchContext *newCatchContext(const StringRef exceptionVarName, const ValueRef exceptionValue);
-    CallContext *newQmlContext(FunctionObject *f, ObjectRef qml);
+        CallData *callData;
 
-    void createMutableBinding(const StringRef name, bool deletable);
+        ExecutionEngine *engine;
+        ExecutionContext *parent;
+        ExecutionContext *outer;
+        Lookup *lookups;
+        CompiledData::CompilationUnit *compilationUnit;
+        EvalCode *currentEvalCode;
+
+        int lineNumber;
+
+    };
+    V4_MANAGED(Managed)
+    Q_MANAGED_TYPE(ExecutionContext)
+
+    ExecutionContext(ExecutionEngine *engine, ContextType t)
+        : Managed(engine->executionContextClass)
+    {
+        d()->type = t;
+        d()->strictMode = false;
+        d()->engine = engine;
+        d()->parent = engine->currentContext();
+        d()->outer = 0;
+        d()->lookups = 0;
+        d()->compilationUnit = 0;
+        d()->currentEvalCode = 0;
+        d()->lineNumber = -1;
+        engine->current = this;
+    }
+
+    HeapObject *newCallContext(FunctionObject *f, CallData *callData);
+    WithContext *newWithContext(Object *with);
+    CatchContext *newCatchContext(String *exceptionVarName, const ValueRef exceptionValue);
+    CallContext *newQmlContext(FunctionObject *f, Object *qml);
+
+    void createMutableBinding(String *name, bool deletable);
 
     ReturnedValue throwError(const QV4::ValueRef value);
     ReturnedValue throwError(const QString &message);
@@ -139,10 +147,10 @@ struct Q_QML_EXPORT ExecutionContext : public Managed
     ReturnedValue throwURIError(const ValueRef msg);
     ReturnedValue throwUnimplemented(const QString &message);
 
-    void setProperty(const StringRef name, const ValueRef value);
-    ReturnedValue getProperty(const StringRef name);
-    ReturnedValue getPropertyAndBase(const StringRef name, ObjectRef base);
-    bool deleteProperty(const StringRef name);
+    void setProperty(String *name, const ValueRef value);
+    ReturnedValue getProperty(String *name);
+    ReturnedValue getPropertyAndBase(String *name, Object *&base);
+    bool deleteProperty(String *name);
 
     // Can only be called from within catch(...), rethrows if no JS exception.
     ReturnedValue catchException(StackTrace *trace = 0);
@@ -155,19 +163,22 @@ struct Q_QML_EXPORT ExecutionContext : public Managed
 
 struct CallContext : public ExecutionContext
 {
-    CallContext(ExecutionEngine *engine, ContextType t = Type_SimpleCallContext)
-        : ExecutionContext(engine, t)
-    {
-        function = 0;
-        locals = 0;
-        activation = 0;
-    }
-    CallContext(ExecutionEngine *engine, ObjectRef qml, QV4::FunctionObject *function);
+    struct Data : ExecutionContext::Data {
+        Data(ExecutionEngine *engine, ContextType t = Type_SimpleCallContext)
+            : ExecutionContext::Data(engine, t)
+        {
+            function = 0;
+            locals = 0;
+            activation = 0;
+        }
+        Data(ExecutionEngine *engine, Object *qml, QV4::FunctionObject *function);
 
-    FunctionObject *function;
-    int realArgumentCount;
-    Value *locals;
-    Object *activation;
+        FunctionObject *function;
+        int realArgumentCount;
+        Value *locals;
+        Object *activation;
+    };
+    V4_MANAGED(ExecutionContext)
 
     // formals are in reverse order
     String * const *formals() const;
@@ -180,52 +191,60 @@ struct CallContext : public ExecutionContext
 };
 
 inline ReturnedValue CallContext::argument(int i) {
-    return i < callData->argc ? callData->args[i].asReturnedValue() : Primitive::undefinedValue().asReturnedValue();
+    return i < d()->callData->argc ? d()->callData->args[i].asReturnedValue() : Primitive::undefinedValue().asReturnedValue();
 }
 
 struct GlobalContext : public ExecutionContext
 {
-    GlobalContext(ExecutionEngine *engine);
+    struct Data : ExecutionContext::Data {
+        Data(ExecutionEngine *engine);
+        Object *global;
+    };
+    V4_MANAGED(ExecutionContext)
 
-    Object *global;
 };
 
 struct CatchContext : public ExecutionContext
 {
-    CatchContext(ExecutionEngine *engine, const StringRef exceptionVarName, const ValueRef exceptionValue);
-
-    StringValue exceptionVarName;
-    Value exceptionValue;
+    struct Data : ExecutionContext::Data {
+        Data(ExecutionEngine *engine, String *exceptionVarName, const ValueRef exceptionValue);
+        StringValue exceptionVarName;
+        Value exceptionValue;
+    };
+    V4_MANAGED(ExecutionContext)
 };
 
 struct WithContext : public ExecutionContext
 {
-    WithContext(ExecutionEngine *engine, ObjectRef with);
-    Object *withObject;
+    struct Data : ExecutionContext::Data {
+        Data(ExecutionEngine *engine, Object *with);
+        Object *withObject;
+    };
+    V4_MANAGED(ExecutionContext)
 };
 
 inline CallContext *ExecutionContext::asCallContext()
 {
-    return type >= Type_SimpleCallContext ? static_cast<CallContext *>(this) : 0;
+    return d()->type >= Type_SimpleCallContext ? static_cast<CallContext *>(this) : 0;
 }
 
 inline const CallContext *ExecutionContext::asCallContext() const
 {
-    return type >= Type_SimpleCallContext ? static_cast<const CallContext *>(this) : 0;
+    return d()->type >= Type_SimpleCallContext ? static_cast<const CallContext *>(this) : 0;
 }
 
 
 inline void ExecutionEngine::pushContext(CallContext *context)
 {
-    context->parent = current;
+    context->d()->parent = current;
     current = context;
-    current->currentEvalCode = 0;
+    current->d()->currentEvalCode = 0;
 }
 
 inline ExecutionContext *ExecutionEngine::popContext()
 {
-    Q_ASSERT(current->parent);
-    current = current->parent;
+    Q_ASSERT(current->d()->parent);
+    current = current->d()->parent;
     return current;
 }
 
@@ -235,7 +254,7 @@ struct ExecutionContextSaver
     ExecutionContext *savedContext;
 
     ExecutionContextSaver(ExecutionContext *context)
-        : engine(context->engine)
+        : engine(context->d()->engine)
         , savedContext(context)
     {
     }
@@ -246,7 +265,7 @@ struct ExecutionContextSaver
 };
 
 inline Scope::Scope(ExecutionContext *ctx)
-    : engine(ctx->engine)
+    : engine(ctx->d()->engine)
 #ifndef QT_NO_DEBUG
     , size(0)
 #endif
@@ -256,7 +275,7 @@ inline Scope::Scope(ExecutionContext *ctx)
 
 /* Function *f, int argc */
 #define requiredMemoryForExecutionContect(f, argc) \
-    ((sizeof(CallContext) + 7) & ~7) + sizeof(Value) * (f->varCount() + qMax((uint)argc, f->formalParameterCount())) + sizeof(CallData)
+    ((sizeof(CallContext::Data) + 7) & ~7) + sizeof(Value) * (f->varCount() + qMax((uint)argc, f->formalParameterCount())) + sizeof(CallData)
 
 } // namespace QV4
 

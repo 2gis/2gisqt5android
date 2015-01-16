@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtQuick module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -52,6 +44,36 @@
 #include <QtNetwork/qnetworkreply.h>
 
 QT_BEGIN_NAMESPACE
+
+QQuickPixmap* QQuickAnimatedImagePrivate::infoForCurrentFrame(QQmlEngine *engine)
+{
+    if (!_movie)
+        return 0;
+
+    int current = _movie->currentFrameNumber();
+    if (!frameMap.contains(current)) {
+        QUrl requestedUrl;
+        QQuickPixmap *pixmap = 0;
+        if (engine && !_movie->fileName().isEmpty()) {
+            requestedUrl.setUrl(QString::fromUtf8("quickanimatedimage://%1#%2")
+                                .arg(_movie->fileName())
+                                .arg(current));
+        }
+        if (!requestedUrl.isEmpty()) {
+            if (QQuickPixmap::isCached(requestedUrl, QSize()))
+                pixmap = new QQuickPixmap(engine, requestedUrl);
+            else
+                pixmap = new QQuickPixmap(requestedUrl, _movie->currentImage());
+        } else {
+            pixmap = new QQuickPixmap;
+            pixmap->setImage(_movie->currentImage());
+        }
+        frameMap.insert(current, pixmap);
+    }
+
+    return frameMap.value(current);
+}
+
 /*!
     \qmltype AnimatedImage
     \instantiates QQuickAnimatedImage
@@ -111,6 +133,8 @@ QQuickAnimatedImage::~QQuickAnimatedImage()
     if (d->reply)
         d->reply->deleteLater();
     delete d->_movie;
+    qDeleteAll(d->frameMap);
+    d->frameMap.clear();
 }
 
 /*!
@@ -230,6 +254,10 @@ void QQuickAnimatedImage::setSource(const QUrl &url)
         d->reply->deleteLater();
         d->reply = 0;
     }
+
+    d->setImage(QImage());
+    qDeleteAll(d->frameMap);
+    d->frameMap.clear();
 
     d->oldPlaying = isPlaying();
     if (d->_movie) {
@@ -357,7 +385,7 @@ void QQuickAnimatedImage::movieRequestFinished()
         d->_movie->jumpToFrame(d->preset_currentframe);
         d->preset_currentframe = 0;
     }
-    d->setImage(d->_movie->currentPixmap().toImage());
+    d->setPixmap(*d->infoForCurrentFrame(qmlEngine(this)));
 
     if (isPlaying() != d->oldPlaying)
         emit playingChanged();
@@ -372,7 +400,7 @@ void QQuickAnimatedImage::movieUpdate()
     Q_D(QQuickAnimatedImage);
 
     if (d->_movie) {
-        d->setImage(d->_movie->currentPixmap().toImage());
+        d->setPixmap(*d->infoForCurrentFrame(qmlEngine(this)));
         emit frameChanged();
     }
 }

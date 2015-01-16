@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -98,6 +90,7 @@ private slots:
     void pathview2();
     void pathview3();
     void initialCurrentIndex();
+    void initialCurrentItem();
     void insertModel_data();
     void insertModel();
     void removeModel_data();
@@ -146,6 +139,7 @@ private slots:
     void changePathDuringRefill();
     void nestedinFlickable();
     void flickableDelegate();
+    void jsArrayChange();
 };
 
 class TestObject : public QObject
@@ -243,6 +237,27 @@ void tst_QQuickPathView::items()
     offset.setX(pathview->highlightItem()->width()/2);
     offset.setY(pathview->highlightItem()->height()/2);
     QCOMPARE(pathview->highlightItem()->position() + offset, start);
+}
+
+void tst_QQuickPathView::initialCurrentItem()
+{
+    QScopedPointer<QQuickView> window(createView());
+
+    QaimModel model;
+    model.addItem("Jules", "12345");
+    model.addItem("Vicent", "2345");
+    model.addItem("Marvin", "54321");
+
+    QQmlContext *ctxt = window->rootContext();
+    ctxt->setContextProperty("testModel", &model);
+
+    window->setSource(testFileUrl("pathview4.qml"));
+    qApp->processEvents();
+
+    QQuickPathView *pathview = findItem<QQuickPathView>(window->rootObject(), "view");
+    QVERIFY(pathview != 0);
+    QVERIFY(pathview->currentIndex() != -1);
+    QVERIFY(!window->rootObject()->property("currentItemIsNull").toBool());
 }
 
 void tst_QQuickPathView::pathview2()
@@ -2274,6 +2289,33 @@ void tst_QQuickPathView::flickableDelegate()
     QTRY_COMPARE(movingSpy.count(), 0);
     QTRY_COMPARE(moveEndedSpy.count(), 0);
     QCOMPARE(moveStartedSpy.count(), 0);
+}
+
+void tst_QQuickPathView::jsArrayChange()
+{
+    QQmlEngine engine;
+    QQmlComponent component(&engine);
+    component.setData("import QtQuick 2.4; PathView {}", QUrl());
+
+    QScopedPointer<QQuickPathView> view(qobject_cast<QQuickPathView *>(component.create()));
+    QVERIFY(!view.isNull());
+
+    QSignalSpy spy(view.data(), SIGNAL(modelChanged()));
+    QVERIFY(spy.isValid());
+
+    QJSValue array1 = engine.newArray(3);
+    QJSValue array2 = engine.newArray(3);
+    for (int i = 0; i < 3; ++i) {
+        array1.setProperty(i, i);
+        array2.setProperty(i, i);
+    }
+
+    view->setModel(QVariant::fromValue(array1));
+    QCOMPARE(spy.count(), 1);
+
+    // no change
+    view->setModel(QVariant::fromValue(array2));
+    QCOMPARE(spy.count(), 1);
 }
 
 QTEST_MAIN(tst_QQuickPathView)

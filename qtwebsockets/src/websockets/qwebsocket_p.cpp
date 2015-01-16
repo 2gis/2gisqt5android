@@ -5,35 +5,27 @@
 **
 ** This file is part of the QtWebSockets module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -392,12 +384,6 @@ void QWebSocketPrivate::open(const QUrl &url, bool mask)
                     m_pSocket->setPauseMode(m_pauseMode);
 
                     makeConnections(m_pSocket.data());
-                    QObject::connect(sslSocket, &QSslSocket::encryptedBytesWritten, q,
-                                     &QWebSocket::bytesWritten);
-                    typedef void (QSslSocket:: *sslErrorSignalType)(const QList<QSslError> &);
-                    QObject::connect(sslSocket,
-                                     static_cast<sslErrorSignalType>(&QSslSocket::sslErrors),
-                                     q, &QWebSocket::sslErrors);
                     setSocketState(QAbstractSocket::ConnectingState);
 
                     sslSocket->setSslConfiguration(m_configuration.m_sslConfiguration);
@@ -426,8 +412,6 @@ void QWebSocketPrivate::open(const QUrl &url, bool mask)
                 m_pSocket->setPauseMode(m_pauseMode);
 
                 makeConnections(m_pSocket.data());
-                QObject::connect(m_pSocket.data(), &QAbstractSocket::bytesWritten, q,
-                                 &QWebSocket::bytesWritten);
                 setSocketState(QAbstractSocket::ConnectingState);
     #ifndef QT_NO_NETWORKPROXY
                 m_pSocket->setProxy(m_configuration.m_proxy);
@@ -545,10 +529,11 @@ void QWebSocketPrivate::makeConnections(const QTcpSocket *pTcpSocket)
 #ifndef QT_NO_NETWORKPROXY
         QObject::connect(pTcpSocket, &QAbstractSocket::proxyAuthenticationRequired, q,
                          &QWebSocket::proxyAuthenticationRequired);
-#endif
+#endif // QT_NO_NETWORKPROXY
         QObject::connect(pTcpSocket, &QAbstractSocket::readChannelFinished, q,
                          &QWebSocket::readChannelFinished);
         QObject::connect(pTcpSocket, &QAbstractSocket::aboutToClose, q, &QWebSocket::aboutToClose);
+        QObject::connect(pTcpSocket, &QAbstractSocket::bytesWritten, q, &QWebSocket::bytesWritten);
 
         //catch signals
         QObjectPrivate::connect(pTcpSocket, &QAbstractSocket::stateChanged, this,
@@ -557,6 +542,21 @@ void QWebSocketPrivate::makeConnections(const QTcpSocket *pTcpSocket)
         //with QTcpSocket there is no problem, but with QSslSocket the processing hangs
         QObjectPrivate::connect(pTcpSocket, &QAbstractSocket::readyRead, this,
                                 &QWebSocketPrivate::processData, Qt::QueuedConnection);
+#ifndef QT_NO_SSL
+        const QSslSocket * const sslSocket = qobject_cast<const QSslSocket *>(pTcpSocket);
+        if (sslSocket) {
+            QObject::connect(sslSocket, &QSslSocket::encryptedBytesWritten, q,
+                             &QWebSocket::bytesWritten);
+            typedef void (QSslSocket:: *sslErrorSignalType)(const QList<QSslError> &);
+            QObject::connect(sslSocket,
+                             static_cast<sslErrorSignalType>(&QSslSocket::sslErrors),
+                             q, &QWebSocket::sslErrors);
+        } else
+#endif // QT_NO_SSL
+        {
+            QObject::connect(pTcpSocket, &QAbstractSocket::bytesWritten, q,
+                             &QWebSocket::bytesWritten);
+        }
     }
 
     QObject::connect(&m_dataProcessor, &QWebSocketDataProcessor::textFrameReceived, q,
@@ -848,6 +848,45 @@ QString readLine(QTcpSocket *pSocket)
     return line;
 }
 
+// this function is a copy of QHttpNetworkReplyPrivate::parseStatus
+static bool parseStatusLine(const QByteArray &status, int *majorVersion, int *minorVersion,
+                            int *statusCode, QString *reasonPhrase)
+{
+    // from RFC 2616:
+    //        Status-Line = HTTP-Version SP Status-Code SP Reason-Phrase CRLF
+    //        HTTP-Version   = "HTTP" "/" 1*DIGIT "." 1*DIGIT
+    // that makes: 'HTTP/n.n xxx Message'
+    // byte count:  0123456789012
+
+    static const int minLength = 11;
+    static const int dotPos = 6;
+    static const int spacePos = 8;
+    static const char httpMagic[] = "HTTP/";
+
+    if (status.length() < minLength
+        || !status.startsWith(httpMagic)
+        || status.at(dotPos) != '.'
+        || status.at(spacePos) != ' ') {
+        // I don't know how to parse this status line
+        return false;
+    }
+
+    // optimize for the valid case: defer checking until the end
+    *majorVersion = status.at(dotPos - 1) - '0';
+    *minorVersion = status.at(dotPos + 1) - '0';
+
+    int i = spacePos;
+    int j = status.indexOf(' ', i + 1); // j == -1 || at(j) == ' ' so j+1 == 0 && j+1 <= length()
+    const QByteArray code = status.mid(i + 1, j - i - 1);
+
+    bool ok;
+    *statusCode = code.toInt(&ok);
+    *reasonPhrase = QString::fromLatin1(status.constData() + j + 1);
+
+    return ok && uint(*majorVersion) <= 9 && uint(* minorVersion) <= 9;
+}
+
+
 //called on the client for a server handshake response
 /*!
     \internal
@@ -861,25 +900,13 @@ void QWebSocketPrivate::processHandshake(QTcpSocket *pSocket)
     bool ok = false;
     QString errorDescription;
 
-    const QString regExpStatusLine(QStringLiteral("^(HTTP/[0-9]+\\.[0-9]+)\\s([0-9]+)\\s(.*)"));
-    const QRegularExpression regExp(regExpStatusLine);
-    const QString statusLine = readLine(pSocket);
-    QString httpProtocol;
+    const QByteArray statusLine = pSocket->readLine();
+    int httpMajorVersion, httpMinorVersion;
     int httpStatusCode;
     QString httpStatusMessage;
-    const QRegularExpressionMatch match = regExp.match(statusLine);
-    if (Q_LIKELY(match.hasMatch())) {
-        QStringList tokens = match.capturedTexts();
-        tokens.removeFirst();	//remove the search string
-        if (tokens.length() == 3) {
-            httpProtocol = tokens[0];
-            httpStatusCode = tokens[1].toInt();
-            httpStatusMessage = tokens[2].trimmed();
-            ok = true;
-        }
-    }
-    if (Q_UNLIKELY(!ok)) {
-        errorDescription = QWebSocket::tr("Invalid statusline in response: %1.").arg(statusLine);
+    if (Q_UNLIKELY(!parseStatusLine(statusLine, &httpMajorVersion, &httpMinorVersion,
+                                    &httpStatusCode, &httpStatusMessage))) {
+        errorDescription = QWebSocket::tr("Invalid statusline in response: %1.").arg(QString::fromLatin1(statusLine));
     } else {
         QString headerLine = readLine(pSocket);
         QMap<QString, QString> headers;
@@ -906,11 +933,9 @@ void QWebSocketPrivate::processHandshake(QTcpSocket *pSocket)
 
         if (Q_LIKELY(httpStatusCode == 101)) {
             //HTTP/x.y 101 Switching Protocols
-            bool conversionOk = false;
-            const float version = httpProtocol.midRef(5).toFloat(&conversionOk);
             //TODO: do not check the httpStatusText right now
             ok = !(acceptKey.isEmpty() ||
-                   (!conversionOk || (version < 1.1f)) ||
+                   (httpMajorVersion < 1 || httpMinorVersion < 1) ||
                    (upgrade.toLower() != QStringLiteral("websocket")) ||
                    (connection.toLower() != QStringLiteral("upgrade")));
             if (ok) {
@@ -923,7 +948,7 @@ void QWebSocketPrivate::processHandshake(QTcpSocket *pSocket)
             } else {
                 errorDescription =
                     QWebSocket::tr("QWebSocketPrivate::processHandshake: Invalid statusline in response: %1.")
-                        .arg(statusLine);
+                        .arg(QString::fromLatin1(statusLine));
             }
         } else if (httpStatusCode == 400) {
             //HTTP/1.1 400 Bad Request

@@ -4,7 +4,7 @@ TARGET = tst_qdeclarativeengine
 QT += testlib declarative network
 macx:CONFIG -= app_bundle
 
-SOURCES += tst_qdeclarativeengine.cpp 
+SOURCES += tst_qdeclarativeengine.cpp
 
 DEFINES += SRCDIR=\\\"$$PWD\\\"
 

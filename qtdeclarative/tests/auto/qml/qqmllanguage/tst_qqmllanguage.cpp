@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -126,6 +118,7 @@ private slots:
     void dynamicProperties();
     void dynamicPropertiesNested();
     void listProperties();
+    void badListItemType();
     void dynamicObjectProperties();
     void dynamicSignalsAndSlots();
     void simpleBindings();
@@ -146,7 +139,9 @@ private slots:
     void onCompleted();
     void onDestruction();
     void scriptString();
+    void scriptStringJs();
     void scriptStringWithoutSourceCode();
+    void scriptStringComparison();
     void defaultPropertyListOrder();
     void declaredPropertyValues();
     void dontDoubleCallClassBegin();
@@ -156,6 +151,7 @@ private slots:
     void nestedComponentRoots();
     void registrationOrder();
     void readonly();
+    void readonlyObjectProperties();
     void receivers();
     void registeredCompositeType();
     void implicitImportsLast();
@@ -232,6 +228,7 @@ private slots:
     void customParserBindingScopes();
     void customParserEvaluateEnum();
     void customParserProperties();
+    void customParserWithExtendedObject();
 
     void preservePropertyCacheOnGroupObjects();
     void propertyCacheInSync();
@@ -1337,6 +1334,13 @@ void tst_qqmllanguage::listProperties()
     QCOMPARE(object->property("test").toInt(), 2);
 }
 
+void tst_qqmllanguage::badListItemType()
+{
+    QQmlComponent component(&engine, testFileUrl("badListItemType.qml"));
+    QVERIFY(component.isError());
+    VERIFY_ERRORS("badListItemType.errors.txt");
+}
+
 // Tests the creation and assignment of dynamic object properties
 // ### Not complete
 void tst_qqmllanguage::dynamicObjectProperties()
@@ -1947,6 +1951,84 @@ void tst_qqmllanguage::scriptString()
     }
 }
 
+// Check that assignments to QQmlScriptString properties works also from within Javascript
+void tst_qqmllanguage::scriptStringJs()
+{
+    QQmlComponent component(&engine, testFileUrl("scriptStringJs.qml"));
+    VERIFY_ERRORS(0);
+
+    MyTypeObject *object = qobject_cast<MyTypeObject*>(component.create());
+    QVERIFY(object != 0);
+    QQmlContext *context = QQmlEngine::contextForObject(object);
+    QVERIFY(context != 0);
+    bool ok;
+
+    QCOMPARE(QQmlScriptStringPrivate::get(object->scriptProperty())->script, QString("\" hello \\\" world \""));
+    QVERIFY(!object->scriptProperty().isEmpty());
+    QVERIFY(!object->scriptProperty().isUndefinedLiteral());
+    QVERIFY(!object->scriptProperty().isNullLiteral());
+    QCOMPARE(object->scriptProperty().stringLiteral(), QString(" hello \\\" world "));
+    QVERIFY(object->scriptProperty().numberLiteral(&ok) == 0.0 && !ok);
+    QVERIFY(!object->scriptProperty().booleanLiteral(&ok) && !ok);
+
+    QJSValue inst = engine.newQObject(object);
+    QJSValue func = engine.evaluate("function(value) { this.scriptProperty = value }");
+
+    func.callWithInstance(inst, QJSValueList() << "test a \"string ");
+    QCOMPARE(QQmlScriptStringPrivate::get(object->scriptProperty())->script, QString("\"test a \\\"string \""));
+    QVERIFY(!object->scriptProperty().isEmpty());
+    QVERIFY(!object->scriptProperty().isUndefinedLiteral());
+    QVERIFY(!object->scriptProperty().isNullLiteral());
+    QCOMPARE(object->scriptProperty().stringLiteral(), QString("test a \\\"string "));
+    QVERIFY(object->scriptProperty().numberLiteral(&ok) == 0.0 && !ok);
+    QVERIFY(!object->scriptProperty().booleanLiteral(&ok) && !ok);
+
+    func.callWithInstance(inst, QJSValueList() << QJSValue::UndefinedValue);
+    QCOMPARE(QQmlScriptStringPrivate::get(object->scriptProperty())->script, QString("undefined"));
+    QVERIFY(!object->scriptProperty().isEmpty());
+    QVERIFY(object->scriptProperty().isUndefinedLiteral());
+    QVERIFY(!object->scriptProperty().isNullLiteral());
+    QVERIFY(object->scriptProperty().stringLiteral().isEmpty());
+    QVERIFY(object->scriptProperty().numberLiteral(&ok) == 0.0 && !ok);
+    QVERIFY(!object->scriptProperty().booleanLiteral(&ok) && !ok);
+
+    func.callWithInstance(inst, QJSValueList() << true);
+    QCOMPARE(QQmlScriptStringPrivate::get(object->scriptProperty())->script, QString("true"));
+    QVERIFY(!object->scriptProperty().isEmpty());
+    QVERIFY(!object->scriptProperty().isUndefinedLiteral());
+    QVERIFY(!object->scriptProperty().isNullLiteral());
+    QVERIFY(object->scriptProperty().stringLiteral().isEmpty());
+    QVERIFY(object->scriptProperty().numberLiteral(&ok) == 0.0 && !ok);
+    QVERIFY(object->scriptProperty().booleanLiteral(&ok) && ok);
+
+    func.callWithInstance(inst, QJSValueList() << false);
+    QCOMPARE(QQmlScriptStringPrivate::get(object->scriptProperty())->script, QString("false"));
+    QVERIFY(!object->scriptProperty().isEmpty());
+    QVERIFY(!object->scriptProperty().isUndefinedLiteral());
+    QVERIFY(!object->scriptProperty().isNullLiteral());
+    QVERIFY(object->scriptProperty().stringLiteral().isEmpty());
+    QVERIFY(object->scriptProperty().numberLiteral(&ok) == 0.0 && !ok);
+    QVERIFY(!object->scriptProperty().booleanLiteral(&ok) && ok);
+
+    func.callWithInstance(inst, QJSValueList() << QJSValue::NullValue);
+    QCOMPARE(QQmlScriptStringPrivate::get(object->scriptProperty())->script, QString("null"));
+    QVERIFY(!object->scriptProperty().isEmpty());
+    QVERIFY(!object->scriptProperty().isUndefinedLiteral());
+    QVERIFY(object->scriptProperty().isNullLiteral());
+    QVERIFY(object->scriptProperty().stringLiteral().isEmpty());
+    QVERIFY(object->scriptProperty().numberLiteral(&ok) == 0.0 && !ok);
+    QVERIFY(!object->scriptProperty().booleanLiteral(&ok) && !ok);
+
+    func.callWithInstance(inst, QJSValueList() << 12.34);
+    QCOMPARE(QQmlScriptStringPrivate::get(object->scriptProperty())->script, QString("12.34"));
+    QVERIFY(!object->scriptProperty().isEmpty());
+    QVERIFY(!object->scriptProperty().isUndefinedLiteral());
+    QVERIFY(!object->scriptProperty().isNullLiteral());
+    QVERIFY(object->scriptProperty().stringLiteral().isEmpty());
+    QVERIFY(object->scriptProperty().numberLiteral(&ok) == 12.34 && ok);
+    QVERIFY(!object->scriptProperty().booleanLiteral(&ok) && !ok);
+}
+
 void tst_qqmllanguage::scriptStringWithoutSourceCode()
 {
     QUrl url = testFileUrl("scriptString7.qml");
@@ -1955,18 +2037,18 @@ void tst_qqmllanguage::scriptStringWithoutSourceCode()
         QQmlTypeData *td = eng->typeLoader.getType(url);
         Q_ASSERT(td);
 
-        QV4::CompiledData::QmlUnit *qmlUnit = td->compiledData()->qmlUnit;
+        QV4::CompiledData::Unit *qmlUnit = td->compiledData()->compilationUnit->data;
         Q_ASSERT(qmlUnit);
         const QV4::CompiledData::Object *rootObject = qmlUnit->objectAt(qmlUnit->indexOfRootObject);
-        QCOMPARE(qmlUnit->header.stringAt(rootObject->inheritedTypeNameIndex), QString("MyTypeObject"));
+        QCOMPARE(qmlUnit->stringAt(rootObject->inheritedTypeNameIndex), QString("MyTypeObject"));
         quint32 i;
         for (i = 0; i < rootObject->nBindings; ++i) {
             const QV4::CompiledData::Binding *binding = rootObject->bindingTable() + i;
-            if (qmlUnit->header.stringAt(binding->propertyNameIndex) != QString("scriptProperty"))
+            if (qmlUnit->stringAt(binding->propertyNameIndex) != QString("scriptProperty"))
                 continue;
-            QCOMPARE(binding->valueAsScriptString(&qmlUnit->header), QString("intProperty"));
+            QCOMPARE(binding->valueAsScriptString(qmlUnit), QString("intProperty"));
             const_cast<QV4::CompiledData::Binding*>(binding)->stringIndex = 0; // empty string index
-            QVERIFY(binding->valueAsScriptString(&qmlUnit->header).isEmpty());
+            QVERIFY(binding->valueAsScriptString(qmlUnit).isEmpty());
             break;
         }
         QVERIFY(i < rootObject->nBindings);
@@ -1993,6 +2075,87 @@ void tst_qqmllanguage::scriptStringWithoutSourceCode()
         QQmlExpression expr(ss, /*context*/0, object);
         QCOMPARE(expr.evaluate().toInt(), int(100));
     }
+}
+
+// Test the QQmlScriptString comparison operators. The script strings are considered
+// equal if there evaluation would produce the same result.
+void tst_qqmllanguage::scriptStringComparison()
+{
+    QQmlComponent component1(&engine, testFileUrl("scriptString.qml"));
+    QVERIFY(!component1.isError() && component1.errors().isEmpty());
+    MyTypeObject *object1 = qobject_cast<MyTypeObject*>(component1.create());
+    QVERIFY(object1 != 0);
+
+    QQmlComponent component2(&engine, testFileUrl("scriptString2.qml"));
+    QVERIFY(!component2.isError() && component2.errors().isEmpty());
+    MyTypeObject *object2 = qobject_cast<MyTypeObject*>(component2.create());
+    QVERIFY(object2 != 0);
+
+    QQmlComponent component3(&engine, testFileUrl("scriptString3.qml"));
+    QVERIFY(!component3.isError() && component3.errors().isEmpty());
+    MyTypeObject *object3 = qobject_cast<MyTypeObject*>(component3.create());
+    QVERIFY(object3 != 0);
+
+    //QJSValue inst1 = engine.newQObject(object1);
+    QJSValue inst2 = engine.newQObject(object2);
+    QJSValue inst3 = engine.newQObject(object3);
+    QJSValue func = engine.evaluate("function(value) { this.scriptProperty = value }");
+
+    const QString s = "hello\\n\\\"world\\\"";
+    const qreal n = 12.345;
+    bool ok;
+
+    QVERIFY(object2->scriptProperty().stringLiteral() == s);
+    QVERIFY(object3->scriptProperty().numberLiteral(&ok) == n && ok);
+    QVERIFY(object1->scriptProperty() == object1->scriptProperty());
+    QVERIFY(object2->scriptProperty() == object2->scriptProperty());
+    QVERIFY(object3->scriptProperty() == object3->scriptProperty());
+    QVERIFY(object2->scriptProperty() != object3->scriptProperty());
+    QVERIFY(object1->scriptProperty() != object2->scriptProperty());
+    QVERIFY(object1->scriptProperty() != object3->scriptProperty());
+
+    func.callWithInstance(inst2, QJSValueList() << n);
+    QVERIFY(object2->scriptProperty() == object3->scriptProperty());
+
+    func.callWithInstance(inst2, QJSValueList() << s);
+    QVERIFY(object2->scriptProperty() != object3->scriptProperty());
+    func.callWithInstance(inst3, QJSValueList() << s);
+    QVERIFY(object2->scriptProperty() == object3->scriptProperty());
+
+    func.callWithInstance(inst2, QJSValueList() << QJSValue::UndefinedValue);
+    QVERIFY(object2->scriptProperty() != object3->scriptProperty());
+    func.callWithInstance(inst3, QJSValueList() << QJSValue::UndefinedValue);
+    QVERIFY(object2->scriptProperty() == object3->scriptProperty());
+
+    func.callWithInstance(inst2, QJSValueList() << QJSValue::NullValue);
+    QVERIFY(object2->scriptProperty() != object3->scriptProperty());
+    func.callWithInstance(inst3, QJSValueList() << QJSValue::NullValue);
+    QVERIFY(object2->scriptProperty() == object3->scriptProperty());
+
+    func.callWithInstance(inst2, QJSValueList() << false);
+    QVERIFY(object2->scriptProperty() != object3->scriptProperty());
+    func.callWithInstance(inst3, QJSValueList() << false);
+    QVERIFY(object2->scriptProperty() == object3->scriptProperty());
+
+    func.callWithInstance(inst2, QJSValueList() << true);
+    QVERIFY(object2->scriptProperty() != object3->scriptProperty());
+    func.callWithInstance(inst3, QJSValueList() << true);
+    QVERIFY(object2->scriptProperty() == object3->scriptProperty());
+
+    QVERIFY(object1->scriptProperty() != object2->scriptProperty());
+    object2->setScriptProperty(object1->scriptProperty());
+    QVERIFY(object1->scriptProperty() == object2->scriptProperty());
+
+    QVERIFY(object1->scriptProperty() != object3->scriptProperty());
+    func.callWithInstance(inst3, QJSValueList() << engine.toScriptValue(object1->scriptProperty()));
+    QVERIFY(object1->scriptProperty() == object3->scriptProperty());
+
+    // While this are two instances of the same object they are still considered different
+    // because the (none literal) script string may access variables which have different
+    // values in both instances and hence evaluated to different results.
+    MyTypeObject *object1_2 = qobject_cast<MyTypeObject*>(component1.create());
+    QVERIFY(object1_2 != 0);
+    QVERIFY(object1->scriptProperty() != object1_2->scriptProperty());
 }
 
 // Check that default property assignments are correctly spliced into explicit
@@ -2361,7 +2524,8 @@ void tst_qqmllanguage::basicRemote()
     QFETCH(QString, type);
     QFETCH(QString, error);
 
-    TestHTTPServer server(14447);
+    TestHTTPServer server;
+    QVERIFY2(server.listen(14447), qPrintable(server.errorString()));
     server.serveDirectory(dataDirectory());
 
     QQmlComponent component(&engine, url);
@@ -2405,7 +2569,8 @@ void tst_qqmllanguage::importsRemote()
     QFETCH(QString, type);
     QFETCH(QString, error);
 
-    TestHTTPServer server(14447);
+    TestHTTPServer server;
+    QVERIFY2(server.listen(14447), qPrintable(server.errorString()));
     server.serveDirectory(dataDirectory());
 
     testType(qml,type,error);
@@ -2497,7 +2662,8 @@ void tst_qqmllanguage::importsInstalledRemote()
     QFETCH(QString, type);
     QFETCH(QString, error);
 
-    TestHTTPServer server(14447);
+    TestHTTPServer server;
+    QVERIFY2(server.listen(14447), qPrintable(server.errorString()));
     server.serveDirectory(dataDirectory());
 
     QString serverdir = "http://127.0.0.1:14447/lib/";
@@ -2563,7 +2729,8 @@ void tst_qqmllanguage::importsPath()
     QFETCH(QString, qml);
     QFETCH(QString, value);
 
-    TestHTTPServer server(14447);
+    TestHTTPServer server;
+    QVERIFY2(server.listen(14447), qPrintable(server.errorString()));
     server.serveDirectory(dataDirectory());
 
     engine.setImportPathList(QStringList(defaultImportPathList) << importPath);
@@ -3108,6 +3275,24 @@ void tst_qqmllanguage::readonly()
     delete o;
 }
 
+void tst_qqmllanguage::readonlyObjectProperties()
+{
+    QQmlComponent component(&engine, testFileUrl("readonlyObjectProperty.qml"));
+
+    QScopedPointer<QObject> o(component.create());
+    QVERIFY(!o.isNull());
+
+    QQmlProperty prop(o.data(), QStringLiteral("subObject"), &engine);
+    QVERIFY(!prop.isWritable());
+    QVERIFY(!prop.write(QVariant::fromValue(o.data())));
+
+    QObject *subObject = qvariant_cast<QObject*>(prop.read());
+    QVERIFY(subObject);
+    QCOMPARE(subObject->property("readWrite").toInt(), int(42));
+    subObject->setProperty("readWrite", QVariant::fromValue(int(100)));
+    QCOMPARE(subObject->property("readWrite").toInt(), int(100));
+}
+
 void tst_qqmllanguage::receivers()
 {
     QQmlComponent component(&engine, testFileUrl("receivers.qml"));
@@ -3139,7 +3324,8 @@ void tst_qqmllanguage::registeredCompositeType()
 // QTBUG-18268
 void tst_qqmllanguage::remoteLoadCrash()
 {
-    TestHTTPServer server(14448);
+    TestHTTPServer server;
+    QVERIFY2(server.listen(14448), qPrintable(server.errorString()));
     server.serveDirectory(dataDirectory());
 
     QQmlComponent component(&engine);
@@ -3629,7 +3815,8 @@ void tst_qqmllanguage::compositeSingletonQmlDirError()
 // Load a remote composite singleton type via qmldir that defines the type as a singleton
 void tst_qqmllanguage::compositeSingletonRemote()
 {
-    TestHTTPServer server(14447);
+    TestHTTPServer server;
+    QVERIFY2(server.listen(14447), qPrintable(server.errorString()));
     server.serveDirectory(dataDirectory());
 
     QQmlComponent component(&engine, testFile("singletonTest15.qml"));
@@ -3718,6 +3905,24 @@ void tst_qqmllanguage::customParserProperties()
     QCOMPARE(testObject->intProperty(), 42);
     QCOMPARE(testObject->property("qmlString").toString(), QStringLiteral("Hello"));
     QVERIFY(!testObject->property("someObject").isNull());
+}
+
+void tst_qqmllanguage::customParserWithExtendedObject()
+{
+    QQmlComponent component(&engine, testFile("customExtendedParserProperties.qml"));
+    VERIFY_ERRORS(0);
+    QScopedPointer<QObject> o(component.create());
+    QVERIFY(!o.isNull());
+    SimpleObjectWithCustomParser *testObject = qobject_cast<SimpleObjectWithCustomParser*>(o.data());
+    QVERIFY(testObject);
+    QCOMPARE(testObject->customBindingsCount(), 0);
+    QCOMPARE(testObject->intProperty(), 42);
+    QCOMPARE(testObject->property("qmlString").toString(), QStringLiteral("Hello"));
+    QVERIFY(!testObject->property("someObject").isNull());
+
+    QVariant returnValue;
+    QVERIFY(QMetaObject::invokeMethod(o.data(), "getExtendedProperty", Q_RETURN_ARG(QVariant, returnValue)));
+    QCOMPARE(returnValue.toInt(), 1584);
 }
 
 void tst_qqmllanguage::preservePropertyCacheOnGroupObjects()

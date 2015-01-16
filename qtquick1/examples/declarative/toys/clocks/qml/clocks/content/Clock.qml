@@ -47,7 +47,7 @@ Item {
     property alias city: cityLabel.text
     property int hours
     property int minutes
-    property int seconds 
+    property int seconds
     property real shift
     property bool night: false
 

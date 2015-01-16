@@ -47,6 +47,10 @@ namespace JSC {
 
 static bool isVFPPresent()
 {
+#if defined(__SOFTFP__)
+    return false;
+#endif
+
 #if OS(LINUX)
     int fd = open("/proc/self/auxv", O_RDONLY);
     if (fd > 0) {
@@ -70,7 +74,7 @@ static bool isVFPPresent()
 
 const bool MacroAssemblerARM::s_isVFPPresent = isVFPPresent();
 
-#if CPU(ARMV5_OR_LOWER)
+#if !CPU(ARM_FEATURE_UNALIGNED)
 /* On ARMv5 and below, natural alignment is required. */
 void MacroAssemblerARM::load32WithUnalignedHalfWords(BaseIndex address, RegisterID dest)
 {

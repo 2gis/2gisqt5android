@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtQuick module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -342,7 +334,7 @@ bool QQuickFlickablePrivate::flick(AxisData &data, qreal minExtent, qreal maxExt
         qreal dist = v2 / (accel * 2.0);
         if (v > 0)
             dist = -dist;
-        qreal target = qRound(data.move.value() - dist);
+        qreal target = -qRound(-(data.move.value() - dist));
         dist = -target + data.move.value();
         accel = v2 / (2.0f * qAbs(dist));
 
@@ -444,18 +436,18 @@ void QQuickFlickablePrivate::fixup(AxisData &data, qreal minExtent, qreal maxExt
     } else if (data.move.value() < maxExtent) {
         resetTimeline(data);
         adjustContentPos(data, maxExtent);
-    } else if (qRound(data.move.value()) != data.move.value()) {
+    } else if (-qRound(-data.move.value()) != data.move.value()) {
         // We could animate, but since it is less than 0.5 pixel it's probably not worthwhile.
         resetTimeline(data);
         qreal val = data.move.value();
-        if (qAbs(qRound(val) - val) < 0.25) // round small differences
-            val = qRound(val);
+        if (qAbs(-qRound(-val) - val) < 0.25) // round small differences
+            val = -qRound(-val);
         else if (data.smoothVelocity.value() > 0) // continue direction of motion for larger
-            val = qFloor(val);
+            val = -qFloor(-val);
         else if (data.smoothVelocity.value() < 0)
-            val = qCeil(val);
+            val = -qCeil(-val);
         else // otherwise round
-            val = qRound(val);
+            val = -qRound(-val);
         timeline.set(data.move, val);
     }
     data.inOvershoot = false;
@@ -1373,7 +1365,7 @@ void QQuickFlickablePrivate::replayDelayedPress()
 
             // Use the event handler that will take care of finding the proper item to propagate the event
             replayingPressEvent = true;
-            QQuickWindowPrivate::get(w)->deliverMouseEvent(mouseEvent.data());
+            QCoreApplication::sendEvent(w, mouseEvent.data());
             replayingPressEvent = false;
         }
     }
@@ -1382,12 +1374,12 @@ void QQuickFlickablePrivate::replayDelayedPress()
 //XXX pixelAligned ignores the global position of the Flickable, i.e. assumes Flickable itself is pixel aligned.
 void QQuickFlickablePrivate::setViewportX(qreal x)
 {
-    contentItem->setX(pixelAligned ? qRound(x) : x);
+    contentItem->setX(pixelAligned ? -qRound(-x) : x);
 }
 
 void QQuickFlickablePrivate::setViewportY(qreal y)
 {
-    contentItem->setY(pixelAligned ? qRound(y) : y);
+    contentItem->setY(pixelAligned ? -qRound(-y) : y);
 }
 
 void QQuickFlickable::timerEvent(QTimerEvent *event)
@@ -2062,6 +2054,7 @@ bool QQuickFlickable::sendMouseEvent(QQuickItem *item, QMouseEvent *event)
             break;
         case QEvent::MouseButtonRelease:
             d->handleMouseReleaseEvent(mouseEvent.data());
+            stealThisEvent = d->stealMouse;
             break;
         default:
             break;

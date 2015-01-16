@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -61,6 +53,44 @@ signals:
     void extendedPropertyChanged();
 private:
     int m_value;
+};
+
+class AbstractExtensionObject : public QObject
+{
+    Q_OBJECT
+    Q_PROPERTY(int abstractProperty READ abstractProperty WRITE setAbstractProperty NOTIFY abstractPropertyChanged)
+public:
+
+    AbstractExtensionObject(QObject *parent = 0) : QObject(parent), m_abstractProperty(-1) {}
+
+    void setAbstractProperty(int abstractProperty) { m_abstractProperty = abstractProperty; emit abstractPropertyChanged(); }
+    int abstractProperty() const { return m_abstractProperty; }
+
+    virtual void shouldBeImplemented() = 0;
+
+signals:
+    void abstractPropertyChanged();
+
+private:
+    int m_abstractProperty;
+};
+
+class ImplementedExtensionObject : public AbstractExtensionObject
+{
+    Q_OBJECT
+    Q_PROPERTY(int implementedProperty READ implementedProperty WRITE setImplementedProperty NOTIFY implementedPropertyChanged)
+public:
+    ImplementedExtensionObject(QObject *parent = 0) : AbstractExtensionObject(parent), m_implementedProperty(883) {}
+    void shouldBeImplemented() {}
+
+    void setImplementedProperty(int implementedProperty) { m_implementedProperty = implementedProperty; emit implementedPropertyChanged(); }
+    int implementedProperty() const { return m_implementedProperty; }
+
+signals:
+    void implementedPropertyChanged();
+
+private:
+    int m_implementedProperty;
 };
 
 class ExtensionObject : public QObject
@@ -375,6 +405,9 @@ void registerTypes()
     qmlRegisterType<MyDeleteObject>("Qt.test", 1,0, "MyDeleteObject");
     qmlRegisterType<MyRevisionedClass,1>("Qt.test",1,1,"MyRevisionedClass");
     qmlRegisterType<MyWorkerObject>("Qt.test", 1,0, "MyWorkerObject");
+
+    qmlRegisterExtendedUncreatableType<AbstractExtensionObject, ExtensionObject>("Qt.test", 1,0, "AbstractExtensionObject", QStringLiteral("Abstracts are uncreatable"));
+    qmlRegisterType<ImplementedExtensionObject>("Qt.test", 1,0, "ImplementedExtensionObject");
 
     // test scarce resource property binding post-evaluation optimization
     // and for testing memory usage in property var circular reference test

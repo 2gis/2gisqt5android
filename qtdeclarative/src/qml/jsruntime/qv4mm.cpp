@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -57,6 +49,7 @@
 #include <cstdlib>
 #include <algorithm>
 #include "qv4alloca_p.h"
+#include "qv4profiling_p.h"
 
 #ifdef V4_USE_VALGRIND
 #include <valgrind/valgrind.h>
@@ -102,6 +95,7 @@ struct MemoryManager::Data
 
     struct LargeItem {
         LargeItem *next;
+        size_t size;
         void *data;
 
         Managed *managed() {
@@ -110,6 +104,7 @@ struct MemoryManager::Data
     };
 
     LargeItem *largeItems;
+    std::size_t totalLargeItemsAllocated;
 
     GCDeletable *deletable;
 
@@ -126,6 +121,7 @@ struct MemoryManager::Data
         , maxShift(6)
         , maxChunkSize(32*1024)
         , largeItems(0)
+        , totalLargeItemsAllocated(0)
         , deletable(0)
     {
         memset(smallItems, 0, sizeof(smallItems));
@@ -149,8 +145,10 @@ struct MemoryManager::Data
 
     ~Data()
     {
-        for (QVector<Chunk>::iterator i = heapChunks.begin(), ei = heapChunks.end(); i != ei; ++i)
+        for (QVector<Chunk>::iterator i = heapChunks.begin(), ei = heapChunks.end(); i != ei; ++i) {
+            Q_V4_PROFILE_DEALLOC(engine, 0, i->memory.size(), Profiling::HeapPage);
             i->memory.deallocate();
+        }
     }
 };
 
@@ -174,7 +172,7 @@ MemoryManager::MemoryManager()
 #endif
 }
 
-Managed *MemoryManager::alloc(std::size_t size)
+Managed *MemoryManager::allocData(std::size_t size)
 {
     if (m_d->aggressiveGC)
         runGC();
@@ -189,11 +187,18 @@ Managed *MemoryManager::alloc(std::size_t size)
 
     // doesn't fit into a small bucket
     if (size >= MemoryManager::Data::MaxItemSize) {
+        if (m_d->totalLargeItemsAllocated > 8 * 1024 * 1024)
+            runGC();
+
         // we use malloc for this
-        MemoryManager::Data::LargeItem *item = static_cast<MemoryManager::Data::LargeItem *>(malloc(size + sizeof(MemoryManager::Data::LargeItem)));
+        MemoryManager::Data::LargeItem *item = static_cast<MemoryManager::Data::LargeItem *>(
+                malloc(Q_V4_PROFILE_ALLOC(m_d->engine, size + sizeof(MemoryManager::Data::LargeItem),
+                                          Profiling::LargeItem)));
         memset(item, 0, size + sizeof(MemoryManager::Data::LargeItem));
         item->next = m_d->largeItems;
+        item->size = size;
         m_d->largeItems = item;
+        m_d->totalLargeItemsAllocated += size;
         return item->managed();
     }
 
@@ -218,7 +223,9 @@ Managed *MemoryManager::alloc(std::size_t size)
         std::size_t allocSize = m_d->maxChunkSize*(size_t(1) << shift);
         allocSize = roundUpToMultipleOf(WTF::pageSize(), allocSize);
         Data::Chunk allocation;
-        allocation.memory = PageAllocation::allocate(allocSize, OSAllocator::JSGCHeapPages);
+        allocation.memory = PageAllocation::allocate(
+                    Q_V4_PROFILE_ALLOC(m_d->engine, allocSize, Profiling::HeapPage),
+                    OSAllocator::JSGCHeapPages);
         allocation.chunkSize = int(size);
         m_d->heapChunks.append(allocation);
         std::sort(m_d->heapChunks.begin(), m_d->heapChunks.end());
@@ -228,7 +235,6 @@ Managed *MemoryManager::alloc(std::size_t size)
         Managed **last = &m_d->smallItems[pos];
         while (chunk <= end) {
             Managed *o = reinterpret_cast<Managed *>(chunk);
-            o->_data = 0;
             *last = o;
             last = o->nextFreeRef();
             chunk += size;
@@ -239,7 +245,7 @@ Managed *MemoryManager::alloc(std::size_t size)
         m_d->availableItems[pos] += uint(increase);
         m_d->totalItems += int(increase);
 #ifdef V4_USE_VALGRIND
-        VALGRIND_MAKE_MEM_NOACCESS(allocation.memory, allocation.chunkSize);
+        VALGRIND_MAKE_MEM_NOACCESS(allocation.memory.base(), allocSize);
 #endif
     }
 
@@ -247,11 +253,21 @@ Managed *MemoryManager::alloc(std::size_t size)
 #ifdef V4_USE_VALGRIND
     VALGRIND_MEMPOOL_ALLOC(this, m, size);
 #endif
+    Q_V4_PROFILE_ALLOC(m_d->engine, size, Profiling::SmallItem);
 
     ++m_d->allocCount[pos];
     ++m_d->totalAlloc;
     m_d->smallItems[pos] = m->nextFree();
     return m;
+}
+
+static void drainMarkStack(QV4::ExecutionEngine *engine, Value *markBase)
+{
+    while (engine->jsStackTop > markBase) {
+        Managed *m = engine->popForGC();
+        Q_ASSERT (m->internalClass()->vtable->markObjects);
+        m->internalClass()->vtable->markObjects(m, engine);
+    }
 }
 
 void MemoryManager::mark()
@@ -271,6 +287,9 @@ void MemoryManager::mark()
         }
         persistent->value.mark(m_d->engine);
         persistent = persistent->next;
+
+        if (m_d->engine->jsStackTop >= m_d->engine->jsStackLimit)
+            drainMarkStack(m_d->engine, markBase);
     }
 
     collectFromJSStack();
@@ -303,14 +322,12 @@ void MemoryManager::mark()
 
         if (keepAlive)
             qobjectWrapper->getPointer()->mark(m_d->engine);
+
+        if (m_d->engine->jsStackTop >= m_d->engine->jsStackLimit)
+            drainMarkStack(m_d->engine, markBase);
     }
 
-    // now that we marked all roots, start marking recursively and popping from the mark stack
-    while (m_d->engine->jsStackTop > markBase) {
-        Managed *m = m_d->engine->popForGC();
-        Q_ASSERT (m->internalClass->vtable->markObjects);
-        m->internalClass->vtable->markObjects(m, m_d->engine);
-    }
+    drainMarkStack(m_d->engine, markBase);
 }
 
 void MemoryManager::sweep(bool lastSweep)
@@ -325,7 +342,7 @@ void MemoryManager::sweep(bool lastSweep)
             continue;
         }
         if (Managed *m = weak->value.asManaged()) {
-            if (!m->markBit) {
+            if (!m->markBit()) {
                 weak->value = Primitive::undefinedValue();
                 PersistentValuePrivate *n = weak->next;
                 weak->removeFromList();
@@ -338,7 +355,7 @@ void MemoryManager::sweep(bool lastSweep)
 
     if (MultiplyWrappedQObjectMap *multiplyWrappedQObjects = m_d->engine->m_multiplyWrappedQObjects) {
         for (MultiplyWrappedQObjectMap::Iterator it = multiplyWrappedQObjects->begin(); it != multiplyWrappedQObjects->end();) {
-            if (!it.value()->markBit)
+            if (!it.value()->markBit())
                 it = multiplyWrappedQObjects->erase(it);
             else
                 ++it;
@@ -352,18 +369,19 @@ void MemoryManager::sweep(bool lastSweep)
     Data::LargeItem **last = &m_d->largeItems;
     while (i) {
         Managed *m = i->managed();
-        Q_ASSERT(m->inUse);
-        if (m->markBit) {
-            m->markBit = 0;
+        Q_ASSERT(m->inUse());
+        if (m->markBit()) {
+            m->d()->markBit = 0;
             last = &i->next;
             i = i->next;
             continue;
         }
-        if (m->internalClass->vtable->destroy)
-            m->internalClass->vtable->destroy(m);
+        if (m->internalClass()->vtable->destroy)
+            m->internalClass()->vtable->destroy(m);
 
         *last = i->next;
-        free(i);
+        free(Q_V4_PROFILE_DEALLOC(m_d->engine, i, i->size + sizeof(Data::LargeItem),
+                                  Profiling::LargeItem));
         i = *last;
     }
 
@@ -392,16 +410,16 @@ void MemoryManager::sweep(char *chunkStart, std::size_t chunkSize, size_t size)
 
         Q_ASSERT((qintptr) chunk % 16 == 0);
 
-        if (m->inUse) {
-            if (m->markBit) {
-                m->markBit = 0;
+        if (m->inUse()) {
+            if (m->markBit()) {
+                m->d()->markBit = 0;
             } else {
 //                qDebug() << "-- collecting it." << m << *f << m->nextFree();
 #ifdef V4_USE_VALGRIND
                 VALGRIND_ENABLE_ERROR_REPORTING;
 #endif
-                if (m->internalClass->vtable->destroy)
-                    m->internalClass->vtable->destroy(m);
+                if (m->internalClass()->vtable->destroy)
+                    m->internalClass()->vtable->destroy(m);
 
                 memset(m, 0, size);
                 m->setNextFree(*f);
@@ -409,6 +427,7 @@ void MemoryManager::sweep(char *chunkStart, std::size_t chunkSize, size_t size)
                 VALGRIND_DISABLE_ERROR_REPORTING;
                 VALGRIND_MEMPOOL_FREE(this, m);
 #endif
+                Q_V4_PROFILE_DEALLOC(m_d->engine, m, size, Profiling::SmallItem);
                 *f = m;
             }
         }
@@ -439,9 +458,7 @@ void MemoryManager::runGC()
         mark();
         sweep();
     } else {
-        int totalMem = 0;
-        for (int i = 0; i < m_d->heapChunks.size(); ++i)
-            totalMem += m_d->heapChunks.at(i).memory.size();
+        int totalMem = getAllocatedMem();
 
         QTime t;
         t.start();
@@ -465,22 +482,39 @@ void MemoryManager::runGC()
 
     memset(m_d->allocCount, 0, sizeof(m_d->allocCount));
     m_d->totalAlloc = 0;
+    m_d->totalLargeItemsAllocated = 0;
 }
 
-uint MemoryManager::getUsedMem()
+size_t MemoryManager::getUsedMem() const
 {
-    uint usedMem = 0;
-    for (QVector<Data::Chunk>::iterator i = m_d->heapChunks.begin(), ei = m_d->heapChunks.end(); i != ei; ++i) {
+    size_t usedMem = 0;
+    for (QVector<Data::Chunk>::const_iterator i = m_d->heapChunks.begin(), ei = m_d->heapChunks.end(); i != ei; ++i) {
         char *chunkStart = reinterpret_cast<char *>(i->memory.base());
         char *chunkEnd = chunkStart + i->memory.size() - i->chunkSize;
         for (char *chunk = chunkStart; chunk <= chunkEnd; chunk += i->chunkSize) {
             Managed *m = reinterpret_cast<Managed *>(chunk);
             Q_ASSERT((qintptr) chunk % 16 == 0);
-            if (m->inUse)
+            if (m->inUse())
                 usedMem += i->chunkSize;
         }
     }
     return usedMem;
+}
+
+size_t MemoryManager::getAllocatedMem() const
+{
+    size_t total = 0;
+    for (int i = 0; i < m_d->heapChunks.size(); ++i)
+        total += m_d->heapChunks.at(i).memory.size();
+    return total;
+}
+
+size_t MemoryManager::getLargeItemsMem() const
+{
+    size_t total = 0;
+    for (const Data::LargeItem *i = m_d->largeItems; i != 0; i = i->next)
+        total += i->size;
+    return total;
 }
 
 MemoryManager::~MemoryManager()
@@ -526,11 +560,6 @@ void MemoryManager::registerDeletable(GCDeletable *d)
     m_d->deletable = d;
 }
 
-ExecutionEngine *MemoryManager::engine() const
-{
-    return m_d->engine;
-}
-
 #ifdef DETAILED_MM_STATS
 void MemoryManager::willAllocate(std::size_t size)
 {
@@ -545,11 +574,11 @@ void MemoryManager::willAllocate(std::size_t size)
 
 void MemoryManager::collectFromJSStack() const
 {
-    Value *v = engine()->jsStackBase;
-    Value *top = engine()->jsStackTop;
+    Value *v = m_d->engine->jsStackBase;
+    Value *top = m_d->engine->jsStackTop;
     while (v < top) {
         Managed *m = v->asManaged();
-        if (m && m->inUse)
+        if (m && m->inUse())
             // Skip pointers to already freed objects, they are bogus as well
             m->mark(m_d->engine);
         ++v;

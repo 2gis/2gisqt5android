@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -1427,7 +1419,8 @@ bool QQmlPropertyPrivate::write(QObject *object,
                 list << value.toInt();
                 v = QVariant::fromValue<QList<int> >(list);
                 ok = true;
-            } else if (variantType == QVariant::Double && propertyType == qMetaTypeId<QList<qreal> >()) {
+            } else if ((variantType == QVariant::Double || variantType == QVariant::Int)
+                       && (propertyType == qMetaTypeId<QList<qreal> >())) {
                 QList<qreal> list;
                 list << value.toReal();
                 v = QVariant::fromValue<QList<qreal> >(list);
@@ -1533,7 +1526,7 @@ bool QQmlPropertyPrivate::writeBinding(QObject *object,
         return false;
     } else if (isVarProperty) {
         QV4::FunctionObject *f = result->asFunctionObject();
-        if (f && f->bindingKeyFlag) {
+        if (f && f->bindingKeyFlag()) {
             // we explicitly disallow this case to avoid confusion.  Users can still store one
             // in an array in a var property if they need to, but the common case is user error.
             expression->delayedError()->setErrorDescription(QLatin1String("Invalid use of Qt.binding() in a binding declaration."));
@@ -1551,7 +1544,7 @@ bool QQmlPropertyPrivate::writeBinding(QObject *object,
         writeValueProperty(object, core, QVariant(), context, flags);
     } else if (type == qMetaTypeId<QJSValue>()) {
         QV4::FunctionObject *f = result->asFunctionObject();
-        if (f && f->bindingKeyFlag) {
+        if (f && f->bindingKeyFlag()) {
             expression->delayedError()->setErrorDescription(QLatin1String("Invalid use of Qt.binding() in a binding declaration."));
             expression->delayedError()->setErrorObject(object);
             return false;
@@ -1569,7 +1562,7 @@ bool QQmlPropertyPrivate::writeBinding(QObject *object,
         expression->delayedError()->setErrorObject(object);
         return false;
     } else if (QV4::FunctionObject *f = result->asFunctionObject()) {
-        if (f->bindingKeyFlag)
+        if (f->bindingKeyFlag())
             expression->delayedError()->setErrorDescription(QLatin1String("Invalid use of Qt.binding() in a binding declaration."));
         else
             expression->delayedError()->setErrorDescription(QLatin1String("Unable to assign a function to a property of any type other than var."));
@@ -1592,11 +1585,14 @@ bool QQmlPropertyPrivate::writeBinding(QObject *object,
                     propertyType = propertyMetaObject.className();
             }
         } else if (value.userType() != QVariant::Invalid) {
-            valueType = QMetaType::typeName(value.userType());
+            if (value.userType() == QMetaType::VoidStar)
+                valueType = "null";
+            else
+                valueType = QMetaType::typeName(value.userType());
         }
 
         if (!valueType)
-            valueType = "null";
+            valueType = "undefined";
         if (!propertyType)
             propertyType = QMetaType::typeName(type);
         if (!propertyType)
@@ -1615,15 +1611,14 @@ bool QQmlPropertyPrivate::writeBinding(QObject *object,
 
 QQmlMetaObject QQmlPropertyPrivate::rawMetaObjectForType(QQmlEnginePrivate *engine, int userType)
 {
-    if (engine) {
-        return engine->rawMetaObjectForType(userType);
-    }
-    QQmlType *type = QQmlMetaType::qmlType(userType);
-    if (type)
-        return QQmlMetaObject(type->baseMetaObject());
     QMetaType metaType(userType);
     if ((metaType.flags() & QMetaType::PointerToQObject) && metaType.metaObject())
         return metaType.metaObject();
+    if (engine)
+        return engine->rawMetaObjectForType(userType);
+    QQmlType *type = QQmlMetaType::qmlType(userType);
+    if (type)
+        return QQmlMetaObject(type->baseMetaObject());
     return QQmlMetaObject((QObject*)0);
 }
 

@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtDeclarative module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -70,8 +62,8 @@ public:
     Image { source: "image://myimageprovider/image.png" }
     \endqml
 
-    This specifies that the image should be loaded by the image provider named 
-    "myimageprovider", and the image to be loaded is named "image.png". The QML engine 
+    This specifies that the image should be loaded by the image provider named
+    "myimageprovider", and the image to be loaded is named "image.png". The QML engine
     invokes the appropriate image provider according to the providers that have
     been registered through QDeclarativeEngine::addImageProvider().
 
@@ -96,11 +88,11 @@ public:
 
     When these images are loaded by QML, it looks for a matching image provider
     and calls its requestImage() or requestPixmap() method (depending on its
-    imageType()) to load the image. The method is called with the \c id 
+    imageType()) to load the image. The method is called with the \c id
     parameter set to "yellow" for the first image, and "red" for the second.
 
-    Here is an image provider implementation that can load the images 
-    requested by the above QML. This implementation dynamically 
+    Here is an image provider implementation that can load the images
+    requested by the above QML. This implementation dynamically
     generates QPixmap images that are filled with the requested color:
 
     \snippet examples/declarative/cppextensions/imageprovider/imageprovider.cpp 0
@@ -111,7 +103,7 @@ public:
     with a "colors" identifier:
 
     \code
-    int main(int argc, char *argv[]) 
+    int main(int argc, char *argv[])
     {
         ...
 
@@ -128,7 +120,7 @@ public:
 
     \image imageprovider.png
 
-    A complete example is available in Qt's 
+    A complete example is available in Qt's
     \l {declarative/cppextensions/imageprovider}{examples/declarative/cppextensions/imageprovider}
     directory. Note the example registers the provider via a \l{QDeclarativeExtensionPlugin}{plugin}
     instead of registering it in the application \c main() function as shown above.
@@ -139,14 +131,14 @@ public:
     Image providers that support QImage loading automatically include support
     for asychronous loading of images. To enable asynchronous loading for an
     image source, set the \c asynchronous property to \c true for the relevant
-    \l Image, \l BorderImage or \l AnimatedImage object. When this is enabled, 
+    \l Image, \l BorderImage or \l AnimatedImage object. When this is enabled,
     the image request to the provider is run in a low priority thread,
     allowing image loading to be executed in the background, and reducing the
     performance impact on the user interface.
 
     Asynchronous loading is not supported for image providers that provide
     QPixmap rather than QImage values, as pixmaps can only be created in the
-    main thread. In this case, if \l {Image::}{asynchronous} is set to 
+    main thread. In this case, if \l {Image::}{asynchronous} is set to
     \c true, the value is ignored and the image is loaded
     synchronously.
 
@@ -169,9 +161,9 @@ public:
 
     Defines the type of image supported by this image provider.
 
-    \value Image The Image Provider provides QImage images. The 
+    \value Image The Image Provider provides QImage images. The
         requestImage() method will be called for all image requests.
-    \value Pixmap The Image Provider provides QPixmap images. The 
+    \value Pixmap The Image Provider provides QPixmap images. The
         requestPixmap() method will be called for all image requests.
 */
 
@@ -203,7 +195,7 @@ QDeclarativeImageProvider::ImageType QDeclarativeImageProvider::imageType() cons
 }
 
 /*!
-    Implement this method to return the image with \a id. The default 
+    Implement this method to return the image with \a id. The default
     implementation returns an empty image.
 
     The \a id is the requested image source, with the "image:" scheme and

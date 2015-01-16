@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -405,7 +397,7 @@ public:
 
     void clearHandles(QV4::ExecutionEngine *engine)
     {
-        collector.reset(new VariableCollector(engine));
+        theCollector.reset(new VariableCollector(engine));
     }
 
     QJsonObject buildFrame(const QV4::StackFrame &stackFrame, int frameNr,
@@ -414,18 +406,18 @@ public:
         QJsonObject frame;
         frame[QLatin1String("index")] = frameNr;
         frame[QLatin1String("debuggerFrame")] = false;
-        frame[QLatin1String("func")] = collector->addFunctionRef(stackFrame.function);
-        frame[QLatin1String("script")] = collector->addScriptRef(stackFrame.source);
+        frame[QLatin1String("func")] = theCollector->addFunctionRef(stackFrame.function);
+        frame[QLatin1String("script")] = theCollector->addScriptRef(stackFrame.source);
         frame[QLatin1String("line")] = stackFrame.line - 1;
         if (stackFrame.column >= 0)
             frame[QLatin1String("column")] = stackFrame.column;
 
         QJsonArray properties;
-        collector->setDestination(&properties);
-        if (debugger->collectThisInContext(collector.data(), frameNr)) {
+        theCollector->setDestination(&properties);
+        if (debugger->collectThisInContext(theCollector.data(), frameNr)) {
             QJsonObject obj;
             obj[QLatin1String("properties")] = properties;
-            frame[QLatin1String("receiver")] = collector->addObjectRef(obj, false);
+            frame[QLatin1String("receiver")] = theCollector->addObjectRef(obj, false);
         }
 
         QJsonArray scopes;
@@ -473,7 +465,7 @@ public:
         QJsonObject scope;
 
         QJsonArray properties;
-        collector->collectScope(&properties, debugger, frameNr, scopeNr);
+        theCollector->collectScope(&properties, debugger, frameNr, scopeNr);
 
         QJsonObject anonymous;
         anonymous[QLatin1String("properties")] = properties;
@@ -482,16 +474,21 @@ public:
         scope[QLatin1String("type")] = encodeScopeType(scopeTypes[scopeNr]);
         scope[QLatin1String("index")] = scopeNr;
         scope[QLatin1String("frameIndex")] = frameNr;
-        scope[QLatin1String("object")] = collector->addObjectRef(anonymous, true);
+        scope[QLatin1String("object")] = theCollector->addObjectRef(anonymous, true);
 
         return scope;
     }
 
-    QJsonValue lookup(int refId) const { return collector->lookup(refId); }
+    QJsonValue lookup(int refId) const { return theCollector->lookup(refId); }
 
     QJsonArray buildRefs()
     {
-        return collector->retrieveRefsToInclude();
+        return theCollector->retrieveRefsToInclude();
+    }
+
+    VariableCollector *collector() const
+    {
+        return theCollector.data();
     }
 
     void selectFrame(int frameNr)
@@ -501,7 +498,7 @@ public:
     { return theSelectedFrame; }
 
 private:
-    QScopedPointer<VariableCollector> collector;
+    QScopedPointer<VariableCollector> theCollector;
     int theSelectedFrame;
 
     void addHandler(V8CommandHandler* handler);
@@ -959,6 +956,67 @@ public:
         // response will be send by
     }
 };
+
+// Request:
+// {
+//   "seq": 4,
+//   "type": "request",
+//   "command": "evaluate",
+//   "arguments": {
+//     "expression": "a",
+//     "frame": 0
+//   }
+// }
+//
+// Response:
+// {
+//   "body": {
+//     "handle": 3,
+//     "type": "number",
+//     "value": 1
+//   },
+//   "command": "evaluate",
+//   "refs": [],
+//   "request_seq": 4,
+//   "running": false,
+//   "seq": 5,
+//   "success": true,
+//   "type": "response"
+// }
+//
+// The "value" key in "body" is the result of evaluating the expression in the request.
+class V8EvaluateRequest: public V8CommandHandler
+{
+public:
+    V8EvaluateRequest(): V8CommandHandler(QStringLiteral("evaluate")) {}
+
+    virtual void handleRequest()
+    {
+        //decypher the payload:
+        QJsonObject arguments = req.value(QStringLiteral("arguments")).toObject();
+        QString expression = arguments.value(QStringLiteral("expression")).toString();
+        const int frame = arguments.value(QStringLiteral("frame")).toInt(0);
+
+        QV4::Debugging::Debugger *debugger = debugServicePrivate->debuggerAgent.firstDebugger();
+        Q_ASSERT(debugger->state() == QV4::Debugging::Debugger::Paused);
+
+        VariableCollector *collector = debugServicePrivate->collector();
+        QJsonArray dest;
+        collector->setDestination(&dest);
+        debugger->evaluateExpression(frame, expression, collector);
+
+        const int ref = dest.at(0).toObject().value(QStringLiteral("value")).toObject()
+                .value(QStringLiteral("ref")).toInt();
+
+        // response:
+        addCommand();
+        addRequestSequence();
+        addSuccess(true);
+        addRunning();
+        addBody(collector->lookup(ref).toObject());
+        addRefs();
+    }
+};
 } // anonymous namespace
 
 QV4DebugServicePrivate::QV4DebugServicePrivate()
@@ -978,8 +1036,7 @@ QV4DebugServicePrivate::QV4DebugServicePrivate()
     addHandler(new V8DisconnectRequest);
     addHandler(new V8SetExceptionBreakRequest);
     addHandler(new V8ScriptsRequest);
-
-    // TODO: evaluate
+    addHandler(new V8EvaluateRequest);
 }
 
 void QV4DebugServicePrivate::addHandler(V8CommandHandler* handler)

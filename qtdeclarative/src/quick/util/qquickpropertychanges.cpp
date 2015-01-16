@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtQuick module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -204,7 +196,7 @@ public:
                                 isExplicit(false) {}
 
     QPointer<QObject> object;
-    QByteArray data;
+    QList<const QV4::CompiledData::Binding *> bindings;
     QQmlRefPointer<QQmlCompiledData> cdata;
 
     bool decoded : 1;
@@ -212,6 +204,7 @@ public:
     bool isExplicit : 1;
 
     void decode();
+    void decodeBinding(const QString &propertyPrefix, const QV4::CompiledData::Unit *qmlUnit, const QV4::CompiledData::Binding *binding);
 
     class ExpressionChange {
     public:
@@ -237,10 +230,8 @@ public:
     QQmlProperty property(const QString &);
 };
 
-void QQuickPropertyChangesParser::compileList(QList<QPair<QString, const QV4::CompiledData::Binding*> > &list, const QString &pre, const QV4::CompiledData::QmlUnit *qmlUnit, const QV4::CompiledData::Binding *binding)
+void QQuickPropertyChangesParser::verifyList(const QV4::CompiledData::Unit *qmlUnit, const QV4::CompiledData::Binding *binding)
 {
-    QString propName = pre + qmlUnit->header.stringAt(binding->propertyNameIndex);
-
     if (binding->type == QV4::CompiledData::Binding::Type_Object) {
         error(qmlUnit->objectAt(binding->value.objectIndex), QQuickPropertyChanges::tr("PropertyChanges does not support creating state-specific objects."));
         return;
@@ -248,133 +239,105 @@ void QQuickPropertyChangesParser::compileList(QList<QPair<QString, const QV4::Co
 
     if (binding->type == QV4::CompiledData::Binding::Type_GroupProperty
         || binding->type == QV4::CompiledData::Binding::Type_AttachedProperty) {
-        QString pre = propName + QLatin1Char('.');
         const QV4::CompiledData::Object *subObj = qmlUnit->objectAt(binding->value.objectIndex);
         const QV4::CompiledData::Binding *subBinding = subObj->bindingTable();
         for (quint32 i = 0; i < subObj->nBindings; ++i, ++subBinding) {
-            compileList(list, pre, qmlUnit, subBinding);
+            verifyList(qmlUnit, subBinding);
         }
-        return;
     }
-
-    list << qMakePair(propName, binding);
-}
-
-QByteArray QQuickPropertyChangesParser::compile(const QV4::CompiledData::QmlUnit *qmlUnit, const QList<const QV4::CompiledData::Binding *> &props)
-{
-    QList<QPair<QString, const QV4::CompiledData::Binding *> > data;
-    for (int ii = 0; ii < props.count(); ++ii)
-        compileList(data, QString(), qmlUnit, props.at(ii));
-
-    QByteArray rv;
-    QDataStream ds(&rv, QIODevice::WriteOnly);
-
-    ds << data.count();
-    for (int ii = 0; ii < data.count(); ++ii) {
-        const QV4::CompiledData::Binding *binding = data.at(ii).second;
-        ds << data.at(ii).first << int(binding->type);
-        QVariant var;
-        switch (binding->type) {
-        case QV4::CompiledData::Binding::Type_Script:
-            ds << bindingIdentifier(binding);
-            // Fall through as we also need the expression string.
-            // Signal handlers still need to be constructed by string ;(
-        case QV4::CompiledData::Binding::Type_String:
-            var = binding->valueAsString(&qmlUnit->header);
-            break;
-        case QV4::CompiledData::Binding::Type_Number:
-            var = binding->valueAsNumber();
-            break;
-        case QV4::CompiledData::Binding::Type_Boolean:
-            var = binding->valueAsBoolean();
-            break;
-        case QV4::CompiledData::Binding::Type_Translation:
-        case QV4::CompiledData::Binding::Type_TranslationById:
-            ds << binding->value.translationData.commentIndex << binding->value.translationData.number;
-            var = binding->stringIndex;
-        default:
-            break;
-        }
-        ds << var;
-    }
-
-    return rv;
 }
 
 void QQuickPropertyChangesPrivate::decode()
 {
-    Q_Q(QQuickPropertyChanges);
     if (decoded)
         return;
 
-    QDataStream ds(&data, QIODevice::ReadOnly);
+    foreach (const QV4::CompiledData::Binding *binding, bindings)
+        decodeBinding(QString(), cdata->compilationUnit->data, binding);
 
-    int count;
-    ds >> count;
-    for (int ii = 0; ii < count; ++ii) {
-        QString name;
-        int type;
-        QVariant data;
-        QQmlBinding::Identifier id = QQmlBinding::Invalid;
-        QV4::CompiledData::TranslationData tsd;
-        ds >> name;
-        ds >> type;
+    bindings.clear();
 
-        if (type == QV4::CompiledData::Binding::Type_Script) {
-            ds >> id;
-        } else if (type == QV4::CompiledData::Binding::Type_Translation
-                   || type == QV4::CompiledData::Binding::Type_TranslationById) {
-            quint32 commentIndex;
-            qint32 number;
-            ds >> commentIndex >> number;
-            tsd.commentIndex = commentIndex;
-            tsd.number = number;
-        }
-
-        ds >> data;
-
-        QQmlProperty prop = property(name);      //### better way to check for signal property?
-        if (prop.type() & QQmlProperty::SignalProperty) {
-            QQuickReplaceSignalHandler *handler = new QQuickReplaceSignalHandler;
-            handler->property = prop;
-            handler->expression.take(new QQmlBoundSignalExpression(object, QQmlPropertyPrivate::get(prop)->signalIndex(),
-                                                                   QQmlContextData::get(qmlContext(q)), object, cdata->functionForBindingId(id)));
-            signalReplacements << handler;
-        } else if (type == QV4::CompiledData::Binding::Type_Script) { // binding
-            QString expression = data.toString();
-            QUrl url = QUrl();
-            int line = -1;
-            int column = -1;
-
-            QQmlData *ddata = QQmlData::get(q);
-            if (ddata && ddata->outerContext && !ddata->outerContext->url.isEmpty()) {
-                url = ddata->outerContext->url;
-                line = ddata->lineNumber;
-                column = ddata->columnNumber;
-            }
-
-            expressions << ExpressionChange(name, id, expression, url, line, column);
-        } else {
-            if (type == QV4::CompiledData::Binding::Type_Translation
-                || type == QV4::CompiledData::Binding::Type_TranslationById) {
-                QV4::CompiledData::Binding tmpBinding;
-                tmpBinding.type = type;
-                tmpBinding.stringIndex = data.toInt();
-                tmpBinding.value.translationData = tsd;
-                data = tmpBinding.valueAsString(&cdata->qmlUnit->header);
-            }
-            properties << qMakePair(name, data);
-        }
-    }
     decoded = true;
-    data.clear();
 }
 
-void QQuickPropertyChangesParser::setCustomData(QObject *object, const QByteArray &data, QQmlCompiledData *cdata)
+void QQuickPropertyChangesPrivate::decodeBinding(const QString &propertyPrefix, const QV4::CompiledData::Unit *qmlUnit, const QV4::CompiledData::Binding *binding)
+{
+    Q_Q(QQuickPropertyChanges);
+
+    QString propertyName = propertyPrefix + qmlUnit->stringAt(binding->propertyNameIndex);
+
+    if (binding->type == QV4::CompiledData::Binding::Type_GroupProperty
+        || binding->type == QV4::CompiledData::Binding::Type_AttachedProperty) {
+        QString pre = propertyName + QLatin1Char('.');
+        const QV4::CompiledData::Object *subObj = qmlUnit->objectAt(binding->value.objectIndex);
+        const QV4::CompiledData::Binding *subBinding = subObj->bindingTable();
+        for (quint32 i = 0; i < subObj->nBindings; ++i, ++subBinding) {
+            decodeBinding(pre, qmlUnit, subBinding);
+        }
+        return;
+    }
+
+    QQmlProperty prop = property(propertyName);      //### better way to check for signal property?
+
+    if (prop.type() & QQmlProperty::SignalProperty) {
+        QQuickReplaceSignalHandler *handler = new QQuickReplaceSignalHandler;
+        handler->property = prop;
+        handler->expression.take(new QQmlBoundSignalExpression(object, QQmlPropertyPrivate::get(prop)->signalIndex(),
+                                                               QQmlContextData::get(qmlContext(q)), object, cdata->compilationUnit->runtimeFunctions[binding->value.compiledScriptIndex]));
+        signalReplacements << handler;
+        return;
+    }
+
+    if (binding->type == QV4::CompiledData::Binding::Type_Script) {
+        QString expression = binding->valueAsString(qmlUnit);
+        QUrl url = QUrl();
+        int line = -1;
+        int column = -1;
+
+        QQmlData *ddata = QQmlData::get(q);
+        if (ddata && ddata->outerContext && !ddata->outerContext->url.isEmpty()) {
+            url = ddata->outerContext->url;
+            line = ddata->lineNumber;
+            column = ddata->columnNumber;
+        }
+
+        expressions << ExpressionChange(propertyName, binding->value.compiledScriptIndex, expression, url, line, column);
+        return;
+    }
+
+    QVariant var;
+    switch (binding->type) {
+    case QV4::CompiledData::Binding::Type_Script:
+        Q_UNREACHABLE();
+    case QV4::CompiledData::Binding::Type_Translation:
+    case QV4::CompiledData::Binding::Type_TranslationById:
+    case QV4::CompiledData::Binding::Type_String:
+        var = binding->valueAsString(qmlUnit);
+        break;
+    case QV4::CompiledData::Binding::Type_Number:
+        var = binding->valueAsNumber();
+        break;
+    case QV4::CompiledData::Binding::Type_Boolean:
+        var = binding->valueAsBoolean();
+        break;
+    default:
+        break;
+    }
+
+    properties << qMakePair(propertyName, var);
+}
+
+void QQuickPropertyChangesParser::verifyBindings(const QV4::CompiledData::Unit *qmlUnit, const QList<const QV4::CompiledData::Binding *> &props)
+{
+    for (int ii = 0; ii < props.count(); ++ii)
+        verifyList(qmlUnit, props.at(ii));
+}
+
+void QQuickPropertyChangesParser::applyBindings(QObject *obj, QQmlCompiledData *cdata, const QList<const QV4::CompiledData::Binding *> &bindings)
 {
     QQuickPropertyChangesPrivate *p =
-        static_cast<QQuickPropertyChangesPrivate *>(QObjectPrivate::get(object));
-    p->data = data;
+        static_cast<QQuickPropertyChangesPrivate *>(QObjectPrivate::get(obj));
+    p->bindings = bindings;
     p->cdata = cdata;
     p->decoded = false;
 }
@@ -483,9 +446,17 @@ QQuickPropertyChanges::ActionList QQuickPropertyChanges::actions()
             a.specifiedObject = d->object;
             a.specifiedProperty = property;
 
-            QQmlBinding *newBinding = e.id != QQmlBinding::Invalid ? QQmlBinding::createBinding(e.id, object(), qmlContext(this)) : 0;
+            QQmlContextData *context = QQmlContextData::get(qmlContext(this));
+
+            QQmlBinding *newBinding = 0;
+            if (e.id != QQmlBinding::Invalid) {
+                QV4::Scope scope(QQmlEnginePrivate::getV4Engine(qmlEngine(this)));
+                QV4::ScopedValue function(scope, QV4::QmlBindingWrapper::createQmlCallableForFunction(context, object(), d->cdata->compilationUnit->runtimeFunctions[e.id]));
+                newBinding = new QQmlBinding(function, object(), context);
+            }
+//            QQmlBinding *newBinding = e.id != QQmlBinding::Invalid ? QQmlBinding::createBinding(e.id, object(), qmlContext(this)) : 0;
             if (!newBinding)
-                newBinding = new QQmlBinding(e.expression, object(), QQmlContextData::get(qmlContext(this)), e.url.toString(), e.line, e.column);
+                newBinding = new QQmlBinding(e.expression, object(), context, e.url.toString(), e.line, e.column);
 
             if (d->isExplicit) {
                 // in this case, we don't want to assign a binding, per se,

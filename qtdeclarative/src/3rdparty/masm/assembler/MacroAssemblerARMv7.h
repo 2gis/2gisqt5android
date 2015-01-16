@@ -35,6 +35,7 @@
 namespace JSC {
 
 class MacroAssemblerARMv7 : public AbstractMacroAssembler<ARMv7Assembler> {
+protected: // the YarrJIT needs know about addressTempRegister in order to push it.
     // FIXME: switch dataTempRegister & addressTempRegister, or possibly use r7?
     //        - dTR is likely used more than aTR, and we'll get better instruction
     //        encoding if it's in the low 8 registers.
@@ -320,6 +321,12 @@ public:
         m_assembler.smull(dest, dataTempRegister, op1, op2);
     }
 
+    void mul32(Address src, RegisterID dest)
+    {
+        load32(src, dataTempRegister);
+        mul32(dataTempRegister, dest);
+    }
+
     void neg32(RegisterID srcDest)
     {
         m_assembler.neg(srcDest, srcDest);
@@ -328,6 +335,12 @@ public:
     void or32(RegisterID src, RegisterID dest)
     {
         m_assembler.orr(dest, dest, src);
+    }
+
+    void or32(Address src, RegisterID dest)
+    {
+        load32(src, dataTempRegister);
+        or32(dataTempRegister, dest);
     }
     
     void or32(RegisterID src, AbsoluteAddress dest)
@@ -463,6 +476,12 @@ public:
         }
 
         store32(dataTempRegister, address.m_ptr);
+    }
+
+    void xor32(Address src, RegisterID dest)
+    {
+        load32(src, dataTempRegister);
+        xor32(dataTempRegister, dest);
     }
 
     void xor32(RegisterID op1, RegisterID op2, RegisterID dest)

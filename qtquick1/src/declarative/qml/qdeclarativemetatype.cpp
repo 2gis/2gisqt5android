@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtDeclarative module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -152,7 +144,7 @@ public:
     QByteArray m_name;
     int m_version_maj;
     int m_version_min;
-    int m_typeId; int m_listId; 
+    int m_typeId; int m_listId;
     int m_revision;
     mutable bool m_containsRevisionedAttributes;
     mutable QDeclarativeType *m_superType;
@@ -183,9 +175,9 @@ QHash<const QMetaObject *, int> QDeclarativeTypePrivate::m_attachedPropertyIds;
 
 QDeclarativeTypePrivate::QDeclarativeTypePrivate()
 : m_isInterface(false), m_iid(0), m_typeId(0), m_listId(0), m_revision(0), m_containsRevisionedAttributes(false),
-  m_superType(0), m_allocationSize(0), m_newFunc(0), m_baseMetaObject(0), m_attachedPropertiesFunc(0), 
-  m_attachedPropertiesType(0), m_parserStatusCast(-1), m_propertyValueSourceCast(-1), 
-  m_propertyValueInterceptorCast(-1), m_extFunc(0), m_extMetaObject(0), m_index(-1), m_customParser(0), 
+  m_superType(0), m_allocationSize(0), m_newFunc(0), m_baseMetaObject(0), m_attachedPropertiesFunc(0),
+  m_attachedPropertiesType(0), m_parserStatusCast(-1), m_propertyValueSourceCast(-1),
+  m_propertyValueInterceptorCast(-1), m_extFunc(0), m_extMetaObject(0), m_index(-1), m_customParser(0),
   m_isSetup(false), m_haveSuperType(false)
 {
 }
@@ -291,7 +283,7 @@ QDeclarativeType *QDeclarativeType::superType() const
     return d->m_superType;
 }
 
-static void clone(QMetaObjectBuilder &builder, const QMetaObject *mo, 
+static void clone(QMetaObjectBuilder &builder, const QMetaObject *mo,
                   const QMetaObject *ignoreStart, const QMetaObject *ignoreEnd)
 {
     // Clone Q_CLASSINFO
@@ -300,7 +292,7 @@ static void clone(QMetaObjectBuilder &builder, const QMetaObject *mo,
 
         int otherIndex = ignoreEnd->indexOfClassInfo(info.name());
         if (otherIndex >= ignoreStart->classInfoOffset() + ignoreStart->classInfoCount()) {
-            // Skip 
+            // Skip
         } else {
             builder.addClassInfo(info.name(), info.value());
         }
@@ -313,7 +305,7 @@ static void clone(QMetaObjectBuilder &builder, const QMetaObject *mo,
         int otherIndex = ignoreEnd->indexOfProperty(property.name());
         if (otherIndex >= ignoreStart->propertyOffset() + ignoreStart->propertyCount()) {
             builder.addProperty(QByteArray("__qml_ignore__") + property.name(), QByteArray("void"));
-            // Skip 
+            // Skip
         } else {
             builder.addProperty(property);
         }
@@ -331,7 +323,7 @@ static void clone(QMetaObjectBuilder &builder, const QMetaObject *mo,
 
         bool found = false;
 
-        for (int ii = ignoreStart->methodOffset() + ignoreStart->methodCount(); 
+        for (int ii = ignoreStart->methodOffset() + ignoreStart->methodCount();
              !found && ii < ignoreEnd->methodOffset() + ignoreEnd->methodCount();
              ++ii) {
 
@@ -354,7 +346,7 @@ static void clone(QMetaObjectBuilder &builder, const QMetaObject *mo,
 
         int otherIndex = ignoreEnd->indexOfEnumerator(enumerator.name());
         if (otherIndex >= ignoreStart->enumeratorOffset() + ignoreStart->enumeratorCount()) {
-            // Skip 
+            // Skip
         } else {
             builder.addEnumerator(enumerator);
         }
@@ -404,7 +396,7 @@ void QDeclarativeTypePrivate::init() const
         m_metaObjects[ii].methodOffset =
             m_metaObjects.at(ii).metaObject->methodOffset();
     }
-    
+
     // Check for revisioned details
     {
         const QMetaObject *mo = 0;
@@ -555,7 +547,7 @@ const QMetaObject *QDeclarativeType::attachedPropertiesType() const
 
 /*
 This is the id passed to qmlAttachedPropertiesById().  This is different from the index
-for the case that a single class is registered under two or more names (eg. Item in 
+for the case that a single class is registered under two or more names (eg. Item in
 Qt 4.7 and QtQuick 1.0).
 */
 int QDeclarativeType::attachedPropertiesId() const
@@ -1020,7 +1012,7 @@ QDeclarativeType *QDeclarativeMetaType::qmlType(const QMetaObject *metaObject, c
 }
 
 /*!
-    Returns the type (if any) that corresponds to the QVariant::Type \a userType.  
+    Returns the type (if any) that corresponds to the QVariant::Type \a userType.
     Returns null if no type is registered.
 */
 QDeclarativeType *QDeclarativeMetaType::qmlType(int userType)

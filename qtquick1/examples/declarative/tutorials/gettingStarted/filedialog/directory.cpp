@@ -90,7 +90,7 @@ File* fileAt(QDeclarativeListProperty<File> * property, int index)
 /*
 Returns the number of files in the list
 */
-int filesSize(QDeclarativeListProperty<File> * property) 
+int filesSize(QDeclarativeListProperty<File> * property)
 {
     return static_cast< QList<File *> *>(property->data)->size();
 }

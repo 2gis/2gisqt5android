@@ -125,7 +125,7 @@ Style {
     id: calendarStyle
 
     /*!
-        The Calendar attached to this style.
+        The Calendar this style is attached to.
     */
     readonly property Calendar control: __control
 
@@ -147,6 +147,12 @@ Style {
         The width of each grid line.
     */
     property real __gridLineWidth: 1
+
+    /*! \internal */
+    property color __horizontalSeparatorColor: gridColor
+
+    /*! \internal */
+    property color __verticalSeparatorColor: gridColor
 
     function __cellRectAt(index) {
         return CalendarUtils.cellRectAt(index, control.__panel.columns, control.__panel.rows,
@@ -363,6 +369,7 @@ Style {
 
         property int hoveredCellIndex: -1
         property int pressedCellIndex: -1
+        property int pressCellIndex: -1
 
         Rectangle {
             anchors.fill: parent
@@ -388,6 +395,7 @@ Style {
                 anchors.right: parent.right
                 anchors.top: parent.top
                 sourceComponent: navigationBar
+                active: control.navigationBarVisible
 
                 property QtObject styleData: QtObject {
                     readonly property string title: control.__locale.standaloneMonthName(control.visibleMonth)
@@ -426,7 +434,7 @@ Style {
 
             Rectangle {
                 id: topGridLine
-                color: gridColor
+                color: __horizontalSeparatorColor
                 width: parent.width
                 height: __gridLineWidth
                 visible: gridVisible
@@ -482,7 +490,7 @@ Style {
                     anchors.bottom: weekNumbersItem.bottom
 
                     width: __gridLineWidth
-                    color: gridColor
+                    color: __verticalSeparatorColor
                     visible: control.weekNumbersVisible
                 }
 
@@ -573,10 +581,10 @@ Style {
                         }
 
                         onPressed: {
-                            var indexOfCell = cellIndexAt(mouse.x, mouse.y);
-                            if (indexOfCell !== -1) {
-                                var date = view.model.dateAt(indexOfCell);
-                                pressedCellIndex = indexOfCell;
+                            pressCellIndex = cellIndexAt(mouse.x, mouse.y);
+                            if (pressCellIndex !== -1) {
+                                var date = view.model.dateAt(pressCellIndex);
+                                pressedCellIndex = pressCellIndex;
                                 if (__isValidDate(date)) {
                                     control.selectedDate = date;
                                     control.pressed(date);
@@ -600,7 +608,7 @@ Style {
 
                         onClicked: {
                             var indexOfCell = cellIndexAt(mouse.x, mouse.y);
-                            if (indexOfCell !== -1) {
+                            if (indexOfCell !== -1 && indexOfCell === pressCellIndex) {
                                 var date = view.model.dateAt(indexOfCell);
                                 if (__isValidDate(date))
                                     control.clicked(date);
@@ -613,6 +621,15 @@ Style {
                                 var date = view.model.dateAt(indexOfCell);
                                 if (__isValidDate(date))
                                     control.doubleClicked(date);
+                            }
+                        }
+
+                        onPressAndHold: {
+                            var indexOfCell = cellIndexAt(mouse.x, mouse.y);
+                            if (indexOfCell !== -1 && indexOfCell === pressCellIndex) {
+                                var date = view.model.dateAt(indexOfCell);
+                                if (__isValidDate(date))
+                                    control.pressAndHold(date);
                             }
                         }
                     }

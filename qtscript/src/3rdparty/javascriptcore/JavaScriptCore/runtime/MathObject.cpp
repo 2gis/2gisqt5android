@@ -168,11 +168,11 @@ JSValue JSC_HOST_CALL mathProtoFuncMax(ExecState* exec, JSObject*, JSValue, cons
     double result = -Inf;
     for (unsigned k = 0; k < argsCount; ++k) {
         double val = args.at(k).toNumber(exec);
-        if (isnan(val)) {
+        if (std::isnan(val)) {
             result = NaN;
             break;
         }
-        if (val > result || (val == 0 && result == 0 && !signbit(val)))
+        if (val > result || (val == 0 && result == 0 && !std::signbit(val)))
             result = val;
     }
     return jsNumber(exec, result);
@@ -184,11 +184,11 @@ JSValue JSC_HOST_CALL mathProtoFuncMin(ExecState* exec, JSObject*, JSValue, cons
     double result = +Inf;
     for (unsigned k = 0; k < argsCount; ++k) {
         double val = args.at(k).toNumber(exec);
-        if (isnan(val)) {
+        if (std::isnan(val)) {
             result = NaN;
             break;
         }
-        if (val < result || (val == 0 && result == 0 && signbit(val)))
+        if (val < result || (val == 0 && result == 0 && std::signbit(val)))
             result = val;
     }
     return jsNumber(exec, result);
@@ -201,9 +201,9 @@ JSValue JSC_HOST_CALL mathProtoFuncPow(ExecState* exec, JSObject*, JSValue, cons
     double arg = args.at(0).toNumber(exec);
     double arg2 = args.at(1).toNumber(exec);
 
-    if (isnan(arg2))
+    if (std::isnan(arg2))
         return jsNaN(exec);
-    if (isinf(arg2) && fabs(arg) == 1)
+    if (std::isinf(arg2) && fabs(arg) == 1)
         return jsNaN(exec);
     return jsNumber(exec, pow(arg, arg2));
 }
@@ -216,7 +216,7 @@ JSValue JSC_HOST_CALL mathProtoFuncRandom(ExecState* exec, JSObject*, JSValue, c
 JSValue JSC_HOST_CALL mathProtoFuncRound(ExecState* exec, JSObject*, JSValue, const ArgList& args)
 {
     double arg = args.at(0).toNumber(exec);
-    if (signbit(arg) && arg >= -0.5)
+    if (std::signbit(arg) && arg >= -0.5)
          return jsNumber(exec, -0.0);
     double integer = ceil(arg);
     return jsNumber(exec, integer - (integer - arg > 0.5));

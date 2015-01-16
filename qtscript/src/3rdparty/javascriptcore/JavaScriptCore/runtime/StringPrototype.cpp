@@ -480,7 +480,7 @@ JSValue JSC_HOST_CALL stringProtoFuncLastIndexOf(ExecState* exec, JSObject*, JSV
         dpos = len;
 #if OS(SYMBIAN)
     // Work around for broken NaN compare operator
-    else if (isnan(dpos))
+    else if (std::isnan(dpos))
         dpos = len;
 #endif
     return jsNumber(exec, s.rfind(u2, static_cast<int>(dpos)));
@@ -680,9 +680,9 @@ JSValue JSC_HOST_CALL stringProtoFuncSubstring(ExecState* exec, JSObject*, JSVal
 
     double start = a0.toNumber(exec);
     double end = a1.toNumber(exec);
-    if (isnan(start))
+    if (std::isnan(start))
         start = 0;
-    if (isnan(end))
+    if (std::isnan(end))
         end = 0;
     if (start < 0)
         start = 0;

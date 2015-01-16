@@ -50,7 +50,7 @@ Rectangle {
     signal clicked                                          // signal declarations
 
     function doSomething(x)                                 // javascript functions
-    {                               
+    {
         return x + photoImage.width
     }
 
@@ -58,10 +58,10 @@ Rectangle {
     x: 20; y: 20; height: 150                               // try to group related properties together
     width: {                                                // large bindings
         if(photoImage.width > 200){
-	    photoImage.width;
-	}else{
-	    200;
-	}
+            photoImage.width;
+        } else {
+            200;
+        }
     }
 
     Rectangle {                                             // child objects

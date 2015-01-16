@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -61,6 +53,7 @@ struct QQmlProfilerData
     int column;         //used by RangeLocation
     int framerate;      //used by animation events
     int animationcount; //used by animation events
+    qint64 amount;      //used by heap events
 
     QByteArray toByteArray() const;
 };
@@ -79,6 +72,7 @@ public:
         Complete, // end of transmission
         PixmapCacheEvent,
         SceneGraphFrame,
+        MemoryAllocation,
 
         MaximumMessage
     };
@@ -131,6 +125,12 @@ public:
         MaximumSceneGraphFrameType
     };
 
+    enum MemoryType {
+        HeapPage,
+        LargeItem,
+        SmallItem
+    };
+
     QQmlProfilerClient(QQmlDebugConnection *connection)
         : QQmlDebugClient(QLatin1String("CanvasFrameRate"), connection)
     {
@@ -138,6 +138,7 @@ public:
 
     QList<QQmlProfilerData> qmlMessages;
     QList<QQmlProfilerData> javascriptMessages;
+    QList<QQmlProfilerData> jsHeapMessages;
     QList<QQmlProfilerData> asynchronousMessages;
     QList<QQmlProfilerData> pixmapMessages;
 
@@ -175,6 +176,7 @@ private:
 
     void connect(bool block, const QString &testFile);
     void checkTraceReceived();
+    void checkJsHeap();
 
 private slots:
     void cleanup();
@@ -303,6 +305,11 @@ void QQmlProfilerClient::messageReceived(const QByteArray &message)
         }
         break;
     }
+    case QQmlProfilerClient::MemoryAllocation: {
+        stream >> data.detailType;
+        stream >> data.amount;
+        break;
+    }
     default:
         QString failMsg = QString("Unknown message type:") + data.messageType;
         QFAIL(qPrintable(failMsg));
@@ -314,6 +321,8 @@ void QQmlProfilerClient::messageReceived(const QByteArray &message)
     else if (data.messageType == QQmlProfilerClient::SceneGraphFrame ||
             data.messageType == QQmlProfilerClient::Event)
         asynchronousMessages.append(data);
+    else if (data.messageType == QQmlProfilerClient::MemoryAllocation)
+        jsHeapMessages.append(data);
     else if (data.detailType == QQmlProfilerClient::Javascript)
         javascriptMessages.append(data);
     else
@@ -357,6 +366,48 @@ void tst_QQmlProfilerService::checkTraceReceived()
     QCOMPARE(m_client->asynchronousMessages.last().detailType, (int)QQmlProfilerClient::EndTrace);
 }
 
+void tst_QQmlProfilerService::checkJsHeap()
+{
+    QVERIFY2(m_client->jsHeapMessages.count() > 0, "no JavaScript heap messages received");
+
+    bool seen_alloc = false;
+    bool seen_small = false;
+    bool seen_large = false;
+    qint64 allocated = 0;
+    qint64 used = 0;
+    foreach (const QQmlProfilerData &message, m_client->jsHeapMessages) {
+        switch (message.detailType) {
+        case QQmlProfilerClient::HeapPage:
+            allocated += message.amount;
+            seen_alloc = true;
+            break;
+        case QQmlProfilerClient::SmallItem:
+            used += message.amount;
+            seen_small = true;
+            break;
+        case QQmlProfilerClient::LargeItem:
+            allocated += message.amount;
+            used += message.amount;
+            seen_large = true;
+            break;
+        }
+
+        QVERIFY2(used >= 0, QString::fromLatin1("Negative memory usage seen: %1")
+                 .arg(used).toUtf8().constData());
+
+        QVERIFY2(allocated >= 0, QString::fromLatin1("Negative memory allocation seen: %1")
+                 .arg(allocated).toUtf8().constData());
+
+        QVERIFY2(used <= allocated,
+                 QString::fromLatin1("More memory usage than allocation seen: %1 > %2")
+                 .arg(used).arg(allocated).toUtf8().constData());
+    }
+
+    QVERIFY2(seen_alloc, "No heap allocation seen");
+    QVERIFY2(seen_small, "No small item seen");
+    QVERIFY2(seen_large, "No large item seen");
+}
+
 void tst_QQmlProfilerService::cleanup()
 {
     if (QTest::currentTestFailed()) {
@@ -388,6 +439,12 @@ void tst_QQmlProfilerService::cleanup()
                      << data.line << data.column;
         }
         qDebug() << " ";
+        qDebug() << "Javascript Heap Messages:" << m_client->jsHeapMessages.count();
+        i = 0;
+        foreach (const QQmlProfilerData &data, m_client->jsHeapMessages) {
+            qDebug() << i++ << data.time << data.messageType << data.detailType;
+        }
+        qDebug() << " ";
         qDebug() << "Process State:" << (m_process ? m_process->state() : QLatin1String("null"));
         qDebug() << "Application Output:" << (m_process ? m_process->output() : QLatin1String("null"));
         qDebug() << "Connection State:" << (m_connection ? m_connection->stateString() : QLatin1String("null"));
@@ -410,6 +467,7 @@ void tst_QQmlProfilerService::blockingConnectWithTraceEnabled()
     m_client->setTraceState(true);
     m_client->setTraceState(false);
     checkTraceReceived();
+    checkJsHeap();
 }
 
 void tst_QQmlProfilerService::blockingConnectWithTraceDisabled()
@@ -422,6 +480,7 @@ void tst_QQmlProfilerService::blockingConnectWithTraceDisabled()
     m_client->setTraceState(true);
     m_client->setTraceState(false);
     checkTraceReceived();
+    checkJsHeap();
 }
 
 void tst_QQmlProfilerService::nonBlockingConnect()
@@ -433,6 +492,7 @@ void tst_QQmlProfilerService::nonBlockingConnect()
     m_client->setTraceState(true);
     m_client->setTraceState(false);
     checkTraceReceived();
+    checkJsHeap();
 }
 
 void tst_QQmlProfilerService::pixmapCacheData()
@@ -451,6 +511,7 @@ void tst_QQmlProfilerService::pixmapCacheData()
     m_client->setTraceState(false);
 
     checkTraceReceived();
+    checkJsHeap();
     QVERIFY2(m_client->pixmapMessages.count() >= 4,
              QString::number(m_client->pixmapMessages.count()).toUtf8().constData());
 
@@ -487,6 +548,7 @@ void tst_QQmlProfilerService::scenegraphData()
     m_client->setTraceState(false);
 
     checkTraceReceived();
+    checkJsHeap();
 
     // check that at least one frame was rendered
     // there should be a SGPolishAndSync + SGRendererFrame + SGRenderLoopFrame sequence
@@ -516,6 +578,7 @@ void tst_QQmlProfilerService::profileOnExit()
     m_client->setTraceState(true);
 
     checkTraceReceived();
+    checkJsHeap();
 }
 
 void tst_QQmlProfilerService::controlFromJS()
@@ -526,6 +589,7 @@ void tst_QQmlProfilerService::controlFromJS()
 
     m_client->setTraceState(false);
     checkTraceReceived();
+    checkJsHeap();
 }
 
 void tst_QQmlProfilerService::signalSourceLocation()
@@ -539,6 +603,7 @@ void tst_QQmlProfilerService::signalSourceLocation()
         QVERIFY(QQmlDebugTest::waitForSignal(m_process, SIGNAL(readyReadStandardOutput())));
     m_client->setTraceState(false);
     checkTraceReceived();
+    checkJsHeap();
 
     QVERIFY2(m_client->qmlMessages.count() >= 16,
              QString::number(m_client->qmlMessages.count()).toUtf8().constData());
@@ -569,6 +634,7 @@ void tst_QQmlProfilerService::javascript()
         QVERIFY(QQmlDebugTest::waitForSignal(m_process, SIGNAL(readyReadStandardOutput())));
     m_client->setTraceState(false);
     checkTraceReceived();
+    checkJsHeap();
 
     QVERIFY2(m_client->javascriptMessages.count() >= 22,
              QString::number(m_client->javascriptMessages.count()).toUtf8().constData());

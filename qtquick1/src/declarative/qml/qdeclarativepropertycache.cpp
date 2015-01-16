@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtDeclarative module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -49,7 +41,7 @@ Q_DECLARE_METATYPE(QScriptValue)
 
 QT_BEGIN_NAMESPACE
 
-QDeclarativePropertyCache::Data::Flags QDeclarativePropertyCache::Data::flagsForProperty(const QMetaProperty &p, QDeclarativeEngine *engine) 
+QDeclarativePropertyCache::Data::Flags QDeclarativePropertyCache::Data::flagsForProperty(const QMetaProperty &p, QDeclarativeEngine *engine)
 {
     int propType = p.userType();
 
@@ -139,19 +131,19 @@ void QDeclarativePropertyCache::clear()
 
     for (int ii = 0; ii < methodIndexCache.count(); ++ii) {
         RData *data = methodIndexCache.at(ii);
-        if (data) data->release(); 
+        if (data) data->release();
     }
 
-    for (StringCache::ConstIterator iter = stringCache.begin(); 
+    for (StringCache::ConstIterator iter = stringCache.begin();
             iter != stringCache.end(); ++iter) {
         RData *data = (*iter);
-        data->release(); 
+        data->release();
     }
 
-    for (IdentifierCache::ConstIterator iter = identifierCache.begin(); 
+    for (IdentifierCache::ConstIterator iter = identifierCache.begin();
             iter != identifierCache.end(); ++iter) {
         RData *data = (*iter);
-        data->release(); 
+        data->release();
     }
 
     indexCache.clear();
@@ -160,7 +152,7 @@ void QDeclarativePropertyCache::clear()
     identifierCache.clear();
 }
 
-QDeclarativePropertyCache::Data QDeclarativePropertyCache::create(const QMetaObject *metaObject, 
+QDeclarativePropertyCache::Data QDeclarativePropertyCache::create(const QMetaObject *metaObject,
                                                                   const QString &property)
 {
     Q_ASSERT(metaObject);
@@ -230,14 +222,14 @@ QDeclarativePropertyCache *QDeclarativePropertyCache::copy() const
     return cache;
 }
 
-void QDeclarativePropertyCache::append(QDeclarativeEngine *engine, const QMetaObject *metaObject, 
+void QDeclarativePropertyCache::append(QDeclarativeEngine *engine, const QMetaObject *metaObject,
                                        Data::Flag propertyFlags, Data::Flag methodFlags, Data::Flag signalFlags)
 {
     append(engine, metaObject, -1, propertyFlags, methodFlags, signalFlags);
 }
 
-void QDeclarativePropertyCache::append(QDeclarativeEngine *engine, const QMetaObject *metaObject, 
-                                       int revision, 
+void QDeclarativePropertyCache::append(QDeclarativeEngine *engine, const QMetaObject *metaObject,
+                                       int revision,
                                        Data::Flag propertyFlags, Data::Flag methodFlags, Data::Flag signalFlags)
 {
     Q_UNUSED(revision);
@@ -252,7 +244,7 @@ void QDeclarativePropertyCache::append(QDeclarativeEngine *engine, const QMetaOb
     methodIndexCache.resize(methodCount);
     for (int ii = methodOffset; ii < methodCount; ++ii) {
         QMetaMethod m = metaObject->method(ii);
-        if (m.access() == QMetaMethod::Private) 
+        if (m.access() == QMetaMethod::Private)
             continue;
         QString methodName = QString::fromUtf8(m.methodSignature());
 
@@ -262,10 +254,10 @@ void QDeclarativePropertyCache::append(QDeclarativeEngine *engine, const QMetaOb
 
         RData *data = new RData;
         data->identifier = enginePriv->objectClass->createPersistentIdentifier(methodName);
-        methodIndexCache[ii] = data;  
+        methodIndexCache[ii] = data;
 
         data->load(m);
-        if (m.methodType() == QMetaMethod::Slot || m.methodType() == QMetaMethod::Method) 
+        if (m.methodType() == QMetaMethod::Slot || m.methodType() == QMetaMethod::Method)
             data->flags |= methodFlags;
         else if (m.methodType() == QMetaMethod::Signal)
             data->flags |= signalFlags;
@@ -404,7 +396,7 @@ QStringList QDeclarativePropertyCache::propertyNames() const
     return stringCache.keys();
 }
 
-QDeclarativePropertyCache::Data *QDeclarativePropertyCache::property(QDeclarativeEngine *engine, QObject *obj, 
+QDeclarativePropertyCache::Data *QDeclarativePropertyCache::property(QDeclarativeEngine *engine, QObject *obj,
                                                    const QScriptDeclarativeClass::Identifier &name, Data &local)
 {
     QDeclarativePropertyCache::Data *rv = 0;
@@ -431,7 +423,7 @@ QDeclarativePropertyCache::Data *QDeclarativePropertyCache::property(QDeclarativ
     return rv;
 }
 
-QDeclarativePropertyCache::Data *QDeclarativePropertyCache::property(QDeclarativeEngine *engine, QObject *obj, 
+QDeclarativePropertyCache::Data *QDeclarativePropertyCache::property(QDeclarativeEngine *engine, QObject *obj,
                                                    const QString &name, Data &local)
 {
     QDeclarativePropertyCache::Data *rv = 0;

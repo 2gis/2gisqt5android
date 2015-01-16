@@ -13,15 +13,14 @@ contains(QT_CONFIG, private_tests) {
     SUBDIRS += positioning_doc_snippets
 }
 
-#no point in building QtLocation without Qt3D
-qtHaveModule(3d) {
+qtHaveModule(quick) {
     SUBDIRS += 3rdparty
 
     location.depends = positioning 3rdparty
     SUBDIRS += location
 
     plugins.depends += location
-    qtHaveModule(quick):imports.depends += location
+    imports.depends += location
 
     contains(QT_CONFIG, private_tests) {
         location_doc_snippets.subdir = location/doc/snippets
@@ -30,9 +29,7 @@ qtHaveModule(3d) {
 
         SUBDIRS += location_doc_snippets
     }
-}
 
-qtHaveModule(quick) {
     imports.depends += positioning
     SUBDIRS += imports
 }

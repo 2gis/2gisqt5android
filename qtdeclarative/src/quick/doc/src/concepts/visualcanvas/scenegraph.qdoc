@@ -244,11 +244,11 @@ animations, process events, etc.
 
 \endlist
 
-The threaded renderer is currently used by default on Linux, Mac OS X
-and EGLFS based QPA platforms, but this is subject to change. It is
-possible to force use of the threaded renderer by setting \c
-{QML_FORCE_THREADED_RENDERER=1} in the environment.
-
+The threaded renderer is currently used by default on Linux with
+non-Mesa based drivers, OS X and EGLFS based QPA platforms, but this
+is subject to change. It is possible to force use of the threaded
+renderer by setting \c {QSG_RENDER_LOOP=threaded} in the
+environment.
 
 \section2 Non-threaded Render Loop
 
@@ -265,6 +265,16 @@ The following is a simplified illustration of the frame rendering
 sequence in the non-threaded renderer.
 
 \image sg-renderloop-singlethreaded.jpg
+
+
+\section2 Custom control over rendering with QQuickRenderControl
+
+When using QQuickRenderControl, the responsibility for driving the
+rendering loop is transferred to the application. In this case no
+built-in render loop is used. Instead, it is up to the application to
+invoke the polish, synchronize and rendering steps at the appropriate
+time. It is possible to implement either a threaded or non-threaded
+behavior similar to the ones shown above.
 
 
 \section2 Mixing Scene Graph and OpenGL
@@ -284,7 +294,7 @@ when to call the signals and this is the only time the OpenGL
 application is allowed to draw.
 
 The \l {Scene Graph - OpenGL Under QML} example gives an example on
-how to use use these signals.
+how to use these signals.
 
 The other alternative is to create a QQuickFramebufferObject, render
 into it, and let it be displayed in the scene graph as a texture.
@@ -315,7 +325,29 @@ framebuffer object (FBO), so the rendering is a two-step
 operation. First rasterize the surface, then draw the surface. Using
 scene graph API directly is always significantly faster.
 
+\section1 Logging Support
 
+The scene graph has support for a number of logging categories. These
+can be useful in tracking down both performance issues and bugs in
+addition to being helpful to Qt contributors.
+
+\list
+
+\li \c {qt.scenegraph.time.texture} - logs the time spent doing texture uploads
+
+\li \c {qt.scenegraph.time.compilation} - logs the time spent doing shader compilation
+
+\li \c {qt.scenegraph.time.renderer} - logs the time spent in the various steps of the renderer
+
+\li \c {qt.scenegraph.time.renderloop} - logs the time spent in the various steps of the render loop
+
+\li \c {qt.scenegraph.time.glyph} - logs the time spent preparing distance field glyphs
+
+\li \c {qt.scenegraph.info} - logs general information about various parts of the scene graph and the graphics stack
+
+\li \c {qt.scenegraph.renderloop} - creates a detailed log of the various stages involved in rendering. This log mode is primarily useful for developers working on Qt.
+
+\endlist
 
 \section1 Scene Graph Backend
 

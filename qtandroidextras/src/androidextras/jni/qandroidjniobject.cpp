@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -294,7 +286,7 @@ QT_BEGIN_NAMESPACE
     and arguments.
 
     \code
-    jclass myClass = ...;
+    jclass myClazz = ...;
     QAndroidJniObject::QAndroidJniObject(myClazz, "(I)V", 3);
     \endcode
 */
@@ -347,7 +339,7 @@ QT_BEGIN_NAMESPACE
     \code
     ...
     QAndroidJniObject myJavaString1 = ...;
-    QAndroidJniObject myJavaString2 = myJavaString.callObjectMethod<jstring>("toString");
+    QAndroidJniObject myJavaString2 = myJavaString1.callObjectMethod<jstring>("toString");
     ...
     \endcode
 */
@@ -455,8 +447,8 @@ QT_BEGIN_NAMESPACE
     Retrieves the value of the field \a fieldName.
 
     \code
-    QAndroidJniObject volumeControll = ...;
-    jint fieldValue = obj.getField<jint>("MAX_VOLUME");
+    QAndroidJniObject volumeControl = ...;
+    jint fieldValue = volumeControl.getField<jint>("MAX_VOLUME");
     \endcode
 */
 
@@ -724,16 +716,18 @@ QT_BEGIN_NAMESPACE
 QAndroidJniObject::QAndroidJniObject(const char *className, const char *sig, ...)
 {
     va_list args;
+    QJNIObjectPrivate::QVaListPrivate vargs = { args };
     va_start(args, sig);
-    d = QSharedPointer<QJNIObjectPrivate>(new QJNIObjectPrivate(className, sig, args));
+    d = QSharedPointer<QJNIObjectPrivate>(new QJNIObjectPrivate(className, sig, vargs));
     va_end(args);
 }
 
 QAndroidJniObject::QAndroidJniObject(jclass clazz, const char *sig, ...)
 {
     va_list args;
+    QJNIObjectPrivate::QVaListPrivate vargs = { args };
     va_start(args, sig);
-    d = QSharedPointer<QJNIObjectPrivate>(new QJNIObjectPrivate(clazz, sig, args));
+    d = QSharedPointer<QJNIObjectPrivate>(new QJNIObjectPrivate(clazz, sig, vargs));
     va_end(args);
 }
 
@@ -765,7 +759,7 @@ void QAndroidJniObject::callMethod<void>(const char *methodName, const char *sig
 {
     va_list args;
     va_start(args, sig);
-    d->callMethod<void>(methodName, sig, args);
+    d->callMethodV<void>(methodName, sig, args);
     va_end(args);
 }
 
@@ -774,7 +768,7 @@ jboolean QAndroidJniObject::callMethod<jboolean>(const char *methodName, const c
 {
     va_list args;
     va_start(args, sig);
-    jboolean res = d->callMethod<jboolean>(methodName, sig, args);
+    jboolean res = d->callMethodV<jboolean>(methodName, sig, args);
     va_end(args);
     return res;
 }
@@ -784,7 +778,7 @@ jbyte QAndroidJniObject::callMethod<jbyte>(const char *methodName, const char *s
 {
     va_list args;
     va_start(args, sig);
-    jbyte res = d->callMethod<jbyte>(methodName, sig, args);
+    jbyte res = d->callMethodV<jbyte>(methodName, sig, args);
     va_end(args);
     return res;
 }
@@ -794,7 +788,7 @@ jchar QAndroidJniObject::callMethod<jchar>(const char *methodName, const char *s
 {
     va_list args;
     va_start(args, sig);
-    jchar res = d->callMethod<jchar>(methodName, sig, args);
+    jchar res = d->callMethodV<jchar>(methodName, sig, args);
     va_end(args);
     return res;
 }
@@ -804,7 +798,7 @@ jshort QAndroidJniObject::callMethod<jshort>(const char *methodName, const char 
 {
     va_list args;
     va_start(args, sig);
-    jshort res = d->callMethod<jshort>(methodName, sig, args);
+    jshort res = d->callMethodV<jshort>(methodName, sig, args);
     va_end(args);
     return res;
 }
@@ -814,7 +808,7 @@ jint QAndroidJniObject::callMethod<jint>(const char *methodName, const char *sig
 {
     va_list args;
     va_start(args, sig);
-    jint res = d->callMethod<jint>(methodName, sig, args);
+    jint res = d->callMethodV<jint>(methodName, sig, args);
     va_end(args);
     return res;
 }
@@ -824,7 +818,7 @@ jlong QAndroidJniObject::callMethod<jlong>(const char *methodName, const char *s
 {
     va_list args;
     va_start(args, sig);
-    jlong res = d->callMethod<jlong>(methodName, sig, args);
+    jlong res = d->callMethodV<jlong>(methodName, sig, args);
     va_end(args);
     return res;
 }
@@ -834,7 +828,7 @@ jfloat QAndroidJniObject::callMethod<jfloat>(const char *methodName, const char 
 {
     va_list args;
     va_start(args, sig);
-    jfloat res = d->callMethod<jfloat>(methodName, sig, args);
+    jfloat res = d->callMethodV<jfloat>(methodName, sig, args);
     va_end(args);
     return res;
 }
@@ -844,7 +838,7 @@ jdouble QAndroidJniObject::callMethod<jdouble>(const char *methodName, const cha
 {
     va_list args;
     va_start(args, sig);
-    jdouble res = d->callMethod<jdouble>(methodName, sig, args);
+    jdouble res = d->callMethodV<jdouble>(methodName, sig, args);
     va_end(args);
     return res;
 }
@@ -855,7 +849,7 @@ QAndroidJniObject QAndroidJniObject::callObjectMethod(const char *methodName,
 {
     va_list args;
     va_start(args, sig);
-    QJNIObjectPrivate res = d->callObjectMethod(methodName, sig, args);
+    QJNIObjectPrivate res = d->callObjectMethodV(methodName, sig, args);
     va_end(args);
     return res;
 }
@@ -970,7 +964,7 @@ void QAndroidJniObject::callStaticMethod<void>(const char *className,
 {
     va_list args;
     va_start(args, sig);
-    QJNIObjectPrivate::callStaticMethod<void>(className, methodName, sig, args);
+    QJNIObjectPrivate::callStaticMethodV<void>(className, methodName, sig, args);
     va_end(args);
 }
 
@@ -982,7 +976,7 @@ void QAndroidJniObject::callStaticMethod<void>(jclass clazz,
 {
     va_list args;
     va_start(args, sig);
-    QJNIObjectPrivate::callStaticMethod<void>(clazz, methodName, sig, args);
+    QJNIObjectPrivate::callStaticMethodV<void>(clazz, methodName, sig, args);
     va_end(args);
 }
 
@@ -994,7 +988,7 @@ jboolean QAndroidJniObject::callStaticMethod<jboolean>(const char *className,
 {
     va_list args;
     va_start(args, sig);
-    jboolean res = QJNIObjectPrivate::callStaticMethod<jboolean>(className, methodName, sig, args);
+    jboolean res = QJNIObjectPrivate::callStaticMethodV<jboolean>(className, methodName, sig, args);
     va_end(args);
     return res;
 }
@@ -1007,7 +1001,7 @@ jboolean QAndroidJniObject::callStaticMethod<jboolean>(jclass clazz,
 {
     va_list args;
     va_start(args, sig);
-    jboolean res = QJNIObjectPrivate::callStaticMethod<jboolean>(clazz, methodName, sig, args);
+    jboolean res = QJNIObjectPrivate::callStaticMethodV<jboolean>(clazz, methodName, sig, args);
     va_end(args);
     return res;
 }
@@ -1020,7 +1014,7 @@ jbyte QAndroidJniObject::callStaticMethod<jbyte>(const char *className,
 {
     va_list args;
     va_start(args, sig);
-    jbyte res = QJNIObjectPrivate::callStaticMethod<jbyte>(className, methodName, sig, args);
+    jbyte res = QJNIObjectPrivate::callStaticMethodV<jbyte>(className, methodName, sig, args);
     va_end(args);
     return res;
 }
@@ -1033,7 +1027,7 @@ jbyte QAndroidJniObject::callStaticMethod<jbyte>(jclass clazz,
 {
     va_list args;
     va_start(args, sig);
-    jbyte res = QJNIObjectPrivate::callStaticMethod<jbyte>(clazz, methodName, sig, args);
+    jbyte res = QJNIObjectPrivate::callStaticMethodV<jbyte>(clazz, methodName, sig, args);
     va_end(args);
     return res;
 }
@@ -1046,7 +1040,7 @@ jchar QAndroidJniObject::callStaticMethod<jchar>(const char *className,
 {
     va_list args;
     va_start(args, sig);
-    jchar res = QJNIObjectPrivate::callStaticMethod<jchar>(className, methodName, sig, args);
+    jchar res = QJNIObjectPrivate::callStaticMethodV<jchar>(className, methodName, sig, args);
     va_end(args);
     return res;
 }
@@ -1059,7 +1053,7 @@ jchar QAndroidJniObject::callStaticMethod<jchar>(jclass clazz,
 {
     va_list args;
     va_start(args, sig);
-    jchar res = QJNIObjectPrivate::callStaticMethod<jchar>(clazz, methodName, sig, args);
+    jchar res = QJNIObjectPrivate::callStaticMethodV<jchar>(clazz, methodName, sig, args);
     va_end(args);
     return res;
 }
@@ -1073,7 +1067,7 @@ jshort QAndroidJniObject::callStaticMethod<jshort>(const char *className,
 {
     va_list args;
     va_start(args, sig);
-    jshort res = QJNIObjectPrivate::callStaticMethod<jshort>(className, methodName, sig, args);
+    jshort res = QJNIObjectPrivate::callStaticMethodV<jshort>(className, methodName, sig, args);
     va_end(args);
     return res;
 }
@@ -1086,7 +1080,7 @@ jshort QAndroidJniObject::callStaticMethod<jshort>(jclass clazz,
 {
     va_list args;
     va_start(args, sig);
-    jshort res = QJNIObjectPrivate::callStaticMethod<jshort>(clazz, methodName, sig, args);
+    jshort res = QJNIObjectPrivate::callStaticMethodV<jshort>(clazz, methodName, sig, args);
     va_end(args);
     return res;
 }
@@ -1099,7 +1093,7 @@ jint QAndroidJniObject::callStaticMethod<jint>(const char *className,
 {
     va_list args;
     va_start(args, sig);
-    jint res = QJNIObjectPrivate::callStaticMethod<jint>(className, methodName, sig, args);
+    jint res = QJNIObjectPrivate::callStaticMethodV<jint>(className, methodName, sig, args);
     va_end(args);
     return res;
 }
@@ -1112,7 +1106,7 @@ jint QAndroidJniObject::callStaticMethod<jint>(jclass clazz,
 {
     va_list args;
     va_start(args, sig);
-    jint res = QJNIObjectPrivate::callStaticMethod<jint>(clazz, methodName, sig, args);
+    jint res = QJNIObjectPrivate::callStaticMethodV<jint>(clazz, methodName, sig, args);
     va_end(args);
     return res;
 }
@@ -1125,7 +1119,7 @@ jlong QAndroidJniObject::callStaticMethod<jlong>(const char *className,
 {
     va_list args;
     va_start(args, sig);
-    jlong res = QJNIObjectPrivate::callStaticMethod<jlong>(className, methodName, sig, args);
+    jlong res = QJNIObjectPrivate::callStaticMethodV<jlong>(className, methodName, sig, args);
     va_end(args);
     return res;
 }
@@ -1138,7 +1132,7 @@ jlong QAndroidJniObject::callStaticMethod<jlong>(jclass clazz,
 {
     va_list args;
     va_start(args, sig);
-    jlong res = QJNIObjectPrivate::callStaticMethod<jlong>(clazz, methodName, sig, args);
+    jlong res = QJNIObjectPrivate::callStaticMethodV<jlong>(clazz, methodName, sig, args);
     va_end(args);
     return res;
 }
@@ -1151,7 +1145,7 @@ jfloat QAndroidJniObject::callStaticMethod<jfloat>(const char *className,
 {
     va_list args;
     va_start(args, sig);
-    jfloat res = QJNIObjectPrivate::callStaticMethod<jfloat>(className, methodName, sig, args);
+    jfloat res = QJNIObjectPrivate::callStaticMethodV<jfloat>(className, methodName, sig, args);
     va_end(args);
     return res;
 }
@@ -1164,7 +1158,7 @@ jfloat QAndroidJniObject::callStaticMethod<jfloat>(jclass clazz,
 {
     va_list args;
     va_start(args, sig);
-    jfloat res = QJNIObjectPrivate::callStaticMethod<jfloat>(clazz, methodName, sig, args);
+    jfloat res = QJNIObjectPrivate::callStaticMethodV<jfloat>(clazz, methodName, sig, args);
     va_end(args);
     return res;
 }
@@ -1177,7 +1171,7 @@ jdouble QAndroidJniObject::callStaticMethod<jdouble>(const char *className,
 {
     va_list args;
     va_start(args, sig);
-    jdouble res = QJNIObjectPrivate::callStaticMethod<jdouble>(className, methodName, sig, args);
+    jdouble res = QJNIObjectPrivate::callStaticMethodV<jdouble>(className, methodName, sig, args);
     va_end(args);
     return res;
 }
@@ -1190,7 +1184,7 @@ jdouble QAndroidJniObject::callStaticMethod<jdouble>(jclass clazz,
 {
     va_list args;
     va_start(args, sig);
-    jdouble res = QJNIObjectPrivate::callStaticMethod<jdouble>(clazz, methodName, sig, args);
+    jdouble res = QJNIObjectPrivate::callStaticMethodV<jdouble>(clazz, methodName, sig, args);
     va_end(args);
     return res;
 }
@@ -1202,7 +1196,7 @@ QAndroidJniObject QAndroidJniObject::callStaticObjectMethod(const char *classNam
 {
     va_list args;
     va_start(args, sig);
-    QJNIObjectPrivate res = QJNIObjectPrivate::callStaticObjectMethod(className,
+    QJNIObjectPrivate res = QJNIObjectPrivate::callStaticObjectMethodV(className,
                                                                       methodName,
                                                                       sig,
                                                                       args);
@@ -1217,7 +1211,7 @@ QAndroidJniObject QAndroidJniObject::callStaticObjectMethod(jclass clazz,
 {
     va_list args;
     va_start(args, sig);
-    QJNIObjectPrivate res = QJNIObjectPrivate::callStaticObjectMethod(clazz, methodName, sig, args);
+    QJNIObjectPrivate res = QJNIObjectPrivate::callStaticObjectMethodV(clazz, methodName, sig, args);
     va_end(args);
     return res;
 }

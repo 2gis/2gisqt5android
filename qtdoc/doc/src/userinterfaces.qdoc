@@ -1,6 +1,6 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the documentation of the Qt Toolkit.
@@ -42,6 +42,12 @@ documentation. The following sections provide brief introductions to the
 available technologies for creating user interfaces, and a comparison table
 to help choosing the best suitable technology.
 
+\section2 Common Important UI Topics
+
+\list
+\li \l{highdpi.html}{High DPI Displays}
+\endlist
+
 \section1 QML Graphical User Interfaces
 
 QML allows developers to build user interfaces in a declarative way. User
@@ -75,7 +81,7 @@ set of UI elements to create user interfaces using \l{Qt Quick} 2.
 For more about how to create application user interfaces with QML, visit the
 \l{QML User Interfaces} page.
 
-\section1 Qt Widgets
+\section1 Widget-based User Interfaces
 
 \l {Qt Widgets} are traditional user interface elements that are typically found
 in desktop environments. The widgets integrate well to the underlying platform
@@ -101,22 +107,12 @@ type applications.
 \section1 Displaying Web Content
 
 
-Qt provides a \l{http://www.webkit.org/}{WebKit}-based layout engine
-with support for a wide range of standard web techologies such as HTML, CSS and
-JavaScript, that make it possible to embed content from the World Wide Web into
-your Qt application. Qt features both WebKit-based QML and C++ APIs.
+Qt provides both \l{http://www.webkit.org/}{WebKit}-based and Chromium-based
+(\l{Qt WebEngine}{WebEngine}) layout engines, which enable you to embed web content
+into the Qt application. These engines provide both QML and C++ alternatives.
 
-
-\l{Qt WebKit} displays web content through the \l WebView QML type while the
-\l{Qt WebKit Widgets} features a C++ API to render and interact with web
-content.
-
-The main difference between the two APIs is that WebView utilizes a multi-
-process architecture, \l{http://trac.webkit.org/wiki/WebKit2}{WebKit2}, with a
-separate web rendering process. The C++ API uses the previous version of WebKit,
-which has a single-process architecture.
-
-See also \l {Integrating Web Content}.
+For more information about support for web content in Qt, see
+\l{Integrating Web Content}.
 
 \section1 Comparison
 
@@ -146,7 +142,7 @@ choose the best suited tool for the job.
         \li X
         \li
         \li Qt Widgets and Qt Quick Controls integrate well to the underlying
-            platform, providing a native look'n'feel on Windows, Linux, and Mac OS X.
+            platform, providing a native look'n'feel on Windows, Linux, and OS X.
     \row
         \li Custom look'n'feel
         \li X

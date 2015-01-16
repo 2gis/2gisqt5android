@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -63,11 +55,18 @@ QT_BEGIN_NAMESPACE
 
 namespace QV4 {
 
-class RegExp;
-
 struct RegExpObject: Object {
-    V4_OBJECT
+    struct Data : Object::Data {
+        Data(ExecutionEngine *engine, RegExp *value, bool global);
+        Data(ExecutionEngine *engine, const QRegExp &re);
+        Data(InternalClass *ic);
+
+        RegExp *value;
+        bool global;
+    };
+    V4_OBJECT(Object)
     Q_MANAGED_TYPE(RegExpObject)
+
     // needs to be compatible with the flags in qv4jsir_p.h
     enum Flags {
         RegExp_Global     = 0x01,
@@ -80,39 +79,37 @@ struct RegExpObject: Object {
         Index_ArrayInput = Index_ArrayIndex + 1
     };
 
-    RegExp* value;
-    Property *lastIndexProperty(ExecutionContext *ctx);
-    bool global;
-
-    RegExpObject(ExecutionEngine *engine, RegExpRef value, bool global);
-    RegExpObject(ExecutionEngine *engine, const QRegExp &re);
-    ~RegExpObject() {}
+    RegExp *value() const { return d()->value; }
+    bool global() const { return d()->global; }
 
     void init(ExecutionEngine *engine);
 
+    Property *lastIndexProperty(ExecutionContext *ctx);
     QRegExp toQRegExp() const;
     QString toString() const;
     QString source() const;
     uint flags() const;
 
 protected:
-    RegExpObject(InternalClass *ic);
-    static void destroy(Managed *that);
     static void markObjects(Managed *that, ExecutionEngine *e);
 };
 
-DEFINE_REF(RegExp, Object);
-
 struct RegExpCtor: FunctionObject
 {
-    V4_OBJECT
-    RegExpCtor(ExecutionContext *scope);
+    struct Data : FunctionObject::Data {
+        Data(ExecutionContext *scope);
+        Value lastMatch;
+        StringValue lastInput;
+        int lastMatchStart;
+        int lastMatchEnd;
+        void clearLastMatch();
+    };
+    V4_OBJECT(FunctionObject)
 
-    Value lastMatch;
-    StringValue lastInput;
-    int lastMatchStart;
-    int lastMatchEnd;
-    void clearLastMatch();
+    Value lastMatch() { return d()->lastMatch; }
+    StringValue lastInput() { return d()->lastInput; }
+    int lastMatchStart() { return d()->lastMatchStart; }
+    int lastMatchEnd() { return d()->lastMatchEnd; }
 
     static ReturnedValue construct(Managed *m, CallData *callData);
     static ReturnedValue call(Managed *that, CallData *callData);
@@ -121,8 +118,16 @@ struct RegExpCtor: FunctionObject
 
 struct RegExpPrototype: RegExpObject
 {
-    RegExpPrototype(InternalClass *ic): RegExpObject(ic) {}
-    void init(ExecutionEngine *engine, ObjectRef ctor);
+    struct Data : RegExpObject::Data
+    {
+        Data(InternalClass *ic): RegExpObject::Data(ic)
+        {
+            setVTable(staticVTable());
+        }
+    };
+    V4_OBJECT(RegExpObject)
+
+    void init(ExecutionEngine *engine, Object *ctor);
 
     static ReturnedValue method_exec(CallContext *ctx);
     static ReturnedValue method_test(CallContext *ctx);

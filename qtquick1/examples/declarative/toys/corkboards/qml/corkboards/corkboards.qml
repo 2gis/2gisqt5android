@@ -49,12 +49,12 @@ Rectangle {
 
         ListElement {
             name: "Sunday"
-            notes: [ 
+            notes: [
                 ListElement { noteText: "Lunch" },
                 ListElement { noteText: "Birthday Party" }
             ]
         }
-        
+
         ListElement {
             name: "Monday"
             notes: [

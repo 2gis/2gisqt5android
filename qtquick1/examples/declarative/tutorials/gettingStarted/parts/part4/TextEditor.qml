@@ -45,8 +45,8 @@ Rectangle {
     width: 1000; height: 1000
     property int partition: height/3
     state: "DRAWER_CLOSED"
-    
-    
+
+
     //Item 1: MenuBar on the top portion of the screen
     MenuBar{
         id:menuBar
@@ -66,7 +66,7 @@ Rectangle {
         color: "#3F3F3F"
         fontColor: "#DCDCCC"
          height: partition*2
-        width:parent.width        
+        width:parent.width
     }
 
     //Item 3: The drawer handle
@@ -88,17 +88,17 @@ Rectangle {
             id: arrowIcon
             source: "images/arrow.png"
             anchors.horizontalCenter: parent.horizontalCenter
-            
+
             Behavior{NumberAnimation{property: "rotation";easing.type: Easing.OutExpo }}
         }
-        
+
         MouseArea{
             id: drawerMouseArea
             anchors.fill:parent
             onClicked:{
                 if (screen.state == "DRAWER_CLOSED"){
                     screen.state = "DRAWER_OPEN"
-                    console.log("drawer OPEN")    
+                    console.log("drawer OPEN")
                 }
                 else if (screen.state == "DRAWER_OPEN"){
                     screen.state = "DRAWER_CLOSED"
@@ -109,13 +109,13 @@ Rectangle {
             //if true, then onEntered and onExited called if mouse hovers in the mouse area
             //if false, a button must be clicked to detect the mouse hover
             hoverEnabled: true
-    
+
             //display a border if the mouse hovers on the button mouse area
             onEntered: parent.border.color = Qt.lighter("#6A6D6A")
             //remove the border if the mouse exits the button mouse area
             onExited:  parent.border.color = "#6A6D6A"
         }
-    
+
     }
     states:[
         State{
@@ -123,14 +123,14 @@ Rectangle {
             PropertyChanges { target: menuBar; y:0}
             PropertyChanges { target: textArea; y: partition + drawer.height}
             PropertyChanges { target: drawer; y: partition}
-            PropertyChanges { target: arrowIcon; rotation: 180} 
+            PropertyChanges { target: arrowIcon; rotation: 180}
         },
         State{
             name: "DRAWER_CLOSED"
             PropertyChanges { target: menuBar; y:-partition}
             PropertyChanges { target: textArea; y: drawer.height; height: screen.height - drawer.height}
             PropertyChanges { target: drawer; y: 0}
-            PropertyChanges { target: arrowIcon; rotation: 0} 
+            PropertyChanges { target: arrowIcon; rotation: 0}
         }
 
     ]
@@ -141,6 +141,6 @@ Rectangle {
             NumberAnimation { target: menuBar; properties: "y"; duration: 100;easing.type: Easing.OutExpo }
             NumberAnimation { target: drawer; properties: "y"; duration: 100;easing.type: Easing.OutExpo }
         }
-    
+
     ]
 }

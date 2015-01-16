@@ -26,6 +26,9 @@
 
 #if (defined(__GLIBCXX__) && (__GLIBCXX__ >= 20070724) && defined(__GXX_EXPERIMENTAL_CXX0X__)) || (defined(_MSC_VER) && (_MSC_VER >= 1600))
 #include <type_traits>
+#if defined(__GLIBCXX__) && (__GLIBCXX__ >= 20070724) && defined(__GXX_EXPERIMENTAL_CXX0X__)
+#include <tr1/memory>
+#endif
 #endif
 
 namespace WTF {
@@ -166,13 +169,21 @@ namespace WTF {
         typedef T Type;
     };
 
-#if (defined(__GLIBCXX__) && (__GLIBCXX__ >= 20070724) && defined(__GXX_EXPERIMENTAL_CXX0X__)) || (defined(_MSC_VER) && (_MSC_VER >= 1600))
-
+#if COMPILER(CLANG) || GCC_VERSION_AT_LEAST(4, 6, 0) || (defined(_MSC_VER) && (_MSC_VER >= 1400) && (_MSC_VER < 1600) && !defined(__INTEL_COMPILER))
+    // VC8 (VS2005) and later has __has_trivial_constructor and __has_trivial_destructor,
+    // but the implementation returns false for built-in types. We add the extra IsPod condition to
+    // work around this.
+    template <typename T> struct HasTrivialConstructor {
+        static const bool value = __has_trivial_constructor(T) || IsPod<RemoveConstVolatile<T> >::value;
+    };
+    template <typename T> struct HasTrivialDestructor {
+        static const bool value = __has_trivial_destructor(T) || IsPod<RemoveConstVolatile<T> >::value;
+    };
+#elif (defined(__GLIBCXX__) && (__GLIBCXX__ >= 20070724) && defined(__GXX_EXPERIMENTAL_CXX0X__)) || (defined(_MSC_VER) && (_MSC_VER >= 1600))
     // GCC's libstdc++ 20070724 and later supports C++ TR1 type_traits in the std namespace.
     // VC10 (VS2010) and later support C++ TR1 type_traits in the std::tr1 namespace.
     template<typename T> struct HasTrivialConstructor : public std::tr1::has_trivial_constructor<T> { };
     template<typename T> struct HasTrivialDestructor : public std::tr1::has_trivial_destructor<T> { };
-
 #else
 
     // This compiler doesn't provide type traits, so we provide basic HasTrivialConstructor
@@ -189,15 +200,8 @@ namespace WTF {
     typedef IntegralConstant<bool, true>  true_type;
     typedef IntegralConstant<bool, false> false_type;
 
-#if defined(_MSC_VER) && (_MSC_VER >= 1400) && !defined(__INTEL_COMPILER)
-    // VC8 (VS2005) and later have built-in compiler support for HasTrivialConstructor / HasTrivialDestructor,
-    // but for some unexplained reason it doesn't work on built-in types.
-    template <typename T> struct HasTrivialConstructor : public IntegralConstant<bool, __has_trivial_constructor(T)>{ };
-    template <typename T> struct HasTrivialDestructor : public IntegralConstant<bool, __has_trivial_destructor(T)>{ };
-#else
     template <typename T> struct HasTrivialConstructor : public false_type{ };
     template <typename T> struct HasTrivialDestructor : public false_type{ };
-#endif
 
     template <typename T> struct HasTrivialConstructor<T*> : public true_type{ };
     template <typename T> struct HasTrivialDestructor<T*> : public true_type{ };

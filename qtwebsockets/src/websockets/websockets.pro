@@ -1,11 +1,6 @@
-load(qt_build_config)
 TARGET = QtWebSockets
 
-QT = core network core-private sql
-
-TEMPLATE = lib
-
-DEFINES += QTWEBSOCKETS_LIBRARY
+QT = core-private network
 
 QMAKE_DOCS = $$PWD/doc/qtwebsockets.qdocconf
 OTHER_FILES += doc/src/*.qdoc   # show .qdoc files in Qt Creator
@@ -45,7 +40,7 @@ SOURCES += \
     $$PWD/qmaskgenerator.cpp \
     $$PWD/qdefaultmaskgenerator_p.cpp
 
-contains(QT_CONFIG, openssl) | contains(QT_CONFIG, openssl-linked) {
+contains(QT_CONFIG, ssl) | contains(QT_CONFIG, openssl) | contains(QT_CONFIG, openssl-linked) {
     SOURCES += $$PWD/qsslserver.cpp
     PRIVATE_HEADERS += $$PWD/qsslserver_p.h
 }

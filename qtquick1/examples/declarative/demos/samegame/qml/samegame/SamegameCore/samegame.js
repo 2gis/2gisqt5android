@@ -226,7 +226,7 @@ function initHighScoreBar()
                 + maxColumn + "x" + maxRow + '" ORDER BY score desc LIMIT 10');
             if(rs.rows.length < 10)
                 highScoreBar = 0;
-            else 
+            else
                 highScoreBar = rs.rows.item(rs.rows.length - 1).score;
         }
     );

@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the Qt Mobility Components.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -43,7 +35,7 @@ import QtQuick 2.0
 
 Item {
     id: seekControl
-    height: 46
+    height: Math.min(parent.width, parent.height) / 20
     property int duration: 0
     property int playPosition: 0
     property int seekPosition: 0
@@ -53,8 +45,9 @@ Item {
     Rectangle {
         id: background
         anchors.fill: parent
-        color: "black"
+        color: "white"
         opacity: 0.3
+        radius: parent.height / 15
     }
 
     Rectangle {
@@ -68,7 +61,6 @@ Item {
     Text {
         width: 90
         anchors { left: parent.left; top: parent.top; bottom: parent.bottom; leftMargin: 10 }
-        font { family: "Nokia Sans S60"; pixelSize: 24 }
         horizontalAlignment: Text.AlignLeft
         verticalAlignment: Text.AlignVCenter
         color: "white"
@@ -79,7 +71,6 @@ Item {
     Text {
         width: 90
         anchors { right: parent.right; top: parent.top; bottom: parent.bottom; rightMargin: 10 }
-        font { family: "Nokia Sans S60"; pixelSize: 24 }
         horizontalAlignment: Text.AlignRight
         verticalAlignment: Text.AlignVCenter
         color: "white"
@@ -87,35 +78,36 @@ Item {
         text: formatTime(duration)
     }
 
-    Image {
+    Rectangle {
         id: progressHandle
-        height: 46
-        width: 10
-        source: mouseArea.pressed ? "qrc:/images/progress_handle_pressed.svg" : "qrc:/images/progress_handle.svg"
+        height: parent.height
+        width: parent.height / 2
+        color: "white"
+        opacity: 0.5
         anchors.verticalCenter: progressBar.verticalCenter
-        x: seekControl.duration == 0 ? 0 : seekControl.playPosition / seekControl.duration * 630
+        x: seekControl.duration == 0 ? 0 : seekControl.playPosition / seekControl.duration * background.width
 
         MouseArea {
             id: mouseArea
             anchors { horizontalCenter: parent.horizontalCenter; bottom: parent.bottom }
-            height: 46+16
-            width: height
+            height: parent.height
+            width: parent.height * 2
             enabled: seekControl.enabled
             drag {
                 target: progressHandle
                 axis: Drag.XAxis
                 minimumX: 0
-                maximumX: 631
+                maximumX: background.width
             }
             onPressed: {
                 seekControl.seeking = true;
             }
             onCanceled: {
-                seekControl.seekPosition = progressHandle.x * seekControl.duration / 630
+                seekControl.seekPosition = progressHandle.x * seekControl.duration / background.width
                 seekControl.seeking = false
             }
             onReleased: {
-                seekControl.seekPosition = progressHandle.x * seekControl.duration / 630
+                seekControl.seekPosition = progressHandle.x * seekControl.duration / background.width
                 seekControl.seeking = false
                 mouse.accepted = true
             }
@@ -128,7 +120,7 @@ Item {
         interval: 300
         running: seekControl.seeking
         onTriggered: {
-            seekControl.seekPosition = progressHandle.x*seekControl.duration/630
+            seekControl.seekPosition = progressHandle.x*seekControl.duration / background.width
         }
     }
 

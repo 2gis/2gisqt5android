@@ -1,40 +1,32 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Copyright (C) 2014 Jolla Ltd, author: <gunnar.sletta@jollamobile.com>
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtQuick module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -53,8 +45,10 @@
 #include <QtGui/QGuiApplication>
 #include <QtGui/QOpenGLFramebufferObject>
 #include <QtGui/QOpenGLVertexArrayObject>
+#include <QtGui/QOpenGLFunctions_1_0>
 
 #include <private/qquickprofiler_p.h>
+#include "qsgmaterialshader_p.h"
 
 #include <algorithm>
 
@@ -69,20 +63,21 @@ extern QByteArray qsgShaderRewriter_insertZAttributes(const char *input, QSurfac
 namespace QSGBatchRenderer
 {
 
-const bool debug_render     = qgetenv("QSG_RENDERER_DEBUG").contains("render");
-const bool debug_build      = qgetenv("QSG_RENDERER_DEBUG").contains("build");
-const bool debug_change     = qgetenv("QSG_RENDERER_DEBUG").contains("change");
-const bool debug_upload     = qgetenv("QSG_RENDERER_DEBUG").contains("upload");
-const bool debug_roots      = qgetenv("QSG_RENDERER_DEBUG").contains("roots");
-const bool debug_dump       = qgetenv("QSG_RENDERER_DEBUG").contains("dump");
-const bool debug_noalpha    = qgetenv("QSG_RENDERER_DEBUG").contains("noalpha");
-const bool debug_noopaque   = qgetenv("QSG_RENDERER_DEBUG").contains("noopaque");
-const bool debug_noclip     = qgetenv("QSG_RENDERER_DEBUG").contains("noclip");
+#define DECLARE_DEBUG_VAR(variable) \
+    static bool debug_ ## variable() \
+    { static bool value = qgetenv("QSG_RENDERER_DEBUG").contains(QT_STRINGIFY(variable)); return value; }
+DECLARE_DEBUG_VAR(render)
+DECLARE_DEBUG_VAR(build)
+DECLARE_DEBUG_VAR(change)
+DECLARE_DEBUG_VAR(upload)
+DECLARE_DEBUG_VAR(roots)
+DECLARE_DEBUG_VAR(dump)
+DECLARE_DEBUG_VAR(noalpha)
+DECLARE_DEBUG_VAR(noopaque)
+DECLARE_DEBUG_VAR(noclip)
+#undef DECLARE_DEBUG_VAR
 
-#ifndef QSG_NO_RENDER_TIMING
-static bool qsg_render_timing = !qgetenv("QSG_RENDER_TIMING").isEmpty();
 static QElapsedTimer qsg_renderer_timer;
-#endif
 
 #define QSGNODE_TRAVERSE(NODE) for (QSGNode *child = NODE->firstChild(); child; child = child->nextSibling())
 #define SHADOWNODE_TRAVERSE(NODE) for (QList<Node *>::const_iterator child = NODE->children.constBegin(); child != NODE->children.constEnd(); ++child)
@@ -133,10 +128,8 @@ ShaderManager::Shader *ShaderManager::prepareMaterial(QSGMaterial *material)
     if (shader)
         return shader;
 
-#ifndef QSG_NO_RENDER_TIMING
-    if (qsg_render_timing  || QQuickProfiler::enabled)
+    if (QSG_LOG_TIME_COMPILATION().isDebugEnabled() || QQuickProfiler::profilingSceneGraph())
         qsg_renderer_timer.start();
-#endif
 
     QSGMaterialShader *s = material->createShader();
     QOpenGLContext *ctx = QOpenGLContext::currentContext();
@@ -164,13 +157,10 @@ ShaderManager::Shader *ShaderManager::prepareMaterial(QSGMaterial *material)
     Q_ASSERT(shader->pos_order >= 0);
     Q_ASSERT(shader->id_zRange >= 0);
 
-#ifndef QSG_NO_RENDER_TIMING
-    if (qsg_render_timing)
-        qDebug("   - compiling material: %dms", (int) qsg_renderer_timer.elapsed());
+    qCDebug(QSG_LOG_TIME_COMPILATION, "shader compiled in %dms", (int) qsg_renderer_timer.elapsed());
 
-    Q_QUICK_SG_PROFILE1(QQuickProfiler::SceneGraphContextFrame, (
+    Q_QUICK_SG_PROFILE(QQuickProfiler::SceneGraphContextFrame, (
             qsg_renderer_timer.nsecsElapsed()));
-#endif
 
     rewrittenShaders[type] = shader;
     return shader;
@@ -183,10 +173,8 @@ ShaderManager::Shader *ShaderManager::prepareMaterialNoRewrite(QSGMaterial *mate
     if (shader)
         return shader;
 
-#ifndef QSG_NO_RENDER_TIMING
-    if (qsg_render_timing  || QQuickProfiler::enabled)
+    if (QSG_LOG_TIME_COMPILATION().isDebugEnabled() || QQuickProfiler::profilingSceneGraph())
         qsg_renderer_timer.start();
-#endif
 
     QSGMaterialShader *s = static_cast<QSGMaterialShader *>(material->createShader());
     context->compile(s, material);
@@ -200,14 +188,10 @@ ShaderManager::Shader *ShaderManager::prepareMaterialNoRewrite(QSGMaterial *mate
 
     stockShaders[type] = shader;
 
-#ifndef QSG_NO_RENDER_TIMING
-    if (qsg_render_timing)
-        qDebug("   - compiling material: %dms", (int) qsg_renderer_timer.elapsed());
+    qCDebug(QSG_LOG_TIME_COMPILATION, "shader compiled in %dms (no rewrite)", (int) qsg_renderer_timer.elapsed());
 
-    Q_QUICK_SG_PROFILE1(QQuickProfiler::SceneGraphContextFrame, (
+    Q_QUICK_SG_PROFILE(QQuickProfiler::SceneGraphContextFrame, (
             qsg_renderer_timer.nsecsElapsed()));
-#endif
-
     return shader;
 }
 
@@ -244,6 +228,7 @@ void qsg_dumpShadowRoots(BatchRootInfo *i, int indent)
 
 void qsg_dumpShadowRoots(Node *n)
 {
+#ifndef QT_NO_DEBUG_OUTPUT
     static int indent = 0;
     ++indent;
 
@@ -263,6 +248,9 @@ void qsg_dumpShadowRoots(Node *n)
             qsg_dumpShadowRoots(*child);
 
     --indent;
+#else
+    Q_UNUSED(n)
+#endif
 }
 
 Updater::Updater(Renderer *r)
@@ -288,10 +276,10 @@ void Updater::updateStates(QSGNode *n)
     Node *sn = renderer->m_nodes.value(n, 0);
     Q_ASSERT(sn);
 
-    if (Q_UNLIKELY(debug_roots))
+    if (Q_UNLIKELY(debug_roots()))
         qsg_dumpShadowRoots(sn);
 
-    if (Q_UNLIKELY(debug_build)) {
+    if (Q_UNLIKELY(debug_build())) {
         qDebug() << "Updater::updateStates()";
         if (sn->dirtyState & (QSGNode::DirtyNodeAdded << 16))
             qDebug() << " - nodes have been added";
@@ -472,12 +460,18 @@ void Updater::visitGeometryNode(Node *n)
 
         if (e->root) {
             BatchRootInfo *info = renderer->batchRootInfo(e->root);
-            info->availableOrders--;
-            if (info->availableOrders < 0) {
-                renderer->m_rebuild |= Renderer::BuildRenderLists;
-            } else {
-                renderer->m_rebuild |= Renderer::BuildRenderListsForTaggedRoots;
-                renderer->m_taggedRoots << e->root;
+            while (info != 0) {
+                info->availableOrders--;
+                if (info->availableOrders < 0) {
+                    renderer->m_rebuild |= Renderer::BuildRenderLists;
+                } else {
+                    renderer->m_rebuild |= Renderer::BuildRenderListsForTaggedRoots;
+                    renderer->m_taggedRoots << e->root;
+                }
+                if (info->parentRoot != 0)
+                    info = renderer->batchRootInfo(info->parentRoot);
+                else
+                    info = 0;
             }
         } else {
             renderer->m_rebuild |= Renderer::FullRebuild;
@@ -606,11 +600,6 @@ void Element::computeBounds()
 
 BatchCompatibility Batch::isMaterialCompatible(Element *e) const
 {
-    // If material has changed between opaque and translucent, it is not compatible
-    QSGMaterial *m = e->node->activeMaterial();
-    if (isOpaque != ((m->flags() & QSGMaterial::Blending) == 0))
-        return BatchBreaksOnBlending;
-
     Element *n = first;
     // Skip to the first node other than e which has not been removed
     while (n && (n == e || n->removed))
@@ -621,6 +610,7 @@ BatchCompatibility Batch::isMaterialCompatible(Element *e) const
     if (!n)
         return BatchIsCompatible;
 
+    QSGMaterial *m = e->node->activeMaterial();
     QSGMaterial *nm = n->node->activeMaterial();
     return (nm->type() == m->type() && nm->compare(m) == 0)
             ? BatchIsCompatible
@@ -766,11 +756,14 @@ Renderer::Renderer(QSGRenderContext *ctx)
     , m_renderOrderRebuildUpper(-1)
     , m_currentMaterial(0)
     , m_currentShader(0)
+    , m_currentStencilValue(0)
+    , m_clipMatrixId(0)
     , m_currentClip(0)
     , m_currentClipType(NoClip)
     , m_vao(0)
     , m_visualizeMode(VisualizeNothing)
 {
+    initializeOpenGLFunctions();
     setNodeUpdater(new Updater(this));
 
     m_shaderManager = ctx->findChild<ShaderManager *>(QStringLiteral("__qt_ShaderManager"), Qt::FindDirectChildrenOnly);
@@ -806,7 +799,7 @@ Renderer::Renderer(QSGRenderContext *ctx)
         if (ok)
             m_batchVertexThreshold = threshold;
     }
-    if (Q_UNLIKELY(debug_build || debug_render)) {
+    if (Q_UNLIKELY(debug_build() || debug_render())) {
         qDebug() << "Batch thresholds: nodes:" << m_batchNodeThreshold << " vertices:" << m_batchVertexThreshold;
         qDebug() << "Using buffer strategy:" << (m_bufferStrategy == GL_STATIC_DRAW ? "static" : (m_bufferStrategy == GL_DYNAMIC_DRAW ? "dynamic" : "stream"));
     }
@@ -838,10 +831,12 @@ static void qsg_wipeBatch(Batch *batch, QOpenGLFunctions *funcs)
 
 Renderer::~Renderer()
 {
-    // Clean up batches and buffers
-    for (int i=0; i<m_opaqueBatches.size(); ++i) qsg_wipeBatch(m_opaqueBatches.at(i), this);
-    for (int i=0; i<m_alphaBatches.size(); ++i) qsg_wipeBatch(m_alphaBatches.at(i), this);
-    for (int i=0; i<m_batchPool.size(); ++i) qsg_wipeBatch(m_batchPool.at(i), this);
+    if (QOpenGLContext::currentContext()) {
+        // Clean up batches and buffers
+        for (int i=0; i<m_opaqueBatches.size(); ++i) qsg_wipeBatch(m_opaqueBatches.at(i), this);
+        for (int i=0; i<m_alphaBatches.size(); ++i) qsg_wipeBatch(m_alphaBatches.at(i), this);
+        for (int i=0; i<m_batchPool.size(); ++i) qsg_wipeBatch(m_batchPool.at(i), this);
+    }
 
     // The shadowtree
     qDeleteAll(m_nodes.values());
@@ -1067,7 +1062,7 @@ void Renderer::nodeWasRemoved(Node *node)
 
 void Renderer::turnNodeIntoBatchRoot(Node *node)
 {
-    if (Q_UNLIKELY(debug_change)) qDebug() << " - new batch root";
+    if (Q_UNLIKELY(debug_change())) qDebug() << " - new batch root";
     m_rebuild |= FullRebuild;
     node->isBatchRoot = true;
     node->becameBatchRoot = true;
@@ -1088,7 +1083,8 @@ void Renderer::turnNodeIntoBatchRoot(Node *node)
 
 void Renderer::nodeChanged(QSGNode *node, QSGNode::DirtyState state)
 {
-    if (Q_UNLIKELY(debug_change)) {
+#ifndef QT_NO_DEBUG_OUTPUT
+    if (Q_UNLIKELY(debug_change())) {
         QDebug debug = qDebug();
         debug << "dirty:";
         if (state & QSGNode::DirtyGeometry)
@@ -1115,7 +1111,7 @@ void Renderer::nodeChanged(QSGNode *node, QSGNode::DirtyState state)
         else
             debug << node;
     }
-
+#endif
     // As this function calls nodeChanged recursively, we do it at the top
     // to avoid that any of the others are processed twice.
     if (state & QSGNode::DirtySubtreeBlocked) {
@@ -1185,11 +1181,12 @@ void Renderer::nodeChanged(QSGNode *node, QSGNode::DirtyState state)
     if (state & QSGNode::DirtyMaterial && node->type() == QSGNode::GeometryNodeType) {
         Element *e = shadowNode->element();
         if (e) {
-            if (e->batch) {
-                BatchCompatibility compat = e->batch->isMaterialCompatible(e);
-                if (compat == BatchBreaksOnBlending)
-                    m_rebuild |= Renderer::FullRebuild;
-                else if (compat == BatchBreaksOnCompare)
+            bool blended = hasMaterialWithBlending(static_cast<QSGGeometryNode *>(node));
+            if (e->isMaterialBlended != blended) {
+                m_rebuild |= Renderer::FullRebuild;
+                e->isMaterialBlended = blended;
+            } else if (e->batch) {
+                if (e->batch->isMaterialCompatible(e) == BatchBreaksOnCompare)
                     invalidateBatchAndOverlappingRenderOrders(e->batch);
             } else {
                 m_rebuild |= Renderer::BuildBatches;
@@ -1464,7 +1461,7 @@ void Renderer::prepareOpaqueBatches()
 {
     for (int i=m_opaqueRenderList.size() - 1; i >= 0; --i) {
         Element *ei = m_opaqueRenderList.at(i);
-        if (!ei || ei->batch)
+        if (!ei || ei->batch || ei->node->geometry()->vertexCount() == 0)
             continue;
         Batch *batch = newBatch();
         batch->first = ei;
@@ -1486,7 +1483,7 @@ void Renderer::prepareOpaqueBatches()
                 continue;
             if (ej->root != ei->root)
                 break;
-            if (ej->batch)
+            if (ej->batch || ej->node->geometry()->vertexCount() == 0)
                 continue;
 
             QSGGeometryNode *gnj = ej->node;
@@ -1557,6 +1554,9 @@ void Renderer::prepareAlphaBatches()
             continue;
         }
 
+        if (ei->node->geometry()->vertexCount() == 0)
+            continue;
+
         Batch *batch = newBatch();
         batch->first = ei;
         batch->root = ei->root;
@@ -1583,6 +1583,8 @@ void Renderer::prepareAlphaBatches()
                 continue;
 
             QSGGeometryNode *gnj = ej->node;
+            if (gnj->geometry()->vertexCount() == 0)
+                continue;
 
             if (gni->clipList() == gnj->clipList()
                     && gni->geometry()->drawingMode() == gnj->geometry()->drawingMode()
@@ -1629,7 +1631,7 @@ void Renderer::prepareAlphaBatches()
 
 void Renderer::uploadMergedElement(Element *e, int vaOffset, char **vertexData, char **zData, char **indexData, quint16 *iBase, int *indexCount)
 {
-    if (Q_UNLIKELY(debug_upload)) qDebug() << "  - uploading element:" << e << e->node << (void *) *vertexData << (qintptr) (*zData - *vertexData) << (qintptr) (*indexData - *vertexData);
+    if (Q_UNLIKELY(debug_upload())) qDebug() << "  - uploading element:" << e << e->node << (void *) *vertexData << (qintptr) (*zData - *vertexData) << (qintptr) (*indexData - *vertexData);
     QSGGeometry *g = e->node->geometry();
 
     const QMatrix4x4 &localx = *e->node->matrix();
@@ -1702,17 +1704,17 @@ void Renderer::uploadBatch(Batch *b)
 {
         // Early out if nothing has changed in this batch..
         if (!b->needsUpload) {
-            if (Q_UNLIKELY(debug_upload)) qDebug() << " Batch:" << b << "already uploaded...";
+            if (Q_UNLIKELY(debug_upload())) qDebug() << " Batch:" << b << "already uploaded...";
             return;
         }
 
         if (!b->first) {
-            if (Q_UNLIKELY(debug_upload)) qDebug() << " Batch:" << b << "is invalid...";
+            if (Q_UNLIKELY(debug_upload())) qDebug() << " Batch:" << b << "is invalid...";
             return;
         }
 
         if (b->isRenderNode) {
-            if (Q_UNLIKELY(debug_upload)) qDebug() << " Batch: " << b << "is a render node...";
+            if (Q_UNLIKELY(debug_upload())) qDebug() << " Batch: " << b << "is a render node...";
             return;
         }
 
@@ -1791,7 +1793,7 @@ void Renderer::uploadBatch(Batch *b)
 #endif
         map(&b->vbo, bufferSize);
 
-        if (Q_UNLIKELY(debug_upload)) qDebug() << " - batch" << b << " first:" << b->first << " root:"
+        if (Q_UNLIKELY(debug_upload())) qDebug() << " - batch" << b << " first:" << b->first << " root:"
                                    << b->root << " merged:" << b->merged << " positionAttribute" << b->positionAttribute
                                    << " vbo:" << b->vbo.id << ":" << b->vbo.size;
 
@@ -1856,8 +1858,8 @@ void Renderer::uploadBatch(Batch *b)
                 e = e->nextInBatch;
             }
         }
-
-        if (Q_UNLIKELY(debug_upload)) {
+#ifndef QT_NO_DEBUG_OUTPUT
+        if (Q_UNLIKELY(debug_upload())) {
             const char *vd = b->vbo.data;
             qDebug() << "  -- Vertex Data, count:" << b->vertexCount << " - " << g->sizeOfVertex() << "bytes/vertex";
             for (int i=0; i<b->vertexCount; ++i) {
@@ -1888,9 +1890,12 @@ void Renderer::uploadBatch(Batch *b)
                 vd += g->sizeOfVertex();
             }
 
-            const quint16 *id = (const quint16 *) (b->vbo.data
-                                                   + b->vertexCount * g->sizeOfVertex()
-                                                   + (b->merged ? b->vertexCount * sizeof(float) : 0));
+            const quint16 *id =
+# ifdef QSG_SEPARATE_INDEX_BUFFER
+                    (const quint16 *) (b->ibo.data);
+# else
+                    (const quint16 *) (b->vbo.data + b->drawSets.at(0).indices);
+# endif
             {
                 QDebug iDump = qDebug();
                 iDump << "  -- Index Data, count:" << b->indexCount;
@@ -1906,23 +1911,150 @@ void Renderer::uploadBatch(Batch *b)
                 qDebug() << "  -- DrawSet: indexCount:" << s.indexCount << " vertices:" << s.vertices << " z:" << s.zorders << " indices:" << s.indices;
             }
         }
+#endif // QT_NO_DEBUG_OUTPUT
 
         unmap(&b->vbo);
 #ifdef QSG_SEPARATE_INDEX_BUFFER
         unmap(&b->ibo, true);
 #endif
 
-        if (Q_UNLIKELY(debug_upload)) qDebug() << "  --- vertex/index buffers unmapped, batch upload completed...";
+        if (Q_UNLIKELY(debug_upload())) qDebug() << "  --- vertex/index buffers unmapped, batch upload completed...";
 
         b->needsUpload = false;
 
-        if (Q_UNLIKELY(debug_render))
+        if (Q_UNLIKELY(debug_render()))
             b->uploadedThisFrame = true;
+}
+
+/*!
+ * Convenience function to set up the stencil buffer for clipping based on \a clip.
+ *
+ * If the clip is a pixel aligned rectangle, this function will use glScissor instead
+ * of stencil.
+ */
+Renderer::ClipType Renderer::updateStencilClip(const QSGClipNode *clip)
+{
+    if (!clip) {
+        glDisable(GL_STENCIL_TEST);
+        glDisable(GL_SCISSOR_TEST);
+        return NoClip;
+    }
+
+    ClipType clipType = NoClip;
+
+    glDisable(GL_SCISSOR_TEST);
+
+    m_currentStencilValue = 0;
+    m_currentScissorRect = QRect();
+    while (clip) {
+        QMatrix4x4 m = m_current_projection_matrix;
+        if (clip->matrix())
+            m *= *clip->matrix();
+
+        // TODO: Check for multisampling and pixel grid alignment.
+        bool isRectangleWithNoPerspective = clip->isRectangular()
+                && qFuzzyIsNull(m(3, 0)) && qFuzzyIsNull(m(3, 1));
+        bool noRotate = qFuzzyIsNull(m(0, 1)) && qFuzzyIsNull(m(1, 0));
+        bool isRotate90 = qFuzzyIsNull(m(0, 0)) && qFuzzyIsNull(m(1, 1));
+
+        if (isRectangleWithNoPerspective && (noRotate || isRotate90)) {
+            QRectF bbox = clip->clipRect();
+            qreal invW = 1 / m(3, 3);
+            qreal fx1, fy1, fx2, fy2;
+            if (noRotate) {
+                fx1 = (bbox.left() * m(0, 0) + m(0, 3)) * invW;
+                fy1 = (bbox.bottom() * m(1, 1) + m(1, 3)) * invW;
+                fx2 = (bbox.right() * m(0, 0) + m(0, 3)) * invW;
+                fy2 = (bbox.top() * m(1, 1) + m(1, 3)) * invW;
+            } else {
+                Q_ASSERT(isRotate90);
+                fx1 = (bbox.bottom() * m(0, 1) + m(0, 3)) * invW;
+                fy1 = (bbox.left() * m(1, 0) + m(1, 3)) * invW;
+                fx2 = (bbox.top() * m(0, 1) + m(0, 3)) * invW;
+                fy2 = (bbox.right() * m(1, 0) + m(1, 3)) * invW;
+            }
+
+            if (fx1 > fx2)
+                qSwap(fx1, fx2);
+            if (fy1 > fy2)
+                qSwap(fy1, fy2);
+
+            QRect deviceRect = this->deviceRect();
+
+            GLint ix1 = qRound((fx1 + 1) * deviceRect.width() * qreal(0.5));
+            GLint iy1 = qRound((fy1 + 1) * deviceRect.height() * qreal(0.5));
+            GLint ix2 = qRound((fx2 + 1) * deviceRect.width() * qreal(0.5));
+            GLint iy2 = qRound((fy2 + 1) * deviceRect.height() * qreal(0.5));
+
+            if (!(clipType & ScissorClip)) {
+                m_currentScissorRect = QRect(ix1, iy1, ix2 - ix1, iy2 - iy1);
+                glEnable(GL_SCISSOR_TEST);
+                clipType |= ScissorClip;
+            } else {
+                m_currentScissorRect &= QRect(ix1, iy1, ix2 - ix1, iy2 - iy1);
+            }
+            glScissor(m_currentScissorRect.x(), m_currentScissorRect.y(),
+                      m_currentScissorRect.width(), m_currentScissorRect.height());
+        } else {
+            if (!(clipType & StencilClip)) {
+                if (!m_clipProgram.isLinked()) {
+                    QSGShaderSourceBuilder::initializeProgramFromFiles(
+                        &m_clipProgram,
+                        QStringLiteral(":/scenegraph/shaders/stencilclip.vert"),
+                        QStringLiteral(":/scenegraph/shaders/stencilclip.frag"));
+                    m_clipProgram.bindAttributeLocation("vCoord", 0);
+                    m_clipProgram.link();
+                    m_clipMatrixId = m_clipProgram.uniformLocation("matrix");
+                }
+
+                glClearStencil(0);
+                glClear(GL_STENCIL_BUFFER_BIT);
+                glEnable(GL_STENCIL_TEST);
+                glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
+                glDepthMask(GL_FALSE);
+
+                m_clipProgram.bind();
+                m_clipProgram.enableAttributeArray(0);
+
+                clipType |= StencilClip;
+            }
+
+            glStencilFunc(GL_EQUAL, m_currentStencilValue, 0xff); // stencil test, ref, test mask
+            glStencilOp(GL_KEEP, GL_KEEP, GL_INCR); // stencil fail, z fail, z pass
+
+            const QSGGeometry *g = clip->geometry();
+            Q_ASSERT(g->attributeCount() > 0);
+            const QSGGeometry::Attribute *a = g->attributes();
+            glVertexAttribPointer(0, a->tupleSize, a->type, GL_FALSE, g->sizeOfVertex(), g->vertexData());
+
+            m_clipProgram.setUniformValue(m_clipMatrixId, m);
+            if (g->indexCount()) {
+                glDrawElements(g->drawingMode(), g->indexCount(), g->indexType(), g->indexData());
+            } else {
+                glDrawArrays(g->drawingMode(), 0, g->vertexCount());
+            }
+
+            ++m_currentStencilValue;
+        }
+
+        clip = clip->clipList();
+    }
+
+    if (clipType & StencilClip) {
+        m_clipProgram.disableAttributeArray(0);
+        glStencilFunc(GL_EQUAL, m_currentStencilValue, 0xff); // stencil test, ref, test mask
+        glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP); // stencil fail, z fail, z pass
+        bindable()->reactivate();
+    } else {
+        glDisable(GL_STENCIL_TEST);
+    }
+
+    return clipType;
 }
 
 void Renderer::updateClip(const QSGClipNode *clipList, const Batch *batch)
 {
-    if (clipList != m_currentClip && Q_LIKELY(!debug_noclip)) {
+    if (clipList != m_currentClip && Q_LIKELY(!debug_noclip())) {
         m_currentClip = clipList;
         // updateClip sets another program, so force-reactivate our own
         if (m_currentShader)
@@ -2001,7 +2133,8 @@ void Renderer::renderMergedBatch(const Batch *batch)
     Element *e = batch->first;
     Q_ASSERT(e);
 
-    if (Q_UNLIKELY(debug_render)) {
+#ifndef QT_NO_DEBUG_OUTPUT
+    if (Q_UNLIKELY(debug_render())) {
         QDebug debug = qDebug();
         debug << " -"
               << batch
@@ -2019,6 +2152,7 @@ void Renderer::renderMergedBatch(const Batch *batch)
             debug << "opacity:" << e->node->inheritedOpacity();
         batch->uploadedThisFrame = false;
     }
+#endif
 
     QSGGeometryNode *gn = e->node;
 
@@ -2067,6 +2201,19 @@ void Renderer::renderMergedBatch(const Batch *batch)
 
     program->updateState(state(dirty), material, m_currentMaterial);
 
+#ifndef QT_NO_DEBUG
+    if (qsg_test_and_clear_material_failure()) {
+        qDebug() << "QSGMaterial::updateState triggered an error (merged), batch will be skipped:";
+        Element *ee = e;
+        while (ee) {
+            qDebug() << "   -" << ee->node;
+            ee = ee->nextInBatch;
+        }
+        QSGNodeDumper::dump(rootNode());
+        qFatal("Aborting: scene graph is invalid...");
+    }
+#endif
+
     m_currentMaterial = material;
 
     QSGGeometry* g = gn->geometry();
@@ -2097,7 +2244,7 @@ void Renderer::renderUnmergedBatch(const Batch *batch)
     Element *e = batch->first;
     Q_ASSERT(e);
 
-    if (Q_UNLIKELY(debug_render)) {
+    if (Q_UNLIKELY(debug_render())) {
         qDebug() << " -"
                  << batch
                  << (batch->uploadedThisFrame ? "[  upload]" : "[retained]")
@@ -2174,6 +2321,16 @@ void Renderer::renderUnmergedBatch(const Batch *batch)
 
         program->updateState(state(dirty), material, m_currentMaterial);
 
+#ifndef QT_NO_DEBUG
+    if (qsg_test_and_clear_material_failure()) {
+        qDebug() << "QSGMaterial::updateState() triggered an error (unmerged), batch will be skipped:";
+        qDebug() << "   - offending node is" << e->node;
+        QSGNodeDumper::dump(rootNode());
+        qFatal("Aborting: scene graph is invalid...");
+        return;
+    }
+#endif
+
         // We don't need to bother with asking each node for its material as they
         // are all identical (compare==0) since they are in the same batch.
         m_currentMaterial = material;
@@ -2193,8 +2350,11 @@ void Renderer::renderUnmergedBatch(const Batch *batch)
         if (g->drawingMode() == GL_LINE_STRIP || g->drawingMode() == GL_LINE_LOOP || g->drawingMode() == GL_LINES)
             glLineWidth(g->lineWidth());
 #if !defined(QT_OPENGL_ES_2)
-        else if (!QOpenGLContext::currentContext()->isOpenGLES() && g->drawingMode() == GL_POINTS)
-            glPointSize(g->lineWidth());
+        else if (!QOpenGLContext::currentContext()->isOpenGLES() && g->drawingMode() == GL_POINTS) {
+            QOpenGLFunctions_1_0 *gl1funcs = QOpenGLContext::currentContext()->versionFunctions<QOpenGLFunctions_1_0>();
+            gl1funcs->initializeOpenGLFunctions();
+            gl1funcs->glPointSize(g->lineWidth());
+        }
 #endif
 
         if (g->indexCount())
@@ -2214,7 +2374,7 @@ void Renderer::renderUnmergedBatch(const Batch *batch)
 
 void Renderer::renderBatches()
 {
-    if (Q_UNLIKELY(debug_render)) {
+    if (Q_UNLIKELY(debug_render())) {
         qDebug().nospace() << "Rendering:" << endl
                            << " -> Opaque: " << qsg_countNodesInBatches(m_opaqueBatches) << " nodes in " << m_opaqueBatches.size() << " batches..." << endl
                            << " -> Alpha: " << qsg_countNodesInBatches(m_alphaBatches) << " nodes in " << m_alphaBatches.size() << " batches...";
@@ -2225,11 +2385,7 @@ void Renderer::renderBatches()
     glClearColor(clearColor().redF(), clearColor().greenF(), clearColor().blueF(), clearColor().alphaF());
 
     if (m_useDepthBuffer) {
-#if defined(QT_OPENGL_ES)
-        glClearDepthf(1);
-#else
-        glClearDepth(1);
-#endif
+        glClearDepthf(1); // calls glClearDepth() under the hood for desktop OpenGL
         glEnable(GL_DEPTH_TEST);
         glDepthFunc(GL_LESS);
         glDepthMask(true);
@@ -2251,8 +2407,8 @@ void Renderer::renderBatches()
     m_currentProgram = 0;
     m_currentClip = 0;
 
-    bool renderOpaque = !debug_noopaque;
-    bool renderAlpha = !debug_noalpha;
+    bool renderOpaque = !debug_noopaque();
+    bool renderAlpha = !debug_noalpha();
 
     if (Q_LIKELY(renderOpaque)) {
         for (int i=0; i<m_opaqueBatches.size(); ++i) {
@@ -2286,6 +2442,7 @@ void Renderer::renderBatches()
     updateStencilClip(0);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+    glDepthMask(true);
 }
 
 void Renderer::deleteRemovedElements()
@@ -2327,12 +2484,12 @@ void Renderer::preprocess()
 
 void Renderer::render()
 {
-    if (Q_UNLIKELY(debug_dump)) {
+    if (Q_UNLIKELY(debug_dump())) {
         qDebug("\n");
         QSGNodeDumper::dump(rootNode());
     }
 
-    if (Q_UNLIKELY(debug_render || debug_build)) {
+    if (Q_UNLIKELY(debug_render() || debug_build())) {
 
         QByteArray type("rebuild:");
         if (m_rebuild == 0)
@@ -2359,7 +2516,7 @@ void Renderer::render()
             buildRenderListsForTaggedRoots();
         m_rebuild |= BuildBatches;
 
-        if (Q_UNLIKELY(debug_build)) {
+        if (Q_UNLIKELY(debug_build())) {
             qDebug() << "Opaque render lists" << (complete ? "(complete)" : "(partial)") << ":";
             for (int i=0; i<m_opaqueRenderList.size(); ++i) {
                 Element *e = m_opaqueRenderList.at(i);
@@ -2386,7 +2543,7 @@ void Renderer::render()
         prepareOpaqueBatches();
         prepareAlphaBatches();
 
-        if (Q_UNLIKELY(debug_build)) {
+        if (Q_UNLIKELY(debug_build())) {
             qDebug() << "Opaque Batches:";
             for (int i=0; i<m_opaqueBatches.size(); ++i) {
                 Batch *b = m_opaqueBatches.at(i);
@@ -2422,11 +2579,11 @@ void Renderer::render()
     }
 
 
-    if (Q_UNLIKELY(debug_upload)) qDebug() << "Uploading Opaque Batches:";
+    if (Q_UNLIKELY(debug_upload())) qDebug() << "Uploading Opaque Batches:";
     for (int i=0; i<m_opaqueBatches.size(); ++i)
         uploadBatch(m_opaqueBatches.at(i));
 
-    if (Q_UNLIKELY(debug_upload)) qDebug() << "Uploading Alpha Batches:";
+    if (Q_UNLIKELY(debug_upload())) qDebug() << "Uploading Alpha Batches:";
     for (int i=0; i<m_alphaBatches.size(); ++i)
         uploadBatch(m_alphaBatches.at(i));
 
@@ -2445,7 +2602,7 @@ void Renderer::render()
 
 void Renderer::renderRenderNode(Batch *batch)
 {
-    if (Q_UNLIKELY(debug_render))
+    if (Q_UNLIKELY(debug_render()))
         qDebug() << " -" << batch << "rendernode";
 
     Q_ASSERT(batch->first->isRenderNode);
@@ -2470,16 +2627,19 @@ void Renderer::renderRenderNode(Batch *batch)
     state.projectionMatrix = &pm;
     state.scissorEnabled = m_currentClipType & ScissorClip;
     state.stencilEnabled = m_currentClipType & StencilClip;
-    state.scissorRect = m_current_scissor_rect;
-    state.stencilValue = m_current_stencil_value;
+    state.scissorRect = m_currentScissorRect;
+    state.stencilValue = m_currentStencilValue;
 
     QSGNode *xform = e->renderNode->parent();
     QMatrix4x4 matrix;
-    while (xform != rootNode()) {
+    QSGNode *root = rootNode();
+    if (e->root) {
+        matrix = qsg_matrixForRoot(e->root);
+        root = e->root->sgNode;
+    }
+    while (xform != root) {
         if (xform->type() == QSGNode::TransformNodeType) {
-            matrix = static_cast<QSGTransformNode *>(xform)->combinedMatrix();
-            if (e->root)
-                matrix = qsg_matrixForRoot(e->root) * matrix;
+            matrix = matrix * static_cast<QSGTransformNode *>(xform)->combinedMatrix();
             break;
         }
         xform = xform->parent();

@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -89,11 +81,11 @@ QV4::ReturnedValue QV4Include::resultValue(QV4::ExecutionEngine *v4, Status stat
     QV4::ScopedObject o(scope, v4->newObject());
     QV4::ScopedString s(scope);
     QV4::ScopedValue v(scope);
-    o->put((s = v4->newString(QStringLiteral("OK"))), (v = QV4::Primitive::fromInt32(Ok)));
-    o->put((s = v4->newString(QStringLiteral("LOADING"))), (v = QV4::Primitive::fromInt32(Loading)));
-    o->put((s = v4->newString(QStringLiteral("NETWORK_ERROR"))), (v = QV4::Primitive::fromInt32(NetworkError)));
-    o->put((s = v4->newString(QStringLiteral("EXCEPTION"))), (v = QV4::Primitive::fromInt32(Exception)));
-    o->put((s = v4->newString(QStringLiteral("status"))), (v = QV4::Primitive::fromInt32(status)));
+    o->put((s = v4->newString(QStringLiteral("OK"))).getPointer(), (v = QV4::Primitive::fromInt32(Ok)));
+    o->put((s = v4->newString(QStringLiteral("LOADING"))).getPointer(), (v = QV4::Primitive::fromInt32(Loading)));
+    o->put((s = v4->newString(QStringLiteral("NETWORK_ERROR"))).getPointer(), (v = QV4::Primitive::fromInt32(NetworkError)));
+    o->put((s = v4->newString(QStringLiteral("EXCEPTION"))).getPointer(), (v = QV4::Primitive::fromInt32(Exception)));
+    o->put((s = v4->newString(QStringLiteral("status"))).getPointer(), (v = QV4::Primitive::fromInt32(status)));
 
     return o.asReturnedValue();
 }
@@ -160,13 +152,13 @@ void QV4Include::finished()
             script.run();
         if (scope.engine->hasException) {
             QV4::ScopedValue ex(scope, ctx->catchException());
-            resultObj->put(status, QV4::ScopedValue(scope, QV4::Primitive::fromInt32(Exception)));
-            resultObj->put(QV4::ScopedString(scope, v4->newString(QStringLiteral("exception"))), ex);
+            resultObj->put(status.getPointer(), QV4::ScopedValue(scope, QV4::Primitive::fromInt32(Exception)));
+            resultObj->put(v4->newString(QStringLiteral("exception"))->getPointer(), ex);
         } else {
-            resultObj->put(status, QV4::ScopedValue(scope, QV4::Primitive::fromInt32(Ok)));
+            resultObj->put(status.getPointer(), QV4::ScopedValue(scope, QV4::Primitive::fromInt32(Ok)));
         }
     } else {
-        resultObj->put(QV4::ScopedString(scope, v4->newString(QStringLiteral("status"))), QV4::ScopedValue(scope, QV4::Primitive::fromInt32(NetworkError)));
+        resultObj->put(v4->newString(QStringLiteral("status"))->getPointer(), QV4::ScopedValue(scope, QV4::Primitive::fromInt32(NetworkError)));
     }
 
     QV4::ScopedValue cb(scope, m_callbackFunction.value());
@@ -181,27 +173,26 @@ void QV4Include::finished()
 */
 QV4::ReturnedValue QV4Include::method_include(QV4::CallContext *ctx)
 {
-    if (!ctx->callData->argc)
+    if (!ctx->d()->callData->argc)
         return QV4::Encode::undefined();
 
-    QV4::ExecutionEngine *v4 = ctx->engine;
-    QV4::Scope scope(v4);
-    QV8Engine *engine = v4->v8Engine;
-    QQmlContextData *context = QV4::QmlContextWrapper::callingContext(v4);
+    QV4::Scope scope(ctx->engine());
+    QV8Engine *engine = scope.engine->v8Engine;
+    QQmlContextData *context = QV4::QmlContextWrapper::callingContext(scope.engine);
 
     if (!context || !context->isJSContext)
         V4THROW_ERROR("Qt.include(): Can only be called from JavaScript files");
 
-    QUrl url(ctx->engine->resolvedUrl(ctx->callData->args[0].toQStringNoThrow()));
+    QUrl url(scope.engine->resolvedUrl(ctx->d()->callData->args[0].toQStringNoThrow()));
 
     QV4::ScopedValue callbackFunction(scope, QV4::Primitive::undefinedValue());
-    if (ctx->callData->argc >= 2 && ctx->callData->args[1].asFunctionObject())
-        callbackFunction = ctx->callData->args[1];
+    if (ctx->d()->callData->argc >= 2 && ctx->d()->callData->args[1].asFunctionObject())
+        callbackFunction = ctx->d()->callData->args[1];
 
     QString localFile = QQmlFile::urlToLocalFileOrQrc(url);
 
     QV4::ScopedValue result(scope);
-    QV4::ScopedObject qmlcontextobject(scope, v4->qmlContextObject());
+    QV4::ScopedObject qmlcontextobject(scope, scope.engine->qmlContextObject());
 
     if (localFile.isEmpty()) {
         QV4Include *i = new QV4Include(url, engine, context,
@@ -214,7 +205,7 @@ QV4::ReturnedValue QV4Include::method_include(QV4::CallContext *ctx)
 
         if (const QQmlPrivate::CachedQmlUnit *cachedUnit = QQmlMetaType::findCachedCompilationUnit(url)) {
             QV4::CompiledData::CompilationUnit *jsUnit = cachedUnit->createCompilationUnit();
-            script.reset(new QV4::Script(v4, qmlcontextobject, jsUnit));
+            script.reset(new QV4::Script(scope.engine, qmlcontextobject, jsUnit));
         } else {
             QFile f(localFile);
 
@@ -223,24 +214,24 @@ QV4::ReturnedValue QV4Include::method_include(QV4::CallContext *ctx)
                 QString code = QString::fromUtf8(data);
                 QmlIR::Document::removeScriptPragmas(code);
 
-                script.reset(new QV4::Script(v4, qmlcontextobject, code, url.toString()));
+                script.reset(new QV4::Script(scope.engine, qmlcontextobject, code, url.toString()));
             }
         }
 
         if (!script.isNull()) {
-            QV4::ExecutionContext *ctx = v4->currentContext();
+            QV4::ExecutionContext *ctx = scope.engine->currentContext();
             script->parse();
-            if (!v4->hasException)
+            if (!scope.engine->hasException)
                 script->run();
-            if (v4->hasException) {
+            if (scope.engine->hasException) {
                 QV4::ScopedValue ex(scope, ctx->catchException());
-                result = resultValue(v4, Exception);
-                result->asObject()->put(QV4::ScopedString(scope, v4->newString(QStringLiteral("exception"))), ex);
+                result = resultValue(scope.engine, Exception);
+                result->asObject()->put(scope.engine->newString(QStringLiteral("exception"))->getPointer(), ex);
             } else {
-                result = resultValue(v4, Ok);
+                result = resultValue(scope.engine, Ok);
             }
         } else {
-            result = resultValue(v4, NetworkError);
+            result = resultValue(scope.engine, NetworkError);
         }
 
         callback(callbackFunction, result);

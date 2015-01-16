@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -415,6 +407,35 @@ void tst_qquicktext::wrap()
 
         QVERIFY(textObject != 0);
         QCOMPARE(textObject->width(), 30.);
+        QVERIFY(textObject->height() > textHeight);
+
+        qreal oldHeight = textObject->height();
+        textObject->setWidth(100);
+        QVERIFY(textObject->height() < oldHeight);
+
+        delete textObject;
+    }
+
+    // Check that increasing width from idealWidth will cause a relayout
+    for (int i = 0; i < richText.size(); i++)
+    {
+        QString componentStr = "import QtQuick 2.0\nText { wrapMode: Text.WordWrap; textFormat: Text.RichText; width: 30; text: \"" + richText.at(i) + "\" }";
+        QQmlComponent textComponent(&engine);
+        textComponent.setData(componentStr.toLatin1(), QUrl::fromLocalFile(""));
+        QQuickText *textObject = qobject_cast<QQuickText*>(textComponent.create());
+
+        QVERIFY(textObject != 0);
+        QCOMPARE(textObject->width(), 30.);
+        QVERIFY(textObject->height() > textHeight);
+
+        QQuickTextPrivate *textPrivate = QQuickTextPrivate::get(textObject);
+        QVERIFY(textPrivate != 0);
+        QVERIFY(textPrivate->extra.isAllocated());
+
+        QTextDocument *doc = textPrivate->extra->doc;
+        QVERIFY(doc != 0);
+        textObject->setWidth(doc->idealWidth());
+        QCOMPARE(textObject->width(), doc->idealWidth());
         QVERIFY(textObject->height() > textHeight);
 
         qreal oldHeight = textObject->height();
@@ -876,6 +897,9 @@ static inline QByteArray msgNotLessThan(int n1, int n2)
 
 void tst_qquicktext::hAlignImplicitWidth()
 {
+#if defined(QT_OPENGL_ES_2_ANGLE) && _MSC_VER==1600
+    QSKIP("QTBUG-40658");
+#endif
     QQuickView view(testFileUrl("hAlignImplicitWidth.qml"));
     view.setFlags(view.flags() | Qt::WindowStaysOnTopHint); // Prevent being obscured by other windows.
     view.show();
@@ -2034,7 +2058,8 @@ void tst_qquicktext::embeddedImages()
     QFETCH(QUrl, qmlfile);
     QFETCH(QString, error);
 
-    TestHTTPServer server(SERVER_PORT);
+    TestHTTPServer server;
+    QVERIFY2(server.listen(SERVER_PORT), qPrintable(server.errorString()));
     server.serveDirectory(testFile("http"));
 
     if (!error.isEmpty())
@@ -2679,14 +2704,15 @@ void tst_qquicktext::lineLaidOutRelayout()
 
     qreal maxH = 0;
     for (int i = 0; i < textPrivate->layout.lineCount(); ++i) {
-        QRectF r = textPrivate->layout.lineAt(i).rect();
-
+        QTextLine line = textPrivate->layout.lineAt(i);
+        const QRectF r = line.rect();
+        const qreal h = line.height();
         if (r.x() == 0) {
-            QCOMPARE(r.y(), i * r.height());
-            maxH = qMax(maxH, r.y() + r.height());
+            QCOMPARE(r.y(), i * h);
+            maxH = qMax(maxH, r.y() + h);
         } else {
             QCOMPARE(r.x(), myText->width() / 2);
-            QCOMPARE(r.y(), (i * r.height()) - maxH);
+            QCOMPARE(r.y(), i * h - maxH);
         }
     }
 
@@ -2772,7 +2798,8 @@ void tst_qquicktext::imgTagsBaseUrl()
     QFETCH(QUrl, contextUrl);
     QFETCH(qreal, imgHeight);
 
-    TestHTTPServer server(SERVER_PORT);
+    TestHTTPServer server;
+    QVERIFY2(server.listen(SERVER_PORT), qPrintable(server.errorString()));
     server.serveDirectory(testFile(""));
 
     QByteArray baseUrlFragment;
@@ -2811,7 +2838,7 @@ void tst_qquicktext::imgTagsAlign()
     QFETCH(QString, align);
     QString componentStr = "import QtQuick 2.0\nText { text: \"This is a test <img src=\\\"" + src + "\\\" align=\\\"" + align + "\\\"> of image.\" }";
     QQmlComponent textComponent(&engine);
-    textComponent.setData(componentStr.toLatin1(), QUrl::fromLocalFile(""));
+    textComponent.setData(componentStr.toLatin1(), QUrl::fromLocalFile("."));
     QQuickText *textObject = qobject_cast<QQuickText*>(textComponent.create());
 
     QVERIFY(textObject != 0);
@@ -2836,7 +2863,7 @@ void tst_qquicktext::imgTagsMultipleImages()
     QString componentStr = "import QtQuick 2.0\nText { text: \"This is a starfish<img src=\\\"data/images/starfish_2.png\\\" width=\\\"60\\\" height=\\\"60\\\" > and another one<img src=\\\"data/images/heart200.png\\\" width=\\\"85\\\" height=\\\"85\\\">.\" }";
 
     QQmlComponent textComponent(&engine);
-    textComponent.setData(componentStr.toLatin1(), QUrl::fromLocalFile(""));
+    textComponent.setData(componentStr.toLatin1(), QUrl::fromLocalFile("."));
     QQuickText *textObject = qobject_cast<QQuickText*>(textComponent.create());
 
     QVERIFY(textObject != 0);
@@ -2897,8 +2924,8 @@ void tst_qquicktext::imgTagsError()
     QString componentStr = "import QtQuick 2.0\nText { text: \"This is a starfish<img src=\\\"data/images/starfish_2.pn\\\" width=\\\"60\\\" height=\\\"60\\\">.\" }";
 
     QQmlComponent textComponent(&engine);
-    QTest::ignoreMessage(QtWarningMsg, "file::2:1: QML Text: Cannot open: file:data/images/starfish_2.pn");
-    textComponent.setData(componentStr.toLatin1(), QUrl::fromLocalFile(""));
+    QTest::ignoreMessage(QtWarningMsg, "<Unknown File>:2:1: QML Text: Cannot open: file:data/images/starfish_2.pn");
+    textComponent.setData(componentStr.toLatin1(), QUrl("file:"));
     QQuickText *textObject = qobject_cast<QQuickText*>(textComponent.create());
 
     QVERIFY(textObject != 0);

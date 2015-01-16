@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -50,6 +42,7 @@
 #include "private/qv4globalobject_p.h"
 #include "private/qv4script_p.h"
 #include "private/qv4runtime_p.h"
+#include <private/qqmlbuiltinfunctions_p.h>
 
 #include <QtCore/qdatetime.h>
 #include <QtCore/qmetaobject.h>
@@ -232,6 +225,51 @@ void QJSEngine::collectGarbage()
 }
 
 /*!
+  \since 5.4
+
+  Installs translator functions on the given \a object, or on the Global
+  Object if no object is specified.
+
+  The relation between script translator functions and C++ translator
+  functions is described in the following table:
+
+    \table
+    \header \li Script Function \li Corresponding C++ Function
+    \row    \li qsTr()       \li QObject::tr()
+    \row    \li QT_TR_NOOP() \li QT_TR_NOOP()
+    \row    \li qsTranslate() \li QCoreApplication::translate()
+    \row    \li QT_TRANSLATE_NOOP() \li QT_TRANSLATE_NOOP()
+    \row    \li qsTrId() \li qtTrId()
+    \row    \li QT_TRID_NOOP() \li QT_TRID_NOOP()
+    \endtable
+
+  It also adds an arg() method to the string prototype.
+
+  \sa {Internationalization with Qt}
+*/
+void QJSEngine::installTranslatorFunctions(const QJSValue &object)
+{
+    QV4::ExecutionEngine *v4 = d->m_v4Engine;
+    QV4::Scope scope(v4);
+    QJSValuePrivate *vp = QJSValuePrivate::get(object);
+    QV4::ScopedObject obj(scope, vp->getValue(v4));
+    if (!obj)
+        obj = v4->globalObject;
+#ifndef QT_NO_TRANSLATION
+    obj->defineDefaultProperty(QStringLiteral("qsTranslate"), QV4::GlobalExtensions::method_qsTranslate);
+    obj->defineDefaultProperty(QStringLiteral("QT_TRANSLATE_NOOP"), QV4::GlobalExtensions::method_qsTranslateNoOp);
+    obj->defineDefaultProperty(QStringLiteral("qsTr"), QV4::GlobalExtensions::method_qsTr);
+    obj->defineDefaultProperty(QStringLiteral("QT_TR_NOOP"), QV4::GlobalExtensions::method_qsTrNoOp);
+    obj->defineDefaultProperty(QStringLiteral("qsTrId"), QV4::GlobalExtensions::method_qsTrId);
+    obj->defineDefaultProperty(QStringLiteral("QT_TRID_NOOP"), QV4::GlobalExtensions::method_qsTrIdNoOp);
+
+    // string prototype extension
+    v4->stringObjectClass->prototype->defineDefaultProperty(QStringLiteral("arg"),
+                                                            QV4::GlobalExtensions::method_string_arg);
+#endif
+}
+
+/*!
     Evaluates \a program, using \a lineNumber as the base line number,
     and returns the result of the evaluation.
 
@@ -269,7 +307,7 @@ QJSValue QJSEngine::evaluate(const QString& program, const QString& fileName, in
     QV4::ScopedValue result(scope);
 
     QV4::Script script(ctx, program, fileName, lineNumber);
-    script.strictMode = ctx->strictMode;
+    script.strictMode = ctx->d()->strictMode;
     script.inheritContext = true;
     script.parse();
     if (!scope.engine->hasException)
@@ -388,17 +426,19 @@ bool QJSEngine::convertV2(const QJSValue &value, int type, void *ptr)
         QV4::ScopedValue v(scope, vp->getValue(engine->m_v4Engine));
         return engine->metaTypeFromJS(v, type, ptr);
     } else if (vp->value.isEmpty()) {
-        // have a string based value without engine. Do conversion manually
-        if (type == QMetaType::Bool) {
-            *reinterpret_cast<bool*>(ptr) = vp->string.length() != 0;
-            return true;
-        }
-        if (type == QMetaType::QString) {
-            *reinterpret_cast<QString*>(ptr) = vp->string;
-            return true;
-        }
-        double d = QV4::RuntimeHelpers::stringToNumber(vp->string);
-        switch (type) {
+        if (vp->unboundData.userType() == QMetaType::QString) {
+            QString string = vp->unboundData.toString();
+            // have a string based value without engine. Do conversion manually
+            if (type == QMetaType::Bool) {
+                *reinterpret_cast<bool*>(ptr) = string.length() != 0;
+                return true;
+            }
+            if (type == QMetaType::QString) {
+                *reinterpret_cast<QString*>(ptr) = string;
+                return true;
+            }
+            double d = QV4::RuntimeHelpers::stringToNumber(string);
+            switch (type) {
             case QMetaType::Int:
                 *reinterpret_cast<int*>(ptr) = QV4::Primitive::toInt32(d);
                 return true;
@@ -434,6 +474,9 @@ bool QJSEngine::convertV2(const QJSValue &value, int type, void *ptr)
                 return true;
             default:
                 return false;
+            }
+        } else {
+            return QMetaType::convert(&vp->unboundData.data_ptr(), vp->unboundData.userType(), ptr, type);
         }
     } else {
         switch (type) {

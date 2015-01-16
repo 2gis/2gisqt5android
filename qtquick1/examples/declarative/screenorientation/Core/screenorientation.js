@@ -53,7 +53,7 @@ function printOrientation(orientation) {
     }
     return orientationString;
 }
- 
+
 function getAngle(orientation) {
     var angle;
     if (orientation == Orientation.Portrait) {

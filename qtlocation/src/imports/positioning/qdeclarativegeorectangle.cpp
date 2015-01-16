@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtPositioning module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -72,7 +64,7 @@ QT_BEGIN_NAMESPACE
     degrees.  Setting one of these attributes will cause the other attributes to be adjusted
     accordingly.
 
-    \section2 Limitations
+    \section1 Limitations
 
     A \c georectangle can never cross the poles.
 
@@ -80,7 +72,7 @@ QT_BEGIN_NAMESPACE
     poles the height is modified such that the \c georectangle touches but does not cross the pole
     and that the center coordinate is still in the center of the \c georectangle.
 
-    \section2 Example Usage
+    \section1 Example Usage
 
     Use properties of type \l variant to store a \c {georectangle}.  To create a \c georectangle
     value, use the \l {QtPositioning::rectangle}{QtPositioning.rectangle()} function:
@@ -96,9 +88,9 @@ QT_BEGIN_NAMESPACE
     When integrating with C++, note that any QGeoRectangle value passed into QML from C++ is
     automatically converted into a \c georectangle value, and vice-versa.
 
-    \section2 Properties
+    \section1 Properties
 
-    \section3 bottomLeft
+    \section2 bottomLeft
 
     \code
     coordinate bottomLeft
@@ -106,7 +98,7 @@ QT_BEGIN_NAMESPACE
 
     This property holds the bottom left coordinate of this georectangle.
 
-    \section3 bottomRight
+    \section2 bottomRight
 
     \code
     coordinate bottomRight
@@ -114,7 +106,7 @@ QT_BEGIN_NAMESPACE
 
     This property holds the bottom right coordinate of this georectangle.
 
-    \section3 center
+    \section2 center
 
     \code
     coordinate center
@@ -123,7 +115,7 @@ QT_BEGIN_NAMESPACE
     This property holds the center coordinate of this georectangle. For more details
     see \l {QGeoRectangle::setCenter()}.
 
-    \section3 height
+    \section2 height
 
     \code
     double height
@@ -132,7 +124,7 @@ QT_BEGIN_NAMESPACE
     This property holds the height of this georectangle (in degrees). For more details
     see \l {QGeoRectangle::setHeight()}.
 
-    \section3 topLeft
+    \section2 topLeft
 
     \code
     coordinate topLeft
@@ -140,7 +132,7 @@ QT_BEGIN_NAMESPACE
 
     This property holds the top left coordinate of this georectangle.
 
-    \section3 topRight
+    \section2 topRight
 
     \code
     coordinate topRight
@@ -148,7 +140,7 @@ QT_BEGIN_NAMESPACE
 
     This property holds the top right coordinate of this georectangle.
 
-    \section3 width
+    \section2 width
 
     \code
     double width

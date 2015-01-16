@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the Qt Mobility Components.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -47,6 +39,9 @@ Rectangle {
     color: "transparent"
 
     property string folder
+
+    property int itemHeight: Math.min(parent.width, parent.height) / 15
+    property int buttonHeight: Math.min(parent.width, parent.height) / 12
 
     signal fileSelected(string file)
 
@@ -74,12 +69,12 @@ Rectangle {
 
         Rectangle {
             id: root
-            color: "white"
+            color: "black"
             property bool showFocusHighlight: false
             property variant folders: folders1
             property variant view: view1
             property alias folder: folders1.folder
-            property color textColor: "black"
+            property color textColor: "white"
 
             FolderListModel {
                 id: folders1
@@ -111,34 +106,39 @@ Rectangle {
                             fileBrowser.selectFile(path)
                     }
                     width: root.width
-                    height: 52
+                    height: folderImage.height
                     color: "transparent"
 
                     Rectangle {
-                        id: highlight; visible: false
+                        id: highlight
+                        visible: false
                         anchors.fill: parent
-                        color: palette.highlight
-                        gradient: Gradient {
-                            GradientStop { id: t1; position: 0.0; color: palette.highlight }
-                            GradientStop { id: t2; position: 1.0; color: Qt.lighter(palette.highlight) }
-                        }
+                        anchors.leftMargin: 5
+                        anchors.rightMargin: 5
+                        color: "#212121"
                     }
 
                     Item {
-                        width: 48; height: 48
+                        id: folderImage
+                        width: itemHeight
+                        height: itemHeight
                         Image {
+                            id: folderPicture
                             source: "qrc:/folder.png"
-                            anchors.centerIn: parent
+                            width: itemHeight * 0.9
+                            height: itemHeight * 0.9
+                            anchors.left: parent.left
+                            anchors.margins: 5
                             visible: folders.isFolder(index)
                         }
                     }
 
                     Text {
                         id: nameText
-                        anchors.fill: parent; verticalAlignment: Text.AlignVCenter
+                        anchors.fill: parent;
+                        verticalAlignment: Text.AlignVCenter
                         text: fileName
-                        anchors.leftMargin: 54
-                        font.pixelSize: 32
+                        anchors.leftMargin: itemHeight + 10
                         color: (wrapper.ListView.isCurrentItem && root.showFocusHighlight) ? palette.highlightedText : textColor
                         elide: Text.ElideRight
                     }
@@ -150,7 +150,7 @@ Rectangle {
                             root.showFocusHighlight = false;
                             wrapper.ListView.view.currentIndex = index;
                         }
-                        onClicked: { if (folders == wrapper.ListView.view.model) launch() }
+                        onClicked: { if (folders === wrapper.ListView.view.model) launch() }
                     }
 
                     states: [
@@ -168,17 +168,12 @@ Rectangle {
                 id: view1
                 anchors.top: titleBar.bottom
                 anchors.bottom: cancelButton.top
-                x: 0
                 width: parent.width
                 model: folders1
                 delegate: folderDelegate
                 highlight: Rectangle {
-                    color: palette.highlight
+                    color: "#212121"
                     visible: root.showFocusHighlight && view1.count != 0
-                    gradient: Gradient {
-                        GradientStop { id: t1; position: 0.0; color: palette.highlight }
-                        GradientStop { id: t2; position: 1.0; color: Qt.lighter(palette.highlight) }
-                    }
                     width: view1.currentItem == null ? 0 : view1.currentItem.width
                 }
                 highlightMoveVelocity: 1000
@@ -223,12 +218,8 @@ Rectangle {
                 model: folders2
                 delegate: folderDelegate
                 highlight: Rectangle {
-                    color: palette.highlight
+                    color: "#212121"
                     visible: root.showFocusHighlight && view2.count != 0
-                    gradient: Gradient {
-                        GradientStop { id: t1; position: 0.0; color: palette.highlight }
-                        GradientStop { id: t2; position: 1.0; color: Qt.lighter(palette.highlight) }
-                    }
                     width: view1.currentItem == null ? 0 : view1.currentItem.width
                 }
                 highlightMoveVelocity: 1000
@@ -262,19 +253,29 @@ Rectangle {
             }
 
             Rectangle {
-                id: cancelButton
-                width: 100
-                height: titleBar.height - 7
+                width: parent.width
+                height: buttonHeight + 10
+                anchors.bottom: parent.bottom
                 color: "black"
-                anchors { bottom: parent.bottom; horizontalCenter: parent.horizontalCenter }
+            }
+
+            Rectangle {
+                id: cancelButton
+                width: parent.width
+                height: buttonHeight
+                color: "#212121"
+                anchors.bottom: parent.bottom
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.margins: 5
+                radius: buttonHeight / 15
 
                 Text {
-                    anchors { fill: parent; margins: 4 }
+                    anchors.fill: parent
                     text: "Cancel"
                     color: "white"
                     horizontalAlignment: Text.AlignHCenter
                     verticalAlignment: Text.AlignVCenter
-                    font.pixelSize: 20
                 }
 
                 MouseArea {
@@ -285,55 +286,66 @@ Rectangle {
 
             Keys.onPressed: {
                 root.keyPressed(event.key);
-                if (event.key == Qt.Key_Return || event.key == Qt.Key_Select || event.key == Qt.Key_Right) {
+                if (event.key === Qt.Key_Return || event.key === Qt.Key_Select || event.key === Qt.Key_Right) {
                     view.currentItem.launch();
                     event.accepted = true;
-                } else if (event.key == Qt.Key_Left) {
+                } else if (event.key === Qt.Key_Left) {
                     up();
                 }
             }
 
-            BorderImage {
-                source: "qrc:/titlebar.sci";
-                width: parent.width;
-                height: 52
-                y: -7
+
+            Rectangle {
                 id: titleBar
+                width: parent.width
+                height: buttonHeight + 10
+                anchors.top: parent.top
+                color: "black"
 
                 Rectangle {
-                    id: upButton
-                    width: 48
-                    height: titleBar.height - 7
-                    color: "transparent"
-                    Image { anchors.centerIn: parent; source: "qrc:/up.png" }
-                    MouseArea { id: upRegion; anchors.centerIn: parent
-                        width: 56
-                        height: 56
-                        onClicked: up()
-                    }
-                    states: [
-                        State {
-                            name: "pressed"
-                            when: upRegion.pressed
-                            PropertyChanges { target: upButton; color: palette.highlight }
+                    width: parent.width;
+                    height: buttonHeight
+                    color: "#212121"
+                    anchors.margins: 5
+                    anchors.top: parent.top
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    radius: buttonHeight / 15
+
+                    Rectangle {
+                        id: upButton
+                        width: buttonHeight
+                        height: buttonHeight
+                        color: "transparent"
+                        Image {
+                            width: itemHeight
+                            height: itemHeight
+                            anchors.centerIn: parent
+                            source: "qrc:/up.png"
                         }
-                    ]
-                }
+                        MouseArea { id: upRegion; anchors.centerIn: parent
+                            width: buttonHeight
+                            height: buttonHeight
+                            onClicked: up()
+                        }
+                        states: [
+                            State {
+                                name: "pressed"
+                                when: upRegion.pressed
+                                PropertyChanges { target: upButton; color: palette.highlight }
+                            }
+                        ]
+                    }
 
-                Rectangle {
-                    color: "gray"
-                    x: 48
-                    width: 1
-                    height: 44
-                }
-
-                Text {
-                    anchors.left: upButton.right; anchors.right: parent.right; height: parent.height
-                    anchors.leftMargin: 4; anchors.rightMargin: 4
-                    text: folders.folder
-                    color: "white"
-                    elide: Text.ElideLeft; horizontalAlignment: Text.AlignRight; verticalAlignment: Text.AlignVCenter
-                    font.pixelSize: 32
+                    Text {
+                        anchors.left: upButton.right; anchors.right: parent.right; height: parent.height
+                        anchors.leftMargin: 5; anchors.rightMargin: 5
+                        text: folders.folder
+                        color: "white"
+                        elide: Text.ElideLeft;
+                        horizontalAlignment: Text.AlignLeft;
+                        verticalAlignment: Text.AlignVCenter
+                    }
                 }
             }
 
@@ -374,14 +386,14 @@ Rectangle {
 
             function keyPressed(key) {
                 switch (key) {
-                    case Qt.Key_Up:
-                    case Qt.Key_Down:
-                    case Qt.Key_Left:
-                    case Qt.Key_Right:
-                        root.showFocusHighlight = true;
+                case Qt.Key_Up:
+                case Qt.Key_Down:
+                case Qt.Key_Left:
+                case Qt.Key_Right:
+                    root.showFocusHighlight = true;
                     break;
-                    default:
-                        // do nothing
+                default:
+                    // do nothing
                     break;
                 }
             }

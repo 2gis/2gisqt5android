@@ -44,7 +44,7 @@ Rectangle {
     color: "white"
     width: 200
     height: 100
-    
+
     Text {
         text: "?"
         anchors.horizontalCenter: parent.horizontalCenter

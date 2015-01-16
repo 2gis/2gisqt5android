@@ -5,7 +5,7 @@ QT += testlib declarative
 QT += script network widgets
 macx:CONFIG -= app_bundle
 
-SOURCES += tst_qdeclarativecomponent.cpp 
+SOURCES += tst_qdeclarativecomponent.cpp
 
 DEFINES += SRCDIR=\\\"$$PWD\\\"
 

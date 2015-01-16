@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -58,6 +50,16 @@
 
 DEFINE_BOOL_CONFIG_OPTION(qmlCheckTypes, QML_CHECK_TYPES)
 
+static inline bool isCaseSensitiveFileSystem(const QString &path) {
+    Q_UNUSED(path)
+#if defined(Q_OS_OSX)
+    return pathconf(path.toLatin1().constData(), _PC_CASE_SENSITIVE);
+#elif defined(Q_OS_WIN)
+    return false;
+#else
+    return true;
+#endif
+}
 
 /*
 This test case covers QML language issues.  This covers everything that does not
@@ -412,13 +414,15 @@ void tst_qdeclarativelanguage::errors_data()
 #endif
     QTest::newRow("singularProperty") << "singularProperty.qml" << "singularProperty.errors.txt" << false;
     QTest::newRow("singularProperty.2") << "singularProperty.2.qml" << "singularProperty.2.errors.txt" << false;
-    QTest::newRow("incorrectCase") << "incorrectCase.qml" 
-#if defined(Q_OS_MAC) || defined(Q_OS_WIN32)
-        << "incorrectCase.errors.insensitive.txt" 
+
+    const QString expectedError = isCaseSensitiveFileSystem(dataDirectory()) ?
+#if defined(Q_OS_OSX)
+            QStringLiteral("incorrectCase.errors.sensitive.osx.txt") :
 #else
-        << "incorrectCase.errors.sensitive.txt" 
+            QStringLiteral("incorrectCase.errors.sensitive.txt") :
 #endif
-        << false;
+            QStringLiteral("incorrectCase.errors.insensitive.txt");
+    QTest::newRow("incorrectCase") << "incorrectCase.qml" << expectedError << false;
 
     QTest::newRow("metaobjectRevision.1") << "metaobjectRevision.1.qml" << "metaobjectRevision.1.errors.txt" << false;
     QTest::newRow("metaobjectRevision.2") << "metaobjectRevision.2.qml" << "metaobjectRevision.2.errors.txt" << false;
@@ -522,7 +526,7 @@ void tst_qdeclarativelanguage::assignQmlComponent()
     QCOMPARE(child->property("y"), QVariant(11));
 }
 
-// Test literal assignment to all the basic types 
+// Test literal assignment to all the basic types
 void tst_qdeclarativelanguage::assignBasicTypes()
 {
     QDeclarativeComponent component(&engine, testFileUrl("assignBasicTypes.qml"));
@@ -549,7 +553,7 @@ void tst_qdeclarativelanguage::assignBasicTypes()
     QCOMPARE(object->rectFProperty(), QRectF((float)1000.1, (float)-10.9, (float)400, (float)90.99));
     QCOMPARE(object->boolProperty(), true);
     QCOMPARE(object->variantProperty(), QVariant("Hello World!"));
-    QCOMPARE(object->vectorProperty(), QVector3D(10, 1, 2.2));
+    QCOMPARE(object->vectorProperty(), QVector3D(10, 1, 2.2f));
     QCOMPARE(object->urlProperty(), component.url().resolved(QUrl("main.qml")));
     QVERIFY(object->objectProperty() != 0);
     MyTypeObject *child = qobject_cast<MyTypeObject *>(object->objectProperty());
@@ -666,7 +670,7 @@ void tst_qdeclarativelanguage::idProperty()
     MyContainer *object = qobject_cast<MyContainer *>(component.create());
     QVERIFY(object != 0);
     QCOMPARE(object->getChildren()->count(), 1);
-    MyTypeObject *child = 
+    MyTypeObject *child =
         qobject_cast<MyTypeObject *>(object->getChildren()->at(0));
     QVERIFY(child != 0);
     QCOMPARE(child->id(), QString("myObjectId"));
@@ -826,12 +830,12 @@ void tst_qdeclarativelanguage::propertyValueSource()
     QList<QObject *> valueSources;
     QObjectList allChildren = object->findChildren<QObject*>();
     foreach (QObject *child, allChildren) {
-        if (qobject_cast<QDeclarativePropertyValueSource *>(child)) 
+        if (qobject_cast<QDeclarativePropertyValueSource *>(child))
             valueSources.append(child);
     }
 
     QCOMPARE(valueSources.count(), 1);
-    MyPropertyValueSource *valueSource = 
+    MyPropertyValueSource *valueSource =
         qobject_cast<MyPropertyValueSource *>(valueSources.at(0));
     QVERIFY(valueSource != 0);
     QCOMPARE(valueSource->prop.object(), qobject_cast<QObject*>(object));
@@ -847,12 +851,12 @@ void tst_qdeclarativelanguage::propertyValueSource()
     QList<QObject *> valueSources;
     QObjectList allChildren = object->findChildren<QObject*>();
     foreach (QObject *child, allChildren) {
-        if (qobject_cast<QDeclarativePropertyValueSource *>(child)) 
+        if (qobject_cast<QDeclarativePropertyValueSource *>(child))
             valueSources.append(child);
     }
 
     QCOMPARE(valueSources.count(), 1);
-    MyPropertyValueSource *valueSource = 
+    MyPropertyValueSource *valueSource =
         qobject_cast<MyPropertyValueSource *>(valueSources.at(0));
     QVERIFY(valueSource != 0);
     QCOMPARE(valueSource->prop.object(), qobject_cast<QObject*>(object));
@@ -975,7 +979,7 @@ void tst_qdeclarativelanguage::aliasProperties()
         QVERIFY(object != 0);
 
         // Read through alias
-        MyQmlObject *v = 
+        MyQmlObject *v =
             qvariant_cast<MyQmlObject *>(object->property("aliasObject"));
         QVERIFY(v != 0);
         QCOMPARE(v->value(), 10);
@@ -984,7 +988,7 @@ void tst_qdeclarativelanguage::aliasProperties()
         MyQmlObject *v2 = new MyQmlObject();
         v2->setParent(object);
         object->setProperty("aliasObject", qVariantFromValue(v2));
-        MyQmlObject *v3 = 
+        MyQmlObject *v3 =
             qvariant_cast<MyQmlObject *>(object->property("aliasObject"));
         QVERIFY(v3 != 0);
         QCOMPARE(v3, v2);
@@ -1057,7 +1061,7 @@ void tst_qdeclarativelanguage::aliasProperties()
         QCOMPARE(object->property("a").toInt(), 1923);
     }
 
-    // Ptr Alias Cleanup - check that aliases to ptr types return 0 
+    // Ptr Alias Cleanup - check that aliases to ptr types return 0
     // if the object aliased to is removed
     {
         QDeclarativeComponent component(&engine, testFileUrl("alias.7.qml"));
@@ -1280,7 +1284,7 @@ void tst_qdeclarativelanguage::scriptString()
     }
 }
 
-// Check that default property assignments are correctly spliced into explicit 
+// Check that default property assignments are correctly spliced into explicit
 // property assignments
 void tst_qdeclarativelanguage::defaultPropertyListOrder()
 {
@@ -1678,6 +1682,10 @@ void tst_qdeclarativelanguage::importsRemote()
     QFETCH(QString, type);
     QFETCH(QString, error);
 
+#ifdef Q_OS_WIN
+    if (type != "QDeclarativeRectangle")
+        QSKIP("Test crashes on windows for non-obvious reasons. QTBUG-30131");
+#endif
     TestHTTPServer server(14447);
     server.serveDirectory(directory());
 
@@ -1845,11 +1853,9 @@ void tst_qdeclarativelanguage::importIncorrectCase()
     QList<QDeclarativeError> errors = component.errors();
     QCOMPARE(errors.count(), 1);
 
-#if defined(Q_OS_MAC) || defined(Q_OS_WIN)
-    QString expectedError = QLatin1String("File name case mismatch");
-#else
-    QString expectedError = QLatin1String("File not found");
-#endif
+    const QString expectedError = isCaseSensitiveFileSystem(dataDirectory()) ?
+                QStringLiteral("File not found") :
+                QStringLiteral("File name case mismatch");
 
     QCOMPARE(errors.at(0).description(), expectedError);
 }

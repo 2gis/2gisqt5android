@@ -1,6 +1,6 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the Qt Quick Controls module of the Qt Toolkit.
@@ -38,48 +38,23 @@
 **
 ****************************************************************************/
 
-
-
-
-
 import QtQuick 2.2
+import QtQuick.Layouts 1.1
+import QtQuick.Dialogs 1.1
 import QtQuick.Controls 1.2
-import QtQuick.Layouts 1.0
-import QtQuick.Dialogs 1.0
-import "content"
+import "qml/UI.js" as UI
+import "qml"
 
 ApplicationWindow {
     visible: true
-    title: "Component Gallery"
+    title: "Qt Quick Controls Gallery"
 
-    width: 640
-    height: 420
-    minimumHeight: 400
-    minimumWidth: 600
-
-    property string loremIpsum:
-            "Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor "+
-            "Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor "+
-            "incididunt ut labore et dolore magna aliqua.\n Ut enim ad minim veniam, quis nostrud "+
-            "exercitation ullamco laboris nisi ut aliquip ex ea commodo cosnsequat. ";
-
-    ImageViewer { id: imageViewer }
-
-    FileDialog {
-        id: fileDialog
-        nameFilters: [ "Image files (*.png *.jpg)" ]
-        onAccepted: imageViewer.open(fileUrl)
-    }
-
-    AboutDialog { id: aboutDialog }
-
-    Action {
-        id: openAction
-        text: "&Open"
-        shortcut: StandardKey.Open
-        iconSource: "images/document-open.png"
-        onTriggered: fileDialog.open()
-        tooltip: "Open an image"
+    MessageDialog {
+        id: aboutDialog
+        icon: StandardIcon.Information
+        title: "About"
+        text: "Qt Quick Controls Gallery"
+        informativeText: "This example demonstrates most of the available Qt Quick Controls."
     }
 
     Action {
@@ -109,80 +84,16 @@ ApplicationWindow {
         onTriggered: activeFocusItem.paste()
     }
 
-    Action {
-        id: aboutAction
-        text: "About"
-        onTriggered: aboutDialog.open()
-    }
-
-    ExclusiveGroup {
-        id: textFormatGroup
-
-        Action {
-            id: a1
-            text: "Align &Left"
-            checkable: true
-            Component.onCompleted: checked = true
-        }
-
-        Action {
-            id: a2
-            text: "&Center"
-            checkable: true
-        }
-
-        Action {
-            id: a3
-            text: "Align &Right"
-            checkable: true
-        }
-    }
-
-    ChildWindow { id: window1 }
-
-    Menu {
-        id: editmenu
-        MenuItem { action: cutAction }
-        MenuItem { action: copyAction }
-        MenuItem { action: pasteAction }
-        MenuSeparator {}
-        Menu {
-            title: "Text &Format"
-            MenuItem { action: a1 }
-            MenuItem { action: a2 }
-            MenuItem { action: a3 }
-            MenuSeparator { }
-            MenuItem { text: "Allow &Hyphenation"; checkable: true }
-        }
-        Menu {
-            title: "Font &Style"
-            MenuItem { text: "&Bold"; checkable: true }
-            MenuItem { text: "&Italic"; checkable: true }
-            MenuItem { text: "&Underline"; checkable: true }
-        }
-    }
-
     toolBar: ToolBar {
-        id: toolbar
         RowLayout {
-            id: toolbarLayout
-            spacing: 0
-            width: parent.width
-            ToolButton {
-                iconSource: "images/window-new.png"
-                onClicked: window1.visible = !window1.visible
-                Accessible.name: "New window"
-                tooltip: "Toggle visibility of the second window"
-            }
-            ToolButton { action: openAction }
-            ToolButton {
-                Accessible.name: "Save as"
-                iconSource: "images/document-save-as.png"
-                tooltip: "(Pretend to) Save as..."
+            anchors.fill: parent
+            anchors.margins: spacing
+            Label {
+                text: UI.label
             }
             Item { Layout.fillWidth: true }
             CheckBox {
-                id: enabledCheck
+                id: enabler
                 text: "Enabled"
                 checked: true
             }
@@ -192,75 +103,57 @@ ApplicationWindow {
     menuBar: MenuBar {
         Menu {
             title: "&File"
-            MenuItem { action: openAction }
             MenuItem {
-                text: "Close"
+                text: "E&xit"
                 shortcut: StandardKey.Quit
                 onTriggered: Qt.quit()
             }
         }
         Menu {
             title: "&Edit"
+            visible: tabView.currentIndex == 2
             MenuItem { action: cutAction }
             MenuItem { action: copyAction }
             MenuItem { action: pasteAction }
-            MenuSeparator { }
-            MenuItem {
-                text: "Do Nothing"
-                shortcut: "Ctrl+E,Shift+Ctrl+X"
-                enabled: false
-            }
-            MenuItem {
-                text: "Not Even There"
-                shortcut: "Ctrl+E,Shift+Ctrl+Y"
-                visible: false
-            }
-            Menu {
-                title: "Me Neither"
-                visible: false
-            }
         }
         Menu {
             title: "&Help"
-            MenuItem { action: aboutAction }
+            MenuItem {
+                text: "About..."
+                onTriggered: aboutDialog.open()
+            }
         }
-    }
-
-
-    SystemPalette {id: syspal}
-    color: syspal.window
-    ListModel {
-        id: choices
-        ListElement { text: "Banana" }
-        ListElement { text: "Orange" }
-        ListElement { text: "Apple" }
-        ListElement { text: "Coconut" }
     }
 
     TabView {
-        id:frame
-        enabled: enabledCheck.checked
-        tabPosition: controlPage.item ? controlPage.item.tabPosition : Qt.TopEdge
+        id: tabView
+
         anchors.fill: parent
-        anchors.margins: Qt.platform.os === "osx" ? 12 : 2
+        anchors.margins: UI.margin
+        tabPosition: UI.tabPosition
+
+        Layout.minimumWidth: 360
+        Layout.minimumHeight: 360
+        Layout.preferredWidth: 480
+        Layout.preferredHeight: 640
 
         Tab {
-            id: controlPage
-            title: "Controls"
-            Controls { }
+            title: "Buttons"
+            ButtonPage {
+                enabled: enabler.checked
+            }
         }
         Tab {
-            title: "Itemviews"
-            ModelView { }
+            title: "Progress"
+            ProgressPage {
+                enabled: enabler.checked
+            }
         }
         Tab {
-            title: "Styles"
-            Styles { anchors.fill: parent }
-        }
-        Tab {
-            title: "Layouts"
-            Layouts { anchors.fill:parent }
+            title: "Input"
+            InputPage {
+                enabled: enabler.checked
+            }
         }
     }
 }
-

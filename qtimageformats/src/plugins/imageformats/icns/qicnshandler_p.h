@@ -1,40 +1,32 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Copyright (C) 2013 Alex Char.
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the plugins of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -60,6 +52,11 @@ struct ICNSBlockHeader
         TypeIcnv = MAKEOSTYPE('i', 'c', 'n', 'V'), // Icon Composer version
         // Legacy:
         TypeClut = MAKEOSTYPE('c', 'l', 'u', 't'), // Color look-up table (pre-OS X resources)
+        TypeTile = MAKEOSTYPE('t', 'i', 'l', 'e'), // Container (icon variants)
+        TypeOver = MAKEOSTYPE('o', 'v', 'e', 'r'), // Container (icon variants)
+        TypeOpen = MAKEOSTYPE('o', 'p', 'e', 'n'), // Container (icon variants)
+        TypeDrop = MAKEOSTYPE('d', 'r', 'o', 'p'), // Container (icon variants)
+        TypeOdrp = MAKEOSTYPE('o', 'd', 'r', 'p'), // Container (icon variants)
     };
 
     quint32 ostype;
@@ -102,6 +99,7 @@ struct ICNSEntry
     };
 
     quint32 ostype;     // Real OSType
+    quint32 variant;    // Virtual OSType: a parent container, zero if parent is icns root
     Group group;        // ASCII character number
     quint32 width;      // For uncompressed icons only, zero for compressed ones for now
     quint32 height;     // For uncompressed icons only, zero for compressed ones fow now
@@ -112,7 +110,7 @@ struct ICNSEntry
     qint64 dataOffset;  // Offset from the initial position of the file/device
 
     ICNSEntry() :
-        ostype(0), group(GroupUnknown), width(0), height(0), depth(DepthUnknown),
+        ostype(0), variant(0), group(GroupUnknown), width(0), height(0), depth(DepthUnknown),
         flags(Unknown), dataFormat(FormatUnknown), dataLength(0), dataOffset(0)
     {
     }
@@ -142,7 +140,7 @@ public:
 private:
     bool ensureScanned() const;
     bool scanDevice();
-    bool addEntry(const ICNSBlockHeader &header, qint64 imgDataOffset);
+    bool addEntry(const ICNSBlockHeader &header, qint64 imgDataOffset, quint32 variant = 0);
     const ICNSEntry &getIconMask(const ICNSEntry &icon) const;
 
 private:

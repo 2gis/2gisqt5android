@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -75,6 +67,7 @@ private slots:
     void flickDeceleration();
     void pressDelay();
     void nestedPressDelay();
+    void nestedClickThenFlick();
     void flickableDirection();
     void resizeContent();
     void returnToBounds();
@@ -100,7 +93,7 @@ private slots:
     void pressDelayWithLoader();
 
 private:
-    void flickWithTouch(QWindow *window, QTouchDevice *touchDevice, const QPoint &from, const QPoint &to);
+    void flickWithTouch(QQuickWindow *window, QTouchDevice *touchDevice, const QPoint &from, const QPoint &to);
     QQmlEngine engine;
 };
 
@@ -511,6 +504,51 @@ void tst_qquickflickable::nestedPressDelay()
     QVERIFY(inner->property("moving").toBool() == true);
 
     QTest::mouseRelease(window.data(), Qt::LeftButton, 0, QPoint(90, 150));
+}
+
+// QTBUG-37316
+void tst_qquickflickable::nestedClickThenFlick()
+{
+    QScopedPointer<QQuickView> window(new QQuickView);
+    window->setSource(testFileUrl("nestedClickThenFlick.qml"));
+    QTRY_COMPARE(window->status(), QQuickView::Ready);
+    QQuickViewTestUtil::centerOnScreen(window.data());
+    QQuickViewTestUtil::moveMouseAway(window.data());
+    window->show();
+    QVERIFY(QTest::qWaitForWindowExposed(window.data()));
+    QVERIFY(window->rootObject() != 0);
+
+    QQuickFlickable *outer = qobject_cast<QQuickFlickable*>(window->rootObject());
+    QVERIFY(outer != 0);
+
+    QQuickFlickable *inner = window->rootObject()->findChild<QQuickFlickable*>("innerFlickable");
+    QVERIFY(inner != 0);
+
+    QTest::mousePress(window.data(), Qt::LeftButton, 0, QPoint(150, 150));
+
+    // the MouseArea is not pressed immediately
+    QVERIFY(outer->property("pressed").toBool() == false);
+    QTRY_VERIFY(outer->property("pressed").toBool() == true);
+
+    QTest::mouseRelease(window.data(), Qt::LeftButton, 0, QPoint(150, 150));
+
+    QVERIFY(outer->property("pressed").toBool() == false);
+
+    // Dragging inner Flickable should work
+    QTest::mousePress(window.data(), Qt::LeftButton, 0, QPoint(80, 150));
+    // the MouseArea is not pressed immediately
+
+    QVERIFY(outer->property("pressed").toBool() == false);
+
+    QTest::mouseMove(window.data(), QPoint(80, 148));
+    QTest::mouseMove(window.data(), QPoint(80, 140));
+    QTest::mouseMove(window.data(), QPoint(80, 120));
+    QTest::mouseMove(window.data(), QPoint(80, 100));
+
+    QVERIFY(outer->property("moving").toBool() == false);
+    QVERIFY(inner->property("moving").toBool() == true);
+
+    QTest::mouseRelease(window.data(), Qt::LeftButton, 0, QPoint(80, 100));
 }
 
 void tst_qquickflickable::flickableDirection()
@@ -1349,20 +1387,18 @@ void tst_qquickflickable::flickTwiceUsingTouches()
     QTRY_VERIFY(contentYAfterSecondFlick > (contentYAfterFirstFlick + 80.0f));
 }
 
-void tst_qquickflickable::flickWithTouch(QWindow *window, QTouchDevice *touchDevice, const QPoint &from, const QPoint &to)
+void tst_qquickflickable::flickWithTouch(QQuickWindow *window, QTouchDevice *touchDevice, const QPoint &from, const QPoint &to)
 {
-    QTest::touchEvent(window, touchDevice)
-        .press(0, from, window);
-    QTest::qWait(1);
+    QTest::touchEvent(window, touchDevice).press(0, from, window);
+    QQuickTouchUtils::flush(window);
+
     QPoint diff = to - from;
     for (int i = 1; i <= 8; ++i) {
-        QTest::touchEvent(window, touchDevice)
-            .move(0, from + i*diff/8, window);
-        QTest::qWait(1);
+        QTest::touchEvent(window, touchDevice).move(0, from + i*diff/8, window);
+        QQuickTouchUtils::flush(window);
     }
-    QTest::touchEvent(window, touchDevice)
-        .release(0, to, window);
-    QTest::qWait(1);
+    QTest::touchEvent(window, touchDevice).release(0, to, window);
+    QQuickTouchUtils::flush(window);
 }
 
 void tst_qquickflickable::nestedStopAtBounds_data()

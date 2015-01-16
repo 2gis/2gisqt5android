@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -79,7 +71,8 @@ QOpenSLESAudioOutput::QOpenSLESAudioOutput(const QByteArray &device)
       m_elapsedTime(0),
       m_processedBytes(0),
       m_availableBuffers(BUFFER_COUNT),
-      m_eventMask(SL_PLAYEVENT_HEADATEND)
+      m_eventMask(SL_PLAYEVENT_HEADATEND),
+      m_startRequiresInit(true)
 {
 #ifndef ANDROID
       m_streamType = -1;
@@ -107,13 +100,10 @@ QAudio::State QOpenSLESAudioOutput::state() const
 void QOpenSLESAudioOutput::start(QIODevice *device)
 {
     Q_ASSERT(device);
-    destroyPlayer();
-
-    m_pullMode = true;
-
     if (!preparePlayer())
         return;
 
+    m_pullMode = true;
     m_audioSource = device;
     setState(QAudio::ActiveState);
     setError(QAudio::NoError);
@@ -134,29 +124,20 @@ void QOpenSLESAudioOutput::start(QIODevice *device)
 
     // Change the state to playing.
     // We need to do this after filling the buffers or processedBytes might get corrupted.
-    if (SL_RESULT_SUCCESS != (*m_playItf)->SetPlayState(m_playItf, SL_PLAYSTATE_PLAYING)) {
-        setError(QAudio::FatalError);
-        destroyPlayer();
-    }
+    startPlayer();
 }
 
 QIODevice *QOpenSLESAudioOutput::start()
 {
-    destroyPlayer();
-
-    m_pullMode = false;
-
     if (!preparePlayer())
         return Q_NULLPTR;
 
+    m_pullMode = false;
     m_audioSource = new SLIODevicePrivate(this);
     m_audioSource->open(QIODevice::WriteOnly | QIODevice::Unbuffered);
 
     // Change the state to playing
-    if (SL_RESULT_SUCCESS != (*m_playItf)->SetPlayState(m_playItf, SL_PLAYSTATE_PLAYING)) {
-        setError(QAudio::FatalError);
-        destroyPlayer();
-    }
+    startPlayer();
 
     setState(QAudio::IdleState);
     return m_audioSource;
@@ -167,7 +148,7 @@ void QOpenSLESAudioOutput::stop()
     if (m_state == QAudio::StoppedState)
         return;
 
-    destroyPlayer();
+    stopPlayer();
     setError(QAudio::NoError);
 }
 
@@ -176,7 +157,7 @@ int QOpenSLESAudioOutput::bytesFree() const
     if (m_state != QAudio::ActiveState && m_state != QAudio::IdleState)
         return 0;
 
-    return m_availableBuffers.load() ? m_bufferSize : 0;
+    return m_availableBuffers.loadAcquire() ? m_bufferSize : 0;
 }
 
 int QOpenSLESAudioOutput::periodSize() const
@@ -189,6 +170,7 @@ void QOpenSLESAudioOutput::setBufferSize(int value)
     if (m_state != QAudio::StoppedState)
         return;
 
+    m_startRequiresInit = true;
     m_bufferSize = value;
 }
 
@@ -262,6 +244,7 @@ void QOpenSLESAudioOutput::resume()
 
 void QOpenSLESAudioOutput::setFormat(const QAudioFormat &format)
 {
+    m_startRequiresInit = true;
     m_format = format;
 }
 
@@ -290,7 +273,7 @@ qint64 QOpenSLESAudioOutput::elapsedUSecs() const
     if (m_state == QAudio::StoppedState)
         return 0;
 
-    return m_clockStamp.elapsed() * 1000;
+    return m_clockStamp.elapsed() * qint64(1000);
 }
 
 void QOpenSLESAudioOutput::reset()
@@ -333,6 +316,7 @@ void QOpenSLESAudioOutput::setCategory(const QString &category)
         return;
     }
 
+    m_startRequiresInit = true;
     m_streamType = streamType;
     m_category = category;
 #endif // ANDROID
@@ -359,6 +343,11 @@ void QOpenSLESAudioOutput::onEOSEvent()
     setError(QAudio::UnderrunError);
 }
 
+void QOpenSLESAudioOutput::onBytesProcessed(qint64 bytes)
+{
+    m_processedBytes += bytes;
+}
+
 void QOpenSLESAudioOutput::bufferAvailable(quint32 count, quint32 playIndex)
 {
     Q_UNUSED(count);
@@ -367,11 +356,13 @@ void QOpenSLESAudioOutput::bufferAvailable(quint32 count, quint32 playIndex)
     if (m_state == QAudio::StoppedState)
         return;
 
-    if (!m_pullMode) {
-        m_availableBuffers.fetchAndAddRelaxed(1);
+    if (!m_pullMode) { // We're in push mode.
+        // Signal that there is a new open slot in the buffer and return
+        m_availableBuffers.fetchAndAddRelease(1);
         return;
     }
 
+    // We're in pull mode.
     const int index = m_nextBuffer * m_bufferSize;
     const qint64 readSize = m_audioSource->read(m_buffers + index, m_bufferSize);
 
@@ -386,8 +377,8 @@ void QOpenSLESAudioOutput::bufferAvailable(quint32 count, quint32 playIndex)
         return;
     }
 
-    m_processedBytes += readSize;
     m_nextBuffer = (m_nextBuffer + 1) % BUFFER_COUNT;
+    QMetaObject::invokeMethod(this, "onBytesProcessed", Qt::QueuedConnection, Q_ARG(qint64, readSize));
 }
 
 void QOpenSLESAudioOutput::playCallback(SLPlayItf player, void *ctx, SLuint32 event)
@@ -411,6 +402,11 @@ void QOpenSLESAudioOutput::bufferQueueCallback(SLBufferQueueItf bufferQueue, voi
 
 bool QOpenSLESAudioOutput::preparePlayer()
 {
+    if (m_startRequiresInit)
+        destroyPlayer();
+    else
+        return true;
+
     SLEngineItf engine = QOpenSLESEngine::instance()->slEngine();
     if (!engine) {
         qWarning() << "No engine";
@@ -551,20 +547,15 @@ bool QOpenSLESAudioOutput::preparePlayer()
 
     m_clockStamp.restart();
     setError(QAudio::NoError);
+    m_startRequiresInit = false;
 
     return true;
 }
 
 void QOpenSLESAudioOutput::destroyPlayer()
 {
-    setState(QAudio::StoppedState);
-
-    // We need to change the state manually...
-    if (m_playItf)
-        (*m_playItf)->SetPlayState(m_playItf, SL_PLAYSTATE_STOPPED);
-
-    if (m_bufferQueueItf && SL_RESULT_SUCCESS != (*m_bufferQueueItf)->Clear(m_bufferQueueItf))
-        qWarning() << "Unable to clear buffer";
+    if (m_state != QAudio::StoppedState)
+        stopPlayer();
 
     if (m_playerObject) {
         (*m_playerObject)->Destroy(m_playerObject);
@@ -586,19 +577,49 @@ void QOpenSLESAudioOutput::destroyPlayer()
     m_buffers = Q_NULLPTR;
     m_processedBytes = 0;
     m_nextBuffer = 0;
-    m_availableBuffers = BUFFER_COUNT;
+    m_availableBuffers.storeRelease(BUFFER_COUNT);
     m_playItf = Q_NULLPTR;
     m_volumeItf = Q_NULLPTR;
     m_bufferQueueItf = Q_NULLPTR;
+    m_startRequiresInit = true;
+}
+
+void QOpenSLESAudioOutput::stopPlayer()
+{
+    setState(QAudio::StoppedState);
+
+    // We need to change the state manually...
+    if (m_playItf)
+        (*m_playItf)->SetPlayState(m_playItf, SL_PLAYSTATE_STOPPED);
+
+    if (m_bufferQueueItf && SL_RESULT_SUCCESS != (*m_bufferQueueItf)->Clear(m_bufferQueueItf))
+        qWarning() << "Unable to clear buffer";
+}
+
+void QOpenSLESAudioOutput::startPlayer()
+{
+    if (SL_RESULT_SUCCESS != (*m_playItf)->SetPlayState(m_playItf, SL_PLAYSTATE_PLAYING)) {
+        setError(QAudio::FatalError);
+        destroyPlayer();
+    }
 }
 
 qint64 QOpenSLESAudioOutput::writeData(const char *data, qint64 len)
 {
-    if (!len || !m_availableBuffers.load())
+    if (!len)
         return 0;
 
     if (len > m_bufferSize)
         len = m_bufferSize;
+
+    // Acquire one slot in the buffer
+    const int before = m_availableBuffers.fetchAndAddAcquire(-1);
+
+    // If there where no vacant slots, then we just overdrew the buffer account...
+    if (before < 1) {
+        m_availableBuffers.fetchAndAddRelease(1);
+        return 0;
+    }
 
     const int index = m_nextBuffer * m_bufferSize;
     ::memcpy(m_buffers + index, data, len);
@@ -606,8 +627,11 @@ qint64 QOpenSLESAudioOutput::writeData(const char *data, qint64 len)
                                                       m_buffers + index,
                                                       len);
 
-    if (res == SL_RESULT_BUFFER_INSUFFICIENT)
+    // If we where unable to enqueue a new buffer, give back the acquired slot.
+    if (res == SL_RESULT_BUFFER_INSUFFICIENT) {
+        m_availableBuffers.fetchAndAddRelease(1);
         return 0;
+    }
 
     if (res != SL_RESULT_SUCCESS) {
         setError(QAudio::FatalError);
@@ -616,7 +640,6 @@ qint64 QOpenSLESAudioOutput::writeData(const char *data, qint64 len)
     }
 
     m_processedBytes += len;
-    m_availableBuffers.fetchAndAddRelaxed(-1);
     setState(QAudio::ActiveState);
     setError(QAudio::NoError);
     m_nextBuffer = (m_nextBuffer + 1) % BUFFER_COUNT;

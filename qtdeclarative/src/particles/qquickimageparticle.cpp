@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtQuick module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -714,10 +706,6 @@ void fillUniformArrayFromImage(float* array, const QImage& img, int size)
 
 QQuickImageParticle::QQuickImageParticle(QQuickItem* parent)
     : QQuickParticlePainter(parent)
-    , m_image(0)
-    , m_colorTable(0)
-    , m_sizeTable(0)
-    , m_opacityTable(0)
     , m_color_variation(0.0)
     , m_material(0)
     , m_alphaVariation(0.0)
@@ -750,6 +738,7 @@ QQuickImageParticle::QQuickImageParticle(QQuickItem* parent)
 
 QQuickImageParticle::~QQuickImageParticle()
 {
+    clearShadows();
 }
 
 QQmlListProperty<QQuickSprite> QQuickImageParticle::sprites()
@@ -767,15 +756,14 @@ void QQuickImageParticle::setImage(const QUrl &image)
 {
     if (image.isEmpty()){
         if (m_image) {
-            delete m_image;
-            m_image = 0;
+            m_image.reset();
             emit imageChanged();
         }
         return;
     }
 
     if (!m_image)
-        m_image = new ImageData;
+        m_image.reset(new ImageData);
     if (image == m_image->source)
         return;
     m_image->source = image;
@@ -788,14 +776,14 @@ void QQuickImageParticle::setColortable(const QUrl &table)
 {
     if (table.isEmpty()){
         if (m_colorTable) {
-            delete m_colorTable;
+            m_colorTable.reset();
             emit colortableChanged();
         }
         return;
     }
 
     if (!m_colorTable)
-        m_colorTable = new ImageData;
+        m_colorTable.reset(new ImageData);
     if (table == m_colorTable->source)
         return;
     m_colorTable->source = table;
@@ -807,14 +795,14 @@ void QQuickImageParticle::setSizetable(const QUrl &table)
 {
     if (table.isEmpty()){
         if (m_sizeTable) {
-            delete m_sizeTable;
+            m_sizeTable.reset();
             emit sizetableChanged();
         }
         return;
     }
 
     if (!m_sizeTable)
-        m_sizeTable = new ImageData;
+        m_sizeTable.reset(new ImageData);
     if (table == m_sizeTable->source)
         return;
     m_sizeTable->source = table;
@@ -826,14 +814,14 @@ void QQuickImageParticle::setOpacitytable(const QUrl &table)
 {
     if (table.isEmpty()){
         if (m_opacityTable) {
-            delete m_opacityTable;
+            m_opacityTable.reset();
             emit opacitytableChanged();
         }
         return;
     }
 
     if (!m_opacityTable)
-        m_opacityTable = new ImageData;
+        m_opacityTable.reset(new ImageData);
     if (table == m_opacityTable->source)
         return;
     m_opacityTable->source = table;
@@ -1231,6 +1219,9 @@ void QQuickImageParticle::buildParticleNodes(QSGNode** passThrough)
 
 void QQuickImageParticle::finishBuildParticleNodes(QSGNode** node)
 {
+    if (!QOpenGLContext::currentContext())
+        return;
+
     if (QOpenGLContext::currentContext()->isOpenGLES() && m_count * 4 > 0xffff) {
         printf("ImageParticle: Too many particles - maximum 16,000 per ImageParticle.\n");//ES 2 vertex count limit is ushort
         return;
@@ -1411,12 +1402,13 @@ void QQuickImageParticle::finishBuildParticleNodes(QSGNode** node)
         else //Simple
             g = new QSGGeometry(SimpleParticle_AttributeSet, count, 0);
 
+        node->setFlag(QSGNode::OwnsGeometry);
         node->setGeometry(g);
         if (perfLevel <= Colored){
             g->setDrawingMode(GL_POINTS);
             if (m_debugMode){
                 GLfloat pointSizeRange[2];
-                glGetFloatv(GL_ALIASED_POINT_SIZE_RANGE, pointSizeRange);
+                QOpenGLContext::currentContext()->functions()->glGetFloatv(GL_ALIASED_POINT_SIZE_RANGE, pointSizeRange);
                 qDebug() << "Using point sprites, GL_ALIASED_POINT_SIZE_RANGE " <<pointSizeRange[0] << ":" << pointSizeRange[1];
             }
         }else

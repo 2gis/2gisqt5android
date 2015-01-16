@@ -1,4 +1,4 @@
-import QtQuick 1.0 
+import QtQuick 1.0
 
 ListView {
     width: 240; height: 320

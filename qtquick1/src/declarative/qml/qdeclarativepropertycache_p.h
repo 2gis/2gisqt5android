@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtDeclarative module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -73,10 +65,10 @@ public:
     virtual ~QDeclarativePropertyCache();
 
     struct Data {
-        inline Data(); 
+        inline Data();
         inline bool operator==(const Data &);
 
-        enum Flag { 
+        enum Flag {
                     NoFlags           = 0x00000000,
 
                     // Can apply to all properties, except IsFunction
@@ -101,7 +93,7 @@ public:
         };
         Q_DECLARE_FLAGS(Flags, Flag)
 
-        bool isValid() const { return coreIndex != -1; } 
+        bool isValid() const { return coreIndex != -1; }
 
         Flags flags;
         int propType;
@@ -112,7 +104,7 @@ public:
         };
         uint overrideIndexIsProperty : 1;
         signed int overrideIndex : 31;
-        int revision; 
+        int revision;
         int metaObjectOffset;
 
         static Flags flagsForProperty(const QMetaProperty &, QDeclarativeEngine *engine = 0);
@@ -159,7 +151,7 @@ protected:
 private:
     friend class QDeclarativeEnginePrivate;
 
-    struct RData : public Data, public QDeclarativeRefCount { 
+    struct RData : public Data, public QDeclarativeRefCount {
         QScriptDeclarativeClass::PersistentIdentifier identifier;
     };
 
@@ -178,7 +170,7 @@ private:
     AllowedRevisionCache allowedRevisionCache;
 };
 Q_DECLARE_OPERATORS_FOR_FLAGS(QDeclarativePropertyCache::Data::Flags);
-  
+
 QDeclarativePropertyCache::Data::Data()
 : flags(0), propType(0), coreIndex(-1), notifyIndex(-1), overrideIndexIsProperty(false), overrideIndex(-1),
   revision(0), metaObjectOffset(-1)
@@ -207,21 +199,21 @@ QDeclarativePropertyCache::overrideData(Data *data) const
 }
 
 QDeclarativePropertyCache::Data *
-QDeclarativePropertyCache::property(const QScriptDeclarativeClass::Identifier &id) const 
+QDeclarativePropertyCache::property(const QScriptDeclarativeClass::Identifier &id) const
 {
     return identifierCache.value(id);
 }
 
 QDeclarativePropertyCache::ValueTypeData::ValueTypeData()
-: flags(QDeclarativePropertyCache::Data::NoFlags), valueTypeCoreIdx(-1), valueTypePropType(0) 
+: flags(QDeclarativePropertyCache::Data::NoFlags), valueTypeCoreIdx(-1), valueTypePropType(0)
 {
 }
 
-bool QDeclarativePropertyCache::ValueTypeData::operator==(const ValueTypeData &o) 
-{ 
+bool QDeclarativePropertyCache::ValueTypeData::operator==(const ValueTypeData &o)
+{
     return flags == o.flags &&
            valueTypeCoreIdx == o.valueTypeCoreIdx &&
-           valueTypePropType == o.valueTypePropType; 
+           valueTypePropType == o.valueTypePropType;
 }
 
 bool QDeclarativePropertyCache::isAllowedInRevision(Data *data) const

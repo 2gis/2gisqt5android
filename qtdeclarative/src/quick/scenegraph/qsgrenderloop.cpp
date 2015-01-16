@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtQuick module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -49,6 +41,7 @@
 #include <QtCore/private/qabstractanimation_p.h>
 
 #include <QtGui/QOpenGLContext>
+#include <QtGui/QOffscreenSurface>
 #include <QtGui/private/qguiapplication_p.h>
 #include <qpa/qplatformintegration.h>
 
@@ -65,7 +58,6 @@
 
 QT_BEGIN_NAMESPACE
 
-DEFINE_BOOL_CONFIG_OPTION(qsg_render_timing, QSG_RENDER_TIMING)
 
 extern Q_GUI_EXPORT QImage qt_gl_read_framebuffer(const QSize &size, bool alpha_format, bool include_alpha);
 
@@ -85,6 +77,11 @@ QSGRenderLoop *QSGRenderLoop::s_instance = 0;
 
 QSGRenderLoop::~QSGRenderLoop()
 {
+}
+
+QSurface::SurfaceType QSGRenderLoop::windowSurfaceType() const
+{
+    return QSurface::OpenGLSurface;
 }
 
 void QSGRenderLoop::cleanup()
@@ -151,31 +148,15 @@ public:
     bool eventPending;
 };
 
-bool QSGRenderLoop::useConsistentTiming()
-{
-    bool bufferQueuing = QGuiApplicationPrivate::platformIntegration()->hasCapability(QPlatformIntegration::BufferQueueingOpenGL);
-    // Enable fixed animation steps...
-    QByteArray fixed = qgetenv("QSG_FIXED_ANIMATION_STEP");
-    bool fixedAnimationSteps = bufferQueuing;
-    if (fixed == "no")
-        fixedAnimationSteps = false;
-    else if (fixed.length())
-        fixedAnimationSteps = true;
-    return fixedAnimationSteps;
-}
-
 QSGRenderLoop *QSGRenderLoop::instance()
 {
     if (!s_instance) {
+
+        // For compatibility with 5.3 and earlier's QSG_INFO environment variables
+        if (qEnvironmentVariableIsSet("QSG_INFO"))
+            ((QLoggingCategory &) QSG_LOG_INFO()).setEnabled(QtDebugMsg, true);
+
         s_instance = QSGContext::createWindowManager();
-
-        bool info = qEnvironmentVariableIsSet("QSG_INFO");
-
-        if (useConsistentTiming()) {
-            QUnifiedTimer::instance(true)->setConsistentTiming(true);
-            if (info)
-                qDebug() << "QSG: using fixed animation steps";
-        }
 
         if (!s_instance) {
 
@@ -208,15 +189,15 @@ QSGRenderLoop *QSGRenderLoop::instance()
 
             switch (loopType) {
             case ThreadedRenderLoop:
-                if (info) qDebug() << "QSG: threaded render loop";
+                qCDebug(QSG_LOG_INFO, "threaded render loop");
                 s_instance = new QSGThreadedRenderLoop();
                 break;
             case WindowsRenderLoop:
-                if (info) qDebug() << "QSG: windows render loop";
+                qCDebug(QSG_LOG_INFO, "windows render loop");
                 s_instance = new QSGWindowsRenderLoop();
                 break;
             default:
-                if (info) qDebug() << "QSG: basic render loop";
+                qCDebug(QSG_LOG_INFO, "QSG: basic render loop");
                 s_instance = new QSGGuiThreadRenderLoop();
                 break;
             }
@@ -285,37 +266,39 @@ void QSGGuiThreadRenderLoop::show(QQuickWindow *window)
 
 void QSGGuiThreadRenderLoop::hide(QQuickWindow *window)
 {
-    if (!m_windows.contains(window))
-        return;
-
-    m_windows.remove(window);
     QQuickWindowPrivate *cd = QQuickWindowPrivate::get(window);
-    if (gl)
-        gl->makeCurrent(window);
     cd->fireAboutToStop();
-    cd->cleanupNodesOnShutdown();
-
-    if (m_windows.size() == 0) {
-        if (!cd->persistentSceneGraph) {
-            rc->invalidate();
-            QCoreApplication::sendPostedEvents(0, QEvent::DeferredDelete);
-            if (!cd->persistentGLContext) {
-                delete gl;
-                gl = 0;
-            }
-        }
-    }
 }
 
 void QSGGuiThreadRenderLoop::windowDestroyed(QQuickWindow *window)
 {
+    m_windows.remove(window);
     hide(window);
+    QQuickWindowPrivate *d = QQuickWindowPrivate::get(window);
+
+    bool current = false;
+    QScopedPointer<QOffscreenSurface> offscreenSurface;
+    if (gl) {
+        QSurface *surface = window;
+        // There may be no platform window if the window got closed.
+        if (!window->handle()) {
+            offscreenSurface.reset(new QOffscreenSurface);
+            offscreenSurface->setFormat(gl->format());
+            offscreenSurface->create();
+            surface = offscreenSurface.data();
+        }
+        current = gl->makeCurrent(surface);
+    }
+    if (Q_UNLIKELY(!current))
+        qCDebug(QSG_LOG_RENDERLOOP) << "cleanup without an OpenGL context";
+
+    d->cleanupNodesOnShutdown();
     if (m_windows.size() == 0) {
         rc->invalidate();
         QCoreApplication::sendPostedEvents(0, QEvent::DeferredDelete);
         delete gl;
         gl = 0;
-    } else if (window == gl->surface()) {
+    } else if (gl && window == gl->surface() && current) {
         gl->doneCurrent();
     }
 }
@@ -333,8 +316,8 @@ void QSGGuiThreadRenderLoop::renderWindow(QQuickWindow *window)
     if (!gl) {
         gl = new QOpenGLContext();
         gl->setFormat(window->requestedFormat());
-        if (QOpenGLContextPrivate::globalShareContext())
-            gl->setShareContext(QOpenGLContextPrivate::globalShareContext());
+        if (qt_gl_global_share_context())
+            gl->setShareContext(qt_gl_global_share_context());
         if (!gl->create()) {
             const bool isEs = gl->isOpenGLES();
             delete gl;
@@ -356,15 +339,27 @@ void QSGGuiThreadRenderLoop::renderWindow(QQuickWindow *window)
     if (!current)
         return;
 
-    cd->polishItems();
-
-    emit window->afterAnimating();
-
-    qint64 renderTime = 0, syncTime = 0;
+    if (!data.grabOnly) {
+        cd->flushDelayedTouchEvent();
+        // Event delivery/processing triggered the window to be deleted or stop rendering.
+        if (!m_windows.contains(window))
+            return;
+    }
     QElapsedTimer renderTimer;
-    bool profileFrames = qsg_render_timing()  || QQuickProfiler::enabled;
+    qint64 renderTime = 0, syncTime = 0, polishTime = 0;
+    bool profileFrames = QSG_LOG_TIME_RENDERLOOP().isDebugEnabled() ||
+            QQuickProfiler::profilingSceneGraph();
     if (profileFrames)
         renderTimer.start();
+
+    cd->polishItems();
+
+    if (profileFrames) {
+        polishTime = renderTimer.nsecsElapsed();
+        Q_QUICK_SG_PROFILE(QQuickProfiler::SceneGraphPolishFrame, (polishTime));
+    }
+
+    emit window->afterAnimating();
 
     cd->syncSceneGraph();
 
@@ -374,10 +369,10 @@ void QSGGuiThreadRenderLoop::renderWindow(QQuickWindow *window)
     cd->renderSceneGraph(window->size());
 
     if (profileFrames)
-        renderTime = renderTimer.nsecsElapsed() - syncTime;
+        renderTime = renderTimer.nsecsElapsed();
 
     if (data.grabOnly) {
-        grabContent = qt_gl_read_framebuffer(window->size() * window->devicePixelRatio(), false, false);
+        grabContent = qt_gl_read_framebuffer(window->size() * window->effectiveDevicePixelRatio(), false, false);
         data.grabOnly = false;
     }
 
@@ -387,24 +382,26 @@ void QSGGuiThreadRenderLoop::renderWindow(QQuickWindow *window)
     }
 
     qint64 swapTime = 0;
-    if (profileFrames) {
-        swapTime = renderTimer.nsecsElapsed() - renderTime - syncTime;
-    }
+    if (profileFrames)
+        swapTime = renderTimer.nsecsElapsed();
 
-    if (qsg_render_timing()) {
+    if (QSG_LOG_TIME_RENDERLOOP().isDebugEnabled()) {
         static QTime lastFrameTime = QTime::currentTime();
-        qDebug() << "- Breakdown of frame time; sync:" << syncTime/1000000
-                 << "ms render:" << renderTime/1000000 << "ms swap:" << swapTime/1000000
-                 << "ms total:" << (swapTime + renderTime + syncTime)/1000000
-                 << "ms time since last frame:" << (lastFrameTime.msecsTo(QTime::currentTime()))
-                 << "ms";
+        qCDebug(QSG_LOG_TIME_RENDERLOOP,
+                "Frame rendered with 'basic' renderloop in %dms, polish=%d, sync=%d, render=%d, swap=%d, frameDelta=%d",
+                int(swapTime / 1000000),
+                int(polishTime / 1000000),
+                int((syncTime - polishTime) / 1000000),
+                int((renderTime - syncTime) / 1000000),
+                int((swapTime - renderTime) / 10000000),
+                int(lastFrameTime.msecsTo(QTime::currentTime())));
         lastFrameTime = QTime::currentTime();
     }
 
-    Q_QUICK_SG_PROFILE1(QQuickProfiler::SceneGraphRenderLoopFrame, (
-            syncTime,
-            renderTime,
-            swapTime));
+    Q_QUICK_SG_PROFILE(QQuickProfiler::SceneGraphRenderLoopFrame, (
+            syncTime - polishTime,
+            renderTime - syncTime,
+            swapTime - renderTime));
 
     // Might have been set during syncSceneGraph()
     if (data.updatePending)

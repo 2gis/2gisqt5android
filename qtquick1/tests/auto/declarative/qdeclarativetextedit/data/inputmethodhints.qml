@@ -1,6 +1,6 @@
 import QtQuick 1.0
 
-TextEdit {  
+TextEdit {
     text: "Hello world!"
     inputMethodHints: Qt.ImhNoPredictiveText
 }

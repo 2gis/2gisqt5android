@@ -14,7 +14,7 @@ Item {
             width: 300
             height: 300
             color: "blue"
-    
+
             Flickable {
                 objectName: "flick 2"
                 width: 300

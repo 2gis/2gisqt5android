@@ -2,6 +2,8 @@ TARGET = QtWinExtras
 
 load(qt_module)
 
+QT += gui-private core-private
+
 SOURCES += \
     qwinfunctions.cpp \
     qwinfunctions_p.cpp \
@@ -14,7 +16,8 @@ SOURCES += \
     qwineventfilter.cpp \
     qwinthumbnailtoolbar.cpp \
     qwinthumbnailtoolbutton.cpp \
-    qwinevent.cpp
+    qwinevent.cpp \
+    qwinmime.cpp
 
 HEADERS += \
     qwinfunctions.h \
@@ -37,13 +40,14 @@ HEADERS += \
     qwinthumbnailtoolbutton.h \
     qwinthumbnailtoolbutton_p.h \
     qwinevent.h \
-    windowsguidsdefs_p.h
+    windowsguidsdefs_p.h \
+    qwinmime.h
 
 QMAKE_DOCS = $$PWD/doc/qtwinextras.qdocconf
 
 DEFINES += NTDDI_VERSION=0x06010000 _WIN32_WINNT=0x0601
 LIBS_PRIVATE += -lole32 -lshlwapi -lshell32
-win32:!qtHaveModule(opengl):LIBS_PRIVATE += -lgdi32
+win32:!qtHaveModule(opengl)|contains(QT_CONFIG, dynamicgl):LIBS_PRIVATE += -lgdi32
 
 OTHER_FILES += \
     doc/qtwinextras.qdocconf \

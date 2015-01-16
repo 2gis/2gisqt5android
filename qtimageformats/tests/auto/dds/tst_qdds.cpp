@@ -1,40 +1,32 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Copyright (C) 2013 Ivan Komissarov.
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the DDS plugin in the Qt ImageFormats module.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -109,7 +101,7 @@ void tst_qdds::readImage_data()
     QTest::newRow("46") << QString("RXGB") << QSize(64, 64);
     QTest::newRow("47") << QString("ATI2") << QSize(64, 64);
     QTest::newRow("48") << QString("P4") << QSize(64, 64);
-    QTest::newRow("49") << QString("A8R8G8B8_2") << QSize(64, 32);
+    QTest::newRow("49") << QString("A8R8G8B8.2") << QSize(64, 32);
 }
 
 void tst_qdds::readImage()
@@ -118,8 +110,12 @@ void tst_qdds::readImage()
     QFETCH(QSize, size);
 
     const QString path = QStringLiteral(":/dds/") + fileName + QStringLiteral(".dds");
+    const QByteArray subType = fileName.left(fileName.lastIndexOf(QLatin1Char('.'))).toLatin1();
     QImageReader reader(path);
     QVERIFY(reader.canRead());
+    QVERIFY(reader.supportsOption(QImageIOHandler::SubType));
+    QCOMPARE(reader.subType(), subType);
+    QVERIFY(reader.supportsOption(QImageIOHandler::SupportedSubTypes));
     QImage image = reader.read();
     QVERIFY2(!image.isNull(), qPrintable(reader.errorString()));
     QCOMPARE(image.size(), size);
@@ -159,7 +155,7 @@ void tst_qdds::testWriteImage_data()
     QTest::addColumn<QSize>("size");
 
     QTest::newRow("1") << QString("A8R8G8B8") << QSize(64, 64);
-    QTest::newRow("2") << QString("A8R8G8B8_2") << QSize(64, 32);
+    QTest::newRow("2") << QString("A8R8G8B8.2") << QSize(64, 32);
 }
 
 void tst_qdds::testWriteImage()
@@ -169,6 +165,7 @@ void tst_qdds::testWriteImage()
 
     const QString path = fileName + QStringLiteral(".dds");
     const QString sourcePath = QStringLiteral(":/dds/") + fileName + QStringLiteral(".dds");
+    const QByteArray subType = fileName.left(fileName.lastIndexOf(QLatin1Char('.'))).toLatin1();
 
     QImage image(sourcePath);
     QVERIFY(!image.isNull());
@@ -176,9 +173,15 @@ void tst_qdds::testWriteImage()
 
     QImageWriter writer(path, QByteArrayLiteral("dds"));
     QVERIFY2(writer.canWrite(), qPrintable(writer.errorString()));
+    writer.setSubType(subType);
     QVERIFY2(writer.write(image), qPrintable(writer.errorString()));
 
     QVERIFY(image == QImage(path));
+
+    QImageReader reader(path);
+    QVERIFY(reader.canRead());
+    QCOMPARE(reader.size(), size);
+    QCOMPARE(reader.subType(), subType);
 }
 
 QTEST_MAIN(tst_qdds)

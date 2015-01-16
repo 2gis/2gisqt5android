@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -57,9 +49,12 @@
 
 #include "qsoundeffect_pulse_p.h"
 
-#if defined(Q_WS_MAEMO_6)
+#if defined(Q_WS_MAEMO_6) || defined(NEMO_AUDIO)
 #include <pulse/ext-stream-restore.h>
 #endif
+
+#include <private/qmediaresourcepolicy_p.h>
+#include <private/qmediaresourceset_p.h>
 
 #include <unistd.h>
 
@@ -237,7 +232,7 @@ private:
             case PA_CONTEXT_SETTING_NAME:
                 break;
             case PA_CONTEXT_READY:
-    #if defined(Q_WS_MAEMO_6)
+    #if defined(Q_WS_MAEMO_6) || defined(NEMO_AUDIO)
                 pa_ext_stream_restore_read(c, &stream_restore_info_callback, self);
                 pa_ext_stream_restore_set_subscribe_cb(c, &stream_restore_monitor_callback, self);
                 pa_ext_stream_restore_subscribe(c, 1, 0, self);
@@ -252,7 +247,7 @@ private:
         }
     }
 
-#if defined(Q_WS_MAEMO_6)
+#if defined(Q_WS_MAEMO_6) || defined(NEMO_AUDIO)
 
     static void stream_restore_monitor_callback(pa_context *c, void *userdata)
     {
@@ -388,10 +383,29 @@ QSoundEffectPrivate::QSoundEffectPrivate(QObject* parent):
     m_runningCount(0),
     m_reloadCategory(false),
     m_sample(0),
-    m_position(0)
+    m_position(0),
+    m_resourcesAvailable(false)
+#if defined(Q_WS_MAEMO_6) || defined(NEMO_AUDIO)
+    , m_customVolume(false)
+#endif
 {
     m_ref = new QSoundEffectRef(this);
     pa_sample_spec_init(&m_pulseSpec);
+
+    m_resources = QMediaResourcePolicy::createResourceSet<QMediaPlayerResourceSetInterface>();
+    Q_ASSERT(m_resources);
+    m_resourcesAvailable = m_resources->isAvailable();
+    connect(m_resources, SIGNAL(availabilityChanged(bool)), SLOT(handleAvailabilityChanged(bool)));
+}
+
+void QSoundEffectPrivate::handleAvailabilityChanged(bool available)
+{
+    m_resourcesAvailable = available;
+#ifdef DEBUG_RESOURCE
+    qDebug() << Q_FUNC_INFO << "Resource availability changed " << m_resourcesAvailable;
+#endif
+    if (!m_resourcesAvailable)
+        stop();
 }
 
 void QSoundEffectPrivate::release()
@@ -437,6 +451,8 @@ void QSoundEffectPrivate::setCategory(const QString &category)
 
 QSoundEffectPrivate::~QSoundEffectPrivate()
 {
+    QMediaResourcePolicy::destroyResourceSet(m_resources);
+    m_resources = 0;
     m_ref->release();
 }
 
@@ -527,6 +543,9 @@ qreal QSoundEffectPrivate::volume() const
 
 void QSoundEffectPrivate::setVolume(qreal volume)
 {
+#if defined(Q_WS_MAEMO_6) || defined(NEMO_AUDIO)
+    m_customVolume = true;
+#endif
     m_volume = volume;
     emit volumeChanged();
     updateVolume();
@@ -536,6 +555,10 @@ void QSoundEffectPrivate::updateVolume()
 {
     if (m_sinkInputId < 0)
         return;
+#if defined(Q_WS_MAEMO_6) || defined(NEMO_AUDIO)
+    if (!m_customVolume)
+        return;
+#endif
     PulseDaemonLocker locker;
     pa_cvolume volume;
     volume.channels = m_pulseSpec.channels;
@@ -625,6 +648,14 @@ void QSoundEffectPrivate::setLoopsRemaining(int loopsRemaining)
 }
 
 void QSoundEffectPrivate::play()
+{
+    if (!m_resourcesAvailable)
+        return;
+
+    playAvailable();
+}
+
+void QSoundEffectPrivate::playAvailable()
 {
 #ifdef QT_PA_DEBUG
     qDebug() << this << "play";

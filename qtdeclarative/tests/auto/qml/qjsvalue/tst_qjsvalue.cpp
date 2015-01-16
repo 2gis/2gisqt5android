@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -42,10 +34,6 @@
 #include "tst_qjsvalue.h"
 #include <QtWidgets/QPushButton>
 
-QT_BEGIN_NAMESPACE
-extern bool qt_script_isJITEnabled();
-QT_END_NAMESPACE
-
 tst_QJSValue::tst_QJSValue()
     : engine(0)
 {
@@ -53,8 +41,7 @@ tst_QJSValue::tst_QJSValue()
 
 tst_QJSValue::~tst_QJSValue()
 {
-    if (engine)
-        delete engine;
+    delete engine;
 }
 
 void tst_QJSValue::ctor_invalid()
@@ -316,6 +303,19 @@ void tst_QJSValue::ctor_copyAndAssign()
     QCOMPARE(v5.toNumber(), 1.0);
 }
 
+static QJSValue createUnboundValue(const QJSValue &value)
+{
+    QVariant variant = QVariant::fromValue(value);
+    QBuffer buffer;
+    buffer.open(QIODevice::ReadWrite);
+    QDataStream stream(&buffer);
+    variant.save(stream);
+    buffer.seek(0);
+    QVariant resultVariant;
+    resultVariant.load(stream);
+    return resultVariant.value<QJSValue>();
+}
+
 void tst_QJSValue::toString()
 {
     QJSEngine eng;
@@ -414,6 +414,28 @@ void tst_QJSValue::toString()
     variant = eng.toScriptValue(QUrl());
     QVERIFY(variant.isVariant());
     QVERIFY(variant.toString().isEmpty());
+
+    {
+        QJSValue o = eng.newObject();
+        o.setProperty(QStringLiteral("test"), 42);
+        QCOMPARE(o.toString(), QStringLiteral("[object Object]"));
+
+        o = createUnboundValue(o);
+        QVERIFY(!o.engine());
+        QCOMPARE(o.toString(), QStringLiteral("[object Object]"));
+    }
+
+    {
+        QJSValue o = eng.newArray();
+        o.setProperty(0, 1);
+        o.setProperty(1, 2);
+        o.setProperty(2, 3);
+        QCOMPARE(o.toString(), QStringLiteral("1,2,3"));
+
+        o = createUnboundValue(o);
+        QVERIFY(!o.engine());
+        QCOMPARE(o.toString(), QStringLiteral("1,2,3"));
+    }
 }
 
 void tst_QJSValue::toNumber()
@@ -427,35 +449,43 @@ void tst_QJSValue::toNumber()
     QJSValue null = eng.evaluate("null");
     QCOMPARE(null.toNumber(), 0.0);
     QCOMPARE(qjsvalue_cast<qreal>(null), 0.0);
+    QCOMPARE(createUnboundValue(null).toNumber(), 0.0);
 
     {
         QJSValue falskt = eng.toScriptValue(false);
         QCOMPARE(falskt.toNumber(), 0.0);
+        QCOMPARE(createUnboundValue(falskt).toNumber(), 0.0);
         QCOMPARE(qjsvalue_cast<qreal>(falskt), 0.0);
 
         QJSValue sant = eng.toScriptValue(true);
         QCOMPARE(sant.toNumber(), 1.0);
+        QCOMPARE(createUnboundValue(sant).toNumber(), 1.0);
         QCOMPARE(qjsvalue_cast<qreal>(sant), 1.0);
 
         QJSValue number = eng.toScriptValue(123.0);
         QCOMPARE(number.toNumber(), 123.0);
         QCOMPARE(qjsvalue_cast<qreal>(number), 123.0);
+        QCOMPARE(createUnboundValue(number).toNumber(), 123.0);
 
         QJSValue str = eng.toScriptValue(QString("ciao"));
         QCOMPARE(qIsNaN(str.toNumber()), true);
         QCOMPARE(qIsNaN(qjsvalue_cast<qreal>(str)), true);
+        QCOMPARE(qIsNaN(createUnboundValue(str).toNumber()), true);
 
         QJSValue str2 = eng.toScriptValue(QString("123"));
         QCOMPARE(str2.toNumber(), 123.0);
         QCOMPARE(qjsvalue_cast<qreal>(str2), 123.0);
+        QCOMPARE(createUnboundValue(str2).toNumber(), 123.0);
     }
 
     QJSValue object = eng.newObject();
     QCOMPARE(qIsNaN(object.toNumber()), true);
+    QCOMPARE(qIsNaN(createUnboundValue(object).toNumber()), true);
     QCOMPARE(qIsNaN(qjsvalue_cast<qreal>(object)), true);
 
     QJSValue inv = QJSValue();
     QVERIFY(qIsNaN(inv.toNumber()));
+    QCOMPARE(qIsNaN(createUnboundValue(inv).toNumber()), true);
     QVERIFY(qIsNaN(qjsvalue_cast<qreal>(inv)));
 
     // V2 constructors

@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the tools applications of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -226,23 +218,20 @@ bool QQmlTypeCompiler::compile()
         QV4::ExecutionEngine *v4 = engine->v4engine();
         QScopedPointer<QV4::EvalInstructionSelection> isel(v4->iselFactory->create(engine, v4->executableAllocator, &document->jsModule, &document->jsGenerator));
         isel->setUseFastLookups(false);
+        isel->setUseTypeInference(true);
         document->javaScriptCompilationUnit = isel->compile(/*generated unit data*/false);
     }
 
     // Generate QML compiled type data structures
 
     QmlIR::QmlUnitGenerator qmlGenerator;
-    QV4::CompiledData::QmlUnit *qmlUnit = qmlGenerator.generate(*document);
+    QV4::CompiledData::Unit *qmlUnit = qmlGenerator.generate(*document);
 
     Q_ASSERT(document->javaScriptCompilationUnit);
-    Q_ASSERT((void*)qmlUnit == (void*)&qmlUnit->header);
     // The js unit owns the data and will free the qml unit.
-    document->javaScriptCompilationUnit->data = &qmlUnit->header;
+    document->javaScriptCompilationUnit->data = qmlUnit;
 
     compiledData->compilationUnit = document->javaScriptCompilationUnit;
-    if (compiledData->compilationUnit)
-        compiledData->compilationUnit->ref();
-    compiledData->qmlUnit = qmlUnit; // ownership transferred to m_compiledData
 
     // Add to type registry of composites
     if (compiledData->isCompositeType())
@@ -290,7 +279,7 @@ bool QQmlTypeCompiler::compile()
     compiledData->totalParserStatusCount = parserStatusCount;
     compiledData->totalObjectCount = objectCount;
 
-    Q_ASSERT(compiledData->propertyCaches.count() == static_cast<int>(compiledData->qmlUnit->nObjects));
+    Q_ASSERT(compiledData->propertyCaches.count() == static_cast<int>(compiledData->compilationUnit->data->nObjects));
 
     return errors.isEmpty();
 }
@@ -298,7 +287,7 @@ bool QQmlTypeCompiler::compile()
 void QQmlTypeCompiler::recordError(const QQmlError &error)
 {
     QQmlError e = error;
-    e.setUrl(compiledData->url);
+    e.setUrl(url());
     errors << e;
 }
 
@@ -317,9 +306,9 @@ QV4::IR::Module *QQmlTypeCompiler::jsIRModule() const
     return &document->jsModule;
 }
 
-const QV4::CompiledData::QmlUnit *QQmlTypeCompiler::qmlUnit() const
+const QV4::CompiledData::Unit *QQmlTypeCompiler::qmlUnit() const
 {
-    return compiledData->qmlUnit;
+    return compiledData->compilationUnit->data;
 }
 
 const QQmlImports *QQmlTypeCompiler::imports() const
@@ -378,9 +367,9 @@ QHash<int, QHash<int, int> > *QQmlTypeCompiler::objectIndexToIdPerComponent()
     return &compiledData->objectIndexToIdPerComponent;
 }
 
-QHash<int, QQmlCompiledData::CustomParserData> *QQmlTypeCompiler::customParserData()
+QHash<int, QBitArray> *QQmlTypeCompiler::customParserBindings()
 {
-    return &compiledData->customParserData;
+    return &compiledData->customParserBindings;
 }
 
 QQmlJS::MemoryPool *QQmlTypeCompiler::memoryPool()
@@ -396,11 +385,6 @@ QStringRef QQmlTypeCompiler::newStringRef(const QString &string)
 const QV4::Compiler::StringTableGenerator *QQmlTypeCompiler::stringPool() const
 {
     return &document->jsGenerator.stringTable;
-}
-
-void QQmlTypeCompiler::setCustomParserBindings(const QVector<int> &bindings)
-{
-    compiledData->customParserBindings = bindings;
 }
 
 void QQmlTypeCompiler::setDeferredBindingsPerObject(const QHash<int, QBitArray> &deferredBindingsPerObject)
@@ -585,7 +569,7 @@ bool QQmlPropertyCacheCreator::createMetaObject(int objectIndex, const QmlIR::Ob
         QV4::CompiledData::Property::Type dtype;
         int metaType;
     } builtinTypes[] = {
-        { QV4::CompiledData::Property::Var, qMetaTypeId<QJSValue>() },
+        { QV4::CompiledData::Property::Var, QMetaType::QVariant },
         { QV4::CompiledData::Property::Variant, QMetaType::QVariant },
         { QV4::CompiledData::Property::Int, QMetaType::Int },
         { QV4::CompiledData::Property::Bool, QMetaType::Bool },
@@ -1722,7 +1706,7 @@ QQmlPropertyValidator::QQmlPropertyValidator(QQmlTypeCompiler *typeCompiler)
     , customParsers(typeCompiler->customParserCache())
     , propertyCaches(typeCompiler->propertyCaches())
     , objectIndexToIdPerComponent(*typeCompiler->objectIndexToIdPerComponent())
-    , customParserData(typeCompiler->customParserData())
+    , customParserBindingsPerObject(typeCompiler->customParserBindings())
     , _seenObjectWithId(false)
 {
 }
@@ -1731,7 +1715,6 @@ bool QQmlPropertyValidator::validate()
 {
     if (!validateObject(qmlUnit->indexOfRootObject, /*instantiatingBinding*/0))
         return false;
-    compiler->setCustomParserBindings(customParserBindings);
     compiler->setDeferredBindingsPerObject(deferredBindingsPerObject);
     return true;
 }
@@ -1739,13 +1722,6 @@ bool QQmlPropertyValidator::validate()
 const QQmlImports &QQmlPropertyValidator::imports() const
 {
     return *compiler->imports();
-}
-
-QQmlBinding::Identifier QQmlPropertyValidator::bindingIdentifier(const QV4::CompiledData::Binding *binding, QQmlCustomParser *)
-{
-    const int id = customParserBindings.count();
-    customParserBindings.append(binding->value.compiledScriptIndex);
-    return id;
 }
 
 QString QQmlPropertyValidator::bindingAsString(int objectIndex, const QV4::CompiledData::Binding *binding) const
@@ -2018,11 +1994,11 @@ bool QQmlPropertyValidator::validateObject(int objectIndex, const QV4::CompiledD
     if (customParser && !customBindings.isEmpty()) {
         customParser->clearErrors();
         customParser->compiler = this;
-        QQmlCompiledData::CustomParserData data;
-        data.bindings = customParserBindings;
-        data.compilationArtifact = customParser->compile(qmlUnit, customBindings);
+        customParser->imports = compiler->imports();
+        customParser->verifyBindings(qmlUnit, customBindings);
         customParser->compiler = 0;
-        customParserData->insert(objectIndex, data);
+        customParser->imports = (QQmlImports*)0;
+        customParserBindingsPerObject->insert(objectIndex, customParserBindings);
         const QList<QQmlError> parserErrors = customParser->errors();
         if (!parserErrors.isEmpty()) {
             foreach (QQmlError error, parserErrors)
@@ -2048,7 +2024,7 @@ bool QQmlPropertyValidator::validateLiteralBinding(QQmlPropertyCache *propertyCa
         if (binding->flags & QV4::CompiledData::Binding::IsResolvedEnum)
             return true;
 
-        QString value = binding->valueAsString(&qmlUnit->header);
+        QString value = binding->valueAsString(qmlUnit);
         QMetaProperty p = propertyCache->firstCppMetaObject()->property(property->coreIndex);
         bool ok;
         if (p.isFlagType()) {
@@ -2130,7 +2106,7 @@ bool QQmlPropertyValidator::validateLiteralBinding(QQmlPropertyCache *propertyCa
     break;
     case QVariant::Color: {
         bool ok = false;
-        QQmlStringConverters::rgbaFromString(binding->valueAsString(&qmlUnit->header), &ok);
+        QQmlStringConverters::rgbaFromString(binding->valueAsString(qmlUnit), &ok);
         if (!ok) {
             recordError(binding->valueLocation, tr("Invalid property assignment: color expected"));
             return false;
@@ -2140,7 +2116,7 @@ bool QQmlPropertyValidator::validateLiteralBinding(QQmlPropertyCache *propertyCa
 #ifndef QT_NO_DATESTRING
     case QVariant::Date: {
         bool ok = false;
-        QQmlStringConverters::dateFromString(binding->valueAsString(&qmlUnit->header), &ok);
+        QQmlStringConverters::dateFromString(binding->valueAsString(qmlUnit), &ok);
         if (!ok) {
             recordError(binding->valueLocation, tr("Invalid property assignment: date expected"));
             return false;
@@ -2149,7 +2125,7 @@ bool QQmlPropertyValidator::validateLiteralBinding(QQmlPropertyCache *propertyCa
     break;
     case QVariant::Time: {
         bool ok = false;
-        QQmlStringConverters::timeFromString(binding->valueAsString(&qmlUnit->header), &ok);
+        QQmlStringConverters::timeFromString(binding->valueAsString(qmlUnit), &ok);
         if (!ok) {
             recordError(binding->valueLocation, tr("Invalid property assignment: time expected"));
             return false;
@@ -2158,7 +2134,7 @@ bool QQmlPropertyValidator::validateLiteralBinding(QQmlPropertyCache *propertyCa
     break;
     case QVariant::DateTime: {
         bool ok = false;
-        QQmlStringConverters::dateTimeFromString(binding->valueAsString(&qmlUnit->header), &ok);
+        QQmlStringConverters::dateTimeFromString(binding->valueAsString(qmlUnit), &ok);
         if (!ok) {
             recordError(binding->valueLocation, tr("Invalid property assignment: datetime expected"));
             return false;
@@ -2168,7 +2144,7 @@ bool QQmlPropertyValidator::validateLiteralBinding(QQmlPropertyCache *propertyCa
 #endif // QT_NO_DATESTRING
     case QVariant::Point: {
         bool ok = false;
-        QQmlStringConverters::pointFFromString(binding->valueAsString(&qmlUnit->header), &ok).toPoint();
+        QQmlStringConverters::pointFFromString(binding->valueAsString(qmlUnit), &ok);
         if (!ok) {
             recordError(binding->valueLocation, tr("Invalid property assignment: point expected"));
             return false;
@@ -2177,7 +2153,7 @@ bool QQmlPropertyValidator::validateLiteralBinding(QQmlPropertyCache *propertyCa
     break;
     case QVariant::PointF: {
         bool ok = false;
-        QQmlStringConverters::pointFFromString(binding->valueAsString(&qmlUnit->header), &ok);
+        QQmlStringConverters::pointFFromString(binding->valueAsString(qmlUnit), &ok);
         if (!ok) {
             recordError(binding->valueLocation, tr("Invalid property assignment: point expected"));
             return false;
@@ -2186,7 +2162,7 @@ bool QQmlPropertyValidator::validateLiteralBinding(QQmlPropertyCache *propertyCa
     break;
     case QVariant::Size: {
         bool ok = false;
-        QQmlStringConverters::sizeFFromString(binding->valueAsString(&qmlUnit->header), &ok).toSize();
+        QQmlStringConverters::sizeFFromString(binding->valueAsString(qmlUnit), &ok);
         if (!ok) {
             recordError(binding->valueLocation, tr("Invalid property assignment: size expected"));
             return false;
@@ -2195,7 +2171,7 @@ bool QQmlPropertyValidator::validateLiteralBinding(QQmlPropertyCache *propertyCa
     break;
     case QVariant::SizeF: {
         bool ok = false;
-        QQmlStringConverters::sizeFFromString(binding->valueAsString(&qmlUnit->header), &ok);
+        QQmlStringConverters::sizeFFromString(binding->valueAsString(qmlUnit), &ok);
         if (!ok) {
             recordError(binding->valueLocation, tr("Invalid property assignment: size expected"));
             return false;
@@ -2204,7 +2180,7 @@ bool QQmlPropertyValidator::validateLiteralBinding(QQmlPropertyCache *propertyCa
     break;
     case QVariant::Rect: {
         bool ok = false;
-        QQmlStringConverters::rectFFromString(binding->valueAsString(&qmlUnit->header), &ok).toRect();
+        QQmlStringConverters::rectFFromString(binding->valueAsString(qmlUnit), &ok);
         if (!ok) {
             recordError(binding->valueLocation, tr("Invalid property assignment: rect expected"));
             return false;
@@ -2213,7 +2189,7 @@ bool QQmlPropertyValidator::validateLiteralBinding(QQmlPropertyCache *propertyCa
     break;
     case QVariant::RectF: {
         bool ok = false;
-        QQmlStringConverters::rectFFromString(binding->valueAsString(&qmlUnit->header), &ok);
+        QQmlStringConverters::rectFFromString(binding->valueAsString(qmlUnit), &ok);
         if (!ok) {
             recordError(binding->valueLocation, tr("Invalid property assignment: point expected"));
             return false;
@@ -2233,7 +2209,7 @@ bool QQmlPropertyValidator::validateLiteralBinding(QQmlPropertyCache *propertyCa
             float yp;
             float zy;
         } vec;
-        if (!QQmlStringConverters::createFromString(QMetaType::QVector3D, binding->valueAsString(&qmlUnit->header), &vec, sizeof(vec))) {
+        if (!QQmlStringConverters::createFromString(QMetaType::QVector3D, binding->valueAsString(qmlUnit), &vec, sizeof(vec))) {
             recordError(binding->valueLocation, tr("Invalid property assignment: 3D vector expected"));
             return false;
         }
@@ -2246,7 +2222,7 @@ bool QQmlPropertyValidator::validateLiteralBinding(QQmlPropertyCache *propertyCa
             float zy;
             float wp;
         } vec;
-        if (!QQmlStringConverters::createFromString(QMetaType::QVector4D, binding->valueAsString(&qmlUnit->header), &vec, sizeof(vec))) {
+        if (!QQmlStringConverters::createFromString(QMetaType::QVector4D, binding->valueAsString(qmlUnit), &vec, sizeof(vec))) {
             recordError(binding->valueLocation, tr("Invalid property assignment: 4D vector expected"));
             return false;
         }
@@ -2259,7 +2235,7 @@ bool QQmlPropertyValidator::validateLiteralBinding(QQmlPropertyCache *propertyCa
         // generate single literal value assignment to a list property if required
         if (property->propType == qMetaTypeId<QList<qreal> >()) {
             if (binding->type != QV4::CompiledData::Binding::Type_Number) {
-                recordError(binding->valueLocation, tr("Invalid property assignment: real or array of reals expected"));
+                recordError(binding->valueLocation, tr("Invalid property assignment: number or array of numbers expected"));
                 return false;
             }
             break;
@@ -2358,8 +2334,6 @@ bool QQmlPropertyValidator::validateObjectBinding(QQmlPropertyData *property, co
 
         return true;
     }
-    if (isComponent(binding->value.objectIndex))
-        return true;
 
     if (QQmlMetaType::isInterface(property->propType)) {
         // Can only check at instantiation time if the created sub-object successfully casts to the
@@ -2377,6 +2351,8 @@ bool QQmlPropertyValidator::validateObjectBinding(QQmlPropertyData *property, co
                 return false;
             }
         }
+        return true;
+    } else if (isComponent(binding->value.objectIndex)) {
         return true;
     } else if (binding->flags & QV4::CompiledData::Binding::IsSignalHandlerObject && property->isFunction()) {
         return true;

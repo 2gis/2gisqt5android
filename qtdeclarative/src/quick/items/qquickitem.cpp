@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtQuick module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -42,6 +34,7 @@
 #include "qquickitem.h"
 
 #include "qquickwindow.h"
+#include "qquickrendercontrol.h"
 #include <QtQml/qjsengine.h>
 #include "qquickwindow_p.h"
 
@@ -59,6 +52,7 @@
 #include <QtCore/qcoreevent.h>
 #include <QtCore/qnumeric.h>
 #include <QtGui/qpa/qplatformtheme.h>
+#include <QtCore/qloggingcategory.h>
 
 #include <private/qqmlglobal_p.h>
 #include <private/qqmlengine_p.h>
@@ -87,25 +81,24 @@ QT_BEGIN_NAMESPACE
 static bool qsg_leak_check = !qgetenv("QML_LEAK_CHECK").isEmpty();
 #endif
 
-#ifdef FOCUS_DEBUG
-void printFocusTree(QQuickItem *item, QQuickItem *scope = 0, int depth = 1);
-void printFocusTree(QQuickItem *item, QQuickItem *scope, int depth)
+void debugFocusTree(QQuickItem *item, QQuickItem *scope = 0, int depth = 1)
 {
-    qWarning()
-            << QByteArray(depth, '\t').constData()
-            << (scope && QQuickItemPrivate::get(scope)->subFocusItem == item ? '*' : ' ')
-            << item->hasFocus()
-            << item->hasActiveFocus()
-            << item->isFocusScope()
-            << item;
-    foreach (QQuickItem *child, item->childItems()) {
-        printFocusTree(
-                child,
-                item->isFocusScope() || !scope ? item : scope,
-                item->isFocusScope() || !scope ? depth + 1 : depth);
+    if (DBG_FOCUS().isEnabled(QtDebugMsg)) {
+        qCDebug(DBG_FOCUS)
+                << QByteArray(depth, '\t').constData()
+                << (scope && QQuickItemPrivate::get(scope)->subFocusItem == item ? '*' : ' ')
+                << item->hasFocus()
+                << item->hasActiveFocus()
+                << item->isFocusScope()
+                << item;
+        foreach (QQuickItem *child, item->childItems()) {
+            debugFocusTree(
+                    child,
+                    item->isFocusScope() || !scope ? item : scope,
+                    item->isFocusScope() || !scope ? depth + 1 : depth);
+        }
     }
 }
-#endif
 
 static void QQuickItem_parentNotifier(QObject *o, qintptr, QQmlNotifier **n)
 {
@@ -404,7 +397,7 @@ void QQuickItemKeyFilter::componentComplete()
     \c KeyNavigation.BeforeItem allows the event to be used for key navigation
     before the item, rather than after.
 
-    If item to which the focus is switching is not enabled or visible, an attempt will
+    If the item to which the focus is switching is not enabled or visible, an attempt will
     be made to skip this item and focus on the next. This is possible if there are
     a chain of items with the same KeyNavigation handler. If multiple items in a row are not enabled
     or visible, they will also be skipped.
@@ -412,7 +405,7 @@ void QQuickItemKeyFilter::componentComplete()
     KeyNavigation will implicitly set the other direction to return focus to this item. So if you set
     \l left to another item, \l right will be set on that item's KeyNavigation to set focus back to this
     item. However, if that item's KeyNavigation has had right explicitly set then no change will occur.
-    This means that the above example could have been written, with the same behaviour, without specifying
+    This means that the example above could achieve the same behavior without specifying
     KeyNavigation.right or KeyNavigation.down for any of the items.
 
     \sa {Keys}{Keys attached property}
@@ -459,7 +452,7 @@ QQuickItem *QQuickKeyNavigationAttached::left() const
 void QQuickKeyNavigationAttached::setLeft(QQuickItem *i)
 {
     Q_D(QQuickKeyNavigationAttached);
-    if (d->left == i)
+    if (d->leftSet && d->left == i)
         return;
     d->left = i;
     d->leftSet = true;
@@ -481,7 +474,7 @@ QQuickItem *QQuickKeyNavigationAttached::right() const
 void QQuickKeyNavigationAttached::setRight(QQuickItem *i)
 {
     Q_D(QQuickKeyNavigationAttached);
-    if (d->right == i)
+    if (d->rightSet && d->right == i)
         return;
     d->right = i;
     d->rightSet = true;
@@ -503,7 +496,7 @@ QQuickItem *QQuickKeyNavigationAttached::up() const
 void QQuickKeyNavigationAttached::setUp(QQuickItem *i)
 {
     Q_D(QQuickKeyNavigationAttached);
-    if (d->up == i)
+    if (d->upSet && d->up == i)
         return;
     d->up = i;
     d->upSet = true;
@@ -525,7 +518,7 @@ QQuickItem *QQuickKeyNavigationAttached::down() const
 void QQuickKeyNavigationAttached::setDown(QQuickItem *i)
 {
     Q_D(QQuickKeyNavigationAttached);
-    if (d->down == i)
+    if (d->downSet && d->down == i)
         return;
     d->down = i;
     d->downSet = true;
@@ -547,7 +540,7 @@ QQuickItem *QQuickKeyNavigationAttached::tab() const
 void QQuickKeyNavigationAttached::setTab(QQuickItem *i)
 {
     Q_D(QQuickKeyNavigationAttached);
-    if (d->tab == i)
+    if (d->tabSet && d->tab == i)
         return;
     d->tab = i;
     d->tabSet = true;
@@ -569,7 +562,7 @@ QQuickItem *QQuickKeyNavigationAttached::backtab() const
 void QQuickKeyNavigationAttached::setBacktab(QQuickItem *i)
 {
     Q_D(QQuickKeyNavigationAttached);
-    if (d->backtab == i)
+    if (d->backtabSet && d->backtab == i)
         return;
     d->backtab = i;
     d->backtabSet = true;
@@ -657,13 +650,13 @@ void QQuickKeyNavigationAttached::keyPressed(QKeyEvent *event, bool post)
         break;
     case Qt::Key_Tab:
         if (d->tab) {
-            setFocusNavigation(d->tab, "tab");
+            setFocusNavigation(d->tab, "tab", Qt::TabFocusReason);
             event->accept();
         }
         break;
     case Qt::Key_Backtab:
         if (d->backtab) {
-            setFocusNavigation(d->backtab, "backtab");
+            setFocusNavigation(d->backtab, "backtab", Qt::BacktabFocusReason);
             event->accept();
         }
         break;
@@ -725,14 +718,15 @@ void QQuickKeyNavigationAttached::keyReleased(QKeyEvent *event, bool post)
     if (!event->isAccepted()) QQuickItemKeyFilter::keyReleased(event, post);
 }
 
-void QQuickKeyNavigationAttached::setFocusNavigation(QQuickItem *currentItem, const char *dir)
+void QQuickKeyNavigationAttached::setFocusNavigation(QQuickItem *currentItem, const char *dir,
+                                                     Qt::FocusReason reason)
 {
     QQuickItem *initialItem = currentItem;
     bool isNextItem = false;
     do {
         isNextItem = false;
         if (currentItem->isVisible() && currentItem->isEnabled()) {
-            currentItem->forceActiveFocus(Qt::OtherFocusReason);
+            currentItem->forceActiveFocus(reason);
         } else {
             QObject *attached =
                 qmlAttachedPropertiesObject<QQuickKeyNavigationAttached>(currentItem, false);
@@ -893,6 +887,8 @@ bool QQuickKeysAttached::isConnected(const char *signalName)
     handling.  If the item accepts the key event it will not be
     handled by the Keys attached property handler.
     \endlist
+
+    \sa {Key Handling Priorities}
 */
 
 /*!
@@ -920,6 +916,9 @@ bool QQuickKeysAttached::isConnected(const char *signalName)
         focus: true
     }
     \endqml
+
+    To see the order in which events are received when using forwardTo, see
+    \l {Key Handling Priorities}.
 */
 
 /*!
@@ -1608,17 +1607,9 @@ void QQuickItemPrivate::setLayoutMirror(bool mirror)
     }
 }
 
-void QQuickItemPrivate::setAccessibleFlagAndListener()
+void QQuickItemPrivate::setAccessible()
 {
-    Q_Q(QQuickItem);
-    QQuickItem *item = q;
-    while (item) {
-        if (item->d_func()->isAccessible)
-            break; // already set - grandparents should have the flag set as well.
-
-        item->d_func()->isAccessible = true;
-        item = item->d_func()->parentItem;
-    }
+    isAccessible = true;
 }
 
 /*!
@@ -1686,6 +1677,66 @@ void QQuickItemPrivate::updateSubFocusItem(QQuickItem *scope, bool focus)
     \note All classes with QSG prefix should be used solely on the scene graph's
     rendering thread. See \l {Scene Graph and Rendering} for more information.
 
+    \section2 Graphics Resource Handling
+
+    The preferred way to handle cleanup of graphics resources used in
+    the scene graph, is to rely on the automatic cleanup of nodes. A
+    QSGNode returned from QQuickItem::updatePaintNode() is
+    automatically deleted on the right thread at the right time. Trees
+    of QSGNode instances are managed through the use of
+    QSGNode::OwnedByParent, which is set by default. So, for the
+    majority of custom scene graph items, no extra work will be
+    required.
+
+    Implementations that store graphics resources outside the node
+    tree, such as an item implementing QQuickItem::textureProvider(),
+    will need to take care in cleaning it up correctly depending on
+    how the item is used in QML. The situations to handle are:
+
+    \list
+
+    \li The scene graph is invalidated; This can happen, for instance,
+    if the window is hidden using QQuickWindow::hide(). If the item
+    class implements a \c slot named \c invalidateSceneGraph(), this
+    slot will be called on the rendering thread while the GUI thread
+    is blocked. This is equivalent to connecting to
+    QQuickWindow::sceneGraphInvalidated(). The OpenGL context of this
+    item's window will be bound when this slot is called. The only
+    exception is if the native OpenGL has been destroyed outside Qt's
+    control, for instance through \c EGL_CONTEXT_LOST.
+
+    \li The item is removed from the scene; If an item is taken out of
+    the scene, for instance because it's parent was set to \c null or
+    an item in another window, the QQuickItem::releaseResources() will
+    be called on the GUI thread. QQuickWindow::scheduleRenderJob()
+    should be used to schedule cleanup of rendering resources.
+
+    \li The item is deleted; When the destructor if an item runs, it
+    should delete any graphics resources it has. If neither of the two
+    conditions above were already met, the item will be part of a
+    window and it is possible to use QQuickWindow::scheduleRenderJob()
+    to have them cleaned up. If an implementation ignores the call to
+    QQuickItem::releaseResources(), the item will in many cases no
+    longer have access to a QQuickWindow and thus no means of
+    scheduling cleanup.
+
+    \endlist
+
+    When scheduling cleanup of graphics resources using
+    QQuickWindow::scheduleRenderJob(), one should use either
+    QQuickWindow::BeforeSynchronizingStage or
+    QQuickWindow::AfterSynchronizingStage. The \l {Scene Graph and
+    Rendering}{synchronization stage} is where the scene graph is
+    changed as a result of changes to the QML tree. If cleanup is
+    scheduled at any other time, it may result in other parts of the
+    scene graph referencing the newly deleted objects as these parts
+    have not been updated.
+
+    \note Use of QObject::deleteLater() to clean up graphics resources
+    is not recommended as this will run at an arbitrary time and it is
+    unknown if there will be an OpenGL context bound when the deletion
+    takes place.
+
     \section1 Custom QPainter Items
 
     The QQuickItem provides a subclass, QQuickPaintedItem, which
@@ -1697,6 +1748,19 @@ void QQuickItemPrivate::updateSubFocusItem(QQuickItem *scope, bool focus)
     operation. First rasterize the surface, then draw the
     surface. Using scene graph API directly is always significantly
     faster.
+
+    \section1 Behavior Animations
+
+    If your Item uses the \l Behavior type to define animations for property
+    changes, you should always use either QObject::setProperty(),
+    QQmlProperty(), or QMetaProperty::write() when you need to modify those
+    properties from C++. This ensures that the QML engine knows about the
+    property change. Otherwise, the engine won't be able to carry out your
+    requested animation. For example, if you call \l setPosition() directly,
+    any behavior that reacts to changes in the x or y properties will not take
+    effect, as you are bypassing Qt's meta-object system. Note that these
+    functions incur a slight performance penalty. For more details, see
+    \l {Accessing Members of a QML Object Type from C++}.
 
     \sa QQuickWindow, QQuickPaintedItem
 */
@@ -1779,6 +1843,101 @@ void QQuickItemPrivate::updateSubFocusItem(QQuickItem *scope, bool focus)
     their layouts.
 
     See LayoutMirroring for more details.
+
+    \section1 Item Layers
+
+    An Item will normally be rendered directly into the window it
+    belongs to. However, by setting \l layer.enabled, it is possible
+    to delegate the item and its entire subtree into an offscreen
+    surface. Only the offscreen surface, a texture, will be then drawn
+    into the window.
+
+    If it is desired to have a texture size different from that of the
+    item, this is possible using \l layer.textureSize. To render only
+    a section of the item into the texture, use \l
+    layer.sourceRect. It is also possible to specify \l
+    layer.sourceRect so it extends beyond the bounds of the item. In
+    this case, the exterior will be padded with transparent pixels.
+
+    The item will use linear interpolation for scaling if
+    \l layer.smooth is set to \c true and will use mipmap for
+    downsampling if \l layer.mipmap is set to \c true. Mipmapping may
+    improve visual quality of downscaled items. For mipmapping of
+    single Image items, prefer Image::mipmap.
+
+    \section2 Layer Opacity vs Item Opacity
+
+    When applying \l opacity to an item hierarchy the opacity is
+    applied to each item individually. This can lead to undesired
+    visual results when the opacity is applied to a subtree. Consider
+    the following example:
+
+    \table
+    \row
+      \li \inlineimage qml-blending-nonlayered.png
+      \li \b {Non-layered Opacity} \snippet qml/layerblending.qml non-layered
+    \endtable
+
+    A layer is rendered with the root item's opacity being 1, and then
+    the root item's opacity is applied to the texture when it is
+    drawn. This means that fading in a large item hierarchy from
+    transparent to opaque, or vice versa, can be done without the
+    overlap artifacts that the normal item by item alpha blending
+    has. Here is the same example with layer enabled:
+
+    \table
+    \row
+      \li \image qml-blending-layered.png
+      \li \b {Layered Opacity} \snippet qml/layerblending.qml layered
+    \endtable
+
+    \section2 Combined with ShaderEffects
+
+    Setting \l layer.enabled to true will turn the item into a \l
+    {QQuickItem::isTextureProvider}{texture provider}, making it
+    possible to use the item directly as a texture, for instance
+    in combination with the ShaderEffect type.
+
+    It is possible to apply an effect on a layer at runtime using
+    layer.effect:
+
+    \snippet qml/layerwitheffect.qml 1
+
+    In this example, we implement the shader effect manually. The \l
+    {Qt Graphical Effects} module contains a suite of ready-made
+    effects for use with Qt Quick.
+
+    See ShaderEffect for more information about using effects.
+
+    \note \l layer.enabled is actually just a more convenient way of using
+    ShaderEffectSource.
+
+
+    \section2 Memory and Performance
+
+    When an item's layer is enabled, the scene graph will allocate memory
+    in the GPU equal to \c {width x height x 4}. In memory constrained
+    configurations, large layers should be used with care.
+
+    In the QPainter / QWidget world, it is some times favorable to
+    cache complex content in a pixmap, image or texture. In Qt Quick,
+    because of the techniques already applied by the \l {Qt Quick
+    Scene Graph Renderer} {scene graph renderer}, this will in most
+    cases not be the case. Excessive draw calls are already reduced
+    because of batching and a cache will in most cases end up blending
+    more pixels than the original content. The overhead of rendering
+    to an offscreen and the blending involved with drawing the
+    resulting texture is therefore often more costly than simply
+    letting the item and its children be drawn normally.
+
+    Also, an item using a layer can not be \l {Batching} {batched} during
+    rendering. This means that a scene with many layered items may
+    have performance problems.
+
+    Layering can be convenient and useful for visual effects, but
+    should in most cases be enabled for the duration of the effect and
+    disabled afterwards.
+
 */
 
 /*!
@@ -2110,6 +2269,17 @@ QQuickItem::~QQuickItem()
 
     d->changeListeners.clear();
 
+    /*
+       Remove any references our transforms have to us, in case they try to
+       remove themselves from our list of transforms when that list has already
+       been destroyed after ~QQuickItem() has run.
+    */
+    for (int ii = 0; ii < d->transforms.count(); ++ii) {
+        QQuickTransform *t = d->transforms.at(ii);
+        QQuickTransformPrivate *tp = QQuickTransformPrivate::get(t);
+        tp->items.removeOne(this);
+    }
+
     if (d->extra.isAllocated()) {
         delete d->extra->contents; d->extra->contents = 0;
         delete d->extra->layer; d->extra->layer = 0;
@@ -2263,14 +2433,10 @@ QQuickItem* QQuickItemPrivate::nextPrevItemInTabFocusChain(QQuickItem *item, boo
         if (current == startItem && from == firstFromItem) {
             // wrapped around, avoid endless loops
             if (originalItem == contentItem) {
-#ifdef FOCUS_DEBUG
-                qDebug() << "QQuickItemPrivate::nextPrevItemInTabFocusChain: looped, return contentItem";
-#endif
+                qCDebug(DBG_FOCUS) << "QQuickItemPrivate::nextPrevItemInTabFocusChain: looped, return contentItem";
                 return item->window()->contentItem();
             } else {
-#ifdef FOCUS_DEBUG
-                qDebug() << "QQuickItemPrivate::nextPrevItemInTabFocusChain: looped, return " << startItem;
-#endif
+                qCDebug(DBG_FOCUS) << "QQuickItemPrivate::nextPrevItemInTabFocusChain: looped, return " << startItem;
                 return startItem;
             }
         }
@@ -2423,9 +2589,6 @@ void QQuickItem::setParentItem(QQuickItem *parentItem)
     d->itemChange(ItemParentHasChanged, d->parentItem);
 
     d->parentNotifier.notify();
-    if (d->isAccessible && d->parentItem) {
-        d->parentItem->d_func()->setAccessibleFlagAndListener();
-    }
 
     emit parentChanged(d->parentItem);
     if (isVisible() && d->parentItem)
@@ -3430,7 +3593,7 @@ void QQuickItem::geometryChanged(const QRectF &newGeometry, const QRectF &oldGeo
     rendering thread. See \l {Scene Graph and Rendering} for more information.
 
     \sa QSGMaterial, QSGSimpleMaterial, QSGGeometryNode, QSGGeometry,
-    QSGFlatColorMaterial, QSGTextureMaterial, QSGNode::markDirty()
+    QSGFlatColorMaterial, QSGTextureMaterial, QSGNode::markDirty(), {Graphics Resource Handling}
  */
 
 QSGNode *QQuickItem::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData *updatePaintNodeData)
@@ -3441,16 +3604,20 @@ QSGNode *QQuickItem::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData *upda
 }
 
 /*!
-    This function is called when the item's scene graph resources are no longer needed.
-    It allows items to free its resources, for instance textures, that are not owned by scene graph
-    nodes. Note that scene graph nodes are managed by QQuickWindow and should not be deleted by
-    this function. Scene graph resources are no longer needed when the parent is set to null and
-    the item is not used by any \l ShaderEffect or \l ShaderEffectSource.
+    This function is called when an item should release graphics
+    resources which are not already managed by the nodes returend from
+    QQuickItem::updatePaintNode().
 
-    This function is called from the main thread. Therefore, resources used by the scene graph
-    should not be deleted directly, but by calling \l QObject::deleteLater().
+    This happens when the item is about to be removed from window it
+    was previously rendering to. The item is guaranteed to have a
+    \l {QQuickItem::window()}{window} when the function is called.
 
-    \note The item destructor still needs to free its scene graph resources if not already done.
+    The function is called on the GUI thread and the state of the
+    rendering thread, when it is used, is unknown. Objects should
+    not be deleted directly, but instead scheduled for cleanup
+    using QQuickWindow::scheduleRenderJob().
+
+    \sa {Graphics Resource Handling}
  */
 
 void QQuickItem::releaseResources()
@@ -3999,15 +4166,15 @@ void QQuickItem::mapFromItem(QQmlV4Function *args) const
 
             QRectF r = mapRectFromItem(itemObj, QRectF(x, y, w, h));
 
-            rv->put((s = v4->newString(QStringLiteral("x"))), (v = QV4::Primitive::fromDouble(r.x())));
-            rv->put((s = v4->newString(QStringLiteral("y"))), (v = QV4::Primitive::fromDouble(r.y())));
-            rv->put((s = v4->newString(QStringLiteral("width"))), (v = QV4::Primitive::fromDouble(r.width())));
-            rv->put((s = v4->newString(QStringLiteral("height"))), (v = QV4::Primitive::fromDouble(r.height())));
+            rv->put((s = v4->newString(QStringLiteral("x"))).getPointer(), (v = QV4::Primitive::fromDouble(r.x())));
+            rv->put((s = v4->newString(QStringLiteral("y"))).getPointer(), (v = QV4::Primitive::fromDouble(r.y())));
+            rv->put((s = v4->newString(QStringLiteral("width"))).getPointer(), (v = QV4::Primitive::fromDouble(r.width())));
+            rv->put((s = v4->newString(QStringLiteral("height"))).getPointer(), (v = QV4::Primitive::fromDouble(r.height())));
         } else {
             QPointF p = mapFromItem(itemObj, QPointF(x, y));
 
-            rv->put((s = v4->newString(QStringLiteral("x"))), (v = QV4::Primitive::fromDouble(p.x())));
-            rv->put((s = v4->newString(QStringLiteral("y"))), (v = QV4::Primitive::fromDouble(p.y())));
+            rv->put((s = v4->newString(QStringLiteral("x"))).getPointer(), (v = QV4::Primitive::fromDouble(p.x())));
+            rv->put((s = v4->newString(QStringLiteral("y"))).getPointer(), (v = QV4::Primitive::fromDouble(p.y())));
         }
     }
 }
@@ -4079,15 +4246,15 @@ void QQuickItem::mapToItem(QQmlV4Function *args) const
 
             QRectF r = mapRectToItem(itemObj, QRectF(x, y, w, h));
 
-            rv->put((s = v4->newString(QStringLiteral("x"))), (v = QV4::Primitive::fromDouble(r.x())));
-            rv->put((s = v4->newString(QStringLiteral("y"))), (v = QV4::Primitive::fromDouble(r.y())));
-            rv->put((s = v4->newString(QStringLiteral("width"))), (v = QV4::Primitive::fromDouble(r.width())));
-            rv->put((s = v4->newString(QStringLiteral("height"))), (v = QV4::Primitive::fromDouble(r.height())));
+            rv->put((s = v4->newString(QStringLiteral("x"))).getPointer(), (v = QV4::Primitive::fromDouble(r.x())));
+            rv->put((s = v4->newString(QStringLiteral("y"))).getPointer(), (v = QV4::Primitive::fromDouble(r.y())));
+            rv->put((s = v4->newString(QStringLiteral("width"))).getPointer(), (v = QV4::Primitive::fromDouble(r.width())));
+            rv->put((s = v4->newString(QStringLiteral("height"))).getPointer(), (v = QV4::Primitive::fromDouble(r.height())));
         } else {
             QPointF p = mapToItem(itemObj, QPointF(x, y));
 
-            rv->put((s = v4->newString(QStringLiteral("x"))), (v = QV4::Primitive::fromDouble(p.x())));
-            rv->put((s = v4->newString(QStringLiteral("y"))), (v = QV4::Primitive::fromDouble(p.y())));
+            rv->put((s = v4->newString(QStringLiteral("x"))).getPointer(), (v = QV4::Primitive::fromDouble(p.x())));
+            rv->put((s = v4->newString(QStringLiteral("y"))).getPointer(), (v = QV4::Primitive::fromDouble(p.y())));
         }
     }
 }
@@ -5105,6 +5272,8 @@ void QQuickItem::setScale(qreal s)
   rectangle has specified an opacity of 0.5, which affects the opacity of
   its blue child rectangle even though the child has not specified an opacity.
 
+  Values outside the range of 0 to 1 will be clamped.
+
   \table
   \row
   \li \image declarative-item_opacity1.png
@@ -5152,9 +5321,10 @@ qreal QQuickItem::opacity() const
     return d->opacity();
 }
 
-void QQuickItem::setOpacity(qreal o)
+void QQuickItem::setOpacity(qreal newOpacity)
 {
     Q_D(QQuickItem);
+    qreal o = qBound<qreal>(0, newOpacity, 1);
     if (d->opacity() == o)
         return;
 
@@ -5391,6 +5561,17 @@ void QQuickItemPrivate::setEffectiveEnableRecur(QQuickItem *scope, bool newEffec
 
     emit q->enabledChanged();
 }
+
+bool QQuickItemPrivate::isTransparentForPositioner() const
+{
+    return extra.isAllocated() && extra.value().transparentForPositioner;
+}
+
+void QQuickItemPrivate::setTransparentForPositioner(bool transparent)
+{
+    extra.value().transparentForPositioner = transparent;
+}
+
 
 QString QQuickItemPrivate::dirtyToString() const
 {
@@ -5819,10 +6000,6 @@ qreal QQuickItem::y() const
     return d->y;
 }
 
-/*!
-    \property QQuickItem::pos
-    \internal
-  */
 /*!
     \internal
   */
@@ -6622,9 +6799,10 @@ void QQuickItem::setCursor(const QCursor &cursor)
     if (oldShape != cursor.shape() || oldShape >= Qt::LastCursor || cursor.shape() >= Qt::LastCursor) {
         d->extra.value().cursor = cursor;
         if (d->window) {
-            QQuickWindowPrivate *windowPrivate = QQuickWindowPrivate::get(d->window);
-            if (windowPrivate->cursorItem == this)
-                d->window->setCursor(cursor);
+            QWindow *renderWindow = QQuickRenderControl::renderWindowFor(d->window);
+            QWindow *window = renderWindow ? renderWindow : d->window; // this may not be a QQuickWindow
+            if (QQuickWindowPrivate::get(d->window)->cursorItem == this)
+                window->setCursor(cursor);
         }
     }
 
@@ -6632,7 +6810,9 @@ void QQuickItem::setCursor(const QCursor &cursor)
         d->incrementCursorCount(+1);
         d->hasCursor = true;
         if (d->window) {
-            QPointF pos = d->window->mapFromGlobal(QGuiApplicationPrivate::lastCursorPosition.toPoint());
+            QWindow *renderWindow = QQuickRenderControl::renderWindowFor(d->window);
+            QWindow *window = renderWindow ? renderWindow : d->window;
+            QPointF pos = window->mapFromGlobal(QGuiApplicationPrivate::lastCursorPosition.toPoint());
             if (contains(mapFromScene(pos)))
                 QQuickWindowPrivate::get(d->window)->updateCursor(pos);
         }
@@ -6762,6 +6942,13 @@ void QQuickItem::grabTouchPoints(const QVector<int> &ids)
         windowPriv->itemForTouchPointId[ids.at(i)] = this;
         if (oldGrabber)
             ungrab.insert(oldGrabber);
+
+        QQuickItem *mouseGrabber = windowPriv->mouseGrabberItem;
+        if (windowPriv->touchMouseId == ids.at(i) && mouseGrabber && mouseGrabber != this) {
+            windowPriv->mouseGrabberItem = 0;
+            QEvent ev(QEvent::UngrabMouse);
+            d->window->sendEvent(mouseGrabber, &ev);
+        }
     }
     foreach (QQuickItem *oldGrabber, ungrab)
         oldGrabber->touchUngrabEvent();
@@ -7251,6 +7438,7 @@ void QQuickItemLayer::activate()
 {
     Q_ASSERT(!m_effectSource);
     m_effectSource = new QQuickShaderEffectSource();
+    QQuickItemPrivate::get(m_effectSource)->setTransparentForPositioner(true);
 
     QQuickItem *parentItem = m_item->parentItem();
     if (parentItem) {
@@ -7316,6 +7504,7 @@ void QQuickItemLayer::activateEffect()
     }
     m_effect->setVisible(m_item->isVisible());
     m_effect->setProperty(m_name, qVariantFromValue<QObject *>(m_effectSource));
+    QQuickItemPrivate::get(m_effect)->setTransparentForPositioner(true);
     m_effectComponent->completeCreate();
 }
 
@@ -7401,12 +7590,15 @@ void QQuickItemLayer::setMipmap(bool mipmap)
     allow you to save some texture memory.
 
     \list
-    \li ShaderEffectSource.Alpha - GL_ALPHA
+    \li ShaderEffectSource.Alpha - GL_ALPHA;
     \li ShaderEffectSource.RGB - GL_RGB
     \li ShaderEffectSource.RGBA - GL_RGBA
     \endlist
 
-    \note Some OpenGL implementations do not support the GL_ALPHA format.
+    \note ShaderEffectSource.RGB and ShaderEffectSource.Alpha should
+    be used with caution, as support for these formats in the underlying
+    hardare and driver is often not present.
+
  */
 
 void QQuickItemLayer::setFormat(QQuickShaderEffectSource::Format f)
@@ -7632,7 +7824,8 @@ QQuickItemPrivate::ExtraData::ExtraData()
 #endif
   effectRefCount(0), hideRefCount(0),
   opacityNode(0), clipNode(0), rootNode(0), beforePaintNode(0),
-  acceptedMouseButtons(0), origin(QQuickItem::Center)
+  acceptedMouseButtons(0), origin(QQuickItem::Center),
+  transparentForPositioner(false)
 {
 }
 

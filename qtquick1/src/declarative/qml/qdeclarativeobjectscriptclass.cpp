@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtDeclarative module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -77,7 +69,7 @@ struct ObjectData : public QScriptDeclarativeClass::Object {
     virtual ~ObjectData() {
         if (object && !object->parent()) {
             QDeclarativeData *ddata = QDeclarativeData::get(object, false);
-            if (ddata && !ddata->indestructible && 0 == --ddata->objectDataRefCount) 
+            if (ddata && !ddata->indestructible && 0 == --ddata->objectDataRefCount)
                 object->deleteLater();
         }
     }
@@ -176,7 +168,7 @@ QDeclarativeObjectScriptClass::queryProperty(QObject *obj, const Identifier &nam
     if ((hints & ImplicitObject) && lastData && lastData->revision != 0) {
 
         QDeclarativeData *ddata = QDeclarativeData::get(obj);
-        if (ddata && ddata->propertyCache && !ddata->propertyCache->isAllowedInRevision(lastData)) 
+        if (ddata && ddata->propertyCache && !ddata->propertyCache->isAllowedInRevision(lastData))
             return 0;
     }
 
@@ -343,7 +335,7 @@ void QDeclarativeObjectScriptClass::setProperty(QObject *obj,
         return;
     }
 
-    if (!(lastData->flags & QDeclarativePropertyCache::Data::IsWritable) && 
+    if (!(lastData->flags & QDeclarativePropertyCache::Data::IsWritable) &&
         !(lastData->flags & QDeclarativePropertyCache::Data::IsQList)) {
         QString error = QLatin1String("Cannot assign to read-only property \"") +
                         toString(name) + QLatin1Char('\"');
@@ -725,7 +717,7 @@ void *MetaCallArgument::dataPtr()
 {
     if (type == -1)
         return qvariantPtr->data();
-    else 
+    else
         return (void *)&allocData;
 }
 
@@ -803,7 +795,7 @@ void MetaCallArgument::fromScriptValue(int callType, QDeclarativeEngine *engine,
         qvariantPtr = new (&allocData) QVariant(other);
         type = callType;
     } else if (callType == qMetaTypeId<QList<QObject*> >()) {
-        qlistPtr = new (&allocData) QList<QObject *>(); 
+        qlistPtr = new (&allocData) QList<QObject *>();
         if (value.isArray()) {
             int length = value.property(QLatin1String("length")).toInt32();
             for (int ii = 0; ii < length; ++ii) {
@@ -828,7 +820,7 @@ void MetaCallArgument::fromScriptValue(int callType, QDeclarativeEngine *engine,
             qvariantPtr->convert((QVariant::Type)callType);
         } else if (const QMetaObject *mo = priv->rawMetaObjectForType(callType)) {
             QObject *obj = priv->toQObject(v);
-            
+
             if (obj) {
                 const QMetaObject *objMo = obj->metaObject();
                 while (objMo && objMo != mo) objMo = objMo->superClass();
@@ -898,7 +890,7 @@ int QDeclarativeObjectMethodScriptClass::enumType(const QMetaObject *meta, const
     if (scopeIdx != -1) {
         scope = str.left(scopeIdx);
         name = str.mid(scopeIdx + 2);
-    } else { 
+    } else {
         name = str;
     }
     for (int i = meta->enumeratorCount() - 1; i >= 0; --i) {
@@ -919,8 +911,8 @@ QDeclarativeObjectMethodScriptClass::Value QDeclarativeObjectMethodScriptClass::
         return callOverloaded(method, ctxt);
 }
 
-QDeclarativeObjectMethodScriptClass::Value 
-QDeclarativeObjectMethodScriptClass::callPrecise(QObject *object, const QDeclarativePropertyCache::Data &data, 
+QDeclarativeObjectMethodScriptClass::Value
+QDeclarativeObjectMethodScriptClass::callPrecise(QObject *object, const QDeclarativePropertyCache::Data &data,
                                                  QScriptContext *ctxt)
 {
     if (data.flags & QDeclarativePropertyCache::Data::HasArguments) {
@@ -932,9 +924,9 @@ QDeclarativeObjectMethodScriptClass::callPrecise(QObject *object, const QDeclara
         // ### Cache
         for (int ii = 0; ii < argTypeNames.count(); ++ii) {
             argTypes[ii] = QMetaType::type(argTypeNames.at(ii));
-            if (argTypes[ii] == QVariant::Invalid) 
+            if (argTypes[ii] == QVariant::Invalid)
                 argTypes[ii] = enumType(object->metaObject(), QString::fromLatin1(argTypeNames.at(ii)));
-            if (argTypes[ii] == QVariant::Invalid) 
+            if (argTypes[ii] == QVariant::Invalid)
                 return Value(ctxt, ctxt->throwError(QString::fromLatin1("Unknown method parameter type: %1").arg(QLatin1String(argTypeNames.at(ii)))));
         }
 
@@ -950,9 +942,9 @@ QDeclarativeObjectMethodScriptClass::callPrecise(QObject *object, const QDeclara
     }
 }
 
-QDeclarativeObjectMethodScriptClass::Value 
-QDeclarativeObjectMethodScriptClass::callMethod(QObject *object, int index, 
-                                                int returnType, int argCount, int *argTypes, 
+QDeclarativeObjectMethodScriptClass::Value
+QDeclarativeObjectMethodScriptClass::callMethod(QObject *object, int index,
+                                                int returnType, int argCount, int *argTypes,
                                                 QScriptContext *ctxt)
 {
     if (argCount > 0) {
@@ -972,7 +964,7 @@ QDeclarativeObjectMethodScriptClass::callMethod(QObject *object, int index,
         return args[0].toValue(engine);
 
     } else if (returnType != 0) {
-        
+
         MetaCallArgument arg;
         arg.initAsType(returnType, engine);
 
@@ -994,13 +986,13 @@ QDeclarativeObjectMethodScriptClass::callMethod(QObject *object, int index,
 /*!
 Resolve the overloaded method to call.  The algorithm works conceptually like this:
     1.  Resolve the set of overloads it is *possible* to call.
-        Impossible overloads include those that have too many parameters or have parameters 
-        of unknown type.  
-    2.  Filter the set of overloads to only contain those with the closest number of 
+        Impossible overloads include those that have too many parameters or have parameters
+        of unknown type.
+    2.  Filter the set of overloads to only contain those with the closest number of
         parameters.
         For example, if we are called with 3 parameters and there are 2 overloads that
         take 2 parameters and one that takes 3, eliminate the 2 parameter overloads.
-    3.  Find the best remaining overload based on its match score.  
+    3.  Find the best remaining overload based on its match score.
         If two or more overloads have the same match score, call the last one.  The match
         score is constructed by adding the matchScore() result for each of the parameters.
 */
@@ -1037,8 +1029,8 @@ QDeclarativeObjectMethodScriptClass::callOverloaded(MethodData *method, QScriptC
         bool unknownArgument = false;
         for (int ii = 0; ii < methodArgumentCount; ++ii) {
             methodArgTypes[ii] = QMetaType::type(methodArgTypeNames.at(ii));
-            if (methodArgTypes[ii] == QVariant::Invalid) 
-                methodArgTypes[ii] = enumType(method->object->metaObject(), 
+            if (methodArgTypes[ii] == QVariant::Invalid)
+                methodArgTypes[ii] = enumType(method->object->metaObject(),
                                               QString::fromLatin1(methodArgTypeNames.at(ii)));
             if (methodArgTypes[ii] == QVariant::Invalid) {
                 unknownArgument = true;
@@ -1074,12 +1066,12 @@ QDeclarativeObjectMethodScriptClass::callOverloaded(MethodData *method, QScriptC
 }
 
 /*!
-    Returns the match score for converting \a actual to be of type \a conversionType.  A 
+    Returns the match score for converting \a actual to be of type \a conversionType.  A
     zero score means "perfect match" whereas a higher score is worse.
 
     The conversion table is copied out of the QtScript callQtMethod() function.
 */
-int QDeclarativeObjectMethodScriptClass::matchScore(const QScriptValue &actual, int conversionType, 
+int QDeclarativeObjectMethodScriptClass::matchScore(const QScriptValue &actual, int conversionType,
                                                     const QByteArray &conversionTypeName)
 {
     if (actual.isNumber()) {
@@ -1204,7 +1196,7 @@ static QByteArray QMetaMethod_name(const QMetaMethod &m)
 Returns the next related method, if one, or 0.
 */
 QDeclarativePropertyCache::Data *
-QDeclarativeObjectMethodScriptClass::relatedMethod(QObject *object, QDeclarativePropertyCache::Data *current, 
+QDeclarativeObjectMethodScriptClass::relatedMethod(QObject *object, QDeclarativePropertyCache::Data *current,
                                                    QDeclarativePropertyCache::Data &dummy)
 {
     QDeclarativePropertyCache *cache = QDeclarativeData::get(object)->propertyCache;
@@ -1224,7 +1216,7 @@ QDeclarativeObjectMethodScriptClass::relatedMethod(QObject *object, QDeclarative
 
         QMetaMethod method = mo->method(current->relatedIndex);
         dummy.load(method);
-        
+
         // Look for overloaded methods
         QByteArray methodName = QMetaMethod_name(method);
         for (int ii = current->relatedIndex - 1; ii >= methodOffset; --ii) {

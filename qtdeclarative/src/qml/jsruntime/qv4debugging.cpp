@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -45,6 +37,7 @@
 #include "qv4function_p.h"
 #include "qv4instr_moth_p.h"
 #include "qv4runtime_p.h"
+#include "qv4script_p.h"
 #include <iostream>
 
 #include <algorithm>
@@ -53,29 +46,74 @@ using namespace QV4;
 using namespace QV4::Debugging;
 
 namespace {
-class EvalJob: public Debugger::Job
+class JavaScriptJob: public Debugger::Job
 {
     QV4::ExecutionEngine *engine;
     const QString &script;
 
 public:
-    EvalJob(QV4::ExecutionEngine *engine, const QString &script)
+    JavaScriptJob(QV4::ExecutionEngine *engine, const QString &script)
         : engine(engine)
         , script(script)
     {}
 
-    ~EvalJob() {}
-
     void run()
     {
-        // TODO
-        qDebug() << "Evaluating script:" << script;
-        Q_UNUSED(engine);
+        QV4::Scope scope(engine);
+        QV4::ExecutionContext *ctx = engine->currentContext();
+        ContextStateSaver ctxSaver(ctx);
+        QV4::ScopedValue result(scope);
+
+        QV4::Script script(ctx, this->script);
+        script.strictMode = ctx->d()->strictMode;
+        script.inheritContext = false;
+        script.parse();
+        if (!scope.engine->hasException)
+            result = script.run();
+        if (scope.engine->hasException)
+            result = ctx->catchException();
+        handleResult(result);
+    }
+
+protected:
+    virtual void handleResult(QV4::ScopedValue &result) = 0;
+};
+
+class EvalJob: public JavaScriptJob
+{
+    bool result;
+
+public:
+    EvalJob(QV4::ExecutionEngine *engine, const QString &script)
+        : JavaScriptJob(engine, script)
+        , result(false)
+    {}
+
+    virtual void handleResult(QV4::ScopedValue &result)
+    {
+        this->result = result->toBoolean();
     }
 
     bool resultAsBoolean() const
     {
-        return true;
+        return result;
+    }
+};
+
+class ExpressionEvalJob: public JavaScriptJob
+{
+    Debugger::Collector *collector;
+
+public:
+    ExpressionEvalJob(ExecutionEngine *engine, const QString &expression, Debugger::Collector *collector)
+        : JavaScriptJob(engine, expression)
+        , collector(collector)
+    {
+    }
+
+    virtual void handleResult(QV4::ScopedValue &result)
+    {
+        collector->collect(QStringLiteral("body"), result);
     }
 };
 
@@ -210,7 +248,7 @@ Debugger::ExecutionState Debugger::currentExecutionState() const
 {
     ExecutionState state;
     state.fileName = getFunction()->sourceFile();
-    state.lineNumber = engine()->currentContext()->lineNumber;
+    state.lineNumber = engine()->currentContext()->d()->lineNumber;
 
     return state;
 }
@@ -224,12 +262,12 @@ static inline CallContext *findContext(ExecutionContext *ctxt, int frame)
 {
     while (ctxt) {
         CallContext *cCtxt = ctxt->asCallContext();
-        if (cCtxt && cCtxt->function) {
+        if (cCtxt && cCtxt->d()->function) {
             if (frame < 1)
                 return cCtxt;
             --frame;
         }
-        ctxt = ctxt->parent;
+        ctxt = ctxt->d()->parent;
     }
 
     return 0;
@@ -238,7 +276,7 @@ static inline CallContext *findContext(ExecutionContext *ctxt, int frame)
 static inline CallContext *findScope(ExecutionContext *ctxt, int scope)
 {
     for (; scope > 0 && ctxt; --scope)
-        ctxt = ctxt->outer;
+        ctxt = ctxt->d()->outer;
 
     return ctxt ? ctxt->asCallContext() : 0;
 }
@@ -327,7 +365,7 @@ void Debugger::collectLocalsInContext(Collector *collector, int frameNr, int sco
                 QString qName;
                 if (String *name = ctxt->variables()[i])
                     qName = name->toQString();
-                v = ctxt->locals[i];
+                v = ctxt->d()->locals[i];
                 collector->collect(qName, v);
             }
         }
@@ -367,16 +405,16 @@ bool Debugger::collectThisInContext(Debugger::Collector *collector, int frame)
             ExecutionContext *ctxt = findContext(engine->currentContext(), frameNr);
             while (ctxt) {
                 if (CallContext *cCtxt = ctxt->asCallContext())
-                    if (cCtxt->activation)
+                    if (cCtxt->d()->activation)
                         break;
-                ctxt = ctxt->outer;
+                ctxt = ctxt->d()->outer;
             }
 
             if (!ctxt)
                 return false;
 
             Scope scope(engine);
-            ScopedObject o(scope, ctxt->asCallContext()->activation);
+            ScopedObject o(scope, ctxt->asCallContext()->d()->activation);
             collector->collect(o);
             return true;
         }
@@ -434,14 +472,27 @@ QVector<ExecutionContext::ContextType> Debugger::getScopeTypes(int frame) const
         return types;
 
     CallContext *sctxt = findContext(m_engine->currentContext(), frame);
-    if (!sctxt || sctxt->type < ExecutionContext::Type_SimpleCallContext)
+    if (!sctxt || sctxt->d()->type < ExecutionContext::Type_SimpleCallContext)
         return types;
     CallContext *ctxt = static_cast<CallContext *>(sctxt);
 
-    for (ExecutionContext *it = ctxt; it; it = it->outer)
-        types.append(it->type);
+    for (ExecutionContext *it = ctxt; it; it = it->d()->outer)
+        types.append(it->d()->type);
 
     return types;
+}
+
+
+void Debugger::evaluateExpression(int frameNr, const QString &expression, Debugger::Collector *resultsCollector)
+{
+    Q_ASSERT(state() == Paused);
+    Q_UNUSED(frameNr);
+
+    Q_ASSERT(m_runningJob == 0);
+    ExpressionEvalJob job(m_engine, expression, resultsCollector);
+    m_runningJob = &job;
+    m_runningJob->run();
+    m_runningJob = 0;
 }
 
 void Debugger::maybeBreakAtInstruction()
@@ -450,7 +501,7 @@ void Debugger::maybeBreakAtInstruction()
         return;
 
     QMutexLocker locker(&m_lock);
-    int lineNumber = engine()->currentContext()->lineNumber;
+    int lineNumber = engine()->currentContext()->d()->lineNumber;
 
     if (m_gatherSources) {
         m_gatherSources->run();
@@ -481,6 +532,8 @@ void Debugger::maybeBreakAtInstruction()
 
 void Debugger::enteringFunction()
 {
+    if (m_runningJob)
+        return;
     QMutexLocker locker(&m_lock);
 
     if (m_stepping == StepIn) {
@@ -490,12 +543,14 @@ void Debugger::enteringFunction()
 
 void Debugger::leavingFunction(const ReturnedValue &retVal)
 {
+    if (m_runningJob)
+        return;
     Q_UNUSED(retVal); // TODO
 
     QMutexLocker locker(&m_lock);
 
     if (m_stepping != NotStepping && m_currentContext == m_engine->currentContext()) {
-        m_currentContext = m_engine->currentContext()->parent;
+        m_currentContext = m_engine->currentContext()->d()->parent;
         m_stepping = StepOver;
         m_returnedValue = retVal;
     }
@@ -517,10 +572,10 @@ Function *Debugger::getFunction() const
 {
     ExecutionContext *context = m_engine->currentContext();
     if (CallContext *callCtx = context->asCallContext())
-        return callCtx->function->function;
+        return callCtx->d()->function->function();
     else {
-        Q_ASSERT(context->type == QV4::ExecutionContext::Type_GlobalContext);
-        return context->engine->globalCode;
+        Q_ASSERT(context->d()->type == QV4::ExecutionContext::Type_GlobalContext);
+        return context->d()->engine->globalCode;
     }
 }
 
@@ -560,6 +615,7 @@ bool Debugger::reallyHitTheBreakPoint(const QString &filename, int linenr)
     EvalJob evilJob(m_engine, condition);
     m_runningJob = &evilJob;
     m_runningJob->run();
+    m_runningJob = 0;
 
     return evilJob.resultAsBoolean();
 }
@@ -726,7 +782,7 @@ void Debugger::Collector::collect(const QString &name, const ScopedValue &value)
     }
 }
 
-void Debugger::Collector::collect(const ObjectRef object)
+void Debugger::Collector::collect(Object *object)
 {
     bool property = true;
     qSwap(property, m_isProperty);

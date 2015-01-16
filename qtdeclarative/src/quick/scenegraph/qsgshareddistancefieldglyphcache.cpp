@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtQuick module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -407,176 +399,6 @@ void QSGSharedDistanceFieldGlyphCache::unregisterOwnerElement(QQuickItem *ownerE
     }
 }
 
-#if defined(QSGSHAREDDISTANCEFIELDGLYPHCACHE_DEBUG_)
-#  include <QtOpenGL/private/qglextensions_p.h>
-
-void QSGSharedDistanceFieldGlyphCache::saveTexture(GLuint textureId, int width, int height)
-{
-    GLuint fboId;
-    glGenFramebuffers(1, &fboId);
-
-    GLuint tmpTexture = 0;
-    glGenTextures(1, &tmpTexture);
-    glBindTexture(GL_TEXTURE_2D, tmpTexture);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
-    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glBindTexture(GL_TEXTURE_2D, 0);
-
-    glBindFramebuffer(GL_FRAMEBUFFER_EXT, fboId);
-    glFramebufferTexture2D(GL_FRAMEBUFFER_EXT, GL_COLOR_ATTACHMENT0_EXT, GL_TEXTURE_2D,
-                           tmpTexture, 0);
-
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, textureId);
-
-    glDisable(GL_STENCIL_TEST);
-    glDisable(GL_DEPTH_TEST);
-    glDisable(GL_SCISSOR_TEST);
-    glDisable(GL_BLEND);
-
-    GLfloat textureCoordinateArray[8];
-    textureCoordinateArray[0] = 0.0f;
-    textureCoordinateArray[1] = 0.0f;
-    textureCoordinateArray[2] = 1.0f;
-    textureCoordinateArray[3] = 0.0f;
-    textureCoordinateArray[4] = 1.0f;
-    textureCoordinateArray[5] = 1.0f;
-    textureCoordinateArray[6] = 0.0f;
-    textureCoordinateArray[7] = 1.0f;
-
-    GLfloat vertexCoordinateArray[8];
-    vertexCoordinateArray[0] = -1.0f;
-    vertexCoordinateArray[1] = -1.0f;
-    vertexCoordinateArray[2] =  1.0f;
-    vertexCoordinateArray[3] = -1.0f;
-    vertexCoordinateArray[4] =  1.0f;
-    vertexCoordinateArray[5] =  1.0f;
-    vertexCoordinateArray[6] = -1.0f;
-    vertexCoordinateArray[7] =  1.0f;
-
-    glViewport(0, 0, width, height);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, vertexCoordinateArray);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, textureCoordinateArray);
-
-    {
-        static const char vertexShaderSource[] =
-                "attribute highp   vec4      vertexCoordsArray; \n"
-                "attribute highp   vec2      textureCoordArray; \n"
-                "varying   highp   vec2      textureCoords;     \n"
-                "void main(void) \n"
-                "{ \n"
-                "    gl_Position = vertexCoordsArray;   \n"
-                "    textureCoords = textureCoordArray; \n"
-                "} \n";
-
-        static const char fragmentShaderSource[] =
-                "varying   highp   vec2      textureCoords; \n"
-                "uniform   sampler2D         texture;       \n"
-                "void main() \n"
-                "{ \n"
-                "    gl_FragColor = texture2D(texture, textureCoords); \n"
-                "} \n";
-
-        GLuint vertexShader = glCreateShader(GL_VERTEX_SHADER);
-        GLuint fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
-
-        if (vertexShader == 0 || fragmentShader == 0) {
-            GLenum error = glGetError();
-            qWarning("SharedGraphicsCacheServer::setupShaderPrograms: Failed to create shaders. (GL error: %x)",
-                     error);
-            return;
-        }
-
-        glShaderSource(vertexShader, 1, &vertexShaderSource, NULL);
-        glShaderSource(fragmentShader, 1, &fragmentShaderSource, NULL);
-        glCompileShader(vertexShader);
-
-        GLint len = 1;
-        glGetShaderiv(vertexShader, GL_INFO_LOG_LENGTH, &len);
-
-        char infoLog[2048];
-        glGetShaderInfoLog(vertexShader, 2048, NULL, infoLog);
-        if (qstrlen(infoLog) > 0) {
-            qWarning("SharedGraphicsCacheServer::setupShaderPrograms, problems compiling vertex shader:\n %s",
-                     infoLog);
-            //return;
-        }
-
-        glCompileShader(fragmentShader);
-        glGetShaderInfoLog(fragmentShader, 2048, NULL, infoLog);
-        if (qstrlen(infoLog) > 0) {
-            qWarning("SharedGraphicsCacheServer::setupShaderPrograms, problems compiling fragent shader:\n %s",
-                     infoLog);
-            //return;
-        }
-
-        GLuint shaderProgram = glCreateProgram();
-        glAttachShader(shaderProgram, vertexShader);
-        glAttachShader(shaderProgram, fragmentShader);
-
-        glBindAttribLocation(shaderProgram, 0, "vertexCoordsArray");
-        glBindAttribLocation(shaderProgram, 1, "textureCoordArray");
-
-        glLinkProgram(shaderProgram);
-        glGetProgramInfoLog(shaderProgram, 2048, NULL, infoLog);
-        if (qstrlen(infoLog) > 0) {
-            qWarning("SharedGraphicsCacheServer::setupShaderPrograms, problems linking shaders:\n %s",
-                     infoLog);
-            //return;
-        }
-
-        glUseProgram(shaderProgram);
-        glEnableVertexAttribArray(0);
-        glEnableVertexAttribArray(1);
-
-        int textureUniformLocation = glGetUniformLocation(shaderProgram, "_qt_texture");
-        glUniform1i(textureUniformLocation, 0);
-    }
-
-    glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
-
-    {
-        GLenum error = glGetError();
-        if (error != GL_NO_ERROR) {
-            qWarning("SharedGraphicsCacheServer::readBackBuffer: glDrawArrays reported error 0x%x",
-                     error);
-        }
-    }
-
-    uchar *data = new uchar[width * height * 4];
-
-    glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, data);
-
-    QImage image(width, height, QImage::Format_ARGB32);
-    quint32 *dest = reinterpret_cast<quint32 *>(image.bits());
-    for (int i=0; i<width*height; ++i)
-        dest[i] = qRgba(0xff, 0xff, 0xff, data[i]);
-
-    QByteArray fileName = m_cacheId + ' ' + QByteArray::number(textureId);
-    fileName = fileName.replace('/', '_').replace(' ', '_') + ".png";
-    image.save(QString::fromLocal8Bit(fileName));
-
-    {
-        GLenum error = glGetError();
-        if (error != GL_NO_ERROR) {
-            qWarning("SharedGraphicsCacheServer::readBackBuffer: glReadPixels reported error 0x%x",
-                     error);
-        }
-    }
-
-    glDisableVertexAttribArray(0);
-    glDisableVertexAttribArray(1);
-
-    glDeleteFramebuffers(1, &fboId);
-    glDeleteTextures(1, &tmpTexture);
-
-    delete[] data;
-}
-#endif
-
 namespace {
     struct TextureContent {
         QSize size;
@@ -691,9 +513,6 @@ void QSGSharedDistanceFieldGlyphCache::processPendingGlyphs()
                     texture.textureId = m_sharedGraphicsCache->textureIdForBuffer(it.key());
                     texture.size = m_sharedGraphicsCache->sizeOfBuffer(it.key());
 
-#if defined(QSGSHAREDDISTANCEFIELDGLYPHCACHE_DEBUG_)
-                    saveTexture(texture.textureId, texture.size.width(), texture.size.height());
-#endif
                     setGlyphsTexture(it.value().glyphs, texture);
 
                     ++it;

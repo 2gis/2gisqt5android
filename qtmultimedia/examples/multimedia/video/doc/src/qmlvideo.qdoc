@@ -29,13 +29,11 @@
 \example video/qmlvideo
 \title QML Video Example
 \ingroup multimedia_examples
+\brief Transforming video and camera viewfinder content.
 
-\brief The QML Video Example demonstrates the various manipulations (move;
-resize; rotate; change aspect ratio) which can be applied to QML \l{VideoOutput}
-items.
-
-This example demonstrates the various manipulations (move; resize; rotate;
-change aspect ratio) which can be applied to QML \l{VideoOutput} items.
+\e{QML Video} demonstrates the various transformations (move; resize; rotate;
+change aspect ratio) that can be applied to QML \l VideoOutput and \l Camera
+types.
 
 It also shows how native code can be combined with QML to implement more
 advanced functionality - in this case, C++ code is used to calculate the QML
@@ -46,7 +44,7 @@ The following image shows the application executing the video-overlay scene,
 which creates a dummy overlay item (just a semi-transparent \l{Rectangle}),
 which moves across the \l{VideoOutput} item.
 
-\image qmlvideo-overlay.png
+\image qmlvideo-overlay.jpg
 
 \include examples-run.qdocinc
 
@@ -67,7 +65,7 @@ the following items:
        average over the past second.
 \endlist
 
-\image qmlvideo-menu.png
+\image qmlvideo-menu.jpg
 
 Each scene in the flickable list is implemented in its own QML file - for
 example the video-basic scene (which just displays a static \l{VideoOutput}

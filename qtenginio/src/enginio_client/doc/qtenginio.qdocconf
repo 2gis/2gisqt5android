@@ -4,7 +4,6 @@ include(../../../doc/enginio_global.qdocconf)
 
 project = QtEnginio
 description = Client library for Enginio
-url = http://qt-project.org/doc/qt-$QT_VER
 version = $QT_VERSION
 
 sourcedirs += ..  \
@@ -24,7 +23,7 @@ exampledirs += \
 # Specify example install dir under QT_INSTALL_EXAMPLES
 examplesinstallpath = enginio/widgets
 
-depends += qtcore qtgui qtwidgets qtnetwork qtenginiooverview
+depends += qtcore qtgui qtwidgets qtnetwork qtquick qtenginioqml qtenginiooverview
 
 qhp.projects            = QtEnginio
 

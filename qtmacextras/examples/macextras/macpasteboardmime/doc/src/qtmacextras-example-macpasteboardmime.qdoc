@@ -33,12 +33,12 @@
 
     This example shows how to use QMacPasteboardMime to do conversion
     between a MIME type and a Uniform Type Identifier (UTI) format used
-    on Mac OS X.
+    on OS X.
 
     The example creates a widget that accepts drag & drop events, and
     reads contents of dropped business cards in vCard format.
 
     \include examples-run.qdocinc
 
-    \sa {Qt for Mac OS X}, {Qt Mac Extras}
+    \sa {Qt for OS X}, {Qt Mac Extras}
 */

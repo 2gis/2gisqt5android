@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -50,9 +42,13 @@
 #if !defined(QT_NO_OPENGL) && !defined(QT_OPENGL_ES_1_CL) && !defined(QT_OPENGL_ES_1)
 #include <qglshaderprogram.h>
 #include <QtGui/QOpenGLContext>
+#include <QtGui/QOpenGLFunctions>
 #include <QtGui/QWindow>
 #ifndef GL_CLAMP_TO_EDGE
 #define GL_CLAMP_TO_EDGE 0x812F
+#endif
+#ifndef GL_RGB8
+#define GL_RGB8 0x8051
 #endif
 #endif
 
@@ -97,11 +93,11 @@ QVideoSurfaceGenericPainter::QVideoSurfaceGenericPainter()
 {
     m_imagePixelFormats
         << QVideoFrame::Format_RGB32
-#ifndef QT_OPENGL_ES // The raster formats should be a subset of the GL formats.
-        << QVideoFrame::Format_RGB24
-#endif
         << QVideoFrame::Format_ARGB32
         << QVideoFrame::Format_RGB565;
+    // The raster formats should be a subset of the GL formats.
+    if (QOpenGLContext::openGLModuleType() != QOpenGLContext::LibGLES)
+        m_imagePixelFormats << QVideoFrame::Format_RGB24;
 }
 
 QList<QVideoFrame::PixelFormat> QVideoSurfaceGenericPainter::supportedPixelFormats(
@@ -140,13 +136,11 @@ QAbstractVideoSurface::Error QVideoSurfaceGenericPainter::start(const QVideoSurf
 
     const QAbstractVideoBuffer::HandleType t = format.handleType();
     if (t == QAbstractVideoBuffer::NoHandle) {
-        if (m_imageFormat != QImage::Format_Invalid
-#ifdef QT_OPENGL_ES
-                && format.pixelFormat() != QVideoFrame::Format_RGB24
-#endif
-                && !m_imageSize.isEmpty()) {
+        bool ok = m_imageFormat != QImage::Format_Invalid && !m_imageSize.isEmpty();
+        if (QOpenGLContext::openGLModuleType() == QOpenGLContext::LibGLES)
+            ok &= format.pixelFormat() != QVideoFrame::Format_RGB24;
+        if (ok)
             return QAbstractVideoSurface::NoError;
-        }
     } else if (t == QAbstractVideoBuffer::QPixmapHandle) {
         return QAbstractVideoSurface::NoError;
     }
@@ -237,7 +231,7 @@ void QVideoSurfaceGenericPainter::updateColors(int, int, int, int)
 #  define GL_UNSIGNED_SHORT_5_6_5 33635
 #endif
 
-class QVideoSurfaceGLPainter : public QVideoSurfacePainter
+class QVideoSurfaceGLPainter : public QVideoSurfacePainter, protected QOpenGLFunctions
 {
 public:
     QVideoSurfaceGLPainter(QGLContext *context);
@@ -262,7 +256,7 @@ protected:
     void initYuv420PTextureInfo(const QSize &size);
     void initYv12TextureInfo(const QSize &size);
 
-#ifndef QT_OPENGL_ES
+#if !defined(QT_OPENGL_ES) && !defined(QT_OPENGL_DYNAMIC)
     typedef void (APIENTRY *_glActiveTexture) (GLenum);
     _glActiveTexture glActiveTexture;
 #endif
@@ -300,7 +294,7 @@ QVideoSurfaceGLPainter::QVideoSurfaceGLPainter(QGLContext *context)
     , m_textureCount(0)
     , m_yuv(false)
 {
-#ifndef QT_OPENGL_ES
+#if !defined(QT_OPENGL_ES) && !defined(QT_OPENGL_DYNAMIC)
     glActiveTexture = (_glActiveTexture)m_context->getProcAddress(QLatin1String("glActiveTexture"));
 #endif
 
@@ -309,6 +303,7 @@ QVideoSurfaceGLPainter::QVideoSurfaceGLPainter(QGLContext *context)
     memset(m_textureHeights, 0, sizeof(m_textureHeights));
     memset(m_textureOffsets, 0, sizeof(m_textureOffsets));
 
+    initializeOpenGLFunctions();
 }
 
 QVideoSurfaceGLPainter::~QVideoSurfaceGLPainter()
@@ -554,7 +549,7 @@ void QVideoSurfaceGLPainter::initYv12TextureInfo(const QSize &size)
     m_textureOffsets[2] = bytesPerLine * size.height();
 }
 
-#ifndef QT_OPENGL_ES
+#if !defined(QT_OPENGL_ES) && !defined(QT_OPENGL_DYNAMIC)
 
 # ifndef GL_FRAGMENT_PROGRAM_ARB
 #  define GL_FRAGMENT_PROGRAM_ARB           0x8804
@@ -945,7 +940,7 @@ QAbstractVideoSurface::Error QVideoSurfaceArbFpPainter::paint(
     return QVideoSurfaceGLPainter::paint(target, painter, source);
 }
 
-#endif
+#endif // !QT_OPENGL_ES && !QT_OPENGL_DYNAMIC
 
 static const char *qt_glsl_vertexShaderProgram =
         "attribute highp vec4 vertexCoordArray;\n"
@@ -1057,10 +1052,6 @@ QVideoSurfaceGlslPainter::QVideoSurfaceGlslPainter(QGLContext *context)
             << QVideoFrame::Format_RGB32
             << QVideoFrame::Format_BGR32
             << QVideoFrame::Format_ARGB32
-#ifndef QT_OPENGL_ES
-            << QVideoFrame::Format_RGB24
-            << QVideoFrame::Format_BGR24
-#endif
             << QVideoFrame::Format_RGB565
             << QVideoFrame::Format_YUV444
             << QVideoFrame::Format_AYUV444
@@ -1069,6 +1060,11 @@ QVideoSurfaceGlslPainter::QVideoSurfaceGlslPainter(QGLContext *context)
     m_glPixelFormats
             << QVideoFrame::Format_RGB32
             << QVideoFrame::Format_ARGB32;
+    if (!context->contextHandle()->isOpenGLES()) {
+        m_imagePixelFormats
+            << QVideoFrame::Format_RGB24
+            << QVideoFrame::Format_BGR24;
+    }
 }
 
 QAbstractVideoSurface::Error QVideoSurfaceGlslPainter::start(const QVideoSurfaceFormat &format)
@@ -1095,16 +1091,18 @@ QAbstractVideoSurface::Error QVideoSurfaceGlslPainter::start(const QVideoSurface
             initRgbTextureInfo(GL_RGBA, GL_RGBA, GL_UNSIGNED_BYTE, format.frameSize());
             fragmentProgram = qt_glsl_argbShaderProgram;
             break;
-#ifndef QT_OPENGL_ES
         case QVideoFrame::Format_RGB24:
-            initRgbTextureInfo(GL_RGB8, GL_RGB, GL_UNSIGNED_BYTE, format.frameSize());
-            fragmentProgram = qt_glsl_rgbShaderProgram;
+            if (!m_context->contextHandle()->isOpenGLES()) {
+                initRgbTextureInfo(GL_RGB8, GL_RGB, GL_UNSIGNED_BYTE, format.frameSize());
+                fragmentProgram = qt_glsl_rgbShaderProgram;
+            }
             break;
         case QVideoFrame::Format_BGR24:
-            initRgbTextureInfo(GL_RGB8, GL_RGB, GL_UNSIGNED_BYTE, format.frameSize());
-            fragmentProgram = qt_glsl_argbShaderProgram;
+            if (!m_context->contextHandle()->isOpenGLES()) {
+                initRgbTextureInfo(GL_RGB8, GL_RGB, GL_UNSIGNED_BYTE, format.frameSize());
+                fragmentProgram = qt_glsl_argbShaderProgram;
+            }
             break;
-#endif
         case QVideoFrame::Format_RGB565:
             initRgbTextureInfo(GL_RGB, GL_RGB, GL_UNSIGNED_SHORT_5_6_5, format.frameSize());
             fragmentProgram = qt_glsl_rgbShaderProgram;
@@ -1577,14 +1575,14 @@ void QPainterVideoSurface::setGLContext(QGLContext *context)
 
         m_glContext->makeCurrent();
 
-        const QByteArray extensions(reinterpret_cast<const char *>(glGetString(GL_EXTENSIONS)));
-#ifndef QT_OPENGL_ES
-
+        const QByteArray extensions(reinterpret_cast<const char *>(
+                                        context->contextHandle()->functions()->glGetString(GL_EXTENSIONS)));
+#if !defined(QT_OPENGL_ES) && !defined(QT_OPENGL_DYNAMIC)
         if (extensions.contains("ARB_fragment_program"))
             m_shaderTypes |= FragmentProgramShader;
 #endif
         if (QGLShaderProgram::hasOpenGLShaderPrograms(m_glContext)
-#ifndef QT_OPENGL_ES_2
+#if !defined(QT_OPENGL_ES_2) && !defined(QT_OPENGL_DYNAMIC)
                 && extensions.contains("ARB_shader_objects")
 #endif
             )
@@ -1683,13 +1681,13 @@ void QPainterVideoSurface::createPainter()
 
 #if !defined(QT_NO_OPENGL) && !defined(QT_OPENGL_ES_1_CL) && !defined(QT_OPENGL_ES_1)
     switch (m_shaderType) {
-#ifndef QT_OPENGL_ES
+#if !defined(QT_OPENGL_ES) && !defined(QT_OPENGL_DYNAMIC)
     case FragmentProgramShader:
         Q_ASSERT(m_glContext);
         m_glContext->makeCurrent();
         m_painter = new QVideoSurfaceArbFpPainter(m_glContext);
         break;
-#endif
+#endif // !QT_OPENGL_ES && !QT_OPENGL_DYNAMIC
     case GlslShader:
         Q_ASSERT(m_glContext);
         m_glContext->makeCurrent();

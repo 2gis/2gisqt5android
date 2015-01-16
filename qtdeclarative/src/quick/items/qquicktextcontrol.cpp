@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -443,12 +435,12 @@ void QQuickTextControlPrivate::setClipboardSelection()
 }
 #endif
 
-void QQuickTextControlPrivate::_q_emitCursorPosChanged(const QTextCursor &someCursor)
+void QQuickTextControlPrivate::_q_updateCursorPosChanged(const QTextCursor &someCursor)
 {
     Q_Q(QQuickTextControl);
     if (someCursor.isCopyOf(cursor)) {
         emit q->cursorPositionChanged();
-        cursorRectangleChanged = true;
+        q->updateCursorRectangle(true);
     }
 }
 
@@ -586,7 +578,7 @@ QQuickTextControl::QQuickTextControl(QTextDocument *doc, QObject *parent)
     qmlobject_connect(layout, QAbstractTextDocumentLayout, SIGNAL(updateBlock(QTextBlock)), this, QQuickTextControl, SIGNAL(updateRequest()));
     qmlobject_connect(doc, QTextDocument, SIGNAL(contentsChanged()), this, QQuickTextControl, SIGNAL(textChanged()));
     qmlobject_connect(doc, QTextDocument, SIGNAL(contentsChanged()), this, QQuickTextControl, SLOT(_q_updateCurrentCharFormatAndSelection()));
-    qmlobject_connect(doc, QTextDocument, SIGNAL(cursorPositionChanged(QTextCursor)), this, QQuickTextControl, SLOT(_q_emitCursorPosChanged(QTextCursor)));
+    qmlobject_connect(doc, QTextDocument, SIGNAL(cursorPositionChanged(QTextCursor)), this, QQuickTextControl, SLOT(_q_updateCursorPosChanged(QTextCursor)));
     connect(doc, &QTextDocument::contentsChange, this, &QQuickTextControl::contentsChange);
 
     layout->setProperty("cursorWidth", textCursorWidth);
@@ -973,7 +965,6 @@ QRectF QQuickTextControlPrivate::rectForPosition(int position) const
     const QTextBlock block = doc->findBlock(position);
     if (!block.isValid())
         return QRectF();
-    const QAbstractTextDocumentLayout *docLayout = doc->documentLayout();
     const QTextLayout *layout = block.layout();
     const QPointF layoutPos = q->blockBoundingRect(block).topLeft();
     int relativePos = position - block.position();
@@ -988,24 +979,14 @@ QRectF QQuickTextControlPrivate::rectForPosition(int position) const
 #endif
     QTextLine line = layout->lineForTextPosition(relativePos);
 
-    int cursorWidth;
-    {
-        bool ok = false;
-#ifndef QT_NO_PROPERTIES
-        cursorWidth = docLayout->property("cursorWidth").toInt(&ok);
-#endif
-        if (!ok)
-            cursorWidth = 1;
-    }
-
     QRectF r;
 
     if (line.isValid()) {
         qreal x = line.cursorToX(relativePos);
         qreal w = 0;
-        r = QRectF(layoutPos.x() + x, layoutPos.y() + line.y(), cursorWidth + w, line.height());
+        r = QRectF(layoutPos.x() + x, layoutPos.y() + line.y(), textCursorWidth + w, line.height());
     } else {
-        r = QRectF(layoutPos.x(), layoutPos.y(), cursorWidth, 10); // #### correct height
+        r = QRectF(layoutPos.x(), layoutPos.y(), textCursorWidth, 10); // #### correct height
     }
 
     return r;
@@ -1516,19 +1497,6 @@ QString QQuickTextControl::anchorAt(const QPointF &pos) const
 {
     Q_D(const QQuickTextControl);
     return d->doc->documentLayout()->anchorAt(pos);
-}
-
-void QQuickTextControl::setCursorWidth(int width)
-{
-    Q_D(QQuickTextControl);
-#ifdef QT_NO_PROPERTIES
-    Q_UNUSED(width);
-#else
-    if (width == -1)
-        width = textCursorWidth;
-    d->doc->documentLayout()->setProperty("cursorWidth", width);
-#endif
-    d->repaintCursor();
 }
 
 void QQuickTextControl::setAcceptRichText(bool accept)

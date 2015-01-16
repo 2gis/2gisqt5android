@@ -28,7 +28,7 @@
 
 #include <float.h>
 #include <limits>
-#include <math.h>
+#include <cmath>
 #include <stdlib.h>
 
 #if OS(SOLARIS)
@@ -38,6 +38,18 @@
 #if OS(OPENBSD)
 #include <sys/types.h>
 #include <machine/ieee.h>
+#endif
+
+#if OS(QNX)
+// FIXME: Look into a way to have cmath import its functions into both the standard and global
+// namespace. For now, we include math.h since the QNX cmath header only imports its functions
+// into the standard namespace.
+#include <math.h>
+// These macros from math.h conflict with the real functions in the std namespace.
+#undef signbit
+#undef isnan
+#undef isinf
+#undef isfinite
 #endif
 
 #ifndef M_PI
@@ -67,19 +79,25 @@ inline double wtf_ceil(double x) { return copysign(ceil(x), x); }
 
 #if OS(SOLARIS)
 
+namespace std {
+
 #ifndef isfinite
 inline bool isfinite(double x) { return finite(x) && !isnand(x); }
+#endif
+#ifndef signbit
+inline bool signbit(double x) { return copysign(1.0, x) < 0; }
 #endif
 #ifndef isinf
 inline bool isinf(double x) { return !finite(x) && !isnand(x); }
 #endif
-#ifndef signbit
-inline bool signbit(double x) { return x < 0.0; } // FIXME: Wrong for negative 0.
-#endif
+
+} // namespace std
 
 #endif
 
 #if OS(OPENBSD)
+
+namespace std {
 
 #ifndef isfinite
 inline bool isfinite(double x) { return finite(x); }
@@ -87,6 +105,8 @@ inline bool isfinite(double x) { return finite(x); }
 #ifndef signbit
 inline bool signbit(double x) { struct ieee_double *p = (struct ieee_double *)&x; return p->dbl_sign; }
 #endif
+
+} // namespace std
 
 #endif
 
@@ -115,17 +135,23 @@ inline double trunc(double num) { return num > 0 ? floor(num) : ceil(num); }
 
 #endif
 
-#if COMPILER(MSVC) && _MSC_VER < 1800
+#if COMPILER(MSVC)
+
+namespace std {
 
 inline bool isinf(double num) { return !_finite(num) && !_isnan(num); }
 inline bool isnan(double num) { return !!_isnan(num); }
+inline bool isfinite(double x) { return _finite(x); }
+#if _MSC_VER < 1800
 inline bool signbit(double num) { return _copysign(1.0, num) < 0; }
+#endif
+
+} // namespace std
 
 inline double nextafter(double x, double y) { return _nextafter(x, y); }
 inline float nextafterf(float x, float y) { return x > y ? x - FLT_EPSILON : x + FLT_EPSILON; }
 
 inline double copysign(double x, double y) { return _copysign(x, y); }
-inline int isfinite(double x) { return _finite(x); }
 
 // Work around a bug in Win, where atan2(+-infinity, +-infinity) yields NaN instead of specific values.
 inline double wtf_atan2(double x, double y)
@@ -151,10 +177,10 @@ inline double wtf_atan2(double x, double y)
 }
 
 // Work around a bug in the Microsoft CRT, where fmod(x, +-infinity) yields NaN instead of x.
-inline double wtf_fmod(double x, double y) { return (!isinf(x) && isinf(y)) ? x : fmod(x, y); }
+extern "C" inline double wtf_fmod(double x, double y) { return (!std::isinf(x) && std::isinf(y)) ? x : fmod(x, y); }
 
 // Work around a bug in the Microsoft CRT, where pow(NaN, 0) yields NaN instead of 1.
-inline double wtf_pow(double x, double y) { return y == 0 ? 1 : pow(x, y); }
+extern "C" inline double wtf_pow(double x, double y) { return y == 0 ? 1 : pow(x, y); }
 
 #define atan2(x, y) wtf_atan2(x, y)
 #define fmod(x, y) wtf_fmod(x, y)
@@ -185,7 +211,7 @@ inline double wtf_pow(double x, double y)
 {
     // MinGW-w64 has a custom implementation for pow.
     // This handles certain special cases that are different.
-    if ((x == 0.0 || isinf(x)) && isfinite(y)) {
+    if ((x == 0.0 || std::isinf(x)) && std::isfinite(y)) {
         double f;
         if (modf(y, &f) != 0.0)
             return ((x == 0.0) ^ (y > 0.0)) ? std::numeric_limits<double>::infinity() : 0.0;

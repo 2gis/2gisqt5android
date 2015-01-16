@@ -56,18 +56,18 @@ Rectangle {
     x: (rising && !verticalRise) ? xAttractor : Math.random()*(main.inPortrait ? main.baseWidth : main.baseHeight)
     Behavior on x {
         id: xBehavior
-        SmoothedAnimation { 
-            velocity: 100+Math.random()*100 
-        } 
+        SmoothedAnimation {
+            velocity: 100+Math.random()*100
+        }
     }
-    Behavior on y { 
+    Behavior on y {
         id: yBehavior
-        SmoothedAnimation { 
-            velocity: 100+Math.random()*100 
-        } 
+        SmoothedAnimation {
+            velocity: 100+Math.random()*100
+        }
     }
     Timer {
-       interval: 80+Math.random()*40 
+       interval: 80+Math.random()*40
         repeat: true
         running: true
         onTriggered: {
@@ -83,7 +83,7 @@ Rectangle {
                     rising = false;
                     yBehavior.enabled = true;
                     rising = true;
-                }  
+                }
             }
         }
     }

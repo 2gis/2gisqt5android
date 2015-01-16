@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtQuick.Dialogs module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -179,6 +171,12 @@ QT_BEGIN_NAMESPACE
     The corresponding handler is \c onReset.
 */
 
+/*! \qmlproperty StandardButton MessageDialog::clickedButton
+
+    This property holds the button pressed by the user. Its value is
+    one of the flags set for the standardButtons property.
+*/
+
 /*!
     \class QQuickPlatformMessageDialog
     \inmodule QtQuick.Dialogs
@@ -305,12 +303,6 @@ QPlatformMessageDialogHelper *QQuickPlatformMessageDialog::helper()
 */
 
 /*!
-    \enum QQuickStandardIcon::Icon
-
-    This enum specifies a standard icon to be used on a dialog.
-*/
-
-/*!
     \qmlproperty QQuickStandardIcon::Icon MessageDialog::icon
 
     The icon of the message box can be specified with one of these values:
@@ -318,37 +310,29 @@ QPlatformMessageDialogHelper *QQuickPlatformMessageDialog::helper()
     \table
     \row
     \li no icon
-    \li \l StandardIcon.NoIcon
+    \li \c StandardIcon.NoIcon
     \li For an unadorned text alert.
     \row
     \li \inlineimage ../images/question.png "Question icon"
-    \li \l StandardIcon.Question
+    \li \c StandardIcon.Question
     \li For asking a question during normal operations.
     \row
     \li \image information.png
-    \li \l StandardIcon.Information
+    \li \c StandardIcon.Information
     \li For reporting information about normal operations.
     \row
     \li \image warning.png
-    \li \l StandardIcon.Warning
+    \li \c StandardIcon.Warning
     \li For reporting non-critical errors.
     \row
     \li \image critical.png
-    \li \l StandardIcon.Critical
+    \li \c StandardIcon.Critical
     \li For reporting critical errors.
     \endtable
 
     The default is \c StandardIcon.NoIcon.
 
     The enum values are the same as in \l QMessageBox::Icon.
-*/
-
-// TODO after QTBUG-35019 is fixed: fix links to this module's enums
-// rather than linking to those in QMessageBox
-/*!
-    \enum QQuickStandardButton::StandardButton
-
-    This enum specifies a button with a standard label to be used on a dialog.
 */
 
 /*!
@@ -361,27 +345,61 @@ QPlatformMessageDialogHelper *QQuickPlatformMessageDialog::helper()
     property. You can control which buttons are available by setting
     standardButtons to a bitwise-or combination of the following flags:
 
-    \table
-    \row \li StandardButton.Ok          \li An \gui OK button defined with the \l {QMessageBox::AcceptRole} {AcceptRole}.
-    \row \li  StandardButton.Open       \li An \gui Open button defined with the \l {QMessageBox::AcceptRole} {AcceptRole}.
-    \row \li  StandardButton.Save       \li A \gui Save button defined with the \l {QMessageBox::AcceptRole} {AcceptRole}.
-    \row \li  StandardButton.Cancel     \li A \gui Cancel button defined with the \l {QMessageBox::RejectRole} {RejectRole}.
-    \row \li  StandardButton.Close      \li A \gui Close button defined with the \l {QMessageBox::RejectRole} {RejectRole}.
-    \row \li  StandardButton.Discard    \li A \gui Discard or \gui {Don't Save} button, depending on the platform,
-                                        defined with the \l {QMessageBox::DestructiveRole} {DestructiveRole}.
-    \row \li  StandardButton.Apply      \li An \gui Apply button defined with the \l {QMessageBox::ApplyRole} {ApplyRole}.
-    \row \li  StandardButton.Reset      \li A \gui Reset button defined with the \l {QMessageBox::ResetRole} {ResetRole}.
-    \row \li  StandardButton.RestoreDefaults \li A \gui {Restore Defaults} button defined with the \l {QMessageBox::ResetRole} {ResetRole}.
-    \row \li  StandardButton.Help       \li A \gui Help button defined with the \l {QMessageBox::HelpRole} {HelpRole}.
-    \row \li  StandardButton.SaveAll    \li A \gui {Save All} button defined with the \l {QMessageBox::AcceptRole} {AcceptRole}.
-    \row \li  StandardButton.Yes        \li A \gui Yes button defined with the \l {QMessageBox::YesRole} {YesRole}.
-    \row \li  StandardButton.YesToAll   \li A \gui {Yes to All} button defined with the \l {QMessageBox::YesRole} {YesRole}.
-    \row \li  StandardButton.No         \li A \gui No button defined with the \l {QMessageBox::NoRole} {NoRole}.
-    \row \li  StandardButton.NoToAll    \li A \gui {No to All} button defined with the \l {QMessageBox::NoRole} {NoRole}.
-    \row \li  StandardButton.Abort      \li An \gui Abort button defined with the \l {QMessageBox::RejectRole} {RejectRole}.
-    \row \li  StandardButton.Retry      \li A \gui Retry button defined with the \l {QMessageBox::AcceptRole} {AcceptRole}.
-    \row \li  StandardButton.Ignore     \li An \gui Ignore button defined with the \l {QMessageBox::AcceptRole} {AcceptRole}.
-    \endtable
+    \value StandardButton.Ok
+           An \gui OK button defined with the
+           \l {QMessageBox::}{AcceptRole}.
+    \value StandardButton.Open
+           An \gui Open button defined with the
+           \l {QMessageBox::}{AcceptRole}.
+    \value StandardButton.Save
+           A \gui Save button defined with the
+           \l {QMessageBox::}{AcceptRole}.
+    \value StandardButton.Cancel
+           A \gui Cancel button defined with the
+           \l {QMessageBox::}{RejectRole}.
+    \value StandardButton.Close
+           A \gui Close button defined with the
+           \l {QMessageBox::}{RejectRole}.
+    \value StandardButton.Discard
+           A \gui Discard or \gui {Don't Save} button,
+           depending on the platform, defined with the
+           \l {QMessageBox::}{DestructiveRole}.
+    \value StandardButton.Apply
+           An \gui Apply button defined with the
+           \l {QMessageBox::}{ApplyRole}.
+    \value StandardButton.Reset
+           A \gui Reset button defined with the
+           \l {QMessageBox::}{ResetRole}.
+    \value StandardButton.RestoreDefaults
+           A \gui {Restore Defaults} button defined with the
+           \l {QMessageBox::}{ResetRole}.
+    \value StandardButton.Help
+           A \gui Help button defined with the
+           \l {QMessageBox::}{HelpRole}.
+    \value StandardButton.SaveAll
+           A \gui {Save All} button defined with the
+           \l {QMessageBox::}{AcceptRole}.
+    \value StandardButton.Yes
+           A \gui Yes button defined with the
+           \l {QMessageBox::}{YesRole}.
+    \value StandardButton.YesToAll
+           A \gui {Yes to All} button defined with the
+           \l {QMessageBox::}{YesRole}.
+    \value StandardButton.No
+           A \gui No button defined with the
+           \l {QMessageBox::}{NoRole}.
+    \value StandardButton.NoToAll
+           A \gui {No to All} button defined with the
+           \l {QMessageBox::}{NoRole}.
+    \value StandardButton.Abort
+           An \gui Abort button defined with the
+           \l {QMessageBox::}{RejectRole}.
+    \value StandardButton.Retry
+           A \gui Retry button defined with the
+           \l {QMessageBox::}{AcceptRole}.
+    \value StandardButton.Ignore
+           An \gui Ignore button defined with the
+           \l {QMessageBox::}{AcceptRole}.
 
     For example the following dialog will ask a question with 5 possible answers:
 

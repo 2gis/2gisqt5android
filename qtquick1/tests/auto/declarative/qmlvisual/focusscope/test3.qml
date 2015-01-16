@@ -27,12 +27,12 @@ Rectangle {
         id: verticalDelegate
         FocusScope {
             id: root
-            width: 50; height: 50; 
+            width: 50; height: 50;
             Keys.onDigit9Pressed: console.log("Error - " + name)
-            Rectangle { 
+            Rectangle {
                 focus: true
                 Keys.onDigit9Pressed: console.log(name)
-                width: 50; height: 50; 
+                width: 50; height: 50;
                 color: root.ListView.isCurrentItem?"black":name
             }
         }

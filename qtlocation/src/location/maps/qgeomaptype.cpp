@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtLocation module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -50,8 +42,11 @@ QGeoMapType::QGeoMapType()
 QGeoMapType::QGeoMapType(const QGeoMapType &other)
     : d_ptr(other.d_ptr) {}
 
-QGeoMapType::QGeoMapType(QGeoMapType::MapStyle style, const QString &name, const QString &description, bool mobile, int mapId)
-    : d_ptr(new QGeoMapTypePrivate(style, name, description, mobile, mapId)) {}
+QGeoMapType::QGeoMapType(QGeoMapType::MapStyle style, const QString &name,
+                         const QString &description, bool mobile, bool night, int mapId)
+:   d_ptr(new QGeoMapTypePrivate(style, name, description, mobile, night, mapId))
+{
+}
 
 QGeoMapType::~QGeoMapType() {}
 
@@ -94,42 +89,43 @@ bool QGeoMapType::mobile() const
     return d_ptr->mobile_;
 }
 
+bool QGeoMapType::night() const
+{
+    return d_ptr->night_;
+}
+
 int QGeoMapType::mapId() const
 {
     return d_ptr->mapId_;
 }
 
 QGeoMapTypePrivate::QGeoMapTypePrivate()
-    : style_(QGeoMapType::NoMap),
-      name_(QLatin1String("")),
-      description_(QLatin1String("")),
-      mobile_(false),
-      mapId_(0) {}
+:   style_(QGeoMapType::NoMap), mobile_(false), night_(false), mapId_(0)
+{
+}
 
 QGeoMapTypePrivate::QGeoMapTypePrivate(const QGeoMapTypePrivate &other)
-    : QSharedData(other),
-      style_(other.style_),
-      name_(other.name_),
-      description_(other.description_),
-      mobile_(other.mobile_),
-      mapId_(other.mapId_) {}
-
-QGeoMapTypePrivate::QGeoMapTypePrivate(QGeoMapType::MapStyle style, const QString &name, const QString &description, bool mobile, int mapId)
-    : style_(style),
-      name_(name),
-      description_(description),
-      mobile_(mobile),
-      mapId_(mapId) {}
-
-QGeoMapTypePrivate::~QGeoMapTypePrivate() {}
-
-bool QGeoMapTypePrivate::operator == (const QGeoMapTypePrivate &other) const
+:   QSharedData(other), style_(other.style_), name_(other.name_), description_(other.description_),
+    mobile_(other.mobile_), night_(other.night_), mapId_(other.mapId_)
 {
-    return ((style_ == other.style_)
-            && (name_ == other.name_)
-            && (description_ == other.description_)
-            && (mobile_ == other.mobile_)
-            && (mapId_ == other.mapId_));
+}
+
+QGeoMapTypePrivate::QGeoMapTypePrivate(QGeoMapType::MapStyle style, const QString &name,
+                                       const QString &description, bool mobile, bool night,
+                                       int mapId)
+:   style_(style), name_(name), description_(description), mobile_(mobile), night_(night),
+    mapId_(mapId)
+{
+}
+
+QGeoMapTypePrivate::~QGeoMapTypePrivate()
+{
+}
+
+bool QGeoMapTypePrivate::operator==(const QGeoMapTypePrivate &other) const
+{
+    return style_ == other.style_ && name_ == other.name_ && description_ == other.description_ &&
+           mobile_ == other.mobile_ && night_ == other.night_ && mapId_ == other.mapId_;
 }
 
 QT_END_NAMESPACE

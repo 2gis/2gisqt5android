@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtDeclarative module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -246,8 +238,8 @@ QList<QDeclarativeError> QDeclarativeDataBlob::errors() const
 /*!
 Mark this blob as having \a errors.
 
-All outstanding dependencies will be cancelled.  Requests to add new dependencies 
-will be ignored.  Entry into the Error state is irreversable, although you can change the 
+All outstanding dependencies will be cancelled.  Requests to add new dependencies
+will be ignored.  Entry into the Error state is irreversable, although you can change the
 specific errors by additional calls to setError.
 */
 void QDeclarativeDataBlob::setError(const QDeclarativeError &errors)
@@ -271,8 +263,8 @@ void QDeclarativeDataBlob::setError(const QList<QDeclarativeError> &errors)
         tryDone();
 }
 
-/*! 
-Wait for \a blob to become complete or to error.  If \a blob is already 
+/*!
+Wait for \a blob to become complete or to error.  If \a blob is already
 complete or in error, or this blob is already complete, this has no effect.
 */
 void QDeclarativeDataBlob::addDependency(QDeclarativeDataBlob *blob)
@@ -300,7 +292,7 @@ or addDependency().
 */
 
 /*!
-Invoked once data has either been received or a network error occurred, and all 
+Invoked once data has either been received or a network error occurred, and all
 dependencies are complete.
 
 You can set an error in this method, but you cannot add new dependencies.  Implementors
@@ -365,7 +357,7 @@ void QDeclarativeDataBlob::networkError(QNetworkReply::NetworkError networkError
     setError(error);
 }
 
-/*! 
+/*!
 Called if \a blob, which was previously waited for, has an error.
 
 The default implementation does nothing.
@@ -385,9 +377,9 @@ void QDeclarativeDataBlob::dependencyComplete(QDeclarativeDataBlob *blob)
     Q_UNUSED(blob);
 }
 
-/*! 
-Called when all blobs waited for have completed.  This occurs regardless of 
-whether they are in error, or complete state.  
+/*!
+Called when all blobs waited for have completed.  This occurs regardless of
+whether they are in error, or complete state.
 
 The default implementation does nothing.
 */
@@ -456,7 +448,7 @@ void QDeclarativeDataBlob::notifyComplete(QDeclarativeDataBlob *blob)
     m_waitingFor.removeOne(blob);
     blob->release();
 
-    if (!isError() && m_waitingFor.isEmpty()) 
+    if (!isError() && m_waitingFor.isEmpty())
         allDependenciesDone();
 
     m_inCallback = false;
@@ -477,7 +469,7 @@ The loader then fetches the data over the network or from the local file system 
 QDeclarativeDataBlob is an abstract class, so should always be specialized.
 
 Once data is received, the QDeclarativeDataBlob::dataReceived() method is invoked on the blob.  The
-derived class should use this callback to process the received data.  Processing of the data can 
+derived class should use this callback to process the received data.  Processing of the data can
 result in an error being set (QDeclarativeDataBlob::setError()), or one or more dependencies being
 created (QDeclarativeDataBlob::addDependency()).  Dependencies are other QDeclarativeDataBlob's that
 are required before processing can fully complete.
@@ -505,7 +497,7 @@ QDeclarativeDataLoader::QDeclarativeDataLoader(QDeclarativeEngine *engine)
 /*! \internal */
 QDeclarativeDataLoader::~QDeclarativeDataLoader()
 {
-    for (NetworkReplies::Iterator iter = m_networkReplies.begin(); iter != m_networkReplies.end(); ++iter) 
+    for (NetworkReplies::Iterator iter = m_networkReplies.begin(); iter != m_networkReplies.end(); ++iter)
         (*iter)->release();
 }
 
@@ -636,7 +628,7 @@ void QDeclarativeDataLoader::loadWithStaticData(QDeclarativeDataBlob *blob, cons
 {
     Q_ASSERT(blob->status() == QDeclarativeDataBlob::Null);
     Q_ASSERT(blob->m_manager == 0);
-    
+
     blob->m_status = QDeclarativeDataBlob::Loading;
 
     setData(blob, data);
@@ -659,7 +651,7 @@ void QDeclarativeDataLoader::setData(QDeclarativeDataBlob *blob, const QByteArra
     if (!blob->isError() && !blob->isWaiting())
         blob->allDependenciesDone();
 
-    if (blob->status() != QDeclarativeDataBlob::Error) 
+    if (blob->status() != QDeclarativeDataBlob::Error)
         blob->m_status = QDeclarativeDataBlob::WaitingForDependencies;
 
     blob->m_inCallback = false;
@@ -700,8 +692,8 @@ Returns a QDeclarativeTypeData for the specified \a url.  The QDeclarativeTypeDa
 */
 QDeclarativeTypeData *QDeclarativeTypeLoader::get(const QUrl &url)
 {
-    Q_ASSERT(!url.isRelative() && 
-            (QDeclarativeEnginePrivate::urlToLocalFileOrQrc(url).isEmpty() || 
+    Q_ASSERT(!url.isRelative() &&
+            (QDeclarativeEnginePrivate::urlToLocalFileOrQrc(url).isEmpty() ||
              !QDir::isRelativePath(QDeclarativeEnginePrivate::urlToLocalFileOrQrc(url))));
 
     QDeclarativeTypeData *typeData = m_typeCache.value(url);
@@ -717,7 +709,7 @@ QDeclarativeTypeData *QDeclarativeTypeLoader::get(const QUrl &url)
 }
 
 /*!
-Returns a QDeclarativeTypeData for the given \a data with the provided base \a url.  The 
+Returns a QDeclarativeTypeData for the given \a data with the provided base \a url.  The
 QDeclarativeTypeData will not be cached.
 
 The specified \a options control how the loader handles type data.
@@ -734,8 +726,8 @@ Returns a QDeclarativeScriptData for \a url.  The QDeclarativeScriptData may be 
 */
 QDeclarativeScriptData *QDeclarativeTypeLoader::getScript(const QUrl &url)
 {
-    Q_ASSERT(!url.isRelative() && 
-            (QDeclarativeEnginePrivate::urlToLocalFileOrQrc(url).isEmpty() || 
+    Q_ASSERT(!url.isRelative() &&
+            (QDeclarativeEnginePrivate::urlToLocalFileOrQrc(url).isEmpty() ||
              !QDir::isRelativePath(QDeclarativeEnginePrivate::urlToLocalFileOrQrc(url))));
 
     QDeclarativeScriptData *scriptData = m_scriptCache.value(url);
@@ -755,8 +747,8 @@ Returns a QDeclarativeQmldirData for \a url.  The QDeclarativeQmldirData may be 
 */
 QDeclarativeQmldirData *QDeclarativeTypeLoader::getQmldir(const QUrl &url)
 {
-    Q_ASSERT(!url.isRelative() && 
-            (QDeclarativeEnginePrivate::urlToLocalFileOrQrc(url).isEmpty() || 
+    Q_ASSERT(!url.isRelative() &&
+            (QDeclarativeEnginePrivate::urlToLocalFileOrQrc(url).isEmpty() ||
              !QDir::isRelativePath(QDeclarativeEnginePrivate::urlToLocalFileOrQrc(url))));
 
     QDeclarativeQmldirData *qmldirData = m_qmldirCache.value(url);
@@ -838,11 +830,11 @@ and qmldir information.
 */
 void QDeclarativeTypeLoader::clearCache()
 {
-    for (TypeCache::Iterator iter = m_typeCache.begin(); iter != m_typeCache.end(); ++iter) 
+    for (TypeCache::Iterator iter = m_typeCache.begin(); iter != m_typeCache.end(); ++iter)
         (*iter)->release();
-    for (ScriptCache::Iterator iter = m_scriptCache.begin(); iter != m_scriptCache.end(); ++iter) 
+    for (ScriptCache::Iterator iter = m_scriptCache.begin(); iter != m_scriptCache.end(); ++iter)
         (*iter)->release();
-    for (QmldirCache::Iterator iter = m_qmldirCache.begin(); iter != m_qmldirCache.end(); ++iter) 
+    for (QmldirCache::Iterator iter = m_qmldirCache.begin(); iter != m_qmldirCache.end(); ++iter)
         (*iter)->release();
     qDeleteAll(m_importDirCache);
     qDeleteAll(m_importQmlDirCache);
@@ -855,7 +847,7 @@ void QDeclarativeTypeLoader::clearCache()
 }
 
 
-QDeclarativeTypeData::QDeclarativeTypeData(const QUrl &url, QDeclarativeTypeLoader::Options options, 
+QDeclarativeTypeData::QDeclarativeTypeData(const QUrl &url, QDeclarativeTypeLoader::Options options,
                                            QDeclarativeTypeLoader *manager)
 : QDeclarativeDataBlob(url, QmlFile), m_options(options), m_imports(manager), m_typesResolved(false),
   m_compiledData(0), m_typeLoader(manager)
@@ -864,11 +856,11 @@ QDeclarativeTypeData::QDeclarativeTypeData(const QUrl &url, QDeclarativeTypeLoad
 
 QDeclarativeTypeData::~QDeclarativeTypeData()
 {
-    for (int ii = 0; ii < m_scripts.count(); ++ii) 
+    for (int ii = 0; ii < m_scripts.count(); ++ii)
         m_scripts.at(ii).script->release();
-    for (int ii = 0; ii < m_qmldirs.count(); ++ii) 
+    for (int ii = 0; ii < m_qmldirs.count(); ++ii)
         m_qmldirs.at(ii)->release();
-    for (int ii = 0; ii < m_types.count(); ++ii) 
+    for (int ii = 0; ii < m_types.count(); ++ii)
         if (m_types.at(ii).typeData) m_types.at(ii).typeData->release();
     if (m_compiledData)
         m_compiledData->release();
@@ -901,7 +893,7 @@ const QList<QDeclarativeTypeData::ScriptReference> &QDeclarativeTypeData::resolv
 
 QDeclarativeCompiledData *QDeclarativeTypeData::compiledData() const
 {
-    if (m_compiledData) 
+    if (m_compiledData)
         m_compiledData->addref();
 
     return m_compiledData;
@@ -959,7 +951,7 @@ void QDeclarativeTypeData::done()
     }
 
     // Compile component
-    if (!isError()) 
+    if (!isError())
         compile();
 
     if (!(m_options & QDeclarativeTypeLoader::PreserveParser))
@@ -1062,7 +1054,7 @@ void QDeclarativeTypeData::resolveTypes()
 
         if (import.type == QDeclarativeScriptParser::Import::File && import.qualifier.isEmpty()) {
             QUrl qmldirUrl = finalUrl().resolved(QUrl(import.uri + QLatin1String("/qmldir")));
-            if (QDeclarativeQmldirData *qmldir = qmldirForUrl(qmldirUrl)) 
+            if (QDeclarativeQmldirData *qmldir = qmldirForUrl(qmldirUrl))
                 qmldircomponentsnetwork = qmldir->dirComponents();
         }
 

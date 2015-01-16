@@ -51,11 +51,7 @@
 */
 
 /*!
-    \externalpage http://qt-project.org/downloads
-    \title Opensource Downloads
-*/
-/*!
-    \externalpage http://qt.digia.com/licensing/
+    \externalpage http://qt.io/licensing/
     \title Qt Licensing Overview
 */
 
@@ -67,6 +63,11 @@
 /*!
     \externalpage http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html
     \title GNU Lesser General Public License, version 2.1
+*/
+
+/*!
+    \externalpage http://www.gnu.org/licenses/lgpl-3.0.html
+    \title GNU Lesser General Public License, version 3
 */
 
 /*!
@@ -100,6 +101,11 @@
 */
 
 /*!
+   \externalpage http://www.windowsphone.com/en-us/store/app/quickforecast/35572287-c6d6-4d5c-9799-46555f7fc459
+   \title Windows Store: QuickForecast
+*/
+
+/*!
     \externalpage https://itunes.apple.com/us/app/quick-forecast/id736658981
     \title iTunes: Quick Forecast
 */
@@ -118,6 +124,15 @@
     \externalpage https://play.google.com/store/apps/details?id=com.digia.QtHangman
     \title Google Play: Qt Hangman
 */
+/*!
+    \externalpage https://play.google.com/store/apps/details?id=com.digia.Flyingbus
+    \title Google Play: Flyingbus
+*/
+
+/*!
+    \externalpage https://itunes.apple.com/us/app/flyingbus/id762515926?mt=8
+    \title iTunes: Flyingbus
+*/
 
 /*!
     \externalpage http://www.gnu.org/copyleft/fdl.html
@@ -125,7 +140,7 @@
 */
 
 /*!
-    \externalpage http://qt-project.org/doc/qbs/index.html
+    \externalpage http://doc.qt.io/qbs/index.html
     \title Qbs Manual
 */
 
@@ -135,11 +150,7 @@
 */
 
 /*!
-    \externalpage http://qt.digia.com/Try-Buy/
-    \title Try Qt Enterprise
-*/
-/*!
-    \externalpage http://qt.digia.com/
+    \externalpage http://www.qt.io/qt-features/
     \title Qt Enterprise
 */
 /*!
@@ -155,19 +166,19 @@
     \title Android: App Manifest
 */
 /*!
-    \externalpage http://engin.io
-    \title Enginio Data Storage
+    \externalpage https://qtcloudservices.com/
+    \title Qt Cloud Services
 */
 /*!
-    \externalpage http://qt-project.org/doc/qtcreator/creator-configuring.html
+    \externalpage http://doc.qt.io/qtcreator/creator-configuring.html
     \title Configuring Qt Creator
 */
 /*!
-    \externalpage http://qt-project.org/doc/qtcreator/creator-build-example-application.html
+    \externalpage http://doc.qt.io/qtcreator/creator-build-example-application.html
     \title Building and Running Example
 */
 /*!
-    \externalpage http://qt-project.org/doc/qtcreator/creator-mobile-app-tutorial.html
+    \externalpage http://doc.qt.io/qtcreator/creator-mobile-app-tutorial.html
     \title Creating a Mobile Application
 */
 /*!
@@ -197,3 +208,17 @@
     \title BlackBerry 10 application lifecycle
 */
 
+/*!
+    \externalpage http://wiki.openssl.org/index.php/Compilation_and_Installation#Configure_Options
+    \title OpenSSL Configure Options
+*/
+
+/*!
+    \externalpage https://codereview.qt-project.org/#/admin/projects/qt/qthttp
+    \title Qt HTTP
+*/
+
+/*!
+    \externalpage https://codereview.qt-project.org/#/admin/projects/qt/qtftp
+    \title Qt FTP
+*/

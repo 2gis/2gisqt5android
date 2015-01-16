@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtDeclarative module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -127,13 +119,13 @@ void QDeclarativeLoaderPrivate::initResize()
     subtree from a URL or Component.
 
     Loader is used to dynamically load visual QML components. It can load a
-    QML file (using the \l source property) or a \l Component object (using 
-    the \l sourceComponent property). It is useful for delaying the creation 
-    of a component until it is required: for example, when a component should 
-    be created on demand, or when a component should not be created 
+    QML file (using the \l source property) or a \l Component object (using
+    the \l sourceComponent property). It is useful for delaying the creation
+    of a component until it is required: for example, when a component should
+    be created on demand, or when a component should not be created
     unnecessarily for performance reasons.
 
-    Here is a Loader that loads "Page1.qml" as a component when the 
+    Here is a Loader that loads "Page1.qml" as a component when the
     \l MouseArea is clicked:
 
     \snippet doc/src/snippets/declarative/loader/simple.qml 0
@@ -178,13 +170,13 @@ void QDeclarativeLoaderPrivate::initResize()
 
     \section2 Receiving signals from loaded items
 
-    Any signals emitted from the loaded item can be received using the 
+    Any signals emitted from the loaded item can be received using the
     \l Connections element. For example, the following \c application.qml
     loads \c MyItem.qml, and is able to receive the \c message signal from
     the loaded item through a \l Connections object:
 
     \table
-    \row 
+    \row
     \li application.qml
     \li MyItem.qml
     \row
@@ -199,19 +191,19 @@ void QDeclarativeLoaderPrivate::initResize()
 
     \section2 Focus and key events
 
-    Loader is a focus scope. Its \l {Item::}{focus} property must be set to 
-    \c true for any of its children to get the \e {active focus}. (See 
-    \l{qmlfocus#Acquiring Focus and Focus Scopes}{the focus documentation page} 
+    Loader is a focus scope. Its \l {Item::}{focus} property must be set to
+    \c true for any of its children to get the \e {active focus}. (See
+    \l{qmlfocus#Acquiring Focus and Focus Scopes}{the focus documentation page}
     for more details.) Any key events received in the loaded item should likely
     also be \l {KeyEvent::}{accepted} so they are not propagated to the Loader.
 
     For example, the following \c application.qml loads \c KeyReader.qml when
-    the \l MouseArea is clicked.  Notice the \l {Item::}{focus} property is 
-    set to \c true for the Loader as well as the \l Item in the dynamically 
+    the \l MouseArea is clicked.  Notice the \l {Item::}{focus} property is
+    set to \c true for the Loader as well as the \l Item in the dynamically
     loaded object:
 
     \table
-    \row 
+    \row
     \li application.qml
     \li KeyReader.qml
     \row
@@ -219,7 +211,7 @@ void QDeclarativeLoaderPrivate::initResize()
     \li \snippet doc/src/snippets/declarative/loader/KeyReader.qml 0
     \endtable
 
-    Once \c KeyReader.qml is loaded, it accepts key events and sets 
+    Once \c KeyReader.qml is loaded, it accepts key events and sets
     \c event.accepted to \c true so that the event is not propagated to the
     parent \l Rectangle.
 

@@ -107,7 +107,7 @@ Rectangle {
             PropertyChanges { target: menuBar; y: 0}
             PropertyChanges { target: textArea; y: partition + drawer.height}
             PropertyChanges { target: drawer; y: partition}
-            PropertyChanges { target: arrowIcon; rotation: 180} 
+            PropertyChanges { target: arrowIcon; rotation: 180}
         },
         State {
             name: "DRAWER_CLOSED"

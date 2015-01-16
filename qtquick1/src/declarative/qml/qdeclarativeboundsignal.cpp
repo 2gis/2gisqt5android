@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtDeclarative module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -75,7 +67,7 @@ private:
         MetaObject(QDeclarativeBoundSignalParameters *b)
             : parent(b) {}
 
-        int metaCall(QMetaObject::Call c, int id, void **a) { 
+        int metaCall(QMetaObject::Call c, int id, void **a) {
             return parent->metaCall(c, id, a);
         }
         QDeclarativeBoundSignalParameters *parent;
@@ -97,7 +89,7 @@ QDeclarativeAbstractBoundSignal::~QDeclarativeAbstractBoundSignal()
 {
 }
 
-QDeclarativeBoundSignal::QDeclarativeBoundSignal(QObject *scope, const QMetaMethod &signal, 
+QDeclarativeBoundSignal::QDeclarativeBoundSignal(QObject *scope, const QMetaMethod &signal,
                                QObject *parent)
 : m_expression(0), m_signal(signal), m_paramsValid(false), m_isEvaluating(false), m_params(0)
 {
@@ -110,7 +102,7 @@ QDeclarativeBoundSignal::QDeclarativeBoundSignal(QObject *scope, const QMetaMeth
     QDeclarativePropertyPrivate::connect(scope, m_signal.methodIndex(), this, evaluateIdx);
 }
 
-QDeclarativeBoundSignal::QDeclarativeBoundSignal(QDeclarativeContext *ctxt, const QString &val, 
+QDeclarativeBoundSignal::QDeclarativeBoundSignal(QDeclarativeContext *ctxt, const QString &val,
                                QObject *scope, const QMetaMethod &signal,
                                QObject *parent)
 : m_expression(0), m_signal(signal), m_paramsValid(false), m_isEvaluating(false), m_params(0)
@@ -132,8 +124,8 @@ QDeclarativeBoundSignal::~QDeclarativeBoundSignal()
     m_expression = 0;
 }
 
-int QDeclarativeBoundSignal::index() const 
-{ 
+int QDeclarativeBoundSignal::index() const
+{
     return m_signal.methodIndex();
 }
 
@@ -149,7 +141,7 @@ QDeclarativeExpression *QDeclarativeBoundSignal::expression() const
     Sets the signal expression to \a e.  Returns the current signal expression,
     or null if there is no signal expression.
 
-    The QDeclarativeBoundSignal instance takes ownership of \a e.  The caller is 
+    The QDeclarativeBoundSignal instance takes ownership of \a e.  The caller is
     assumes ownership of the returned QDeclarativeExpression.
 */
 QDeclarativeExpression *QDeclarativeBoundSignal::setExpression(QDeclarativeExpression *e)
@@ -198,7 +190,7 @@ int QDeclarativeBoundSignal::qt_metacall(QMetaObject::Call c, int id, void **a)
     }
 }
 
-QDeclarativeBoundSignalParameters::QDeclarativeBoundSignalParameters(const QMetaMethod &method, 
+QDeclarativeBoundSignalParameters::QDeclarativeBoundSignalParameters(const QMetaMethod &method,
                                                                      QObject *parent)
 : QObject(parent), types(0), values(0)
 {

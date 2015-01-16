@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -79,6 +71,8 @@ private slots:
     void initParent();
     void dynamicModelCrash();
     void visualItemModelCrash();
+    void invalidContextCrash();
+    void jsArrayChange();
 };
 
 class TestObject : public QObject
@@ -742,6 +736,75 @@ void tst_QQuickRepeater::visualItemModelCrash()
     window->setSource(testFileUrl("visualitemmodel.qml"));
     qApp->processEvents();
     delete window;
+}
+
+class BadModel : public QAbstractListModel
+{
+public:
+    ~BadModel()
+    {
+        beginResetModel();
+        endResetModel();
+    }
+
+    QVariant data(const QModelIndex &, int) const { return QVariant(); }
+    int rowCount(const QModelIndex &) const { return 0; }
+};
+
+
+void tst_QQuickRepeater::invalidContextCrash()
+{
+    QQmlEngine engine;
+    QQmlComponent component(&engine, testFileUrl("invalidContextCrash.qml"));
+
+    BadModel* model = new BadModel;
+    engine.rootContext()->setContextProperty("badModel", model);
+
+    QScopedPointer<QObject> root(component.create());
+    QCOMPARE(root->children().count(), 1);
+    QObject *repeater = root->children().first();
+
+    // Make sure the model comes first in the child list, so it will be
+    // deleted first and then the repeater. During deletion the QML context
+    // has been deleted already and is invalid.
+    model->setParent(root.data());
+    repeater->setParent(0);
+    repeater->setParent(root.data());
+
+    QCOMPARE(root->children().count(), 2);
+    QVERIFY(root->children().at(0) == model);
+    QVERIFY(root->children().at(1) == repeater);
+
+    // Delete the root object, which will invalidate/delete the QML context
+    // and then delete the child QObjects, which may try to access the context.
+    root.reset(0);
+}
+
+void tst_QQuickRepeater::jsArrayChange()
+{
+    QQmlEngine engine;
+    QQmlComponent component(&engine);
+    component.setData("import QtQuick 2.4; Repeater {}", QUrl());
+
+    QScopedPointer<QQuickRepeater> repeater(qobject_cast<QQuickRepeater *>(component.create()));
+    QVERIFY(!repeater.isNull());
+
+    QSignalSpy spy(repeater.data(), SIGNAL(modelChanged()));
+    QVERIFY(spy.isValid());
+
+    QJSValue array1 = engine.newArray(3);
+    QJSValue array2 = engine.newArray(3);
+    for (int i = 0; i < 3; ++i) {
+        array1.setProperty(i, i);
+        array2.setProperty(i, i);
+    }
+
+    repeater->setModel(QVariant::fromValue(array1));
+    QCOMPARE(spy.count(), 1);
+
+    // no change
+    repeater->setModel(QVariant::fromValue(array2));
+    QCOMPARE(spy.count(), 1);
 }
 
 QTEST_MAIN(tst_QQuickRepeater)

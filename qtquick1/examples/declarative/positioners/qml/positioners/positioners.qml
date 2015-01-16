@@ -61,7 +61,7 @@ Rectangle {
             width: 100; height: 50
             color: "lightsteelblue"
             border.color: "black"
-            radius: 15 
+            radius: 15
             Behavior on opacity { NumberAnimation {} }
         }
 
@@ -72,7 +72,7 @@ Rectangle {
             width: 100; height: 50
             color: "lightsteelblue"
             border.color: "black"
-            radius: 15 
+            radius: 15
             Behavior on opacity { NumberAnimation {} }
         }
 
@@ -81,7 +81,7 @@ Rectangle {
 
     Row {
         id: layout2
-        y: 300 
+        y: 300
         move: Transition {
             NumberAnimation { properties: "x"; easing.type: Easing.OutBounce }
         }
@@ -107,7 +107,7 @@ Rectangle {
             width: 50; height: 100
             color: "lightsteelblue"
             border.color: "black"
-            radius: 15 
+            radius: 15
             Behavior on opacity { NumberAnimation {} }
         }
 
@@ -171,7 +171,7 @@ Rectangle {
             width: 50; height: 50
             color: "lightsteelblue"
             border.color: "black"
-            radius: 15 
+            radius: 15
             Behavior on opacity { NumberAnimation {} }
         }
 
@@ -182,7 +182,7 @@ Rectangle {
             width: 50; height: 50
             color: "lightsteelblue"
             border.color: "black"
-            radius: 15 
+            radius: 15
             Behavior on opacity { NumberAnimation {} }
         }
 
@@ -193,7 +193,7 @@ Rectangle {
             width: 50; height: 50
             color: "lightsteelblue"
             border.color: "black"
-            radius: 15 
+            radius: 15
             Behavior on opacity { NumberAnimation {} }
         }
 
@@ -221,7 +221,7 @@ Rectangle {
             width: 60; height: 50
             color: "lightsteelblue"
             border.color: "black"
-            radius: 15 
+            radius: 15
             Behavior on opacity { NumberAnimation {} }
         }
 
@@ -232,18 +232,18 @@ Rectangle {
             width: 60; height: 50
             color: "lightsteelblue"
             border.color: "black"
-            radius: 15 
+            radius: 15
             Behavior on opacity { NumberAnimation {} }
         }
 
         Rectangle { color: "orange"; width: 50; height: 50; border.color: "black"; radius: 15 }
 
-        Rectangle { 
+        Rectangle {
             id: blueF3
             width: 40; height: 50
             color: "lightsteelblue"
             border.color: "black"
-            radius: 15 
+            radius: 15
             Behavior on opacity { NumberAnimation {} }
         }
 

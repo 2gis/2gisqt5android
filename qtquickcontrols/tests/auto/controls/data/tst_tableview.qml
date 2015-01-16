@@ -179,6 +179,86 @@ TestCase {
         table.destroy()
     }
 
+    function test_keys() {
+        var component = Qt.createComponent("tableview/tv_keys.qml")
+        compare(component.status, Component.Ready)
+        var test =  component.createObject(container);
+        verify(test !== null, "test control created is null")
+        var control1 = test.control1
+        verify(control1 !== null)
+
+        control1.forceActiveFocus()
+        verify(control1.activeFocus)
+
+        control1.selectionMode = SelectionMode.SingleSelection
+        control1.model = 3
+        control1.currentRow = -1
+
+        verify(control1.gotit === false)
+        verify(control1.currentRow === -1)
+
+        keyClick(Qt.Key_Down);
+        verify(control1.activeFocus)
+        verify(control1.gotit === true)
+        verify(control1.currentRow === -1)
+
+        keyClick(Qt.Key_Down);
+        verify(control1.activeFocus)
+        verify(control1.gotit === true)
+        verify(control1.currentRow === 0)
+
+        test.destroy()
+    }
+
+    function test_keys_2() {
+        var component = Qt.createComponent("tableview/tv_keys_2.qml")
+        compare(component.status, Component.Ready)
+        var test =  component.createObject(container);
+        verify(test !== null, "test control created is null")
+        var control1 = test.control1
+        verify(control1 !== null)
+        var control2 = control1.control2
+        verify(control2 !== null)
+
+        control2.forceActiveFocus()
+        verify(control2.activeFocus)
+
+        control2.currentRow = 1
+        control2.selection.select(1, 1)
+
+        verify(control1.gotit === false)
+        verify(control2.currentRow === 1)
+
+        keyClick(Qt.Key_Up);
+        verify(control1.activeFocus)
+        verify(control1.gotit === false)
+        verify(control2.currentRow === 0)
+
+        keyClick(Qt.Key_Up);
+        verify(control1.activeFocus)
+        verify(control1.gotit === true)
+        verify(control2.currentRow === 0)
+
+        control2.currentRow = 1
+        control2.selection.select(1, 1)
+        control1.gotit = false
+
+        verify(control1.gotit === false)
+        verify(control2.currentRow === 1)
+
+        keyClick(Qt.Key_Down);
+        verify(control1.activeFocus)
+        verify(control1.gotit === false)
+        verify(control2.currentRow === 2)
+
+        keyClick(Qt.Key_Down);
+        verify(control1.activeFocus)
+        verify(control1.gotit === true)
+        verify(control2.currentRow === 2)
+
+        test.destroy()
+    }
+
     function test_selection() {
 
         var component = Qt.createComponent("tableview/table2_qabstractitemmodel.qml")
@@ -280,6 +360,7 @@ TestCase {
         table.selection.selectAll()
         compare(table.selection.__ranges.length, 1)
         verify(rangeTest([[0,49]], table))
+        table.destroy()
     }
 
     function test_selectionCount() {
@@ -300,6 +381,7 @@ TestCase {
         compare(table.selection.count, 100)
         table.model = 50
         compare(table.selection.count, 0)
+        table.destroy()
     }
 
     function test_selectionForeach() {
@@ -363,6 +445,7 @@ TestCase {
         table.selection.select(0)
         table.selection.forEach(addEven)
         compare(iteration, 50)
+        table.destroy()
     }
 
     function test_selectionContains() {
@@ -383,6 +466,7 @@ TestCase {
         verify(!table.selection.contains(6))
         verify(!table.selection.contains(7))
         verify(table.selection.contains(8))
+        table.destroy()
     }
 
     function test_initializedStyleData() {
@@ -400,6 +484,7 @@ TestCase {
         waitForRendering(table)
         compare(table.items, [0, 1, 2]);
         compare(table.rows, [0, 1, 2]);
+        table.destroy()
     }
 
 
@@ -542,6 +627,7 @@ TestCase {
         compare(table._clicked, false)
         compare(table._released, false)
         compare(table._doubleClicked, false)
+        compare(table._pressAndHold, false)
 
         mousePress(table, 25 , 10, Qt.LeftButton)
         compare(table._pressed, true)
@@ -557,6 +643,11 @@ TestCase {
 
         mouseDoubleClick(table, 25 , 10, Qt.LeftButton)
         compare(table._doubleClicked, true)
+        table.clearTestData()
+
+        mousePress(table, 25 , 10, Qt.LeftButton)
+        compare(table._pressAndHold, false)
+        tryCompare(table, "_pressAndHold", true, 5000)
         table.clearTestData()
 
         table.destroy()
@@ -580,6 +671,7 @@ TestCase {
         compare(table._clicked, false)
         compare(table._released, false)
         compare(table._doubleClicked, false)
+        compare(table._pressAndHold, false)
 
         mousePress(table, 25, 10, Qt.RightButton)
         compare(table._pressed, true)
@@ -595,6 +687,11 @@ TestCase {
 
         mouseDoubleClick(table, 25, 10, Qt.RightButton)
         compare(table._doubleClicked, true)
+        table.clearTestData()
+
+        mousePress(table, 25 , 10, Qt.RightButton)
+        compare(table._pressAndHold, false)
+        tryCompare(table, "_pressAndHold", true, 5000)
         table.clearTestData()
 
         table.destroy()
@@ -870,6 +967,13 @@ TestCase {
         return undefined // no matching child found
     }
 
+    Component {
+        id: textFieldDelegate
+        TextField {
+            objectName: "delegate-" + styleData.row + "-" + styleData.column
+        }
+    }
+
     function test_activeFocusOnTab() {
         if (!SystemInfo.tabAllWidgets)
             skip("This function doesn't support NOT iterating all.")
@@ -921,6 +1025,23 @@ TestCase {
         verify(control.control1.activeFocus)
         verify(!control.control2.activeFocus)
         verify(!control.control3.activeFocus)
+
+        control.control2.itemDelegate = textFieldDelegate
+
+        keyPress(Qt.Key_Tab)
+        verify(!control.control1.activeFocus)
+        verify(control.control2.activeFocus)
+        verify(!control.control3.activeFocus)
+
+        for (var row = 0; row < 3; ++row) {
+            for (var col = 0; col < 2; ++col) {
+                keyPress(Qt.Key_Tab)
+                var delegate = findAChild(control.control2.__currentRowItem, "delegate-" + row + "-" + col)
+                verify(delegate)
+                verify(delegate.activeFocus)
+            }
+        }
+
         control.destroy()
     }
 }

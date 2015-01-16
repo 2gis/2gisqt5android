@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -736,6 +728,8 @@ void QQmlDataBlob::ThreadData::setProgress(quint8 v)
 QQmlDataLoaderThread::QQmlDataLoaderThread(QQmlDataLoader *loader)
 : m_loader(loader), m_networkAccessManager(0), m_networkReplyProxy(0)
 {
+    // Do that after initializing all the members.
+    startup();
 }
 
 QNetworkAccessManager *QQmlDataLoaderThread::networkAccessManager() const
@@ -904,11 +898,20 @@ QQmlDataLoader::QQmlDataLoader(QQmlEngine *engine)
 /*! \internal */
 QQmlDataLoader::~QQmlDataLoader()
 {
+    invalidate();
+}
+
+void QQmlDataLoader::invalidate()
+{
     for (NetworkReplies::Iterator iter = m_networkReplies.begin(); iter != m_networkReplies.end(); ++iter)
         (*iter)->release();
+    m_networkReplies.clear();
 
-    shutdownThread();
-    delete m_thread;
+    if (m_thread) {
+        shutdownThread();
+        delete m_thread;
+        m_thread = 0;
+    }
 }
 
 void QQmlDataLoader::lock()
@@ -1241,7 +1244,7 @@ void QQmlDataLoader::setCachedUnit(QQmlDataBlob *blob, const QQmlPrivate::Cached
 
 void QQmlDataLoader::shutdownThread()
 {
-    if (!m_thread->isShutdown())
+    if (m_thread && !m_thread->isShutdown())
         m_thread->shutdown();
 }
 
@@ -1570,6 +1573,10 @@ QString QQmlTypeLoader::QmldirContent::pluginLocation() const
     return m_location;
 }
 
+bool QQmlTypeLoader::QmldirContent::designerSupported() const
+{
+    return m_parser.designerSupported();
+}
 
 /*!
 Constructs a new type loader that uses the given \a engine.
@@ -2220,7 +2227,7 @@ void QQmlTypeData::dataReceived(const Data &data)
     QQmlEngine *qmlEngine = typeLoader()->engine();
     m_document.reset(new QmlIR::Document(QV8Engine::getV4(qmlEngine)->debugger != 0));
     QmlIR::IRBuilder compiler(QV8Engine::get(qmlEngine)->illegalNames());
-    if (!compiler.generateFromQml(code, finalUrlString(), finalUrlString(), m_document.data())) {
+    if (!compiler.generateFromQml(code, finalUrlString(), m_document.data())) {
         QList<QQmlError> errors;
         foreach (const QQmlJS::DiagnosticMessage &msg, compiler.errors) {
             QQmlError e;
@@ -2345,10 +2352,8 @@ void QQmlTypeData::compile()
     Q_ASSERT(m_compiledData == 0);
 
     m_compiledData = new QQmlCompiledData(typeLoader()->engine());
-    m_compiledData->url = finalUrl();
-    m_compiledData->name = finalUrlString();
 
-    QQmlCompilingProfiler prof(QQmlEnginePrivate::get(typeLoader()->engine())->profiler, m_compiledData->name);
+    QQmlCompilingProfiler prof(QQmlEnginePrivate::get(typeLoader()->engine())->profiler, finalUrlString());
 
     QQmlTypeCompiler compiler(QQmlEnginePrivate::get(typeLoader()->engine()), m_compiledData, this, m_document.data());
     if (!compiler.compile()) {
@@ -2536,7 +2541,6 @@ void QQmlTypeData::scriptImported(QQmlScriptBlob *blob, const QV4::CompiledData:
 QQmlScriptData::QQmlScriptData()
     : importCache(0)
     , m_loaded(false)
-    , m_precompiledScript(0)
     , m_program(0)
 {
 }
@@ -2544,10 +2548,6 @@ QQmlScriptData::QQmlScriptData()
 QQmlScriptData::~QQmlScriptData()
 {
     delete m_program;
-    if (m_precompiledScript) {
-        m_precompiledScript->deref();
-        m_precompiledScript = 0;
-    }
 }
 
 void QQmlScriptData::initialize(QQmlEngine *engine)
@@ -2560,7 +2560,7 @@ void QQmlScriptData::initialize(QQmlEngine *engine)
     QV8Engine *v8engine = ep->v8engine();
     QV4::ExecutionEngine *v4 = QV8Engine::getV4(v8engine);
 
-    m_program = new QV4::Script(v4, QV4::ObjectRef::null(), m_precompiledScript);
+    m_program = new QV4::Script(v4, 0, m_precompiledScript);
 
     addToEngine(engine);
 
@@ -2708,27 +2708,22 @@ void QQmlScriptBlob::dataReceived(const Data &data)
     }
 
     QList<QQmlError> errors;
-    QV4::CompiledData::CompilationUnit *unit = QV4::Script::precompile(&irUnit.jsModule, &irUnit.jsGenerator, v4, finalUrl(), source, &errors);
-    if (unit)
-        unit->ref();
+    QQmlRefPointer<QV4::CompiledData::CompilationUnit> unit = QV4::Script::precompile(&irUnit.jsModule, &irUnit.jsGenerator, v4, finalUrl(), source, &errors);
+    // No need to addref on unit, it's initial refcount is 1
     source.clear();
     if (!errors.isEmpty()) {
-        if (unit)
-            unit->deref();
         setError(errors);
         return;
     }
     irUnit.javaScriptCompilationUnit = unit;
 
     QmlIR::QmlUnitGenerator qmlGenerator;
-    QV4::CompiledData::QmlUnit *qmlUnit = qmlGenerator.generate(irUnit);
+    QV4::CompiledData::Unit *unitData = qmlGenerator.generate(irUnit);
     Q_ASSERT(!unit->data);
-    Q_ASSERT((void*)qmlUnit == (void*)&qmlUnit->header);
     // The js unit owns the data and will free the qml unit.
-    unit->data = &qmlUnit->header;
+    unit->data = unitData;
 
     initializeFromCompilationUnit(unit);
-    unit->deref();
 }
 
 void QQmlScriptBlob::initializeFromCachedUnit(const QQmlPrivate::CachedQmlUnit *unit)
@@ -2801,13 +2796,11 @@ void QQmlScriptBlob::initializeFromCompilationUnit(QV4::CompiledData::Compilatio
     m_scriptData->url = finalUrl();
     m_scriptData->urlString = finalUrlString();
     m_scriptData->m_precompiledScript = unit;
-    if (m_scriptData->m_precompiledScript)
-        m_scriptData->m_precompiledScript->ref();
 
     m_importCache.setBaseUrl(finalUrl(), finalUrlString());
 
     Q_ASSERT(m_scriptData->m_precompiledScript->data->flags & QV4::CompiledData::Unit::IsQml);
-    const QV4::CompiledData::QmlUnit *qmlUnit = reinterpret_cast<const QV4::CompiledData::QmlUnit*>(m_scriptData->m_precompiledScript->data);
+    const QV4::CompiledData::Unit *qmlUnit = m_scriptData->m_precompiledScript->data;
 
     QList<QQmlError> errors;
     for (quint32 i = 0; i < qmlUnit->nImports; ++i) {

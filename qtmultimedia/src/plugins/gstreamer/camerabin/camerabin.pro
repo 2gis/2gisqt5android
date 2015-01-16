@@ -30,7 +30,8 @@ HEADERS += \
     $$PWD/camerabinresourcepolicy.h \
     $$PWD/camerabincapturedestination.h \
     $$PWD/camerabincapturebufferformat.h \
-    $$PWD/camerabinviewfindersettings.h
+    $$PWD/camerabinviewfindersettings.h \
+    $$PWD/camerabininfocontrol.h
 
 SOURCES += \
     $$PWD/camerabinserviceplugin.cpp \
@@ -48,7 +49,8 @@ SOURCES += \
     $$PWD/camerabinresourcepolicy.cpp \
     $$PWD/camerabincapturedestination.cpp \
     $$PWD/camerabinviewfindersettings.cpp \
-    $$PWD/camerabincapturebufferformat.cpp
+    $$PWD/camerabincapturebufferformat.cpp \
+    $$PWD/camerabininfocontrol.cpp
 
 maemo6 {
     HEADERS += \
@@ -80,8 +82,6 @@ config_gstreamer_photography {
     LIBS += -lgstphotography-0.10
     DEFINES += GST_USE_UNSTABLE_API #prevents warnings because of unstable photography API
 }
-
-config_linux_v4l: DEFINES += USE_V4L
 
 OTHER_FILES += \
     camerabin.json

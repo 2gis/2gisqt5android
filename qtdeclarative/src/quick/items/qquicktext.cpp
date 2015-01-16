@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtQuick module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -87,6 +79,7 @@ QQuickTextPrivate::QQuickTextPrivate()
     , requireImplicitSize(false), implicitWidthValid(false), implicitHeightValid(false)
     , truncated(false), hAlignImplicit(true), rightToLeftText(false)
     , layoutTextElided(false), textHasChanged(true), needToUpdateLayout(false), formatModifiesFontSize(false)
+    , polishSize(false)
 {
     implicitAntialiasing = true;
 }
@@ -364,6 +357,8 @@ void QQuickTextPrivate::updateLayout()
         textHasChanged = true;
         updateLayout();
     }
+
+    q->polish();
 }
 
 void QQuickText::imageDownloadFinished()
@@ -498,7 +493,6 @@ void QQuickTextPrivate::updateSize()
         else
             extra->doc->setTextWidth(extra->doc->idealWidth()); // ### Text does not align if width is not set (QTextDoc bug)
 
-        widthExceeded = extra->doc->textWidth() < extra->doc->idealWidth();
         QSizeF dsize = extra->doc->size();
         layedOutTextRect = QRectF(QPointF(0,0), dsize);
         size = QSizeF(extra->doc->idealWidth(),dsize.height());
@@ -1456,6 +1450,7 @@ void QQuickText::itemChange(ItemChange change, const ItemChangeData &value)
         d->implicitHeightValid = false;
         d->updateLayout();
     }
+    QQuickItem::itemChange(change, value);
 }
 
 /*!
@@ -2256,13 +2251,22 @@ QSGNode *QQuickText::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData *data
                 node->addImage(QRectF(img->pos.x() + dx, img->pos.y() + dy, pix->width(), pix->height()), pix->image());
         }
     }
+
+    // The font caches have now been initialized on the render thread, so they have to be
+    // invalidated before we can use them from the main thread again.
+    invalidateFontCaches();
+
     return node;
 }
 
 void QQuickText::updatePolish()
 {
     Q_D(QQuickText);
-    d->updateSize();
+    if (d->polishSize) {
+        d->updateSize();
+        d->polishSize = false;
+    }
+    invalidateFontCaches();
 }
 
 /*!
@@ -2389,6 +2393,7 @@ void QQuickText::setFontSizeMode(FontSizeMode mode)
     if (d->fontSizeMode() == mode)
         return;
 
+    d->polishSize = true;
     polish();
 
     d->extra.value().fontSizeMode = mode;
@@ -2417,8 +2422,10 @@ void QQuickText::setMinimumPixelSize(int size)
     if (d->minimumPixelSize() == size)
         return;
 
-    if (d->fontSizeMode() != FixedSize && (widthValid() || heightValid()))
+    if (d->fontSizeMode() != FixedSize && (widthValid() || heightValid())) {
+        d->polishSize = true;
         polish();
+    }
     d->extra.value().minimumPixelSize = size;
     emit minimumPixelSizeChanged();
 }
@@ -2445,8 +2452,10 @@ void QQuickText::setMinimumPointSize(int size)
     if (d->minimumPointSize() == size)
         return;
 
-    if (d->fontSizeMode() != FixedSize && (widthValid() || heightValid()))
+    if (d->fontSizeMode() != FixedSize && (widthValid() || heightValid())) {
+        d->polishSize = true;
         polish();
+    }
     d->extra.value().minimumPointSize = size;
     emit minimumPointSizeChanged();
 }
@@ -2705,6 +2714,28 @@ QString QQuickText::linkAt(qreal x, qreal y) const
 {
     Q_D(const QQuickText);
     return d->anchorAt(QPointF(x, y));
+}
+
+/*!
+ * \internal
+ *
+ * Invalidates font caches owned by the text objects owned by the element
+ * to work around the fact that text objects cannot be used from multiple threads.
+ */
+void QQuickText::invalidateFontCaches()
+{
+    Q_D(QQuickText);
+
+    if (d->richText && d->extra->doc != 0) {
+        QTextBlock block;
+        for (block = d->extra->doc->firstBlock(); block.isValid(); block = block.next()) {
+            if (block.layout() != 0 && block.layout()->engine() != 0)
+                block.layout()->engine()->resetFontEngineCache();
+        }
+    } else {
+        if (d->layout.engine() != 0)
+            d->layout.engine()->resetFontEngineCache();
+    }
 }
 
 QT_END_NAMESPACE

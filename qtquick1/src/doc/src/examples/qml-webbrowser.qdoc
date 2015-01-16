@@ -31,7 +31,7 @@
     \depends helper/qmlapplicationviewer
 
     \brief The Qt Quick Web Browser demo shows how to write a simple web browser in QML by combining the
-    WebView element with other components including scroll bars, 
+    WebView element with other components including scroll bars,
     \l Flickable views and TextInput fields.
 
     \image qml-webbrowser-demo.png

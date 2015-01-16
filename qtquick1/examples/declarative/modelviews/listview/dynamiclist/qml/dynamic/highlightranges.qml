@@ -46,8 +46,8 @@ Rectangle {
     property int current: 0
     width: 600; height: 300
 
-    // This example shows the same model in three different ListView items, 
-    // with different highlight ranges. The highlight ranges are set by the 
+    // This example shows the same model in three different ListView items,
+    // with different highlight ranges. The highlight ranges are set by the
     // preferredHighlightBegin and preferredHighlightEnd properties in ListView.
     //
     // The first ListView does not set a highlight range, so its currentItem

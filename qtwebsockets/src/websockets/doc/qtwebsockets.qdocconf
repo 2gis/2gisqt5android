@@ -2,7 +2,6 @@ include($QT_INSTALL_DOCS/global/qt-module-defaults.qdocconf)
 
 project                                             = QtWebSockets
 description                                         = Qt WebSockets Reference Documentation
-url                                                 = http://qt-project.org/doc/qt-$QT_VER/qtwebsockets
 version                                             = $QT_VERSION
 
 examplesinstallpath                                 = websockets
@@ -27,7 +26,7 @@ qhp.QtWebSockets.subprojects.classes.sortPages      = true
 
 qhp.QtWebSockets.subprojects.qml.title              = QML Types
 qhp.QtWebSockets.subprojects.qml.indexTitle         = Qt WebSockets QML Types
-qhp.QtWebSockets.subprojects.qml.selectors          = fake:qmlclass
+qhp.QtWebSockets.subprojects.qml.selectors          = qmlclass
 qhp.QtWebSockets.subprojects.qml.sortPages          = true
 
 qhp.QtWebSockets.subprojects.examples.title         = Examples
