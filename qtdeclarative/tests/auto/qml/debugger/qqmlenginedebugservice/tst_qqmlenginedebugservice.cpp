@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -44,6 +36,7 @@
 #include <QHostAddress>
 #include <QDebug>
 #include <QThread>
+#include <QModelIndex>
 
 #include <QtQml/qqmlengine.h>
 #include <QtQml/qqmlcontext.h>
@@ -80,6 +73,16 @@ signals:
     void nonScriptPropChanged();
 };
 QML_DECLARE_TYPE(NonScriptProperty)
+
+class CustomTypes : public QObject
+{
+    Q_OBJECT
+    Q_PROPERTY(QModelIndex modelIndex READ modelIndex)
+public:
+    CustomTypes(QObject *parent = 0) : QObject(parent) {}
+
+    QModelIndex modelIndex() { return QModelIndex(); }
+};
 
 class tst_QQmlEngineDebugService : public QObject
 {
@@ -133,6 +136,7 @@ private slots:
     void setBindingInStates();
 
     void regression_QTCREATORBUG_7451();
+    void queryObjectWithNonStreamableTypes();
 };
 
 QmlDebugObjectReference tst_QQmlEngineDebugService::findRootObject(
@@ -320,6 +324,12 @@ void tst_QQmlEngineDebugService::initTestCase()
                     "}\n"
                 "]\n"
            "}\n"
+           ;
+
+    // test non-streamable properties
+    qmlRegisterType<CustomTypes>("Backend", 1, 0, "CustomTypes");
+    qml << "import Backend 1.0\n"
+           "CustomTypes {}"
            ;
 
     for (int i=0; i<qml.count(); i++) {
@@ -628,7 +638,7 @@ void tst_QQmlEngineDebugService::queryRootContexts()
     // root context query sends only root object data - it doesn't fill in
     // the children or property info
     QCOMPARE(context.objects.count(), 0);
-    QCOMPARE(context.contexts.count(), 5);
+    QCOMPARE(context.contexts.count(), 6);
     QVERIFY(context.contexts[0].debugId >= 0);
     QCOMPARE(context.contexts[0].name, QString("tst_QQmlDebug_childContext"));
 }
@@ -825,6 +835,26 @@ void tst_QQmlEngineDebugService::regression_QTCREATORBUG_7451()
         QVERIFY(success);
         QVERIFY(QQmlDebugTest::waitForSignal(m_dbg, SIGNAL(result())));
     }
+}
+
+void tst_QQmlEngineDebugService::queryObjectWithNonStreamableTypes()
+{
+    bool success;
+
+    QmlDebugObjectReference rootObject = findRootObject(4, true);
+
+    QQmlEngineDebugClient *unconnected = new QQmlEngineDebugClient(0);
+    unconnected->queryObject(rootObject, &success);
+    QVERIFY(!success);
+    delete unconnected;
+
+    m_dbg->queryObject(rootObject, &success);
+    QVERIFY(success);
+    QVERIFY(QQmlDebugTest::waitForSignal(m_dbg, SIGNAL(result())));
+
+    QmlDebugObjectReference obj = m_dbg->object();
+
+    QCOMPARE(findProperty(obj.properties, "modelIndex").value, QVariant());
 }
 
 

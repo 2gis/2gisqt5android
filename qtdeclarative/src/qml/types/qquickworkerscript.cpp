@@ -5,35 +5,27 @@
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -235,7 +227,7 @@ void QQuickWorkerScriptEnginePrivate::WorkerEngine::init()
     QV4::Scoped<QV4::FunctionObject> createsendconstructor(scope, createsendscript.run());
     Q_ASSERT(!scope.engine->hasException);
     QV4::ScopedString name(scope, m_v4Engine->newString(QStringLiteral("sendMessage")));
-    QV4::ScopedValue function(scope, m_v4Engine->newBuiltinFunction(m_v4Engine->rootContext, name,
+    QV4::ScopedValue function(scope, QV4::BuiltinFunction::create(m_v4Engine->rootContext, name.getPointer(),
                                                                     QQuickWorkerScriptEnginePrivate::method_sendMessage));
     QV4::ScopedCallData callData(scope, 1);
     callData->args[0] = function;
@@ -283,12 +275,12 @@ QQuickWorkerScriptEnginePrivate::QQuickWorkerScriptEnginePrivate(QQmlEngine *eng
 
 QV4::ReturnedValue QQuickWorkerScriptEnginePrivate::method_sendMessage(QV4::CallContext *ctx)
 {
-    WorkerEngine *engine = (WorkerEngine*)ctx->engine->v8Engine;
+    WorkerEngine *engine = (WorkerEngine*)ctx->engine()->v8Engine;
 
-    int id = ctx->callData->argc > 1 ? ctx->callData->args[1].toInt32() : 0;
+    int id = ctx->d()->callData->argc > 1 ? ctx->d()->callData->args[1].toInt32() : 0;
 
     QV4::Scope scope(ctx);
-    QV4::ScopedValue v(scope, ctx->callData->argument(2));
+    QV4::ScopedValue v(scope, ctx->d()->callData->argument(2));
     QByteArray data = QV4::Serialize::serialize(v, engine);
 
     QMutexLocker locker(&engine->p->m_lock);
@@ -315,9 +307,9 @@ QV4::ReturnedValue QQuickWorkerScriptEnginePrivate::getWorker(WorkerScript *scri
         w->setReadOnly(false);
 
         QV4::Scoped<QV4::Object> api(scope, v4->newObject());
-        api->put(QV4::ScopedString(scope, v4->newString(QStringLiteral("sendMessage"))), QV4::ScopedValue(scope, workerEngine->sendFunction(script->id)));
+        api->put(QV4::ScopedString(scope, v4->newString(QStringLiteral("sendMessage"))).getPointer(), QV4::ScopedValue(scope, workerEngine->sendFunction(script->id)));
 
-        w->QV4::Object::put(QV4::ScopedString(scope, v4->newString(QStringLiteral("WorkerScript"))), api);
+        w->QV4::Object::put(QV4::ScopedString(scope, v4->newString(QStringLiteral("WorkerScript"))).getPointer(), api);
 
         w->setReadOnly(true);
     }

@@ -1,7 +1,7 @@
 QT += widgets declarative
 
 SOURCES += main.cpp \
-           lineedit.cpp 
+           lineedit.cpp
 HEADERS += lineedit.h
 RESOURCES += extended.qrc
 

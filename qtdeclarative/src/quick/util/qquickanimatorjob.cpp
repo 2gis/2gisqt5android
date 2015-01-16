@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtQuick module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -57,6 +49,7 @@ QQuickAnimatorProxyJob::QQuickAnimatorProxyJob(QAbstractAnimationJob *job, QObje
     : m_controller(0)
     , m_job(job)
     , m_internalState(State_Stopped)
+    , m_jobManagedByController(false)
 {
     m_isRenderThreadProxy = true;
     m_animation = qobject_cast<QQuickAbstractAnimation *>(item);
@@ -92,6 +85,8 @@ QQuickAnimatorProxyJob::QQuickAnimatorProxyJob(QAbstractAnimationJob *job, QObje
 QQuickAnimatorProxyJob::~QQuickAnimatorProxyJob()
 {
     deleteJob();
+    if (m_controller)
+        m_controller->proxyWasDestroyed(this);
 }
 
 void QQuickAnimatorProxyJob::deleteJob()
@@ -101,7 +96,10 @@ void QQuickAnimatorProxyJob::deleteJob()
         // so delete it through the controller to clean up properly.
         if (m_controller)
             m_controller->deleteJob(m_job);
-        else
+
+        // We explicitly delete the job if the animator controller has never touched
+        // it. If it has, it will have ownership as well.
+        else if (!m_jobManagedByController)
             delete m_job;
         m_job = 0;
     }
@@ -149,11 +147,13 @@ void QQuickAnimatorProxyJob::controllerWasDeleted()
 void QQuickAnimatorProxyJob::setWindow(QQuickWindow *window)
 {
     if (!window) {
-        // Stop will trigger syncBackCurrentValues so best to do it before
-        // we delete m_job.
         stop();
         deleteJob();
-        return;
+
+        // Upon leaving a window, we reset the controller. This means that
+        // animators will only enter the Starting phase and won't be making
+        // calls to QQuickAnimatorController::startjob().
+        m_controller = 0;
 
     } else if (!m_controller && m_job) {
         m_controller = QQuickWindowPrivate::get(window)->animationController;
@@ -179,15 +179,6 @@ void QQuickAnimatorProxyJob::readyToAnimate()
 void QQuickAnimatorProxyJob::startedByController()
 {
     m_internalState = State_Running;
-}
-
-bool QQuickAnimatorProxyJob::event(QEvent *e)
-{
-    if (e->type() == QEvent::User) {
-        stop();
-        return true;
-    }
-    return QObject::event(e);
 }
 
 static void qquick_syncback_helper(QAbstractAnimationJob *job)
@@ -258,6 +249,10 @@ QQuickTransformAnimatorJob::QQuickTransformAnimatorJob()
 QQuickTransformAnimatorJob::~QQuickTransformAnimatorJob()
 {
     if (m_helper && --m_helper->ref == 0) {
+        // The only condition for not having a controller is when target was
+        // destroyed, in which case we have neither m_helper nor m_contorller.
+        Q_ASSERT(m_controller);
+        Q_ASSERT(m_helper->item);
         m_controller->m_transforms.remove(m_helper->item);
         delete m_helper;
     }
@@ -268,6 +263,7 @@ void QQuickTransformAnimatorJob::initialize(QQuickAnimatorController *controller
     QQuickAnimatorJob::initialize(controller);
 
     if (m_controller) {
+        bool newHelper = m_helper == 0;
         m_helper = m_controller->m_transforms.value(m_target);
         if (!m_helper) {
             m_helper = new Helper();
@@ -275,7 +271,8 @@ void QQuickTransformAnimatorJob::initialize(QQuickAnimatorController *controller
             m_controller->m_transforms.insert(m_target, m_helper);
             QObject::connect(m_target, SIGNAL(destroyed(QObject*)), m_controller, SLOT(itemDestroyed(QObject*)), Qt::DirectConnection);
         } else {
-            ++m_helper->ref;
+            if (newHelper) // only add reference the first time around..
+                ++m_helper->ref;
             // Make sure leftovers from previous runs are being used...
             m_helper->wasSynced = false;
         }
@@ -287,6 +284,12 @@ void QQuickTransformAnimatorJob::nodeWasDestroyed()
 {
     if (m_helper)
         m_helper->node = 0;
+}
+
+void QQuickTransformAnimatorJob::targetWasDeleted()
+{
+    m_helper = 0;
+    QQuickAnimatorJob::targetWasDeleted();
 }
 
 void QQuickTransformAnimatorJob::Helper::sync()
@@ -360,7 +363,7 @@ void QQuickXAnimatorJob::updateCurrentTime(int time)
 {
     if (!m_controller)
         return;
-    Q_ASSERT(m_controller->m_window->openglContext()->thread() == QThread::currentThread());
+    Q_ASSERT(!m_controller->m_window->openglContext() || m_controller->m_window->openglContext()->thread() == QThread::currentThread());
 
     m_value = m_from + (m_to - m_from) * m_easing.valueForProgress(time / (qreal) m_duration);
     m_helper->dx = m_value;
@@ -377,7 +380,7 @@ void QQuickYAnimatorJob::updateCurrentTime(int time)
 {
     if (!m_controller)
         return;
-    Q_ASSERT(m_controller->m_window->openglContext()->thread() == QThread::currentThread());
+    Q_ASSERT(!m_controller->m_window->openglContext() || m_controller->m_window->openglContext()->thread() == QThread::currentThread());
 
     m_value = m_from + (m_to - m_from) * m_easing.valueForProgress(time / (qreal) m_duration);
     m_helper->dy = m_value;
@@ -435,7 +438,7 @@ void QQuickOpacityAnimatorJob::updateCurrentTime(int time)
 {
     if (!m_controller || !m_opacityNode)
         return;
-    Q_ASSERT(m_controller->m_window->openglContext()->thread() == QThread::currentThread());
+    Q_ASSERT(!m_controller->m_window->openglContext() || m_controller->m_window->openglContext()->thread() == QThread::currentThread());
 
     m_value = m_from + (m_to - m_from) * m_easing.valueForProgress(time / (qreal) m_duration);
     m_opacityNode->setOpacity(m_value);
@@ -451,7 +454,7 @@ void QQuickScaleAnimatorJob::updateCurrentTime(int time)
 {
     if (!m_controller)
         return;
-    Q_ASSERT(m_controller->m_window->openglContext()->thread() == QThread::currentThread());
+    Q_ASSERT(!m_controller->m_window->openglContext() || m_controller->m_window->openglContext()->thread() == QThread::currentThread());
 
     m_value = m_from + (m_to - m_from) * m_easing.valueForProgress(time / (qreal) m_duration);
     m_helper->scale = m_value;
@@ -471,7 +474,7 @@ void QQuickRotationAnimatorJob::updateCurrentTime(int time)
 {
     if (!m_controller)
         return;
-    Q_ASSERT(m_controller->m_window->openglContext()->thread() == QThread::currentThread());
+    Q_ASSERT(!m_controller->m_window->openglContext() || m_controller->m_window->openglContext()->thread() == QThread::currentThread());
 
     float t =  m_easing.valueForProgress(time / (qreal) m_duration);
     switch (m_direction) {
@@ -551,7 +554,7 @@ void QQuickUniformAnimatorJob::updateCurrentTime(int time)
 {
     if (!m_controller)
         return;
-    Q_ASSERT(m_controller->m_window->openglContext()->thread() == QThread::currentThread());
+    Q_ASSERT(!m_controller->m_window->openglContext() || m_controller->m_window->openglContext()->thread() == QThread::currentThread());
 
     if (!m_node || m_uniformIndex == -1 || m_uniformType == -1)
         return;

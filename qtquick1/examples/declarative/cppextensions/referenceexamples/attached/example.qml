@@ -47,23 +47,23 @@ BirthdayParty {
     }
 
     // ![1]
-    Boy { 
-        name: "Leo Hodges" 
+    Boy {
+        name: "Leo Hodges"
         shoe { size: 10; color: "black"; brand: "Reebok"; price: 59.95 }
 
         BirthdayParty.rsvp: "2009-07-06"
     }
     // ![1]
-    Boy { 
-        name: "Jack Smith" 
+    Boy {
+        name: "Jack Smith"
         shoe { size: 8; color: "blue"; brand: "Puma"; price: 19.95 }
     }
-    Girl { 
-        name: "Anne Brown" 
+    Girl {
+        name: "Anne Brown"
         shoe.size: 7
         shoe.color: "red"
         shoe.brand: "Marc Jacobs"
-        shoe.price: 699.99 
+        shoe.price: 699.99
 
         BirthdayParty.rsvp: "2009-07-01"
     }

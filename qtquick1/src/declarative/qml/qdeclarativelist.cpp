@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtDeclarative module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -109,7 +101,7 @@ QML list properties are typesafe.  Only QObject's that derive from the correct b
 the list.  The listElementType() method can be used to query the QMetaObject of the QObject type supported.
 Attempting to add objects of the incorrect type to a list property will fail.
 
-Like with normal lists, when accessing a list element by index, it is the callers responsibility to ensure 
+Like with normal lists, when accessing a list element by index, it is the callers responsibility to ensure
 that it does not request an out of range element using the count() method before calling at().
 */
 
@@ -123,7 +115,7 @@ QDeclarativeListReference::QDeclarativeListReference()
 
 /*!
 Constructs a QDeclarativeListReference for \a object's \a property.  If \a property is not a list
-property, an invalid QDeclarativeListReference is created.  If \a object is destroyed after 
+property, an invalid QDeclarativeListReference is created.  If \a object is destroyed after
 the reference is constructed, it will automatically become invalid.  That is, it is safe to hold
 QDeclarativeListReference instances even after \a object is deleted.
 
@@ -136,7 +128,7 @@ QDeclarativeListReference::QDeclarativeListReference(QObject *object, const char
     if (!object || !property) return;
 
     QDeclarativePropertyCache::Data local;
-    QDeclarativePropertyCache::Data *data = 
+    QDeclarativePropertyCache::Data *data =
         QDeclarativePropertyCache::property(engine, object, QLatin1String(property), local);
 
     if (!data || !(data->flags & QDeclarativePropertyCache::Data::IsQList)) return;
@@ -241,7 +233,7 @@ bool QDeclarativeListReference::canClear() const
 }
 
 /*!
-Returns true if the list property can be queried for its element count, otherwise false.  
+Returns true if the list property can be queried for its element count, otherwise false.
 Returns false if the reference is invalid.
 
 \sa count()
@@ -307,7 +299,7 @@ int QDeclarativeListReference::count() const
 /*!
 \class QDeclarativeListProperty
 \since 4.7
-\brief The QDeclarativeListProperty class allows applications to expose list-like 
+\brief The QDeclarativeListProperty class allows applications to expose list-like
 properties to QML.
 
 QML has many list properties, where more than one object value can be assigned.
@@ -315,7 +307,7 @@ The use of a list property from QML looks like this:
 
 \code
 FruitBasket {
-    fruit: [ 
+    fruit: [
         Apple {},
         Orange{},
         Banana{}
@@ -325,10 +317,10 @@ FruitBasket {
 
 The QDeclarativeListProperty encapsulates a group of function pointers that represet the
 set of actions QML can perform on the list - adding items, retrieving items and
-clearing the list.  In the future, additional operations may be supported.  All 
+clearing the list.  In the future, additional operations may be supported.  All
 list properties must implement the append operation, but the rest are optional.
 
-To provide a list property, a C++ class must implement the operation callbacks, 
+To provide a list property, a C++ class must implement the operation callbacks,
 and then return an appropriate QDeclarativeListProperty value from the property getter.
 List properties should have no setter.  In the example above, the Q_PROPERTY()
 declarative will look like this:
@@ -337,7 +329,7 @@ declarative will look like this:
 Q_PROPERTY(QDeclarativeListProperty<Fruit> fruit READ fruit);
 \endcode
 
-QML list properties are typesafe - in this case \c {Fruit} is a QObject type that 
+QML list properties are typesafe - in this case \c {Fruit} is a QObject type that
 \c {Apple}, \c {Orange} and \c {Banana} all derive from.
 
 \note QDeclarativeListProperty can only be used for lists of QObject-derived object pointers.
@@ -347,7 +339,7 @@ QML list properties are typesafe - in this case \c {Fruit} is a QObject type tha
 */
 
 /*!
-\fn QDeclarativeListProperty::QDeclarativeListProperty() 
+\fn QDeclarativeListProperty::QDeclarativeListProperty()
 \internal
 */
 
@@ -358,18 +350,18 @@ Convenience constructor for making a QDeclarativeListProperty value from an exis
 QList \a list.  The \a list reference must remain valid for as long as \a object
 exists.  \a object must be provided.
 
-Generally this constructor should not be used in production code, as a 
+Generally this constructor should not be used in production code, as a
 writable QList violates QML's memory management rules.  However, this constructor
 can very useful while prototyping.
 */
 
 /*!
-\fn QDeclarativeListProperty::QDeclarativeListProperty(QObject *object, void *data, AppendFunction append, 
-                                     CountFunction count = 0, AtFunction at = 0, 
+\fn QDeclarativeListProperty::QDeclarativeListProperty(QObject *object, void *data, AppendFunction append,
+                                     CountFunction count = 0, AtFunction at = 0,
                                      ClearFunction clear = 0)
 
 Construct a QDeclarativeListProperty from a set of operation functions.  An opaque \a data handle
-may be passed which can be accessed from within the operation functions.  The list property 
+may be passed which can be accessed from within the operation functions.  The list property
 remains valid while \a object exists.
 
 The \a append operation is compulsory and must be provided, while the \a count, \a at and
@@ -393,7 +385,7 @@ Return the number of elements in the list \a property.
 */
 
 /*!
-\fn bool QDeclarativeListProperty::operator==(const QDeclarativeListProperty &other) const 
+\fn bool QDeclarativeListProperty::operator==(const QDeclarativeListProperty &other) const
 
 Returns true if this QDeclarativeListProperty is equal to \a other, otherwise false.
 */

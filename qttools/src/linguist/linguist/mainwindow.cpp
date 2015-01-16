@@ -5,35 +5,27 @@
 **
 ** This file is part of the Qt Linguist of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -1345,8 +1337,8 @@ void MainWindow::about()
     box.setText(tr("<center><img src=\":/images/splash.png\"/></img><p>%1</p></center>"
                     "<p>Qt Linguist is a tool for adding translations to Qt "
                     "applications.</p>"
-                    "<p>Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies)."
-                   ).arg(version));
+                    "<p>Copyright (C) %2 Digia Plc and/or its subsidiary(-ies)."
+                   ).arg(version, QStringLiteral("2014")));
 
     box.setWindowTitle(QApplication::translate("AboutDialog", "Qt Linguist"));
     box.setIcon(QMessageBox::NoIcon);
@@ -1909,6 +1901,9 @@ void MainWindow::setupMenuBar()
     connect(m_ui.actionStatistics, SIGNAL(triggered()), this, SLOT(toggleStatistics()));
     connect(m_ui.actionVisualizeWhitespace, SIGNAL(triggered()), this, SLOT(toggleVisualizeWhitespace()));
     connect(m_ui.menuView, SIGNAL(aboutToShow()), this, SLOT(updateViewMenu()));
+    connect(m_ui.actionIncreaseZoom, SIGNAL(triggered()), m_messageEditor, SLOT(increaseFontSize()));
+    connect(m_ui.actionDecreaseZoom, SIGNAL(triggered()), m_messageEditor, SLOT(decreaseFontSize()));
+    connect(m_ui.actionResetZoomToDefault, SIGNAL(triggered()), m_messageEditor, SLOT(resetFontSize()));
     m_ui.menuViewViews->addAction(m_contextDock->toggleViewAction());
     m_ui.menuViewViews->addAction(m_messagesDock->toggleViewAction());
     m_ui.menuViewViews->addAction(m_phrasesDock->toggleViewAction());

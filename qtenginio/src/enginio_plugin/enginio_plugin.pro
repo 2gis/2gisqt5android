@@ -1,8 +1,8 @@
-requires(qtHaveModule(quick))
+requires(qtHaveModule(qml))
 
 TARGETPATH = Enginio
 
-QT += qml quick enginio enginio-private core-private
+QT = qml enginio enginio-private core-private
 
 QMAKE_DOCS = $$PWD/doc/qtenginioqml.qdocconf
 OTHER_FILES += \

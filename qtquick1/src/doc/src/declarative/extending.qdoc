@@ -143,11 +143,11 @@ CppItem {
 
 where CppItem maps to the C++ class QCppItem.
 
-If the author of QCppItem adds a "root" property to QCppItem in a new version of the module, 
+If the author of QCppItem adds a "root" property to QCppItem in a new version of the module,
 it will break the above program as \c root.x now resolves to a different value.
-The solution is to allow the author of QCppItem to state that the new \c root property is 
+The solution is to allow the author of QCppItem to state that the new \c root property is
 only available from a particular version of QCppItem onwards. This permits new properties
-and features to be added to existing elements without breaking existing programs. 
+and features to be added to existing elements without breaking existing programs.
 
 QML enables this by allowing the properties, methods and signals of a class to be tagged with
 a particular \e revision, so that they are only accessible if the relevant module version

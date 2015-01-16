@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtDeclarative module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -286,7 +278,7 @@ ProcessAST::defineObjectBinding(AST::UiQualifiedId *propertyName,
         if (lastTypeDot >= 0)
             resolvableObjectType.replace(QLatin1Char('.'),QLatin1Char('/'));
 
-	QDeclarativeParser::Object *obj = new QDeclarativeParser::Object;
+        QDeclarativeParser::Object *obj = new QDeclarativeParser::Object;
 
         QDeclarativeScriptParser::TypeReference *typeRef = _parser->findOrCreateType(resolvableObjectType);
         obj->type = typeRef->id;
@@ -505,7 +497,7 @@ bool ProcessAST::visit(AST::UiPublicMember *node)
                 _parser->_errors << error;
                 return false;
             }
-            
+
             signal.parameterTypes << qtType;
             signal.parameterNames << p->name->asString().toUtf8();
             p = p->finish();
@@ -636,7 +628,7 @@ bool ProcessAST::visit(AST::UiObjectBinding *node)
     const QString objectType = asString(node->qualifiedTypeNameId);
     const AST::SourceLocation typeLocation = node->qualifiedTypeNameId->identifierToken;
 
-    defineObjectBinding(node->qualifiedId, node->hasOnToken, objectType, 
+    defineObjectBinding(node->qualifiedId, node->hasOnToken, objectType,
                         typeLocation, l, node->initializer);
 
     return false;
@@ -888,7 +880,7 @@ QList<QDeclarativeError> QDeclarativeScriptParser::errors() const
     return _errors;
 }
 
-static void replaceWithSpace(QString &str, int idx, int n) 
+static void replaceWithSpace(QString &str, int idx, int n)
 {
     QChar *data = str.data() + idx;
     const QChar space(QLatin1Char(' '));
@@ -954,42 +946,42 @@ QDeclarativeParser::Object::ScriptBlock::Pragmas QDeclarativeScriptParser::extra
 #define CHECK_TOKEN(t) if (token != QDeclarativeJSGrammar:: t) return rv;
 
 static const int uriTokens[] = {
-    QDeclarativeJSGrammar::T_IDENTIFIER, 
-    QDeclarativeJSGrammar::T_PROPERTY, 
-    QDeclarativeJSGrammar::T_SIGNAL, 
-    QDeclarativeJSGrammar::T_READONLY, 
-    QDeclarativeJSGrammar::T_ON, 
-    QDeclarativeJSGrammar::T_BREAK, 
-    QDeclarativeJSGrammar::T_CASE, 
-    QDeclarativeJSGrammar::T_CATCH, 
-    QDeclarativeJSGrammar::T_CONTINUE, 
-    QDeclarativeJSGrammar::T_DEFAULT, 
-    QDeclarativeJSGrammar::T_DELETE, 
-    QDeclarativeJSGrammar::T_DO, 
-    QDeclarativeJSGrammar::T_ELSE, 
-    QDeclarativeJSGrammar::T_FALSE, 
-    QDeclarativeJSGrammar::T_FINALLY, 
-    QDeclarativeJSGrammar::T_FOR, 
-    QDeclarativeJSGrammar::T_FUNCTION, 
-    QDeclarativeJSGrammar::T_IF, 
-    QDeclarativeJSGrammar::T_IN, 
-    QDeclarativeJSGrammar::T_INSTANCEOF, 
-    QDeclarativeJSGrammar::T_NEW, 
-    QDeclarativeJSGrammar::T_NULL, 
-    QDeclarativeJSGrammar::T_RETURN, 
-    QDeclarativeJSGrammar::T_SWITCH, 
-    QDeclarativeJSGrammar::T_THIS, 
-    QDeclarativeJSGrammar::T_THROW, 
-    QDeclarativeJSGrammar::T_TRUE, 
-    QDeclarativeJSGrammar::T_TRY, 
-    QDeclarativeJSGrammar::T_TYPEOF, 
-    QDeclarativeJSGrammar::T_VAR, 
-    QDeclarativeJSGrammar::T_VOID, 
-    QDeclarativeJSGrammar::T_WHILE, 
-    QDeclarativeJSGrammar::T_CONST, 
-    QDeclarativeJSGrammar::T_DEBUGGER, 
-    QDeclarativeJSGrammar::T_RESERVED_WORD, 
-    QDeclarativeJSGrammar::T_WITH, 
+    QDeclarativeJSGrammar::T_IDENTIFIER,
+    QDeclarativeJSGrammar::T_PROPERTY,
+    QDeclarativeJSGrammar::T_SIGNAL,
+    QDeclarativeJSGrammar::T_READONLY,
+    QDeclarativeJSGrammar::T_ON,
+    QDeclarativeJSGrammar::T_BREAK,
+    QDeclarativeJSGrammar::T_CASE,
+    QDeclarativeJSGrammar::T_CATCH,
+    QDeclarativeJSGrammar::T_CONTINUE,
+    QDeclarativeJSGrammar::T_DEFAULT,
+    QDeclarativeJSGrammar::T_DELETE,
+    QDeclarativeJSGrammar::T_DO,
+    QDeclarativeJSGrammar::T_ELSE,
+    QDeclarativeJSGrammar::T_FALSE,
+    QDeclarativeJSGrammar::T_FINALLY,
+    QDeclarativeJSGrammar::T_FOR,
+    QDeclarativeJSGrammar::T_FUNCTION,
+    QDeclarativeJSGrammar::T_IF,
+    QDeclarativeJSGrammar::T_IN,
+    QDeclarativeJSGrammar::T_INSTANCEOF,
+    QDeclarativeJSGrammar::T_NEW,
+    QDeclarativeJSGrammar::T_NULL,
+    QDeclarativeJSGrammar::T_RETURN,
+    QDeclarativeJSGrammar::T_SWITCH,
+    QDeclarativeJSGrammar::T_THIS,
+    QDeclarativeJSGrammar::T_THROW,
+    QDeclarativeJSGrammar::T_TRUE,
+    QDeclarativeJSGrammar::T_TRY,
+    QDeclarativeJSGrammar::T_TYPEOF,
+    QDeclarativeJSGrammar::T_VAR,
+    QDeclarativeJSGrammar::T_VOID,
+    QDeclarativeJSGrammar::T_WHILE,
+    QDeclarativeJSGrammar::T_CONST,
+    QDeclarativeJSGrammar::T_DEBUGGER,
+    QDeclarativeJSGrammar::T_RESERVED_WORD,
+    QDeclarativeJSGrammar::T_WITH,
 
     QDeclarativeJSGrammar::EOF_SYMBOL
 };

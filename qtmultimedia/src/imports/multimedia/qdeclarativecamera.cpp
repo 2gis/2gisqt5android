@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the plugins of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -46,10 +38,14 @@
 #include "qdeclarativecameraflash_p.h"
 #include "qdeclarativecamerafocus_p.h"
 #include "qdeclarativecameraimageprocessing_p.h"
+#include "qdeclarativecameraviewfinder_p.h"
+
+#include "qdeclarativemediametadata_p.h"
 
 #include <qmediaplayercontrol.h>
 #include <qmediaservice.h>
 #include <qvideorenderercontrol.h>
+#include <qvideodeviceselectorcontrol.h>
 #include <QtQml/qqmlinfo.h>
 
 #include <QtCore/QTimer>
@@ -81,9 +77,7 @@ void QDeclarativeCamera::_q_availabilityChanged(QMultimedia::AvailabilityStatus 
     \ingroup camera_qml
     \inqmlmodule QtMultimedia
 
-    \inherits Item
-
-    Camera is part of the \b{QtMultimedia 5.0} module.
+    \inherits QtObject
 
     You can use \c Camera to capture images and movies from a camera, and manipulate
     the capture and processing settings that get applied to the images.  To display the
@@ -92,7 +86,7 @@ void QDeclarativeCamera::_q_availabilityChanged(QMultimedia::AvailabilityStatus 
     \qml
 
     import QtQuick 2.0
-    import QtMultimedia 5.0
+    import QtMultimedia 5.4
 
     Item {
         width: 640
@@ -129,6 +123,12 @@ void QDeclarativeCamera::_q_availabilityChanged(QMultimedia::AvailabilityStatus 
     }
     \endqml
 
+    If multiple cameras are available, you can select which one to use by setting the \l deviceId
+    property to a value from
+    \l{QtMultimedia::QtMultimedia::availableCameras}{QtMultimedia.availableCameras}.
+    On a mobile device, you can conveniently switch between front-facing and back-facing cameras
+    by setting the \l position property.
+
     The various settings and functionality of the Camera stack is spread
     across a few different child properties of Camera.
 
@@ -158,6 +158,8 @@ void QDeclarativeCamera::_q_availabilityChanged(QMultimedia::AvailabilityStatus 
     set manually or automatically. These settings properties contain the current set value.
     For example, when autofocus is enabled the focus zones are exposed in the
     \l {CameraFocus}{focus} property.
+
+    For additional information, read also the \l{Camera Overview}{camera overview}.
 */
 
 /*!
@@ -172,35 +174,57 @@ void QDeclarativeCamera::_q_availabilityChanged(QMultimedia::AvailabilityStatus 
 QDeclarativeCamera::QDeclarativeCamera(QObject *parent) :
     QObject(parent),
     m_camera(0),
+    m_metaData(0),
+    m_viewfinder(0),
     m_pendingState(ActiveState),
     m_componentComplete(false)
 {
-    m_camera = new QCamera(this);
+    m_camera = new QCamera;
+    m_currentCameraInfo = QCameraInfo(*m_camera);
 
-    m_imageCapture = new QDeclarativeCameraCapture(m_camera, this);
-    m_videoRecorder = new QDeclarativeCameraRecorder(m_camera, this);
-    m_exposure = new QDeclarativeCameraExposure(m_camera, this);
-    m_flash = new QDeclarativeCameraFlash(m_camera, this);
-    m_focus = new QDeclarativeCameraFocus(m_camera, this);
-    m_imageProcessing = new QDeclarativeCameraImageProcessing(m_camera, this);
+    m_imageCapture = new QDeclarativeCameraCapture(m_camera);
+    m_videoRecorder = new QDeclarativeCameraRecorder(m_camera);
+    m_exposure = new QDeclarativeCameraExposure(m_camera);
+    m_flash = new QDeclarativeCameraFlash(m_camera);
+    m_focus = new QDeclarativeCameraFocus(m_camera);
+    m_imageProcessing = new QDeclarativeCameraImageProcessing(m_camera);
 
-    connect(m_camera, SIGNAL(captureModeChanged(QCamera::CaptureModes)), this, SIGNAL(captureModeChanged()));
-    connect(m_camera, SIGNAL(lockStatusChanged(QCamera::LockStatus,QCamera::LockChangeReason)), this, SIGNAL(lockStatusChanged()));
-    connect(m_camera, SIGNAL(stateChanged(QCamera::State)), this, SLOT(_q_updateState(QCamera::State)));
+    connect(m_camera, SIGNAL(captureModeChanged(QCamera::CaptureModes)),
+            this, SIGNAL(captureModeChanged()));
+    connect(m_camera, SIGNAL(lockStatusChanged(QCamera::LockStatus,QCamera::LockChangeReason)),
+            this, SIGNAL(lockStatusChanged()));
+    connect(m_camera, &QCamera::stateChanged, this, &QDeclarativeCamera::_q_updateState);
     connect(m_camera, SIGNAL(statusChanged(QCamera::Status)), this, SIGNAL(cameraStatusChanged()));
     connect(m_camera, SIGNAL(error(QCamera::Error)), this, SLOT(_q_error(QCamera::Error)));
-    connect(m_camera, SIGNAL(availabilityChanged(QMultimedia::AvailabilityStatus)), this, SLOT(_q_availabilityChanged(QMultimedia::AvailabilityStatus)));
+    connect(m_camera, SIGNAL(availabilityChanged(QMultimedia::AvailabilityStatus)),
+            this, SLOT(_q_availabilityChanged(QMultimedia::AvailabilityStatus)));
 
-    connect(m_camera->focus(), SIGNAL(opticalZoomChanged(qreal)), this, SIGNAL(opticalZoomChanged(qreal)));
-    connect(m_camera->focus(), SIGNAL(digitalZoomChanged(qreal)), this, SIGNAL(digitalZoomChanged(qreal)));
-    connect(m_camera->focus(), SIGNAL(maximumOpticalZoomChanged(qreal)), this, SIGNAL(maximumOpticalZoomChanged(qreal)));
-    connect(m_camera->focus(), SIGNAL(maximumDigitalZoomChanged(qreal)), this, SIGNAL(maximumDigitalZoomChanged(qreal)));
+    connect(m_camera->focus(), &QCameraFocus::opticalZoomChanged,
+            this, &QDeclarativeCamera::opticalZoomChanged);
+    connect(m_camera->focus(), &QCameraFocus::digitalZoomChanged,
+            this, &QDeclarativeCamera::digitalZoomChanged);
+    connect(m_camera->focus(), &QCameraFocus::maximumOpticalZoomChanged,
+            this, &QDeclarativeCamera::maximumOpticalZoomChanged);
+    connect(m_camera->focus(), &QCameraFocus::maximumDigitalZoomChanged,
+            this, &QDeclarativeCamera::maximumDigitalZoomChanged);
 }
 
 /*! Destructor, clean up memory */
 QDeclarativeCamera::~QDeclarativeCamera()
 {
     m_camera->unload();
+
+    // These must be deleted before QCamera
+    delete m_imageCapture;
+    delete m_videoRecorder;
+    delete m_exposure;
+    delete m_flash;
+    delete m_focus;
+    delete m_imageProcessing;
+    delete m_metaData;
+    delete m_viewfinder;
+
+    delete m_camera;
 }
 
 void QDeclarativeCamera::classBegin()
@@ -211,6 +235,173 @@ void QDeclarativeCamera::componentComplete()
 {
     m_componentComplete = true;
     setCameraState(m_pendingState);
+}
+
+/*!
+    \qmlproperty string QtMultimedia::Camera::deviceId
+
+    This property holds the unique identifier for the camera device being used. It may not be human-readable.
+
+    You can get all available device IDs from \l{QtMultimedia::QtMultimedia::availableCameras}{QtMultimedia.availableCameras}.
+    If no value is provided or if set to an empty string, the system's default camera will be used.
+
+    If possible, \l cameraState, \l captureMode, \l digitalZoom and other camera parameters are
+    preserved when changing the camera device.
+
+    \sa displayName, position
+    \since QtMultimedia 5.4
+*/
+
+QString QDeclarativeCamera::deviceId() const
+{
+    return m_currentCameraInfo.deviceName();
+}
+
+void QDeclarativeCamera::setDeviceId(const QString &name)
+{
+    if (name == m_currentCameraInfo.deviceName())
+        return;
+
+    setupDevice(name);
+}
+
+/*!
+    \qmlproperty enumeration QtMultimedia::Camera::position
+
+    This property holds the physical position of the camera on the hardware system.
+
+    The position can be one of the following:
+
+    \list
+    \li \c Camera.UnspecifiedPosition - the camera position is unspecified or unknown.
+    \li \c Camera.BackFace - the camera is on the back face of the system hardware. For example on a
+        mobile device, it means it is on the opposite side to that of the screem.
+    \li \c Camera.FrontFace - the camera is on the front face of the system hardware. For example on
+        a mobile device, it means it is on the same side as that of the screen. Viewfinder frames of
+        front-facing cameras are mirrored horizontally, so the users can see themselves as looking
+        into a mirror. Captured images or videos are not mirrored.
+    \endlist
+
+    On a mobile device it can be used to easily choose between front-facing and back-facing cameras.
+    If this property is set to \c Camera.UnspecifiedPosition, the system's default camera will be
+    used.
+
+    If possible, \l cameraState, \l captureMode, \l digitalZoom and other camera parameters are
+    preserved when changing the camera device.
+
+    \sa deviceId
+    \since QtMultimedia 5.4
+*/
+
+QDeclarativeCamera::Position QDeclarativeCamera::position() const
+{
+    return QDeclarativeCamera::Position(m_currentCameraInfo.position());
+}
+
+void QDeclarativeCamera::setPosition(Position position)
+{
+    QCamera::Position pos = QCamera::Position(position);
+    if (pos == m_currentCameraInfo.position())
+        return;
+
+    QString id;
+
+    if (pos == QCamera::UnspecifiedPosition) {
+        id = QCameraInfo::defaultCamera().deviceName();
+    } else {
+        QList<QCameraInfo> cameras = QCameraInfo::availableCameras(pos);
+        if (!cameras.isEmpty())
+            id = cameras.first().deviceName();
+    }
+
+    if (!id.isEmpty())
+        setupDevice(id);
+}
+
+/*!
+    \qmlproperty string QtMultimedia::Camera::displayName
+
+    This property holds the human-readable name of the camera.
+
+    You can use this property to display the name of the camera in a user interface.
+
+    \readonly
+    \sa deviceId
+    \since QtMultimedia 5.4
+*/
+
+QString QDeclarativeCamera::displayName() const
+{
+    return m_currentCameraInfo.description();
+}
+
+/*!
+    \qmlproperty int QtMultimedia::Camera::orientation
+
+    This property holds the physical orientation of the camera sensor.
+
+    The value is the orientation angle (clockwise, in steps of 90 degrees) of the camera sensor in
+    relation to the display in its natural orientation.
+
+    For example, suppose a mobile device which is naturally in portrait orientation. The back-facing
+    camera is mounted in landscape. If the top side of the camera sensor is aligned with the right
+    edge of the screen in natural orientation, \c orientation returns \c 270. If the top side of a
+    front-facing camera sensor is aligned with the right edge of the screen, \c orientation
+    returns \c 90.
+
+    \readonly
+    \sa VideoOutput::orientation
+    \since QtMultimedia 5.4
+*/
+
+int QDeclarativeCamera::orientation() const
+{
+    return m_currentCameraInfo.orientation();
+}
+
+void QDeclarativeCamera::setupDevice(const QString &deviceName)
+{
+    QMediaService *service = m_camera->service();
+    if (!service)
+        return;
+
+    QVideoDeviceSelectorControl *deviceControl = qobject_cast<QVideoDeviceSelectorControl*>(service->requestControl(QVideoDeviceSelectorControl_iid));
+    if (!deviceControl)
+        return;
+
+    int deviceIndex = -1;
+
+    if (deviceName.isEmpty()) {
+        deviceIndex = deviceControl->defaultDevice();
+    } else {
+        for (int i = 0; i < deviceControl->deviceCount(); ++i) {
+            if (deviceControl->deviceName(i) == deviceName) {
+                deviceIndex = i;
+                break;
+            }
+        }
+    }
+
+    if (deviceIndex == -1)
+        return;
+
+    State previousState = cameraState();
+    setCameraState(UnloadedState);
+
+    deviceControl->setSelectedDevice(deviceIndex);
+
+    QCameraInfo oldCameraInfo = m_currentCameraInfo;
+    m_currentCameraInfo = QCameraInfo(*m_camera);
+
+    emit deviceIdChanged();
+    if (oldCameraInfo.description() != m_currentCameraInfo.description())
+        emit displayNameChanged();
+    if (oldCameraInfo.position() != m_currentCameraInfo.position())
+        emit positionChanged();
+    if (oldCameraInfo.orientation() != m_currentCameraInfo.orientation())
+        emit orientationChanged();
+
+    setCameraState(previousState);
 }
 
 /*!
@@ -280,6 +471,7 @@ QDeclarativeCamera::Availability QDeclarativeCamera::availability() const
 
     \endtable
 
+    The default capture mode is \c CaptureStillImage.
 */
 QDeclarativeCamera::CaptureMode QDeclarativeCamera::captureMode() const
 {
@@ -672,6 +864,156 @@ void QDeclarativeCamera::setDigitalZoom(qreal value)
 
     The corresponding handler is \c onMaximumDigitalZoomChanged.
 */
+
+/*!
+    \qmlproperty variant QtMultimedia::Camera::metaData.cameraManufacturer
+
+    This property holds the name of the manufacturer of the camera.
+
+    \sa {QMediaMetaData}
+    \since 5.4
+*/
+
+/*!
+    \qmlproperty variant QtMultimedia::Camera::metaData.cameraModel
+
+    This property holds the name of the model of the camera.
+
+    \sa {QMediaMetaData}
+    \since 5.4
+*/
+
+/*!
+    \qmlproperty variant QtMultimedia::Camera::metaData.event
+
+    This property holds the event during which the photo or video is to be captured.
+
+    \sa {QMediaMetaData}
+    \since 5.4
+*/
+
+/*!
+    \qmlproperty variant QtMultimedia::Camera::metaData.subject
+
+    This property holds the name of the subject of the capture or recording.
+
+    \sa {QMediaMetaData}
+    \since 5.4
+*/
+
+/*!
+    \qmlproperty variant QtMultimedia::Camera::metaData.orientation
+
+    This property holds the clockwise rotation of the camera at time of capture.
+
+    \sa {QMediaMetaData}
+    \since 5.4
+*/
+
+/*!
+    \qmlproperty variant QtMultimedia::Camera::metaData.dateTimeOriginal
+
+    This property holds the initial time at which the photo or video is
+    captured.
+
+    \sa {QMediaMetaData}
+    \since 5.4
+*/
+
+/*!
+    \qmlproperty variant QtMultimedia::Camera::metaData.gpsLatitude
+    \qmlproperty variant QtMultimedia::Camera::metaData.gpsLongitude
+    \qmlproperty variant QtMultimedia::Camera::metaData.gpsAltitude
+
+    These properties hold the the geographic position in decimal degrees of the
+    camera at time of capture.
+
+    \sa {QMediaMetaData}
+    \since 5.4
+*/
+
+/*!
+    \qmlproperty variant QtMultimedia::Camera::metaData.gpsTimestamp
+
+    This property holds the timestamp of the GPS position data.
+
+    \sa {QMediaMetaData}
+    \since 5.4
+*/
+
+/*!
+    \qmlproperty variant QtMultimedia::Camera::metaData.gpsTrack
+
+    This property holds direction of movement of the camera at the time of
+    capture. It is measured in degrees clockwise from north.
+
+    \sa {QMediaMetaData}
+    \since 5.4
+*/
+
+/*!
+    \qmlproperty variant QtMultimedia::Camera::metaData.gpsSpeed
+
+    This property holds the velocity in kilometers per hour of the camera at
+    time of capture.
+
+    \sa {QMediaMetaData}
+    \since 5.4
+*/
+
+/*!
+    \qmlproperty variant QtMultimedia::Camera::metaData.gpsImgDirection
+
+    This property holds direction the camera is facing at the time of capture.
+    It is measured in degrees clockwise from north.
+
+    \sa {QMediaMetaData}
+    \since 5.4
+*/
+
+/*!
+    \qmlproperty variant QtMultimedia::Camera::metaData.gpsProcessingMethod
+
+    This property holds the name of the method for determining the GPS position
+    data.
+
+    \sa {QMediaMetaData}
+    \since 5.4
+*/
+
+QDeclarativeMediaMetaData *QDeclarativeCamera::metaData()
+{
+    if (!m_metaData)
+        m_metaData = new QDeclarativeMediaMetaData(m_camera);
+    return m_metaData;
+}
+
+/*!
+    \qmlproperty size QtMultimedia::Camera::viewfinder.resolution
+
+    This property holds the resolution of the camera viewfinder. If no
+    resolution is given the backend will use a default value.
+
+    \since 5.4
+*/
+
+/*!
+    \qmlproperty real QtMultimedia::Camera::viewfinder.minimumFrameRate
+    \qmlproperty real QtMultimedia::Camera::viewfinder.maximumFrameRate
+
+    These properties hold the limits of the preferred frame rate for the
+    viewfinder in frames per second.
+
+    \since 5.4
+ */
+
+QDeclarativeCameraViewfinder *QDeclarativeCamera::viewfinder()
+{
+    if (!m_viewfinder)
+        m_viewfinder = new QDeclarativeCameraViewfinder(m_camera);
+
+    return m_viewfinder;
+}
 
 QT_END_NAMESPACE
 

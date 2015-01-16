@@ -4,7 +4,6 @@ Cpp.ignoretokens += Q_ANDROIDEXTRAS_EXPORT
 
 project = QtAndroidExtras
 description = Qt Android Extras Reference Documentation
-url = http://qt-project.org/doc/qt-$QT_VER
 version = $QT_VERSION
 
 examplesinstallpath = qtandroidextras

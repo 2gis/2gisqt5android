@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -126,7 +118,7 @@ QDeclarativeItem *tst_qdeclarativelistmodel::createWorkerTest(QDeclarativeEngine
     QDeclarativeItem *item = qobject_cast<QDeclarativeItem*>(component->create());
     QDeclarativeEngine::setContextForObject(model, eng->rootContext());
     if (item)
-        item->setProperty("model", qVariantFromValue(model)); 
+        item->setProperty("model", qVariantFromValue(model));
     return item;
 }
 
@@ -167,17 +159,17 @@ void tst_qdeclarativelistmodel::static_nestedElements()
     QFETCH(int, elementCount);
 
     QStringList elements;
-    for (int i=0; i<elementCount; i++) 
+    for (int i=0; i<elementCount; i++)
         elements.append("ListElement { a: 1; b: 2 }");
     QString elementsStr = elements.join(",\n") + "\n";
 
-    QString componentStr = 
+    QString componentStr =
         "import QtQuick 1.0\n"
         "ListModel {\n"
         "   ListElement {\n"
         "       attributes: [\n";
     componentStr += elementsStr.toUtf8().constData();
-    componentStr += 
+    componentStr +=
         "       ]\n"
         "   }\n"
         "}";
@@ -342,7 +334,7 @@ void tst_qdeclarativelistmodel::dynamic_worker()
     if (QByteArray(QTest::currentDataTag()).startsWith("nested"))
         return;
 
-    // This is same as dynamic() except it applies the test to a ListModel called 
+    // This is same as dynamic() except it applies the test to a ListModel called
     // from a WorkerScript (i.e. testing the internal FlatListModel that is created
     // by the WorkerListModelAgent)
 
@@ -393,7 +385,7 @@ void tst_qdeclarativelistmodel::dynamic_worker_sync()
     // This is the same as dynamic_worker() except that it executes a set of list operations
     // from the worker script, calls sync(), and tests the changes are reflected in the
     // list in the main thread
-    
+
     QDeclarativeListModel model;
     QDeclarativeEngine eng;
     QDeclarativeComponent component(&eng, QUrl::fromLocalFile(SRCDIR "/data/model.qml"));
@@ -419,7 +411,7 @@ void tst_qdeclarativelistmodel::dynamic_worker_sync()
     if (QByteArray(QTest::currentDataTag()).startsWith("nested-set"))
         QTest::ignoreMessage(QtWarningMsg, "<Unknown File>: QML ListModel: Cannot add list-type data when modifying or after modification from a worker script");
 
-    QVERIFY(QMetaObject::invokeMethod(item, "evalExpressionViaWorker", 
+    QVERIFY(QMetaObject::invokeMethod(item, "evalExpressionViaWorker",
             Q_ARG(QVariant, operations.mid(0, operations.length()-1))));
     waitForWorker(item);
 
@@ -709,12 +701,12 @@ void tst_qdeclarativelistmodel::set()
     sv.setProperty("test", QScriptValue(true));
     model.set(0, sv);
     QCOMPARE(model.get(0).property("test").toBool(), true); // triggers creation of model cache
-    QCOMPARE(model.data(0, model.roles()[0]), qVariantFromValue(true)); 
+    QCOMPARE(model.data(0, model.roles()[0]), qVariantFromValue(true));
 
     sv.setProperty("test", QScriptValue(false));
     model.set(0, sv);
     QCOMPARE(model.get(0).property("test").toBool(), false); // tests model cache is updated
-    QCOMPARE(model.data(0, model.roles()[0]), qVariantFromValue(false)); 
+    QCOMPARE(model.data(0, model.roles()[0]), qVariantFromValue(false));
 }
 
 /*
@@ -761,8 +753,8 @@ void tst_qdeclarativelistmodel::get_data()
     QTest::addColumn<QString>("roleName");
     QTest::addColumn<QVariant>("roleValue");
 
-    QTest::newRow("simple value") << "get(0).roleA = 500" << 0 << "roleA" << QVariant(500); 
-    QTest::newRow("simple value 2") << "get(1).roleB = 500" << 1 << "roleB" << QVariant(500); 
+    QTest::newRow("simple value") << "get(0).roleA = 500" << 0 << "roleA" << QVariant(500);
+    QTest::newRow("simple value 2") << "get(1).roleB = 500" << 1 << "roleB" << QVariant(500);
 
     QVariantMap map;
     map["zzz"] = 123;

@@ -49,9 +49,9 @@ Rectangle {
     //generous amount of screen space that will allow the buttons to fit
     height: 480; width:1000
 
-    color: "#6C646A" 
+    color: "#6C646A"
 
-    //a sub-rectangle allows the flexibility of setting the row area 
+    //a sub-rectangle allows the flexibility of setting the row area
     Rectangle{
         id:actionContainer
 
@@ -70,7 +70,7 @@ Rectangle {
                 buttonColor: "lightgrey"
                 label: "Load"
             }
-            
+
             Button{
                 buttonColor: "grey"
                 id: saveButton

@@ -70,8 +70,8 @@ Once you have a \l Component, you can call its \l {Component::createObject()}{cr
 the component. This function can take one or two arguments:
 \list
 \li The first is the parent for the new item. Since graphical items will not appear on the scene without a parent, it is
-  recommended that you set the parent this way. However, if you wish to set the parent later you can safely pass \c null to 
-  this function. 
+  recommended that you set the parent this way. However, if you wish to set the parent later you can safely pass \c null to
+  this function.
 \li The second is optional and is a map of property-value items that define initial any property values for the item.
   Property values specified by this argument are applied to the object before its creation is finalized, avoiding
   binding errors that may occur if particular properties must be initialized to enable other property bindings.

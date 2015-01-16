@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtDeclarative module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -160,7 +152,7 @@ class QByteArray;
 
     \snippet doc/src/snippets/declarative/component.qml 0
 
-    Notice that while a \l Rectangle by itself would be automatically 
+    Notice that while a \l Rectangle by itself would be automatically
     rendered and displayed, this is not the case for the above rectangle
     because it is defined inside a \c Component. The component encapsulates the
     QML elements within, as if they were defined in a separate QML
@@ -230,7 +222,7 @@ class QByteArray;
 
 /*!
     \enum QDeclarativeComponent::Status
-    
+
     Specifies the loading status of the QDeclarativeComponent.
 
     \value Null This QDeclarativeComponent has no data.  Call loadUrl() or setData() to add QML content.
@@ -282,8 +274,8 @@ void QDeclarativeComponentPrivate::clear()
         typeData->release();
         typeData = 0;
     }
-        
-    if (cc) { 
+
+    if (cc) {
         cc->release();
         cc = 0;
     }
@@ -439,12 +431,12 @@ QDeclarativeComponent::QDeclarativeComponent(QDeclarativeEngine *engine, const Q
 }
 
 /*!
-    Create a QDeclarativeComponent from the given \a fileName and give it the specified 
+    Create a QDeclarativeComponent from the given \a fileName and give it the specified
     \a parent and \a engine.
 
     \sa loadUrl()
 */
-QDeclarativeComponent::QDeclarativeComponent(QDeclarativeEngine *engine, const QString &fileName, 
+QDeclarativeComponent::QDeclarativeComponent(QDeclarativeEngine *engine, const QString &fileName,
                            QObject *parent)
 : QObject(*(new QDeclarativeComponentPrivate), parent)
 {
@@ -483,7 +475,7 @@ void QDeclarativeComponent::setData(const QByteArray &data, const QUrl &url)
     d->url = url;
 
     QDeclarativeTypeData *typeData = QDeclarativeEnginePrivate::get(d->engine)->typeLoader.get(data, url);
-    
+
     if (typeData->isCompleteOrError()) {
         d->fromTypeData(typeData);
     } else {
@@ -627,8 +619,8 @@ QDeclarativeComponent::QDeclarativeComponent(QDeclarativeComponentPrivate &dd, Q
     which were not created in QML.
 
     If you wish to create an object without setting a parent, specify \c null for
-    the \a parent value. Note that if the returned object is to be displayed, you 
-    must provide a valid \a parent value or set the returned object's \l{Item::parent}{parent} 
+    the \a parent value. Note that if the returned object is to be displayed, you
+    must provide a valid \a parent value or set the returned object's \l{Item::parent}{parent}
     property, or else the object will not be visible.
 
     If a \a parent is not provided to createObject(), a reference to the returned object must be held so that
@@ -753,7 +745,7 @@ QScriptValue QDeclarativeComponentPrivate::createObject(QObject *publicParent, c
 /*!
     Create an object instance from this component.  Returns 0 if creation
     failed.  \a context specifies the context within which to create the object
-    instance.  
+    instance.
 
     If \a context is 0 (the default), it will create the instance in the
     engine' s \l {QDeclarativeEngine::rootContext()}{root context}.
@@ -772,21 +764,21 @@ QObject *QDeclarativeComponent::create(QDeclarativeContext *context)
 
 /*!
     This method provides more advanced control over component instance creation.
-    In general, programmers should use QDeclarativeComponent::create() to create a 
+    In general, programmers should use QDeclarativeComponent::create() to create a
     component.
 
     Create an object instance from this component.  Returns 0 if creation
     failed.  \a context specifies the context within which to create the object
-    instance.  
+    instance.
 
     When QDeclarativeComponent constructs an instance, it occurs in three steps:
     \list 1
     \li The object hierarchy is created, and constant values are assigned.
     \li Property bindings are evaluated for the first time.
     \li If applicable, QDeclarativeParserStatus::componentComplete() is called on objects.
-    \endlist 
+    \endlist
     QDeclarativeComponent::beginCreate() differs from QDeclarativeComponent::create() in that it
-    only performs step 1.  QDeclarativeComponent::completeCreate() must be called to 
+    only performs step 1.  QDeclarativeComponent::completeCreate() must be called to
     complete steps 2 and 3.
 
     This breaking point is sometimes useful when using attached properties to
@@ -837,7 +829,7 @@ QDeclarativeComponentPrivate::beginCreate(QDeclarativeContextData *context, cons
     return begin(context, creationContext, cc, start, count, &state, 0, bindings);
 }
 
-QObject * QDeclarativeComponentPrivate::begin(QDeclarativeContextData *parentContext, 
+QObject * QDeclarativeComponentPrivate::begin(QDeclarativeContextData *parentContext,
                                               QDeclarativeContextData *componentCreationContext,
                                               QDeclarativeCompiledData *component, int start, int count,
                                               ConstructionState *state, QList<QDeclarativeError> *errors,
@@ -860,7 +852,7 @@ QObject * QDeclarativeComponentPrivate::begin(QDeclarativeContextData *parentCon
     ctxt->imports = component->importCache;
 
     // Nested global imports
-    if (componentCreationContext && start != -1) 
+    if (componentCreationContext && start != -1)
         ctxt->importedScripts = componentCreationContext->importedScripts;
 
     component->importCache->addref();
@@ -912,7 +904,7 @@ void QDeclarativeComponentPrivate::beginDeferred(QDeclarativeEnginePrivate *engi
     QDeclarativeVME vme;
     vme.runDeferred(object);
 
-    if (vme.isError()) 
+    if (vme.isError())
         state->errors = vme.errors();
 
     if (isRoot) {
@@ -939,13 +931,13 @@ void QDeclarativeComponentPrivate::complete(QDeclarativeEnginePrivate *enginePri
     if (state->completePending) {
         QT_TRY {
             for (int ii = 0; ii < state->bindValues.count(); ++ii) {
-                QDeclarativeEnginePrivate::SimpleList<QDeclarativeAbstractBinding> bv = 
+                QDeclarativeEnginePrivate::SimpleList<QDeclarativeAbstractBinding> bv =
                     state->bindValues.at(ii);
                 for (int jj = 0; jj < bv.count; ++jj) {
                     if(bv.at(jj)) {
                         // XXX akennedy
                         bv.at(jj)->m_mePtr = 0;
-                        bv.at(jj)->setEnabled(true, QDeclarativePropertyPrivate::BypassInterceptor | 
+                        bv.at(jj)->setEnabled(true, QDeclarativePropertyPrivate::BypassInterceptor |
                                                     QDeclarativePropertyPrivate::DontRemoveBinding);
                     }
                 }
@@ -953,7 +945,7 @@ void QDeclarativeComponentPrivate::complete(QDeclarativeEnginePrivate *enginePri
             }
 
             for (int ii = 0; ii < state->parserStatus.count(); ++ii) {
-                QDeclarativeEnginePrivate::SimpleList<QDeclarativeParserStatus> ps = 
+                QDeclarativeEnginePrivate::SimpleList<QDeclarativeParserStatus> ps =
                     state->parserStatus.at(ii);
 
                 for (int jj = ps.count - 1; jj >= 0; --jj) {
@@ -1026,7 +1018,7 @@ void QDeclarativeComponentPrivate::complete(QDeclarativeEnginePrivate *enginePri
 
 /*!
     This method provides more advanced control over component instance creation.
-    In general, programmers should use QDeclarativeComponent::create() to create a 
+    In general, programmers should use QDeclarativeComponent::create() to create a
     component.
 
     Complete a component creation begin with QDeclarativeComponent::beginCreate().

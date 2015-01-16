@@ -8,7 +8,7 @@ TARGET = tst_examples
 QT += testlib declarative
 macx:CONFIG -= app_bundle
 
-SOURCES += tst_examples.cpp 
+SOURCES += tst_examples.cpp
 
 include(../../../../tools/qml/qml.pri)
 

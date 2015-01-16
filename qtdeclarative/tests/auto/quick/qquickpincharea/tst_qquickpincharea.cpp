@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -48,6 +40,7 @@
 #include <QtQuick/qquickview.h>
 #include <QtQml/qqmlcontext.h>
 #include "../../shared/util.h"
+#include "../shared/viewtestutil.h"
 
 class tst_QQuickPinchArea: public QQmlDataTest
 {
@@ -232,15 +225,18 @@ void tst_QQuickPinchArea::scale()
     {
         QTest::QTouchEventSequence pinchSequence = QTest::touchEvent(window, device);
         pinchSequence.press(0, p1, window).commit();
+        QQuickTouchUtils::flush(window);
         // In order for the stationary point to remember its previous position,
         // we have to reuse the same pinchSequence object.  Otherwise if we let it
         // be destroyed and then start a new sequence, point 0 will default to being
         // stationary at 0, 0, and PinchArea will filter out that touchpoint because
         // it is outside its bounds.
         pinchSequence.stationary(0).press(1, p2, window).commit();
+        QQuickTouchUtils::flush(window);
         p1 -= QPoint(10,10);
         p2 += QPoint(10,10);
         pinchSequence.move(0, p1,window).move(1, p2,window).commit();
+        QQuickTouchUtils::flush(window);
 
         QCOMPARE(root->property("scale").toReal(), 1.0);
         QVERIFY(root->property("pinchActive").toBool());
@@ -248,6 +244,7 @@ void tst_QQuickPinchArea::scale()
         p1 -= QPoint(10,10);
         p2 += QPoint(10,10);
         pinchSequence.move(0, p1,window).move(1, p2,window).commit();
+        QQuickTouchUtils::flush(window);
 
         QCOMPARE(root->property("scale").toReal(), 1.5);
         QCOMPARE(root->property("center").toPointF(), QPointF(40, 40)); // blackrect is at 50,50
@@ -260,8 +257,10 @@ void tst_QQuickPinchArea::scale()
     {
         QTest::QTouchEventSequence pinchSequence = QTest::touchEvent(window, device);
         pinchSequence.move(0, p1, window).move(1, p2, window).commit();
+        QQuickTouchUtils::flush(window);
         QCOMPARE(blackRect->scale(), 2.0);
         pinchSequence.release(0, p1, window).release(1, p2, window).commit();
+        QQuickTouchUtils::flush(window);
     }
     QVERIFY(!root->property("pinchActive").toBool());
 }
@@ -293,12 +292,15 @@ void tst_QQuickPinchArea::pan()
     {
         QTest::QTouchEventSequence pinchSequence = QTest::touchEvent(window, device);
         pinchSequence.press(0, p1, window).commit();
+        QQuickTouchUtils::flush(window);
         // In order for the stationary point to remember its previous position,
         // we have to reuse the same pinchSequence object.
         pinchSequence.stationary(0).press(1, p2, window).commit();
+        QQuickTouchUtils::flush(window);
         p1 += QPoint(10,10);
         p2 += QPoint(10,10);
         pinchSequence.move(0, p1,window).move(1, p2,window).commit();
+        QQuickTouchUtils::flush(window);
 
         QCOMPARE(root->property("scale").toReal(), 1.0);
         QVERIFY(root->property("pinchActive").toBool());
@@ -306,6 +308,7 @@ void tst_QQuickPinchArea::pan()
         p1 += QPoint(10,10);
         p2 += QPoint(10,10);
         pinchSequence.move(0, p1,window).move(1, p2,window).commit();
+        QQuickTouchUtils::flush(window);
     }
 
     QCOMPARE(root->property("center").toPointF(), QPointF(60, 60)); // blackrect is at 50,50
@@ -316,11 +319,13 @@ void tst_QQuickPinchArea::pan()
     p1 += QPoint(100,100);
     p2 += QPoint(100,100);
     QTest::touchEvent(window, device).move(0, p1, window).move(1, p2, window);
+    QQuickTouchUtils::flush(window);
 
     QCOMPARE(blackRect->x(), 140.0);
     QCOMPARE(blackRect->y(), 160.0);
 
     QTest::touchEvent(window, device).release(0, p1, window).release(1, p2, window);
+    QQuickTouchUtils::flush(window);
     QVERIFY(!root->property("pinchActive").toBool());
 }
 
@@ -355,12 +360,15 @@ void tst_QQuickPinchArea::retouch()
     {
         QTest::QTouchEventSequence pinchSequence = QTest::touchEvent(window, device);
         pinchSequence.press(0, p1, window).commit();
+        QQuickTouchUtils::flush(window);
         // In order for the stationary point to remember its previous position,
         // we have to reuse the same pinchSequence object.
         pinchSequence.stationary(0).press(1, p2, window).commit();
+        QQuickTouchUtils::flush(window);
         p1 -= QPoint(10,10);
         p2 += QPoint(10,10);
         pinchSequence.move(0, p1,window).move(1, p2,window).commit();
+        QQuickTouchUtils::flush(window);
 
         QCOMPARE(root->property("scale").toReal(), 1.0);
         QVERIFY(root->property("pinchActive").toBool());
@@ -368,6 +376,7 @@ void tst_QQuickPinchArea::retouch()
         p1 -= QPoint(10,10);
         p2 += QPoint(10,10);
         pinchSequence.move(0, p1,window).move(1, p2,window).commit();
+        QQuickTouchUtils::flush(window);
 
         QCOMPARE(startedSpy.count(), 1);
 
@@ -382,6 +391,7 @@ void tst_QQuickPinchArea::retouch()
 
         // Hold down the first finger but release the second one
         pinchSequence.stationary(0).release(1, p2, window).commit();
+        QQuickTouchUtils::flush(window);
 
         QCOMPARE(startedSpy.count(), 1);
         QCOMPARE(finishedSpy.count(), 0);
@@ -390,9 +400,11 @@ void tst_QQuickPinchArea::retouch()
 
         // Keep holding down the first finger and re-touch the second one, then move them both
         pinchSequence.stationary(0).press(1, p2, window).commit();
+        QQuickTouchUtils::flush(window);
         p1 -= QPoint(10,10);
         p2 += QPoint(10,10);
         pinchSequence.move(0, p1, window).move(1, p2, window).commit();
+        QQuickTouchUtils::flush(window);
 
         // Lifting and retouching results in onPinchStarted being called again
         QCOMPARE(startedSpy.count(), 2);
@@ -401,6 +413,7 @@ void tst_QQuickPinchArea::retouch()
         QCOMPARE(window->rootObject()->property("pointCount").toInt(), 2);
 
         pinchSequence.release(0, p1, window).release(1, p2, window).commit();
+        QQuickTouchUtils::flush(window);
 
         QVERIFY(!root->property("pinchActive").toBool());
         QCOMPARE(startedSpy.count(), 2);
@@ -456,14 +469,18 @@ void tst_QQuickPinchArea::transformedPinchArea()
         QTest::QTouchEventSequence pinchSequence = QTest::touchEvent(view, device);
         // start pinch
         pinchSequence.press(0, p1, view).commit();
+        QQuickTouchUtils::flush(view);
         // In order for the stationary point to remember its previous position,
         // we have to reuse the same pinchSequence object.
         pinchSequence.stationary(0).press(1, p2, view).commit();
+        QQuickTouchUtils::flush(view);
         pinchSequence.stationary(0).move(1, p2 + QPoint(threshold * 2, 0), view).commit();
+        QQuickTouchUtils::flush(view);
         QCOMPARE(pinchArea->property("pinching").toBool(), shouldPinch);
 
         // release pinch
         pinchSequence.release(0, p1, view).release(1, p2, view).commit();
+        QQuickTouchUtils::flush(view);
         QCOMPARE(pinchArea->property("pinching").toBool(), false);
     }
 }

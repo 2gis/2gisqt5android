@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtBluetooth module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -50,6 +42,8 @@ QT_BEGIN_NAMESPACE
     \inmodule QtBluetooth
     \brief The QBluetoothDeviceDiscoveryAgent class discovers the Bluetooth
     devices nearby.
+
+    \since 5.2
 
     To discover the nearby Bluetooth devices:
     \list
@@ -99,6 +93,16 @@ QT_BEGIN_NAMESPACE
     \fn void QBluetoothDeviceDiscoveryAgent::deviceDiscovered(const QBluetoothDeviceInfo &info)
 
     This signal is emitted when the Bluetooth device described by \a info is discovered.
+
+    The signal is emitted as soon as the most important device information
+    has been collected. However, as long as the \l finished() signal has not
+    been emitted the information collection continues even for already discovered
+    devices. This is particularly true for signal strength information (RSSI). If
+    signal strength information is required it is advisable to retrieve the device
+    information via \l discoveredDevices() once the discovery has finished. This
+    will yield the most recent RSSI information.
+
+    \sa QBluetoothDeviceInfo::rssi()
 */
 
 /*!
@@ -132,10 +136,10 @@ QT_BEGIN_NAMESPACE
 /*!
     Constructs a new Bluetooth device discovery agent with parent \a parent.
 */
-QBluetoothDeviceDiscoveryAgent::QBluetoothDeviceDiscoveryAgent(QObject *parent)
-    : QObject(parent), d_ptr(new QBluetoothDeviceDiscoveryAgentPrivate(QBluetoothAddress()))
+QBluetoothDeviceDiscoveryAgent::QBluetoothDeviceDiscoveryAgent(QObject *parent) :
+    QObject(parent),
+    d_ptr(new QBluetoothDeviceDiscoveryAgentPrivate(QBluetoothAddress(), this))
 {
-    d_ptr->q_ptr = this;
 }
 
 /*!
@@ -150,10 +154,11 @@ QBluetoothDeviceDiscoveryAgent::QBluetoothDeviceDiscoveryAgent(QObject *parent)
 
     \sa error()
 */
-QBluetoothDeviceDiscoveryAgent::QBluetoothDeviceDiscoveryAgent(const QBluetoothAddress &deviceAdapter, QObject *parent)
-    : QObject(parent), d_ptr(new QBluetoothDeviceDiscoveryAgentPrivate(deviceAdapter))
+QBluetoothDeviceDiscoveryAgent::QBluetoothDeviceDiscoveryAgent(
+    const QBluetoothAddress &deviceAdapter, QObject *parent) :
+    QObject(parent),
+    d_ptr(new QBluetoothDeviceDiscoveryAgentPrivate(deviceAdapter, this))
 {
-    d_ptr->q_ptr = this;
     if (!deviceAdapter.isNull()) {
         const QList<QBluetoothHostInfo> localDevices = QBluetoothLocalDevice::allDevices();
         foreach (const QBluetoothHostInfo &hostInfo, localDevices) {
@@ -238,7 +243,6 @@ bool QBluetoothDeviceDiscoveryAgent::isActive() const
     return d->isActive();
 }
 
-
 /*!
     Returns the last error.
 */
@@ -261,4 +265,3 @@ QString QBluetoothDeviceDiscoveryAgent::errorString() const
 #include "moc_qbluetoothdevicediscoveryagent.cpp"
 
 QT_END_NAMESPACE
-

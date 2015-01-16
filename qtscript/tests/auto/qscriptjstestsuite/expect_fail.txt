@@ -145,6 +145,12 @@ ecma/Math/15.8.2.5.js | Math.atan2(Infinity, Infinity)
 ecma/Math/15.8.2.5.js | Math.atan2(Infinity, -Infinity)
 ecma/Math/15.8.2.5.js | Math.atan2(-Infinity, Infinity)
 ecma/Math/15.8.2.5.js | Math.atan2(-Infinity, -Infinity)
+ecma/Math/15.8.2.17.js | Math.sqrt(-0)
+ecma/Math/15.8.2.17.js | Infinity/Math.sqrt(-0)
+
+[Q_CC_MINGW64]
+ecma/Expressions/11.4.7-02.js | -(-2147483648) == 2147483648 | QTBUG-32829
+ecma/TypeConversion/9.3.1-3.js | - -"0x80000000" | QTBUG-32829
 
 [Q_OS_SOLARIS]
 ecma/Expressions/11.13.2-2.js | VAR1 = -0; VAR2= Infinity; VAR2 /= VAR1

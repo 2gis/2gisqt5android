@@ -5,35 +5,27 @@
 **
 ** This file is part of the Qt Assistant of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -213,10 +205,6 @@ MainWindow::MainWindow(CmdLineParser *cmdLine, QWidget *parent)
     QToolBar *toolBar = addToolBar(tr("Bookmark Toolbar"));
     toolBar->setObjectName(QLatin1String("Bookmark Toolbar"));
     bookMarkManager->setBookmarksToolbar(toolBar);
-
-    // Show the widget here, otherwise the restore geometry and state won't work
-    // on x11.
-    show();
 
     toolBar->hide();
     toolBarMenu()->addAction(toolBar->toggleViewAction());
@@ -492,9 +480,10 @@ void MainWindow::qtDocumentationInstalled()
 void MainWindow::checkInitState()
 {
     TRACE_OBJ
-    HelpEngineWrapper::instance().initialDocSetupDone();
-    if (!m_cmdLine->enableRemoteControl())
+    if (!m_cmdLine->enableRemoteControl()) {
+        HelpEngineWrapper::instance().initialDocSetupDone();
         return;
+    }
 
     HelpEngineWrapper &helpEngine = HelpEngineWrapper::instance();
     if (helpEngine.contentModel()->isCreatingContents()
@@ -511,6 +500,7 @@ void MainWindow::checkInitState()
             disconnect(helpEngine.contentModel(), 0, this, 0);
             disconnect(helpEngine.indexModel(), 0, this, 0);
         }
+        HelpEngineWrapper::instance().initialDocSetupDone();
         emit initDone();
     }
 }
@@ -904,8 +894,8 @@ void MainWindow::showAboutDialog()
         aboutDia.setText(tr("<center>"
             "<h3>%1</h3>"
             "<p>Version %2</p></center>"
-            "<p>Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).</p>")
-            .arg(tr("Qt Assistant")).arg(QLatin1String(QT_VERSION_STR)),
+            "<p>Copyright (C) %3 Digia Plc and/or its subsidiary(-ies).</p>")
+            .arg(tr("Qt Assistant"), QLatin1String(QT_VERSION_STR), QStringLiteral("2014")),
             resources);
         QLatin1String path(":/qt-project.org/assistant/images/assistant-128.png");
         aboutDia.setPixmap(QString(path));

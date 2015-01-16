@@ -52,7 +52,7 @@ for more details.)
 
 In general, these are accessible from QML regardless of whether a
 QObject-derived class has been \l{Registering C++ types with the QML type
-system}{registered with the QML type system}. However, if if a class is to be
+system}{registered with the QML type system}. However, if a class is to be
 used in a way that requires the engine to access additional type information
 — for example, if the class itself is to be used as a method parameter or
 property, or if one of its enum types is to be used in this way — then the
@@ -359,7 +359,7 @@ implementation, whereas an object-type property can be freely created and
 destroyed through QML code.
 
 
-\section1 Exposing Methods (including Qt Slots)
+\section1 Exposing Methods (Including Qt Slots)
 
 Any method of a QObject-derived type is accessible from QML code if it is:
 
@@ -398,13 +398,13 @@ methods, as shown below right:
 \li
 \code
  int main(int argc, char *argv[]) {
-     QCoreApplication app(argc, argv);
+     QGuiApplication app(argc, argv);
 
-     QQmlEngine engine;
-     Message msg;
-     engine.rootContext()->setContextProperty("msg", &msg);
-     QQmlComponent component(&engine, QUrl::fromLocalFile("MyItem.qml"));
-     component.create();
+     MessageBoard msgBoard;
+     QQuickView view;
+     view.engine()->rootContext()->setContextProperty("msgBoard", &msgBoard);
+     view.setSource(QUrl::fromLocalFile("MyItem.qml"));
+     view.show();
 
      return app.exec();
  }

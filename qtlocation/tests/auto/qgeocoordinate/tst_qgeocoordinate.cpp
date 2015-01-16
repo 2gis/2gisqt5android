@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -827,6 +819,28 @@ private slots:
         QTest::newRow("SW with alt, dms, hemisphere, 28.2341m")
                 << southWestWithAlt << QGeoCoordinate::DegreesMinutesSecondsWithHemisphere
                 << QString("27%1 28' 3.3\" S, 153%1 1' 40.4\" W, 28.2341m").arg(DEGREES_SYMB);
+
+        QTest::newRow("Wrap seconds to Minutes DMSH")
+                << QGeoCoordinate(1.1333333, 1.1333333) << QGeoCoordinate::DegreesMinutesSecondsWithHemisphere
+                << QString( "1%1 8' 0.0\" N, 1%1 8' 0.0\" E").arg(DEGREES_SYMB);
+        QTest::newRow("Wrap seconds to Minutes DMS")
+                << QGeoCoordinate(1.1333333, 1.1333333) << QGeoCoordinate::DegreesMinutesSeconds
+                << QString( "1%1 8' 0.0\", 1%1 8' 0.0\"").arg(DEGREES_SYMB);
+        QTest::newRow("Wrap minutes to Degrees DMH")
+                << QGeoCoordinate(1.999999, 1.999999) << QGeoCoordinate::DegreesMinutesWithHemisphere
+                << QString( "2%1 0.000' N, 2%1 0.000' E").arg(DEGREES_SYMB);
+        QTest::newRow("Wrap minutes to Degrees DM")
+                << QGeoCoordinate(1.999999, 1.999999) << QGeoCoordinate::DegreesMinutes
+                << QString( "2%1 0.000', 2%1 0.000'").arg(DEGREES_SYMB);
+
+        QTest::newRow("Wrap seconds to minutes to Degrees DM -> above valid long/lat values")
+                << QGeoCoordinate(89.9999, 179.9999) << QGeoCoordinate::DegreesMinutesSeconds
+                << QString( "90%1 0' 0.0\", 180%1 0' 0.0\"").arg(DEGREES_SYMB);
+
+        QTest::newRow("Wrap minutes to Degrees DM ->above valid long/lat values")
+                << QGeoCoordinate(89.9999, 179.9999) << QGeoCoordinate::DegreesMinutes
+                << QString( "90%1 0.000', 180%1 0.000'").arg(DEGREES_SYMB);
+
     }
 
     void datastream()

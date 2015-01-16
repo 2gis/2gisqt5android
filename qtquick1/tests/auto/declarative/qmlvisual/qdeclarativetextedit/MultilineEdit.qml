@@ -6,7 +6,7 @@ Item {
     property alias text: textEdit.text
 
     width: 240 + 11 //Should be set manually in most cases
-    height: textEdit.height + 11 
+    height: textEdit.height + 11
 
     Rectangle {
         color: 'lightsteelblue'
@@ -25,10 +25,10 @@ Item {
                 y: 1
             }
         }
-        property int leftMargin: 6 
-        property int topMargin: 6 
-        property int rightMargin: 6 
-        property int bottomMargin: 6 
+        property int leftMargin: 6
+        property int topMargin: 6
+        property int rightMargin: 6
+        property int bottomMargin: 6
         x: leftMargin
         width: parent.width - leftMargin - rightMargin;
         y: 5

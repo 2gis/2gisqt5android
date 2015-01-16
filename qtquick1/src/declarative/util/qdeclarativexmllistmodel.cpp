@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtDeclarative module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -114,7 +106,7 @@ typedef QPair<int, int> QDeclarativeXmlListRange;
     For example, if there is an XML document like this:
 
     \quotefile doc/src/snippets/declarative/xmlrole.xml
-        
+
     Here are some valid XPath expressions for XmlRole queries on this document:
 
     \snippet doc/src/snippets/declarative/xmlrole.qml 0
@@ -127,7 +119,7 @@ typedef QPair<int, int> QDeclarativeXmlListRange;
 /*!
     \qmlproperty bool XmlRole::isKey
     Defines whether this is a key role.
-    
+
     Key roles are used to to determine whether a set of values should
     be updated or added to the XML list model when XmlListModel::reload()
     is called.
@@ -321,7 +313,7 @@ void QDeclarativeXmlQueryEngine::processJobs()
               return;
             currentJob = m_jobs.takeLast();
         }
-        
+
         locker.unlock();
         processQuery(&currentJob);
         locker.relock();
@@ -450,7 +442,7 @@ void QDeclarativeXmlQueryEngine::doSubQueryJob(XmlQueryJob *currentJob, QDeclara
             for (int i=0; i<currentJob->keyRoleResultsCache.count(); i++) {
                 if (!keyRoleResults.contains(currentJob->keyRoleResultsCache[i]))
                     addIndexToRangeList(&currentResult->removed, i);
-                else 
+                else
                     temp << currentJob->keyRoleResultsCache[i];
             }
 
@@ -644,10 +636,10 @@ void QDeclarativeXmlListModelPrivate::clear_role(QDeclarativeListProperty<QDecla
     \endqml
 
     The \l {XmlListModel::query}{query} value of "/rss/channel/item" specifies that the XmlListModel should generate
-    a model item for each \c <item> in the XML document. 
-    
+    a model item for each \c <item> in the XML document.
+
     The XmlRole objects define the
-    model item attributes. Here, each model item will have \c title and \c pubDate 
+    model item attributes. Here, each model item will have \c title and \c pubDate
     attributes that match the \c title and \c pubDate values of its corresponding \c <item>.
     (See \l XmlRole::query for more examples of valid XPath expressions for XmlRole.)
 
@@ -682,8 +674,8 @@ void QDeclarativeXmlListModelPrivate::clear_role(QDeclarativeListProperty<QDecla
     \endqml
 
     Then when reload() is called, the model will only add and reload
-    items with a "pubDate" value that is not already 
-    present in the model. 
+    items with a "pubDate" value that is not already
+    present in the model.
 
     This is useful when displaying the contents of XML documents that
     are incrementally updated (such as RSS feeds) to avoid repainting the
@@ -901,9 +893,9 @@ QScriptValue QDeclarativeXmlListModel::get(int index) const
         return sengine->undefinedValue();
 
     QScriptValue sv = sengine->newObject();
-    for (int i=0; i<d->roleObjects.count(); i++) 
+    for (int i=0; i<d->roleObjects.count(); i++)
         sv.setProperty(d->roleObjects[i]->name(), sengine->toScriptValue(d->data.value(i).value(index)));
-    return sv;    
+    return sv;
 }
 
 /*!
@@ -935,7 +927,7 @@ QDeclarativeXmlListModel::Status QDeclarativeXmlListModel::status() const
     1.0 (all data downloaded). If the XML data is not from a remote source,
     the progress becomes 1.0 as soon as the data is read.
 
-    Note that when the progress is 1.0, the XML data has been downloaded, but 
+    Note that when the progress is 1.0, the XML data has been downloaded, but
     it is yet to be loaded into the model at this point. Use the status
     property to find out when the XML data has been read and loaded into
     the model.
@@ -983,13 +975,13 @@ void QDeclarativeXmlListModel::componentComplete()
     \qmlmethod XmlListModel::reload()
 
     Reloads the model.
-    
+
     If no key roles have been specified, all existing model
     data is removed, and the model is rebuilt from scratch.
 
     Otherwise, items are only added if the model does not already
     contain items with matching key role values.
-    
+
     \sa {Using key XML roles}, XmlRole::isKey
 */
 void QDeclarativeXmlListModel::reload()

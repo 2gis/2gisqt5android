@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -46,63 +38,80 @@
 
 using namespace QV4;
 
-ObjectIterator::ObjectIterator(Value *scratch1, Value *scratch2, const ObjectRef o, uint flags)
-    : object(ObjectRef::fromValuePointer(scratch1))
-    , current(ObjectRef::fromValuePointer(scratch2))
+ObjectIterator::ObjectIterator(Value *scratch1, Value *scratch2, Object *o, uint flags)
+    : object(scratch1)
+    , current(scratch2)
     , arrayNode(0)
     , arrayIndex(0)
     , memberIndex(0)
     , flags(flags)
 {
-    object = o.getPointer();
-    current = o.getPointer();
-
-    if (!!object && object->asArgumentsObject()) {
-        Scope scope(object->engine());
-        Scoped<ArgumentsObject> (scope, object->asReturnedValue())->fullyCreate();
-    }
+    init(o);
 }
 
-ObjectIterator::ObjectIterator(Scope &scope, const ObjectRef o, uint flags)
-    : object(ObjectRef::fromValuePointer(scope.alloc(1)))
-    , current(ObjectRef::fromValuePointer(scope.alloc(1)))
+ObjectIterator::ObjectIterator(Scope &scope, Object *o, uint flags)
+    : object(scope.alloc(1))
+    , current(scope.alloc(1))
     , arrayNode(0)
     , arrayIndex(0)
     , memberIndex(0)
     , flags(flags)
 {
-    object = o;
-    current = o;
+    init(o);
+}
 
-    if (!!object && object->asArgumentsObject()) {
+ObjectIterator::ObjectIterator(Value *scratch1, Value *scratch2, uint flags)
+    : object(scratch1)
+    , current(scratch2)
+    , arrayNode(0)
+    , arrayIndex(0)
+    , memberIndex(0)
+    , flags(flags)
+{
+    object->o = (Object*)0;
+    current->o = (Object*)0;
+    // Caller needs to call init!
+}
+
+void ObjectIterator::init(Object *o)
+{
+    object->o = o;
+    current->o = o;
+
+#if QT_POINTER_SIZE == 4
+    object->tag = QV4::Value::Managed_Type;
+    current->tag = QV4::Value::Managed_Type;
+#endif
+
+    if (object->as<ArgumentsObject>()) {
         Scope scope(object->engine());
         Scoped<ArgumentsObject> (scope, object->asReturnedValue())->fullyCreate();
     }
 }
 
-void ObjectIterator::next(StringRef name, uint *index, Property *pd, PropertyAttributes *attrs)
+void ObjectIterator::next(String *&name, uint *index, Property *pd, PropertyAttributes *attrs)
 {
     name = (String *)0;
     *index = UINT_MAX;
 
-    if (!object) {
+    if (!object->asObject()) {
         *attrs = PropertyAttributes();
         return;
     }
 
     while (1) {
-        if (!current)
+        if (!current->asObject())
             break;
 
         while (1) {
-            current->advanceIterator(this, name, index, pd, attrs);
+            current->asObject()->advanceIterator(this, name, index, pd, attrs);
             if (attrs->isEmpty())
                 break;
             // check the property is not already defined earlier in the proto chain
-            if (current != object) {
-                Object *o = object;
+            if (current->asObject() != object->asObject()) {
+                Object *o = object->asObject();
                 bool shadowed = false;
-                while (o != current) {
+                while (o != current->asObject()) {
                     if ((!!name && o->hasOwnProperty(name)) ||
                         (*index != UINT_MAX && o->hasOwnProperty(*index))) {
                         shadowed = true;
@@ -117,9 +126,9 @@ void ObjectIterator::next(StringRef name, uint *index, Property *pd, PropertyAtt
         }
 
         if (flags & WithProtoChain)
-            current = current->prototype();
+            current->o = current->objectValue()->prototype();
         else
-            current = (Object *)0;
+            current->o = (Object *)0;
 
         arrayIndex = 0;
         memberIndex = 0;
@@ -129,7 +138,7 @@ void ObjectIterator::next(StringRef name, uint *index, Property *pd, PropertyAtt
 
 ReturnedValue ObjectIterator::nextPropertyName(ValueRef value)
 {
-    if (!object)
+    if (!object->asObject())
         return Encode::null();
 
     PropertyAttributes attrs;
@@ -137,11 +146,13 @@ ReturnedValue ObjectIterator::nextPropertyName(ValueRef value)
     uint index;
     Scope scope(object->engine());
     ScopedString name(scope);
-    next(name, &index, &p, &attrs);
+    String *n;
+    next(n, &index, &p, &attrs);
+    name = n;
     if (attrs.isEmpty())
         return Encode::null();
 
-    value = object->getValue(&p, attrs);
+    value = object->objectValue()->getValue(&p, attrs);
 
     if (!!name)
         return name->asReturnedValue();
@@ -151,7 +162,7 @@ ReturnedValue ObjectIterator::nextPropertyName(ValueRef value)
 
 ReturnedValue ObjectIterator::nextPropertyNameAsString(ValueRef value)
 {
-    if (!object)
+    if (!object->asObject())
         return Encode::null();
 
     PropertyAttributes attrs;
@@ -159,11 +170,13 @@ ReturnedValue ObjectIterator::nextPropertyNameAsString(ValueRef value)
     uint index;
     Scope scope(object->engine());
     ScopedString name(scope);
-    next(name, &index, &p, &attrs);
+    String *n;
+    next(n, &index, &p, &attrs);
+    name = n;
     if (attrs.isEmpty())
         return Encode::null();
 
-    value = object->getValue(&p, attrs);
+    value = object->objectValue()->getValue(&p, attrs);
 
     if (!!name)
         return name->asReturnedValue();
@@ -173,7 +186,7 @@ ReturnedValue ObjectIterator::nextPropertyNameAsString(ValueRef value)
 
 ReturnedValue ObjectIterator::nextPropertyNameAsString()
 {
-    if (!object)
+    if (!object->asObject())
         return Encode::null();
 
     PropertyAttributes attrs;
@@ -181,7 +194,9 @@ ReturnedValue ObjectIterator::nextPropertyNameAsString()
     uint index;
     Scope scope(object->engine());
     ScopedString name(scope);
-    next(name, &index, &p, &attrs);
+    String *n;
+    next(n, &index, &p, &attrs);
+    name = n;
     if (attrs.isEmpty())
         return Encode::null();
 
@@ -197,7 +212,7 @@ DEFINE_OBJECT_VTABLE(ForEachIteratorObject);
 void ForEachIteratorObject::markObjects(Managed *that, ExecutionEngine *e)
 {
     ForEachIteratorObject *o = static_cast<ForEachIteratorObject *>(that);
-    o->workArea[0].mark(e);
-    o->workArea[1].mark(e);
+    o->d()->workArea[0].mark(e);
+    o->d()->workArea[1].mark(e);
     Object::markObjects(that, e);
 }

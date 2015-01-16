@@ -19,7 +19,7 @@ Rectangle {
         focus: true
 
         Keys.onDigit9Pressed: console.log("Error - FocusScope")
-        
+
         Rectangle {
             height: 120
             width: 420
@@ -30,13 +30,13 @@ Rectangle {
 
             Rectangle {
                 id: item1
-                x: 10; y: 10 
+                x: 10; y: 10
                 width: 100; height: 100; color: "green"
                 border.width: 5
                 border.color: activeFocus?"blue":"black"
                 Keys.onDigit9Pressed: console.log("Top Left");
                 KeyNavigation.right: item2
-                focus: true 
+                focus: true
 
                 Rectangle {
                     width: 50; height: 50; anchors.centerIn: parent

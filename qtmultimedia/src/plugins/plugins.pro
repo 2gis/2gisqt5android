@@ -29,6 +29,10 @@ win32:!winrt {
     config_wmf: SUBDIRS += wmf
 }
 
+winrt {
+    SUBDIRS += winrt
+}
+
 unix:!mac:!android {
     config_gstreamer {
        SUBDIRS += gstreamer
@@ -36,11 +40,8 @@ unix:!mac:!android {
         SUBDIRS += audiocapture
     }
 
-    config_pulseaudio {
-        SUBDIRS += pulseaudio
-    } else:config_alsa {
-        SUBDIRS += alsa
-    }
+    config_pulseaudio: SUBDIRS += pulseaudio
+    config_alsa: SUBDIRS += alsa
 
     # v4l is turned off because it is not supported in Qt 5
     # config_linux_v4l {
@@ -52,8 +53,6 @@ mac:!simulator {
     SUBDIRS += audiocapture coreaudio
 
     config_avfoundation: SUBDIRS += avfoundation
-
-    !ios: SUBDIRS += qt7
 }
 
 config_resourcepolicy {

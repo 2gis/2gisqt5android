@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtQuick module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -63,6 +55,8 @@
 #include "qaccessible.h"
 #include "qquickaccessibleattached_p.h"
 #endif
+
+#include <QtGui/private/qtextengine_p.h>
 
 QT_BEGIN_NAMESPACE
 
@@ -370,6 +364,7 @@ void QQuickTextInput::setColor(const QColor &c)
         d->color = c;
         d->textLayoutDirty = true;
         d->updateType = QQuickTextInputPrivate::UpdatePaintNode;
+        polish();
         update();
         emit colorChanged();
     }
@@ -397,6 +392,7 @@ void QQuickTextInput::setSelectionColor(const QColor &color)
     if (d->hasSelectedText()) {
         d->textLayoutDirty = true;
         d->updateType = QQuickTextInputPrivate::UpdatePaintNode;
+        polish();
         update();
     }
     emit selectionColorChanged();
@@ -422,6 +418,7 @@ void QQuickTextInput::setSelectedTextColor(const QColor &color)
     if (d->hasSelectedText()) {
         d->textLayoutDirty = true;
         d->updateType = QQuickTextInputPrivate::UpdatePaintNode;
+        polish();
         update();
     }
     emit selectedTextColorChanged();
@@ -731,6 +728,7 @@ void QQuickTextInput::setCursorVisible(bool on)
     if (!d->cursorItem) {
         d->setCursorBlinkPeriod(on ? qApp->styleHints()->cursorFlashTime() : 0);
         d->updateType = QQuickTextInputPrivate::UpdatePaintNode;
+        polish();
         update();
     }
     emit cursorVisibleChanged(d->cursorVisible);
@@ -779,8 +777,7 @@ QRectF QQuickTextInput::cursorRectangle() const
         return QRectF();
     qreal x = l.cursorToX(c) - d->hscroll;
     qreal y = l.y() - d->vscroll;
-    qreal height = l.ascent() + l.descent();
-    return QRectF(x, y, 1, height);
+    return QRectF(x, y, 1, l.height());
 }
 
 /*!
@@ -881,6 +878,8 @@ void QQuickTextInput::setFocusOnPress(bool b)
 
     Whether the TextInput should scroll when the text is longer than the width. By default this is
     set to true.
+
+    \sa ensureVisible()
 */
 bool QQuickTextInput::autoScroll() const
 {
@@ -1197,7 +1196,7 @@ void QQuickTextInput::setInputMask(const QString &im)
 bool QQuickTextInput::hasAcceptableInput() const
 {
     Q_D(const QQuickTextInput);
-    return d->hasAcceptableInput(d->m_text) == QQuickTextInputPrivate::AcceptableInput;
+    return d->m_acceptableInput;
 }
 
 /*!
@@ -1299,6 +1298,7 @@ void QQuickTextInput::setEchoMode(QQuickTextInput::EchoMode echo)
 
     \li Qt.ImhDate - The text editor functions as a date field.
     \li Qt.ImhTime - The text editor functions as a time field.
+    \li Qt.ImhMultiLine - The text editor doesn't close software input keyboard when Return or Enter key is pressed (since QtQuick 2.4).
     \endlist
 
     Flags that restrict input (exclusive flags) are:
@@ -1394,8 +1394,7 @@ QRectF QQuickTextInput::positionToRectangle(int pos) const
         return QRectF();
     qreal x = l.cursorToX(pos) - d->hscroll;
     qreal y = l.y() - d->vscroll;
-    qreal height = l.ascent() + l.descent();
-    return QRectF(x, y, 1, height);
+    return QRectF(x, y, 1, l.height());
 }
 
 /*!
@@ -1409,7 +1408,7 @@ QRectF QQuickTextInput::positionToRectangle(int pos) const
     This means that for all x values before the first character this function returns 0,
     and for all x values after the last character this function returns text.length.  If
     the y value is above the text the position will be that of the nearest character on
-    the first line line and if it is below the text the position of the nearest character
+    the first line and if it is below the text the position of the nearest character
     on the last line will be returned.
 
     The cursor position type specifies how the cursor position should be resolved.
@@ -1721,33 +1720,24 @@ void QQuickTextInput::geometryChanged(const QRectF &newGeometry,
     QQuickImplicitSizeItem::geometryChanged(newGeometry, oldGeometry);
 }
 
-void QQuickTextInputPrivate::updateHorizontalScroll()
+void QQuickTextInputPrivate::ensureVisible(int position, int preeditCursor, int preeditLength)
 {
     Q_Q(QQuickTextInput);
-#ifndef QT_NO_IM
-    QTextLine currentLine = m_textLayout.lineForTextPosition(m_cursor + m_preeditCursor);
-    const int preeditLength = m_textLayout.preeditAreaText().length();
-#else
-    QTextLine currentLine = m_textLayout.lineForTextPosition(m_cursor);
-#endif
+    QTextLine textLine = m_textLayout.lineForTextPosition(position + preeditCursor);
     const qreal width = qMax<qreal>(0, q->width());
     qreal cix = 0;
     qreal widthUsed = 0;
-    if (currentLine.isValid()) {
-#ifndef QT_NO_IM
-        cix = currentLine.cursorToX(m_cursor + preeditLength);
-#else
-        cix = currentLine.cursorToX(m_cursor);
-#endif
+    if (textLine.isValid()) {
+        cix = textLine.cursorToX(position + preeditLength);
         const qreal cursorWidth = cix >= 0 ? cix : width - cix;
-        widthUsed = qMax(currentLine.naturalTextWidth(), cursorWidth);
+        widthUsed = qMax(textLine.naturalTextWidth(), cursorWidth);
     }
     int previousScroll = hscroll;
 
-    if (!autoScroll || widthUsed <=  width || m_echoMode == QQuickTextInput::NoEcho) {
+    if (widthUsed <= width) {
         hscroll = 0;
     } else {
-        Q_ASSERT(currentLine.isValid());
+        Q_ASSERT(textLine.isValid());
         if (cix - hscroll >= width) {
             // text doesn't fit, cursor is to the right of br (scroll right)
             hscroll = cix - width;
@@ -1767,7 +1757,7 @@ void QQuickTextInputPrivate::updateHorizontalScroll()
         if (preeditLength > 0) {
             // check to ensure long pre-edit text doesn't push the cursor
             // off to the left
-             cix = currentLine.cursorToX(m_cursor + qMax(0, m_preeditCursor - 1));
+             cix = textLine.cursorToX(position + qMax(0, preeditCursor - 1));
              if (cix < hscroll)
                  hscroll = cix;
         }
@@ -1775,6 +1765,20 @@ void QQuickTextInputPrivate::updateHorizontalScroll()
     }
     if (previousScroll != hscroll)
         textLayoutDirty = true;
+}
+
+void QQuickTextInputPrivate::updateHorizontalScroll()
+{
+    if (autoScroll && m_echoMode != QQuickTextInput::NoEcho) {
+#ifndef QT_NO_IM
+        const int preeditLength = m_textLayout.preeditAreaText().length();
+        ensureVisible(m_cursor, m_preeditCursor, preeditLength);
+#else
+        ensureVisible(m_cursor);
+#endif
+    } else {
+        hscroll = 0;
+    }
 }
 
 void QQuickTextInputPrivate::updateVerticalScroll()
@@ -1832,7 +1836,21 @@ void QQuickTextInput::triggerPreprocess()
     Q_D(QQuickTextInput);
     if (d->updateType == QQuickTextInputPrivate::UpdateNone)
         d->updateType = QQuickTextInputPrivate::UpdateOnlyPreprocess;
+    polish();
     update();
+}
+
+void QQuickTextInput::updatePolish()
+{
+    invalidateFontCaches();
+}
+
+void QQuickTextInput::invalidateFontCaches()
+{
+    Q_D(QQuickTextInput);
+
+    if (d->m_textLayout.engine() != 0)
+        d->m_textLayout.engine()->resetFontEngineCache();
 }
 
 QSGNode *QQuickTextInput::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData *data)
@@ -1853,17 +1871,13 @@ QSGNode *QQuickTextInput::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData 
         node = new QQuickTextNode(this);
     d->textNode = node;
 
-    if (!d->textLayoutDirty && oldNode != 0) {
-        QSGSimpleRectNode *cursorNode = node->cursorNode();
-        if (cursorNode != 0 && !isReadOnly()) {
-            cursorNode->setRect(cursorRectangle());
+    const bool showCursor = !isReadOnly() && d->cursorItem == 0 && d->cursorVisible && (d->m_blinkStatus || d->m_blinkPeriod == 0);
 
-            if (!d->cursorVisible || d->cursorItem || (!d->m_blinkStatus && d->m_blinkPeriod > 0)) {
-                d->hideCursor();
-            } else {
-                d->showCursor();
-            }
-        }
+    if (!d->textLayoutDirty && oldNode != 0) {
+        if (showCursor)
+            node->setCursor(cursorRectangle(), d->color);
+        else
+            node->clearCursor();
     } else {
         node->setUseNativeRenderer(d->renderType == NativeRendering);
         node->deleteContent();
@@ -1873,9 +1887,9 @@ QSGNode *QQuickTextInput::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData 
         if (d->autoScroll && d->m_textLayout.lineCount() > 0) {
             QFontMetricsF fm(d->font);
             // the y offset is there to keep the baseline constant in case we have script changes in the text.
-            offset = -QPoint(d->hscroll, d->vscroll + d->m_textLayout.lineAt(0).ascent() - fm.ascent());
+            offset = -QPointF(d->hscroll, d->vscroll + d->m_textLayout.lineAt(0).ascent() - fm.ascent());
         } else {
-            offset = -QPoint(d->hscroll, d->vscroll);
+            offset = -QPointF(d->hscroll, d->vscroll);
         }
 
         if (!d->m_textLayout.text().isEmpty()
@@ -1891,23 +1905,24 @@ QSGNode *QQuickTextInput::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData 
                                                                  // selection
         }
 
-        if (!isReadOnly() && d->cursorItem == 0) {
-            node->setCursor(cursorRectangle(), d->color);
-            if (!d->cursorVisible || (!d->m_blinkStatus && d->m_blinkPeriod > 0)) {
-                d->hideCursor();
-            } else {
-                d->showCursor();
-            }
-        }
+        if (showCursor)
+                node->setCursor(cursorRectangle(), d->color);
 
         d->textLayoutDirty = false;
     }
+
+    invalidateFontCaches();
 
     return node;
 }
 
 #ifndef QT_NO_IM
 QVariant QQuickTextInput::inputMethodQuery(Qt::InputMethodQuery property) const
+{
+    return inputMethodQuery(property, QVariant());
+}
+
+QVariant QQuickTextInput::inputMethodQuery(Qt::InputMethodQuery property, QVariant argument) const
 {
     Q_D(const QQuickTextInput);
     switch (property) {
@@ -1938,6 +1953,16 @@ QVariant QQuickTextInput::inputMethodQuery(Qt::InputMethodQuery property) const
             return QVariant(d->selectionEnd());
         else
             return QVariant(d->selectionStart());
+    case Qt::ImAbsolutePosition:
+        return QVariant(d->m_cursor);
+    case Qt::ImTextAfterCursor:
+        if (argument.isValid())
+            return QVariant(d->m_text.mid(d->m_cursor, argument.toInt()));
+        return QVariant(d->m_text.mid(d->m_cursor));
+    case Qt::ImTextBeforeCursor:
+        if (argument.isValid())
+            return QVariant(d->m_text.left(d->m_cursor).right(argument.toInt()));
+        return QVariant(d->m_text.left(d->m_cursor));
     default:
         return QQuickItem::inputMethodQuery(property);
     }
@@ -2063,9 +2088,8 @@ void QQuickTextInput::insert(int position, const QString &text)
 {
     Q_D(QQuickTextInput);
     if (d->m_echoMode == QQuickTextInput::Password) {
-        int delay = qGuiApp->styleHints()->passwordMaskDelay();
-        if (delay > 0)
-            d->m_passwordEchoTimer.start(delay, this);
+        if (d->m_passwordMaskDelay > 0)
+            d->m_passwordEchoTimer.start(d->m_passwordMaskDelay, this);
     }
     if (position < 0 || position > d->m_text.length())
         return;
@@ -2245,6 +2269,34 @@ void QQuickTextInput::setPasswordCharacter(const QString &str)
 }
 
 /*!
+   \qmlproperty int QtQuick::TextInput::passwordMaskDelay
+   \since 5.4
+
+   Sets the delay before visible character is masked with password character, in milliseconds.
+
+   The reset method will be called by assigning undefined.
+*/
+int QQuickTextInput::passwordMaskDelay() const
+{
+    Q_D(const QQuickTextInput);
+    return d->m_passwordMaskDelay;
+}
+
+void QQuickTextInput::setPasswordMaskDelay(int delay)
+{
+    Q_D(QQuickTextInput);
+    if (d->m_passwordMaskDelay != delay) {
+        d->m_passwordMaskDelay = delay;
+        emit passwordMaskDelayChanged(delay);
+    }
+}
+
+void QQuickTextInput::resetPasswordMaskDelay()
+{
+    setPasswordMaskDelay(qGuiApp->styleHints()->passwordMaskDelay());
+}
+
+/*!
    \qmlproperty string QtQuick::TextInput::displayText
 
    This is the text displayed in the TextInput.
@@ -2254,12 +2306,15 @@ void QQuickTextInput::setPasswordCharacter(const QString &str)
    this property holds the text visible to the user, while
    the \l text property holds the actual entered text.
 
+   \note Unlike the TextInput::text property, this contains
+   partial text input from an input method.
+
    \readonly
 */
 QString QQuickTextInput::displayText() const
 {
     Q_D(const QQuickTextInput);
-    return d->m_textLayout.text();
+    return d->m_textLayout.text().insert(d->m_textLayout.preeditAreaPosition(), d->m_textLayout.preeditAreaText());
 }
 
 /*!
@@ -2540,7 +2595,7 @@ void QQuickTextInputPrivate::handleFocusEvent(QFocusEvent *event)
                 && !persistentSelection)
             deselect();
 
-        if (q->hasAcceptableInput() || fixup())
+        if (hasAcceptableInput(m_text) == AcceptableInput || fixup())
             emit q->editingFinished();
 
 #ifndef QT_NO_IM
@@ -2607,15 +2662,18 @@ void QQuickTextInputPrivate::init()
     }
 }
 
-void QQuickTextInput::updateCursorRectangle()
+void QQuickTextInput::updateCursorRectangle(bool scroll)
 {
     Q_D(QQuickTextInput);
     if (!isComponentComplete())
         return;
 
-    d->updateHorizontalScroll();
-    d->updateVerticalScroll();
+    if (scroll) {
+        d->updateHorizontalScroll();
+        d->updateVerticalScroll();
+    }
     d->updateType = QQuickTextInputPrivate::UpdatePaintNode;
+    polish();
     update();
     emit cursorRectangleChanged();
     if (d->cursorItem) {
@@ -2633,6 +2691,7 @@ void QQuickTextInput::selectionChanged()
     Q_D(QQuickTextInput);
     d->textLayoutDirty = true; //TODO: Only update rect in selection
     d->updateType = QQuickTextInputPrivate::UpdatePaintNode;
+    polish();
     update();
     emit selectedTextChanged();
 
@@ -2648,18 +2707,6 @@ void QQuickTextInput::selectionChanged()
             d->lastSelectionEnd = d->m_cursor;
         emit selectionEndChanged();
     }
-}
-
-void QQuickTextInputPrivate::showCursor()
-{
-    if (textNode != 0 && textNode->cursorNode() != 0)
-        textNode->cursorNode()->setColor(color);
-}
-
-void QQuickTextInputPrivate::hideCursor()
-{
-    if (textNode != 0 && textNode->cursorNode() != 0)
-        textNode->cursorNode()->setColor(QColor(0, 0, 0, 0));
 }
 
 QRectF QQuickTextInput::boundingRect() const
@@ -2856,6 +2903,7 @@ void QQuickTextInputPrivate::updateLayout()
     contentSize = QSizeF(width, height);
 
     updateType = UpdatePaintNode;
+    q->polish();
     q->update();
 
     if (!requireImplicitWidth && !q->widthValid())
@@ -3364,6 +3412,27 @@ bool QQuickTextInputPrivate::finishChange(int validateFromState, bool update, bo
             }
         }
 #endif
+
+        if (m_maskData) {
+            if (m_text.length() != m_maxLength) {
+                m_acceptableInput = false;
+            } else {
+                for (int i = 0; i < m_maxLength; ++i) {
+                    if (m_maskData[i].separator) {
+                        if (m_text.at(i) != m_maskData[i].maskChar) {
+                            m_acceptableInput = false;
+                            break;
+                        }
+                    } else {
+                        if (!isValidInput(m_text.at(i), m_maskData[i].maskChar)) {
+                            m_acceptableInput = false;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
         if (validateFromState >= 0 && wasValidInput && !m_validInput) {
             if (m_transactions.count())
                 return false;
@@ -3484,9 +3553,8 @@ void QQuickTextInputPrivate::internalInsert(const QString &s)
 {
     Q_Q(QQuickTextInput);
     if (m_echoMode == QQuickTextInput::Password) {
-        int delay = qGuiApp->styleHints()->passwordMaskDelay();
-        if (delay > 0)
-            m_passwordEchoTimer.start(delay, q);
+        if (m_passwordMaskDelay > 0)
+            m_passwordEchoTimer.start(m_passwordMaskDelay, q);
     }
     Q_ASSERT(!hasSelectedText());   // insert(), processInputMethodEvent() call removeSelectedText() first.
     if (m_maskData) {
@@ -4124,6 +4192,7 @@ void QQuickTextInputPrivate::setCursorBlinkPeriod(int msec)
         m_blinkTimer = 0;
         if (m_blinkStatus == 1) {
             updateType = UpdatePaintNode;
+            q->polish();
             q->update();
         }
     }
@@ -4136,6 +4205,7 @@ void QQuickTextInput::timerEvent(QTimerEvent *event)
     if (event->timerId() == d->m_blinkTimer) {
         d->m_blinkStatus = !d->m_blinkStatus;
         d->updateType = QQuickTextInputPrivate::UpdatePaintNode;
+        polish();
         update();
     } else if (event->timerId() == d->m_passwordEchoTimer.timerId()) {
         d->m_passwordEchoTimer.stop();
@@ -4149,7 +4219,13 @@ void QQuickTextInputPrivate::processKeyEvent(QKeyEvent* event)
     Q_Q(QQuickTextInput);
 
     if (event->key() == Qt::Key_Enter || event->key() == Qt::Key_Return) {
-        if (q->hasAcceptableInput() || fixup()) {
+        if (hasAcceptableInput(m_text) == AcceptableInput || fixup()) {
+
+            QInputMethod *inputMethod = QGuiApplication::inputMethod();
+            inputMethod->commit();
+            if (!(q->inputMethodHints() & Qt::ImhMultiLine))
+                inputMethod->hide();
+
             emit q->accepted();
             emit q->editingFinished();
         }
@@ -4374,6 +4450,22 @@ void QQuickTextInputPrivate::deleteEndOfLine()
     addCommand(cmd);
     removeSelectedText();
     finishChange(priorState);
+}
+
+/*!
+    \qmlmethod QtQuick::TextInput::ensureVisible(int position)
+    \since 5.4
+
+    Scrolls the contents of the text input so that the specified character
+    \a position is visible inside the boundaries of the text input.
+
+    \sa autoScroll
+*/
+void QQuickTextInput::ensureVisible(int position)
+{
+    Q_D(QQuickTextInput);
+    d->ensureVisible(position);
+    updateCursorRectangle(false);
 }
 
 QT_END_NAMESPACE

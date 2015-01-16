@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the Qt Mobility Components.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -41,9 +33,15 @@
 
 #include "mfvideorenderercontrol.h"
 #include "mfglobal.h"
-#ifdef QT_OPENGL_ES_2_ANGLE
+
+#if defined(QT_OPENGL_ES_2) || defined(QT_OPENGL_DYNAMIC)
+#define MAYBE_ANGLE
+#endif
+
+#ifdef MAYBE_ANGLE
 #include "evrcustompresenter.h"
 #endif
+
 #include <qabstractvideosurface.h>
 #include <qvideosurfaceformat.h>
 #include <qtcore/qtimer.h>
@@ -53,6 +51,7 @@
 #include <qtcore/qthread.h>
 #include "guiddef.h"
 #include <qtcore/qdebug.h>
+#include <QtMultimedia/private/qmediaopenglhelper_p.h>
 
 //#define DEBUG_MEDIAFOUNDATION
 #define PAD_TO_DWORD(x)  (((x) + 3) & ~3)
@@ -2228,9 +2227,7 @@ MFVideoRendererControl::MFVideoRendererControl(QObject *parent)
     , m_surface(0)
     , m_currentActivate(0)
     , m_callback(0)
-#ifdef QT_OPENGL_ES_2_ANGLE
     , m_presenterActivate(0)
-#endif
 {
 }
 
@@ -2244,7 +2241,7 @@ void MFVideoRendererControl::clear()
     if (m_surface)
         m_surface->stop();
 
-#ifdef QT_OPENGL_ES_2_ANGLE
+#ifdef MAYBE_ANGLE
     if (m_presenterActivate) {
         m_presenterActivate->ShutdownObject();
         m_presenterActivate->Release();
@@ -2279,7 +2276,7 @@ void MFVideoRendererControl::setSurface(QAbstractVideoSurface *surface)
         connect(m_surface, SIGNAL(supportedFormatsChanged()), this, SLOT(supportedFormatsChanged()));
     }
 
-#ifdef QT_OPENGL_ES_2_ANGLE
+#ifdef MAYBE_ANGLE
     if (m_presenterActivate)
         m_presenterActivate->setSurface(m_surface);
     else
@@ -2290,10 +2287,8 @@ void MFVideoRendererControl::setSurface(QAbstractVideoSurface *surface)
 
 void MFVideoRendererControl::customEvent(QEvent *event)
 {
-#ifdef QT_OPENGL_ES_2_ANGLE
     if (m_presenterActivate)
         return;
-#endif
 
     if (!m_currentActivate)
         return;
@@ -2324,7 +2319,7 @@ void MFVideoRendererControl::customEvent(QEvent *event)
 
 void MFVideoRendererControl::supportedFormatsChanged()
 {
-#ifdef QT_OPENGL_ES_2_ANGLE
+#ifdef MAYBE_ANGLE
     if (m_presenterActivate)
         m_presenterActivate->supportedFormatsChanged();
     else
@@ -2335,10 +2330,8 @@ void MFVideoRendererControl::supportedFormatsChanged()
 
 void MFVideoRendererControl::present()
 {
-#ifdef QT_OPENGL_ES_2_ANGLE
     if (m_presenterActivate)
         return;
-#endif
 
     if (m_currentActivate)
         static_cast<VideoRendererActivate*>(m_currentActivate)->present();
@@ -2350,20 +2343,21 @@ IMFActivate* MFVideoRendererControl::createActivate()
 
     clear();
 
-#ifdef QT_OPENGL_ES_2_ANGLE
+#ifdef MAYBE_ANGLE
     // We can use the EVR with our custom presenter only if the surface supports OpenGL
-    // texture handles
-    if (!m_surface->supportedPixelFormats(QAbstractVideoBuffer::GLTextureHandle).isEmpty()) {
+    // texture handles. We also require ANGLE (due to the D3D interop).
+    if (!m_surface->supportedPixelFormats(QAbstractVideoBuffer::GLTextureHandle).isEmpty()
+        && QMediaOpenGLHelper::isANGLE()) {
         // Create the EVR media sink, but replace the presenter with our own
         if (SUCCEEDED(MFCreateVideoRendererActivate(::GetShellWindow(), &m_currentActivate))) {
             m_presenterActivate = new EVRCustomPresenterActivate;
             m_currentActivate->SetUnknown(MF_ACTIVATE_CUSTOM_VIDEO_PRESENTER_ACTIVATE, m_presenterActivate);
         }
     }
+#endif
 
     if (!m_currentActivate)
-#endif
-    m_currentActivate = new VideoRendererActivate(this);
+        m_currentActivate = new VideoRendererActivate(this);
 
     setSurface(m_surface);
 

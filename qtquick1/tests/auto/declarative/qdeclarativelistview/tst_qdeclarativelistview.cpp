@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -60,6 +52,8 @@ public:
     tst_QDeclarativeListView();
 
 private slots:
+    void initTestCase();
+
     // Test both QListModelInterface and QAbstractItemModel model types
     void qListModelInterface_items();
     void qAbstractItemModel_items();
@@ -116,6 +110,7 @@ private slots:
     void test_mirroring();
     void orientationChange();
     void contentPosJump();
+    void QTBUG_37115();
 
 private:
     template <class T> void items();
@@ -350,8 +345,39 @@ private:
     QList<QPair<QString,QString> > list;
 };
 
+class TestFilterModel : public QSortFilterProxyModel
+{
+    Q_OBJECT
+    Q_PROPERTY(QString filter READ filter WRITE setFilter NOTIFY filterChanged)
+    QString m_filter;
+
+public:
+    explicit TestFilterModel(QObject *parent = 0) : QSortFilterProxyModel(parent)
+    {
+        setSourceModel(new QStringListModel(QStringList() << "AA" << "BB" << "CC", this));
+    }
+
+    QString filter() const { return m_filter; }
+    void setFilter(const QString &filter)
+    {
+        if (m_filter != filter) {
+            m_filter = filter;
+            setFilterWildcard(m_filter);
+            emit filterChanged();
+        }
+    }
+
+signals:
+    void filterChanged();
+};
+
 tst_QDeclarativeListView::tst_QDeclarativeListView()
 {
+}
+
+void tst_QDeclarativeListView::initTestCase()
+{
+    qmlRegisterType<TestFilterModel>("org.test.models", 1, 0, "TestFilterModel");
 }
 
 template <class T>
@@ -2500,11 +2526,11 @@ void tst_QDeclarativeListView::testQtQuick11Attributes_data()
     QTest::addColumn<QString>("error");
 
     QTest::newRow("positionViewAtBeginning") << "Component.onCompleted: positionViewAtBeginning()"
-        << "<Unknown File>: ReferenceError: Can't find variable: positionViewAtBeginning"
+        << "<Unknown File>:1: ReferenceError: Can't find variable: positionViewAtBeginning"
         << "";
 
     QTest::newRow("positionViewAtEnd") << "Component.onCompleted: positionViewAtEnd()"
-        << "<Unknown File>: ReferenceError: Can't find variable: positionViewAtEnd"
+        << "<Unknown File>:1: ReferenceError: Can't find variable: positionViewAtEnd"
         << "";
 }
 
@@ -2717,6 +2743,20 @@ void tst_QDeclarativeListView::contentPosJump()
         QTRY_VERIFY(item);
         QTRY_VERIFY(item->y() == i*20);
     }
+
+    delete canvas;
+}
+
+void tst_QDeclarativeListView::QTBUG_37115()
+{
+    QDeclarativeView *canvas = createView();
+
+    canvas->setSource(QUrl::fromLocalFile(SRCDIR "/data/qtbug37115.qml"));
+    qApp->processEvents();
+
+    QDeclarativeListView *listview = findItem<QDeclarativeListView>(canvas->rootObject(), "listview");
+    QTRY_VERIFY(listview != 0);
+    QTRY_COMPARE(listview->property("countCopy").toInt(), 0);
 
     delete canvas;
 }

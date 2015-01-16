@@ -2,10 +2,10 @@ TEMPLATE = subdirs
 
 SUBDIRS += \
     gallery \
-    splitview \
     tableview \
     touch \
-    basiclayouts
+    basiclayouts \
+    styles
 
 qtHaveModule(widgets) {
     SUBDIRS += texteditor

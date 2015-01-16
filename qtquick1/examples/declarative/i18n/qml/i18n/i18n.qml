@@ -66,7 +66,7 @@ Rectangle {
 
         Text {
             text: "If a translation is available for the system language (eg. French) then the
-			string below will translated (eg. 'Bonjour'). Otherwise it will show 'Hello'."
+                        string below will translated (eg. 'Bonjour'). Otherwise it will show 'Hello'."
             width: parent.width; wrapMode: Text.WordWrap
         }
 

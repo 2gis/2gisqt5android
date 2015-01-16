@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -67,6 +59,12 @@
 using namespace QV4;
 using namespace QQmlJS;
 using namespace AST;
+
+static inline void setLocation(IR::Stmt *s, const SourceLocation &loc)
+{
+    if (s && loc.isValid())
+        s->location = loc;
+}
 
 Codegen::ScanFunctions::ScanFunctions(Codegen *cg, const QString &sourceCode, CompilationMode defaultProgramMode)
     : _cg(cg)
@@ -487,11 +485,9 @@ void Codegen::leaveEnvironment()
     _env = _env->parent;
 }
 
-void Codegen::enterLoop(Statement *node, IR::BasicBlock *startBlock, IR::BasicBlock *breakBlock, IR::BasicBlock *continueBlock)
+void Codegen::enterLoop(Statement *node, IR::BasicBlock *breakBlock, IR::BasicBlock *continueBlock)
 {
-    if (startBlock)
-        startBlock->markAsGroupStart();
-    _loop = new Loop(node, startBlock, breakBlock, continueBlock, _loop);
+    _loop = new Loop(node, breakBlock, continueBlock, _loop);
     _loop->labelledStatement = _labelledStatement; // consume the enclosing labelled statement
     _loop->scopeAndFinally = _scopeAndFinally;
     _labelledStatement = 0;
@@ -509,8 +505,8 @@ IR::Expr *Codegen::member(IR::Expr *base, const QString *name)
     if (hasError)
         return 0;
 
-    if (base->asTemp() /*|| base->asName()*/)
-        return _block->MEMBER(base->asTemp(), name);
+    if (base->asTemp() || base->asArgLocal())
+        return _block->MEMBER(base, name);
     else {
         const unsigned t = _block->newTemp();
         move(_block->TEMP(t), base);
@@ -523,25 +519,26 @@ IR::Expr *Codegen::subscript(IR::Expr *base, IR::Expr *index)
     if (hasError)
         return 0;
 
-    if (! base->asTemp()) {
+    if (! base->asTemp() || base->asArgLocal()) {
         const unsigned t = _block->newTemp();
         move(_block->TEMP(t), base);
         base = _block->TEMP(t);
     }
 
-    if (! index->asTemp()) {
+    if (! index->asTemp() || index->asArgLocal()) {
         const unsigned t = _block->newTemp();
         move(_block->TEMP(t), index);
         index = _block->TEMP(t);
     }
 
-    Q_ASSERT(base->asTemp() && index->asTemp());
+    Q_ASSERT(base->asTemp() || base->asArgLocal());
+    Q_ASSERT(index->asTemp() || index->asArgLocal());
     return _block->SUBSCRIPT(base->asTemp(), index->asTemp());
 }
 
 IR::Expr *Codegen::argument(IR::Expr *expr)
 {
-    if (expr && ! expr->asTemp()) {
+    if (expr && !expr->asTemp() && !expr->asArgLocal()) {
         const unsigned t = _block->newTemp();
         move(_block->TEMP(t), expr);
         expr = _block->TEMP(t);
@@ -555,7 +552,7 @@ IR::Expr *Codegen::reference(IR::Expr *expr)
     if (hasError)
         return 0;
 
-    if (expr && !expr->asTemp() && !expr->asName() && !expr->asMember() && !expr->asSubscript()) {
+    if (expr && !expr->asTemp() && !expr->asArgLocal() && !expr->asName() && !expr->asMember() && !expr->asSubscript()) {
         const unsigned t = _block->newTemp();
         move(_block->TEMP(t), expr);
         expr = _block->TEMP(t);
@@ -563,7 +560,7 @@ IR::Expr *Codegen::reference(IR::Expr *expr)
     return expr;
 }
 
-IR::Expr *Codegen::unop(IR::AluOp op, IR::Expr *expr)
+IR::Expr *Codegen::unop(IR::AluOp op, IR::Expr *expr, const SourceLocation &loc)
 {
     if (hasError)
         return 0;
@@ -591,16 +588,16 @@ IR::Expr *Codegen::unop(IR::AluOp op, IR::Expr *expr)
             }
         }
     }
-    if (! expr->asTemp()) {
+    if (!expr->asTemp() && !expr->asArgLocal()) {
         const unsigned t = _block->newTemp();
-        move(_block->TEMP(t), expr);
+        setLocation(move(_block->TEMP(t), expr), loc);
         expr = _block->TEMP(t);
     }
-    Q_ASSERT(expr->asTemp());
-    return _block->UNOP(op, expr->asTemp());
+    Q_ASSERT(expr->asTemp() || expr->asArgLocal());
+    return _block->UNOP(op, expr);
 }
 
-IR::Expr *Codegen::binop(IR::AluOp op, IR::Expr *left, IR::Expr *right)
+IR::Expr *Codegen::binop(IR::AluOp op, IR::Expr *left, IR::Expr *right, const AST::SourceLocation &loc)
 {
     if (hasError)
         return 0;
@@ -655,20 +652,20 @@ IR::Expr *Codegen::binop(IR::AluOp op, IR::Expr *left, IR::Expr *right)
         }
     }
 
-    if (!left->asTemp()) {
+    if (!left->asTemp() && !left->asArgLocal()) {
         const unsigned t = _block->newTemp();
-        move(_block->TEMP(t), left);
+        setLocation(move(_block->TEMP(t), left), loc);
         left = _block->TEMP(t);
     }
 
-    if (!right->asTemp()) {
+    if (!right->asTemp() && !right->asArgLocal()) {
         const unsigned t = _block->newTemp();
-        move(_block->TEMP(t), right);
+        setLocation(move(_block->TEMP(t), right), loc);
         right = _block->TEMP(t);
     }
 
-    Q_ASSERT(left->asTemp());
-    Q_ASSERT(right->asTemp());
+    Q_ASSERT(left->asTemp() || left->asArgLocal());
+    Q_ASSERT(right->asTemp() || right->asArgLocal());
 
     return _block->BINOP(op, left, right);
 }
@@ -681,43 +678,42 @@ IR::Expr *Codegen::call(IR::Expr *base, IR::ExprList *args)
     return _block->CALL(base, args);
 }
 
-void Codegen::move(IR::Expr *target, IR::Expr *source, IR::AluOp op)
+IR::Stmt *Codegen::move(IR::Expr *target, IR::Expr *source, IR::AluOp op)
 {
     if (hasError)
-        return;
+        return 0;
 
     Q_ASSERT(target->isLValue());
 
     if (op != IR::OpInvalid) {
-        move(target, binop(op, target, source));
-        return;
+        return move(target, binop(op, target, source));
     }
 
-    if (!source->asTemp() && !source->asConst() && !target->asTemp()) {
+    if (!source->asTemp() && !source->asConst() && !target->asTemp() && !source->asArgLocal() && !target->asArgLocal()) {
         unsigned t = _block->newTemp();
         _block->MOVE(_block->TEMP(t), source);
         source = _block->TEMP(t);
     }
-    if (source->asConst() && !target->asTemp()) {
+    if (source->asConst() && !target->asTemp() && !target->asArgLocal()) {
         unsigned t = _block->newTemp();
         _block->MOVE(_block->TEMP(t), source);
         source = _block->TEMP(t);
     }
 
-    _block->MOVE(target, source);
+    return _block->MOVE(target, source);
 }
 
-void Codegen::cjump(IR::Expr *cond, IR::BasicBlock *iftrue, IR::BasicBlock *iffalse)
+IR::Stmt *Codegen::cjump(IR::Expr *cond, IR::BasicBlock *iftrue, IR::BasicBlock *iffalse)
 {
     if (hasError)
-        return;
+        return 0;
 
     if (! (cond->asTemp() || cond->asBinop())) {
         const unsigned t = _block->newTemp();
         move(_block->TEMP(t), cond);
         cond = _block->TEMP(t);
     }
-    _block->CJUMP(cond, iftrue, iffalse);
+    return _block->CJUMP(cond, iftrue, iffalse);
 }
 
 void Codegen::accept(Node *node)
@@ -749,7 +745,7 @@ void Codegen::statement(ExpressionNode *ast)
         if (r.format == ex) {
             if (r->asCall()) {
                 _block->EXP(*r); // the nest nx representation for calls is EXP(CALL(c..))
-            } else if (r->asTemp()) {
+            } else if (r->asTemp() || r->asArgLocal()) {
                 // there is nothing to do
             } else {
                 unsigned t = _block->newTemp();
@@ -767,7 +763,7 @@ void Codegen::condition(ExpressionNode *ast, IR::BasicBlock *iftrue, IR::BasicBl
         accept(ast);
         qSwap(_expr, r);
         if (r.format == ex) {
-            cjump(*r, r.iftrue, r.iffalse);
+            setLocation(cjump(*r, r.iftrue, r.iffalse), ast->firstSourceLocation());
         }
     }
 }
@@ -1065,7 +1061,7 @@ bool Codegen::visit(ArrayLiteral *ast)
         current = arg;
 
         IR::Expr *exp = *expr;
-        if (exp->asTemp() || exp->asConst()) {
+        if (exp->asTemp() || expr->asArgLocal() || exp->asConst()) {
             current->expr = exp;
         } else {
             unsigned value = _block->newTemp();
@@ -1126,18 +1122,18 @@ bool Codegen::visit(BinaryExpression *ast)
 
     if (ast->op == QSOperator::And) {
         if (_expr.accept(cx)) {
-            IR::BasicBlock *iftrue = _function->newBasicBlock(groupStartBlock(), exceptionHandler());
+            IR::BasicBlock *iftrue = _function->newBasicBlock(exceptionHandler());
             condition(ast->left, iftrue, _expr.iffalse);
             _block = iftrue;
             condition(ast->right, _expr.iftrue, _expr.iffalse);
         } else {
-            IR::BasicBlock *iftrue = _function->newBasicBlock(groupStartBlock(), exceptionHandler());
-            IR::BasicBlock *endif = _function->newBasicBlock(groupStartBlock(), exceptionHandler());
+            IR::BasicBlock *iftrue = _function->newBasicBlock(exceptionHandler());
+            IR::BasicBlock *endif = _function->newBasicBlock(exceptionHandler());
 
             const unsigned r = _block->newTemp();
 
             move(_block->TEMP(r), *expression(ast->left));
-            cjump(_block->TEMP(r), iftrue, endif);
+            setLocation(cjump(_block->TEMP(r), iftrue, endif), ast->operatorToken);
             _block = iftrue;
             move(_block->TEMP(r), *expression(ast->right));
             _block->JUMP(endif);
@@ -1148,17 +1144,17 @@ bool Codegen::visit(BinaryExpression *ast)
         return false;
     } else if (ast->op == QSOperator::Or) {
         if (_expr.accept(cx)) {
-            IR::BasicBlock *iffalse = _function->newBasicBlock(groupStartBlock(), exceptionHandler());
+            IR::BasicBlock *iffalse = _function->newBasicBlock(exceptionHandler());
             condition(ast->left, _expr.iftrue, iffalse);
             _block = iffalse;
             condition(ast->right, _expr.iftrue, _expr.iffalse);
         } else {
-            IR::BasicBlock *iffalse = _function->newBasicBlock(groupStartBlock(), exceptionHandler());
-            IR::BasicBlock *endif = _function->newBasicBlock(groupStartBlock(), exceptionHandler());
+            IR::BasicBlock *iffalse = _function->newBasicBlock(exceptionHandler());
+            IR::BasicBlock *endif = _function->newBasicBlock(exceptionHandler());
 
             const unsigned r = _block->newTemp();
             move(_block->TEMP(r), *expression(ast->left));
-            cjump(_block->TEMP(r), endif, iffalse);
+            setLocation(cjump(_block->TEMP(r), endif, iffalse), ast->operatorToken);
             _block = iffalse;
             move(_block->TEMP(r), *expression(ast->right));
             _block->JUMP(endif);
@@ -1236,23 +1232,23 @@ bool Codegen::visit(BinaryExpression *ast)
     case QSOperator::Lt:
     case QSOperator::StrictEqual:
     case QSOperator::StrictNotEqual: {
-        if (!left->asTemp() && !left->asConst()) {
+        if (!left->asTemp() && !left->asArgLocal() && !left->asConst()) {
             const unsigned t = _block->newTemp();
-            move(_block->TEMP(t), left);
+            setLocation(move(_block->TEMP(t), left), ast->operatorToken);
             left = _block->TEMP(t);
         }
 
         IR::Expr* right = *expression(ast->right);
 
         if (_expr.accept(cx)) {
-            cjump(binop(IR::binaryOperator(ast->op), left, right), _expr.iftrue, _expr.iffalse);
+            setLocation(cjump(binop(IR::binaryOperator(ast->op), left, right, ast->operatorToken), _expr.iftrue, _expr.iffalse), ast->operatorToken);
         } else {
-            IR::Expr *e = binop(IR::binaryOperator(ast->op), left, right);
+            IR::Expr *e = binop(IR::binaryOperator(ast->op), left, right, ast->operatorToken);
             if (e->asConst() || e->asString())
                 _expr.code = e;
             else {
                 const unsigned t = _block->newTemp();
-                move(_block->TEMP(t), e);
+                setLocation(move(_block->TEMP(t), e), ast->operatorToken);
                 _expr.code = _block->TEMP(t);
             }
         }
@@ -1270,20 +1266,20 @@ bool Codegen::visit(BinaryExpression *ast)
     case QSOperator::RShift:
     case QSOperator::Sub:
     case QSOperator::URShift: {
-        if (!left->asTemp() && !left->asConst()) {
+        if (!left->asTemp() && !left->asArgLocal() && !left->asConst()) {
             const unsigned t = _block->newTemp();
-            move(_block->TEMP(t), left);
+            setLocation(move(_block->TEMP(t), left), ast->operatorToken);
             left = _block->TEMP(t);
         }
 
         IR::Expr* right = *expression(ast->right);
 
-        IR::Expr *e = binop(IR::binaryOperator(ast->op), left, right);
+        IR::Expr *e = binop(IR::binaryOperator(ast->op), left, right, ast->operatorToken);
         if (e->asConst() || e->asString())
             _expr.code = e;
         else {
             const unsigned t = _block->newTemp();
-            move(_block->TEMP(t), e);
+            setLocation(move(_block->TEMP(t), e), ast->operatorToken);
             _expr.code = _block->TEMP(t);
         }
         break;
@@ -1317,9 +1313,9 @@ bool Codegen::visit(ConditionalExpression *ast)
     if (hasError)
         return true;
 
-    IR::BasicBlock *iftrue = _function->newBasicBlock(groupStartBlock(), exceptionHandler());
-    IR::BasicBlock *iffalse = _function->newBasicBlock(groupStartBlock(), exceptionHandler());
-    IR::BasicBlock *endif = _function->newBasicBlock(groupStartBlock(), exceptionHandler());
+    IR::BasicBlock *iftrue = _function->newBasicBlock(exceptionHandler());
+    IR::BasicBlock *iffalse = _function->newBasicBlock(exceptionHandler());
+    IR::BasicBlock *endif = _function->newBasicBlock(exceptionHandler());
 
     const unsigned t = _block->newTemp();
 
@@ -1347,8 +1343,8 @@ bool Codegen::visit(DeleteExpression *ast)
 
     IR::Expr* expr = *expression(ast->expression);
     // Temporaries cannot be deleted
-    IR::Temp *t = expr->asTemp();
-    if (t && t->index < static_cast<unsigned>(_env->members.size())) {
+    IR::ArgLocal *al = expr->asArgLocal();
+    if (al && al->index < static_cast<unsigned>(_env->members.size())) {
         // Trying to delete a function argument might throw.
         if (_function->isStrict) {
             throwSyntaxError(ast->deleteToken, QStringLiteral("Delete of an unqualified identifier in strict mode."));
@@ -1375,7 +1371,9 @@ bool Codegen::visit(DeleteExpression *ast)
         _expr.code = _block->CONST(IR::BoolType, 1);
         return false;
     }
-    if (expr->asTemp() && expr->asTemp()->index >=  static_cast<unsigned>(_env->members.size())) {
+    if (expr->asTemp() ||
+            (expr->asArgLocal() &&
+             expr->asArgLocal()->index >= static_cast<unsigned>(_env->members.size()))) {
         _expr.code = _block->CONST(IR::BoolType, 1);
         return false;
     }
@@ -1435,10 +1433,10 @@ IR::Expr *Codegen::identifier(const QString &name, int line, int col)
         int index = e->findMember(name);
         Q_ASSERT (index < e->members.size());
         if (index != -1) {
-            IR::Temp *t = _block->LOCAL(index, scope);
+            IR::ArgLocal *al = _block->LOCAL(index, scope);
             if (name == QStringLiteral("arguments") || name == QStringLiteral("eval"))
-                t->isArgumentsOrEval = true;
-            return t;
+                al->isArgumentsOrEval = true;
+            return al;
         }
         const int argIdx = f->indexOfArgument(&name);
         if (argIdx != -1)
@@ -1497,7 +1495,7 @@ bool Codegen::visit(NewExpression *ast)
 
     Result base = expression(ast->expression);
     IR::Expr *expr = *base;
-    if (expr && !expr->asTemp() && !expr->asName() && !expr->asMember()) {
+    if (expr && !expr->asTemp() && !expr->asArgLocal() && !expr->asName() && !expr->asMember()) {
         const unsigned t = _block->newTemp();
         move(_block->TEMP(t), expr);
         expr = _block->TEMP(t);
@@ -1513,7 +1511,7 @@ bool Codegen::visit(NewMemberExpression *ast)
 
     Result base = expression(ast->base);
     IR::Expr *expr = *base;
-    if (expr && !expr->asTemp() && !expr->asName() && !expr->asMember()) {
+    if (expr && !expr->asTemp() && !expr->asArgLocal() && !expr->asName() && !expr->asMember()) {
         const unsigned t = _block->newTemp();
         move(_block->TEMP(t), expr);
         expr = _block->TEMP(t);
@@ -1540,7 +1538,7 @@ bool Codegen::visit(NotExpression *ast)
 
     Result expr = expression(ast->expression);
     const unsigned r = _block->newTemp();
-    move(_block->TEMP(r), unop(IR::OpNot, *expr));
+    setLocation(move(_block->TEMP(r), unop(IR::OpNot, *expr, ast->notToken)), ast->notToken);
     _expr.code = _block->TEMP(r);
     return false;
 }
@@ -1734,11 +1732,11 @@ bool Codegen::visit(PostDecrementExpression *ast)
         return false;
 
     const unsigned oldValue = _block->newTemp();
-    move(_block->TEMP(oldValue), unop(IR::OpUPlus, *expr));
+    setLocation(move(_block->TEMP(oldValue), unop(IR::OpUPlus, *expr, ast->decrementToken)), ast->decrementToken);
 
     const unsigned  newValue = _block->newTemp();
-    move(_block->TEMP(newValue), binop(IR::OpSub, _block->TEMP(oldValue), _block->CONST(IR::NumberType, 1)));
-    move(*expr, _block->TEMP(newValue));
+    setLocation(move(_block->TEMP(newValue), binop(IR::OpSub, _block->TEMP(oldValue), _block->CONST(IR::NumberType, 1), ast->decrementToken)), ast->decrementToken);
+    setLocation(move(*expr, _block->TEMP(newValue)), ast->decrementToken);
 
     if (!_expr.accept(nx))
         _expr.code = _block->TEMP(oldValue);
@@ -1760,11 +1758,11 @@ bool Codegen::visit(PostIncrementExpression *ast)
         return false;
 
     const unsigned oldValue = _block->newTemp();
-    move(_block->TEMP(oldValue), unop(IR::OpUPlus, *expr));
+    setLocation(move(_block->TEMP(oldValue), unop(IR::OpUPlus, *expr, ast->incrementToken)), ast->incrementToken);
 
     const unsigned  newValue = _block->newTemp();
-    move(_block->TEMP(newValue), binop(IR::OpAdd, _block->TEMP(oldValue), _block->CONST(IR::NumberType, 1)));
-    move(*expr, _block->TEMP(newValue));
+    setLocation(move(_block->TEMP(newValue), binop(IR::OpAdd, _block->TEMP(oldValue), _block->CONST(IR::NumberType, 1), ast->incrementToken)), ast->incrementToken);
+    setLocation(move(*expr, _block->TEMP(newValue)), ast->incrementToken);
 
     if (!_expr.accept(nx))
         _expr.code = _block->TEMP(oldValue);
@@ -1785,13 +1783,13 @@ bool Codegen::visit(PreDecrementExpression *ast)
 
     if (throwSyntaxErrorOnEvalOrArgumentsInStrictMode(*expr, ast->decrementToken))
         return false;
-    IR::Expr *op = binop(IR::OpSub, *expr, _block->CONST(IR::NumberType, 1));
+    IR::Expr *op = binop(IR::OpSub, *expr, _block->CONST(IR::NumberType, 1), ast->decrementToken);
     if (_expr.accept(nx)) {
-        move(*expr, op);
+        setLocation(move(*expr, op), ast->decrementToken);
     } else {
         const unsigned t = _block->newTemp();
-        move(_block->TEMP(t), op);
-        move(*expr, _block->TEMP(t));
+        setLocation(move(_block->TEMP(t), op), ast->decrementToken);
+        setLocation(move(*expr, _block->TEMP(t)), ast->decrementToken);
         _expr.code = _block->TEMP(t);
     }
     return false;
@@ -1810,13 +1808,13 @@ bool Codegen::visit(PreIncrementExpression *ast)
 
     if (throwSyntaxErrorOnEvalOrArgumentsInStrictMode(*expr, ast->incrementToken))
         return false;
-    IR::Expr *op = binop(IR::OpAdd, unop(IR::OpUPlus, *expr), _block->CONST(IR::NumberType, 1));
+    IR::Expr *op = binop(IR::OpAdd, unop(IR::OpUPlus, *expr, ast->incrementToken), _block->CONST(IR::NumberType, 1), ast->incrementToken);
     if (_expr.accept(nx)) {
-        move(*expr, op);
+        setLocation(move(*expr, op), ast->incrementToken);
     } else {
         const unsigned t = _block->newTemp();
-        move(_block->TEMP(t), op);
-        move(*expr, _block->TEMP(t));
+        setLocation(move(_block->TEMP(t), op), ast->incrementToken);
+        setLocation(move(*expr, _block->TEMP(t)), ast->incrementToken);
         _expr.code = _block->TEMP(t);
     }
     return false;
@@ -1856,7 +1854,7 @@ bool Codegen::visit(TildeExpression *ast)
 
     Result expr = expression(ast->expression);
     const unsigned t = _block->newTemp();
-    move(_block->TEMP(t), unop(IR::OpCompl, *expr));
+    setLocation(move(_block->TEMP(t), unop(IR::OpCompl, *expr, ast->tildeToken)), ast->tildeToken);
     _expr.code = _block->TEMP(t);
     return false;
 }
@@ -1893,7 +1891,7 @@ bool Codegen::visit(UnaryMinusExpression *ast)
 
     Result expr = expression(ast->expression);
     const unsigned t = _block->newTemp();
-    move(_block->TEMP(t), unop(IR::OpUMinus, *expr));
+    setLocation(move(_block->TEMP(t), unop(IR::OpUMinus, *expr, ast->minusToken)), ast->minusToken);
     _expr.code = _block->TEMP(t);
     return false;
 }
@@ -1905,7 +1903,7 @@ bool Codegen::visit(UnaryPlusExpression *ast)
 
     Result expr = expression(ast->expression);
     const unsigned t = _block->newTemp();
-    move(_block->TEMP(t), unop(IR::OpUPlus, *expr));
+    setLocation(move(_block->TEMP(t), unop(IR::OpUPlus, *expr, ast->plusToken)), ast->plusToken);
     _expr.code = _block->TEMP(t);
     return false;
 }
@@ -1947,9 +1945,10 @@ int Codegen::defineFunction(const QString &name, AST::Node *ast,
     IR::Function *function = _module->newFunction(name, _function);
     int functionIndex = _module->functions.count() - 1;
 
-    IR::BasicBlock *entryBlock = function->newBasicBlock(groupStartBlock(), 0);
-    IR::BasicBlock *exitBlock = function->newBasicBlock(groupStartBlock(), 0, IR::Function::DontInsertBlock);
-    function->hasDirectEval = _env->hasDirectEval || _env->compilationMode == EvalCode;
+    IR::BasicBlock *entryBlock = function->newBasicBlock(0);
+    IR::BasicBlock *exitBlock = function->newBasicBlock(0, IR::Function::DontInsertBlock);
+    function->hasDirectEval = _env->hasDirectEval || _env->compilationMode == EvalCode
+            || _module->debugMode; // Conditional breakpoints are like eval in the function
     function->usesArgumentsObject = _env->parent && (_env->usesArgumentsObject == Environment::ArgumentsObjectUsed);
     function->usesThis = _env->usesThis;
     function->maxNumberOfArguments = qMax(_env->maxNumberOfArguments, (int)QV4::Global::ReservedArgumentCount);
@@ -2005,7 +2004,7 @@ int Codegen::defineFunction(const QString &name, AST::Node *ast,
     unsigned returnAddress = entryBlock->newTemp();
 
     entryBlock->MOVE(entryBlock->TEMP(returnAddress), entryBlock->CONST(IR::UndefinedType, 0));
-    exitBlock->RET(exitBlock->TEMP(returnAddress));
+    setLocation(exitBlock->RET(exitBlock->TEMP(returnAddress)), ast->lastSourceLocation());
 
     qSwap(_function, function);
     qSwap(_block, entryBlock);
@@ -2162,11 +2161,11 @@ bool Codegen::visit(DoWhileStatement *ast)
     if (hasError)
         return true;
 
-    IR::BasicBlock *loopbody = _function->newBasicBlock(groupStartBlock(), exceptionHandler());
-    IR::BasicBlock *loopcond = _function->newBasicBlock(loopbody, exceptionHandler());
-    IR::BasicBlock *loopend = _function->newBasicBlock(groupStartBlock(), exceptionHandler());
+    IR::BasicBlock *loopbody = _function->newBasicBlock(exceptionHandler());
+    IR::BasicBlock *loopcond = _function->newBasicBlock(exceptionHandler());
+    IR::BasicBlock *loopend = _function->newBasicBlock(exceptionHandler());
 
-    enterLoop(ast, loopbody, loopend, loopcond);
+    enterLoop(ast, loopend, loopcond);
 
     _block->JUMP(loopbody);
 
@@ -2212,9 +2211,9 @@ bool Codegen::visit(ForEachStatement *ast)
     if (hasError)
         return true;
 
-    IR::BasicBlock *foreachin = _function->newBasicBlock(groupStartBlock(), exceptionHandler());
-    IR::BasicBlock *foreachbody = _function->newBasicBlock(foreachin, exceptionHandler());
-    IR::BasicBlock *foreachend = _function->newBasicBlock(groupStartBlock(), exceptionHandler());
+    IR::BasicBlock *foreachin = _function->newBasicBlock(exceptionHandler());
+    IR::BasicBlock *foreachbody = _function->newBasicBlock(exceptionHandler());
+    IR::BasicBlock *foreachend = _function->newBasicBlock(exceptionHandler());
 
     int objectToIterateOn = _block->newTemp();
     move(_block->TEMP(objectToIterateOn), *expression(ast->expression));
@@ -2224,7 +2223,7 @@ bool Codegen::visit(ForEachStatement *ast)
     int iterator = _block->newTemp();
     move(_block->TEMP(iterator), _block->CALL(_block->NAME(IR::Name::builtin_foreach_iterator_object, 0, 0), args));
 
-    enterLoop(ast, foreachin, foreachend, foreachin);
+    enterLoop(ast, foreachend, foreachin);
     _block->JUMP(foreachin);
 
     _block = foreachbody;
@@ -2240,7 +2239,7 @@ bool Codegen::visit(ForEachStatement *ast)
     move(_block->TEMP(temp), _block->CALL(_block->NAME(IR::Name::builtin_foreach_next_property_name, 0, 0), args));
     int null = _block->newTemp();
     move(_block->TEMP(null), _block->CONST(IR::NullType, 0));
-    cjump(_block->BINOP(IR::OpStrictNotEqual, _block->TEMP(temp), _block->TEMP(null)), foreachbody, foreachend);
+    setLocation(cjump(_block->BINOP(IR::OpStrictNotEqual, _block->TEMP(temp), _block->TEMP(null)), foreachbody, foreachend), ast->forToken);
     _block = foreachend;
 
     leaveLoop();
@@ -2252,15 +2251,15 @@ bool Codegen::visit(ForStatement *ast)
     if (hasError)
         return true;
 
-    IR::BasicBlock *forcond = _function->newBasicBlock(groupStartBlock(), exceptionHandler());
-    IR::BasicBlock *forbody = _function->newBasicBlock(forcond, exceptionHandler());
-    IR::BasicBlock *forstep = _function->newBasicBlock(forcond, exceptionHandler());
-    IR::BasicBlock *forend = _function->newBasicBlock(groupStartBlock(), exceptionHandler());
+    IR::BasicBlock *forcond = _function->newBasicBlock(exceptionHandler());
+    IR::BasicBlock *forbody = _function->newBasicBlock(exceptionHandler());
+    IR::BasicBlock *forstep = _function->newBasicBlock(exceptionHandler());
+    IR::BasicBlock *forend = _function->newBasicBlock(exceptionHandler());
 
     statement(ast->initialiser);
     _block->JUMP(forcond);
 
-    enterLoop(ast, forcond, forend, forstep);
+    enterLoop(ast, forend, forstep);
 
     _block = forcond;
     if (ast->condition)
@@ -2288,9 +2287,9 @@ bool Codegen::visit(IfStatement *ast)
     if (hasError)
         return true;
 
-    IR::BasicBlock *iftrue = _function->newBasicBlock(groupStartBlock(), exceptionHandler());
-    IR::BasicBlock *iffalse = ast->ko ? _function->newBasicBlock(groupStartBlock(), exceptionHandler()) : 0;
-    IR::BasicBlock *endif = _function->newBasicBlock(groupStartBlock(), exceptionHandler());
+    IR::BasicBlock *iftrue = _function->newBasicBlock(exceptionHandler());
+    IR::BasicBlock *iffalse = ast->ko ? _function->newBasicBlock(exceptionHandler()) : 0;
+    IR::BasicBlock *endif = _function->newBasicBlock(exceptionHandler());
 
     condition(ast->expression, iftrue, ast->ko ? iffalse : endif);
 
@@ -2335,8 +2334,8 @@ bool Codegen::visit(LabelledStatement *ast)
             AST::cast<AST::LocalForEachStatement *>(ast->statement)) {
         statement(ast->statement); // labelledStatement will be associated with the ast->statement's loop.
     } else {
-        IR::BasicBlock *breakBlock = _function->newBasicBlock(groupStartBlock(), exceptionHandler());
-        enterLoop(ast->statement, 0, breakBlock, /*continueBlock*/ 0);
+        IR::BasicBlock *breakBlock = _function->newBasicBlock(exceptionHandler());
+        enterLoop(ast->statement, breakBlock, /*continueBlock*/ 0);
         statement(ast->statement);
         _block->JUMP(breakBlock);
         _block = breakBlock;
@@ -2351,9 +2350,9 @@ bool Codegen::visit(LocalForEachStatement *ast)
     if (hasError)
         return true;
 
-    IR::BasicBlock *foreachin = _function->newBasicBlock(groupStartBlock(), exceptionHandler());
-    IR::BasicBlock *foreachbody = _function->newBasicBlock(foreachin, exceptionHandler());
-    IR::BasicBlock *foreachend = _function->newBasicBlock(groupStartBlock(), exceptionHandler());
+    IR::BasicBlock *foreachin = _function->newBasicBlock(exceptionHandler());
+    IR::BasicBlock *foreachbody = _function->newBasicBlock(exceptionHandler());
+    IR::BasicBlock *foreachend = _function->newBasicBlock(exceptionHandler());
 
     variableDeclaration(ast->declaration);
 
@@ -2364,7 +2363,7 @@ bool Codegen::visit(LocalForEachStatement *ast)
     move(_block->TEMP(iterator), _block->CALL(_block->NAME(IR::Name::builtin_foreach_iterator_object, 0, 0), args));
 
     _block->JUMP(foreachin);
-    enterLoop(ast, foreachin, foreachend, foreachin);
+    enterLoop(ast, foreachend, foreachin);
 
     _block = foreachbody;
     int temp = _block->newTemp();
@@ -2379,7 +2378,7 @@ bool Codegen::visit(LocalForEachStatement *ast)
     move(_block->TEMP(temp), _block->CALL(_block->NAME(IR::Name::builtin_foreach_next_property_name, 0, 0), args));
     int null = _block->newTemp();
     move(_block->TEMP(null), _block->CONST(IR::NullType, 0));
-    cjump(_block->BINOP(IR::OpStrictNotEqual, _block->TEMP(temp), _block->TEMP(null)), foreachbody, foreachend);
+    setLocation(cjump(_block->BINOP(IR::OpStrictNotEqual, _block->TEMP(temp), _block->TEMP(null)), foreachbody, foreachend), ast->forToken);
     _block = foreachend;
 
     leaveLoop();
@@ -2391,15 +2390,15 @@ bool Codegen::visit(LocalForStatement *ast)
     if (hasError)
         return true;
 
-    IR::BasicBlock *forcond = _function->newBasicBlock(groupStartBlock(), exceptionHandler());
-    IR::BasicBlock *forbody = _function->newBasicBlock(forcond, exceptionHandler());
-    IR::BasicBlock *forstep = _function->newBasicBlock(forcond, exceptionHandler());
-    IR::BasicBlock *forend = _function->newBasicBlock(groupStartBlock(), exceptionHandler());
+    IR::BasicBlock *forcond = _function->newBasicBlock(exceptionHandler());
+    IR::BasicBlock *forbody = _function->newBasicBlock(exceptionHandler());
+    IR::BasicBlock *forstep = _function->newBasicBlock(exceptionHandler());
+    IR::BasicBlock *forend = _function->newBasicBlock(exceptionHandler());
 
     variableDeclarationList(ast->declarations);
     _block->JUMP(forcond);
 
-    enterLoop(ast, forcond, forend, forstep);
+    enterLoop(ast, forend, forstep);
 
     _block = forcond;
     if (ast->condition)
@@ -2446,22 +2445,22 @@ bool Codegen::visit(SwitchStatement *ast)
     if (hasError)
         return true;
 
-    IR::BasicBlock *switchend = _function->newBasicBlock(groupStartBlock(), exceptionHandler());
+    IR::BasicBlock *switchend = _function->newBasicBlock(exceptionHandler());
 
     if (ast->block) {
         Result lhs = expression(ast->expression);
-        IR::BasicBlock *switchcond = _function->newBasicBlock(groupStartBlock(), exceptionHandler());
+        IR::BasicBlock *switchcond = _function->newBasicBlock(exceptionHandler());
         _block->JUMP(switchcond);
         IR::BasicBlock *previousBlock = 0;
 
         QHash<Node *, IR::BasicBlock *> blockMap;
 
-        enterLoop(ast, 0, switchend, 0);
+        enterLoop(ast, switchend, 0);
 
         for (CaseClauses *it = ast->block->clauses; it; it = it->next) {
             CaseClause *clause = it->clause;
 
-            _block = _function->newBasicBlock(groupStartBlock(), exceptionHandler());
+            _block = _function->newBasicBlock(exceptionHandler());
             blockMap[clause] = _block;
 
             if (previousBlock && !previousBlock->isTerminated())
@@ -2474,7 +2473,7 @@ bool Codegen::visit(SwitchStatement *ast)
         }
 
         if (ast->block->defaultClause) {
-            _block = _function->newBasicBlock(groupStartBlock(), exceptionHandler());
+            _block = _function->newBasicBlock(exceptionHandler());
             blockMap[ast->block->defaultClause] = _block;
 
             if (previousBlock && !previousBlock->isTerminated())
@@ -2489,7 +2488,7 @@ bool Codegen::visit(SwitchStatement *ast)
         for (CaseClauses *it = ast->block->moreClauses; it; it = it->next) {
             CaseClause *clause = it->clause;
 
-            _block = _function->newBasicBlock(groupStartBlock(), exceptionHandler());
+            _block = _function->newBasicBlock(exceptionHandler());
             blockMap[clause] = _block;
 
             if (previousBlock && !previousBlock->isTerminated())
@@ -2510,8 +2509,8 @@ bool Codegen::visit(SwitchStatement *ast)
             CaseClause *clause = it->clause;
             Result rhs = expression(clause->expression);
             IR::BasicBlock *iftrue = blockMap[clause];
-            IR::BasicBlock *iffalse = _function->newBasicBlock(groupStartBlock(), exceptionHandler());
-            cjump(binop(IR::OpStrictEqual, *lhs, *rhs), iftrue, iffalse);
+            IR::BasicBlock *iffalse = _function->newBasicBlock(exceptionHandler());
+            setLocation(cjump(binop(IR::OpStrictEqual, *lhs, *rhs), iftrue, iffalse), clause->caseToken);
             _block = iffalse;
         }
 
@@ -2519,13 +2518,13 @@ bool Codegen::visit(SwitchStatement *ast)
             CaseClause *clause = it->clause;
             Result rhs = expression(clause->expression);
             IR::BasicBlock *iftrue = blockMap[clause];
-            IR::BasicBlock *iffalse = _function->newBasicBlock(groupStartBlock(), exceptionHandler());
-            cjump(binop(IR::OpStrictEqual, *lhs, *rhs), iftrue, iffalse);
+            IR::BasicBlock *iffalse = _function->newBasicBlock(exceptionHandler());
+            setLocation(cjump(binop(IR::OpStrictEqual, *lhs, *rhs), iftrue, iffalse), clause->caseToken);
             _block = iffalse;
         }
 
-        if (ast->block->defaultClause) {
-            _block->JUMP(blockMap[ast->block->defaultClause]);
+        if (DefaultClause *defaultClause = ast->block->defaultClause) {
+            setLocation(_block->JUMP(blockMap[ast->block->defaultClause]), defaultClause->defaultToken);
         }
     }
 
@@ -2568,16 +2567,16 @@ bool Codegen::visit(TryStatement *ast)
     IR::BasicBlock *finallyBody = 0;
     IR::BasicBlock *catchBody = 0;
     IR::BasicBlock *catchExceptionHandler = 0;
-    IR::BasicBlock *end = _function->newBasicBlock(groupStartBlock(), surroundingExceptionHandler, IR::Function::DontInsertBlock);
+    IR::BasicBlock *end = _function->newBasicBlock(surroundingExceptionHandler, IR::Function::DontInsertBlock);
 
     if (ast->finallyExpression)
-        finallyBody = _function->newBasicBlock(groupStartBlock(), surroundingExceptionHandler, IR::Function::DontInsertBlock);
+        finallyBody = _function->newBasicBlock(surroundingExceptionHandler, IR::Function::DontInsertBlock);
 
     if (ast->catchExpression) {
         // exception handler for the catch body
-        catchExceptionHandler = _function->newBasicBlock(groupStartBlock(), 0, IR::Function::DontInsertBlock);
+        catchExceptionHandler = _function->newBasicBlock(0, IR::Function::DontInsertBlock);
         pushExceptionHandler(catchExceptionHandler);
-        catchBody =  _function->newBasicBlock(groupStartBlock(), catchExceptionHandler, IR::Function::DontInsertBlock);
+        catchBody =  _function->newBasicBlock(catchExceptionHandler, IR::Function::DontInsertBlock);
         popExceptionHandler();
         pushExceptionHandler(catchBody);
     } else {
@@ -2585,7 +2584,7 @@ bool Codegen::visit(TryStatement *ast)
         pushExceptionHandler(finallyBody);
     }
 
-    IR::BasicBlock *tryBody = _function->newBasicBlock(groupStartBlock(), exceptionHandler());
+    IR::BasicBlock *tryBody = _function->newBasicBlock(exceptionHandler());
     _block->JUMP(tryBody);
 
     ScopeAndFinally tcf(_scopeAndFinally, ast->finallyExpression);
@@ -2690,11 +2689,11 @@ bool Codegen::visit(WhileStatement *ast)
     if (hasError)
         return true;
 
-    IR::BasicBlock *whilecond = _function->newBasicBlock(groupStartBlock(), exceptionHandler());
-    IR::BasicBlock *whilebody = _function->newBasicBlock(whilecond, exceptionHandler());
-    IR::BasicBlock *whileend = _function->newBasicBlock(groupStartBlock(), exceptionHandler());
+    IR::BasicBlock *whilecond = _function->newBasicBlock(exceptionHandler());
+    IR::BasicBlock *whilebody = _function->newBasicBlock(exceptionHandler());
+    IR::BasicBlock *whileend = _function->newBasicBlock(exceptionHandler());
 
-    enterLoop(ast, whilecond, whileend, whilecond);
+    enterLoop(ast, whileend, whilecond);
 
     _block->JUMP(whilecond);
     _block = whilecond;
@@ -2718,7 +2717,7 @@ bool Codegen::visit(WithStatement *ast)
     _function->hasWith = true;
 
     // need an exception handler for with to cleanup the with scope
-    IR::BasicBlock *withExceptionHandler = _function->newBasicBlock(groupStartBlock(), exceptionHandler());
+    IR::BasicBlock *withExceptionHandler = _function->newBasicBlock(exceptionHandler());
     withExceptionHandler->EXP(withExceptionHandler->CALL(withExceptionHandler->NAME(IR::Name::builtin_pop_scope, 0, 0), 0));
     if (!exceptionHandler())
         withExceptionHandler->EXP(withExceptionHandler->CALL(withExceptionHandler->NAME(IR::Name::builtin_rethrow, 0, 0), 0));
@@ -2727,7 +2726,7 @@ bool Codegen::visit(WithStatement *ast)
 
     pushExceptionHandler(withExceptionHandler);
 
-    IR::BasicBlock *withBlock = _function->newBasicBlock(groupStartBlock(), exceptionHandler());
+    IR::BasicBlock *withBlock = _function->newBasicBlock(exceptionHandler());
 
     _block->JUMP(withBlock);
     _block = withBlock;
@@ -2748,7 +2747,7 @@ bool Codegen::visit(WithStatement *ast)
     _block->EXP(_block->CALL(_block->NAME(IR::Name::builtin_pop_scope, 0, 0), 0));
     popExceptionHandler();
 
-    IR::BasicBlock *next = _function->newBasicBlock(groupStartBlock(), exceptionHandler());
+    IR::BasicBlock *next = _function->newBasicBlock(exceptionHandler());
     _block->JUMP(next);
     _block = next;
 
@@ -2798,8 +2797,8 @@ bool Codegen::throwSyntaxErrorOnEvalOrArgumentsInStrictMode(IR::Expr *expr, cons
     if (IR::Name *n = expr->asName()) {
         if (*n->id != QLatin1String("eval") && *n->id != QLatin1String("arguments"))
             return false;
-    } else if (IR::Temp *t = expr->asTemp()) {
-        if (!t->isArgumentsOrEval)
+    } else if (IR::ArgLocal *al = expr->asArgLocal()) {
+        if (!al->isArgumentsOrEval)
             return false;
     } else {
         return false;

@@ -35,7 +35,7 @@
 
     \image gallery-example.png
 
-    \section1 Backend configuration
+    \section1 Backend Configuration
     The \e Enginio \e backend needs to be set up in order to get this example working.
 
     Go to the \e {Enginio Dashboard} and create a new backend with the \gui {Image Gallery} template.

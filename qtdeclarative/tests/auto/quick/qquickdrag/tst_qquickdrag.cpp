@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -416,7 +408,7 @@ void tst_QQuickDrag::drop()
     QCOMPARE(evaluate<bool>(item, "dragActive"), true);
     QCOMPARE(evaluate<QObject *>(item, "Drag.target"), static_cast<QObject *>(&innerTarget));
     QCOMPARE(evaluate<QObject *>(item, "dragTarget"), static_cast<QObject *>(&innerTarget));
-    QCOMPARE(outerTarget.enterEvents, 1); QCOMPARE(outerTarget.leaveEvents, 0); QCOMPARE(outerTarget.dropEvents, 0);
+    QCOMPARE(outerTarget.enterEvents, 0); QCOMPARE(outerTarget.leaveEvents, 0); QCOMPARE(outerTarget.dropEvents, 0);
     QCOMPARE(innerTarget.enterEvents, 1); QCOMPARE(innerTarget.leaveEvents, 0); QCOMPARE(innerTarget.dropEvents, 0);
 
     innerTarget.reset(); outerTarget.reset();
@@ -425,7 +417,7 @@ void tst_QQuickDrag::drop()
     QCOMPARE(evaluate<bool>(item, "dragActive"), false);
     QCOMPARE(evaluate<QObject *>(item, "Drag.target"), static_cast<QObject *>(&innerTarget));
     QCOMPARE(evaluate<QObject *>(item, "dragTarget"), static_cast<QObject *>(&innerTarget));
-    QCOMPARE(outerTarget.enterEvents, 0); QCOMPARE(outerTarget.leaveEvents, 1); QCOMPARE(outerTarget.dropEvents, 0);
+    QCOMPARE(outerTarget.enterEvents, 0); QCOMPARE(outerTarget.leaveEvents, 0); QCOMPARE(outerTarget.dropEvents, 0);
     QCOMPARE(innerTarget.enterEvents, 0); QCOMPARE(innerTarget.leaveEvents, 0); QCOMPARE(innerTarget.dropEvents, 1);
 
     innerTarget.reset(); outerTarget.reset();
@@ -434,24 +426,13 @@ void tst_QQuickDrag::drop()
     QCOMPARE(evaluate<bool>(item, "dragActive"), true);
     QCOMPARE(evaluate<QObject *>(item, "Drag.target"), static_cast<QObject *>(&innerTarget));
     QCOMPARE(evaluate<QObject *>(item, "dragTarget"), static_cast<QObject *>(&innerTarget));
-    QCOMPARE(outerTarget.enterEvents, 1); QCOMPARE(outerTarget.leaveEvents, 0); QCOMPARE(outerTarget.dropEvents, 0);
+    QCOMPARE(outerTarget.enterEvents, 0); QCOMPARE(outerTarget.leaveEvents, 0); QCOMPARE(outerTarget.dropEvents, 0);
     QCOMPARE(innerTarget.enterEvents, 1); QCOMPARE(innerTarget.leaveEvents, 0); QCOMPARE(innerTarget.dropEvents, 0);
 
-    // Inner target declines the drop so it is propagated to the outer target.
-    innerTarget.accept = false;
-
-    innerTarget.reset(); outerTarget.reset();
-    QCOMPARE(evaluate<bool>(item, "Drag.drop() == Qt.CopyAction"), true);
-    QCOMPARE(evaluate<bool>(item, "Drag.active"), false);
-    QCOMPARE(evaluate<bool>(item, "dragActive"), false);
-    QCOMPARE(evaluate<QObject *>(item, "Drag.target"), static_cast<QObject *>(&outerTarget));
-    QCOMPARE(evaluate<QObject *>(item, "dragTarget"), static_cast<QObject *>(&outerTarget));
-    QCOMPARE(outerTarget.enterEvents, 0); QCOMPARE(outerTarget.leaveEvents, 0); QCOMPARE(outerTarget.dropEvents, 1);
-    QCOMPARE(innerTarget.enterEvents, 0); QCOMPARE(innerTarget.leaveEvents, 0); QCOMPARE(innerTarget.dropEvents, 1);
-
+    evaluate<void>(item, "Drag.active = false");
 
     // Inner target doesn't accept enter so drop goes directly to outer.
-    innerTarget.accept = true;
+    innerTarget.accept = false;
     innerTarget.setFlags(QQuickItem::Flags());
 
     innerTarget.reset(); outerTarget.reset();
@@ -584,10 +565,9 @@ void tst_QQuickDrag::move()
     QCoreApplication::processEvents();
     QCOMPARE(evaluate<QObject *>(item, "Drag.target"), static_cast<QObject *>(&rightTarget));
     QCOMPARE(evaluate<QObject *>(item, "dragTarget"), static_cast<QObject *>(&rightTarget));
-    QCOMPARE(outerTarget.enterEvents, 0); QCOMPARE(outerTarget.leaveEvents, 0); QCOMPARE(outerTarget.moveEvents, 1);
+    QCOMPARE(outerTarget.enterEvents, 0); QCOMPARE(outerTarget.leaveEvents, 0); QCOMPARE(outerTarget.moveEvents, 0);
     QCOMPARE(leftTarget .enterEvents, 0); QCOMPARE(leftTarget .leaveEvents, 0); QCOMPARE(leftTarget .moveEvents, 0);
     QCOMPARE(rightTarget.enterEvents, 1); QCOMPARE(rightTarget.leaveEvents, 0); QCOMPARE(rightTarget.moveEvents, 0);
-    QCOMPARE(outerTarget.position.x(), qreal(75)); QCOMPARE(outerTarget.position.y(), qreal(50));
     QCOMPARE(rightTarget.position.x(), qreal(5)); QCOMPARE(rightTarget.position.y(), qreal(15));
 
     // Move into the left target.
@@ -596,10 +576,9 @@ void tst_QQuickDrag::move()
     QCoreApplication::processEvents();
     QCOMPARE(evaluate<QObject *>(item, "Drag.target"), static_cast<QObject *>(&leftTarget));
     QCOMPARE(evaluate<QObject *>(item, "dragTarget"), static_cast<QObject *>(&leftTarget));
-    QCOMPARE(outerTarget.enterEvents, 0); QCOMPARE(outerTarget.leaveEvents, 0); QCOMPARE(outerTarget.moveEvents, 1);
+    QCOMPARE(outerTarget.enterEvents, 0); QCOMPARE(outerTarget.leaveEvents, 0); QCOMPARE(outerTarget.moveEvents, 0);
     QCOMPARE(leftTarget .enterEvents, 1); QCOMPARE(leftTarget .leaveEvents, 0); QCOMPARE(leftTarget .moveEvents, 0);
     QCOMPARE(rightTarget.enterEvents, 0); QCOMPARE(rightTarget.leaveEvents, 1); QCOMPARE(rightTarget.moveEvents, 0);
-    QCOMPARE(outerTarget.position.x(), qreal(25)); QCOMPARE(outerTarget.position.y(), qreal(50));
     QCOMPARE(leftTarget.position.x(), qreal(25)); QCOMPARE(leftTarget.position.y(), qreal(15));
 
     // Move within the left target.

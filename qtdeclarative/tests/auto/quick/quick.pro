@@ -18,6 +18,7 @@ PRIVATETESTS += \
     qquickapplication \
     qquickbehaviors \
     qquickfontloader \
+    qquickfontmetrics \
     qquickimageprovider \
     qquickpath \
     qquicksmoothedanimation \
@@ -55,6 +56,7 @@ QUICKTESTS =  \
     qquickloader \
     qquickmousearea \
     qquickmultipointtoucharea \
+    qquickopenglinfo \
     qquickpainteditem \
     qquickpathview \
     qquickpincharea \
@@ -71,8 +73,7 @@ QUICKTESTS =  \
     qquickview \
     qquickcanvasitem \
     qquickscreen \
-    touchmouse \
-    dialogs \
+    touchmouse
 
 
 SUBDIRS += $$PUBLICTESTS

@@ -60,7 +60,7 @@ QT_BEGIN_NAMESPACE
     \namespace QtMac
     \inmodule QtMacExtras
     \since 5.2
-    \brief The QtMac namespace contains miscellaneous functionality specific to Mac OS X and iOS operating systems.
+    \brief The QtMac namespace contains miscellaneous functionality specific to the OS X operating system.
     \inheaderfile QtMac
  */
 namespace QtMac

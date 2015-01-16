@@ -44,9 +44,6 @@
     You can download the Qt 5 installers and sources from the \l Downloads page.
     For more information, visit the \l{Getting Started with Qt} page.
 
-    \note Qt Enterprise packages are available from the \l{Try Qt Enterprise}
-    page.
-
     \section2 Requirements for Development Host
 
     The Qt installers for Linux assume that a C++ compiler, debugger,
@@ -82,7 +79,7 @@
 
     You can also build Qt 5 from the source package and configure it according
     to your target platform. The source packages are obtained from
-    \l{http://qt-project.org/downloads}.
+    \l{http://www.qt.io/download/}.
 
     Below, you will find more information about building Qt from source.
     \list
@@ -113,7 +110,7 @@
     \li \l{Qt X11 Extras} - provides additional APIs for X11
     \endlist
 
-    Qt's vibrant and active community site, \l{http://qt-project.org} houses
+    Qt's vibrant and active community site, \l{http://qt.io} houses
     a wiki, a forum, and additional learning guides and presentations.
 */
 
@@ -122,7 +119,7 @@
     \title Qt for X11 Requirements
     \brief Setting up the X11 environment for Qt.
 
-    \section1 Platform plugin dependencies
+    \section1 Platform Plugin Dependencies
 
     On Linux, the \e xcb QPA (Qt Platform Abstraction) platform plugin is used.
     It provides the basic functionality needed by \l{Qt GUI} and \l{Qt Widgets}
@@ -376,7 +373,7 @@
     Qt for X11 has some requirements that are given in more detail
     in the \l{Qt for X11 Requirements} document.
 
-    \section1 Step 1: Installing the License File (commercial editions only)
+    \section1 Step 1: Installing the License File (Commercial Editions Only)
         If you have the commercial edition of Qt, install your license
         file as \c{$HOME/.qt-license}.
 
@@ -384,12 +381,12 @@
 
     \section1 Step 2: Unpacking the Archive
         Unpack the archive if you have not done so already. For example,
-        if you have the \c{qt-everywhere-opensource-src-5.3.2.tar.gz}
+        if you have the \c{qt-everywhere-opensource-src-5.4.0.tar.gz}
         package, type the following commands at a command line prompt:
 
     \snippet snippets/code/doc_src_installation.qdoc 0
 
-        This creates the directory \c{/tmp/qt-everywhere-opensource-src-5.3.2}
+        This creates the directory \c{/tmp/qt-everywhere-opensource-src-5.4.0}
         containing the files from the archive. We only support the GNU version of
         the tar archiving utility. Note that on some systems it is called gtar.
 
@@ -399,7 +396,7 @@
         \c{./configure} script in the package directory.
 
         By default, Qt is configured for installation in the
-        \c{/usr/local/Qt-5.3.2} directory, but this can be
+        \c{/usr/local/Qt-5.4.0} directory, but this can be
         changed by using the \c{-prefix} option.
 
     \snippet snippets/code/doc_src_installation.qdoc 1
@@ -450,7 +447,7 @@
 
         For compilers that do not support rpath you must also extended the
         \c LD_LIBRARY_PATH environment variable to include
-        \c{/usr/local/Qt-5.3.2/lib}. On Linux with GCC this step
+        \c{/usr/local/Qt-5.4.0/lib}. On Linux with GCC this step
         is not needed.
 */
 

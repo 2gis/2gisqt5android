@@ -27,6 +27,7 @@
 
 /*!
     \group thread
+    \brief How to develop multithreaded applications.
     \title Threading Classes
 
     These \l{Qt Core} classes provide threading support to applications.
@@ -770,7 +771,7 @@
 
     QPainter can be used in a thread to paint onto QImage, QPrinter, and
     QPicture paint devices. Painting onto QPixmaps and QWidgets is \e not
-    supported. On Mac OS X the automatic progress dialog will not be
+    supported. On OS X the automatic progress dialog will not be
     displayed if you are printing from outside the GUI thread.
 
     Any number of threads can paint at any given time, however only
@@ -788,7 +789,7 @@
     create a copy of the document, and pass the copy to another thread for
     further processing (such as printing).
 
-    \section1 Threads and the SVG module
+    \section1 Threads and the SVG Module
 
     The QSvgGenerator and QSvgRenderer classes in the QtSvg module
     are reentrant.

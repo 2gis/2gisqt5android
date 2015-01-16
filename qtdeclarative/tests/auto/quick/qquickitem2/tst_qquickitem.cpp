@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -43,6 +35,7 @@
 #include <QtQml/qqmlengine.h>
 #include <QtQml/qqmlcomponent.h>
 #include <QtQml/qqmlcontext.h>
+#include <QtQuick/qquickitemgrabresult.h>
 #include <QtQuick/qquickview.h>
 #include <QtGui/private/qinputmethod_p.h>
 #include <QtQuick/private/qquickrectangle_p.h>
@@ -91,6 +84,7 @@ private slots:
     void keyNavigation_RightToLeft();
     void keyNavigation_skipNotVisible();
     void keyNavigation_implicitSetting();
+    void keyNavigation_focusReason();
     void layoutMirroring();
     void layoutMirroringIllegalParent();
     void smooth();
@@ -119,6 +113,8 @@ private slots:
     void contains_data();
     void contains();
     void childAt();
+
+    void grab();
 
 private:
     QQmlEngine engine;
@@ -213,6 +209,21 @@ protected:
 
 public:
     int mKey;
+};
+
+class FocusEventFilter : public QObject
+{
+protected:
+    bool eventFilter(QObject *watched, QEvent *event) {
+        if ((event->type() == QEvent::FocusIn) ||  (event->type() == QEvent::FocusOut)) {
+            QFocusEvent *focusEvent = static_cast<QFocusEvent *>(event);
+            lastFocusReason = focusEvent->reason();
+            return false;
+        } else
+            return QObject::eventFilter(watched, event);
+    }
+public:
+    Qt::FocusReason lastFocusReason;
 };
 
 QML_DECLARE_TYPE(KeyTestItem);
@@ -1613,7 +1624,7 @@ void tst_QQuickItem::layoutMirroringIllegalParent()
 {
     QQmlComponent component(&engine);
     component.setData("import QtQuick 2.0; QtObject { LayoutMirroring.enabled: true; LayoutMirroring.childrenInherit: true }", QUrl::fromLocalFile(""));
-    QTest::ignoreMessage(QtWarningMsg, "file::1:21: QML QtObject: LayoutDirection attached property only works with Items");
+    QTest::ignoreMessage(QtWarningMsg, "<Unknown File>:1:21: QML QtObject: LayoutDirection attached property only works with Items");
     QObject *object = component.create();
     QVERIFY(object != 0);
 }
@@ -1961,6 +1972,62 @@ void tst_QQuickItem::keyNavigation_implicitSetting()
     delete window;
 }
 
+void tst_QQuickItem::keyNavigation_focusReason()
+{
+    QQuickView *window = new QQuickView(0);
+    window->setBaseSize(QSize(240,320));
+
+    FocusEventFilter focusEventFilter;
+
+    window->setSource(testFileUrl("keynavigationtest.qml"));
+    window->show();
+    window->requestActivate();
+
+    QVERIFY(QTest::qWaitForWindowActive(window));
+    QVERIFY(QGuiApplication::focusWindow() == window);
+
+    // install event filter on first item
+    QQuickItem *item = findItem<QQuickItem>(window->rootObject(), "item1");
+    QVERIFY(item);
+    QVERIFY(item->hasActiveFocus());
+    item->installEventFilter(&focusEventFilter);
+
+    //install event filter on second item
+    item = findItem<QQuickItem>(window->rootObject(), "item2");
+    QVERIFY(item);
+    item->installEventFilter(&focusEventFilter);
+
+    //install event filter on third item
+    item = findItem<QQuickItem>(window->rootObject(), "item3");
+    QVERIFY(item);
+    item->installEventFilter(&focusEventFilter);
+
+    //install event filter on last item
+    item = findItem<QQuickItem>(window->rootObject(), "item4");
+    QVERIFY(item);
+    item->installEventFilter(&focusEventFilter);
+
+    // tab
+    QKeyEvent key = QKeyEvent(QEvent::KeyPress, Qt::Key_Tab, Qt::NoModifier, "", false, 1);
+    QGuiApplication::sendEvent(window, &key);
+    QVERIFY(key.isAccepted());
+    QCOMPARE(focusEventFilter.lastFocusReason, Qt::TabFocusReason);
+
+    // backtab
+    key = QKeyEvent(QEvent::KeyPress, Qt::Key_Backtab, Qt::NoModifier, "", false, 1);
+    QGuiApplication::sendEvent(window, &key);
+    QVERIFY(key.isAccepted());
+    QCOMPARE(focusEventFilter.lastFocusReason, Qt::BacktabFocusReason);
+
+    // some arbitrary cursor key
+    key = QKeyEvent(QEvent::KeyPress, Qt::Key_Right, Qt::NoModifier, "", false, 1);
+    QGuiApplication::sendEvent(window, &key);
+    QVERIFY(key.isAccepted());
+    QCOMPARE(focusEventFilter.lastFocusReason, Qt::OtherFocusReason);
+
+    delete window;
+}
+
 void tst_QQuickItem::smooth()
 {
     QQmlComponent component(&engine);
@@ -2085,8 +2152,8 @@ void tst_QQuickItem::mapCoordinates()
             Q_RETURN_ARG(QVariant, result), Q_ARG(QVariant, x), Q_ARG(QVariant, y)));
     QCOMPARE(result.value<QPointF>(), qobject_cast<QQuickItem*>(a)->mapFromScene(QPointF(x, y)));
 
-    QString warning1 = testFileUrl("mapCoordinates.qml").toString() + ":48:5: QML Item: mapToItem() given argument \"1122\" which is neither null nor an Item";
-    QString warning2 = testFileUrl("mapCoordinates.qml").toString() + ":48:5: QML Item: mapFromItem() given argument \"1122\" which is neither null nor an Item";
+    QString warning1 = testFileUrl("mapCoordinates.qml").toString() + ":40:5: QML Item: mapToItem() given argument \"1122\" which is neither null nor an Item";
+    QString warning2 = testFileUrl("mapCoordinates.qml").toString() + ":40:5: QML Item: mapFromItem() given argument \"1122\" which is neither null nor an Item";
 
     QTest::ignoreMessage(QtWarningMsg, qPrintable(warning1));
     QVERIFY(QMetaObject::invokeMethod(root, "checkMapAToInvalid",
@@ -2148,8 +2215,8 @@ void tst_QQuickItem::mapCoordinatesRect()
             Q_RETURN_ARG(QVariant, result), Q_ARG(QVariant, x), Q_ARG(QVariant, y), Q_ARG(QVariant, width), Q_ARG(QVariant, height)));
     QCOMPARE(result.value<QRectF>(), qobject_cast<QQuickItem*>(a)->mapRectFromScene(QRectF(x, y, width, height)));
 
-    QString warning1 = testFileUrl("mapCoordinatesRect.qml").toString() + ":48:5: QML Item: mapToItem() given argument \"1122\" which is neither null nor an Item";
-    QString warning2 = testFileUrl("mapCoordinatesRect.qml").toString() + ":48:5: QML Item: mapFromItem() given argument \"1122\" which is neither null nor an Item";
+    QString warning1 = testFileUrl("mapCoordinatesRect.qml").toString() + ":40:5: QML Item: mapToItem() given argument \"1122\" which is neither null nor an Item";
+    QString warning2 = testFileUrl("mapCoordinatesRect.qml").toString() + ":40:5: QML Item: mapFromItem() given argument \"1122\" which is neither null nor an Item";
 
     QTest::ignoreMessage(QtWarningMsg, qPrintable(warning1));
     QVERIFY(QMetaObject::invokeMethod(root, "checkMapAToInvalid",
@@ -2735,6 +2802,41 @@ void tst_QQuickItem::childAt()
     QCOMPARE(parent.childAt(25, 200), &child3);
     QCOMPARE(parent.childAt(0, 150), static_cast<QQuickItem *>(0));
     QCOMPARE(parent.childAt(300, 300), static_cast<QQuickItem *>(0));
+}
+
+void tst_QQuickItem::grab()
+{
+    QQuickView view;
+    view.setSource(testFileUrl("grabToImage.qml"));
+    view.show();
+    QTest::qWaitForWindowExposed(&view);
+
+    QQuickItem *root = qobject_cast<QQuickItem *>(view.rootObject());
+    QVERIFY(root);
+    QQuickItem *item = root->findChild<QQuickItem *>("myItem");
+    QVERIFY(item);
+
+    { // Default size (item is 100x100)
+        QSharedPointer<QQuickItemGrabResult> result = item->grabToImage();
+        QSignalSpy spy(result.data(), SIGNAL(ready()));
+        QTRY_VERIFY(spy.size() > 0);
+        QVERIFY(!result->url().isEmpty());
+        QImage image = result->image();
+        QCOMPARE(image.pixel(0, 0), qRgb(255, 0, 0));
+        QCOMPARE(image.pixel(99, 99), qRgb(0, 0, 255));
+    }
+
+    { // Smaller size
+        QSharedPointer<QQuickItemGrabResult> result = item->grabToImage(QSize(50, 50));
+        QVERIFY(!result.isNull());
+        QSignalSpy spy(result.data(), SIGNAL(ready()));
+        QTRY_VERIFY(spy.size() > 0);
+        QVERIFY(!result->url().isEmpty());
+        QImage image = result->image();
+        QCOMPARE(image.pixel(0, 0), qRgb(255, 0, 0));
+        QCOMPARE(image.pixel(49, 49), qRgb(0, 0, 255));
+    }
+
 }
 
 

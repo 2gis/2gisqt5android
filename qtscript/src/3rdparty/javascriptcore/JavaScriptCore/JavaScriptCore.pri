@@ -56,6 +56,9 @@ contains(JAVASCRIPTCORE_JIT,no) {
     DEFINES+=ENABLE_YARR=0
 }
 
+# YARR_JIT has known issues on mingw 64 bit, see QTBUG-40814
+mingw:equals(QT_ARCH, x86_64): DEFINES+=ENABLE_YARR_JIT=0
+
 # Rules when JIT enabled (not disabled)
 !contains(DEFINES, ENABLE_JIT=0) {
     linux*-g++*:greaterThan(QT_GCC_MAJOR_VERSION,3):greaterThan(QT_GCC_MINOR_VERSION,0) {

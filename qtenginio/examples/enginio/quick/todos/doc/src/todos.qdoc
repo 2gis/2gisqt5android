@@ -31,17 +31,21 @@
     \ingroup enginio-qml-examples
     \inmodule enginio-qml
 
-    In this example a simple list of objects is displayed in a ListView.
-    Each item in the list is a "To Do" object which can be \e done or \e{not yet done}.
-    Todos can be added and removed (when hovering with the mouse).
+    In this example a simple list of objects is displayed in a
+    ListView.  Each item in the list is a "To Do" object which can be
+    \e done or \e{not yet done}.  Todos can be added and removed (when
+    hovering with the mouse).
+
     \image todolist.png
 
-    In this simple schema the objects will only have two properties that are added
-    to the default properties (such as creation date, which always exists):
-    a string \c title and a bool \c completed. The object type will be created
-    when a call to create, or, in this case, a call to \l{Enginio::EnginioModel::append()}{EnginioModel::append()} is made.
+    In this simple schema, the objects will only have two properties
+    that are added to the default properties (such as creation date,
+    which always exists): a string \c title and a bool \c completed.
+    The object type will be created when a call to create, or, in this
+    case, a call to \l{EnginioModel::append()}{EnginioModel::append()}
+    is made.
 
-    A todo object will look like this (in JSON):
+    A todo object will look like this in \l {http://json.org} {JSON}:
     \code
 {
   "title": "Buy Milk",
@@ -52,11 +56,12 @@
     The example uses Qt Quick Controls, Layouts, and Enginio.
     \snippet todos/todo.qml imports
 
-    The first step is to create an \l{Enginio::EnginioModel} and
-    the Enginio instance with the backend configuration.
-    To get nice debug output in case something goes wrong, the onError signal in
-    Enginio is handled. Since the error is a JSON object, JSON.stringify is used
-    to format it to a string.
+    The first step is to create an \l{Enginio::EnginioModel} {Enginio model} and
+    its \l {EnginioClient} {Enginio client} with the backend configuration.
+    To get nice debug output in case something goes wrong, the client's
+    \l {EnginioClient::error} {onError} signal handler is implented. Since the
+    error is a \l {http://www.ecma-international.org/ecma-262/5.1/#sec-15.12}
+    {JSON object}, JSON.stringify is used to format it to a string.
 
     \snippet todos/todo.qml model
 
@@ -64,15 +69,19 @@
     properties of the Enginio objects are used.
     \snippet todos/todo.qml view
 
-    It is easy to add a new object to the model.  By using the \l onAccepted
-    signal handler of a \l TextField, the data is appended to the model. After appending
-    the new Todo, the text gets cleared so that a new Todo can be entered.
+    It is easy to add a new Todo object to the model using a \l {TextInput}.
+    By implementing the \l {TextInput::accepted} {onAccepted} signal handler,
+    the Todo data is appended to the model. After appending the new Todo, the
+    \l {TextInput::text} {text property} is cleared so that the next Todo can
+    be entered.
 
     \snippet todos/todo.qml append
 
-    Inside the delegate, the data for the index is available by using the property names (\e title and \e completed).
-    The \e title property is directly assigned to the text displayed on each list item. The \e completed
-    boolean is used to display the item with a strikeout font and a light color.
+    Inside the delegate, the data for the index is available by using
+    the property names (\e title and \e completed).  The \e title
+    property is directly assigned to the text displayed on each list
+    item. The \e completed boolean is used to display the item with a
+    strikeout font and a light color.
 
     \snippet todos/todo.qml delegate-properties
 

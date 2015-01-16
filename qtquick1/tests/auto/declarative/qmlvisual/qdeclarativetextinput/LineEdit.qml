@@ -5,8 +5,8 @@ Item {
     id:lineedit
     property alias text: textInp.text
 
-    width: textInp.width + 11 
-    height: 13 + 11 
+    width: textInp.width + 11
+    height: 13 + 11
 
     Rectangle {
         color: 'lightsteelblue'
@@ -25,8 +25,8 @@ Item {
                 y: 1
             }
         }
-        property int leftMargin: 6 
-        property int rightMargin: 6 
+        property int leftMargin: 6
+        property int rightMargin: 6
         x: leftMargin
         y: 5
         //Below function implements all scrolling logic

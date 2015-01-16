@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -57,10 +49,8 @@ class tst_Files: public QObject
 {
     Q_OBJECT
 
-    QString _backendName;
-    EnginioTests::EnginioBackendManager _backendManager;
-    QByteArray _backendId;
-
+    QString _id;
+    EnginioClient _client;
 public slots:
     void error(EnginioReply *reply) {
         qDebug() << "\n\n### ERROR";
@@ -70,32 +60,29 @@ public slots:
     }
 
 private slots:
-    void initTestCase();
-    void cleanupTestCase();
+    void initTestCase()
+    {
+        QObject::connect(&_client, SIGNAL(error(EnginioReply *)), this, SLOT(error(EnginioReply *)));
+        _client.setBackendId("5376019e698b3c6ad500095a");
+    }
+
+    void cleanup()
+    {
+        if (!_id.isEmpty()) {
+            QJsonObject obj;
+            obj["objectType"] = QString::fromUtf8("objects.FilesFileUploadDownload");
+            obj["id"] = _id;
+            EnginioReply *reply = _client.remove(obj);
+            QTRY_VERIFY(reply->isFinished());
+            CHECK_NO_ERROR(reply);
+        }
+        _id.clear();
+    }
+
     void fileUploadDownload_data();
     void fileUploadDownload();
 };
 
-void tst_Files::initTestCase()
-{
-    if (EnginioTests::TESTAPP_URL.isEmpty())
-        QFAIL("Needed environment variable ENGINIO_API_URL is not set!");
-
-    _backendName = QStringLiteral("Files") + QString::number(QDateTime::currentMSecsSinceEpoch());
-    QVERIFY(_backendManager.createBackend(_backendName));
-
-    QJsonObject apiKeys = _backendManager.backendApiKeys(_backendName, EnginioTests::TESTAPP_ENV);
-    _backendId = apiKeys["backendId"].toString().toUtf8();
-
-    QVERIFY(!_backendId.isEmpty());
-
-    EnginioTests::prepareTestObjectType(_backendName);
-}
-
-void tst_Files::cleanupTestCase()
-{
-    QVERIFY(_backendManager.removeBackend(_backendName));
-}
 
 void tst_Files::fileUploadDownload_data()
 {
@@ -127,36 +114,28 @@ void tst_Files::fileUploadDownload()
 {
     QFETCH(int, chunkSize);
 
-    EnginioClient client;
-    QObject::connect(&client, SIGNAL(error(EnginioReply *)), this, SLOT(error(EnginioReply *)));
-    client.setBackendId(_backendId);
-    client.setServiceUrl(EnginioTests::TESTAPP_URL);
-
     if (chunkSize > 0) {
-        EnginioClientConnectionPrivate *clientPrivate = EnginioClientConnectionPrivate::get(&client);
+        EnginioClientConnectionPrivate *clientPrivate = EnginioClientConnectionPrivate::get(&_client);
         clientPrivate->_uploadChunkSize = chunkSize;
     }
 
-    QSignalSpy spyError(&client, SIGNAL(error(EnginioReply*)));
+    QSignalSpy spyError(&_client, SIGNAL(error(EnginioReply*)));
 
     //![upload-create-object]
     QJsonObject obj;
-    obj["objectType"] = QString::fromUtf8("objects.%1").arg(EnginioTests::CUSTOM_OBJECT1);
-    obj["title"] = QString::fromUtf8("Object With File");
-    const EnginioReply* createReply = client.create(obj);
+    obj["objectType"] = QString::fromUtf8("objects.FilesFileUploadDownload");
+    const EnginioReply* createReply = _client.create(obj);
     //![upload-create-object]
     QVERIFY(createReply);
     QTRY_VERIFY(createReply->isFinished());
     CHECK_NO_ERROR(createReply);
     QCOMPARE(spyError.count(), 0);
 
-    QCOMPARE(createReply->networkError(), QNetworkReply::NoError);
     QJsonObject data = createReply->data();
     QVERIFY(!data.isEmpty());
-    QCOMPARE(data["title"], obj["title"]);
     QCOMPARE(data["objectType"], obj["objectType"]);
-    QString id = data["id"].toString();
-    QVERIFY(!id.isEmpty());
+    _id = data["id"].toString();
+    QVERIFY(!_id.isEmpty());
 
     QString fileName = QStringLiteral("test.png");
     QString filePath = QStringLiteral(TEST_FILE_PATH);
@@ -168,8 +147,8 @@ void tst_Files::fileUploadDownload()
     {
         //![upload]
         QJsonObject object;
-        object["id"] = id;
-        object["objectType"] = QString::fromUtf8("objects.%1").arg(EnginioTests::CUSTOM_OBJECT1);
+        object["id"] = _id;
+        object["objectType"] = QString::fromUtf8("objects.FilesFileUploadDownload");
         object["propertyName"] = QStringLiteral("fileAttachment");
 
         QJsonObject fileObject;
@@ -178,7 +157,7 @@ void tst_Files::fileUploadDownload()
         QJsonObject uploadJson;
         uploadJson[QStringLiteral("targetFileProperty")] = object;
         uploadJson[QStringLiteral("file")] = fileObject;
-        const EnginioReply *responseUpload = client.uploadFile(uploadJson, QUrl(filePath));
+        const EnginioReply *responseUpload = _client.uploadFile(uploadJson, QUrl(filePath));
         //![upload]
         QVERIFY(responseUpload);
 
@@ -197,11 +176,10 @@ void tst_Files::fileUploadDownload()
         QJsonObject obj2;
         obj2 = QJsonDocument::fromJson(
                     "{\"include\": {\"fileAttachment\": {}},"
-                    "\"objectType\": \"objects." + EnginioTests::CUSTOM_OBJECT1.toUtf8() + "\","
-                    "\"query\": {\"id\": \"" + id.toUtf8() + "\"}}").object();
+                    "\"objectType\": \"objects.FilesFileUploadDownload\","
+                    "\"query\": {\"id\": \"" + _id.toUtf8() + "\"}}").object();
 
-        const EnginioReply *reply = client.query(obj2);
-        QVERIFY(reply);
+        const EnginioReply *reply = _client.query(obj2);
         QTRY_VERIFY(reply->isFinished());
         CHECK_NO_ERROR(reply);
         QCOMPARE(spyError.count(), 0);
@@ -216,7 +194,7 @@ void tst_Files::fileUploadDownload()
         while (!resultObject["fileAttachment"].isObject() && --ok) {
             qDebug() << resultObject;
             QTest::qWait(1000); // We failed the test, but still we need to gather some debug data.
-            const EnginioReply *reply = client.query(obj2);
+            const EnginioReply *reply = _client.query(obj2);
             QTRY_VERIFY(reply->isFinished());
             CHECK_NO_ERROR(reply);
             QCOMPARE(spyError.count(), 0);
@@ -244,7 +222,7 @@ void tst_Files::fileUploadDownload()
         QJsonObject object;
         object["id"] = fileId; // ID of an existing object with attached file
 
-        const EnginioReply *replyDownload = client.downloadUrl(object);
+        const EnginioReply *replyDownload = _client.downloadUrl(object);
         //![download]
 
         QVERIFY(replyDownload);
@@ -257,7 +235,7 @@ void tst_Files::fileUploadDownload()
         QVERIFY(!downloadData["expiresAt"].toString().isEmpty());
         QNetworkRequest req;
         req.setUrl(QUrl(downloadData["expiringUrl"].toString()));
-        QNetworkReply *reply = client.networkManager()->get(req);
+        QNetworkReply *reply = _client.networkManager()->get(req);
         QTRY_VERIFY(reply->isFinished());
         if (reply->error() != QNetworkReply::NoError) {
             // the test has failed already, let's printout some debugging information
@@ -277,7 +255,7 @@ void tst_Files::fileUploadDownload()
     {
         QJsonObject fileObject;
         fileObject.insert("id", fileId);
-        EnginioReply *fileInfo = client.query(fileObject, Enginio::FileOperation);
+        EnginioReply *fileInfo = _client.query(fileObject, Enginio::FileOperation);
         QVERIFY(fileInfo);
         QTRY_VERIFY(fileInfo->isFinished());
         CHECK_NO_ERROR(fileInfo);
@@ -293,7 +271,7 @@ void tst_Files::fileUploadDownload()
         int count = 0;
         while (thumbnailStatus == "processing" && ++count < 20) {
             QTest::qWait(1000);
-            fileInfo = client.query(fileObject, Enginio::FileOperation);
+            fileInfo = _client.query(fileObject, Enginio::FileOperation);
             QVERIFY(fileInfo);
             QTRY_VERIFY(fileInfo->isFinished());
             CHECK_NO_ERROR(fileInfo);
@@ -317,7 +295,7 @@ void tst_Files::fileUploadDownload()
         object["id"] = fileId; // ID of an existing object with attached file
         object[EnginioString::variant] = QStringLiteral("thumbnail");
 
-        const EnginioReply* replyDownload = client.downloadUrl(object);
+        const EnginioReply *replyDownload = _client.downloadUrl(object);
 
         QVERIFY(replyDownload);
         QTRY_VERIFY(replyDownload->isFinished());
@@ -330,7 +308,7 @@ void tst_Files::fileUploadDownload()
 
         QNetworkRequest req;
         req.setUrl(QUrl(downloadData["expiringUrl"].toString()));
-        QNetworkReply *reply = client.networkManager()->get(req);
+        QNetworkReply *reply = _client.networkManager()->get(req);
         QTRY_VERIFY(reply->isFinished());
         if (reply->error() != QNetworkReply::NoError) {
             // the test has failed already, let's printout some debugging information

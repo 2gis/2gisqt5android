@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtQuick module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -62,6 +54,7 @@
 #include <QtCore/qthread.h>
 #include <QtCore/qmutex.h>
 #include <QtCore/qwaitcondition.h>
+#include <QtCore/qrunnable.h>
 #include <private/qwindow_p.h>
 #include <private/qopengl_p.h>
 #include <qopenglcontext.h>
@@ -93,6 +86,8 @@ class QQuickWindowPrivate;
 class QTouchEvent;
 class QQuickWindowRenderLoop;
 class QQuickWindowIncubationController;
+
+class QOpenGLVertexArrayObjectHelper;
 
 class Q_QUICK_PRIVATE_EXPORT QQuickWindowPrivate : public QWindowPrivate
 {
@@ -135,19 +130,21 @@ public:
     static QMouseEvent *cloneMouseEvent(QMouseEvent *event, QPointF *transformedLocalPos = 0);
     bool deliverInitialMousePressEvent(QQuickItem *, QMouseEvent *);
     bool deliverMouseEvent(QMouseEvent *);
-    bool sendFilteredMouseEvent(QQuickItem *, QQuickItem *, QEvent *);
+    bool sendFilteredMouseEvent(QQuickItem *, QQuickItem *, QEvent *, QSet<QQuickItem *> *);
 #ifndef QT_NO_WHEELEVENT
     bool deliverWheelEvent(QQuickItem *, QWheelEvent *);
 #endif
     bool deliverTouchPoints(QQuickItem *, QTouchEvent *, const QList<QTouchEvent::TouchPoint> &, QSet<int> *,
-            QHash<QQuickItem *, QList<QTouchEvent::TouchPoint> > *);
-    bool deliverTouchEvent(QTouchEvent *);
+                            QHash<QQuickItem *, QList<QTouchEvent::TouchPoint> > *, QSet<QQuickItem*> *filtered);
+    void deliverTouchEvent(QTouchEvent *);
+    void reallyDeliverTouchEvent(QTouchEvent *);
     bool deliverTouchCancelEvent(QTouchEvent *);
+    void flushDelayedTouchEvent();
     bool deliverHoverEvent(QQuickItem *, const QPointF &scenePos, const QPointF &lastScenePos, Qt::KeyboardModifiers modifiers, bool &accepted);
-    bool deliverMatchingPointsToItem(QQuickItem *item, QTouchEvent *event, QSet<int> *acceptedNewPoints, const QSet<int> &matchingNewPoints, const QList<QTouchEvent::TouchPoint> &matchingPoints);
+    bool deliverMatchingPointsToItem(QQuickItem *item, QTouchEvent *event, QSet<int> *acceptedNewPoints, const QSet<int> &matchingNewPoints, const QList<QTouchEvent::TouchPoint> &matchingPoints, QSet<QQuickItem*> *filtered);
     QTouchEvent *touchEventForItemBounds(QQuickItem *target, const QTouchEvent &originalEvent);
     QTouchEvent *touchEventWithPoints(const QTouchEvent &event, const QList<QTouchEvent::TouchPoint> &newPoints);
-    bool sendFilteredTouchEvent(QQuickItem *target, QQuickItem *item, QTouchEvent *event);
+    bool sendFilteredTouchEvent(QQuickItem *target, QQuickItem *item, QTouchEvent *event, QSet<QQuickItem*> *filtered);
     bool sendHoverEvent(QEvent::Type, QQuickItem *, const QPointF &scenePos, const QPointF &lastScenePos,
                         Qt::KeyboardModifiers modifiers, bool accepted);
     bool clearHover();
@@ -210,6 +207,8 @@ public:
     QSGRenderLoop *windowManager;
     QQuickRenderControl *renderControl;
     QQuickAnimatorController *animationController;
+    QTouchEvent *delayedTouch;
+    int touchRecursionGuard;
 
     QColor clearColor;
 
@@ -223,12 +222,17 @@ public:
     uint lastWheelEventAccepted : 1;
     bool componentCompleted : 1;
 
+    Qt::FocusReason lastFocusReason;
+
     QOpenGLFramebufferObject *renderTarget;
     uint renderTargetId;
     QSize renderTargetSize;
 
+    QOpenGLVertexArrayObjectHelper *vaoHelper;
+
     // Keeps track of which touch point (int) was last accepted by which item
     QHash<int, QQuickItem *> itemForTouchPointId;
+    QSet<int> touchMouseIdCandidates;
 
     mutable QQuickWindowIncubationController *incubationController;
 
@@ -246,6 +250,15 @@ public:
                                               QString *translatedMessage,
                                               QString *untranslatedMessage,
                                               bool isEs);
+
+    QMutex renderJobMutex;
+    QList<QRunnable *> beforeSynchronizingJobs;
+    QList<QRunnable *> afterSynchronizingJobs;
+    QList<QRunnable *> beforeRenderingJobs;
+    QList<QRunnable *> afterRenderingJobs;
+    QList<QRunnable *> afterSwapJobs;
+
+    void runAndClearJobs(QList<QRunnable *> *jobs);
 
 private:
     static void cleanupNodesOnShutdown(QQuickItem *);
@@ -265,6 +278,19 @@ public:
 
 private:
     bool _accepted;
+};
+
+class QQuickWindowQObjectCleanupJob : public QRunnable
+{
+public:
+    QQuickWindowQObjectCleanupJob(QObject *o) : object(o) { }
+    void run() Q_DECL_OVERRIDE { delete object; }
+    QObject *object;
+    static void schedule(QQuickWindow *window, QObject *object) {
+        Q_ASSERT(window);
+        Q_ASSERT(object);
+        window->scheduleRenderJob(new QQuickWindowQObjectCleanupJob(object), QQuickWindow::AfterSynchronizingStage);
+    }
 };
 
 Q_DECLARE_OPERATORS_FOR_FLAGS(QQuickWindowPrivate::FocusOptions)

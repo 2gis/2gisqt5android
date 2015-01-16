@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtEnginio module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -399,6 +391,26 @@ protected:
         }
     };
 
+    class RefreshQueryAfterAuthChange // It is needed for compilers that don't support variadic templates
+    {
+        EnginioBaseModelPrivate *model;
+    public:
+        RefreshQueryAfterAuthChange(EnginioBaseModelPrivate *m)
+            : model(m)
+        {
+            Q_ASSERT(m);
+        }
+
+        void operator ()(Enginio::AuthenticationState state) const
+        {
+            // TODO we do not want to refresh on a failed attempt to login
+            if (state == Enginio::NotAuthenticated // logout
+                || state == Enginio::Authenticated // successful login
+                || state == Enginio::AuthenticationFailure)  // token refresh failed
+                    model->execute();
+        }
+    };
+
 public:
     EnginioBaseModelPrivate(EnginioBaseModel *q_ptr)
         : _enginio(0)
@@ -418,7 +430,7 @@ public:
         _notifications.disable();
     }
 
-    void receivedNotification(QJsonObject data);
+    void receivedNotification(const QJsonObject &data);
     void receivedRemoveNotification(const QJsonObject &object, int rowHint = NoHintRow);
     void receivedUpdateNotification(const QJsonObject &object, const QString &idHint = QString(), int row = NoHintRow);
     void receivedCreateNotification(const QJsonObject &object);
@@ -586,19 +598,25 @@ public:
             filter.insert(EnginioString::data, objectType);
             _notifications.connectToBackend(this, _enginio, filter);
 
-            // send full query
-            QJsonObject query = queryAsJson();
-            ObjectAdaptor<QJsonObject> aQuery(query);
-            QNetworkReply *nreply = _enginio->query(aQuery, static_cast<Enginio::Operation>(_operation));
-            EnginioReplyState *ereply = _enginio->createReply(nreply);
-            if (_canFetchMore)
-                _latestRequestedOffset = query[EnginioString::limit].toDouble();
-            FinishedFullQueryRequest finshedRequest = { this, ereply };
-            QObject::connect(ereply, &EnginioReplyState::dataChanged, _replyConnectionConntext, finshedRequest);
+            EnginioReplyState *ereply = reload();
             QObject::connect(ereply, &EnginioReplyState::dataChanged, ereply, &EnginioReplyState::deleteLater);
         } else {
             fullQueryReset(QJsonArray());
         }
+    }
+
+    EnginioReplyState *reload()
+    {
+        // send full query
+        QJsonObject query = queryAsJson();
+        ObjectAdaptor<QJsonObject> aQuery(query);
+        QNetworkReply *nreply = _enginio->query(aQuery, static_cast<Enginio::Operation>(_operation));
+        EnginioReplyState *ereply = _enginio->createReply(nreply);
+        if (_canFetchMore)
+            _latestRequestedOffset = query[EnginioString::limit].toDouble();
+        FinishedFullQueryRequest finshedRequest = { this, ereply };
+        QObject::connect(ereply, &EnginioReplyState::dataChanged, _replyConnectionConntext, finshedRequest);
+        return ereply;
     }
 
     void finishedIncrementalUpdateRequest(const EnginioReplyState *reply, const QJsonObject &query)
@@ -804,11 +822,21 @@ public:
     EnginioReplyState *setDataNow(const int row, const QVariant &value, int role, const QJsonObject &oldObject, const QString &id)
     {
         Q_ASSERT(!id.isEmpty());
-        const QString roleName(_roles.value(role));
-        Q_ASSERT(!roleName.isEmpty());
         QJsonObject deltaObject;
         QJsonObject newObject = oldObject;
-        deltaObject[roleName] = newObject[roleName] = QJsonValue::fromVariant(value);
+        if (role != Enginio::JsonObjectRole) {
+            const QString roleName(_roles.value(role));
+            Q_ASSERT(!roleName.isEmpty());
+            deltaObject[roleName] = newObject[roleName] = QJsonValue::fromVariant(value);
+        } else {
+            const QJsonObject updateObject = value.toJsonObject();
+            if (updateObject.isEmpty()) {
+                QNetworkReply *nreply = new EnginioFakeReply(_enginio, EnginioClientConnectionPrivate::constructErrorMessage(EnginioString::EnginioModel_Trying_to_update_an_object_with_unknown_role));
+                return _enginio->createReply(nreply);
+            }
+            for (QJsonObject::const_iterator i = updateObject.constBegin(); i != updateObject.constEnd(); ++i)
+                deltaObject[i.key()] = i.value();
+        }
         deltaObject[EnginioString::id] = id;
         deltaObject[EnginioString::objectType] = newObject[EnginioString::objectType];
         ObjectAdaptor<QJsonObject> aDeltaObject(deltaObject);
@@ -850,11 +878,11 @@ public:
 
         const QJsonObject object = _data.at(row).toObject();
         if (!object.isEmpty()) {
+            if (role == Qt::DisplayRole || role == Enginio::JsonObjectRole)
+                return _data.at(row);
             const QString roleName = _roles.value(role);
             if (!roleName.isEmpty())
                 return object[roleName];
-            else if (role == Qt::DisplayRole)
-                return _data.at(row);
         }
 
         return QVariant();
@@ -952,6 +980,7 @@ struct EnginioModelPrivateT : public EnginioBaseModelPrivate
             _enginio = EnginioClientConnectionPrivate::get(const_cast<EnginioClientConnection*>(enginio));
             _clientConnections.append(QObject::connect(enginio, &QObject::destroyed, EnginioDestroyed(this)));
             _clientConnections.append(QObject::connect(enginio, &EnginioClientConnection::backendIdChanged, QueryChanged(this)));
+            _clientConnections.append(QObject::connect(enginio, &EnginioClientConnection::authenticationStateChanged, RefreshQueryAfterAuthChange(this)));
         } else {
             _enginio = 0;
         }
@@ -993,7 +1022,8 @@ struct EnginioModelPrivateT : public EnginioBaseModelPrivate
     Reply *append(const QJsonObject &value) { return static_cast<Reply*>(Base::append(value)); }
     Reply *remove(int row) { return static_cast<Reply*>(Base::remove(row)); }
     Reply *setValue(int row, const QString &role, const QVariant &value) { return static_cast<Reply*>(Base::setValue(row, role, value)); }
-
+    Reply *reload() { return static_cast<Reply*>(Base::reload()); }
+    Reply *setData(const int row, const QVariant &value, int role) { return static_cast<Reply*>(Base::setData(row, value, role)); }
     bool queryIsEmpty() const Q_DECL_OVERRIDE
     {
         return ObjectAdaptor<Data>(_query, static_cast<ClientPrivate*>(_enginio)).isEmpty();

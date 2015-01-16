@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtSensors module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -221,7 +213,7 @@ private slots:
         QByteArray actual = sensor.identifier();
         QCOMPARE(actual, expected);
 
-        QTest::ignoreMessage(QtWarningMsg, "ERROR: Cannot call QSensor::setIdentifier while connected to a backend! ");
+        QTest::ignoreMessage(QtWarningMsg, "ERROR: Cannot call QSensor::setIdentifier while connected to a backend!");
         sensor.setIdentifier("dummy.accelerometer");
         expected = testsensorimpl::id;
         actual = sensor.identifier();
@@ -232,7 +224,7 @@ private slots:
     {
         QSensorManager::setDefaultBackend(QByteArray(TestSensor::type), QByteArray("test sensor 2"));
         TestSensor sensor;
-        QTest::ignoreMessage(QtWarningMsg, "Can't create backend \"test sensor 2\" ");
+        QTest::ignoreMessage(QtWarningMsg, "Can't create backend \"test sensor 2\"");
         sensor.connectToBackend();
         QByteArray expected = testsensorimpl::id;
         QByteArray actual = sensor.identifier();
@@ -378,14 +370,14 @@ private slots:
         {
             TestSensor sensor;
             sensor.setProperty("doThis", "rates(0)");
-            QTest::ignoreMessage(QtWarningMsg, "ERROR: Cannot call QSensorBackend::setDataRates with 0 ");
+            QTest::ignoreMessage(QtWarningMsg, "ERROR: Cannot call QSensorBackend::setDataRates with 0");
             sensor.connectToBackend();
         }
 
         {
             TestSensor sensor;
             sensor.setProperty("doThis", "rates(nodef)");
-            QTest::ignoreMessage(QtWarningMsg, "ERROR: Cannot call QSensorBackend::setDataRates with an invalid sensor ");
+            QTest::ignoreMessage(QtWarningMsg, "ERROR: Cannot call QSensorBackend::setDataRates with an invalid sensor");
             sensor.connectToBackend();
         }
 
@@ -417,10 +409,10 @@ private slots:
         QList<QSensorFilter*> expected = QList<QSensorFilter*>();
         QCOMPARE(actual, expected);
 
-        QTest::ignoreMessage(QtWarningMsg, "addFilter: passed a null filter! ");
+        QTest::ignoreMessage(QtWarningMsg, "addFilter: passed a null filter!");
         sensor.addFilter(0);
 
-        QTest::ignoreMessage(QtWarningMsg, "removeFilter: passed a null filter! ");
+        QTest::ignoreMessage(QtWarningMsg, "removeFilter: passed a null filter!");
         sensor.removeFilter(0);
 
         MyFilter *filter = new MyFilter;
@@ -559,7 +551,7 @@ private slots:
 
         sensor.setOutputRange(-1);
         QCOMPARE(sensor.outputRange(), -1);
-        QTest::ignoreMessage(QtWarningMsg, "setOutputRange: 300 is not supported by the sensor. ");
+        QTest::ignoreMessage(QtWarningMsg, "setOutputRange: 300 is not supported by the sensor.");
         sensor.setOutputRange(300);
         QCOMPARE(sensor.outputRange(), -1);
     }
@@ -570,10 +562,10 @@ private slots:
         sensor.setOutputRange(300);
         QCOMPARE(sensor.outputRange(), 300);
         sensor.setOutputRange(350);
-        QTest::ignoreMessage(QtWarningMsg, "setOutputRange: 350 is not supported by the sensor. ");
+        QTest::ignoreMessage(QtWarningMsg, "setOutputRange: 350 is not supported by the sensor.");
         sensor.connectToBackend();
         QCOMPARE(sensor.outputRange(), -1);
-        QTest::ignoreMessage(QtWarningMsg, "setOutputRange: -2 is not supported by the sensor. ");
+        QTest::ignoreMessage(QtWarningMsg, "setOutputRange: -2 is not supported by the sensor.");
         sensor.setOutputRange(-2);
         QCOMPARE(sensor.outputRange(), -1);
     }
@@ -737,12 +729,12 @@ private slots:
         QSensorManager::registerBackend("random", "random.2", &factory);
         QSensor random("random");
         // This is a sensorlog, not a warning
-        //QTest::ignoreMessage(QtWarningMsg, "no suitable backend found for requested identifier \"\" and type \"random\" ");
+        //QTest::ignoreMessage(QtWarningMsg, "no suitable backend found for requested identifier \"\" and type \"random\"");
         random.connectToBackend();
         QVERIFY(!random.isConnectedToBackend());
         random.setIdentifier("random.3");
         // This is a sensorlog, not a warning
-        //QTest::ignoreMessage(QtWarningMsg, "no backend with identifier \"random.3\" for type \"random\" ");
+        //QTest::ignoreMessage(QtWarningMsg, "no backend with identifier \"random.3\" for type \"random\"");
         random.connectToBackend();
         QVERIFY(!random.isConnectedToBackend());
         random.setIdentifier("random.1");
@@ -764,7 +756,7 @@ private slots:
 
         // Register it again (creates a warning)
         sensor.sensorsChangedEmitted = 0;
-        QTest::ignoreMessage(QtWarningMsg, "A backend with type \"a random type\" and identifier \"a random id\" has already been registered! ");
+        QTest::ignoreMessage(QtWarningMsg, "A backend with type \"a random type\" and identifier \"a random id\" has already been registered!");
         QSensorManager::registerBackend("a random type", "a random id", &factory);
         QCOMPARE(sensor.sensorsChangedEmitted, 0);
 
@@ -775,13 +767,13 @@ private slots:
 
         // Unregister an unknown identifier
         sensor.sensorsChangedEmitted = 0;
-        QTest::ignoreMessage(QtWarningMsg, "Identifier \"a random id\" is not registered ");
+        QTest::ignoreMessage(QtWarningMsg, "Identifier \"a random id\" is not registered");
         QSensorManager::unregisterBackend(TestSensor::type, "a random id");
         QCOMPARE(sensor.sensorsChangedEmitted, 0);
 
         // Unregister for an unknown type
         sensor.sensorsChangedEmitted = 0;
-        QTest::ignoreMessage(QtWarningMsg, "No backends of type \"foo\" are registered ");
+        QTest::ignoreMessage(QtWarningMsg, "No backends of type \"foo\" are registered");
         QSensorManager::unregisterBackend("foo", "bar");
         QCOMPARE(sensor.sensorsChangedEmitted, 0);
 

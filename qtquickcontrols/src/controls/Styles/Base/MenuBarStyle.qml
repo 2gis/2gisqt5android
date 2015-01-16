@@ -54,6 +54,7 @@ import QtQuick.Controls.Private 1.0
 */
 
 Style {
+    id: root
 
     /*! Returns a formatted string to render mnemonics for a given menu item.
 
@@ -102,9 +103,10 @@ Style {
 
         Text {
             id: text
+            font: root.font
             text: formatMnemonic(styleData.text, styleData.underlineMnemonic)
             anchors.centerIn: parent
-            renderType: Text.NativeRendering
+            renderType: Settings.isMobile ? Text.QtRendering : Text.NativeRendering
             color: styleData.open ? "white" : SystemPaletteSingleton.windowText(control.enabled)
         }
     }
@@ -113,5 +115,16 @@ Style {
 
         \sa {QtQuick.Controls.Styles::}{MenuStyle}
     */
-    property Component menuStyle: MenuStyle { }
+    property Component menuStyle: MenuStyle {
+        font: root.font
+    }
+
+    /*!
+        \since QtQuick.Controls.Styles 1.3
+        The font of the control.
+    */
+    property font font
+
+    /*! \internal */
+    property bool __isNative: true
 }

@@ -10,7 +10,6 @@ HEADERS += \
     $$PWD/qquickrectangle_p_p.h \
     $$PWD/qquickwindow.h \
     $$PWD/qquickwindow_p.h \
-    $$PWD/qquickrendercontrol_p.h \
     $$PWD/qquickfocusscope_p.h \
     $$PWD/qquickitemsmodule_p.h \
     $$PWD/qquickpainteditem.h \
@@ -74,8 +73,13 @@ HEADERS += \
     $$PWD/qquickitemview_p_p.h \
     $$PWD/qquickitemviewtransition_p.h \
     $$PWD/qquickscreen_p.h \
+    $$PWD/qquickwindowattached_p.h \
     $$PWD/qquickwindowmodule_p.h \
-    $$PWD/qquickframebufferobject.h
+    $$PWD/qquickframebufferobject.h \
+    $$PWD/qquickitemgrabresult.h \
+    $$PWD/qquickrendercontrol.h \
+    $$PWD/qquickrendercontrol_p.h \
+    $$PWD/qquickopenglinfo_p.h
 
 SOURCES += \
     $$PWD/qquickevents.cpp \
@@ -83,7 +87,6 @@ SOURCES += \
     $$PWD/qquickitem.cpp \
     $$PWD/qquickrectangle.cpp \
     $$PWD/qquickwindow.cpp \
-    $$PWD/qquickrendercontrol.cpp \
     $$PWD/qquickfocusscope.cpp \
     $$PWD/qquickitemsmodule.cpp \
     $$PWD/qquickpainteditem.cpp \
@@ -128,7 +131,11 @@ SOURCES += \
     $$PWD/qquickitemviewtransition.cpp \
     $$PWD/qquickwindowmodule.cpp \
     $$PWD/qquickscreen.cpp \
-    $$PWD/qquickframebufferobject.cpp
+    $$PWD/qquickwindowattached.cpp \
+    $$PWD/qquickframebufferobject.cpp \
+    $$PWD/qquickitemgrabresult.cpp \
+    $$PWD/qquickrendercontrol.cpp \
+    $$PWD/qquickopenglinfo.cpp
 
 SOURCES += \
     $$PWD/qquickshadereffect.cpp \

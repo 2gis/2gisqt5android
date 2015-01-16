@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -108,6 +100,7 @@ struct String;
 struct RegExp;
 struct Name;
 struct Temp;
+struct ArgLocal;
 struct Closure;
 struct Convert;
 struct Unop;
@@ -210,6 +203,7 @@ struct ExprVisitor {
     virtual void visitRegExp(RegExp *) = 0;
     virtual void visitName(Name *) = 0;
     virtual void visitTemp(Temp *) = 0;
+    virtual void visitArgLocal(ArgLocal *) = 0;
     virtual void visitClosure(Closure *) = 0;
     virtual void visitConvert(Convert *) = 0;
     virtual void visitUnop(Unop *) = 0;
@@ -260,6 +254,7 @@ struct Q_AUTOTEST_EXPORT Expr {
     virtual RegExp *asRegExp() { return 0; }
     virtual Name *asName() { return 0; }
     virtual Temp *asTemp() { return 0; }
+    virtual ArgLocal *asArgLocal() { return 0; }
     virtual Closure *asClosure() { return 0; }
     virtual Convert *asConvert() { return 0; }
     virtual Unop *asUnop() { return 0; }
@@ -268,7 +263,6 @@ struct Q_AUTOTEST_EXPORT Expr {
     virtual New *asNew() { return 0; }
     virtual Subscript *asSubscript() { return 0; }
     virtual Member *asMember() { return 0; }
-    virtual void dump(QTextStream &out) const = 0;
 };
 
 struct ExprList {
@@ -295,8 +289,6 @@ struct Const: Expr {
 
     virtual void accept(ExprVisitor *v) { v->visitConst(this); }
     virtual Const *asConst() { return this; }
-
-    virtual void dump(QTextStream &out) const;
 };
 
 struct String: Expr {
@@ -309,9 +301,6 @@ struct String: Expr {
 
     virtual void accept(ExprVisitor *v) { v->visitString(this); }
     virtual String *asString() { return this; }
-
-    virtual void dump(QTextStream &out) const;
-    static QString escape(const QString &s);
 };
 
 struct RegExp: Expr {
@@ -333,8 +322,6 @@ struct RegExp: Expr {
 
     virtual void accept(ExprVisitor *v) { v->visitRegExp(this); }
     virtual RegExp *asRegExp() { return this; }
-
-    virtual void dump(QTextStream &out) const;
 };
 
 struct Name: Expr {
@@ -376,28 +363,64 @@ struct Name: Expr {
     virtual void accept(ExprVisitor *v) { v->visitName(this); }
     virtual bool isLValue() { return true; }
     virtual Name *asName() { return this; }
-
-    virtual void dump(QTextStream &out) const;
 };
 
 struct Q_AUTOTEST_EXPORT Temp: Expr {
     enum Kind {
-        Formal = 0,
-        ScopedFormal,
-        Local,
-        ScopedLocal,
+        Invalid = 0,
         VirtualRegister,
         PhysicalRegister,
         StackSlot
     };
 
-    unsigned index;
-    unsigned scope : 27; // how many scopes outside the current one?
-    unsigned kind  : 3;
-    unsigned isArgumentsOrEval : 1;
-    unsigned isReadOnly : 1;
+    unsigned index      : 28;
+    unsigned kind       :  3;
+    unsigned isReadOnly :  1;
     // Used when temp is used as base in member expression
     MemberExpressionResolver memberResolver;
+
+    Temp()
+        : index((1 << 28) - 1)
+        , kind(Invalid)
+        , isReadOnly(0)
+    {}
+
+    void init(unsigned kind, unsigned index)
+    {
+        this->kind = kind;
+        this->index = index;
+        this->isReadOnly = false;
+    }
+
+    bool isInvalid() const { return kind == Invalid; }
+    virtual void accept(ExprVisitor *v) { v->visitTemp(this); }
+    virtual bool isLValue() { return !isReadOnly; }
+    virtual Temp *asTemp() { return this; }
+};
+
+inline bool operator==(const Temp &t1, const Temp &t2) Q_DECL_NOTHROW
+{ return t1.index == t2.index && t1.kind == t2.kind && t1.type == t2.type; }
+
+inline bool operator!=(const Temp &t1, const Temp &t2) Q_DECL_NOTHROW
+{ return !(t1 == t2); }
+
+inline uint qHash(const Temp &t, uint seed = 0) Q_DECL_NOTHROW
+{ return t.index ^ t.kind ^ seed; }
+
+bool operator<(const Temp &t1, const Temp &t2) Q_DECL_NOTHROW;
+
+struct Q_AUTOTEST_EXPORT ArgLocal: Expr {
+    enum Kind {
+        Formal = 0,
+        ScopedFormal,
+        Local,
+        ScopedLocal
+    };
+
+    unsigned index;
+    unsigned scope             : 29; // how many scopes outside the current one?
+    unsigned kind              :  2;
+    unsigned isArgumentsOrEval :  1;
 
     void init(unsigned kind, unsigned index, unsigned scope)
     {
@@ -409,26 +432,15 @@ struct Q_AUTOTEST_EXPORT Temp: Expr {
         this->index = index;
         this->scope = scope;
         this->isArgumentsOrEval = false;
-        this->isReadOnly = false;
     }
 
-    virtual void accept(ExprVisitor *v) { v->visitTemp(this); }
-    virtual bool isLValue() { return !isReadOnly; }
-    virtual Temp *asTemp() { return this; }
+    virtual void accept(ExprVisitor *v) { v->visitArgLocal(this); }
+    virtual bool isLValue() { return true; }
+    virtual ArgLocal *asArgLocal() { return this; }
 
-    virtual void dump(QTextStream &out) const;
+    bool operator==(const ArgLocal &other) const
+    { return index == other.index && scope == other.scope && kind == other.kind; }
 };
-
-inline bool operator==(const Temp &t1, const Temp &t2) Q_DECL_NOTHROW
-{ return t1.index == t2.index && t1.scope == t2.scope && t1.kind == t2.kind && t1.type == t2.type; }
-
-inline bool operator!=(const Temp &t1, const Temp &t2) Q_DECL_NOTHROW
-{ return !(t1 == t2); }
-
-inline uint qHash(const Temp &t, uint seed = 0) Q_DECL_NOTHROW
-{ return t.index ^ (t.kind | (t.scope << 3)) ^ seed; }
-
-bool operator<(const Temp &t1, const Temp &t2) Q_DECL_NOTHROW;
 
 struct Closure: Expr {
     int value; // index in _module->functions
@@ -442,8 +454,6 @@ struct Closure: Expr {
 
     virtual void accept(ExprVisitor *v) { v->visitClosure(this); }
     virtual Closure *asClosure() { return this; }
-
-    virtual void dump(QTextStream &out) const;
 };
 
 struct Convert: Expr {
@@ -457,8 +467,6 @@ struct Convert: Expr {
 
     virtual void accept(ExprVisitor *v) { v->visitConvert(this); }
     virtual Convert *asConvert() { return this; }
-
-    virtual void dump(QTextStream &out) const;
 };
 
 struct Unop: Expr {
@@ -473,8 +481,6 @@ struct Unop: Expr {
 
     virtual void accept(ExprVisitor *v) { v->visitUnop(this); }
     virtual Unop *asUnop() { return this; }
-
-    virtual void dump(QTextStream &out) const;
 };
 
 struct Binop: Expr {
@@ -491,8 +497,6 @@ struct Binop: Expr {
 
     virtual void accept(ExprVisitor *v) { v->visitBinop(this); }
     virtual Binop *asBinop() { return this; }
-
-    virtual void dump(QTextStream &out) const;
 };
 
 struct Call: Expr {
@@ -513,8 +517,6 @@ struct Call: Expr {
 
     virtual void accept(ExprVisitor *v) { v->visitCall(this); }
     virtual Call *asCall() { return this; }
-
-    virtual void dump(QTextStream &out) const;
 };
 
 struct New: Expr {
@@ -535,8 +537,6 @@ struct New: Expr {
 
     virtual void accept(ExprVisitor *v) { v->visitNew(this); }
     virtual New *asNew() { return this; }
-
-    virtual void dump(QTextStream &out) const;
 };
 
 struct Subscript: Expr {
@@ -552,8 +552,6 @@ struct Subscript: Expr {
     virtual void accept(ExprVisitor *v) { v->visitSubscript(this); }
     virtual bool isLValue() { return true; }
     virtual Subscript *asSubscript() { return this; }
-
-    virtual void dump(QTextStream &out) const;
 };
 
 struct Member: Expr {
@@ -562,14 +560,14 @@ struct Member: Expr {
         UnspecifiedMember,
         MemberOfEnum,
         MemberOfQmlScopeObject,
-        MemberOfQmlContextObject
+        MemberOfQmlContextObject,
+        MemberOfSingletonObject
     };
 
     Expr *base;
     const QString *name;
     QQmlPropertyData *property;
     int attachedPropertiesIdOrEnumValue; // depending on kind
-    uchar memberIsEnum : 1;
     uchar freeOfSideEffects : 1;
 
     // This is set for example for for QObject properties. All sorts of extra behavior
@@ -596,7 +594,6 @@ struct Member: Expr {
         this->name = name;
         this->property = property;
         this->attachedPropertiesIdOrEnumValue = attachedPropertiesIdOrEnumValue;
-        this->memberIsEnum = false;
         this->freeOfSideEffects = false;
         this->inhibitTypeConversionOnWrite = property != 0;
         this->kind = kind;
@@ -605,25 +602,20 @@ struct Member: Expr {
     virtual void accept(ExprVisitor *v) { v->visitMember(this); }
     virtual bool isLValue() { return true; }
     virtual Member *asMember() { return this; }
-
-    virtual void dump(QTextStream &out) const;
 };
 
 struct Stmt {
-    enum Mode {
-        HIR,
-        MIR
-    };
-
     struct Data {
         QVector<Expr *> incoming; // used by Phi nodes
     };
 
+    enum { InvalidId = -1 };
+
     Data *d;
-    int id;
     QQmlJS::AST::SourceLocation location;
 
-    Stmt(): d(0), id(-1) {}
+    explicit Stmt(int id): d(0), _id(id) {}
+
     virtual ~Stmt()
     {
 #ifdef Q_CC_MSVC
@@ -641,7 +633,8 @@ struct Stmt {
     virtual CJump *asCJump() { return 0; }
     virtual Ret *asRet() { return 0; }
     virtual Phi *asPhi() { return 0; }
-    virtual void dump(QTextStream &out, Mode mode = HIR) = 0;
+
+    int id() const { return _id; }
 
 private: // For memory management in BasicBlock
     friend struct BasicBlock;
@@ -649,10 +642,16 @@ private: // For memory management in BasicBlock
         delete d;
         d = 0;
     }
+
+private:
+    friend struct Function;
+    int _id;
 };
 
 struct Exp: Stmt {
     Expr *expr;
+
+    Exp(int id): Stmt(id) {}
 
     void init(Expr *expr)
     {
@@ -662,13 +661,14 @@ struct Exp: Stmt {
     virtual void accept(StmtVisitor *v) { v->visitExp(this); }
     virtual Exp *asExp() { return this; }
 
-    virtual void dump(QTextStream &out, Mode);
 };
 
 struct Move: Stmt {
     Expr *target; // LHS - Temp, Name, Member or Subscript
     Expr *source;
     bool swap;
+
+    Move(int id): Stmt(id) {}
 
     void init(Expr *target, Expr *source)
     {
@@ -680,11 +680,12 @@ struct Move: Stmt {
     virtual void accept(StmtVisitor *v) { v->visitMove(this); }
     virtual Move *asMove() { return this; }
 
-    virtual void dump(QTextStream &out, Mode mode = HIR);
 };
 
 struct Jump: Stmt {
     BasicBlock *target;
+
+    Jump(int id): Stmt(id) {}
 
     void init(BasicBlock *target)
     {
@@ -695,32 +696,34 @@ struct Jump: Stmt {
 
     virtual void accept(StmtVisitor *v) { v->visitJump(this); }
     virtual Jump *asJump() { return this; }
-
-    virtual void dump(QTextStream &out, Mode mode);
 };
 
 struct CJump: Stmt {
     Expr *cond; // Temp, Binop
     BasicBlock *iftrue;
     BasicBlock *iffalse;
+    BasicBlock *parent;
 
-    void init(Expr *cond, BasicBlock *iftrue, BasicBlock *iffalse)
+    CJump(int id): Stmt(id) {}
+
+    void init(Expr *cond, BasicBlock *iftrue, BasicBlock *iffalse, BasicBlock *parent)
     {
         this->cond = cond;
         this->iftrue = iftrue;
         this->iffalse = iffalse;
+        this->parent = parent;
     }
 
     virtual Stmt *asTerminator() { return this; }
 
     virtual void accept(StmtVisitor *v) { v->visitCJump(this); }
     virtual CJump *asCJump() { return this; }
-
-    virtual void dump(QTextStream &out, Mode mode);
 };
 
 struct Ret: Stmt {
     Expr *expr;
+
+    Ret(int id): Stmt(id) {}
 
     void init(Expr *expr)
     {
@@ -731,17 +734,15 @@ struct Ret: Stmt {
 
     virtual void accept(StmtVisitor *v) { v->visitRet(this); }
     virtual Ret *asRet() { return this; }
-
-    virtual void dump(QTextStream &out, Mode);
 };
 
 struct Phi: Stmt {
     Temp *targetTemp;
 
+    Phi(int id): Stmt(id) {}
+
     virtual void accept(StmtVisitor *v) { v->visitPhi(this); }
     virtual Phi *asPhi() { return this; }
-
-    virtual void dump(QTextStream &out, Mode mode);
 };
 
 struct Q_QML_PRIVATE_EXPORT Module {
@@ -775,10 +776,10 @@ public:
     QVector<BasicBlock *> out;
     QQmlJS::AST::SourceLocation nextLocation;
 
-    BasicBlock(Function *function, BasicBlock *containingLoop, BasicBlock *catcher)
+    BasicBlock(Function *function, BasicBlock *catcher)
         : function(function)
         , catchBlock(catcher)
-        , _containingGroup(containingLoop)
+        , _containingGroup(0)
         , _index(-1)
         , _isExceptionHandler(false)
         , _groupStart(false)
@@ -812,6 +813,7 @@ public:
 
     void appendStatement(Stmt *statement);
     void prependStatement(Stmt *stmt);
+    void prependStatements(const QVector<Stmt *> &stmts);
     void insertStatementBefore(Stmt *before, Stmt *newStmt);
     void insertStatementBefore(int index, Stmt *newStmt);
     void insertStatementBeforeTerminator(Stmt *stmt);
@@ -841,8 +843,8 @@ public:
     unsigned newTemp();
 
     Temp *TEMP(unsigned kind);
-    Temp *ARG(unsigned index, unsigned scope);
-    Temp *LOCAL(unsigned index, unsigned scope);
+    ArgLocal *ARG(unsigned index, unsigned scope);
+    ArgLocal *LOCAL(unsigned index, unsigned scope);
 
     Expr *CONST(Type type, double value);
     Expr *STRING(const QString *value);
@@ -869,9 +871,7 @@ public:
 
     Stmt *JUMP(BasicBlock *target);
     Stmt *CJUMP(Expr *cond, BasicBlock *iftrue, BasicBlock *iffalse);
-    Stmt *RET(Temp *expr);
-
-    void dump(QTextStream &out, Stmt::Mode mode = Stmt::HIR);
+    Stmt *RET(Expr *expr);
 
     BasicBlock *containingGroup() const
     {
@@ -891,10 +891,10 @@ public:
         return _groupStart;
     }
 
-    void markAsGroupStart()
+    void markAsGroupStart(bool mark = true)
     {
         Q_ASSERT(!isRemoved());
-        _groupStart = true;
+        _groupStart = mark;
     }
 
     // Returns the index of the basic-block.
@@ -994,7 +994,10 @@ struct Function {
     PropertyDependencyMap contextObjectPropertyDependencies;
     PropertyDependencyMap scopeObjectPropertyDependencies;
 
-    template <typename _Tp> _Tp *New() { return new (pool->allocate(sizeof(_Tp))) _Tp(); }
+    template <typename T> T *New() { return new (pool->allocate(sizeof(T))) T(); }
+    template <typename T> T *NewStmt() {
+        return new (pool->allocate(sizeof(T))) T(getNewStatementId());
+    }
 
     Function(Module *module, Function *outer, const QString &name);
     ~Function();
@@ -1004,7 +1007,7 @@ struct Function {
         DontInsertBlock
     };
 
-    BasicBlock *newBasicBlock(BasicBlock *containingLoop, BasicBlock *catchBlock, BasicBlockInsertMode mode = InsertBlock);
+    BasicBlock *newBasicBlock(BasicBlock *catchBlock, BasicBlockInsertMode mode = InsertBlock);
     const QString *newString(const QString &text);
 
     void RECEIVE(const QString &name) { formals.append(newString(name)); }
@@ -1024,8 +1027,6 @@ struct Function {
 
     int liveBasicBlocksCount() const;
 
-    void dump(QTextStream &out, Stmt::Mode mode = Stmt::HIR);
-
     void removeSharedExpressions();
 
     int indexOfArgument(const QStringRef &string) const;
@@ -1036,9 +1037,17 @@ struct Function {
     void setScheduledBlocks(const QVector<BasicBlock *> &scheduled);
     void renumberBasicBlocks();
 
+    int getNewStatementId() { return _statementCount++; }
+    int statementCount() const { return _statementCount; }
+
+private:
+    BasicBlock *getOrCreateBasicBlock(int index);
+    void setStatementCount(int cnt);
+
 private:
     QVector<BasicBlock *> _basicBlocks;
     QVector<BasicBlock *> *_allBasicBlocks;
+    int _statementCount;
 };
 
 class CloneExpr: protected IR::ExprVisitor
@@ -1048,20 +1057,20 @@ public:
 
     void setBasicBlock(IR::BasicBlock *block);
 
-    template <typename _Expr>
-    _Expr *operator()(_Expr *expr)
+    template <typename ExprSubclass>
+    ExprSubclass *operator()(ExprSubclass *expr)
     {
         return clone(expr);
     }
 
-    template <typename _Expr>
-    _Expr *clone(_Expr *expr)
+    template <typename ExprSubclass>
+    ExprSubclass *clone(ExprSubclass *expr)
     {
         Expr *c = expr;
         qSwap(cloned, c);
         expr->accept(this);
         qSwap(cloned, c);
-        return static_cast<_Expr *>(c);
+        return static_cast<ExprSubclass *>(c);
     }
 
     static Const *cloneConst(Const *c, Function *f)
@@ -1088,10 +1097,18 @@ public:
     static Temp *cloneTemp(Temp *t, Function *f)
     {
         Temp *newTemp = f->New<Temp>();
-        newTemp->init(t->kind, t->index, t->scope);
+        newTemp->init(t->kind, t->index);
         newTemp->type = t->type;
         newTemp->memberResolver = t->memberResolver;
         return newTemp;
+    }
+
+    static ArgLocal *cloneArgLocal(ArgLocal *argLocal, Function *f)
+    {
+        ArgLocal *newArgLocal = f->New<ArgLocal>();
+        newArgLocal->init(argLocal->kind, argLocal->index, argLocal->scope);
+        newArgLocal->type = argLocal->type;
+        return newArgLocal;
     }
 
 protected:
@@ -1102,6 +1119,7 @@ protected:
     virtual void visitRegExp(RegExp *);
     virtual void visitName(Name *);
     virtual void visitTemp(Temp *);
+    virtual void visitArgLocal(ArgLocal *);
     virtual void visitClosure(Closure *);
     virtual void visitConvert(Convert *);
     virtual void visitUnop(Unop *);
@@ -1111,9 +1129,59 @@ protected:
     virtual void visitSubscript(Subscript *);
     virtual void visitMember(Member *);
 
-private:
+protected:
     IR::BasicBlock *block;
+
+private:
     IR::Expr *cloned;
+};
+
+class Q_AUTOTEST_EXPORT IRPrinter: public StmtVisitor, public ExprVisitor
+{
+public:
+    IRPrinter(QTextStream *out);
+    virtual ~IRPrinter();
+
+    void print(Stmt *s);
+    void print(Expr *e);
+    void print(const Expr &e);
+
+    virtual void print(Function *f);
+    virtual void print(BasicBlock *bb);
+
+    virtual void visitExp(Exp *s);
+    virtual void visitMove(Move *s);
+    virtual void visitJump(Jump *s);
+    virtual void visitCJump(CJump *s);
+    virtual void visitRet(Ret *s);
+    virtual void visitPhi(Phi *s);
+
+    virtual void visitConst(Const *e);
+    virtual void visitString(String *e);
+    virtual void visitRegExp(RegExp *e);
+    virtual void visitName(Name *e);
+    virtual void visitTemp(Temp *e);
+    virtual void visitArgLocal(ArgLocal *e);
+    virtual void visitClosure(Closure *e);
+    virtual void visitConvert(Convert *e);
+    virtual void visitUnop(Unop *e);
+    virtual void visitBinop(Binop *e);
+    virtual void visitCall(Call *e);
+    virtual void visitNew(New *e);
+    virtual void visitSubscript(Subscript *e);
+    virtual void visitMember(Member *e);
+
+    static QString escape(const QString &s);
+
+protected:
+    virtual void addStmtNr(Stmt *s);
+    void addJustifiedNr(int pos);
+    void printBlockStart();
+
+protected:
+    QTextStream *out;
+    int positionSize;
+    BasicBlock *currentBB;
 };
 
 } // end of namespace IR

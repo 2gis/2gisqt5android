@@ -49,7 +49,7 @@ Rectangle {
     signal clicked
 
     width: buttonLabel.width + 20; height: buttonLabel.height + 6
-    border { width: 1; color: Qt.darker(container.color) } 
+    border { width: 1; color: Qt.darker(container.color) }
     radius: 8
     color: "lightgray"
     smooth: true
@@ -59,13 +59,13 @@ Rectangle {
             position: 0.0
             color: container.pressed ? "darkgray" : "white"
         }
-        GradientStop { 
+        GradientStop {
             position: 1.0
             color: container.color
         }
     }
 
-    MouseArea { 
+    MouseArea {
         anchors.fill: parent
         onClicked: container.clicked()
     }

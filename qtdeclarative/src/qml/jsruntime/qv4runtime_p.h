@@ -5,35 +5,27 @@
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -105,51 +97,51 @@ struct NoThrowContext : public ExecutionContext
 
 struct Q_QML_PRIVATE_EXPORT Runtime {
     // call
-    static ReturnedValue callGlobalLookup(ExecutionContext *context, uint index, CallDataRef callData);
-    static ReturnedValue callActivationProperty(ExecutionContext *, const StringRef name, CallDataRef callData);
-    static ReturnedValue callProperty(ExecutionContext *context, const StringRef name, CallDataRef callData);
-    static ReturnedValue callPropertyLookup(ExecutionContext *context, uint index, CallDataRef callData);
-    static ReturnedValue callElement(ExecutionContext *context, const ValueRef index, CallDataRef callData);
-    static ReturnedValue callValue(ExecutionContext *context, const ValueRef func, CallDataRef callData);
+    static ReturnedValue callGlobalLookup(ExecutionContext *context, uint index, CallData *callData);
+    static ReturnedValue callActivationProperty(ExecutionContext *, String *name, CallData *callData);
+    static ReturnedValue callProperty(ExecutionContext *context, String *name, CallData *callData);
+    static ReturnedValue callPropertyLookup(ExecutionContext *context, uint index, CallData *callData);
+    static ReturnedValue callElement(ExecutionContext *context, const ValueRef index, CallData *callData);
+    static ReturnedValue callValue(ExecutionContext *context, const ValueRef func, CallData *callData);
 
     // construct
-    static ReturnedValue constructGlobalLookup(ExecutionContext *context, uint index, CallDataRef callData);
-    static ReturnedValue constructActivationProperty(ExecutionContext *, const StringRef name, CallDataRef callData);
-    static ReturnedValue constructProperty(ExecutionContext *context, const StringRef name, CallDataRef callData);
-    static ReturnedValue constructPropertyLookup(ExecutionContext *context, uint index, CallDataRef callData);
-    static ReturnedValue constructValue(ExecutionContext *context, const ValueRef func, CallDataRef callData);
+    static ReturnedValue constructGlobalLookup(ExecutionContext *context, uint index, CallData *callData);
+    static ReturnedValue constructActivationProperty(ExecutionContext *, String *name, CallData *callData);
+    static ReturnedValue constructProperty(ExecutionContext *context, String *name, CallData *callData);
+    static ReturnedValue constructPropertyLookup(ExecutionContext *context, uint index, CallData *callData);
+    static ReturnedValue constructValue(ExecutionContext *context, const ValueRef func, CallData *callData);
 
     // set & get
-    static void setActivationProperty(ExecutionContext *ctx, const StringRef name, const ValueRef value);
-    static void setProperty(ExecutionContext *ctx, const ValueRef object, const StringRef name, const ValueRef value);
+    static void setActivationProperty(ExecutionContext *ctx, String *name, const ValueRef value);
+    static void setProperty(ExecutionContext *ctx, const ValueRef object, String *name, const ValueRef value);
     static void setElement(ExecutionContext *ctx, const ValueRef object, const ValueRef index, const ValueRef value);
-    static ReturnedValue getProperty(ExecutionContext *ctx, const ValueRef object, const StringRef name);
-    static ReturnedValue getActivationProperty(ExecutionContext *ctx, const StringRef name);
+    static ReturnedValue getProperty(ExecutionContext *ctx, const ValueRef object, String *name);
+    static ReturnedValue getActivationProperty(ExecutionContext *ctx, String *name);
     static ReturnedValue getElement(ExecutionContext *ctx, const ValueRef object, const ValueRef index);
 
     // typeof
     static ReturnedValue typeofValue(ExecutionContext *ctx, const ValueRef val);
-    static ReturnedValue typeofName(ExecutionContext *context, const StringRef name);
-    static ReturnedValue typeofMember(ExecutionContext* context, const ValueRef base, const StringRef name);
+    static ReturnedValue typeofName(ExecutionContext *context, String *name);
+    static ReturnedValue typeofMember(ExecutionContext* context, const ValueRef base, String *name);
     static ReturnedValue typeofElement(ExecutionContext* context, const ValueRef base, const ValueRef index);
 
     // delete
     static ReturnedValue deleteElement(ExecutionContext *ctx, const ValueRef base, const ValueRef index);
-    static ReturnedValue deleteMember(ExecutionContext *ctx, const ValueRef base, const StringRef name);
-    static ReturnedValue deleteName(ExecutionContext *ctx, const StringRef name);
+    static ReturnedValue deleteMember(ExecutionContext *ctx, const ValueRef base, String *name);
+    static ReturnedValue deleteName(ExecutionContext *ctx, String *name);
 
     // exceptions & scopes
     static void throwException(ExecutionContext*, const ValueRef value);
     static ReturnedValue unwindException(ExecutionContext *ctx);
     static ExecutionContext *pushWithScope(const ValueRef o, ExecutionContext *ctx);
-    static ExecutionContext *pushCatchScope(ExecutionContext *ctx, const StringRef exceptionVarName);
+    static ExecutionContext *pushCatchScope(ExecutionContext *ctx, String *exceptionVarName);
     static ExecutionContext *popScope(ExecutionContext *ctx);
 
     // closures
     static ReturnedValue closure(ExecutionContext *ctx, int functionId);
 
     // function header
-    static void declareVar(ExecutionContext *ctx, bool deletable, const StringRef name);
+    static void declareVar(ExecutionContext *ctx, bool deletable, String *name);
     static ReturnedValue setupArgumentsObject(ExecutionContext *ctx);
     static void convertThisToObject(ExecutionContext *ctx);
 
@@ -226,9 +218,10 @@ struct Q_QML_PRIVATE_EXPORT Runtime {
     static ReturnedValue getQmlImportedScripts(NoThrowContext *ctx);
     static ReturnedValue getQmlContextObject(NoThrowContext *ctx);
     static ReturnedValue getQmlScopeObject(NoThrowContext *ctx);
-    static ReturnedValue getQmlSingleton(NoThrowContext *ctx, const StringRef name);
+    static ReturnedValue getQmlSingleton(NoThrowContext *ctx, String *name);
     static ReturnedValue getQmlAttachedProperty(ExecutionContext *ctx, int attachedPropertiesId, int propertyIndex);
     static ReturnedValue getQmlQObjectProperty(ExecutionContext *ctx, const ValueRef object, int propertyIndex, bool captureRequired);
+    static ReturnedValue getQmlSingletonQObjectProperty(ExecutionContext *ctx, const ValueRef object, int propertyIndex, bool captureRequired);
     static void setQmlQObjectProperty(ExecutionContext *ctx, const ValueRef object, int propertyIndex, const ValueRef value);
 };
 
@@ -345,8 +338,8 @@ inline ReturnedValue Runtime::add(ExecutionContext *ctx, const ValueRef left, co
 {
     TRACE2(left, right);
 
-    if (left->isInteger() && right->isInteger())
-        return add_int32(left->integerValue(), right->integerValue()).asReturnedValue();
+    if (Q_LIKELY(left->isInteger() && right->isInteger()))
+        return add_int32(left->integerValue(), right->integerValue());
     if (left->isNumber() && right->isNumber())
         return Primitive::fromDouble(left->asDouble() + right->asDouble()).asReturnedValue();
 
@@ -358,8 +351,8 @@ inline ReturnedValue Runtime::sub(const ValueRef left, const ValueRef right)
 {
     TRACE2(left, right);
 
-    if (left->isInteger() && right->isInteger())
-        return sub_int32(left->integerValue(), right->integerValue()).asReturnedValue();
+    if (Q_LIKELY(left->isInteger() && right->isInteger()))
+        return sub_int32(left->integerValue(), right->integerValue());
 
     double lval = left->isNumber() ? left->asDouble() : left->toNumberImpl();
     double rval = right->isNumber() ? right->asDouble() : right->toNumberImpl();
@@ -371,8 +364,8 @@ inline ReturnedValue Runtime::mul(const ValueRef left, const ValueRef right)
 {
     TRACE2(left, right);
 
-    if (left->isInteger() && right->isInteger())
-        return mul_int32(left->integerValue(), right->integerValue()).asReturnedValue();
+    if (Q_LIKELY(left->isInteger() && right->isInteger()))
+        return mul_int32(left->integerValue(), right->integerValue());
 
     double lval = left->isNumber() ? left->asDouble() : left->toNumberImpl();
     double rval = right->isNumber() ? right->asDouble() : right->toNumberImpl();

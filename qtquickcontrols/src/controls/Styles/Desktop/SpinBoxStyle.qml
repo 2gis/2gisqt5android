@@ -63,6 +63,8 @@ Style {
         property int horizontalAlignment: Qt.platform.os === "osx" ? Qt.AlignRight : Qt.AlignLeft
         property int verticalAlignment: Qt.AlignVCenter
 
+        property alias font: styleitem.font
+
         property color foregroundColor: SystemPaletteSingleton.text(control.enabled)
         property color backgroundColor: SystemPaletteSingleton.base(control.enabled)
         property color selectionColor: SystemPaletteSingleton.highlight(control.enabled)

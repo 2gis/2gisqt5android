@@ -2,7 +2,7 @@ import QtQuick 1.0
 
 Item {
     id: root
-    
+
     property bool test: false
 
     property real testData: 9

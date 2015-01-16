@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtDeclarative module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -152,20 +144,20 @@ const void *QDeclarativeVMEVariant::dataPtr() const
     return &data;
 }
 
-void *QDeclarativeVMEVariant::dataPtr() 
+void *QDeclarativeVMEVariant::dataPtr()
 {
     return &data;
 }
 
-QObject *QDeclarativeVMEVariant::asQObject() 
+QObject *QDeclarativeVMEVariant::asQObject()
 {
-    if (type != QMetaType::QObjectStar) 
+    if (type != QMetaType::QObjectStar)
         setValue((QObject *)0);
 
     return *(QDeclarativeGuard<QObject> *)(dataPtr());
 }
 
-const QVariant &QDeclarativeVMEVariant::asQVariant() 
+const QVariant &QDeclarativeVMEVariant::asQVariant()
 {
     if (type != QMetaType::QVariant)
         setValue(QVariant());
@@ -173,7 +165,7 @@ const QVariant &QDeclarativeVMEVariant::asQVariant()
     return *(QVariant *)(dataPtr());
 }
 
-int QDeclarativeVMEVariant::asInt() 
+int QDeclarativeVMEVariant::asInt()
 {
     if (type != QMetaType::Int)
         setValue(int(0));
@@ -181,7 +173,7 @@ int QDeclarativeVMEVariant::asInt()
     return *(int *)(dataPtr());
 }
 
-bool QDeclarativeVMEVariant::asBool() 
+bool QDeclarativeVMEVariant::asBool()
 {
     if (type != QMetaType::Bool)
         setValue(bool(false));
@@ -189,7 +181,7 @@ bool QDeclarativeVMEVariant::asBool()
     return *(bool *)(dataPtr());
 }
 
-double QDeclarativeVMEVariant::asDouble() 
+double QDeclarativeVMEVariant::asDouble()
 {
     if (type != QMetaType::Double)
         setValue(double(0));
@@ -197,7 +189,7 @@ double QDeclarativeVMEVariant::asDouble()
     return *(double *)(dataPtr());
 }
 
-const QString &QDeclarativeVMEVariant::asQString() 
+const QString &QDeclarativeVMEVariant::asQString()
 {
     if (type != QMetaType::QString)
         setValue(QString());
@@ -205,7 +197,7 @@ const QString &QDeclarativeVMEVariant::asQString()
     return *(QString *)(dataPtr());
 }
 
-const QUrl &QDeclarativeVMEVariant::asQUrl() 
+const QUrl &QDeclarativeVMEVariant::asQUrl()
 {
     if (type != QMetaType::QUrl)
         setValue(QUrl());
@@ -213,7 +205,7 @@ const QUrl &QDeclarativeVMEVariant::asQUrl()
     return *(QUrl *)(dataPtr());
 }
 
-const QColor &QDeclarativeVMEVariant::asQColor() 
+const QColor &QDeclarativeVMEVariant::asQColor()
 {
     if (type != QMetaType::QColor)
         setValue(QColor());
@@ -221,7 +213,7 @@ const QColor &QDeclarativeVMEVariant::asQColor()
     return *(QColor *)(dataPtr());
 }
 
-const QTime &QDeclarativeVMEVariant::asQTime() 
+const QTime &QDeclarativeVMEVariant::asQTime()
 {
     if (type != QMetaType::QTime)
         setValue(QTime());
@@ -229,7 +221,7 @@ const QTime &QDeclarativeVMEVariant::asQTime()
     return *(QTime *)(dataPtr());
 }
 
-const QDate &QDeclarativeVMEVariant::asQDate() 
+const QDate &QDeclarativeVMEVariant::asQDate()
 {
     if (type != QMetaType::QDate)
         setValue(QDate());
@@ -237,7 +229,7 @@ const QDate &QDeclarativeVMEVariant::asQDate()
     return *(QDate *)(dataPtr());
 }
 
-const QDateTime &QDeclarativeVMEVariant::asQDateTime() 
+const QDateTime &QDeclarativeVMEVariant::asQDateTime()
 {
     if (type != QMetaType::QDateTime)
         setValue(QDateTime());
@@ -245,7 +237,7 @@ const QDateTime &QDeclarativeVMEVariant::asQDateTime()
     return *(QDateTime *)(dataPtr());
 }
 
-const QScriptValue &QDeclarativeVMEVariant::asQScriptValue() 
+const QScriptValue &QDeclarativeVMEVariant::asQScriptValue()
 {
     if (type != qMetaTypeId<QScriptValue>())
         setValue(QScriptValue());
@@ -379,7 +371,7 @@ void QDeclarativeVMEVariant::setValue(const QScriptValue &v)
 }
 
 QDeclarativeVMEMetaObject::QDeclarativeVMEMetaObject(QObject *obj,
-                                                     const QMetaObject *other, 
+                                                     const QMetaObject *other,
                                                      const QDeclarativeVMEMetaData *meta,
                                                      QDeclarativeCompiledData *cdata)
 : object(obj), compiledData(cdata), ctxt(QDeclarativeData::get(obj, true)->outerContext),
@@ -409,7 +401,7 @@ QDeclarativeVMEMetaObject::QDeclarativeVMEMetaObject(QObject *obj,
         if (t == list_type) {
             listProperties.append(List(methodOffset + ii));
             data[ii].setValue(listProperties.count() - 1);
-        } 
+        }
     }
 }
 
@@ -568,7 +560,7 @@ int QDeclarativeVMEMetaObject::metaCall(QMetaObject::Call c, int _id, void **a)
 
                 QDeclarativeVMEMetaData::AliasData *d = metaData->aliasData() + id;
 
-                if (d->flags & QML_ALIAS_FLAG_PTR && c == QMetaObject::ReadProperty) 
+                if (d->flags & QML_ALIAS_FLAG_PTR && c == QMetaObject::ReadProperty)
                         *reinterpret_cast<void **>(a[0]) = 0;
 
                 if (!ctxt) return -1;
@@ -577,7 +569,7 @@ int QDeclarativeVMEMetaObject::metaCall(QMetaObject::Call c, int _id, void **a)
                 QDeclarativeContextPrivate *ctxtPriv = QDeclarativeContextPrivate::get(context);
 
                 QObject *target = ctxtPriv->data->idValues[d->contextIdx].data();
-                if (!target) 
+                if (!target)
                     return -1;
 
                 connectAlias(id);
@@ -585,8 +577,8 @@ int QDeclarativeVMEMetaObject::metaCall(QMetaObject::Call c, int _id, void **a)
                 if (d->isObjectAlias()) {
                     *reinterpret_cast<QObject **>(a[0]) = target;
                     return -1;
-                } 
-                
+                }
+
                 // Remove binding (if any) on write
                 if(c == QMetaObject::WriteProperty) {
                     int flags = *reinterpret_cast<int*>(a[3]);
@@ -598,7 +590,7 @@ int QDeclarativeVMEMetaObject::metaCall(QMetaObject::Call c, int _id, void **a)
                         }
                     }
                 }
-                
+
                 if (d->isValueTypeAlias()) {
                     // Value type property
                     QDeclarativeEnginePrivate *ep = QDeclarativeEnginePrivate::get(ctxt->engine);
@@ -608,7 +600,7 @@ int QDeclarativeVMEMetaObject::metaCall(QMetaObject::Call c, int _id, void **a)
 
                     valueType->read(target, d->propertyIndex());
                     int rv = QMetaObject::metacall(valueType, c, d->valueTypeIndex(), a);
-                    
+
                     if (c == QMetaObject::WriteProperty)
                         valueType->write(target, d->propertyIndex(), 0x00);
 
@@ -670,19 +662,19 @@ int QDeclarativeVMEMetaObject::metaCall(QMetaObject::Call c, int _id, void **a)
 
 QScriptValue QDeclarativeVMEMetaObject::method(int index)
 {
-    if (!methods) 
+    if (!methods)
         methods = new QScriptValue[metaData->methodCount];
 
     if (!methods[index].isValid()) {
         QDeclarativeVMEMetaData::MethodData *data = metaData->methodData() + index;
 
-        const QChar *body = 
+        const QChar *body =
             (const QChar *)(((const char*)metaData) + data->bodyOffset);
 
         QString code = QString::fromRawData(body, data->bodyLength);
 
         // XXX Use QScriptProgram
-        // XXX We should evaluate all methods in a single big script block to 
+        // XXX We should evaluate all methods in a single big script block to
         // improve the call time between dynamic methods defined on the same
         // object
         methods[index] = QDeclarativeExpressionPrivate::evalInObjectScope(ctxt, object, code, ctxt->url.toString(),
@@ -696,7 +688,7 @@ QScriptValue QDeclarativeVMEMetaObject::readVarProperty(int id)
 {
     if (data[id].dataType() == qMetaTypeId<QScriptValue>())
         return data[id].asQScriptValue();
-    else if (data[id].dataType() == QMetaType::QObjectStar) 
+    else if (data[id].dataType() == QMetaType::QObjectStar)
         return QDeclarativeEnginePrivate::get(ctxt->engine)->objectClass->newQObject(data[id].asQObject());
     else
         return QDeclarativeEnginePrivate::get(ctxt->engine)->scriptValueFromVariant(data[id].asQVariant());
@@ -706,9 +698,9 @@ QVariant QDeclarativeVMEMetaObject::readVarPropertyAsVariant(int id)
 {
     if (data[id].dataType() == qMetaTypeId<QScriptValue>())
         return QDeclarativeEnginePrivate::get(ctxt->engine)->scriptValueToVariant(data[id].asQScriptValue());
-    else if (data[id].dataType() == QMetaType::QObjectStar) 
+    else if (data[id].dataType() == QMetaType::QObjectStar)
         return QVariant::fromValue(data[id].asQObject());
-    else 
+    else
         return data[id].asQVariant();
 }
 
@@ -726,8 +718,8 @@ void QDeclarativeVMEMetaObject::writeVarProperty(int id, const QVariant &value)
         needActivate = (data[id].dataType() != QMetaType::QObjectStar || data[id].asQObject() != o);
         data[id].setValue(qvariant_cast<QObject *>(value));
     } else {
-        needActivate = (data[id].dataType() != qMetaTypeId<QVariant>() || 
-                        data[id].asQVariant().userType() != value.userType() || 
+        needActivate = (data[id].dataType() != qMetaTypeId<QVariant>() ||
+                        data[id].asQVariant().userType() != value.userType() ||
                         data[id].asQVariant() != value);
         data[id].setValue(value);
     }
@@ -808,7 +800,7 @@ void QDeclarativeVMEMetaObject::setVmeMethod(int index, const QScriptValue &valu
     int plainSignals = metaData->signalCount + metaData->propertyCount + metaData->aliasCount;
     Q_ASSERT(index >= (methodOffset + plainSignals) && index < (methodOffset + plainSignals + metaData->methodCount));
 
-    if (!methods) 
+    if (!methods)
         methods = new QScriptValue[metaData->methodCount];
     methods[index - methodOffset - plainSignals] = value;
 }
@@ -872,7 +864,7 @@ void QDeclarativeVMEMetaObject::connectAlias(int aliasId)
         QDeclarativeVMEMetaData::AliasData *d = metaData->aliasData() + aliasId;
 
         QObject *target = ctxtPriv->data->idValues[d->contextIdx].data();
-        if (!target) 
+        if (!target)
             return;
 
         int sigIdx = methodOffset + aliasId + metaData->propertyCount;

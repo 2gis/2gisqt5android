@@ -50,11 +50,11 @@ Item {
         size.height: parent.height
 
         /*
-            Below we create a grid layout using the GraphicsGridLayout item 
-            (defined by the GraphicsGridLayoutObject class in gridlayout.h). 
+            Below we create a grid layout using the GraphicsGridLayout item
+            (defined by the GraphicsGridLayoutObject class in gridlayout.h).
 
             The row, column etc. are set through attached properties on
-            GraphicsGridLayout, using the properties defined in the 
+            GraphicsGridLayout, using the properties defined in the
             GridLayoutAttached class (also defined in gridlayout.h).
         */
 

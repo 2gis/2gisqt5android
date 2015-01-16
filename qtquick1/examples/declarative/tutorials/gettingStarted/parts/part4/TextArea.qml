@@ -46,7 +46,7 @@ Rectangle {
     width :400
     height:400
     property color fontColor: "white"
-    
+
     Flickable{
         id: flickArea
 
@@ -71,7 +71,7 @@ Rectangle {
             width:parent.width; height:parent.height
             color:fontColor
             focus: true
-            
+
             wrapMode: TextEdit.Wrap
 
             onCursorRectangleChanged: flickArea.ensureVisible(cursorRectangle)

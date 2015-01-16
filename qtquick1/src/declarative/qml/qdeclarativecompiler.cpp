@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtDeclarative module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -597,10 +589,10 @@ bool QDeclarativeCompiler::compile(QDeclarativeEngine *engine,
                     err = tr( "Element is not creatable.");
                 COMPILE_EXCEPTION(parserRef->refObjects.first(), err);
             }
-            
+
             if (ref.type->containsRevisionedAttributes()) {
                 QDeclarativeError cacheError;
-                ref.typePropertyCache = 
+                ref.typePropertyCache =
                     QDeclarativeEnginePrivate::get(engine)->cache(ref.type, resolvedTypes.at(ii).minorVersion, cacheError);
 
                 if (!ref.typePropertyCache) {
@@ -707,7 +699,7 @@ void QDeclarativeCompiler::compileTree(QDeclarativeParser::Object *tree)
 
     output->importCache = new QDeclarativeTypeNameCache(engine);
 
-    for (int ii = 0; ii < importedScriptIndexes.count(); ++ii) 
+    for (int ii = 0; ii < importedScriptIndexes.count(); ++ii)
         output->importCache->add(importedScriptIndexes.at(ii), ii);
 
     unit->imports().populateCache(output->importCache, engine);
@@ -720,7 +712,7 @@ void QDeclarativeCompiler::compileTree(QDeclarativeParser::Object *tree)
         static_cast<QMetaObject &>(output->rootData) = *tree->metaObject();
         output->root = &output->rootData;
     }
-    if (!tree->metadata.isEmpty()) 
+    if (!tree->metadata.isEmpty())
         enginePrivate->registerCompositeType(output);
 }
 
@@ -750,13 +742,13 @@ bool QDeclarativeCompiler::buildObject(QDeclarativeParser::Object *obj, const Bi
     if (tr.type && obj->metatype == &QDeclarativeComponent::staticMetaObject) {
         COMPILE_CHECK(buildComponent(obj, ctxt));
         return true;
-    } 
+    }
 
     // Object instantiations reset the binding context
     BindingContext objCtxt(obj);
 
     // Create the synthesized meta object, ignoring aliases
-    COMPILE_CHECK(checkDynamicMeta(obj)); 
+    COMPILE_CHECK(checkDynamicMeta(obj));
     COMPILE_CHECK(mergeDynamicMetaProperties(obj));
     COMPILE_CHECK(buildDynamicMeta(obj, IgnoreAliases));
 
@@ -787,7 +779,7 @@ bool QDeclarativeCompiler::buildObject(QDeclarativeParser::Object *obj, const Bi
         }
     }
 
-    // Merge 
+    // Merge
     Property *defaultProperty = 0;
     Property *skipProperty = 0;
     if (obj->defaultProperty) {
@@ -836,7 +828,7 @@ bool QDeclarativeCompiler::buildObject(QDeclarativeParser::Object *obj, const Bi
 
         bool canDefer = false;
         if (isCustomParser) {
-            if (doesPropertyExist(prop, obj) && 
+            if (doesPropertyExist(prop, obj) &&
                 (!(cp->flags() & QDeclarativeCustomParser::AcceptsAttachedProperties) ||
                  !isAttachedPropertyName(prop->name))) {
                 int ids = compileState.ids.count();
@@ -885,7 +877,7 @@ bool QDeclarativeCompiler::buildObject(QDeclarativeParser::Object *obj, const Bi
             prop->isDeferred = true;
     }
 
-    if (defaultProperty) 
+    if (defaultProperty)
         defaultProperty->release();
 
     // Compile custom parser parts
@@ -936,10 +928,10 @@ void QDeclarativeCompiler::genObject(QDeclarativeParser::Object *obj)
         if (!obj->custom.isEmpty())
             create.create.data = output->indexForByteArray(obj->custom);
         create.create.type = obj->type;
-        if (!output->types.at(create.create.type).type && 
+        if (!output->types.at(create.create.type).type &&
             !obj->bindingBitmask.isEmpty()) {
             Q_ASSERT(obj->bindingBitmask.size() % 4 == 0);
-            create.create.bindingBits = 
+            create.create.bindingBits =
                 output->indexForByteArray(obj->bindingBitmask);
         } else {
             create.create.bindingBits = -1;
@@ -963,7 +955,7 @@ void QDeclarativeCompiler::genObject(QDeclarativeParser::Object *obj)
 
         // Add flag for alias properties
         if (!obj->synthdata.isEmpty()) {
-            const QDeclarativeVMEMetaData *vmeMetaData = 
+            const QDeclarativeVMEMetaData *vmeMetaData =
                 reinterpret_cast<const QDeclarativeVMEMetaData *>(obj->synthdata.constData());
             for (int ii = 0; ii < vmeMetaData->aliasCount; ++ii) {
                 int index = obj->metaObject()->propertyOffset() + vmeMetaData->propertyCount + ii;
@@ -1012,7 +1004,7 @@ void QDeclarativeCompiler::genObjectBody(QDeclarativeParser::Object *obj)
         QDeclarativeInstruction ss;
         ss.type = QDeclarativeInstruction::StoreScriptString;
         ss.storeScriptString.propertyIndex = prop.first->index;
-        ss.storeScriptString.value = 
+        ss.storeScriptString.value =
             output->indexForString(prop.first->values.at(0)->value.asScript());
         ss.storeScriptString.scope = prop.second;
         output->bytecode << ss;
@@ -1132,7 +1124,7 @@ void QDeclarativeCompiler::genObjectBody(QDeclarativeParser::Object *obj)
     }
 
     foreach(Property *prop, obj->valueProperties) {
-        if (prop->isDeferred) 
+        if (prop->isDeferred)
             continue;
         if (prop->isAlias)
             genValueProperty(prop, obj);
@@ -1245,12 +1237,12 @@ bool QDeclarativeCompiler::buildComponent(QDeclarativeParser::Object *obj,
     if (obj->properties.count() > 1 ||
        (obj->properties.count() == 1 && obj->properties.begin().key() != "id"))
         COMPILE_EXCEPTION(*obj->properties.begin(), tr("Component elements may not contain properties other than id"));
-       
+
     if (obj->properties.count())
         idProp = *obj->properties.begin();
 
     if (idProp) {
-       if (idProp->value || idProp->values.count() > 1 || idProp->values.at(0)->object) 
+       if (idProp->value || idProp->values.count() > 1 || idProp->values.at(0)->object)
            COMPILE_EXCEPTION(idProp, tr("Invalid component id specification"));
        COMPILE_CHECK(checkValidId(idProp->values.first(), idProp->values.first()->primitive()))
 
@@ -1456,9 +1448,9 @@ bool QDeclarativeCompiler::buildProperty(QDeclarativeParser::Property *prop,
         unit->imports().resolveType(prop->name, &type, 0, 0, 0, &typeNamespace);
 
         if (typeNamespace) {
-            // ### We might need to indicate that this property is a namespace 
+            // ### We might need to indicate that this property is a namespace
             // for the DOM API
-            COMPILE_CHECK(buildPropertyInNamespace(typeNamespace, prop, obj, 
+            COMPILE_CHECK(buildPropertyInNamespace(typeNamespace, prop, obj,
                                                    ctxt));
             return true;
         } else if (!type || !type->attachedPropertiesType())  {
@@ -1509,22 +1501,22 @@ bool QDeclarativeCompiler::buildProperty(QDeclarativeParser::Property *prop,
 
         // We can't error here as the "id" property does not require a
         // successful index resolution
-        if (p.name()) 
+        if (p.name())
             prop->type = p.userType();
 
         // Check if this is an alias
-        if (prop->index != -1 && 
-            prop->parent && 
-            prop->parent->type != -1 && 
+        if (prop->index != -1 &&
+            prop->parent &&
+            prop->parent->type != -1 &&
             output->types.at(prop->parent->type).component) {
 
             QDeclarativePropertyCache *cache = output->types.at(prop->parent->type).component->rootPropertyCache;
-            if (cache && cache->property(prop->index) && 
+            if (cache && cache->property(prop->index) &&
                 cache->property(prop->index)->flags & QDeclarativePropertyCache::Data::IsAlias)
                 prop->isAlias = true;
         }
 
-        if (prop->index != -1 && !prop->values.isEmpty()) 
+        if (prop->index != -1 && !prop->values.isEmpty())
             prop->parent->setBindingBit(prop->index);
     }
 
@@ -1572,8 +1564,8 @@ bool QDeclarativeCompiler::buildProperty(QDeclarativeParser::Property *prop,
 }
 
 bool QDeclarativeCompiler::buildPropertyInNamespace(QDeclarativeImportedNamespace *ns,
-                                                    QDeclarativeParser::Property *nsProp, 
-                                                    QDeclarativeParser::Object *obj, 
+                                                    QDeclarativeParser::Property *nsProp,
+                                                    QDeclarativeParser::Object *obj,
                                                     const BindingContext &ctxt)
 {
     if (!nsProp->value)
@@ -1589,7 +1581,7 @@ bool QDeclarativeCompiler::buildPropertyInNamespace(QDeclarativeImportedNamespac
         QDeclarativeType *type = 0;
         unit->imports().resolveType(ns, prop->name, &type, 0, 0, 0);
 
-        if (!type || !type->attachedPropertiesType()) 
+        if (!type || !type->attachedPropertiesType())
             COMPILE_EXCEPTION(prop, tr("Non-existent attached object"));
 
         if (!prop->value)
@@ -1880,7 +1872,7 @@ bool QDeclarativeCompiler::buildGroupedProperty(QDeclarativeParser::Property *pr
         if (!prop->value->metatype)
             COMPILE_EXCEPTION(prop, tr("Invalid grouped property access"));
 
-        if (prop->values.count()) 
+        if (prop->values.count())
             COMPILE_EXCEPTION(prop->values.at(0), tr( "Cannot assign a value directly to a grouped property"));
 
         obj->addGroupedProperty(prop);
@@ -1949,7 +1941,7 @@ bool QDeclarativeCompiler::buildValueTypeProperty(QObject *type,
             QDeclarativeParser::Value *v = prop->onValues.at(ii);
             Q_ASSERT(v->object);
 
-            COMPILE_CHECK(buildPropertyOnAssignment(prop, obj, baseObj, v, ctxt)); 
+            COMPILE_CHECK(buildPropertyOnAssignment(prop, obj, baseObj, v, ctxt));
         }
 
         obj->addValueProperty(prop);
@@ -1959,7 +1951,7 @@ bool QDeclarativeCompiler::buildValueTypeProperty(QObject *type,
 }
 
 // Build assignments to QML lists.  QML lists are properties of type
-// QDeclarativeListProperty<T>.  List properties can accept a list of 
+// QDeclarativeListProperty<T>.  List properties can accept a list of
 // objects, or a single binding.
 bool QDeclarativeCompiler::buildListProperty(QDeclarativeParser::Property *prop,
                                              QDeclarativeParser::Object *obj,
@@ -2009,7 +2001,7 @@ bool QDeclarativeCompiler::buildScriptStringProperty(QDeclarativeParser::Propert
                                             QDeclarativeParser::Object *obj,
                                             const BindingContext &ctxt)
 {
-    if (prop->values.count() > 1) 
+    if (prop->values.count() > 1)
         COMPILE_EXCEPTION(prop->values.at(1), tr( "Cannot assign multiple values to a script property"));
 
     if (prop->values.at(0)->object)
@@ -2302,7 +2294,7 @@ int QDeclarativeCompiler::evaluateEnum(const QByteArray& script) const
 const QMetaObject *QDeclarativeCompiler::resolveType(const QByteArray& name) const
 {
     QDeclarativeType *qmltype = 0;
-    if (!unit->imports().resolveType(name, &qmltype, 0, 0, 0, 0)) 
+    if (!unit->imports().resolveType(name, &qmltype, 0, 0, 0, 0))
         return 0;
     if (!qmltype)
         return 0;
@@ -2409,7 +2401,7 @@ bool QDeclarativeCompiler::mergeDynamicMetaProperties(QDeclarativeParser::Object
             property = obj->getDefaultProperty();
         } else {
             property = obj->getProperty(p.name);
-            if (!property->values.isEmpty()) 
+            if (!property->values.isEmpty())
                 COMPILE_EXCEPTION(property, tr("Property value set multiple times"));
         }
 
@@ -2488,7 +2480,7 @@ bool QDeclarativeCompiler::buildDynamicMeta(QDeclarativeParser::Object *obj, Dyn
                 QByteArray customTypeName;
                 QDeclarativeType *qmltype = 0;
                 QUrl url;
-                if (!unit->imports().resolveType(p.customType, &qmltype, &url, 0, 0, 0)) 
+                if (!unit->imports().resolveType(p.customType, &qmltype, &url, 0, 0, 0))
                     COMPILE_EXCEPTION(&p, tr("Invalid property type"));
 
                 if (!qmltype) {
@@ -2563,7 +2555,7 @@ bool QDeclarativeCompiler::buildDynamicMeta(QDeclarativeParser::Object *obj, Dyn
         dynamicData.append((char *)&propertyData, sizeof(propertyData));
 
         builder.addSignal(p.name + "Changed()");
-        QMetaPropertyBuilder propBuilder = 
+        QMetaPropertyBuilder propBuilder =
             builder.addProperty(p.name, type, builder.methodCount() - 1);
         propBuilder.setWritable(!readonly);
     }
@@ -2604,7 +2596,7 @@ bool QDeclarativeCompiler::buildDynamicMeta(QDeclarativeParser::Object *obj, Dyn
         QString funcScript(QStringLiteral("(function ") + QLatin1String(s.name) + QLatin1Char('('));
 
         for (int jj = 0; jj < s.parameterNames.count(); ++jj) {
-            if (jj) { 
+            if (jj) {
                 sig.append(',');
                 funcScript.append(QLatin1Char(','));
             }
@@ -2655,7 +2647,7 @@ bool QDeclarativeCompiler::buildDynamicMeta(QDeclarativeParser::Object *obj, Dyn
     if (obj->type != -1) {
         QDeclarativePropertyCache *cache = output->types[obj->type].createPropertyCache(engine)->copy();
         cache->append(engine, &obj->extObject, QDeclarativePropertyCache::Data::NoFlags,
-                      QDeclarativePropertyCache::Data::IsVMEFunction, 
+                      QDeclarativePropertyCache::Data::IsVMEFunction,
                       QDeclarativePropertyCache::Data::IsVMESignal);
         obj->synthCache = cache;
     }
@@ -2665,10 +2657,10 @@ bool QDeclarativeCompiler::buildDynamicMeta(QDeclarativeParser::Object *obj, Dyn
 
 bool QDeclarativeCompiler::checkValidId(QDeclarativeParser::Value *v, const QString &val)
 {
-    if (val.isEmpty()) 
+    if (val.isEmpty())
         COMPILE_EXCEPTION(v, tr( "Invalid empty ID"));
 
-    if (val.at(0).isLetter() && !val.at(0).isLower()) 
+    if (val.at(0).isLetter() && !val.at(0).isLower())
         COMPILE_EXCEPTION(v, tr( "IDs cannot start with an uppercase letter"));
 
     QChar u(QLatin1Char('_'));
@@ -2766,12 +2758,12 @@ bool QDeclarativeCompiler::compileAlias(QMetaObjectBuilder &builder,
             if (valueTypeIndex == -1)
                 COMPILE_EXCEPTION(prop.defaultValue, tr("Invalid alias location"));
             Q_ASSERT(valueTypeIndex <= 0xFF);
-            
+
             aliasProperty = valueType->metaObject()->property(valueTypeIndex);
             propIdx |= (valueTypeIndex << 16);
         }
 
-        if (aliasProperty.isEnumType()) 
+        if (aliasProperty.isEnumType())
             typeName = "int";  // Avoid introducing a dependency on the aliased metaobject
         else
             typeName = aliasProperty.typeName();
@@ -2803,7 +2795,7 @@ bool QDeclarativeCompiler::compileAlias(QMetaObjectBuilder &builder,
     data.append((const char *)&flags, sizeof(flags));
 
     builder.addSignal(prop.name + "Changed()");
-    QMetaPropertyBuilder propBuilder = 
+    QMetaPropertyBuilder propBuilder =
         builder.addProperty(prop.name, typeName.constData(), builder.methodCount() - 1);
     propBuilder.setWritable(writable);
     return true;
@@ -2846,11 +2838,11 @@ void QDeclarativeCompiler::genBindingAssignment(QDeclarativeParser::Value *bindi
         store.assignBinding.value = ref.compiledIndex;
         store.assignBinding.context = ref.bindingContext.stack;
         store.assignBinding.owner = ref.bindingContext.owner;
-        if (valueTypeProperty) 
+        if (valueTypeProperty)
             store.assignBinding.property = (valueTypeProperty->index & 0xFFFF) |
                                            ((valueTypeProperty->type & 0xFF)) << 16 |
                                            ((prop->index & 0xFF) << 24);
-        else 
+        else
             store.assignBinding.property = prop->index;
         store.line = binding->location.start.line;
         output->bytecode << store;
@@ -2887,19 +2879,19 @@ int QDeclarativeCompiler::genContextCache()
 
     for (QHash<QString, QDeclarativeParser::Object *>::ConstIterator iter = compileState.ids.begin();
          iter != compileState.ids.end();
-         ++iter) 
+         ++iter)
         cache->add(iter.key(), (*iter)->idIndex);
 
     output->contextCaches.append(cache);
     return output->contextCaches.count() - 1;
 }
 
-int QDeclarativeCompiler::genValueTypeData(QDeclarativeParser::Property *valueTypeProp, 
+int QDeclarativeCompiler::genValueTypeData(QDeclarativeParser::Property *valueTypeProp,
                                   QDeclarativeParser::Property *prop)
 {
     QByteArray data =
-        QDeclarativePropertyPrivate::saveValueType(prop->parent->metaObject(), prop->index, 
-                                                   enginePrivate->valueTypes[prop->type]->metaObject(), 
+        QDeclarativePropertyPrivate::saveValueType(prop->parent->metaObject(), prop->index,
+                                                   enginePrivate->valueTypes[prop->type]->metaObject(),
                                                    valueTypeProp->index);
 //                valueTypeProp->index, valueTypeProp->type);
 
@@ -2926,7 +2918,7 @@ bool QDeclarativeCompiler::completeComponentBuild()
 
     QDeclarativeBindingCompiler bindingCompiler;
 
-    for (QHash<QDeclarativeParser::Value*,BindingReference>::Iterator iter = compileState.bindings.begin(); 
+    for (QHash<QDeclarativeParser::Value*,BindingReference>::Iterator iter = compileState.bindings.begin();
          iter != compileState.bindings.end(); ++iter) {
 
         BindingReference &binding = *iter;
@@ -2936,7 +2928,7 @@ bool QDeclarativeCompiler::completeComponentBuild()
         expr.expression = binding.expression;
         expr.imports = unit->imports();
 
-        // ### We don't currently optimize for bindings on alias's - because 
+        // ### We don't currently optimize for bindings on alias's - because
         // of the solution to QTBUG-13719
         if (!binding.property->isAlias) {
             int index = bindingCompiler.compile(expr, enginePrivate);
@@ -2945,7 +2937,7 @@ bool QDeclarativeCompiler::completeComponentBuild()
                 binding.compiledIndex = index;
                 componentStat.optimizedBindings.append(iter.key()->location);
                 continue;
-            } 
+            }
         }
 
         binding.dataType = BindingReference::QtScript;
@@ -2959,8 +2951,8 @@ bool QDeclarativeCompiler::completeComponentBuild()
         expression = rewriteBinding(binding.expression.asAST(), expression, &isSharable);
 
         quint32 length = expression.length();
-        quint32 pc; 
-        
+        quint32 pc;
+
         if (isSharable) {
             pc = output->cachedClosures.count();
             pc |= 0x80000000;
@@ -2973,7 +2965,7 @@ bool QDeclarativeCompiler::completeComponentBuild()
         binding.compiledData =
             QByteArray((const char *)&pc, sizeof(quint32)) +
             QByteArray((const char *)&length, sizeof(quint32)) +
-            QByteArray((const char *)expression.constData(), 
+            QByteArray((const char *)expression.constData(),
                        expression.length() * sizeof(QChar));
 
         componentStat.scriptBindings.append(iter.key()->location);
@@ -2981,7 +2973,7 @@ bool QDeclarativeCompiler::completeComponentBuild()
 
     if (bindingCompiler.isValid()) {
         compileState.compiledBindingData = bindingCompiler.program();
-        if (bindingsDump()) 
+        if (bindingsDump())
             QDeclarativeBindingCompiler::dump(compileState.compiledBindingData);
     }
 
@@ -3045,7 +3037,7 @@ void QDeclarativeCompiler::dumpStats()
 */
 bool QDeclarativeCompiler::canCoerce(int to, QDeclarativeParser::Object *from)
 {
-    const QMetaObject *toMo = 
+    const QMetaObject *toMo =
         enginePrivate->rawMetaObjectForType(to);
     const QMetaObject *fromMo = from->metaObject();
 
@@ -3083,7 +3075,7 @@ QStringList QDeclarativeCompiler::deferredProperties(QDeclarativeParser::Object 
 }
 
 // This code must match the semantics of QDeclarativePropertyPrivate::findSignalByName
-int QDeclarativeCompiler::indexOfSignal(QDeclarativeParser::Object *object, const QByteArray &name, 
+int QDeclarativeCompiler::indexOfSignal(QDeclarativeParser::Object *object, const QByteArray &name,
                                         bool *notInRevision)
 {
     if (notInRevision) *notInRevision = false;
@@ -3091,7 +3083,7 @@ int QDeclarativeCompiler::indexOfSignal(QDeclarativeParser::Object *object, cons
     if (object->synthCache || (object->type != -1 && output->types.at(object->type).propertyCache())) {
         // XXX fromUtf8
         QString strName(QString::fromUtf8(name));
-        QDeclarativePropertyCache *cache = 
+        QDeclarativePropertyCache *cache =
             object->synthCache?object->synthCache:output->types.at(object->type).propertyCache();
 
         QDeclarativePropertyCache::Data *d = cache->property(strName);
@@ -3124,7 +3116,7 @@ int QDeclarativeCompiler::indexOfSignal(QDeclarativeParser::Object *object, cons
 
 }
 
-int QDeclarativeCompiler::indexOfProperty(QDeclarativeParser::Object *object, const QByteArray &name, 
+int QDeclarativeCompiler::indexOfProperty(QDeclarativeParser::Object *object, const QByteArray &name,
                                           bool *notInRevision)
 {
     if (notInRevision) *notInRevision = false;
@@ -3132,12 +3124,12 @@ int QDeclarativeCompiler::indexOfProperty(QDeclarativeParser::Object *object, co
     if (object->synthCache || (object->type != -1 && output->types.at(object->type).propertyCache())) {
         // XXX fromUtf8
         QString strName(QString::fromUtf8(name));
-        QDeclarativePropertyCache *cache = 
+        QDeclarativePropertyCache *cache =
             object->synthCache?object->synthCache:output->types.at(object->type).propertyCache();
 
         QDeclarativePropertyCache::Data *d = cache->property(strName);
         // Find the first property
-        while (d && d->flags & QDeclarativePropertyCache::Data::IsFunction) 
+        while (d && d->flags & QDeclarativePropertyCache::Data::IsFunction)
             d = cache->overrideData(d);
 
         if (d && !cache->isAllowedInRevision(d)) {

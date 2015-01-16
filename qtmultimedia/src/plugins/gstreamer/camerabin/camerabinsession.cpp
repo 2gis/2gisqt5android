@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -106,6 +98,8 @@
 #define CAPTURE_START "start-capture"
 #define CAPTURE_STOP "stop-capture"
 
+#define FILESINK_BIN_NAME "videobin-filesink"
+
 #define CAMERABIN_IMAGE_MODE 1
 #define CAMERABIN_VIDEO_MODE 2
 
@@ -119,7 +113,7 @@
 
 QT_BEGIN_NAMESPACE
 
-CameraBinSession::CameraBinSession(QObject *parent)
+CameraBinSession::CameraBinSession(GstElementFactory *sourceFactory, QObject *parent)
     :QObject(parent),
      m_recordingActive(false),
      m_state(QCamera::UnloadedState),
@@ -133,6 +127,7 @@ CameraBinSession::CameraBinSession(QObject *parent)
      m_viewfinderInterface(0),
      m_videoSrc(0),
      m_viewfinderElement(0),
+     m_sourceFactory(sourceFactory),
      m_viewfinderHasChanged(true),
      m_videoInputHasChanged(true),
      m_audioSrc(0),
@@ -140,10 +135,16 @@ CameraBinSession::CameraBinSession(QObject *parent)
      m_capsFilter(0),
      m_fileSink(0),
      m_audioEncoder(0),
+     m_videoEncoder(0),
      m_muxer(0)
 {
+    if (m_sourceFactory)
+        gst_object_ref(GST_OBJECT(m_sourceFactory));
+
     m_camerabin = gst_element_factory_make("camerabin2", "camerabin2");
     g_signal_connect(G_OBJECT(m_camerabin), "notify::idle", G_CALLBACK(updateBusyStatus), this);
+    g_signal_connect(G_OBJECT(m_camerabin), "element-added",  G_CALLBACK(elementAdded), this);
+    g_signal_connect(G_OBJECT(m_camerabin), "element-removed",  G_CALLBACK(elementRemoved), this);
     qt_gst_object_ref_sink(m_camerabin);
 
     m_bus = gst_element_get_bus(m_camerabin);
@@ -195,6 +196,9 @@ CameraBinSession::~CameraBinSession()
     }
     if (m_viewfinderElement)
         gst_object_unref(GST_OBJECT(m_viewfinderElement));
+
+    if (m_sourceFactory)
+        gst_object_unref(GST_OBJECT(m_sourceFactory));
 }
 
 #ifdef HAVE_GST_PHOTOGRAPHY
@@ -345,6 +349,9 @@ void CameraBinSession::setupCaptureResolution()
     } else {
         g_object_set(m_camerabin, VIEWFINDER_CAPS_PROPERTY, NULL, NULL);
     }
+
+    if (m_videoEncoder)
+        m_videoEncodeControl->applySettings(m_videoEncoder);
 }
 
 void CameraBinSession::setAudioCaptureCaps()
@@ -371,6 +378,9 @@ void CameraBinSession::setAudioCaptureCaps()
     GstCaps *caps = gst_caps_new_full(structure, NULL);
     g_object_set(G_OBJECT(m_camerabin), AUDIO_CAPTURE_CAPS_PROPERTY, caps, NULL);
     gst_caps_unref(caps);
+
+    if (m_audioEncoder)
+        m_audioEncodeControl->applySettings(m_audioEncoder);
 }
 
 GstElement *CameraBinSession::buildCameraSource()
@@ -383,31 +393,16 @@ GstElement *CameraBinSession::buildCameraSource()
     m_videoInputHasChanged = false;
 
     GstElement *videoSrc = 0;
+
+    if (!videoSrc)
     g_object_get(G_OBJECT(m_camerabin), CAMERA_SOURCE_PROPERTY, &videoSrc, NULL);
 
-    // If the QT_GSTREAMER_CAMERABIN_SRC environment variable has been set use the source
-    // it recommends.
-    const QByteArray envCandidate = qgetenv("QT_GSTREAMER_CAMERABIN_SRC");
-    if (!m_videoSrc && !envCandidate.isEmpty()) {
-        m_videoSrc = gst_element_factory_make(envCandidate.constData(), "camera_source");
-    }
+    if (m_sourceFactory)
+        m_videoSrc = gst_element_factory_create(m_sourceFactory, "camera_source");
 
     // If gstreamer has set a default source use it.
     if (!m_videoSrc)
         m_videoSrc = videoSrc;
-
-    // If there's no better guidance try the names of some known camera source elements.
-    if (!m_videoSrc) {
-        const QList<QByteArray> candidates = QList<QByteArray>()
-                << "subdevsrc"
-                << "wrappercamerabinsrc";
-
-        foreach (const QByteArray &sourceElementName, candidates) {
-            m_videoSrc = gst_element_factory_make(sourceElementName.constData(), "camera_source");
-            if (m_videoSrc)
-                break;
-        }
-    }
 
     if (m_videoSrc && !m_inputDevice.isEmpty()) {
 #if CAMERABIN_DEBUG
@@ -417,9 +412,41 @@ GstElement *CameraBinSession::buildCameraSource()
         if (g_object_class_find_property(G_OBJECT_GET_CLASS(m_videoSrc), "video-source")) {
             GstElement *src = 0;
 
-            if (m_videoInputFactory)
+            /* QT_GSTREAMER_CAMERABIN_VIDEOSRC can be used to set the video source element.
+
+               --- Usage
+
+                 QT_GSTREAMER_CAMERABIN_VIDEOSRC=[drivername=elementname[,drivername2=elementname2 ...],][elementname]
+
+               --- Examples
+
+                 Always use 'somevideosrc':
+                 QT_GSTREAMER_CAMERABIN_VIDEOSRC="somevideosrc"
+
+                 Use 'somevideosrc' when the device driver is 'somedriver', otherwise use default:
+                 QT_GSTREAMER_CAMERABIN_VIDEOSRC="somedriver=somevideosrc"
+
+                 Use 'somevideosrc' when the device driver is 'somedriver', otherwise use 'somevideosrc2'
+                 QT_GSTREAMER_CAMERABIN_VIDEOSRC="somedriver=somevideosrc,somevideosrc2"
+            */
+            const QByteArray envVideoSource = qgetenv("QT_GSTREAMER_CAMERABIN_VIDEOSRC");
+            if (!envVideoSource.isEmpty()) {
+                QList<QByteArray> sources = envVideoSource.split(',');
+                foreach (const QByteArray &source, sources) {
+                    QList<QByteArray> keyValue = source.split('=');
+                    if (keyValue.count() == 1) {
+                        src = gst_element_factory_make(keyValue.at(0), "camera_source");
+                        break;
+                    } else if (keyValue.at(0) == QGstUtils::cameraDriver(m_inputDevice, m_sourceFactory)) {
+                        src = gst_element_factory_make(keyValue.at(1), "camera_source");
+                        break;
+                    }
+                }
+            } else if (m_videoInputFactory) {
                 src = m_videoInputFactory->buildElement();
-            else
+            }
+
+            if (!src)
                 src = gst_element_factory_make("v4l2src", "camera_source");
 
             if (src) {
@@ -728,13 +755,19 @@ void CameraBinSession::updateBusyStatus(GObject *o, GParamSpec *p, gpointer d)
 
 qint64 CameraBinSession::duration() const
 {
-    GstFormat   format = GST_FORMAT_TIME;
-    gint64      duration = 0;
+    if (m_camerabin) {
+        GstElement *fileSink = gst_bin_get_by_name(GST_BIN(m_camerabin), FILESINK_BIN_NAME);
+        if (fileSink) {
+            GstFormat format = GST_FORMAT_TIME;
+            gint64 duration = 0;
+            bool ret = gst_element_query_position(fileSink, &format, &duration);
+            gst_object_unref(GST_OBJECT(fileSink));
+            if (ret)
+                return duration / 1000000;
+        }
+    }
 
-    if ( m_camerabin && gst_element_query_position(m_camerabin, &format, &duration))
-        return duration / 1000000;
-    else
-        return 0;
+    return 0;
 }
 
 bool CameraBinSession::isMuted() const
@@ -1307,6 +1340,34 @@ QList<QSize> CameraBinSession::supportedResolutions(QPair<int,int> rate,
         *continuous = isContinuous;
 
     return res;
+}
+
+void CameraBinSession::elementAdded(GstBin *, GstElement *element, CameraBinSession *session)
+{
+    GstElementFactory *factory = gst_element_get_factory(element);
+
+    if (GST_IS_BIN(element)) {
+        g_signal_connect(G_OBJECT(element), "element-added",  G_CALLBACK(elementAdded), session);
+        g_signal_connect(G_OBJECT(element), "element-removed",  G_CALLBACK(elementRemoved), session);
+    } else if (!factory) {
+        // no-op
+    } else if (gst_element_factory_list_is_type(factory, GST_ELEMENT_FACTORY_TYPE_AUDIO_ENCODER)) {
+        session->m_audioEncoder = element;
+
+        session->m_audioEncodeControl->applySettings(element);
+    } else if (gst_element_factory_list_is_type(factory, GST_ELEMENT_FACTORY_TYPE_VIDEO_ENCODER)) {
+        session->m_videoEncoder = element;
+
+        session->m_videoEncodeControl->applySettings(element);
+    }
+}
+
+void CameraBinSession::elementRemoved(GstBin *, GstElement *element, CameraBinSession *session)
+{
+    if (element == session->m_audioEncoder)
+        session->m_audioEncoder = 0;
+    else if (element == session->m_videoEncoder)
+        session->m_videoEncoder = 0;
 }
 
 QT_END_NAMESPACE

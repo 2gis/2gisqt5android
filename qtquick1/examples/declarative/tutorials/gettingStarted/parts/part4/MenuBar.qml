@@ -50,7 +50,7 @@ Rectangle {
 
     //container for the header and the buttons
     Rectangle{
-        
+
         id: labelList
         height:parent.height/10
         width: parent.width
@@ -88,16 +88,16 @@ Rectangle {
                 width: 50
                 id: editButton
                 buttonColor : menuListView.currentIndex == 1?  editColor : Qt.darker(editColor, 1.5)
-                scale: menuListView.currentIndex == 1? 1.25: 1    
+                scale: menuListView.currentIndex == 1? 1.25: 1
                 label: "Edit"
                 radius: 1
 
                 //on a button click, change the list's currently selected item to EditMenu
                 onButtonClick: {
-                    menuListView.currentIndex = 1    
+                    menuListView.currentIndex = 1
                 }
 
-                
+
             }
 
 
@@ -117,7 +117,7 @@ Rectangle {
             color: editColor
             width:  menuListView.width
             height: menuBar.height
-            
+
         }
     }
 
@@ -135,7 +135,7 @@ Rectangle {
         //control the movement of the menu switching
         snapMode: ListView.SnapOneItem
         orientation: ListView.Horizontal
-        boundsBehavior: Flickable.StopAtBounds 
+        boundsBehavior: Flickable.StopAtBounds
         flickDeceleration: 5000
         highlightFollowsCurrentItem: true
         highlightMoveDuration:240

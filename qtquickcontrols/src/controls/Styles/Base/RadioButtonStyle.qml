@@ -75,7 +75,7 @@ import QtQuick.Controls.Private 1.0
 Style {
     id: radiobuttonStyle
 
-    /*! The \l RadioButton attached to this style. */
+    /*! The \l RadioButton this style is attached to. */
     readonly property RadioButton control: __control
 
     /*! This defines the text label. */
@@ -97,10 +97,10 @@ Style {
         }
         Text {
             id: text
-            text: control.text
+            text: StyleHelpers.stylizeMnemonics(control.text)
             anchors.centerIn: parent
             color: SystemPaletteSingleton.text(control.enabled)
-            renderType: Text.NativeRendering
+            renderType: Settings.isMobile ? Text.QtRendering : Text.NativeRendering
         }
     }
 

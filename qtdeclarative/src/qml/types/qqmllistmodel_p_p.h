@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -209,12 +201,12 @@ public:
     };
 
     const Role *getRoleOrCreate(const QString &key, const QVariant &data);
-    const Role &getRoleOrCreate(const QV4::StringRef key, Role::DataType type);
+    const Role &getRoleOrCreate(QV4::String *key, Role::DataType type);
     const Role &getRoleOrCreate(const QString &key, Role::DataType type);
 
     const Role &getExistingRole(int index) { return *roles.at(index); }
     const Role *getExistingRole(const QString &key);
-    const Role *getExistingRole(const QV4::StringRef key);
+    const Role *getExistingRole(QV4::String *key);
 
     int roleCount() const { return roles.count(); }
 
@@ -260,7 +252,7 @@ private:
     int setBoolProperty(const ListLayout::Role &role, bool b);
     int setListProperty(const ListLayout::Role &role, ListModel *m);
     int setQObjectProperty(const ListLayout::Role &role, QObject *o);
-    int setVariantMapProperty(const ListLayout::Role &role, QV4::ObjectRef o, QV8Engine *eng);
+    int setVariantMapProperty(const ListLayout::Role &role, QV4::Object *o, QV8Engine *eng);
     int setVariantMapProperty(const ListLayout::Role &role, QVariantMap *m);
     int setDateTimeProperty(const ListLayout::Role &role, const QDateTime &dt);
 
@@ -269,7 +261,7 @@ private:
     void setBoolPropertyFast(const ListLayout::Role &role, bool b);
     void setQObjectPropertyFast(const ListLayout::Role &role, QObject *o);
     void setListPropertyFast(const ListLayout::Role &role, ListModel *m);
-    void setVariantMapFast(const ListLayout::Role &role, QV4::ObjectRef o, QV8Engine *eng);
+    void setVariantMapFast(const ListLayout::Role &role, QV4::Object *o, QV8Engine *eng);
     void setDateTimePropertyFast(const ListLayout::Role &role, const QDateTime &dt);
 
     void clearProperty(const ListLayout::Role &role);
@@ -333,11 +325,11 @@ public:
         return elements.count();
     }
 
-    void set(int elementIndex, QV4::ObjectRef object, QVector<int> *roles, QV8Engine *eng);
-    void set(int elementIndex, QV4::ObjectRef object, QV8Engine *eng);
+    void set(int elementIndex, QV4::Object *object, QVector<int> *roles, QV8Engine *eng);
+    void set(int elementIndex, QV4::Object *object, QV8Engine *eng);
 
-    int append(QV4::ObjectRef object, QV8Engine *eng);
-    void insert(int elementIndex, QV4::ObjectRef object, QV8Engine *eng);
+    int append(QV4::Object *object, QV8Engine *eng);
+    void insert(int elementIndex, QV4::Object *object, QV8Engine *eng);
 
     void clear();
     void remove(int index, int count);

@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the tools applications of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -132,6 +124,7 @@ QVariantMap pluginsForModulePath(const QString &modulePath) {
     // a qml import may contain several plugins
     QString plugins;
     QString classnames;
+    QStringList dependencies;
     QByteArray line;
     do {
         line = qmldirFile.readLine();
@@ -141,6 +134,12 @@ QVariantMap pluginsForModulePath(const QString &modulePath) {
         } else if (line.startsWith("classname")) {
             classnames += QString::fromUtf8(line.split(' ').at(1));
             classnames += QStringLiteral(" ");
+        } else if (line.startsWith("depends")) {
+            QList<QByteArray> dep = line.split(' ');
+            if (dep.length() != 3)
+                std::cerr << "depends: expected 2 arguments: module identifier and version" << std::endl;
+            else
+                dependencies << QString::fromUtf8(dep[1]) + QStringLiteral(" ") + QString::fromUtf8(dep[2]).simplified();
         }
 
     } while (line.length() > 0);
@@ -148,6 +147,8 @@ QVariantMap pluginsForModulePath(const QString &modulePath) {
     QVariantMap pluginInfo;
     pluginInfo[QStringLiteral("plugins")] = plugins.simplified();
     pluginInfo[QStringLiteral("classnames")] = classnames.simplified();
+    if (dependencies.length())
+        pluginInfo[QStringLiteral("dependencies")] = dependencies;
     return pluginInfo;
 }
 
@@ -181,9 +182,10 @@ QString resolveImportPath(const QString &uri, const QString &version)
 QVariantList findPathsForModuleImports(const QVariantList &imports)
 {
     QVariantList done;
+    QVariantList importsCopy(imports);
 
-    foreach (QVariant importVariant, imports) {
-        QVariantMap import = qvariant_cast<QVariantMap>(importVariant);
+    for (int i = 0; i < importsCopy.length(); ++i) {
+        QVariantMap import = qvariant_cast<QVariantMap>(importsCopy[i]);
         if (import[QStringLiteral("type")] == QStringLiteral("module")) {
             QString path = resolveImportPath(import.value(QStringLiteral("name")).toString(), import.value(QStringLiteral("version")).toString());
             if (!path.isEmpty())
@@ -195,6 +197,17 @@ QVariantList findPathsForModuleImports(const QVariantList &imports)
                 import[QStringLiteral("plugin")] = plugins;
             if (!classnames.isEmpty())
                 import[QStringLiteral("classname")] = classnames;
+            if (plugininfo.contains(QStringLiteral("dependencies"))) {
+                QStringList dependencies = plugininfo.value(QStringLiteral("dependencies")).toStringList();
+                foreach (QString line, dependencies) {
+                    QList<QString> dep = line.split(QStringLiteral(" "));
+                    QVariantMap depImport;
+                    depImport[QStringLiteral("type")] = QStringLiteral("module");
+                    depImport[QStringLiteral("name")] = dep[0];
+                    depImport[QStringLiteral("version")] = dep[1];
+                    importsCopy.append(depImport);
+                }
+            }
         }
         done.append(import);
     }
@@ -202,16 +215,8 @@ QVariantList findPathsForModuleImports(const QVariantList &imports)
 }
 
 // Scan a single qml file for import statements
-QVariantList findQmlImportsInQmlFile(const QString &filePath)
+static QVariantList findQmlImportsInQmlCode(const QString &filePath, const QString &code)
 {
-    QFile file(filePath);
-    if (!file.open(QIODevice::ReadOnly)) {
-           std::cerr << "Cannot open input file " << QDir::toNativeSeparators(file.fileName()).toStdString()
-                     << ':' << file.errorString().toStdString() << std::endl;
-           return QVariantList();
-    }
-    QString code = QString::fromUtf8(file.readAll());
-
     QQmlJS::Engine engine;
     QQmlJS::Lexer lexer(&engine);
     lexer.setCode(code, /*line = */ 1);
@@ -220,12 +225,25 @@ QVariantList findQmlImportsInQmlFile(const QString &filePath)
     if (!parser.parse() || !parser.diagnosticMessages().isEmpty()) {
         // Extract errors from the parser
         foreach (const QQmlJS::DiagnosticMessage &m, parser.diagnosticMessages()) {
-            std::cerr << QDir::toNativeSeparators(file.fileName()).toStdString() << ':'
+            std::cerr << QDir::toNativeSeparators(filePath).toStdString() << ':'
                       << m.loc.startLine << ':' << m.message.toStdString() << std::endl;
         }
         return QVariantList();
     }
-    return findImportsInAst(parser.ast()->headers, code, file.fileName());
+    return findImportsInAst(parser.ast()->headers, code, filePath);
+}
+
+// Scan a single qml file for import statements
+static QVariantList findQmlImportsInQmlFile(const QString &filePath)
+{
+    QFile file(filePath);
+    if (!file.open(QIODevice::ReadOnly)) {
+           std::cerr << "Cannot open input file " << QDir::toNativeSeparators(file.fileName()).toStdString()
+                     << ':' << file.errorString().toStdString() << std::endl;
+           return QVariantList();
+    }
+    QString code = QString::fromUtf8(file.readAll());
+    return findQmlImportsInQmlCode(filePath, code);
 }
 
 // Scan a single javascrupt file for import statements
@@ -280,10 +298,15 @@ QVariantList findQmlImportsInJavascriptFile(const QString &filePath)
 QVariantList findQmlImportsInFile(const QString &filePath)
 {
     QVariantList imports;
-    if (filePath.endsWith(QStringLiteral(".qml")))
-         imports = findQmlImportsInQmlFile(filePath);
-    else if (filePath.endsWith(QStringLiteral(".js")))
+    if (filePath == QLatin1String("-")) {
+        QFile f;
+        if (f.open(stdin, QIODevice::ReadOnly))
+            imports = findQmlImportsInQmlCode(QLatin1String("<stdin>"), QString::fromUtf8(f.readAll()));
+    } else if (filePath.endsWith(QStringLiteral(".qml"))) {
+        imports = findQmlImportsInQmlFile(filePath);
+    } else if (filePath.endsWith(QStringLiteral(".js"))) {
         imports = findQmlImportsInJavascriptFile(filePath);
+    }
 
     return findPathsForModuleImports(imports);
 }
@@ -398,7 +421,7 @@ int main(int argc, char *argv[])
         const QString &arg = args.at(i);
         ++i;
         QStringList *argReceiver = 0;
-        if (!arg.startsWith(QLatin1Char('-'))) {
+        if (!arg.startsWith(QLatin1Char('-')) || arg == QLatin1String("-")) {
             qmlRootPaths += arg;
         } else if (arg == QLatin1String("-rootPath")) {
             if (i >= args.count())
@@ -423,7 +446,7 @@ int main(int argc, char *argv[])
 
         while (i < args.count()) {
             const QString arg = args.at(i);
-            if (arg.startsWith(QLatin1Char('-')))
+            if (arg.startsWith(QLatin1Char('-')) && arg != QLatin1String("-"))
                 break;
             ++i;
             *argReceiver += arg;

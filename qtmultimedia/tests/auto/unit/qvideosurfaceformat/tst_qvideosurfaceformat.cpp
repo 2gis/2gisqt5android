@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -93,8 +85,6 @@ private slots:
     void assignAllParameters ();
 
     void propertyEdgeCases();
-    void debugOperator();
-    void debugOperator_data();
 };
 
 tst_QVideoSurfaceFormat::tst_QVideoSurfaceFormat()
@@ -917,108 +907,6 @@ void tst_QVideoSurfaceFormat::propertyEdgeCases()
     original.setProperty("pixelAspectRatio", QColor(Qt::red));
     QCOMPARE(original.pixelAspectRatio(), QSize(53, 45));
 }
-
-#define ADDDEBUGTEST(format, w, h, r) \
-    QTest::newRow(#format "-" #w "x" #h "@" #r) \
-        << QVideoFrame::Format_ ##format \
-        << "Format_" #format \
-        << QSize(w, h) \
-        << r;
-
-void tst_QVideoSurfaceFormat::debugOperator_data()
-{
-    // This is not too exhaustive
-    QTest::addColumn<QVideoFrame::PixelFormat>("format");
-    QTest::addColumn<QString>("formatString");
-    QTest::addColumn<QSize>("frameSize");
-    QTest::addColumn<int>("frameRate"); // could be double, but formatting is unstable
-
-    ADDDEBUGTEST(Invalid, 100, 200, 3);
-    ADDDEBUGTEST(ARGB32,101, 201, 4);
-    ADDDEBUGTEST(ARGB32_Premultiplied, 100, 202, 5);
-    ADDDEBUGTEST(RGB32, 8, 16, 30);
-    ADDDEBUGTEST(RGB24, 8, 16, 30);
-    ADDDEBUGTEST(RGB565, 8, 16, 30);
-    ADDDEBUGTEST(RGB555, 8, 16, 30);
-    ADDDEBUGTEST(ARGB8565_Premultiplied, 8, 16, 30);
-    ADDDEBUGTEST(BGRA32, 8, 16, 30);
-    ADDDEBUGTEST(BGRA32_Premultiplied, 8, 16, 30);
-    ADDDEBUGTEST(BGR32, 8, 16, 30);
-    ADDDEBUGTEST(BGR24, 8, 16, 30);
-    ADDDEBUGTEST(BGR565, 8, 16, 30);
-    ADDDEBUGTEST(BGR555, 8, 16, 30);
-    ADDDEBUGTEST(BGRA5658_Premultiplied, 8, 16, 30);
-
-    ADDDEBUGTEST(AYUV444, 8, 16, 30);
-    ADDDEBUGTEST(AYUV444, 8, 16, 31);
-    ADDDEBUGTEST(AYUV444_Premultiplied, 8, 16, 30);
-    ADDDEBUGTEST(YUV444, 8, 16, 30);
-    ADDDEBUGTEST(YUV420P, 8, 16, 30);
-    ADDDEBUGTEST(YV12, 8, 16, 30);
-    ADDDEBUGTEST(UYVY, 8, 16, 30);
-    ADDDEBUGTEST(YUYV, 8, 16, 30);
-    ADDDEBUGTEST(NV12, 8, 16, 30);
-    ADDDEBUGTEST(NV12, 80, 16, 30);
-    ADDDEBUGTEST(NV21, 8, 16, 30);
-    ADDDEBUGTEST(IMC1, 8, 16, 30);
-    ADDDEBUGTEST(IMC2, 8, 16, 30);
-    ADDDEBUGTEST(IMC3, 8, 16, 30);
-    ADDDEBUGTEST(IMC3, 8, 160, 30);
-    ADDDEBUGTEST(IMC4, 8, 16, 30);
-    ADDDEBUGTEST(Y8, 8, 16, 30);
-    ADDDEBUGTEST(Y16, 8, 16, 30);
-
-    ADDDEBUGTEST(Jpeg, 8, 16, 30);
-
-    ADDDEBUGTEST(CameraRaw, 8, 16, 30);
-    ADDDEBUGTEST(AdobeDng, 8, 16, 30);
-
-    // User is special
-    QTest::newRow("User-0x0@0)")
-                  << QVideoFrame::Format_User
-                  << "UserType(1000)"
-                  << QSize()
-                  << 0;
-}
-
-void tst_QVideoSurfaceFormat::debugOperator()
-{
-    QFETCH(QVideoFrame::PixelFormat, format);
-    QFETCH(QString, formatString);
-    QFETCH(QSize, frameSize);
-    QFETCH(int, frameRate);
-
-    QString templateOutput = QString("QVideoSurfaceFormat(%1, QSize(%2, %3) , viewport=QRect(0,1 800x600) , pixelAspectRatio=QSize(320, 200) "
-        ", handleType=GLTextureHandle, yCbCrColorSpace=YCbCr_BT709)\n"
-        "    handleType = QVariant(QAbstractVideoBuffer::HandleType, ) \n"
-        "     pixelFormat  =  QVariant(QVideoFrame::PixelFormat, ) \n"
-        "     frameSize  =  QVariant(QSize, QSize(%4, %5) ) \n"
-        "     frameWidth  =  QVariant(int, %6) \n"
-        "     viewport  =  QVariant(QRect, QRect(0,1 800x600) ) \n"
-        "     scanLineDirection  =  QVariant(QVideoSurfaceFormat::Direction, ) \n"
-        "     frameRate  =  QVariant(%7, %8) \n"
-        "     pixelAspectRatio  =  QVariant(QSize, QSize(320, 200) ) \n"
-        "     sizeHint  =  QVariant(QSize, QSize(1280, 600) ) \n"
-        "     yCbCrColorSpace  =  QVariant(QVideoSurfaceFormat::YCbCrColorSpace, )  ")
-            .arg(formatString)
-            .arg(frameSize.width())
-            .arg(frameSize.height())
-            .arg(frameSize.width())
-            .arg(frameSize.height())
-            .arg(frameSize.width())
-            .arg(sizeof(qreal) == sizeof(double) ? "double" : "float")
-            .arg(frameRate);
-
-    QVideoSurfaceFormat vsf(frameSize, format, QAbstractVideoBuffer::GLTextureHandle);
-    vsf.setViewport(QRect(0,1, 800, 600));
-    vsf.setPixelAspectRatio(QSize(320, 200));
-    vsf.setYCbCrColorSpace(QVideoSurfaceFormat::YCbCr_BT709);
-    vsf.setFrameRate(frameRate);
-
-    QTest::ignoreMessage(QtDebugMsg, templateOutput.toLatin1().constData());
-    qDebug() << vsf;
-}
-
 
 
 QTEST_MAIN(tst_QVideoSurfaceFormat)

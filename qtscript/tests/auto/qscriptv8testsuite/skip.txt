@@ -29,6 +29,7 @@ to-precision | Unresolved failures on Mac OS X (Cocoa)
 
 [Q_OS_WIN]
 to-precision | Unresolved failures on Windows
+smi-negative-zero | Unresolved failure on Windows 8 (QTBUG-41321)
 
 [Q_OS_LINUX]
 smi-negative-zero | Unresolved sign failure for Ubuntu 11.10 x64 (QTBUG-23463)

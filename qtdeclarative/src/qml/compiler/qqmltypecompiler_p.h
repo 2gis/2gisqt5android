@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the tools applications of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -82,9 +74,9 @@ public:
 
     QV4::IR::Module *jsIRModule() const;
 
-    const QV4::CompiledData::QmlUnit *qmlUnit() const;
+    const QV4::CompiledData::Unit *qmlUnit() const;
 
-    QUrl url() const { return compiledData->url; }
+    QUrl url() const { return typeData->finalUrl(); }
     QQmlEnginePrivate *enginePrivate() const { return engine; }
     const QQmlImports *imports() const;
     QHash<int, QQmlCompiledData::TypeReference *> *resolvedTypes();
@@ -96,11 +88,10 @@ public:
     QVector<QByteArray> *vmeMetaObjects() const;
     QHash<int, int> *objectIndexToIdForRoot();
     QHash<int, QHash<int, int> > *objectIndexToIdPerComponent();
-    QHash<int, QQmlCompiledData::CustomParserData> *customParserData();
+    QHash<int, QBitArray> *customParserBindings();
     QQmlJS::MemoryPool *memoryPool();
     QStringRef newStringRef(const QString &string);
     const QV4::Compiler::StringTableGenerator *stringPool() const;
-    void setCustomParserBindings(const QVector<int> &bindings);
     void setDeferredBindingsPerObject(const QHash<int, QBitArray> &deferredBindingsPerObject);
 
     const QHash<int, QQmlCustomParser*> &customParserCache() const { return customParsers; }
@@ -282,7 +273,6 @@ public:
 
     // Re-implemented for QQmlCustomParser
     virtual const QQmlImports &imports() const;
-    virtual QQmlBinding::Identifier bindingIdentifier(const QV4::CompiledData::Binding *binding, QQmlCustomParser *parser);
     virtual QString bindingAsString(int objectIndex, const QV4::CompiledData::Binding *binding) const;
 
 private:
@@ -295,13 +285,12 @@ private:
     bool canCoerce(int to, QQmlPropertyCache *fromMo);
 
     QQmlEnginePrivate *enginePrivate;
-    const QV4::CompiledData::QmlUnit *qmlUnit;
+    const QV4::CompiledData::Unit *qmlUnit;
     const QHash<int, QQmlCompiledData::TypeReference*> &resolvedTypes;
     const QHash<int, QQmlCustomParser*> &customParsers;
     const QVector<QQmlPropertyCache *> &propertyCaches;
     const QHash<int, QHash<int, int> > objectIndexToIdPerComponent;
-    QHash<int, QQmlCompiledData::CustomParserData> *customParserData;
-    QVector<int> customParserBindings;
+    QHash<int, QBitArray> *customParserBindingsPerObject;
     QHash<int, QBitArray> deferredBindingsPerObject;
 
     bool _seenObjectWithId;
@@ -394,6 +383,7 @@ private:
     virtual void visitClosure(QV4::IR::Closure *closure);
 
     virtual void visitTemp(QV4::IR::Temp *) {}
+    virtual void visitArgLocal(QV4::IR::ArgLocal *) {}
 
     virtual void visitMove(QV4::IR::Move *s) {
         s->source->accept(this);

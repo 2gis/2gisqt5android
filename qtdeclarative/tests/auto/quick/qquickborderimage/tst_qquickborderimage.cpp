@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -131,10 +123,10 @@ void tst_qquickborderimage::imageSource_data()
 
     QTest::newRow("local") << testFileUrl("colors.png").toString() << false << "";
     QTest::newRow("local not found") << testFileUrl("no-such-file.png").toString() << false
-        << "file::2:1: QML BorderImage: Cannot open: " + testFileUrl("no-such-file.png").toString();
+        << "<Unknown File>:2:1: QML BorderImage: Cannot open: " + testFileUrl("no-such-file.png").toString();
     QTest::newRow("remote") << SERVER_ADDR "/colors.png" << true << "";
     QTest::newRow("remote not found") << SERVER_ADDR "/no-such-file.png" << true
-        << "file::2:1: QML BorderImage: Error downloading " SERVER_ADDR "/no-such-file.png - server replied: Not found";
+        << "<Unknown File>:2:1: QML BorderImage: Error downloading " SERVER_ADDR "/no-such-file.png - server replied: Not found";
 }
 
 void tst_qquickborderimage::imageSource()
@@ -143,11 +135,10 @@ void tst_qquickborderimage::imageSource()
     QFETCH(bool, remote);
     QFETCH(QString, error);
 
-    TestHTTPServer *server = 0;
+    TestHTTPServer server;
     if (remote) {
-        server = new TestHTTPServer(SERVER_PORT);
-        QVERIFY(server->isValid());
-        server->serveDirectory(dataDirectory());
+        QVERIFY2(server.listen(SERVER_PORT), qPrintable(server.errorString()));
+        server.serveDirectory(dataDirectory());
     }
 
     if (!error.isEmpty())
@@ -177,7 +168,6 @@ void tst_qquickborderimage::imageSource()
     }
 
     delete obj;
-    delete server;
 }
 
 void tst_qquickborderimage::clearSource()
@@ -292,11 +282,11 @@ void tst_qquickborderimage::sciSource()
     QFETCH(bool, valid);
 
     bool remote = source.startsWith("http");
-    TestHTTPServer *server = 0;
+
+    TestHTTPServer server;
     if (remote) {
-        server = new TestHTTPServer(SERVER_PORT);
-        QVERIFY(server->isValid());
-        server->serveDirectory(dataDirectory());
+        QVERIFY2(server.listen(SERVER_PORT), qPrintable(server.errorString()));
+        server.serveDirectory(dataDirectory());
     }
 
     QString componentStr = "import QtQuick 2.0\nBorderImage { source: \"" + source + "\"; width: 300; height: 300 }";
@@ -325,7 +315,6 @@ void tst_qquickborderimage::sciSource()
     }
 
     delete obj;
-    delete server;
 }
 
 void tst_qquickborderimage::sciSource_data()
@@ -435,11 +424,10 @@ void tst_qquickborderimage::statusChanges()
     QFETCH(bool, remote);
     QFETCH(QQuickImageBase::Status, finalStatus);
 
-    TestHTTPServer *server = 0;
+    TestHTTPServer server;
     if (remote) {
-        server = new TestHTTPServer(SERVER_PORT);
-        QVERIFY(server->isValid());
-        server->serveDirectory(dataDirectory(), TestHTTPServer::Delay);
+        QVERIFY2(server.listen(SERVER_PORT), qPrintable(server.errorString()));
+        server.serveDirectory(dataDirectory());
     }
 
     QString componentStr = "import QtQuick 2.0\nBorderImage { width: 300; height: 300 }";
@@ -452,18 +440,17 @@ void tst_qquickborderimage::statusChanges()
     QVERIFY(obj != 0);
     obj->setSource(source);
     if (remote)
-        server->sendDelayedItem();
+        server.sendDelayedItem();
     QTRY_VERIFY(obj->status() == finalStatus);
     QCOMPARE(spy.count(), emissions);
 
     delete obj;
-    delete server;
 }
 
 void tst_qquickborderimage::sourceSizeChanges()
 {
-    TestHTTPServer server(14449);
-    QVERIFY(server.isValid());
+    TestHTTPServer server;
+    QVERIFY2(server.listen(14449), qPrintable(server.errorString()));
     server.serveDirectory(dataDirectory());
 
     QQmlEngine engine;
@@ -528,8 +515,8 @@ void tst_qquickborderimage::sourceSizeChanges()
 
 void tst_qquickborderimage::progressAndStatusChanges()
 {
-    TestHTTPServer server(14449);
-    QVERIFY(server.isValid());
+    TestHTTPServer server;
+    QVERIFY2(server.listen(14449), qPrintable(server.errorString()));
     server.serveDirectory(dataDirectory());
 
     QQmlEngine engine;

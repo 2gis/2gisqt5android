@@ -50,9 +50,9 @@ Item {
         color: "red"
         smooth: true
 
-        states: State { 
+        states: State {
             name: "rotated"
-            PropertyChanges { target: rect; rotation: 180 } 
+            PropertyChanges { target: rect; rotation: 180 }
         }
 
         transitions: Transition {

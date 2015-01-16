@@ -1,47 +1,40 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
 
-#ifndef QT_NO_DEBUG
-#  define _LIBCPP_DEBUG2 0
-#endif // QT_NO_DEBUG
+// When building with debug code, the macro below will enable debug helpers when using libc++.
+// For example, the std::vector<T>::operator[] will use _LIBCPP_ASSERT to check if the index is
+// within the array bounds. Note that this only works reliably with OSX 10.9 or later.
+//#define _LIBCPP_DEBUG2 2
 
 #include "qv4ssa_p.h"
 #include "qv4isel_util_p.h"
@@ -50,7 +43,6 @@
 #include <QtCore/QCoreApplication>
 #include <QtCore/QStringList>
 #include <QtCore/QSet>
-#include <QtCore/QBuffer>
 #include <QtCore/QLinkedList>
 #include <QtCore/QStack>
 #include <qv4runtime_p.h>
@@ -69,6 +61,12 @@ using namespace IR;
 
 namespace {
 
+#ifdef QT_NO_DEBUG
+enum { DoVerification = 0 };
+#else
+enum { DoVerification = 1 };
+#endif
+
 Q_GLOBAL_STATIC_WITH_ARGS(QTextStream, qout, (stderr, QIODevice::WriteOnly));
 #define qout *qout()
 
@@ -76,94 +74,8 @@ void showMeTheCode(IR::Function *function)
 {
     static bool showCode = !qgetenv("QV4_SHOW_IR").isNull();
     if (showCode) {
-        QVector<Stmt *> code;
-        QHash<Stmt *, BasicBlock *> leader;
-
-        foreach (BasicBlock *block, function->basicBlocks()) {
-            if (block->isRemoved() || block->isEmpty())
-                continue;
-            leader.insert(block->statements().first(), block);
-            foreach (Stmt *s, block->statements()) {
-                code.append(s);
-            }
-        }
-
-        QString name;
-        if (function->name && !function->name->isEmpty())
-            name = *function->name;
-        else
-            name.sprintf("%p", function);
-
-        qout << "function " << name << "(";
-        for (int i = 0; i < function->formals.size(); ++i) {
-            if (i != 0)
-                qout << ", ";
-            qout << *function->formals.at(i);
-        }
-        qout << ")" << endl
-             << "{" << endl;
-
-        foreach (const QString *local, function->locals) {
-            qout << "    var " << *local << ';' << endl;
-        }
-
-        for (int i = 0; i < code.size(); ++i) {
-            Stmt *s = code.at(i);
-            Q_ASSERT(s);
-
-            if (BasicBlock *bb = leader.value(s)) {
-                qout << endl;
-                QByteArray str;
-                str.append('L');
-                str.append(QByteArray::number(bb->index()));
-                str.append(':');
-                if (bb->catchBlock) {
-                    str.append(" (exception handler L");
-                    str.append(QByteArray::number(bb->catchBlock->index()));
-                    str.append(')');
-                }
-                for (int i = 66 - str.length(); i; --i)
-                    str.append(' ');
-                qout << str;
-                qout << "// predecessor blocks:";
-                foreach (BasicBlock *in, bb->in)
-                    qout << " L" << in->index();
-                if (bb->in.isEmpty())
-                    qout << "(none)";
-                if (BasicBlock *container = bb->containingGroup())
-                    qout << "; container block: L" << container->index();
-                if (bb->isGroupStart())
-                    qout << "; group start";
-                qout << endl;
-            }
-            Stmt *n = (i + 1) < code.size() ? code.at(i + 1) : 0;
-
-            QByteArray str;
-            QBuffer buf(&str);
-            buf.open(QIODevice::WriteOnly);
-            QTextStream out(&buf);
-            if (s->id > 0)
-                out << s->id << ": ";
-            s->dump(out, Stmt::MIR);
-            if (s->location.isValid()) {
-                out.flush();
-                for (int i = 58 - str.length(); i > 0; --i)
-                    out << ' ';
-                out << "    // line: " << s->location.startLine << " column: " << s->location.startColumn;
-            }
-
-            out.flush();
-
-            qout << "    " << str;
-            qout << endl;
-
-            if (n && s->asCJump()) {
-                qout << "    else goto L" << s->asCJump()->iffalse->index() << ";" << endl;
-            }
-        }
-
-        qout << "}" << endl
-             << endl;
+        IRPrinter(&qout).print(function);
+        qout << endl;
     }
 }
 
@@ -190,29 +102,6 @@ public:
     }
 };
 
-inline bool unescapableTemp(Temp *t, IR::Function *f)
-{
-    switch (t->kind) {
-    case Temp::Formal:
-    case Temp::ScopedFormal:
-    case Temp::ScopedLocal:
-        return false;
-    case Temp::Local:
-        return !f->variablesCanEscape();
-    default:
-        return true;
-    }
-}
-
-inline Temp *unescapableTemp(Expr *e, IR::Function *f)
-{
-    Temp *t = e->asTemp();
-    if (!t)
-        return 0;
-
-    return unescapableTemp(t, f) ? t : 0;
-}
-
 class BasicBlockSet
 {
     typedef std::vector<int> Numbers;
@@ -222,8 +111,6 @@ class BasicBlockSet
     Flags *blockFlags;
     IR::Function *function;
     enum { MaxVectorCapacity = 8 };
-
-    // Q_DISABLE_COPY(BasicBlockSet); disabled because MSVC wants assignment operator for std::vector
 
 public:
     class const_iterator
@@ -237,7 +124,7 @@ public:
         const_iterator(const BasicBlockSet &set, bool end)
             : set(set)
         {
-            if (end) {
+            if (end || !set.function) {
                 if (set.blockNumbers)
                     numberIt = set.blockNumbers->end();
                 else
@@ -274,10 +161,11 @@ public:
     public:
         BasicBlock *operator*() const
         {
+
             if (set.blockNumbers) {
                 return set.function->basicBlock(*numberIt);
             } else {
-                Q_ASSERT(flagIt <= INT_MAX);
+                Q_ASSERT(flagIt <= static_cast<size_t>(set.function->basicBlockCount()));
                 return set.function->basicBlock(static_cast<int>(flagIt));
             }
         }
@@ -309,7 +197,12 @@ public:
     friend class const_iterator;
 
 public:
-    BasicBlockSet(): blockNumbers(0), blockFlags(0), function(0) {}
+    BasicBlockSet(IR::Function *f = 0): blockNumbers(0), blockFlags(0), function(0)
+    {
+        if (f)
+            init(f);
+    }
+
 #ifdef Q_COMPILER_RVALUE_REFS
     BasicBlockSet(BasicBlockSet &&other): blockNumbers(0), blockFlags(0)
     {
@@ -317,8 +210,36 @@ public:
         std::swap(blockFlags, other.blockFlags);
         std::swap(function, other.function);
     }
-
 #endif // Q_COMPILER_RVALUE_REFS
+
+    BasicBlockSet(const BasicBlockSet &other)
+        : blockNumbers(0)
+        , blockFlags(0)
+        , function(other.function)
+    {
+        if (other.blockFlags)
+            blockFlags = new Flags(*other.blockFlags);
+        else if (other.blockNumbers)
+            blockNumbers = new Numbers(*other.blockNumbers);
+    }
+
+    BasicBlockSet &operator=(const BasicBlockSet &other)
+    {
+        if (blockFlags) {
+            delete blockFlags;
+            blockFlags = 0;
+        } else {
+            delete blockNumbers;
+            blockNumbers = 0;
+        }
+        function = other.function;
+        if (other.blockFlags)
+            blockFlags = new Flags(*other.blockFlags);
+        else if (other.blockNumbers)
+            blockNumbers = new Numbers(*other.blockNumbers);
+        return *this;
+    }
+
     ~BasicBlockSet() { delete blockNumbers; delete blockFlags; }
 
     void init(IR::Function *f)
@@ -330,8 +251,15 @@ public:
         blockNumbers->reserve(MaxVectorCapacity);
     }
 
+    bool empty() const
+    {
+        return begin() == end();
+    }
+
     void insert(BasicBlock *bb)
     {
+        Q_ASSERT(function);
+
         if (blockFlags) {
             (*blockFlags)[bb->index()] = true;
             return;
@@ -355,34 +283,79 @@ public:
         }
     }
 
+    void remove(BasicBlock *bb)
+    {
+        Q_ASSERT(function);
+
+        if (blockFlags) {
+            (*blockFlags)[bb->index()] = false;
+            return;
+        }
+
+        for (std::vector<int>::iterator i = blockNumbers->begin(), ei = blockNumbers->end(); i != ei; ++i) {
+            if (*i == bb->index()) {
+                blockNumbers->erase(i);
+                return;
+            }
+        }
+    }
+
     const_iterator begin() const { return const_iterator(*this, false); }
     const_iterator end() const { return const_iterator(*this, true); }
 
-    QList<BasicBlock *> values() const
+    void collectValues(std::vector<BasicBlock *> &bbs) const
     {
-        QList<BasicBlock *> result;
+        Q_ASSERT(function);
 
         for (const_iterator it = begin(), eit = end(); it != eit; ++it)
-            result.append(*it);
+            bbs.push_back(*it);
+    }
 
-        return result;
+    bool contains(BasicBlock *bb) const
+    {
+        Q_ASSERT(function);
+
+        if (blockFlags)
+            return (*blockFlags)[bb->index()];
+
+        for (std::vector<int>::const_iterator i = blockNumbers->begin(), ei = blockNumbers->end(); i != ei; ++i) {
+            if (*i == bb->index())
+                return true;
+        }
+
+        return false;
     }
 };
 
-class DominatorTree {
+class DominatorTree
+{
+    enum {
+        DebugDominatorFrontiers = 0,
+        DebugImmediateDominators = 0,
+
+        DebugCodeCanUseLotsOfCpu = 0
+    };
+
     typedef int BasicBlockIndex;
     enum { InvalidBasicBlockIndex = -1 };
 
+    struct Data
+    {
+        int N;
+        std::vector<int> dfnum; // BasicBlock index -> dfnum
+        std::vector<int> vertex;
+        std::vector<BasicBlockIndex> parent; // BasicBlock index -> parent BasicBlock index
+        std::vector<BasicBlockIndex> ancestor; // BasicBlock index -> ancestor BasicBlock index
+        std::vector<BasicBlockIndex> best; // BasicBlock index -> best BasicBlock index
+        std::vector<BasicBlockIndex> semi; // BasicBlock index -> semi dominator BasicBlock index
+        std::vector<BasicBlockIndex> samedom; // BasicBlock index -> same dominator BasicBlock index
+
+        Data(): N(0) {}
+    };
+
     IR::Function *function;
-    int N;
-    std::vector<int> dfnum; // BasicBlock index -> dfnum
-    std::vector<int> vertex;
-    std::vector<BasicBlockIndex> parent; // BasicBlock index -> parent BasicBlock index
-    std::vector<BasicBlockIndex> ancestor; // BasicBlock index -> ancestor BasicBlock index
-    std::vector<BasicBlockIndex> best; // BasicBlock index -> best BasicBlock index
-    std::vector<BasicBlockIndex> semi; // BasicBlock index -> semi dominator BasicBlock index
+    QScopedPointer<Data> d;
     std::vector<BasicBlockIndex> idom; // BasicBlock index -> immediate dominator BasicBlock index
-    std::vector<BasicBlockIndex> samedom; // BasicBlock index -> same dominator BasicBlock index
     std::vector<BasicBlockSet> DF; // BasicBlock index -> dominator frontier
 
     struct DFSTodo {
@@ -401,17 +374,17 @@ class DominatorTree {
 
     void DFS(BasicBlockIndex node) {
         std::vector<DFSTodo> worklist;
-        worklist.reserve(vertex.capacity() / 2);
+        worklist.reserve(d->vertex.capacity() / 2);
         DFSTodo todo(node, InvalidBasicBlockIndex);
 
         while (true) {
             BasicBlockIndex n = todo.node;
 
-            if (dfnum[n] == 0) {
-                dfnum[n] = N;
-                vertex[N] = n;
-                parent[n] = todo.parent;
-                ++N;
+            if (d->dfnum[n] == 0) {
+                d->dfnum[n] = d->N;
+                d->vertex[d->N] = n;
+                d->parent[n] = todo.parent;
+                ++d->N;
                 const QVector<BasicBlock *> &out = function->basicBlock(n)->out;
                 for (int i = out.size() - 1; i > 0; --i)
                     worklist.push_back(DFSTodo(out[i]->index(), n));
@@ -438,20 +411,20 @@ class DominatorTree {
 
     BasicBlockIndex ancestorWithLowestSemi(BasicBlockIndex v, std::vector<BasicBlockIndex> &worklist) {
         worklist.clear();
-        for (BasicBlockIndex it = v; it != InvalidBasicBlockIndex; it = ancestor[it])
+        for (BasicBlockIndex it = v; it != InvalidBasicBlockIndex; it = d->ancestor[it])
             worklist.push_back(it);
 
         if (worklist.size() < 2)
-            return best[v];
+            return d->best[v];
 
         BasicBlockIndex b = InvalidBasicBlockIndex;
         BasicBlockIndex last = worklist.back();
         Q_ASSERT(worklist.size() <= INT_MAX);
         for (int it = static_cast<int>(worklist.size()) - 2; it >= 0; --it) {
             BasicBlockIndex bbIt = worklist[it];
-            ancestor[bbIt] = last;
-            BasicBlockIndex &best_it = best[bbIt];
-            if (b != InvalidBasicBlockIndex && dfnum[semi[b]] < dfnum[semi[best_it]])
+            d->ancestor[bbIt] = last;
+            BasicBlockIndex &best_it = d->best[bbIt];
+            if (b != InvalidBasicBlockIndex && d->dfnum[d->semi[b]] < d->dfnum[d->semi[best_it]])
                 best_it = b;
             else
                 b = best_it;
@@ -460,92 +433,75 @@ class DominatorTree {
     }
 
     void link(BasicBlockIndex p, BasicBlockIndex n) {
-        ancestor[n] = p;
-        best[n] = n;
+        d->ancestor[n] = p;
+        d->best[n] = n;
     }
 
     void calculateIDoms() {
         Q_ASSERT(function->basicBlock(0)->in.isEmpty());
 
         const int bbCount = function->basicBlockCount();
-        vertex = std::vector<int>(bbCount, InvalidBasicBlockIndex);
-        parent = std::vector<int>(bbCount, InvalidBasicBlockIndex);
-        dfnum = std::vector<int>(bbCount, 0);
-        semi = std::vector<BasicBlockIndex>(bbCount, InvalidBasicBlockIndex);
-        ancestor = std::vector<BasicBlockIndex>(bbCount, InvalidBasicBlockIndex);
+        d->vertex = std::vector<int>(bbCount, InvalidBasicBlockIndex);
+        d->parent = std::vector<int>(bbCount, InvalidBasicBlockIndex);
+        d->dfnum = std::vector<int>(bbCount, 0);
+        d->semi = std::vector<BasicBlockIndex>(bbCount, InvalidBasicBlockIndex);
+        d->ancestor = std::vector<BasicBlockIndex>(bbCount, InvalidBasicBlockIndex);
         idom = std::vector<BasicBlockIndex>(bbCount, InvalidBasicBlockIndex);
-        samedom = std::vector<BasicBlockIndex>(bbCount, InvalidBasicBlockIndex);
-        best = std::vector<BasicBlockIndex>(bbCount, InvalidBasicBlockIndex);
+        d->samedom = std::vector<BasicBlockIndex>(bbCount, InvalidBasicBlockIndex);
+        d->best = std::vector<BasicBlockIndex>(bbCount, InvalidBasicBlockIndex);
 
         QHash<BasicBlockIndex, std::vector<BasicBlockIndex> > bucket;
         bucket.reserve(bbCount);
 
         DFS(function->basicBlock(0)->index());
-        Q_ASSERT(N == function->liveBasicBlocksCount());
+        Q_ASSERT(d->N == function->liveBasicBlocksCount());
 
         std::vector<BasicBlockIndex> worklist;
-        worklist.reserve(vertex.capacity() / 2);
+        worklist.reserve(d->vertex.capacity() / 2);
 
-        for (int i = N - 1; i > 0; --i) {
-            BasicBlockIndex n = vertex[i];
-            BasicBlockIndex p = parent[n];
+        for (int i = d->N - 1; i > 0; --i) {
+            BasicBlockIndex n = d->vertex[i];
+            BasicBlockIndex p = d->parent[n];
             BasicBlockIndex s = p;
 
             foreach (BasicBlock *v, function->basicBlock(n)->in) {
                 BasicBlockIndex ss = InvalidBasicBlockIndex;
-                if (dfnum[v->index()] <= dfnum[n])
+                if (d->dfnum[v->index()] <= d->dfnum[n])
                     ss = v->index();
                 else
-                    ss = semi[ancestorWithLowestSemi(v->index(), worklist)];
-                if (dfnum[ss] < dfnum[s])
+                    ss = d->semi[ancestorWithLowestSemi(v->index(), worklist)];
+                if (d->dfnum[ss] < d->dfnum[s])
                     s = ss;
             }
-            semi[n] = s;
+            d->semi[n] = s;
             bucket[s].push_back(n);
             link(p, n);
             if (bucket.contains(p)) {
                 foreach (BasicBlockIndex v, bucket[p]) {
                     BasicBlockIndex y = ancestorWithLowestSemi(v, worklist);
-                    BasicBlockIndex semi_v = semi[v];
-                    if (semi[y] == semi_v)
+                    BasicBlockIndex semi_v = d->semi[v];
+                    if (d->semi[y] == semi_v)
                         idom[v] = semi_v;
                     else
-                        samedom[v] = y;
+                        d->samedom[v] = y;
                 }
                 bucket.remove(p);
             }
         }
 
-#if defined(SHOW_SSA)
-        for (int i = 0; i < nodes.size(); ++i)
-            qDebug("\tL%d: ancestor = %d, semi = %d, samedom = %d", i, ancestor[i], semi[i], samedom[i]);
-#endif // SHOW_SSA
-
-        for (int i = 1; i < N; ++i) {
-            BasicBlockIndex n = vertex[i];
+        for (int i = 1; i < d->N; ++i) {
+            BasicBlockIndex n = d->vertex[i];
             Q_ASSERT(n != InvalidBasicBlockIndex);
             Q_ASSERT(!bucket.contains(n));
-            Q_ASSERT(ancestor[n] != InvalidBasicBlockIndex
-                        && ((semi[n] != InvalidBasicBlockIndex
-                                && dfnum[ancestor[n]] <= dfnum[semi[n]]) || semi[n] == n));
-            BasicBlockIndex sdn = samedom[n];
+            Q_ASSERT(d->ancestor[n] != InvalidBasicBlockIndex
+                        && ((d->semi[n] != InvalidBasicBlockIndex
+                                && d->dfnum[d->ancestor[n]] <= d->dfnum[d->semi[n]]) || d->semi[n] == n));
+            BasicBlockIndex sdn = d->samedom[n];
             if (sdn != InvalidBasicBlockIndex)
                 idom[n] = idom[sdn];
         }
 
-#if defined(SHOW_SSA)
-        qout << "Immediate dominators:" << endl;
-        foreach (BasicBlock *to, nodes) {
-            qout << '\t';
-            BasicBlockIndex from = idom.at(to->index);
-            if (from != InvalidBasicBlockIndex)
-                qout << from;
-            else
-                qout << "(none)";
-            qout << " -> " << to->index << endl;
-        }
-        qout << "N = " << N << endl;
-#endif // SHOW_SSA
+        dumpImmediateDominators();
     }
 
     struct NodeProgress {
@@ -553,7 +509,18 @@ class DominatorTree {
         std::vector<BasicBlockIndex> todo;
     };
 
+public:
+    DominatorTree(IR::Function *function)
+        : function(function)
+        , d(new Data)
+    {
+        calculateIDoms();
+        d.reset();
+    }
+
     void computeDF() {
+        DF.resize(function->basicBlockCount());
+
         // compute children of each node in the dominator tree
         std::vector<std::vector<BasicBlockIndex> > children; // BasicBlock index -> children
         children.resize(function->basicBlockCount());
@@ -569,10 +536,10 @@ class DominatorTree {
         }
 
         // Fill the worklist and initialize the node status for each basic-block
-        QHash<BasicBlockIndex, NodeProgress> nodeStatus;
-        nodeStatus.reserve(function->basicBlockCount());
+        std::vector<NodeProgress> nodeStatus;
+        nodeStatus.resize(function->basicBlockCount());
         std::vector<BasicBlockIndex> worklist;
-        worklist.reserve(function->basicBlockCount() * 2);
+        worklist.reserve(function->basicBlockCount());
         foreach (BasicBlock *bb, function->basicBlocks()) {
             if (bb->isRemoved())
                 continue;
@@ -624,49 +591,45 @@ class DominatorTree {
             }
         }
 
-#if defined(SHOW_SSA)
-        qout << "Dominator Frontiers:" << endl;
-        foreach (BasicBlock *n, nodes) {
-            qout << "\tDF[" << n->index << "]: {";
-            QList<BasicBlock *> SList = DF[n->index].values();
-            for (int i = 0; i < SList.size(); ++i) {
-                if (i > 0)
-                    qout << ", ";
-                qout << SList[i]->index;
-            }
-            qout << "}" << endl;
-        }
-#endif // SHOW_SSA
-#if !defined(QT_NO_DEBUG) && defined(CAN_TAKE_LOSTS_OF_TIME)
-        foreach (BasicBlock *n, nodes) {
-            const BasicBlockSet &fBlocks = DF[n->index];
-            for (BasicBlockSet::const_iterator it = fBlocks.begin(), eit = fBlocks.end(); it != eit; ++it) {
-                BasicBlock *fBlock = *it;
-                Q_ASSERT(!dominates(n, fBlock) || fBlock == n);
-                bool hasDominatedSucc = false;
-                foreach (BasicBlock *succ, fBlock->in) {
-                    if (dominates(n, succ)) {
-                        hasDominatedSucc = true;
-                        break;
-                    }
-                }
-                if (!hasDominatedSucc) {
-                    qout << fBlock << " in DF[" << n->index << "] has no dominated predecessors" << endl;
-                }
-                Q_ASSERT(hasDominatedSucc);
-            }
-        }
-#endif // !QT_NO_DEBUG
-    }
+        if (DebugDominatorFrontiers) {
+            qout << "Dominator Frontiers:" << endl;
+            foreach (BasicBlock *n, function->basicBlocks()) {
+                if (n->isRemoved())
+                    continue;
 
-public:
-    DominatorTree(IR::Function *function)
-        : function(function)
-        , N(0)
-    {
-        DF.resize(function->basicBlockCount());
-        calculateIDoms();
-        computeDF();
+                qout << "\tDF[" << n->index() << "]: {";
+                const BasicBlockSet &SList = DF[n->index()];
+                for (BasicBlockSet::const_iterator i = SList.begin(), ei = SList.end(); i != ei; ++i) {
+                    if (i != SList.begin())
+                        qout << ", ";
+                    qout << (*i)->index();
+                }
+                qout << "}" << endl;
+            }
+        }
+
+        if (DebugDominatorFrontiers && DebugCodeCanUseLotsOfCpu) {
+            foreach (BasicBlock *n, function->basicBlocks()) {
+                if (n->isRemoved())
+                    continue;
+                const BasicBlockSet &fBlocks = DF[n->index()];
+                for (BasicBlockSet::const_iterator it = fBlocks.begin(), eit = fBlocks.end(); it != eit; ++it) {
+                    BasicBlock *fBlock = *it;
+                    Q_ASSERT(!dominates(n, fBlock) || fBlock == n);
+                    bool hasDominatedSucc = false;
+                    foreach (BasicBlock *succ, fBlock->in) {
+                        if (dominates(n, succ)) {
+                            hasDominatedSucc = true;
+                            break;
+                        }
+                    }
+                    if (!hasDominatedSucc) {
+                        qout << fBlock << " in DF[" << n->index() << "] has no dominated predecessors" << endl;
+                    }
+                    Q_ASSERT(hasDominatedSucc);
+                }
+            }
+        }
     }
 
     const BasicBlockSet &dominatorFrontier(BasicBlock *n) const {
@@ -674,22 +637,35 @@ public:
     }
 
     BasicBlock *immediateDominator(BasicBlock *bb) const {
-        return function->basicBlock(idom[bb->index()]);
+        const BasicBlockIndex idx = idom[bb->index()];
+        if (idx == -1)
+            return 0;
+        return function->basicBlock(idx);
     }
 
     void dumpImmediateDominators() const
     {
-        qDebug() << "Immediate dominators for" << idom.size() << "nodes:";
-        for (size_t i = 0, ei = idom.size(); i != ei; ++i)
-            if (idom[i] == InvalidBasicBlockIndex)
-                qDebug("\tnone -> L%d", int(i));
-            else
-                qDebug("\tL%d -> L%d", idom[i], int(i));
+        if (DebugImmediateDominators) {
+            qout << "Immediate dominators:" << endl;
+            foreach (BasicBlock *to, function->basicBlocks()) {
+                if (to->isRemoved())
+                    continue;
+
+                qout << '\t';
+                BasicBlockIndex from = idom.at(to->index());
+                if (from != InvalidBasicBlockIndex)
+                    qout << from;
+                else
+                    qout << "(none)";
+                qout << " -> " << to->index() << endl;
+            }
+        }
     }
 
-    void updateImmediateDominator(BasicBlock *bb, BasicBlock *newDominator)
+    void setImmediateDominator(BasicBlock *bb, BasicBlock *newDominator)
     {
         Q_ASSERT(bb->index() >= 0);
+        Q_ASSERT(!newDominator || newDominator->index() >= 0);
 
         if (static_cast<std::vector<BasicBlockIndex>::size_type>(bb->index()) >= idom.size()) {
             // This is a new block, probably introduced by edge splitting. So, we'll have to grow
@@ -697,11 +673,85 @@ public:
             idom.resize(function->basicBlockCount(), InvalidBasicBlockIndex);
         }
 
-        idom[bb->index()] = newDominator->index();
+        const BasicBlockIndex newIdx = newDominator ? newDominator->index() : InvalidBasicBlockIndex;
+        if (DebugImmediateDominators)
+            qDebug() << "Setting idom of" << bb->index() << "from" << idom[bb->index()] << "to" << newIdx;
+        idom[bb->index()] = newIdx;
+    }
+
+    void collectSiblings(BasicBlock *node, BasicBlockSet &siblings)
+    {
+        siblings.insert(node);
+        const BasicBlockIndex dominator = idom[node->index()];
+        if (dominator == InvalidBasicBlockIndex)
+            return;
+        for (size_t i = 0, ei = idom.size(); i != ei; ++i) {
+            if (idom[i] == dominator) {
+                BasicBlock *bb = function->basicBlock(i);
+                if (!bb->isRemoved())
+                    siblings.insert(bb);
+            }
+        }
+    }
+
+    void recalculateIDoms(const BasicBlockSet &nodes, BasicBlock *limit = 0)
+    {
+        const BasicBlockIndex limitIndex = limit ? limit->index() : InvalidBasicBlockIndex;
+        BasicBlockSet todo(nodes), postponed(function);
+        while (!todo.empty())
+            recalculateIDom(*todo.begin(), todo, postponed, limitIndex);
     }
 
     bool dominates(BasicBlock *dominator, BasicBlock *dominated) const {
         return dominates(dominator->index(), dominated->index());
+    }
+
+    struct Cmp {
+        std::vector<int> *nodeDepths;
+        Cmp(std::vector<int> *nodeDepths)
+            : nodeDepths(nodeDepths)
+            { Q_ASSERT(nodeDepths); }
+        bool operator()(BasicBlock *one, BasicBlock *two) const
+            {
+                if (one->isRemoved())
+                    return false;
+                if (two->isRemoved())
+                    return true;
+                return nodeDepths->at(one->index()) > nodeDepths->at(two->index());
+            }
+    };
+
+    // Calculate a depth-first iteration order on the nodes of the dominator tree.
+    //
+    // The order of the nodes in the vector is not the same as one where a recursive depth-first
+    // iteration is done on a tree. Rather, the nodes are (reverse) sorted on tree depth.
+    // So for the:
+    //    1 dominates 2
+    //    2 dominates 3
+    //    3 dominates 4
+    //    2 dominates 5
+    // the order will be:
+    //    4, 3, 5, 2, 1
+    // or:
+    //    4, 5, 3, 2, 1
+    // So the order of nodes on the same depth is undefined, but it will be after the nodes
+    // they dominate, and before the nodes that dominate them.
+    //
+    // The reason for this order is that a proper DFS pre-/post-order would require inverting
+    // the idom vector by either building a real tree datastructure or by searching the idoms
+    // for siblings and children. Both have a higher time complexity than sorting by depth.
+    QVector<BasicBlock *> calculateDFNodeIterOrder() const
+    {
+        std::vector<int> depths = calculateNodeDepths();
+        QVector<BasicBlock *> order = function->basicBlocks();
+        std::sort(order.begin(), order.end(), Cmp(&depths));
+        for (int i = 0; i < order.size(); ) {
+            if (order[i]->isRemoved())
+                order.remove(i);
+            else
+                ++i;
+        }
+        return order;
     }
 
 private:
@@ -719,28 +769,186 @@ private:
 
         return false;
     }
+
+    // Algorithm:
+    //  - for each node:
+    //    - get the depth of a node. If it's unknown (-1):
+    //      - get the depth of the immediate dominator.
+    //      - if that's unknown too, calculate it by calling calculateNodeDepth
+    //      - set the current node's depth to that of immediate dominator + 1
+    std::vector<int> calculateNodeDepths() const
+    {
+        std::vector<int> nodeDepths(function->basicBlockCount(), -1);
+        nodeDepths[0] = 0;
+        foreach (BasicBlock *bb, function->basicBlocks()) {
+            if (bb->isRemoved())
+                continue;
+
+            int &bbDepth = nodeDepths[bb->index()];
+            if (bbDepth == -1) {
+                const int immDom = idom[bb->index()];
+                int immDomDepth = nodeDepths[immDom];
+                if (immDomDepth == -1)
+                    immDomDepth = calculateNodeDepth(immDom, nodeDepths);
+                bbDepth = immDomDepth + 1;
+            }
+        }
+        return nodeDepths;
+    }
+
+    // Algorithm:
+    //   - search for the first dominator of a node that has a known depth. As all nodes are
+    //     reachable from the start node, and that node's depth is 0, this is finite.
+    //   - while doing that search, put all unknown nodes in the worklist
+    //   - pop all nodes from the worklist, and set their depth to the previous' (== dominating)
+    //     node's depth + 1
+    // This way every node's depth is calculated once, and the complexity is O(n).
+    int calculateNodeDepth(int nodeIdx, std::vector<int> &nodeDepths) const
+    {
+        std::vector<int> worklist;
+        worklist.reserve(8);
+        int depth = -1;
+
+        do {
+            worklist.push_back(nodeIdx);
+            nodeIdx = idom[nodeIdx];
+            depth = nodeDepths[nodeIdx];
+        } while (depth == -1);
+
+        for (std::vector<int>::const_reverse_iterator it = worklist.rbegin(), eit = worklist.rend(); it != eit; ++it)
+            nodeDepths[*it] = ++depth;
+
+        return depth;
+    }
+
+    // The immediate-dominator recalculation is used when edges are removed from the CFG. See
+    // [Ramalingam] for a description. Note that instead of calculating the priority, a recursive
+    // algorithm is used: when recalculating the immediate dominator of a node by looking for the
+    // least-common ancestor, and a node is hit that also needs recalculation, a recursive call
+    // is done to calculate that nodes immediate dominator first.
+    //
+    // Note that this simplified algorithm cannot cope with back-edges. It only works for
+    // non-looping edges (which is our use-case).
+    void recalculateIDom(BasicBlock *node, BasicBlockSet &todo, BasicBlockSet &postponed, BasicBlockIndex limit) {
+        Q_ASSERT(!postponed.contains(node));
+        Q_ASSERT(todo.contains(node));
+        todo.remove(node);
+
+        if (node->in.size() == 1) {
+            // Special case: if the node has only one incoming edge, then that is the immediate
+            // dominator.
+            setImmediateDominator(node, node->in.first());
+            return;
+        }
+
+        std::vector<BasicBlockIndex> prefix;
+        prefix.reserve(32);
+
+        for (int i = 0, ei = node->in.size(); i != ei; ++i) {
+            BasicBlock *in = node->in.at(i);
+            if (node == in) // back-edge to self
+                continue;
+            if (dominates(node->index(), in->index())) // a known back-edge
+                continue;
+
+            if (prefix.empty()) {
+                calculatePrefix(node, in, prefix, todo, postponed, limit);
+
+                if (!prefix.empty()) {
+                    std::reverse(prefix.begin(), prefix.end());
+                    Q_ASSERT(!prefix.empty());
+                    Q_ASSERT(prefix.front() == limit || limit == InvalidBasicBlockIndex);
+                }
+            } else {
+                std::vector<BasicBlockIndex> anotherPrefix;
+                anotherPrefix.reserve(prefix.size());
+                calculatePrefix(node, in, anotherPrefix, todo, postponed, limit);
+
+                if (!anotherPrefix.empty())
+                    commonPrefix(prefix, anotherPrefix);
+            }
+        }
+
+        Q_ASSERT(!prefix.empty());
+        idom[node->index()] = prefix.back();
+    }
+
+    void calculatePrefix(BasicBlock *node, BasicBlock *in, std::vector<BasicBlockIndex> &prefix, BasicBlockSet &todo, BasicBlockSet &postponed, BasicBlockIndex limit)
+    {
+        for (BasicBlockIndex it = in->index(); it != InvalidBasicBlockIndex; it = idom[it]) {
+            prefix.push_back(it);
+            if (it == limit)
+                return;
+            BasicBlock *n = function->basicBlock(it);
+            if (postponed.contains(n)) { // possible back-edge, bail out.
+                prefix.clear();
+                return;
+            }
+            if (todo.contains(n)) {
+                postponed.insert(node);
+                recalculateIDom(n, todo, postponed, limit);
+                postponed.remove(node);
+            }
+        }
+    }
+
+    // Calculate the LCA (Least Common Ancestor) by finding the longest common prefix between two
+    // dominator chains. Note that "anotherPrefix" has the node's immediate dominator first, while
+    // "bestPrefix" has it last (meaning: is in reverse order). The reason for this is that removing
+    // nodes from "bestPrefix" is cheaper because it's done at the end of the vector, while
+    // reversing all "anotherPrefix" nodes would take unnecessary time.
+    static void commonPrefix(std::vector<BasicBlockIndex> &bestPrefix, const std::vector<BasicBlockIndex> &anotherPrefix)
+    {
+        const size_t anotherSize = anotherPrefix.size();
+        size_t minLen = qMin(bestPrefix.size(), anotherPrefix.size());
+        while (minLen != 0) {
+            --minLen;
+            if (bestPrefix[minLen] == anotherPrefix[anotherSize - minLen - 1]) {
+                ++minLen;
+                break;
+            }
+        }
+        if (minLen != bestPrefix.size())
+            bestPrefix.erase(bestPrefix.begin() + minLen, bestPrefix.end());
+    }
 };
 
 class VariableCollector: public StmtVisitor, ExprVisitor {
-    typedef QHash<Temp, QSet<BasicBlock *> > DefSites;
-    DefSites _defsites;
-    QVector<QSet<Temp> > A_orig;
-    QSet<Temp> nonLocals;
-    QSet<Temp> killed;
+    std::vector<Temp> _allTemps;
+    std::vector<BasicBlockSet> _defsites;
+    std::vector<std::vector<int> > A_orig;
+    std::vector<bool> nonLocals;
+    std::vector<bool> killed;
 
     BasicBlock *currentBB;
-    IR::Function *function;
     bool isCollectable(Temp *t) const
     {
+        Q_UNUSED(t);
         Q_ASSERT(t->kind != Temp::PhysicalRegister && t->kind != Temp::StackSlot);
-        return unescapableTemp(t, function);
+        return true;
+    }
+
+    void addDefInCurrentBlock(Temp *t)
+    {
+        std::vector<int> &temps = A_orig[currentBB->index()];
+        if (std::find(temps.begin(), temps.end(), t->index) == temps.end())
+            temps.push_back(t->index);
+    }
+
+    void addTemp(Temp *t)
+    {
+        if (_allTemps[t->index].kind == Temp::Invalid)
+            _allTemps[t->index] = *t;
     }
 
 public:
     VariableCollector(IR::Function *function)
-        : function(function)
     {
-        _defsites.reserve(function->tempCount);
+        _allTemps.resize(function->tempCount);
+        _defsites.resize(function->tempCount);
+        for (int i = 0; i < function->tempCount; ++i)
+            _defsites[i].init(function);
+        nonLocals.resize(function->tempCount);
         A_orig.resize(function->basicBlockCount());
         for (int i = 0, ei = A_orig.size(); i != ei; ++i)
             A_orig[i].reserve(8);
@@ -754,11 +962,9 @@ public:
                 continue;
 
             currentBB = bb;
-            killed.clear();
-            killed.reserve(bb->statements().size() / 2);
-            foreach (Stmt *s, bb->statements()) {
+            killed.assign(function->tempCount, false);
+            foreach (Stmt *s, bb->statements())
                 s->accept(this);
-            }
         }
 
 #if defined(SHOW_SSA)
@@ -773,28 +979,36 @@ public:
 #endif // SHOW_SSA
     }
 
-    QList<Temp> vars() const {
-        return _defsites.keys();
+    const std::vector<Temp> &allTemps() const
+    { return _allTemps; }
+
+    void collectDefSites(const Temp &n, std::vector<BasicBlock *> &bbs) const {
+        Q_ASSERT(!n.isInvalid());
+        Q_ASSERT(n.index < _defsites.size());
+        _defsites[n.index].collectValues(bbs);
     }
 
-    QSet<BasicBlock *> defsite(const Temp &n) const {
-        return _defsites[n];
-    }
-
-    QSet<Temp> inBlock(BasicBlock *n) const {
+    const std::vector<int> &inBlock(BasicBlock *n) const
+    {
         return A_orig.at(n->index());
     }
 
-    bool isNonLocal(const Temp &var) const { return nonLocals.contains(var); }
+    bool isNonLocal(const Temp &var) const
+    {
+        Q_ASSERT(!var.isInvalid());
+        Q_ASSERT(var.index < nonLocals.size());
+        return nonLocals[var.index];
+    }
 
 protected:
-    virtual void visitPhi(Phi *) {};
-    virtual void visitConvert(Convert *e) { e->expr->accept(this); };
+    virtual void visitPhi(Phi *) {}
+    virtual void visitConvert(Convert *e) { e->expr->accept(this); }
 
     virtual void visitConst(Const *) {}
     virtual void visitString(IR::String *) {}
     virtual void visitRegExp(IR::RegExp *) {}
     virtual void visitName(Name *) {}
+    virtual void visitArgLocal(ArgLocal *) {}
     virtual void visitClosure(Closure *) {}
     virtual void visitUnop(Unop *e) { e->expr->accept(this); }
     virtual void visitBinop(Binop *e) { e->left->accept(this); e->right->accept(this); }
@@ -821,6 +1035,8 @@ protected:
         s->source->accept(this);
 
         if (Temp *t = s->target->asTemp()) {
+            addTemp(t);
+
             if (isCollectable(t)) {
 #if defined(SHOW_SSA)
                 qout << '\t';
@@ -828,18 +1044,11 @@ protected:
                 qout << " -> L" << currentBB->index << endl;
 #endif // SHOW_SSA
 
-                DefSites::iterator defsitesIt = _defsites.find(*t);
-                if (defsitesIt == _defsites.end()) {
-                    QSet<BasicBlock *> bbs;
-                    bbs.reserve(4);
-                    defsitesIt = _defsites.insert(*t, bbs);
-                }
-                defsitesIt->insert(currentBB);
-
-                A_orig[currentBB->index()].insert(*t);
+                _defsites[t->index].insert(currentBB);
+                addDefInCurrentBlock(t);
 
                 // For semi-pruned SSA:
-                killed.insert(*t);
+                killed[t->index] = true;
             }
         } else {
             s->target->accept(this);
@@ -848,9 +1057,243 @@ protected:
 
     virtual void visitTemp(Temp *t)
     {
+        addTemp(t);
+
         if (isCollectable(t))
-            if (!killed.contains(*t))
-                nonLocals.insert(*t);
+            if (!killed[t->index])
+                nonLocals[t->index] = true;
+    }
+};
+
+struct UntypedTemp {
+    Temp temp;
+    UntypedTemp() {}
+    UntypedTemp(const Temp &t): temp(t) {}
+};
+inline bool operator==(const UntypedTemp &t1, const UntypedTemp &t2) Q_DECL_NOTHROW
+{ return t1.temp.index == t2.temp.index && t1.temp.kind == t2.temp.kind; }
+inline bool operator!=(const UntypedTemp &t1, const UntypedTemp &t2) Q_DECL_NOTHROW
+{ return !(t1 == t2); }
+
+class DefUses
+{
+public:
+    struct DefUse {
+        DefUse()
+            : defStmt(0)
+            , blockOfStatement(0)
+        { uses.reserve(8); }
+        Temp temp;
+        Stmt *defStmt;
+        BasicBlock *blockOfStatement;
+        QVector<Stmt *> uses;
+
+        bool isValid() const
+        { return temp.kind != Temp::Invalid; }
+
+        void clear()
+        { defStmt = 0; blockOfStatement = 0; uses.clear(); }
+    };
+
+private:
+    std::vector<DefUse> _defUses;
+    class Temps: public QVector<Temp> {
+    public:
+        Temps() { reserve(4); }
+    };
+    std::vector<Temps> _usesPerStatement;
+
+    void ensure(Temp *newTemp)
+    {
+        if (_defUses.size() <= newTemp->index) {
+            _defUses.reserve(newTemp->index + _defUses.size() / 3 + 1);
+            _defUses.resize(newTemp->index + 1);
+        }
+    }
+
+    void ensure(Stmt *s)
+    {
+        Q_ASSERT(s->id() >= 0);
+        if (static_cast<unsigned>(s->id()) >= _usesPerStatement.size()) {
+            _usesPerStatement.reserve(s->id() + _usesPerStatement.size() / 3 + 1);
+            _usesPerStatement.resize(s->id() + 1);
+        }
+    }
+
+    void addUseForStatement(Stmt *s, const Temp &var)
+    {
+        ensure(s);
+        _usesPerStatement[s->id()].push_back(var);
+    }
+
+public:
+    DefUses(IR::Function *function)
+    {
+        _usesPerStatement.resize(function->statementCount());
+        _defUses.resize(function->tempCount);
+    }
+
+    void cleanup()
+    {
+        for (size_t i = 0, ei = _defUses.size(); i != ei; ++i) {
+            DefUse &defUse = _defUses[i];
+            if (defUse.isValid() && !defUse.defStmt)
+                defUse.clear();
+        }
+    }
+
+    unsigned statementCount() const
+    { return _usesPerStatement.size(); }
+
+    unsigned tempCount() const
+    { return _defUses.size(); }
+
+    const Temp &temp(int idx) const
+    { return _defUses[idx].temp; }
+
+    void addDef(Temp *newTemp, Stmt *defStmt, BasicBlock *defBlock)
+    {
+        ensure(newTemp);
+        DefUse &defUse = _defUses[newTemp->index];
+        Q_ASSERT(!defUse.isValid());
+        defUse.temp = *newTemp;
+        defUse.defStmt = defStmt;
+        defUse.blockOfStatement = defBlock;
+    }
+
+    QList<UntypedTemp> defsUntyped() const
+    {
+        QList<UntypedTemp> res;
+        foreach (const DefUse &du, _defUses)
+            if (du.isValid())
+                res.append(UntypedTemp(du.temp));
+        return res;
+    }
+
+    std::vector<const Temp *> defs() const {
+        std::vector<const Temp *> res;
+        res.reserve(_defUses.size());
+        for (unsigned i = 0, ei = _defUses.size(); i != ei; ++i) {
+            const DefUse &du = _defUses.at(i);
+            if (du.isValid())
+                res.push_back(&du.temp);
+        }
+        return res;
+    }
+
+    void removeDef(const Temp &variable) {
+        Q_ASSERT(static_cast<unsigned>(variable.index) < _defUses.size());
+        _defUses[variable.index].clear();
+    }
+
+    void addUses(const Temp &variable, const QVector<Stmt *> &newUses)
+    {
+        Q_ASSERT(static_cast<unsigned>(variable.index) < _defUses.size());
+        QVector<Stmt *> &uses = _defUses[variable.index].uses;
+        foreach (Stmt *stmt, newUses)
+            if (std::find(uses.begin(), uses.end(), stmt) == uses.end())
+                uses.push_back(stmt);
+    }
+
+    void addUse(const Temp &variable, Stmt *newUse)
+    {
+        if (_defUses.size() <= variable.index) {
+            _defUses.resize(variable.index + 1);
+            DefUse &du = _defUses[variable.index];
+            du.temp = variable;
+            du.uses.push_back(newUse);
+            addUseForStatement(newUse, variable);
+            return;
+        }
+
+        QVector<Stmt *> &uses = _defUses[variable.index].uses;
+        if (std::find(uses.begin(), uses.end(), newUse) == uses.end())
+            uses.push_back(newUse);
+        addUseForStatement(newUse, variable);
+    }
+
+    int useCount(const Temp &variable) const
+    {
+        Q_ASSERT(static_cast<unsigned>(variable.index) < _defUses.size());
+        return _defUses[variable.index].uses.size();
+    }
+
+    Stmt *defStmt(const Temp &variable) const
+    {
+        Q_ASSERT(static_cast<unsigned>(variable.index) < _defUses.size());
+        return _defUses[variable.index].defStmt;
+    }
+
+    BasicBlock *defStmtBlock(const Temp &variable) const
+    {
+        Q_ASSERT(static_cast<unsigned>(variable.index) < _defUses.size());
+        return _defUses[variable.index].blockOfStatement;
+    }
+
+    void removeUse(Stmt *usingStmt, const Temp &var)
+    {
+        Q_ASSERT(static_cast<unsigned>(var.index) < _defUses.size());
+        QVector<Stmt *> &uses = _defUses[var.index].uses;
+        uses.erase(std::remove(uses.begin(), uses.end(), usingStmt), uses.end());
+    }
+
+    void registerNewStatement(Stmt *s)
+    {
+        ensure(s);
+    }
+
+    const QVector<Temp> &usedVars(Stmt *s) const
+    {
+        Q_ASSERT(s->id() >= 0);
+        Q_ASSERT(static_cast<unsigned>(s->id()) < _usesPerStatement.size());
+        return _usesPerStatement[s->id()];
+    }
+
+    const QVector<Stmt *> &uses(const Temp &var) const
+    {
+        return _defUses[var.index].uses;
+    }
+
+    QVector<Stmt*> removeDefUses(Stmt *s)
+    {
+        QVector<Stmt*> defStmts;
+        foreach (const Temp &usedVar, usedVars(s)) {
+            if (Stmt *ds = defStmt(usedVar))
+                defStmts += ds;
+            removeUse(s, usedVar);
+        }
+        if (Move *m = s->asMove()) {
+            if (Temp *t = m->target->asTemp())
+                removeDef(*t);
+        } else if (Phi *p = s->asPhi()) {
+            removeDef(*p->targetTemp);
+        }
+
+        return defStmts;
+    }
+
+    void dump() const
+    {
+        qout << "Defines and uses:" << endl;
+        foreach (const DefUse &du, _defUses) {
+            if (!du.isValid())
+                continue;
+            qout << '%' << du.temp.index;
+            qout << " -> defined in block " << du.blockOfStatement->index()
+                 << ", statement: " << du.defStmt->id()
+                 << endl;
+            qout << "     uses:";
+            foreach (Stmt *s, du.uses)
+                qout << ' ' << s->id();
+            qout << endl;
+        }
+        qout << "Uses per statement:" << endl;
+        for (unsigned i = 0, ei = _usesPerStatement.size(); i != ei; ++i) {
+            qout << "    " << i << ":";
+            foreach (const Temp &t, _usesPerStatement[i])
+                qout << ' ' << t.index;
+            qout << endl;
+        }
     }
 };
 
@@ -861,16 +1304,16 @@ void insertPhiNode(const Temp &a, BasicBlock *y, IR::Function *f) {
     qout << " in block " << y->index << endl;
 #endif
 
-    Phi *phiNode = f->New<Phi>();
+    Phi *phiNode = f->NewStmt<Phi>();
     phiNode->d = new Stmt::Data;
     phiNode->targetTemp = f->New<Temp>();
-    phiNode->targetTemp->init(a.kind, a.index, 0);
+    phiNode->targetTemp->init(a.kind, a.index);
     y->prependStatement(phiNode);
 
     phiNode->d->incoming.resize(y->in.size());
     for (int i = 0, ei = y->in.size(); i < ei; ++i) {
         Temp *t = f->New<Temp>();
-        t->init(a.kind, a.index, 0);
+        t->init(a.kind, a.index);
         phiNode->d->incoming[i] = t;
     }
 }
@@ -945,23 +1388,22 @@ void insertPhiNode(const Temp &a, BasicBlock *y, IR::Function *f) {
 //     mapping[t] = c
 class VariableRenamer: public StmtVisitor, public ExprVisitor
 {
+    Q_DISABLE_COPY(VariableRenamer)
+
     IR::Function *function;
+    DefUses &defUses;
     unsigned tempCount;
 
-    typedef QHash<unsigned, int> Mapping; // maps from existing/old temp number to the new and unique temp number.
+    typedef std::vector<int> Mapping; // maps from existing/old temp number to the new and unique temp number.
     enum { Absent = -1 };
-    Mapping localMapping;
     Mapping vregMapping;
     ProcessedBlocks processed;
 
-    bool isRenamable(Temp *t) const
-    {
-        Q_ASSERT(t->kind != Temp::PhysicalRegister && t->kind != Temp::StackSlot);
-        return unescapableTemp(t, function);
-    }
+    BasicBlock *currentBB;
+    Stmt *currentStmt;
 
     struct TodoAction {
-        enum { RestoreLocal, RestoreVReg, Rename } action;
+        enum { RestoreVReg, Rename } action;
         union {
             struct {
                 unsigned temp;
@@ -982,9 +1424,9 @@ class VariableRenamer: public StmtVisitor, public ExprVisitor
 
         TodoAction(const Temp &t, int prev)
         {
-            Q_ASSERT(t.kind == Temp::Local || t.kind == Temp::VirtualRegister);
+            Q_ASSERT(t.kind == Temp::VirtualRegister);
 
-            action = t.kind == Temp::Local ? RestoreLocal : RestoreVReg;
+            action = RestoreVReg;
             restoreData.temp = t.index;
             restoreData.previous = prev;
         }
@@ -1001,13 +1443,13 @@ class VariableRenamer: public StmtVisitor, public ExprVisitor
     QVector<TodoAction> todo;
 
 public:
-    VariableRenamer(IR::Function *f)
+    VariableRenamer(IR::Function *f, DefUses &defUses)
         : function(f)
+        , defUses(defUses)
         , tempCount(0)
         , processed(f)
     {
-        localMapping.reserve(f->tempCount);
-        vregMapping.reserve(f->tempCount);
+        vregMapping.assign(f->tempCount, Absent);
         todo.reserve(f->basicBlockCount());
     }
 
@@ -1023,9 +1465,6 @@ public:
             case TodoAction::Rename:
                 rename(todoAction.renameData.basicBlock);
                 break;
-            case TodoAction::RestoreLocal:
-                restore(localMapping, todoAction.restoreData.temp, todoAction.restoreData.previous);
-                break;
             case TodoAction::RestoreVReg:
                 restore(vregMapping, todoAction.restoreData.temp, todoAction.restoreData.previous);
                 break;
@@ -1038,12 +1477,9 @@ public:
     }
 
 private:
-    static inline void restore(Mapping &mapping, unsigned temp, int previous)
+    static inline void restore(Mapping &mapping, int temp, int previous)
     {
-        if (previous == Absent)
-            mapping.remove(temp);
-        else
-            mapping[temp] = previous;
+        mapping[temp] = previous;
     }
 
     void rename(BasicBlock *bb)
@@ -1067,8 +1503,12 @@ private:
 
     void renameStatementsAndPhis(BasicBlock *bb)
     {
-        foreach (Stmt *s, bb->statements())
+        currentBB = bb;
+
+        foreach (Stmt *s, bb->statements()) {
+            currentStmt = s;
             s->accept(this);
+        }
 
         foreach (BasicBlock *Y, bb->out) {
             const int j = Y->in.indexOf(bb);
@@ -1080,6 +1520,7 @@ private:
 //                    qDebug()<<"I: replacing phi use"<<a<<"with"<<newTmp<<"in L"<<Y->index;
                     t->index = newTmp;
                     t->kind = Temp::VirtualRegister;
+                    defUses.addUse(*t, phi);
                 } else {
                     break;
                 }
@@ -1091,11 +1532,8 @@ private:
     {
         int nr = Absent;
         switch (t.kind) {
-        case Temp::Local:
-            nr = localMapping.value(t.index, Absent);
-            break;
         case Temp::VirtualRegister:
-            nr = vregMapping.value(t.index, Absent);
+            nr = vregMapping[t.index];
             break;
         default:
             Q_UNREACHABLE();
@@ -1122,13 +1560,9 @@ private:
         int oldIndex = Absent;
 
         switch (t.kind) {
-        case Temp::Local:
-            oldIndex = localMapping.value(t.index, Absent);
-            localMapping.insert(t.index, newIndex);
-            break;
         case Temp::VirtualRegister:
-            oldIndex = vregMapping.value(t.index, Absent);
-            vregMapping.insert(t.index, newIndex);
+            oldIndex = vregMapping[t.index];
+            vregMapping[t.index] = newIndex;
             break;
         default:
             Q_UNREACHABLE();
@@ -1141,11 +1575,10 @@ private:
 
 protected:
     virtual void visitTemp(Temp *e) { // only called for uses, not defs
-        if (isRenamable(e)) {
-//            qDebug()<<"I: replacing use of"<<e->index<<"with"<<stack[e->index].top();
-            e->index = currentNumber(*e);
-            e->kind = Temp::VirtualRegister;
-        }
+//        qDebug()<<"I: replacing use of"<<e->index<<"with"<<stack[e->index].top();
+        e->index = currentNumber(*e);
+        e->kind = Temp::VirtualRegister;
+        defUses.addUse(*e, currentStmt);
     }
 
     virtual void visitMove(Move *s) {
@@ -1159,13 +1592,12 @@ protected:
             s->target->accept(this);
     }
 
-    void renameTemp(Temp *t) {
-        if (isRenamable(t)) {
-            const int newIdx = nextFreeTemp(*t);
-//            qDebug()<<"I: replacing def of"<<a<<"with"<<newIdx;
-            t->kind = Temp::VirtualRegister;
-            t->index = newIdx;
-        }
+    void renameTemp(Temp *t) { // only called for defs, not uses
+        const int newIdx = nextFreeTemp(*t);
+//        qDebug()<<"I: replacing def of"<<a<<"with"<<newIdx;
+        t->kind = Temp::VirtualRegister;
+        t->index = newIdx;
+        defUses.addDef(t, currentStmt, currentBB);
     }
 
     virtual void visitConvert(Convert *e) { e->expr->accept(this); }
@@ -1181,6 +1613,7 @@ protected:
     virtual void visitString(IR::String *) {}
     virtual void visitRegExp(IR::RegExp *) {}
     virtual void visitName(Name *) {}
+    virtual void visitArgLocal(ArgLocal *) {}
     virtual void visitClosure(Closure *) {}
     virtual void visitUnop(Unop *e) { e->expr->accept(this); }
     virtual void visitBinop(Binop *e) { e->left->accept(this); e->right->accept(this); }
@@ -1206,7 +1639,9 @@ protected:
     }
 };
 
-void convertToSSA(IR::Function *function, const DominatorTree &df)
+// This function converts the IR to semi-pruned SSA form. For details about SSA and the algorightm,
+// see [Appel]. For the changes needed for semi-pruned SSA form, and for its advantages, see [Briggs].
+void convertToSSA(IR::Function *function, const DominatorTree &df, DefUses &defUses)
 {
 #if defined(SHOW_SSA)
     qout << "Converting function ";
@@ -1221,376 +1656,217 @@ void convertToSSA(IR::Function *function, const DominatorTree &df)
     VariableCollector variables(function);
 
     // Prepare for phi node insertion:
-    QVector<QSet<Temp> > A_phi;
+    std::vector<std::vector<bool> > A_phi;
     A_phi.resize(function->basicBlockCount());
-    for (int i = 0, ei = A_phi.size(); i != ei; ++i) {
-        QSet<Temp> temps;
-        temps.reserve(4);
-        A_phi[i] = temps;
-    }
+    for (int i = 0, ei = A_phi.size(); i != ei; ++i)
+        A_phi[i].assign(function->tempCount, false);
+
+    std::vector<BasicBlock *> W;
+    W.reserve(8);
 
     // Place phi functions:
-    foreach (Temp a, variables.vars()) {
+    foreach (const Temp &a, variables.allTemps()) {
+        if (a.isInvalid())
+            continue;
         if (!variables.isNonLocal(a))
             continue; // for semi-pruned SSA
 
-        QList<BasicBlock *> W = QList<BasicBlock *>::fromSet(variables.defsite(a));
-        while (!W.isEmpty()) {
-            BasicBlock *n = W.first();
-            W.removeFirst();
+        W.clear();
+        variables.collectDefSites(a, W);
+        while (!W.empty()) {
+            BasicBlock *n = W.back();
+            W.pop_back();
             const BasicBlockSet &dominatorFrontierForN = df.dominatorFrontier(n);
             for (BasicBlockSet::const_iterator it = dominatorFrontierForN.begin(), eit = dominatorFrontierForN.end();
                  it != eit; ++it) {
                 BasicBlock *y = *it;
-                if (!A_phi.at(y->index()).contains(a)) {
+                if (!A_phi.at(y->index()).at(a.index)) {
                     insertPhiNode(a, y, function);
-                    A_phi[y->index()].insert(a);
-                    if (!variables.inBlock(y).contains(a))
-                        W.append(y);
+                    A_phi[y->index()].at(a.index) = true;
+                    const std::vector<int> &varsInBlockY = variables.inBlock(y);
+                    if (std::find(varsInBlockY.begin(), varsInBlockY.end(), a.index) == varsInBlockY.end())
+                        W.push_back(y);
                 }
             }
         }
     }
 
     // Rename variables:
-    VariableRenamer(function).run();
+    VariableRenamer(function, defUses).run();
 }
 
-struct UntypedTemp {
-    Temp temp;
-    UntypedTemp() {}
-    UntypedTemp(const Temp &t): temp(t) {}
-};
-inline uint qHash(const UntypedTemp &t, uint seed = 0) Q_DECL_NOTHROW
-{ return t.temp.index ^ (t.temp.kind | (t.temp.scope << 3)) ^ seed; }
-inline bool operator==(const UntypedTemp &t1, const UntypedTemp &t2) Q_DECL_NOTHROW
-{ return t1.temp.index == t2.temp.index && t1.temp.scope == t2.temp.scope && t1.temp.kind == t2.temp.kind; }
-inline bool operator!=(const UntypedTemp &t1, const UntypedTemp &t2) Q_DECL_NOTHROW
-{ return !(t1 == t2); }
-
-class DefUsesCalculator: public StmtVisitor, public ExprVisitor {
-public:
-    struct DefUse {
-        DefUse()
-            : defStmt(0)
-            , blockOfStatement(0)
-        {}
-        Stmt *defStmt;
-        BasicBlock *blockOfStatement;
-        QList<Stmt *> uses;
-    };
-
-private:
-    IR::Function *function;
-    typedef QHash<UntypedTemp, DefUse> DefUses;
-    DefUses _defUses;
-    QHash<Stmt *, QList<Temp> > _usesPerStatement;
-
-    BasicBlock *_block;
-    Stmt *_stmt;
-
-    bool isCollectible(Temp *t) const {
-        Q_ASSERT(t->kind != Temp::PhysicalRegister && t->kind != Temp::StackSlot);
-        return unescapableTemp(t, function);
-    }
-
-    void addUse(Temp *t) {
-        Q_ASSERT(t);
-        if (!isCollectible(t))
-            return;
-
-        _defUses[*t].uses.append(_stmt);
-        _usesPerStatement[_stmt].append(*t);
-    }
-
-    void addDef(Temp *t) {
-        if (!isCollectible(t))
-            return;
-
-        Q_ASSERT(!_defUses.contains(*t) || _defUses.value(*t).defStmt == 0 || _defUses.value(*t).defStmt == _stmt);
-
-        DefUse &defUse = _defUses[*t];
-        defUse.defStmt = _stmt;
-        defUse.blockOfStatement = _block;
-    }
-
-public:
-    DefUsesCalculator(IR::Function *function)
-        : function(function)
-    {
-        foreach (BasicBlock *bb, function->basicBlocks()) {
-            if (bb->isRemoved())
-                continue;
-
-            _block = bb;
-            foreach (Stmt *stmt, bb->statements()) {
-                _stmt = stmt;
-                stmt->accept(this);
-            }
-        }
-
-        QMutableHashIterator<UntypedTemp, DefUse> it(_defUses);
-        while (it.hasNext()) {
-            it.next();
-            if (!it.value().defStmt)
-                it.remove();
-        }
-    }
-
-    void addTemp(Temp *newTemp, Stmt *defStmt, BasicBlock *defBlock)
-    {
-        DefUse &defUse = _defUses[*newTemp];
-        defUse.defStmt = defStmt;
-        defUse.blockOfStatement = defBlock;
-    }
-
-    QList<UntypedTemp> defsUntyped() const { return _defUses.keys(); }
-
-    QList<Temp> defs() const {
-        QList<Temp> res;
-        res.reserve(_defUses.size());
-        foreach (const UntypedTemp &t, _defUses.keys())
-            res.append(t.temp);
-        return res;
-    }
-
-    void removeDef(const Temp &var) {
-        _defUses.remove(var);
-    }
-
-    void addUses(const Temp &variable, const QList<Stmt *> &newUses)
-    { _defUses[variable].uses.append(newUses); }
-
-    void addUse(const Temp &variable, Stmt * newUse)
-    { _defUses[variable].uses.append(newUse); }
-
-    int useCount(const UntypedTemp &variable) const
-    { return _defUses[variable].uses.size(); }
-
-    Stmt *defStmt(const UntypedTemp &variable) const
-    { return _defUses[variable].defStmt; }
-
-    BasicBlock *defStmtBlock(const Temp &variable) const
-    { return _defUses[variable].blockOfStatement; }
-
-    void removeUse(Stmt *usingStmt, const Temp &var)
-    { _defUses[var].uses.removeAll(usingStmt); }
-
-    QList<Temp> usedVars(Stmt *s) const
-    { return _usesPerStatement[s]; }
-
-    const QList<Stmt *> &uses(const UntypedTemp &var) const
-    {
-        static const QList<Stmt *> noUses;
-
-        DefUses::const_iterator it = _defUses.find(var);
-        if (it == _defUses.end())
-            return noUses;
-        else
-            return it->uses;
-    }
-
-    QVector<Stmt*> removeDefUses(Stmt *s)
-    {
-        QVector<Stmt*> defStmts;
-        foreach (const Temp &usedVar, usedVars(s)) {
-            if (Stmt *ds = defStmt(usedVar))
-                defStmts += ds;
-            removeUse(s, usedVar);
-        }
-        if (Move *m = s->asMove()) {
-            if (Temp *t = m->target->asTemp())
-                removeDef(*t);
-        } else if (Phi *p = s->asPhi()) {
-            removeDef(*p->targetTemp);
-        }
-
-        return defStmts;
-    }
-
-    void dump() const
-    {
-        foreach (const UntypedTemp &var, _defUses.keys()) {
-            const DefUse &du = _defUses[var];
-            var.temp.dump(qout);
-            qout<<" -> defined in block "<<du.blockOfStatement->index()<<", statement: ";
-            du.defStmt->dump(qout);
-            qout<<endl<<"     uses:"<<endl;
-            foreach (Stmt *s, du.uses) {
-                qout<<"       ";s->dump(qout);qout<<endl;
-            }
-        }
-    }
-
-protected:
-    virtual void visitExp(Exp *s) { s->expr->accept(this); }
-    virtual void visitJump(Jump *) {}
-    virtual void visitCJump(CJump *s) { s->cond->accept(this); }
-    virtual void visitRet(Ret *s) { s->expr->accept(this); }
-
-    virtual void visitPhi(Phi *s) {
-        addDef(s->targetTemp);
-        foreach (Expr *e, s->d->incoming)
-            addUse(e->asTemp());
-    }
-
-    virtual void visitMove(Move *s) {
-        if (Temp *t = s->target->asTemp())
-            addDef(t);
-        else
-            s->target->accept(this);
-
-        s->source->accept(this);
-    }
-
-    virtual void visitTemp(Temp *e) { addUse(e); }
-
-    virtual void visitConst(Const *) {}
-    virtual void visitString(IR::String *) {}
-    virtual void visitRegExp(IR::RegExp *) {}
-    virtual void visitName(Name *) {}
-    virtual void visitClosure(Closure *) {}
-    virtual void visitConvert(Convert *e) { e->expr->accept(this); }
-    virtual void visitUnop(Unop *e) { e->expr->accept(this); }
-    virtual void visitBinop(Binop *e) { e->left->accept(this); e->right->accept(this); }
-    virtual void visitSubscript(Subscript *e) { e->base->accept(this); e->index->accept(this); }
-    virtual void visitMember(Member *e) { e->base->accept(this); }
-    virtual void visitCall(Call *e) {
-        e->base->accept(this);
-        for (ExprList *it = e->args; it; it = it->next)
-            it->expr->accept(this);
-    }
-
-    virtual void visitNew(New *e) {
-        e->base->accept(this);
-        for (ExprList *it = e->args; it; it = it->next)
-            it->expr->accept(this);
-    }
-};
-
-bool hasPhiOnlyUses(Phi *phi, const DefUsesCalculator &defUses, QSet<Phi *> &collectedPhis)
+/// Calculate if a phi node result is used only by other phi nodes, and if those uses are
+/// in turn also used by other phi nodes.
+bool hasPhiOnlyUses(Phi *phi, const DefUses &defUses, QBitArray &collectedPhis)
 {
-    collectedPhis.insert(phi);
+    collectedPhis.setBit(phi->id());
+
     foreach (Stmt *use, defUses.uses(*phi->targetTemp)) {
-        if (Phi *dependentPhi = use->asPhi()) {
-            if (!collectedPhis.contains(dependentPhi)) {
-                if (!hasPhiOnlyUses(dependentPhi, defUses, collectedPhis))
-                    return false;
-            }
-        } else {
+        Phi *dependentPhi = use->asPhi();
+        if (!dependentPhi)
+            return false; // there is a use by a non-phi node
+
+        if (collectedPhis.at(dependentPhi->id()))
+            continue; // we already found this node
+
+        if (!hasPhiOnlyUses(dependentPhi, defUses, collectedPhis))
             return false;
-        }
     }
+
     return true;
 }
 
-void cleanupPhis(DefUsesCalculator &defUses)
+void cleanupPhis(DefUses &defUses)
 {
-    QLinkedList<Phi *> phis;
-    foreach (const Temp &def, defUses.defs())
-        if (Phi *phi = defUses.defStmt(def)->asPhi())
-            phis.append(phi);
+    QBitArray toRemove(defUses.statementCount());
+    QBitArray collectedPhis(defUses.statementCount());
+    std::vector<Phi *> allPhis;
+    allPhis.reserve(32);
 
-    QSet<Phi *> toRemove;
-    while (!phis.isEmpty()) {
-        Phi *phi = phis.first();
-        phis.removeFirst();
-        if (toRemove.contains(phi))
+    foreach (const Temp *def, defUses.defs()) {
+        Stmt *defStmt = defUses.defStmt(*def);
+        if (!defStmt)
             continue;
-        QSet<Phi *> collectedPhis;
+
+        Phi *phi = defStmt->asPhi();
+        if (!phi)
+            continue;
+        allPhis.push_back(phi);
+        if (toRemove.at(phi->id()))
+            continue;
+
+        collectedPhis.fill(false);
         if (hasPhiOnlyUses(phi, defUses, collectedPhis))
-            toRemove.unite(collectedPhis);
+            toRemove |= collectedPhis;
     }
 
-    foreach (Phi *phi, toRemove) {
-        Temp targetVar = *phi->targetTemp;
+    foreach (Phi *phi, allPhis) {
+        if (!toRemove.at(phi->id()))
+            continue;
 
+        const Temp &targetVar = *phi->targetTemp;
         defUses.defStmtBlock(targetVar)->removeStatement(phi);
 
         foreach (const Temp &usedVar, defUses.usedVars(phi))
             defUses.removeUse(phi, usedVar);
         defUses.removeDef(targetVar);
     }
+
+    defUses.cleanup();
 }
 
 class StatementWorklist
 {
-    QVector<Stmt *> worklist;
-    QBitArray inWorklist;
-    QSet<Stmt *> removed;
-    QHash<Stmt*,Stmt*> replaced;
+    IR::Function *theFunction;
+    std::vector<Stmt *> stmts;
+    std::vector<bool> worklist;
+    unsigned worklistSize;
+    std::vector<int> replaced;
+    std::vector<bool> removed;
 
     Q_DISABLE_COPY(StatementWorklist)
 
 public:
     StatementWorklist(IR::Function *function)
+        : theFunction(function)
+        , stmts(function->statementCount(), static_cast<Stmt *>(0))
+        , worklist(function->statementCount(), false)
+        , worklistSize(0)
+        , replaced(function->statementCount(), Stmt::InvalidId)
+        , removed(function->statementCount())
     {
-        QVector<Stmt *> w;
-        int stmtCount = 0;
+        grow();
 
-        // Put in all statements, and number them on the fly. The numbering is used to index the
-        // bit array.
         foreach (BasicBlock *bb, function->basicBlocks()) {
             if (bb->isRemoved())
                 continue;
 
             foreach (Stmt *s, bb->statements()) {
-                s->id = stmtCount++;
-                w.append(s);
+                if (!s)
+                    continue;
+
+                stmts[s->id()] = s;
+                worklist[s->id()] = true;
+                ++worklistSize;
             }
         }
-
-        // For QVector efficiency reasons, we process statements from the back. However, it is more
-        // effective to process the statements in ascending order. So we need to invert the
-        // order.
-        worklist.reserve(w.size());
-        for (int i = w.size() - 1; i >= 0; --i)
-            worklist.append(w.at(i));
-
-        inWorklist = QBitArray(stmtCount, true);
     }
 
-    // This will clear the entry for the statement in the basic block. After processing all
-    // statements, the cleanup method needs to be run to remove all null-pointers.
-    void clear(Stmt *stmt)
+    void reset()
     {
-        Q_ASSERT(!inWorklist.at(stmt->id));
-        removed.insert(stmt);
+        worklist.assign(worklist.size(), false);
+        worklistSize = 0;
+
+        foreach (Stmt *s, stmts) {
+            if (!s)
+                continue;
+
+            worklist[s->id()] = true;
+            ++worklistSize;
+        }
+
+        replaced.assign(replaced.size(), Stmt::InvalidId);
+        removed.assign(removed.size(), false);
+    }
+
+    void remove(Stmt *stmt)
+    {
+        replaced[stmt->id()] = Stmt::InvalidId;
+        removed[stmt->id()] = true;
+        std::vector<bool>::reference inWorklist = worklist[stmt->id()];
+        if (inWorklist) {
+            inWorklist = false;
+            Q_ASSERT(worklistSize > 0);
+            --worklistSize;
+        }
     }
 
     void replace(Stmt *oldStmt, Stmt *newStmt)
     {
         Q_ASSERT(oldStmt);
-        Q_ASSERT(newStmt);
-        Q_ASSERT(!removed.contains(oldStmt));
+        Q_ASSERT(replaced[oldStmt->id()] == Stmt::InvalidId);
+        Q_ASSERT(removed[oldStmt->id()] == false);
 
-        if (newStmt->id == -1)
-            newStmt->id = oldStmt->id;
-        QHash<Stmt *, Stmt *>::const_iterator it = replaced.find(oldStmt);
-        if (it != replaced.end())
-            oldStmt = it.key();
-        replaced[oldStmt] = newStmt;
+        Q_ASSERT(newStmt);
+        registerNewStatement(newStmt);
+        Q_ASSERT(replaced[newStmt->id()] == Stmt::InvalidId);
+        Q_ASSERT(removed[newStmt->id()] == false);
+
+        replaced[oldStmt->id()] = newStmt->id();
+        worklist[oldStmt->id()] = false;
     }
 
-    void cleanup(IR::Function *function)
+    void applyToFunction()
     {
-        foreach (BasicBlock *bb, function->basicBlocks()) {
+        foreach (BasicBlock *bb, theFunction->basicBlocks()) {
             if (bb->isRemoved())
                 continue;
 
             for (int i = 0; i < bb->statementCount();) {
-                Stmt *stmt = bb->statements()[i];
-                QHash<Stmt *, Stmt *>::const_iterator it = replaced.find(stmt);
-                if (it != replaced.end() && !removed.contains(it.value())) {
-                    bb->replaceStatement(i, it.value());
-                } else if (removed.contains(stmt)) {
-                    bb->removeStatement(i);
-                    continue;
-                }
+                Stmt *stmt = bb->statements().at(i);
 
-                ++i;
+                int id = stmt->id();
+                Q_ASSERT(id != Stmt::InvalidId);
+                Q_ASSERT(static_cast<unsigned>(stmt->id()) < stmts.size());
+
+                for (int replacementId = replaced[id]; replacementId != Stmt::InvalidId; replacementId = replaced[replacementId])
+                    id = replacementId;
+                Q_ASSERT(id != Stmt::InvalidId);
+                Q_ASSERT(static_cast<unsigned>(stmt->id()) < stmts.size());
+
+                if (removed[id]) {
+                    bb->removeStatement(i);
+                } else {
+                    if (id != stmt->id())
+                        bb->replaceStatement(i, stmts[id]);
+
+                    ++i;
+                }
             }
         }
+
+        replaced.assign(replaced.size(), Stmt::InvalidId);
+        removed.assign(removed.size(), false);
     }
 
     StatementWorklist &operator+=(const QVector<Stmt *> &stmts)
@@ -1601,18 +1877,17 @@ public:
         return *this;
     }
 
-
     StatementWorklist &operator+=(Stmt *s)
     {
         if (!s)
             return *this;
 
-        Q_ASSERT(s->id >= 0);
-        Q_ASSERT(s->id < inWorklist.size());
+        Q_ASSERT(s->id() >= 0);
+        Q_ASSERT(static_cast<unsigned>(s->id()) < worklist.size());
 
-        if (!inWorklist.at(s->id)) {
-            worklist.append(s);
-            inWorklist.setBit(s->id);
+        if (!worklist[s->id()]) {
+            worklist[s->id()] = true;
+            ++worklistSize;
         }
 
         return *this;
@@ -1620,12 +1895,14 @@ public:
 
     StatementWorklist &operator-=(Stmt *s)
     {
-        Q_ASSERT(s->id >= 0);
-        Q_ASSERT(s->id < inWorklist.size());
+        Q_ASSERT(s->id() >= 0);
+        Q_ASSERT(static_cast<unsigned>(s->id()) < worklist.size());
 
-        if (inWorklist.at(s->id)) {
-            worklist.remove(worklist.indexOf(s));
-            inWorklist.clearBit(s->id);
+        std::vector<bool>::reference inWorklist = worklist[s->id()];
+        if (inWorklist) {
+            inWorklist = false;
+            Q_ASSERT(worklistSize > 0);
+            --worklistSize;
         }
 
         return *this;
@@ -1633,34 +1910,78 @@ public:
 
     bool isEmpty() const
     {
-        return worklist.isEmpty();
+        return worklistSize == 0;
     }
 
-    Stmt *takeOne()
+    Stmt *takeNext(Stmt *last)
     {
         if (isEmpty())
             return 0;
 
-        Stmt *s = worklist.last();
-        Q_ASSERT(s->id < inWorklist.size());
-        worklist.removeLast();
-        inWorklist.clearBit(s->id);
+        const int startAt = last ? last->id() + 1 : 0;
+        Q_ASSERT(startAt >= 0);
+        Q_ASSERT(static_cast<unsigned>(startAt) <= worklist.size());
+
+        Q_ASSERT(worklist.size() == stmts.size());
+
+        // Do not compare the result of find with the end iterator, because some libc++ versions
+        // have a bug where the result of the ++operator is past-the-end of the vector, but unequal
+        // to end().
+        size_t pos = std::find(worklist.begin() + startAt, worklist.end(), true) - worklist.begin();
+        if (pos >= worklist.size())
+            pos = std::find(worklist.begin(), worklist.begin() + startAt, true) - worklist.begin();
+
+        worklist[pos] = false;
+        Q_ASSERT(worklistSize > 0);
+        --worklistSize;
+        Stmt *s = stmts.at(pos);
+        Q_ASSERT(s);
         return s;
+    }
+
+    IR::Function *function() const
+    {
+        return theFunction;
+    }
+
+    void registerNewStatement(Stmt *s)
+    {
+        Q_ASSERT(s->id() >= 0);
+        if (static_cast<unsigned>(s->id()) >= stmts.size()) {
+            if (static_cast<unsigned>(s->id()) >= stmts.capacity())
+                grow();
+
+            int newSize = s->id() + 1;
+            stmts.resize(newSize, 0);
+            worklist.resize(newSize, false);
+            replaced.resize(newSize, Stmt::InvalidId);
+            removed.resize(newSize, false);
+        }
+
+        stmts[s->id()] = s;
+    }
+
+private:
+    void grow()
+    {
+        size_t newCapacity = ((stmts.capacity() + 1) * 3) / 2;
+        stmts.reserve(newCapacity);
+        worklist.reserve(newCapacity);
+        replaced.reserve(newCapacity);
+        removed.reserve(newCapacity);
     }
 };
 
 class EliminateDeadCode: public ExprVisitor {
-    DefUsesCalculator &_defUses;
+    DefUses &_defUses;
     StatementWorklist &_worklist;
-    IR::Function *function;
     bool _sideEffect;
     QVector<Temp *> _collectedTemps;
 
 public:
-    EliminateDeadCode(DefUsesCalculator &defUses, StatementWorklist &worklist, IR::Function *function)
+    EliminateDeadCode(DefUses &defUses, StatementWorklist &worklist)
         : _defUses(defUses)
         , _worklist(worklist)
-        , function(function)
     {
         _collectedTemps.reserve(8);
     }
@@ -1691,11 +2012,6 @@ private:
         _collectedTemps.clear();
     }
 
-    bool isCollectable(Temp *t) const
-    {
-        return unescapableTemp(t, function);
-    }
-
 protected:
     virtual void visitConst(Const *) {}
     virtual void visitString(IR::String *) {}
@@ -1713,9 +2029,10 @@ protected:
 
     virtual void visitTemp(Temp *e)
     {
-        if (isCollectable(e))
-            _collectedTemps.append(e);
+        _collectedTemps.append(e);
     }
+
+    virtual void visitArgLocal(ArgLocal *) {}
 
     virtual void visitClosure(Closure *)
     {
@@ -1814,12 +2131,12 @@ struct DiscoveredType {
 
 class PropagateTempTypes: public StmtVisitor, ExprVisitor
 {
-    const DefUsesCalculator &defUses;
+    const DefUses &defUses;
     UntypedTemp theTemp;
     DiscoveredType newType;
 
 public:
-    PropagateTempTypes(const DefUsesCalculator &defUses)
+    PropagateTempTypes(const DefUses &defUses)
         : defUses(defUses)
     {}
 
@@ -1827,9 +2144,9 @@ public:
     {
         newType = type;
         theTemp = temp;
-        if (Stmt *defStmt = defUses.defStmt(temp))
+        if (Stmt *defStmt = defUses.defStmt(temp.temp))
             defStmt->accept(this);
-        foreach (Stmt *use, defUses.uses(temp))
+        foreach (Stmt *use, defUses.uses(temp.temp))
             use->accept(this);
     }
 
@@ -1844,6 +2161,7 @@ protected:
             e->memberResolver = newType.memberResolver;
         }
     }
+    virtual void visitArgLocal(ArgLocal *) {}
     virtual void visitClosure(Closure *) {}
     virtual void visitConvert(Convert *e) { e->expr->accept(this); }
     virtual void visitUnop(Unop *e) { e->expr->accept(this); }
@@ -1884,71 +2202,85 @@ protected:
     }
 };
 
-class TypeInference: public StmtVisitor, public ExprVisitor {
+class TypeInference: public StmtVisitor, public ExprVisitor
+{
+    enum { DebugTypeInference = 0 };
+
     QQmlEnginePrivate *qmlEngine;
-    IR::Function *function;
-    const DefUsesCalculator &_defUses;
-    typedef QHash<Temp, DiscoveredType> TempTypes;
+    const DefUses &_defUses;
+    typedef std::vector<DiscoveredType> TempTypes;
     TempTypes _tempTypes;
-    QList<Stmt *> _worklist;
+    StatementWorklist *_worklist;
     struct TypingResult {
         DiscoveredType type;
         bool fullyTyped;
 
-        TypingResult(const DiscoveredType &type = DiscoveredType()) : type(type), fullyTyped(type.type != UnknownType) {}
-        explicit TypingResult(MemberExpressionResolver memberResolver): type(memberResolver), fullyTyped(true) {}
+        TypingResult(const DiscoveredType &type = DiscoveredType()) {
+#if defined(__GNUC__) && __GNUC__ == 4 && __GNUC_MINOR__ == 6
+            // avoid optimization bug in gcc 4.6.3 armhf
+            ((int volatile &) this->type.type) = type.type;
+#endif
+            this->type = type;
+            fullyTyped = type.type != UnknownType;
+        }
+        explicit TypingResult(MemberExpressionResolver memberResolver)
+            : type(memberResolver)
+            , fullyTyped(true)
+        {}
     };
     TypingResult _ty;
 
 public:
-    TypeInference(QQmlEnginePrivate *qmlEngine, const DefUsesCalculator &defUses)
+    TypeInference(QQmlEnginePrivate *qmlEngine, const DefUses &defUses)
         : qmlEngine(qmlEngine)
         , _defUses(defUses)
+        , _tempTypes(_defUses.tempCount())
+        , _worklist(0)
         , _ty(UnknownType)
     {}
 
-    void run(IR::Function *f) {
-        function = f;
+    void run(StatementWorklist &w) {
+        _worklist = &w;
 
-        // TODO: the worklist handling looks a bit inefficient... check if there is something better
-        _worklist.clear();
-        for (int i = 0, ei = function->basicBlockCount(); i != ei; ++i) {
-            BasicBlock *bb = function->basicBlock(i);
-            if (bb->isRemoved())
+        Stmt *s = 0;
+        while ((s = _worklist->takeNext(s))) {
+            if (s->asJump())
                 continue;
-            if (i == 0 || !bb->in.isEmpty())
-                _worklist += bb->statements().toList();
-        }
 
-        while (!_worklist.isEmpty()) {
-            QList<Stmt *> worklist = QSet<Stmt *>::fromList(_worklist).toList();
-            _worklist.clear();
-            while (!worklist.isEmpty()) {
-                Stmt *s = worklist.first();
-                worklist.removeFirst();
-                if (s->asJump())
-                    continue;
+            if (DebugTypeInference) {
+                qout<<"Typing stmt ";
+                IRPrinter(&qout).print(s);
+                qout<<endl;
+            }
 
-#if defined(SHOW_SSA)
-                qout<<"Typing stmt ";s->dump(qout);qout<<endl;
-#endif
-
-                if (!run(s)) {
-                    _worklist += s;
-#if defined(SHOW_SSA)
+            if (!run(s)) {
+                *_worklist += s;
+                if (DebugTypeInference) {
                     qout<<"Pushing back stmt: ";
-                    s->dump(qout);qout<<endl;
-                } else {
+                    IRPrinter(&qout).print(s);
+                    qout<<endl;
+                }
+            } else {
+                if (DebugTypeInference) {
                     qout<<"Finished: ";
-                    s->dump(qout);qout<<endl;
-#endif
+                    IRPrinter(&qout).print(s);
+                    qout<<endl;
                 }
             }
         }
 
         PropagateTempTypes propagator(_defUses);
-        for (QHash<Temp, DiscoveredType>::const_iterator i = _tempTypes.begin(), ei = _tempTypes.end(); i != ei; ++i)
-            propagator.run(i.key(), i.value());
+        for (unsigned i = 0, ei = _tempTypes.size(); i != ei; ++i) {
+            const Temp &temp = _defUses.temp(i);
+            if (temp.kind == Temp::Invalid)
+                continue;
+            const DiscoveredType &tempType = _tempTypes[i];
+            if (tempType.type == UnknownType)
+                continue;
+            propagator.run(temp, tempType);
+        }
+
+        _worklist = 0;
     }
 
 private:
@@ -1971,35 +2303,26 @@ private:
         return ty;
     }
 
-    bool isAlwaysVar(Temp *t) {
-        if (unescapableTemp(t, function))
-            return false;
-        t->type = VarType;
-        return true;
-    }
-
     void setType(Expr *e, DiscoveredType ty) {
         if (Temp *t = e->asTemp()) {
-#if defined(SHOW_SSA)
-            qout<<"Setting type for "<< (t->scope?"scoped temp ":"temp ") <<t->index<< " to "<<typeName(Type(ty)) << " (" << ty << ")" << endl;
-#endif
-            if (isAlwaysVar(t))
-                ty = DiscoveredType(VarType);
-            TempTypes::iterator it = _tempTypes.find(*t);
-            if (it == _tempTypes.end())
-                it = _tempTypes.insert(*t, DiscoveredType());
-            if (it.value() != ty) {
-                it.value() = ty;
+            if (DebugTypeInference)
+                qout << "Setting type for temp " << t->index
+                     << " to " << typeName(Type(ty.type)) << " (" << ty.type << ")"
+                     << endl;
 
-#if defined(SHOW_SSA)
-                foreach (Stmt *s, _defUses.uses(*t)) {
-                    qout << "Pushing back dependent stmt: ";
-                    s->dump(qout);
-                    qout << endl;
+            DiscoveredType &it = _tempTypes[t->index];
+            if (it != ty) {
+                it = ty;
+
+                if (DebugTypeInference) {
+                    foreach (Stmt *s, _defUses.uses(*t)) {
+                        qout << "Pushing back dependent stmt: ";
+                        IRPrinter(&qout).print(s);
+                        qout<<endl;
+                    }
                 }
-#endif
 
-                _worklist += _defUses.uses(*t);
+                *_worklist += _defUses.uses(*t);
             }
         } else {
             e->type = (Type) ty.type;
@@ -2022,14 +2345,17 @@ protected:
     virtual void visitRegExp(IR::RegExp *) { _ty = TypingResult(VarType); }
     virtual void visitName(Name *) { _ty = TypingResult(VarType); }
     virtual void visitTemp(Temp *e) {
-        if (isAlwaysVar(e))
-            _ty = TypingResult(VarType);
-        else if (e->memberResolver.isValid())
+        if (e->memberResolver.isValid())
             _ty = TypingResult(e->memberResolver);
         else
-            _ty = TypingResult(_tempTypes.value(*e));
+            _ty = TypingResult(_tempTypes[e->index]);
         setType(e, _ty.type);
     }
+    virtual void visitArgLocal(ArgLocal *e) {
+        _ty = TypingResult(VarType);
+        setType(e, _ty.type);
+    }
+
     virtual void visitClosure(Closure *) { _ty = TypingResult(VarType); }
     virtual void visitConvert(Convert *e) {
         _ty = TypingResult(e->type);
@@ -2201,15 +2527,17 @@ protected:
 
 class ReverseInference
 {
-    const DefUsesCalculator &_defUses;
+    const DefUses &_defUses;
 
 public:
-    ReverseInference(const DefUsesCalculator &defUses)
+    ReverseInference(const DefUses &defUses)
         : _defUses(defUses)
     {}
 
     void run(IR::Function *f)
     {
+        Q_UNUSED(f);
+
         QVector<UntypedTemp> knownOk;
         QList<UntypedTemp> candidates = _defUses.defsUntyped();
         while (!candidates.isEmpty()) {
@@ -2222,7 +2550,7 @@ public:
             if (!isUsedAsInt32(temp, knownOk))
                 continue;
 
-            Stmt *s = _defUses.defStmt(temp);
+            Stmt *s = _defUses.defStmt(temp.temp);
             Move *m = s->asMove();
             if (!m)
                 continue;
@@ -2252,13 +2580,13 @@ public:
                 default:
                     continue;
                 }
-                if (Temp *lt = unescapableTemp(b->left, f))
+                if (Temp *lt = b->left->asTemp())
                     candidates.append(*lt);
-                if (Temp *rt = unescapableTemp(b->right, f))
+                if (Temp *rt = b->right->asTemp())
                     candidates.append(*rt);
             } else if (Unop *u = m->source->asUnop()) {
                 if (u->op == OpCompl || u->op == OpUPlus) {
-                    if (Temp *t = unescapableTemp(u->expr, f))
+                    if (Temp *t = u->expr->asTemp())
                         candidates.append(*t);
                 }
             } else {
@@ -2271,7 +2599,7 @@ public:
         PropagateTempTypes propagator(_defUses);
         foreach (const UntypedTemp &t, knownOk) {
             propagator.run(t, SInt32Type);
-            if (Stmt *defStmt = _defUses.defStmt(t)) {
+            if (Stmt *defStmt = _defUses.defStmt(t.temp)) {
                 if (Move *m = defStmt->asMove()) {
                     if (Convert *c = m->source->asConvert()) {
                         c->type = SInt32Type;
@@ -2289,7 +2617,7 @@ public:
 private:
     bool isUsedAsInt32(const UntypedTemp &t, const QVector<UntypedTemp> &knownOk) const
     {
-        const QList<Stmt *> &uses = _defUses.uses(t);
+        const QVector<Stmt *> &uses = _defUses.uses(t.temp);
         if (uses.isEmpty())
             return false;
 
@@ -2364,7 +2692,7 @@ void convertConst(Const *c, Type targetType)
 }
 
 class TypePropagation: public StmtVisitor, public ExprVisitor {
-    DefUsesCalculator &_defUses;
+    DefUses &_defUses;
     Type _ty;
     IR::Function *_f;
 
@@ -2415,9 +2743,9 @@ class TypePropagation: public StmtVisitor, public ExprVisitor {
     }
 
 public:
-    TypePropagation(DefUsesCalculator &defUses) : _defUses(defUses), _ty(UnknownType) {}
+    TypePropagation(DefUses &defUses) : _defUses(defUses), _ty(UnknownType) {}
 
-    void run(IR::Function *f) {
+    void run(IR::Function *f, StatementWorklist &worklist) {
         _f = f;
         foreach (BasicBlock *bb, f->basicBlocks()) {
             if (bb->isRemoved())
@@ -2438,13 +2766,35 @@ public:
                     *conversion.expr = bb->CONVERT(*conversion.expr, conversion.targetType);
                 } else if (Const *c = (*conversion.expr)->asConst()) {
                     convertConst(c, conversion.targetType);
+                } else if (ArgLocal *al = (*conversion.expr)->asArgLocal()) {
+                    Temp *target = bb->TEMP(bb->newTemp());
+                    target->type = conversion.targetType;
+                    Expr *convert = bb->CONVERT(al, conversion.targetType);
+                    Move *convCall = f->NewStmt<Move>();
+                    worklist.registerNewStatement(convCall);
+                    convCall->init(target, convert);
+                    _defUses.addDef(target, convCall, bb);
+
+                    Temp *source = bb->TEMP(target->index);
+                    source->type = conversion.targetType;
+                    _defUses.addUse(*source, conversion.stmt);
+
+                    if (conversion.stmt->asPhi()) {
+                        // Only temps can be used as arguments to phi nodes, so this is a sanity check...:
+                        Q_UNREACHABLE();
+                    } else {
+                        bb->insertStatementBefore(conversion.stmt, convCall);
+                    }
+
+                    *conversion.expr = source;
                 } else if (Temp *t = (*conversion.expr)->asTemp()) {
                     Temp *target = bb->TEMP(bb->newTemp());
                     target->type = conversion.targetType;
                     Expr *convert = bb->CONVERT(t, conversion.targetType);
-                    Move *convCall = f->New<Move>();
+                    Move *convCall = f->NewStmt<Move>();
+                    worklist.registerNewStatement(convCall);
                     convCall->init(target, convert);
-                    _defUses.addTemp(target, convCall, bb);
+                    _defUses.addDef(target, convCall, bb);
                     _defUses.addUse(*t, convCall);
 
                     Temp *source = bb->TEMP(target->index);
@@ -2469,9 +2819,10 @@ public:
                     //   int32{%2} = int32{convert(double{%3})};
                     Temp *tmp = bb->TEMP(bb->newTemp());
                     tmp->type = u->type;
-                    Move *extraMove = f->New<Move>();
+                    Move *extraMove = f->NewStmt<Move>();
+                    worklist.registerNewStatement(extraMove);
                     extraMove->init(tmp, u);
-                    _defUses.addTemp(tmp, extraMove, bb);
+                    _defUses.addDef(tmp, extraMove, bb);
 
                     if (Temp *unopOperand = u->expr->asTemp()) {
                         _defUses.addUse(*unopOperand, extraMove);
@@ -2480,7 +2831,7 @@ public:
 
                     bb->insertStatementBefore(conversion.stmt, extraMove);
 
-                    *conversion.expr = bb->CONVERT(tmp, conversion.targetType);
+                    *conversion.expr = bb->CONVERT(CloneExpr::cloneTemp(tmp, f), conversion.targetType);
                     _defUses.addUse(*tmp, move);
                 } else {
                     Q_UNREACHABLE();
@@ -2504,6 +2855,7 @@ protected:
     virtual void visitRegExp(IR::RegExp *) {}
     virtual void visitName(Name *) {}
     virtual void visitTemp(Temp *) {}
+    virtual void visitArgLocal(ArgLocal *) {}
     virtual void visitClosure(Closure *) {}
     virtual void visitConvert(Convert *e) { run(e->expr, e->type); }
     virtual void visitUnop(Unop *e) { run(e->expr, e->type); }
@@ -2608,39 +2960,53 @@ protected:
     }
 };
 
-void splitCriticalEdges(IR::Function *f, DominatorTree &df)
+void splitCriticalEdges(IR::Function *f, DominatorTree &df, StatementWorklist &worklist, DefUses &defUses)
 {
-    foreach (BasicBlock *bb, f->basicBlocks()) {
-        if (bb->isRemoved())
+    foreach (BasicBlock *toBB, f->basicBlocks()) {
+        if (toBB->isRemoved())
             continue;
-        if (bb->in.size() < 2)
+        if (toBB->in.size() < 2)
             continue;
 
-        for (int inIdx = 0, eInIdx = bb->in.size(); inIdx != eInIdx; ++inIdx) {
-            BasicBlock *inBB = bb->in[inIdx];
-            if (inBB->out.size() < 2)
+        for (int inIdx = 0, eInIdx = toBB->in.size(); inIdx != eInIdx; ++inIdx) {
+            BasicBlock *fromBB = toBB->in[inIdx];
+            if (fromBB->out.size() < 2)
                 continue;
 
             // We found a critical edge.
-            BasicBlock *containingGroup = inBB->isGroupStart() ? inBB : inBB->containingGroup();
-
             // create the basic block:
-            BasicBlock *newBB = f->newBasicBlock(containingGroup, bb->catchBlock);
-            Jump *s = f->New<Jump>();
-            s->init(bb);
+            BasicBlock *newBB = f->newBasicBlock(toBB->catchBlock);
+            Jump *s = f->NewStmt<Jump>();
+            worklist.registerNewStatement(s);
+            defUses.registerNewStatement(s);
+            s->init(toBB);
             newBB->appendStatement(s);
 
             // rewire the old outgoing edge
-            int outIdx = inBB->out.indexOf(bb);
-            inBB->out[outIdx] = newBB;
-            newBB->in.append(inBB);
+            int outIdx = fromBB->out.indexOf(toBB);
+            fromBB->out[outIdx] = newBB;
+            newBB->in.append(fromBB);
 
             // rewire the old incoming edge
-            bb->in[inIdx] = newBB;
-            newBB->out.append(bb);
+            toBB->in[inIdx] = newBB;
+            newBB->out.append(toBB);
+
+            // add newBB to the correct loop group
+            if (toBB->isGroupStart()) {
+                BasicBlock *container;
+                for (container = fromBB->containingGroup(); container; container = container->containingGroup())
+                     if (container == toBB)
+                         break;
+                if (container == toBB) // if we were already inside the toBB loop
+                    newBB->setContainingGroup(toBB);
+                else
+                    newBB->setContainingGroup(toBB->containingGroup());
+            } else {
+                newBB->setContainingGroup(toBB->containingGroup());
+            }
 
             // patch the terminator
-            Stmt *terminator = inBB->terminator();
+            Stmt *terminator = fromBB->terminator();
             if (Jump *j = terminator->asJump()) {
                 Q_ASSERT(outIdx == 0);
                 j->target = newBB;
@@ -2657,11 +3023,249 @@ void splitCriticalEdges(IR::Function *f, DominatorTree &df)
                 Q_ASSERT(!"Unknown terminator!");
             }
 
+//            qDebug() << "splitting edge" << fromBB->index() << "->" << toBB->index()
+//                     << "by inserting block" << newBB->index();
+
             // Set the immediate dominator of the new block to inBB
-            df.updateImmediateDominator(newBB, inBB);
+            df.setImmediateDominator(newBB, fromBB);
+
+            bool toNeedsNewIdom = true;
+            foreach (BasicBlock *bb, toBB->in) {
+                if (bb != newBB && !df.dominates(toBB, bb)) {
+                    toNeedsNewIdom = false;
+                    break;
+                }
+            }
+            if (toNeedsNewIdom)
+                df.setImmediateDominator(toBB, newBB);
         }
     }
 }
+
+// Detect all (sub-)loops in a function.
+//
+// Doing loop detection on the CFG is better than relying on the statement information in
+// order to mark loops. Although JavaScript only has natural loops, it can still be the case
+// that something is not a loop even though a loop-like-statement is in the source. For
+// example:
+//    while (true) {
+//      if (i > 0)
+//        break;
+//      else
+//        break;
+//    }
+//
+// Algorithm:
+//  - do a DFS on the dominator tree, where for each node:
+//    - collect all back-edges
+//    - if there are back-edges, the node is a loop-header for a new loop, so:
+//      - walk the CFG is reverse-direction, and for every node:
+//        - if the node already belongs to a loop, we've found a nested loop:
+//          - get the loop-header for the (outermost) nested loop
+//          - add that loop-header to the current loop
+//          - continue by walking all incoming edges that do not yet belong to the current loop
+//        - if the node does not belong to a loop yet, add it to the current loop, and
+//          go on with all incoming edges
+//
+// Loop-header detection by checking for back-edges is very straight forward: a back-edge is
+// an incoming edge where the other node is dominated by the current node. Meaning: all
+// execution paths that reach that other node have to go through the current node, that other
+// node ends with a (conditional) jump back to the loop header.
+//
+// The exact order of the DFS on the dominator tree is not important. The only property has to
+// be that a node is only visited when all the nodes it dominates have been visited before.
+// The reason for the DFS is that for nested loops, the inner loop's loop-header is dominated
+// by the outer loop's header. So, by visiting depth-first, sub-loops are identified before
+// their containing loops, which makes nested-loop identification free. An added benefit is
+// that the nodes for those sub-loops are only processed once.
+//
+// Note: independent loops that share the same header are merged together. For example, in
+// the code snippet below, there are 2 back-edges into the loop-header, but only one single
+// loop will be detected.
+//    while (a) {
+//      if (b)
+//        continue;
+//      else
+//        continue;
+//    }
+class LoopDetection
+{
+    enum { DebugLoopDetection = 0 };
+
+    Q_DISABLE_COPY(LoopDetection)
+
+public:
+    struct LoopInfo
+    {
+        BasicBlock *loopHeader;
+        QVector<BasicBlock *> loopBody;
+        QVector<LoopInfo *> nestedLoops;
+        LoopInfo *parentLoop;
+
+        LoopInfo(BasicBlock *loopHeader = 0)
+            : loopHeader(loopHeader)
+            , parentLoop(0)
+        {}
+
+        bool isValid() const
+        { return loopHeader != 0; }
+
+        void addNestedLoop(LoopInfo *nested)
+        {
+            Q_ASSERT(nested);
+            Q_ASSERT(!nestedLoops.contains(nested));
+            Q_ASSERT(nested->parentLoop == 0);
+            nested->parentLoop = this;
+            nestedLoops.append(nested);
+        }
+    };
+
+public:
+    LoopDetection(const DominatorTree &dt)
+        : dt(dt)
+    {}
+
+    ~LoopDetection()
+    {
+        qDeleteAll(loopInfos);
+    }
+
+    void run(IR::Function *function)
+    {
+        std::vector<BasicBlock *> backedges;
+        backedges.reserve(4);
+
+        foreach (BasicBlock *bb, dt.calculateDFNodeIterOrder()) {
+            Q_ASSERT(!bb->isRemoved());
+
+            backedges.clear();
+
+            foreach (BasicBlock *in, bb->in)
+                if (dt.dominates(bb, in))
+                    backedges.push_back(in);
+
+            if (!backedges.empty()) {
+                subLoop(bb, backedges);
+            }
+        }
+
+        createLoopInfos(function);
+        dumpLoopInfo();
+    }
+
+    void dumpLoopInfo() const
+    {
+        if (!DebugLoopDetection)
+            return;
+
+        foreach (LoopInfo *info, loopInfos) {
+            qDebug() << "Loop header:" << info->loopHeader->index()
+                     << "for loop" << quint64(info);
+            foreach (BasicBlock *bb, info->loopBody)
+                qDebug() << "    " << bb->index();
+            foreach (LoopInfo *nested, info->nestedLoops)
+                qDebug() << "    sub loop:" << quint64(nested);
+            qDebug() << "     parent loop:" << quint64(info->parentLoop);
+        }
+    }
+
+    QVector<LoopInfo *> allLoops() const
+    { return loopInfos; }
+
+    // returns all loop headers for loops that have no nested loops.
+    QVector<LoopInfo *> innermostLoops() const
+    {
+        QVector<LoopInfo *> inner(loopInfos);
+
+        for (int i = 0; i < inner.size(); ) {
+            if (inner.at(i)->nestedLoops.isEmpty())
+                ++i;
+            else
+                inner.remove(i);
+        }
+
+        return inner;
+    }
+
+private:
+    void subLoop(BasicBlock *loopHead, const std::vector<BasicBlock *> &backedges)
+    {
+        loopHead->markAsGroupStart();
+
+        std::vector<BasicBlock *> worklist;
+        worklist.reserve(backedges.size() + 8);
+        worklist.insert(worklist.end(), backedges.begin(), backedges.end());
+        while (!worklist.empty()) {
+            BasicBlock *predIt = worklist.back();
+            worklist.pop_back();
+
+            BasicBlock *subloop = predIt->containingGroup();
+            if (subloop) {
+                // This is a discovered block. Find its outermost discovered loop.
+                while (BasicBlock *parentLoop = subloop->containingGroup())
+                  subloop = parentLoop;
+
+                // If it is already discovered to be a subloop of this loop, continue.
+                if (subloop == loopHead)
+                    continue;
+
+                // Yay, it's a subloop of this loop.
+                subloop->setContainingGroup(loopHead);
+                predIt = subloop;
+
+                // Add all predecessors of the subloop header to the worklist, as long as
+                // those predecessors are not in the current subloop. It might be the case
+                // that they are in other loops, which we will then add as a subloop to the
+                // current loop.
+                foreach (BasicBlock *predIn, predIt->in)
+                    if (predIn->containingGroup() != subloop)
+                        worklist.push_back(predIn);
+            } else {
+                if (predIt == loopHead)
+                    continue;
+
+                // This is an undiscovered block. Map it to the current loop.
+                predIt->setContainingGroup(loopHead);
+
+                // Add all incoming edges to the worklist.
+                foreach (BasicBlock *bb, predIt->in)
+                    worklist.push_back(bb);
+            }
+        }
+    }
+
+private:
+    const DominatorTree &dt;
+    QVector<LoopInfo *> loopInfos;
+
+    void createLoopInfos(IR::Function *function)
+    {
+        foreach (BasicBlock *bb, function->basicBlocks()) {
+            if (bb->isRemoved())
+                continue;
+            if (BasicBlock *loopHeader = bb->containingGroup())
+                findLoop(loopHeader)->loopBody.append(bb);
+        }
+
+        foreach (LoopInfo *info, loopInfos) {
+            if (BasicBlock *containingLoopHeader = info->loopHeader->containingGroup())
+                findLoop(containingLoopHeader)->addNestedLoop(info);
+        }
+    }
+
+    LoopInfo *findLoop(BasicBlock *loopHeader)
+    {
+        foreach (LoopInfo *info, loopInfos) {
+            if (info->loopHeader == loopHeader)
+                return info;
+        }
+
+        LoopInfo *info = new LoopInfo;
+        info->loopHeader = loopHeader;
+        loopInfos.append(info);
+        return info;
+    }
+};
 
 // High-level algorithm:
 //  0. start with the first node (the start node) of a function
@@ -2931,20 +3535,20 @@ static Expr *clone(Expr *e, IR::Function *function) {
 
 class ExprReplacer: public StmtVisitor, public ExprVisitor
 {
-    DefUsesCalculator &_defUses;
+    DefUses &_defUses;
     IR::Function* _function;
     Temp *_toReplace;
     Expr *_replacement;
 
 public:
-    ExprReplacer(DefUsesCalculator &defUses, IR::Function *function)
+    ExprReplacer(DefUses &defUses, IR::Function *function)
         : _defUses(defUses)
         , _function(function)
         , _toReplace(0)
         , _replacement(0)
     {}
 
-    void operator()(Temp *toReplace, Expr *replacement, StatementWorklist &W, QList<Stmt *> *newUses = 0)
+    void operator()(Temp *toReplace, Expr *replacement, StatementWorklist &W, QVector<Stmt *> *newUses = 0)
     {
         Q_ASSERT(replacement->asTemp() || replacement->asConst() || replacement->asName());
 
@@ -2953,7 +3557,7 @@ public:
         qSwap(_toReplace, toReplace);
         qSwap(_replacement, replacement);
 
-        const QList<Stmt *> &uses = _defUses.uses(*_toReplace);
+        const QVector<Stmt *> &uses = _defUses.uses(*_toReplace);
         if (newUses)
             newUses->reserve(uses.size());
 
@@ -2964,7 +3568,7 @@ public:
 //            qout<<"     -> ";use->dump(qout);qout<<"\n";
             W += use;
             if (newUses)
-                newUses->append(use);
+                newUses->push_back(use);
         }
 
         qSwap(_replacement, replacement);
@@ -2977,6 +3581,7 @@ protected:
     virtual void visitRegExp(IR::RegExp *) {}
     virtual void visitName(Name *) {}
     virtual void visitTemp(Temp *) {}
+    virtual void visitArgLocal(ArgLocal *) {}
     virtual void visitClosure(Closure *) {}
     virtual void visitConvert(Convert *e) { check(e->expr); }
     virtual void visitUnop(Unop *e) { check(e->expr); }
@@ -3046,76 +3651,113 @@ namespace {
 /// This function removes the basic-block from the function's list, unlinks any uses and/or defs,
 /// and removes unreachable staements from the worklist, so that optimiseSSA won't consider them
 /// anymore.
-/// Important: this assumes that there are no critical edges in the control-flow graph!
-void purgeBB(BasicBlock *bb, IR::Function *func, DefUsesCalculator &defUses, StatementWorklist &W,
-             DominatorTree &df)
+void unlink(BasicBlock *from, BasicBlock *to, IR::Function *func, DefUses &defUses,
+            StatementWorklist &W, DominatorTree &dt)
 {
-    // TODO: after the change above: if we keep on detaching the block from predecessors or
-    //       successors, update the DominatorTree too.
+    struct Util {
+        static void removeIncomingEdge(BasicBlock *from, BasicBlock *to, DefUses &defUses, StatementWorklist &W)
+        {
+            int idx = to->in.indexOf(from);
+            if (idx == -1)
+                return;
+
+            to->in.remove(idx);
+            foreach (Stmt *outStmt, to->statements()) {
+                if (!outStmt)
+                    continue;
+                if (Phi *phi = outStmt->asPhi()) {
+                    if (Temp *t = phi->d->incoming[idx]->asTemp()) {
+                        defUses.removeUse(phi, *t);
+                        W += defUses.defStmt(*t);
+                    }
+                    phi->d->incoming.remove(idx);
+                    W += phi;
+                } else {
+                    break;
+                }
+            }
+        }
+
+        static bool isReachable(BasicBlock *bb, const DominatorTree &dt)
+        {
+            foreach (BasicBlock *in, bb->in) {
+                if (in->isRemoved())
+                    continue;
+                if (dt.dominates(bb, in)) // a back-edge, not interesting
+                    continue;
+                return true;
+            }
+
+            return false;
+        }
+    };
 
     // don't purge blocks that are entry points for catch statements. They might not be directly
     // connected, but are required anyway
-    if (bb->isExceptionHandler())
+    if (to->isExceptionHandler())
         return;
 
-    QVector<BasicBlock *> toPurge;
-    toPurge.reserve(8);
-    toPurge.append(bb);
+    // First, unlink the edge
+    from->out.removeOne(to);
+    Util::removeIncomingEdge(from, to, defUses, W);
 
-    while (!toPurge.isEmpty()) {
-        bb = toPurge.first();
-        toPurge.removeFirst();
+    BasicBlockSet siblings;
+    siblings.init(func);
 
-        if (bb->isRemoved())
-            continue;
+    // Check if the target is still reachable...
+    if (Util::isReachable(to, dt)) { // yes, recalculate the immediate dominator, and we're done.
+        dt.collectSiblings(to, siblings);
+    } else {
+        // The target is unreachable, so purge it:
+        QVector<BasicBlock *> toPurge;
+        toPurge.reserve(8);
+        toPurge.append(to);
+        while (!toPurge.isEmpty()) {
+            BasicBlock *bb = toPurge.first();
+            toPurge.removeFirst();
 
-        // unlink all incoming edges
-        foreach (BasicBlock *in, bb->in) {
-            int idx = in->out.indexOf(bb);
-            if (idx != -1)
-                in->out.remove(idx);
-        }
+            if (bb->isRemoved())
+                continue;
 
-        // unlink all outgoing edges, including "arguments" to phi statements
-        foreach (BasicBlock *out, bb->out) {
-            int idx = out->in.indexOf(bb);
-            if (idx != -1) {
-                out->in.remove(idx);
-                foreach (Stmt *outStmt, out->statements()) {
-                    if (!outStmt)
-                        continue;
-                    if (Phi *phi = outStmt->asPhi()) {
-                        if (Temp *t = phi->d->incoming[idx]->asTemp())
-                            defUses.removeUse(phi, *t);
-                        phi->d->incoming.remove(idx);
-                        W += phi;
-                    } else
-                        break;
+            // unlink all incoming edges
+            foreach (BasicBlock *in, bb->in) {
+                int idx = in->out.indexOf(bb);
+                if (idx != -1)
+                    in->out.remove(idx);
+            }
+
+            // unlink all outgoing edges, including "arguments" to phi statements
+            foreach (BasicBlock *out, bb->out) {
+                if (out->isRemoved())
+                    continue;
+
+                Util::removeIncomingEdge(bb, out, defUses, W);
+
+                if (Util::isReachable(out, dt)) {
+                    dt.collectSiblings(out, siblings);
+                } else {
+                    // if a successor has no incoming edges after unlinking the current basic block,
+                    // then it is unreachable, and can be purged too
+                    toPurge.append(out);
                 }
             }
 
-            if (out->in.isEmpty()) {
-                // if a successor has no incoming edges after unlinking the current basic block, then
-                // it is unreachable, and can be purged too
-                toPurge.append(out);
-            } else if (out->in.size() == 1) {
-                // if the successor now has only one incoming edge, we that edge is the new
-                // immediate dominator
-                df.updateImmediateDominator(out, out->in.first());
+            // unlink all defs/uses from the statements in the basic block
+            foreach (Stmt *s, bb->statements()) {
+                if (!s)
+                    continue;
+
+                W += defUses.removeDefUses(s);
+                W -= s;
             }
+
+            siblings.remove(bb);
+            dt.setImmediateDominator(bb, 0);
+            func->removeBasicBlock(bb);
         }
-
-        // unlink all defs/uses from the statements in the basic block
-        foreach (Stmt *s, bb->statements()) {
-            if (!s)
-                continue;
-
-            W += defUses.removeDefUses(s);
-            W -= s;
-        }
-
-        func->removeBasicBlock(bb);
     }
+
+    dt.recalculateIDoms(siblings);
 }
 
 bool tryOptimizingComparison(Expr *&expr)
@@ -3180,24 +3822,79 @@ bool tryOptimizingComparison(Expr *&expr)
 
     return false;
 }
-} // anonymous namespace
 
-void optimizeSSA(IR::Function *function, DefUsesCalculator &defUses, DominatorTree &df)
+void cfg2dot(IR::Function *f, const QVector<LoopDetection::LoopInfo *> &loops = QVector<LoopDetection::LoopInfo *>())
 {
-    StatementWorklist W(function);
-    ExprReplacer replaceUses(defUses, function);
+    static bool showCode = !qgetenv("QV4_SHOW_IR").isNull();
+    if (!showCode)
+        return;
 
-    while (!W.isEmpty()) {
-        Stmt *s = W.takeOne();
-        if (!s)
+    struct Util {
+        static void genLoop(LoopDetection::LoopInfo *loop)
+        {
+            qout << "  subgraph \"cluster" << quint64(loop) << "\" {\n";
+            qout << "    L" << loop->loopHeader->index() << ";\n";
+            foreach (BasicBlock *bb, loop->loopBody)
+                qout << "    L" << bb->index() << ";\n";
+            foreach (LoopDetection::LoopInfo *nested, loop->nestedLoops)
+                genLoop(nested);
+            qout << "  }\n";
+        }
+    };
+
+    QString name;
+    if (f->name) name = *f->name;
+    else name = QString::fromLatin1("%1").arg((unsigned long long)f);
+    qout << "digraph \"" << name << "\" { ordering=out;\n";
+
+    foreach (LoopDetection::LoopInfo *l, loops) {
+        if (l->parentLoop == 0)
+            Util::genLoop(l);
+    }
+
+    foreach (BasicBlock *bb, f->basicBlocks()) {
+        if (bb->isRemoved())
             continue;
 
+        int idx = bb->index();
+        qout << "  L" << idx << " [label=\"L" << idx << "\"";
+        if (idx == 0 || bb->terminator()->asRet())
+            qout << ", shape=doublecircle";
+        else
+            qout << ", shape=circle";
+        qout << "];\n";
+        foreach (BasicBlock *out, bb->out)
+            qout << "  L" << idx << " -> L" << out->index() << "\n";
+    }
+
+    qout << "}\n" << flush;
+}
+
+} // anonymous namespace
+
+void optimizeSSA(StatementWorklist &W, DefUses &defUses, DominatorTree &df)
+{
+    IR::Function *function = W.function();
+    ExprReplacer replaceUses(defUses, function);
+
+    Stmt *s = 0;
+    while (!W.isEmpty()) {
+        s = W.takeNext(s);
+        Q_ASSERT(s);
+
         if (Phi *phi = s->asPhi()) {
+            // dead code elimination:
+            if (defUses.useCount(*phi->targetTemp) == 0) {
+                W += defUses.removeDefUses(phi);
+                W.remove(s);
+                continue;
+            }
+
             // constant propagation:
             if (Const *c = isConstPhi(phi)) {
                 replaceUses(phi->targetTemp, c, W);
                 defUses.removeDef(*phi->targetTemp);
-                W.clear(s);
+                W.remove(s);
                 continue;
             }
 
@@ -3206,26 +3903,15 @@ void optimizeSSA(IR::Function *function, DefUsesCalculator &defUses, DominatorTr
                 Temp *t = phi->targetTemp;
                 Expr *e = phi->d->incoming.first();
 
-                QList<Stmt *> newT2Uses;
+                QVector<Stmt *> newT2Uses;
                 replaceUses(t, e, W, &newT2Uses);
                 if (Temp *t2 = e->asTemp()) {
                     defUses.removeUse(s, *t2);
                     defUses.addUses(*t2, newT2Uses);
+                    W += defUses.defStmt(*t2);
                 }
                 defUses.removeDef(*t);
-                W.clear(s);
-                continue;
-            }
-
-            // dead code elimination:
-            if (defUses.useCount(*phi->targetTemp) == 0) {
-                foreach (Expr *in, phi->d->incoming) {
-                    if (Temp *t = in->asTemp())
-                        W += defUses.defStmt(*t);
-                }
-
-                defUses.removeDef(*phi->targetTemp);
-                W.clear(s);
+                W.remove(s);
                 continue;
             }
         } else  if (Move *m = s->asMove()) {
@@ -3244,20 +3930,21 @@ void optimizeSSA(IR::Function *function, DefUsesCalculator &defUses, DominatorTr
                 }
             }
 
-            if (Temp *targetTemp = unescapableTemp(m->target, function)) {
+            if (Temp *targetTemp = m->target->asTemp()) {
                 // dead code elimination:
                 if (defUses.useCount(*targetTemp) == 0) {
-                    EliminateDeadCode(defUses, W, function).run(m->source, s);
+                    EliminateDeadCode(defUses, W).run(m->source, s);
                     if (!m->source)
-                        W.clear(s);
+                        W.remove(s);
                     continue;
                 }
 
                 // constant propagation:
                 if (Const *sourceConst = m->source->asConst()) {
+                    Q_ASSERT(sourceConst->type != UnknownType);
                     replaceUses(targetTemp, sourceConst, W);
                     defUses.removeDef(*targetTemp);
-                    W.clear(s);
+                    W.remove(s);
                     continue;
                 }
                 if (Member *member = m->source->asMember()) {
@@ -3267,7 +3954,7 @@ void optimizeSSA(IR::Function *function, DefUsesCalculator &defUses, DominatorTr
                         c->init(SInt32Type, enumValue);
                         replaceUses(targetTemp, c, W);
                         defUses.removeDef(*targetTemp);
-                        W.clear(s);
+                        W.remove(s);
                         defUses.removeUse(s, *member->base->asTemp());
                         continue;
                     } else if (member->attachedPropertiesIdOrEnumValue != 0 && member->property && member->base->asTemp()) {
@@ -3282,13 +3969,13 @@ void optimizeSSA(IR::Function *function, DefUsesCalculator &defUses, DominatorTr
                 }
 
                 // copy propagation:
-                if (Temp *sourceTemp = unescapableTemp(m->source, function)) {
-                    QList<Stmt *> newT2Uses;
+                if (Temp *sourceTemp = m->source->asTemp()) {
+                    QVector<Stmt *> newT2Uses;
                     replaceUses(targetTemp, sourceTemp, W, &newT2Uses);
                     defUses.removeUse(s, *sourceTemp);
                     defUses.addUses(*sourceTemp, newT2Uses);
                     defUses.removeDef(*targetTemp);
-                    W.clear(s);
+                    W.remove(s);
                     continue;
                 }
 
@@ -3319,7 +4006,8 @@ void optimizeSSA(IR::Function *function, DefUsesCalculator &defUses, DominatorTr
                                 doneSomething = true;
                                 break;
                             case OpUPlus:
-                                constOperand->type = unop->type;
+                                if (unop->type != UnknownType)
+                                    constOperand->type = unop->type;
                                 doneSomething = true;
                                 break;
                             case OpCompl:
@@ -3380,13 +4068,22 @@ void optimizeSSA(IR::Function *function, DefUsesCalculator &defUses, DominatorTr
                             continue;
                         }
                     }
-                    if (rightConst) { // mask right hand side of shift operations
+                    if (rightConst) {
                         switch (binop->op) {
                         case OpLShift:
                         case OpRShift:
-                        case OpURShift:
-                            rightConst->value = QV4::Primitive::toInt32(rightConst->value) & 0x1f;
-                            rightConst->type = SInt32Type;
+                            if (double v = QV4::Primitive::toInt32(rightConst->value) & 0x1f) {
+                                // mask right hand side of shift operations
+                                rightConst->value = v;
+                                rightConst->type = SInt32Type;
+                            } else {
+                                // shifting a value over 0 bits is a move:
+                                if (rightConst->value == 0) {
+                                    m->source = binop->left;
+                                    W += m;
+                                }
+                            }
+
                             break;
                         default:
                             break;
@@ -3451,13 +4148,14 @@ void optimizeSSA(IR::Function *function, DefUsesCalculator &defUses, DominatorTr
             if (Const *constantCondition = cjump->cond->asConst()) {
                 // Note: this assumes that there are no critical edges! Meaning, we can safely purge
                 //       any basic blocks that are found to be unreachable.
-                Jump *jump = function->New<Jump>();
+                Jump *jump = function->NewStmt<Jump>();
+                W.registerNewStatement(jump);
                 if (convertToValue(constantCondition).toBoolean()) {
                     jump->target = cjump->iftrue;
-                    purgeBB(cjump->iffalse, function, defUses, W, df);
+                    unlink(cjump->parent, cjump->iffalse, function, defUses, W, df);
                 } else {
                     jump->target = cjump->iffalse;
-                    purgeBB(cjump->iftrue, function, defUses, W, df);
+                    unlink(cjump->parent, cjump->iftrue, function, defUses, W, df);
                 }
                 W.replace(s, jump);
 
@@ -3473,21 +4171,27 @@ void optimizeSSA(IR::Function *function, DefUsesCalculator &defUses, DominatorTr
         }
     }
 
-    W.cleanup(function);
+    W.applyToFunction();
 }
 
+//### TODO: use DefUses from the optimizer, because it already has all this information
 class InputOutputCollector: protected StmtVisitor, protected ExprVisitor {
-    IR::Function *function;
+    void setOutput(Temp *out)
+    {
+        Q_ASSERT(!output);
+        output = out;
+    }
 
 public:
-    QList<Temp> inputs;
-    QList<Temp> outputs;
+    std::vector<Temp *> inputs;
+    Temp *output;
 
-    InputOutputCollector(IR::Function *f): function(f) {}
+    InputOutputCollector()
+    { inputs.reserve(4); }
 
     void collect(Stmt *s) {
-        inputs.clear();
-        outputs.clear();
+        inputs.resize(0);
+        output = 0;
         s->accept(this);
     }
 
@@ -3497,9 +4201,9 @@ protected:
     virtual void visitRegExp(IR::RegExp *) {}
     virtual void visitName(Name *) {}
     virtual void visitTemp(Temp *e) {
-        if (unescapableTemp(e, function))
-            inputs.append(*e);
+        inputs.push_back(e);
     }
+    virtual void visitArgLocal(ArgLocal *) {}
     virtual void visitClosure(Closure *) {}
     virtual void visitConvert(Convert *e) { e->expr->accept(this); }
     virtual void visitUnop(Unop *e) { e->expr->accept(this); }
@@ -3520,10 +4224,7 @@ protected:
     virtual void visitMove(Move *s) {
         s->source->accept(this);
         if (Temp *t = s->target->asTemp()) {
-            if (unescapableTemp(t, function))
-                outputs.append(*t);
-            else
-                s->target->accept(this);
+            setOutput(t);
         } else {
             s->target->accept(this);
         }
@@ -3542,74 +4243,88 @@ protected:
  *   Linear Scan Register Allocation on SSA Form
  *   Christian Wimmer & Michael Franz, CGO'10, April 24-28, 2010
  *
- * There is one slight difference w.r.t. the phi-nodes: in the artice, the phi nodes are attached
- * to the basic-blocks. Therefore, in the algorithm in the article, the ranges for input parameters
- * for phi nodes run from their definition upto the branch instruction into the block with the phi
- * node. In our representation, phi nodes are mostly treaded as normal instructions, so we have to
- * enlarge the range to cover the phi node itself.
+ * See LifeTimeIntervals::renumber for details on the numbering.
  */
 class LifeRanges {
     typedef QSet<Temp> LiveRegs;
 
-    QVector<LiveRegs> _liveIn;
-    QHash<Temp, LifeTimeInterval> _intervals;
-    typedef QVector<LifeTimeInterval> LifeTimeIntervals;
-    LifeTimeIntervals _sortedIntervals;
+    std::vector<LiveRegs> _liveIn;
+    std::vector<LifeTimeInterval *> _intervals;
+    LifeTimeIntervals::Ptr _sortedIntervals;
+
+    LifeTimeInterval &interval(const Temp *temp)
+    {
+        LifeTimeInterval *&lti = _intervals[temp->index];
+        if (Q_UNLIKELY(!lti)) {
+            lti = new LifeTimeInterval;
+            lti->setTemp(*temp);
+        }
+        return *lti;
+    }
+
+    int defPosition(IR::Stmt *s) const
+    {
+        return usePosition(s) + 1;
+    }
+
+    int usePosition(IR::Stmt *s) const
+    {
+        return _sortedIntervals->positionForStatement(s);
+    }
+
+    int start(IR::BasicBlock *bb) const
+    {
+        return _sortedIntervals->startPosition(bb);
+    }
+
+    int end(IR::BasicBlock *bb) const
+    {
+        return _sortedIntervals->endPosition(bb);
+    }
 
 public:
     LifeRanges(IR::Function *function, const QHash<BasicBlock *, BasicBlock *> &startEndLoops)
+        : _intervals(function->tempCount)
     {
+        _sortedIntervals = LifeTimeIntervals::create(function);
         _liveIn.resize(function->basicBlockCount());
-
-        int id = 0;
-        foreach (BasicBlock *bb, function->basicBlocks()) {
-            foreach (Stmt *s, bb->statements()) {
-                if (s->asPhi())
-                    s->id = id + 1;
-                else
-                    s->id = ++id;
-            }
-        }
 
         for (int i = function->basicBlockCount() - 1; i >= 0; --i) {
             BasicBlock *bb = function->basicBlock(i);
-            buildIntervals(bb, startEndLoops.value(bb, 0), function);
+            buildIntervals(bb, startEndLoops.value(bb, 0));
         }
 
-        _sortedIntervals.reserve(_intervals.size());
-        for (QHash<Temp, LifeTimeInterval>::const_iterator i = _intervals.begin(), ei = _intervals.end(); i != ei; ++i) {
-            LifeTimeIntervals::iterator lti = _sortedIntervals.insert(_sortedIntervals.end(), i.value());
-            lti->setTemp(i.key());
-        }
-        std::sort(_sortedIntervals.begin(), _sortedIntervals.end(), LifeTimeInterval::lessThan);
         _intervals.clear();
     }
 
-    QVector<LifeTimeInterval> intervals() const { return _sortedIntervals; }
+    LifeTimeIntervals::Ptr intervals() const { return _sortedIntervals; }
 
     void dump() const
     {
         qout << "Life ranges:" << endl;
         qout << "Intervals:" << endl;
-        foreach (const LifeTimeInterval &range, _sortedIntervals) {
-            range.dump(qout);
+        foreach (const LifeTimeInterval *range, _sortedIntervals->intervals()) {
+            range->dump(qout);
             qout << endl;
         }
 
+        IRPrinter printer(&qout);
         for (int i = 0, ei = _liveIn.size(); i != ei; ++i) {
             qout << "L" << i <<" live-in: ";
             QList<Temp> live = QList<Temp>::fromSet(_liveIn.at(i));
+            if (live.isEmpty())
+                qout << "(none)";
             std::sort(live.begin(), live.end());
             for (int i = 0; i < live.size(); ++i) {
                 if (i > 0) qout << ", ";
-                live[i].dump(qout);
+                printer.print(&live[i]);
             }
             qout << endl;
         }
     }
 
 private:
-    void buildIntervals(BasicBlock *bb, BasicBlock *loopEnd, IR::Function *function)
+    void buildIntervals(BasicBlock *bb, BasicBlock *loopEnd)
     {
         LiveRegs live;
         foreach (BasicBlock *successor, bb->out) {
@@ -3630,35 +4345,41 @@ private:
         QVector<Stmt *> statements = bb->statements();
 
         foreach (const Temp &opd, live)
-            _intervals[opd].addRange(statements.first()->id, statements.last()->id);
+            interval(&opd).addRange(start(bb), end(bb));
 
-        InputOutputCollector collector(function);
+        InputOutputCollector collector;
         for (int i = statements.size() - 1; i >= 0; --i) {
-            Stmt *s = statements[i];
+            Stmt *s = statements.at(i);
             if (Phi *phi = s->asPhi()) {
                 LiveRegs::iterator it = live.find(*phi->targetTemp);
                 if (it == live.end()) {
                     // a phi node target that is only defined, but never used
-                    _intervals[*phi->targetTemp].setFrom(s);
+                    interval(phi->targetTemp).setFrom(start(bb));
                 } else {
                     live.erase(it);
                 }
+                _sortedIntervals->add(&interval(phi->targetTemp));
                 continue;
             }
             collector.collect(s);
-            foreach (const Temp &opd, collector.outputs) {
-                _intervals[opd].setFrom(s);
-                live.remove(opd);
+            //### TODO: use DefUses from the optimizer, because it already has all this information
+            if (Temp *opd = collector.output) {
+                LifeTimeInterval &lti = interval(opd);
+                lti.setFrom(defPosition(s));
+                live.remove(lti.temp());
+                _sortedIntervals->add(&lti);
             }
-            foreach (const Temp &opd, collector.inputs) {
-                _intervals[opd].addRange(statements.first()->id, s->id);
-                live.insert(opd);
+            //### TODO: use DefUses from the optimizer, because it already has all this information
+            for (unsigned i = 0, ei = collector.inputs.size(); i != ei; ++i) {
+                Temp *opd = collector.inputs[i];
+                interval(opd).addRange(start(bb), usePosition(s));
+                live.insert(*opd);
             }
         }
 
         if (loopEnd) { // Meaning: bb is a loop header, because loopEnd is set to non-null.
             foreach (const Temp &opd, live)
-                _intervals[opd].addRange(statements.first()->id, loopEnd->terminator()->id);
+                interval(&opd).addRange(start(bb), usePosition(loopEnd->terminator()));
         }
 
         _liveIn[bb->index()] = live;
@@ -3675,17 +4396,473 @@ void removeUnreachleBlocks(IR::Function *function)
     function->setScheduledBlocks(newSchedule);
     function->renumberBasicBlocks();
 }
+
+class ConvertArgLocals: protected StmtVisitor, protected ExprVisitor
+{
+public:
+    ConvertArgLocals(IR::Function *function)
+        : function(function)
+        , convertArgs(!function->usesArgumentsObject)
+    {
+        tempForFormal.resize(function->formals.size(), -1);
+        tempForLocal.resize(function->locals.size(), -1);
+    }
+
+    void toTemps()
+    {
+        if (function->variablesCanEscape())
+            return;
+
+        QVector<Stmt *> extraMoves;
+        if (convertArgs) {
+            const int formalCount = function->formals.size();
+            extraMoves.reserve(formalCount + function->basicBlock(0)->statementCount());
+            extraMoves.resize(formalCount);
+
+            for (int i = 0; i != formalCount; ++i) {
+                const int newTemp = function->tempCount++;
+                tempForFormal[i] = newTemp;
+
+                ArgLocal *source = function->New<ArgLocal>();
+                source->init(ArgLocal::Formal, i, 0);
+
+                Temp *target = function->New<Temp>();
+                target->init(Temp::VirtualRegister, newTemp);
+
+                Move *m = function->NewStmt<Move>();
+                m->init(target, source);
+                extraMoves[i] = m;
+            }
+        }
+
+        foreach (BasicBlock *bb, function->basicBlocks())
+            if (!bb->isRemoved())
+                foreach (Stmt *s, bb->statements())
+                    s->accept(this);
+
+        if (convertArgs && function->formals.size() > 0)
+            function->basicBlock(0)->prependStatements(extraMoves);
+
+        function->locals.clear();
+    }
+
+protected:
+    virtual void visitConst(Const *) {}
+    virtual void visitString(IR::String *) {}
+    virtual void visitRegExp(IR::RegExp *) {}
+    virtual void visitName(Name *) {}
+    virtual void visitTemp(Temp *) {}
+    virtual void visitArgLocal(ArgLocal *) {}
+    virtual void visitClosure(Closure *) {}
+    virtual void visitConvert(Convert *e) { check(e->expr); }
+    virtual void visitUnop(Unop *e) { check(e->expr); }
+    virtual void visitBinop(Binop *e) { check(e->left); check(e->right); }
+    virtual void visitCall(Call *e) {
+        check(e->base);
+        for (ExprList *it = e->args; it; it = it->next)
+            check(it->expr);
+    }
+    virtual void visitNew(New *e) {
+        check(e->base);
+        for (ExprList *it = e->args; it; it = it->next)
+            check(it->expr);
+    }
+    virtual void visitSubscript(Subscript *e) { check(e->base); check(e->index); }
+    virtual void visitMember(Member *e) { check(e->base); }
+    virtual void visitExp(Exp *s) { check(s->expr); }
+    virtual void visitMove(Move *s) { check(s->target); check(s->source); }
+    virtual void visitJump(Jump *) {}
+    virtual void visitCJump(CJump *s) { check(s->cond); }
+    virtual void visitRet(Ret *s) { check(s->expr); }
+    virtual void visitPhi(Phi *) {
+        Q_UNREACHABLE();
+    }
+
+private:
+    void check(Expr *&e) {
+        if (ArgLocal *al = e->asArgLocal()) {
+            if (al->kind == ArgLocal::Local) {
+                Temp *t = function->New<Temp>();
+                t->init(Temp::VirtualRegister, fetchTempForLocal(al->index));
+                e = t;
+            } else if (convertArgs && al->kind == ArgLocal::Formal) {
+                Temp *t = function->New<Temp>();
+                t->init(Temp::VirtualRegister, fetchTempForFormal(al->index));
+                e = t;
+            }
+        } else {
+            e->accept(this);
+        }
+    }
+
+    int fetchTempForLocal(int local)
+    {
+        int &ref = tempForLocal[local];
+        if (ref == -1)
+            ref = function->tempCount++;
+        return ref;
+    }
+
+    int fetchTempForFormal(int formal)
+    {
+        return tempForFormal[formal];
+    }
+
+    IR::Function *function;
+    bool convertArgs;
+    std::vector<int> tempForFormal;
+    std::vector<int> tempForLocal;
+};
+
+class CloneBasicBlock: protected IR::StmtVisitor, protected CloneExpr
+{
+public:
+    BasicBlock *operator()(IR::BasicBlock *originalBlock)
+    {
+        block = new BasicBlock(originalBlock->function, 0);
+
+        foreach (Stmt *s, originalBlock->statements()) {
+            s->accept(this);
+            clonedStmt->location = s->location;
+        }
+
+        return block;
+    }
+
+protected:
+    virtual void visitExp(Exp *stmt)
+    { clonedStmt = block->EXP(clone(stmt->expr)); }
+
+    virtual void visitMove(Move *stmt)
+    { clonedStmt = block->MOVE(clone(stmt->target), clone(stmt->source)); }
+
+    virtual void visitJump(Jump *stmt)
+    { clonedStmt = block->JUMP(stmt->target); }
+
+    virtual void visitCJump(CJump *stmt)
+    { clonedStmt = block->CJUMP(clone(stmt->cond), stmt->iftrue, stmt->iffalse); }
+
+    virtual void visitRet(Ret *stmt)
+    { clonedStmt = block->RET(clone(stmt->expr)); }
+
+    virtual void visitPhi(Phi *stmt)
+    {
+        Phi *phi = block->function->NewStmt<Phi>();
+        clonedStmt = phi;
+
+        phi->targetTemp = clone(stmt->targetTemp);
+        phi->d = new Stmt::Data;
+        foreach (Expr *in, stmt->d->incoming)
+            phi->d->incoming.append(clone(in));
+        block->appendStatement(phi);
+    }
+
+private:
+    IR::Stmt *clonedStmt;
+};
+
+// Loop-peeling is done by unfolding the loop once. The "original" loop basic blocks stay where they
+// are, and a copy of the loop is placed after it. Special care is taken while copying the loop body:
+// by having the copies of the basic-blocks point to the same nodes as the "original" basic blocks,
+// updating the immediate dominators is easy: if the edge of a copied basic-block B points to a
+// block C that has also been copied, set the immediate dominator of B to the corresponding
+// immediate dominator of C. Finally, for any node outside the loop that gets a new edge attached,
+// the immediate dominator has to be re-calculated.
+class LoopPeeling
+{
+    DominatorTree &dt;
+
+public:
+    LoopPeeling(DominatorTree &dt)
+        : dt(dt)
+    {}
+
+    void run(const QVector<LoopDetection::LoopInfo *> &loops)
+    {
+        foreach (LoopDetection::LoopInfo *loopInfo, loops)
+            peelLoop(loopInfo);
+    }
+
+private:
+    // All copies have their outgoing edges pointing to the same successor block as the originals.
+    // For each copied block, check where the outgoing edges point to. If it's a block inside the
+    // (original) loop, rewire it to the corresponding copy. Otherwise, which is when it points
+    // out of the loop, leave it alone.
+    // As an extra, collect all edges that point out of the copied loop, because the targets need
+    // to have their immediate dominator rechecked.
+    void rewire(BasicBlock *newLoopBlock, const QVector<BasicBlock *> &from, const QVector<BasicBlock *> &to, QVector<BasicBlock *> &loopExits)
+    {
+        for (int i = 0, ei = newLoopBlock->out.size(); i != ei; ++i) {
+            BasicBlock *&out = newLoopBlock->out[i];
+            const int idx = from.indexOf(out);
+            if (idx == -1) {
+                if (!loopExits.contains(out))
+                    loopExits.append(out);
+            } else {
+                out->in.removeOne(newLoopBlock);
+                BasicBlock *newTo = to.at(idx);
+                newTo->in.append(newLoopBlock);
+                out = newTo;
+
+                Stmt *terminator = newLoopBlock->terminator();
+                if (Jump *jump = terminator->asJump()) {
+                    Q_ASSERT(i == 0);
+                    jump->target = newTo;
+                } else if (CJump *cjump = terminator->asCJump()) {
+                    Q_ASSERT(i == 0 || i == 1);
+                    if (i == 0)
+                        cjump->iftrue = newTo;
+                    else
+                        cjump->iffalse = newTo;
+                }
+            }
+        }
+    }
+
+    void peelLoop(LoopDetection::LoopInfo *loop)
+    {
+        CloneBasicBlock clone;
+
+        LoopDetection::LoopInfo unpeeled(*loop);
+        unpeeled.loopHeader = clone(unpeeled.loopHeader);
+        unpeeled.loopHeader->setContainingGroup(loop->loopHeader->containingGroup());
+        unpeeled.loopHeader->markAsGroupStart(true);
+        for (int i = 0, ei = unpeeled.loopBody.size(); i != ei; ++i) {
+            BasicBlock *&bodyBlock = unpeeled.loopBody[i];
+            bodyBlock = clone(bodyBlock);
+            bodyBlock->setContainingGroup(unpeeled.loopHeader);
+            Q_ASSERT(bodyBlock->statementCount() == loop->loopBody[i]->statementCount());
+        }
+
+        // The cloned blocks will have no incoming edges, but they do have outgoing ones (copying
+        // the terminators will automatically insert that edge). The blocks where the originals
+        // pointed to will have an extra incoming edge from the copied blocks.
+
+        foreach (BasicBlock *in, loop->loopHeader->in) {
+            if (unpeeled.loopHeader != in // this can happen for really tight loops (where there are no body blocks). This is a back-edge in that case.
+                    && !unpeeled.loopBody.contains(in) // if the edge is not coming from within the copied set, leave it alone
+                    && !dt.dominates(loop->loopHeader, in)) // an edge coming from within the loop (so a back-edge): this is handled when rewiring all outgoing edges
+                continue;
+
+            unpeeled.loopHeader->in.append(in);
+            loop->loopHeader->in.removeOne(in);
+
+            Stmt *terminator = in->terminator();
+            if (Jump *jump = terminator->asJump()) {
+                jump->target = unpeeled.loopHeader;
+                in->out[0] = unpeeled.loopHeader;
+            } else if (CJump *cjump = terminator->asCJump()) {
+                if (cjump->iftrue == loop->loopHeader) {
+                    cjump->iftrue = unpeeled.loopHeader;
+                    Q_ASSERT(in->out[0] == loop->loopHeader);
+                    in->out[0] = unpeeled.loopHeader;
+                } else if (cjump->iffalse == loop->loopHeader) {
+                    cjump->iffalse = unpeeled.loopHeader;
+                    Q_ASSERT(in->out[1] == loop->loopHeader);
+                    in->out[1] = unpeeled.loopHeader;
+                } else {
+                    Q_UNREACHABLE();
+                }
+            }
+        }
+
+        QVector<BasicBlock *> loopExits;
+        loopExits.reserve(8);
+        loopExits.append(unpeeled.loopHeader);
+
+        IR::Function *f = unpeeled.loopHeader->function;
+        rewire(unpeeled.loopHeader, loop->loopBody, unpeeled.loopBody, loopExits);
+        f->addBasicBlock(unpeeled.loopHeader);
+        for (int i = 0, ei = unpeeled.loopBody.size(); i != ei; ++i) {
+            BasicBlock *bodyBlock = unpeeled.loopBody.at(i);
+            rewire(bodyBlock, loop->loopBody, unpeeled.loopBody, loopExits);
+            f->addBasicBlock(bodyBlock);
+        }
+
+        // The original loop is now peeled off, and won't jump back to the loop header. Meaning, it
+        // is not a loop anymore, so unmark it.
+        loop->loopHeader->markAsGroupStart(false);
+        foreach (BasicBlock *bb, loop->loopBody)
+            bb->setContainingGroup(loop->loopHeader->containingGroup());
+
+        // calculate the idoms in a separate loop, because addBasicBlock in the previous loop will
+        // set the block index, which in turn is used by the dominator tree.
+        for (int i = 0, ei = unpeeled.loopBody.size(); i != ei; ++i) {
+            BasicBlock *bodyBlock = unpeeled.loopBody.at(i);
+            BasicBlock *idom = dt.immediateDominator(loop->loopBody.at(i));
+            const int idx = loop->loopBody.indexOf(idom);
+            if (idom == loop->loopHeader)
+                idom = unpeeled.loopHeader;
+            else if (idx != -1)
+                idom = unpeeled.loopBody.at(idx);
+            Q_ASSERT(idom);
+            dt.setImmediateDominator(bodyBlock, idom);
+        }
+
+        BasicBlockSet siblings(f);
+        foreach (BasicBlock *bb, loopExits)
+            dt.collectSiblings(bb, siblings);
+
+        dt.recalculateIDoms(siblings, loop->loopHeader);
+    }
+};
+
+static void verifyCFG(IR::Function *function)
+{
+    if (!DoVerification)
+        return;
+
+    foreach (BasicBlock *bb, function->basicBlocks()) {
+        if (bb->isRemoved()) {
+            Q_ASSERT(bb->in.isEmpty());
+            Q_ASSERT(bb->out.isEmpty());
+            continue;
+        }
+
+        Q_ASSERT(function->basicBlock(bb->index()) == bb);
+
+        // Check the terminators:
+        if (Jump *jump = bb->terminator()->asJump()) {
+            Q_UNUSED(jump);
+            Q_ASSERT(jump->target);
+            Q_ASSERT(!jump->target->isRemoved());
+            Q_ASSERT(bb->out.size() == 1);
+            Q_ASSERT(bb->out.first() == jump->target);
+        } else if (CJump *cjump = bb->terminator()->asCJump()) {
+            Q_UNUSED(cjump);
+            Q_ASSERT(bb->out.size() == 2);
+            Q_ASSERT(cjump->iftrue);
+            Q_ASSERT(!cjump->iftrue->isRemoved());
+            Q_ASSERT(cjump->iftrue == bb->out[0]);
+            Q_ASSERT(cjump->iffalse);
+            Q_ASSERT(!cjump->iffalse->isRemoved());
+            Q_ASSERT(cjump->iffalse == bb->out[1]);
+        } else if (bb->terminator()->asRet()) {
+            Q_ASSERT(bb->out.size() == 0);
+        } else {
+            Q_UNREACHABLE();
+        }
+
+        // Check the outgoing edges:
+        foreach (BasicBlock *out, bb->out) {
+            Q_UNUSED(out);
+            Q_ASSERT(!out->isRemoved());
+            Q_ASSERT(out->in.contains(bb));
+        }
+
+        // Check the incoming edges:
+        foreach (BasicBlock *in, bb->in) {
+            Q_UNUSED(in);
+            Q_ASSERT(!in->isRemoved());
+            Q_ASSERT(in->out.contains(bb));
+        }
+    }
+}
+
+static void verifyImmediateDominators(const DominatorTree &dt, IR::Function *function)
+{
+    if (!DoVerification)
+        return;
+
+    cfg2dot(function);
+    dt.dumpImmediateDominators();
+    DominatorTree referenceTree(function);
+
+    foreach (BasicBlock *bb, function->basicBlocks()) {
+        if (bb->isRemoved())
+            continue;
+
+        BasicBlock *idom = dt.immediateDominator(bb);
+        BasicBlock *referenceIdom = referenceTree.immediateDominator(bb);
+        Q_UNUSED(idom);
+        Q_UNUSED(referenceIdom);
+        Q_ASSERT(idom == referenceIdom);
+    }
+}
+
+static void verifyNoPointerSharing(IR::Function *function)
+{
+    if (!DoVerification)
+        return;
+
+    class : public StmtVisitor, public ExprVisitor {
+    public:
+        void operator()(IR::Function *f)
+        {
+            foreach (BasicBlock *bb, f->basicBlocks()) {
+                if (bb->isRemoved())
+                    continue;
+
+                foreach (Stmt *s, bb->statements())
+                    s->accept(this);
+            }
+        }
+
+    protected:
+        virtual void visitExp(Exp *s) { check(s); s->expr->accept(this); }
+        virtual void visitMove(Move *s) { check(s); s->target->accept(this); s->source->accept(this); }
+        virtual void visitJump(Jump *s) { check(s); }
+        virtual void visitCJump(CJump *s) { check(s); s->cond->accept(this); }
+        virtual void visitRet(Ret *s) { check(s); s->expr->accept(this); }
+        virtual void visitPhi(Phi *s)
+        {
+            check(s);
+            s->targetTemp->accept(this);
+            foreach (Expr *e, s->d->incoming)
+                e->accept(this);
+        }
+
+        virtual void visitConst(Const *e) { check(e); }
+        virtual void visitString(IR::String *e) { check(e); }
+        virtual void visitRegExp(IR::RegExp *e) { check(e); }
+        virtual void visitName(Name *e) { check(e); }
+        virtual void visitTemp(Temp *e) { check(e); }
+        virtual void visitArgLocal(ArgLocal *e) { check(e); }
+        virtual void visitClosure(Closure *e) { check(e); }
+        virtual void visitConvert(Convert *e) { check(e); e->expr->accept(this); }
+        virtual void visitUnop(Unop *e) { check(e); e->expr->accept(this); }
+        virtual void visitBinop(Binop *e) { check(e); e->left->accept(this); e->right->accept(this); }
+        virtual void visitCall(Call *e) { check(e); e->base->accept(this); check(e->args); }
+        virtual void visitNew(New *e) { check(e); e->base->accept(this); check(e->args); }
+        virtual void visitSubscript(Subscript *e) { check(e); e->base->accept(this); e->index->accept(this); }
+        virtual void visitMember(Member *e) { check(e); e->base->accept(this); }
+
+        void check(ExprList *l)
+        {
+            for (ExprList *it = l; it; it = it->next)
+                check(it->expr);
+        }
+
+    private:
+        void check(Stmt *s)
+        {
+            Q_ASSERT(!stmts.contains(s));
+            stmts.insert(s);
+        }
+
+        void check(Expr *e)
+        {
+            Q_ASSERT(!exprs.contains(e));
+            exprs.insert(e);
+        }
+
+        QSet<Stmt *> stmts;
+        QSet<Expr *> exprs;
+    } V;
+    V(function);
+}
+
 } // anonymous namespace
 
-void LifeTimeInterval::setFrom(Stmt *from) {
-    Q_ASSERT(from && from->id > 0);
+void LifeTimeInterval::setFrom(int from) {
+    Q_ASSERT(from > 0);
 
     if (_ranges.isEmpty()) { // this is the case where there is no use, only a define
-        _ranges.push_front(Range(from->id, from->id));
-        if (_end == Invalid)
-            _end = from->id;
+        _ranges.push_front(Range(from, from));
+        if (_end == InvalidPosition)
+            _end = from;
     } else {
-        _ranges.first().start = from->id;
+        _ranges.first().start = from;
     }
 }
 
@@ -3705,7 +4882,7 @@ void LifeTimeInterval::addRange(int from, int to) {
         p->start = qMin(p->start, from);
         p->end = qMax(p->end, to);
         while (_ranges.count() > 1) {
-            Range *p1 = &_ranges[1];
+            Range *p1 = p + 1;
             if (p->end + 1 < p1->start || p1->end + 1 < p->start)
                 break;
             p1->start = qMin(p->start, p1->start);
@@ -3727,7 +4904,7 @@ void LifeTimeInterval::addRange(int from, int to) {
 
 LifeTimeInterval LifeTimeInterval::split(int atPosition, int newStart)
 {
-    Q_ASSERT(atPosition < newStart || newStart == Invalid);
+    Q_ASSERT(atPosition < newStart || newStart == InvalidPosition);
 
     if (_ranges.isEmpty() || atPosition < _ranges.first().start)
         return LifeTimeInterval();
@@ -3756,7 +4933,7 @@ LifeTimeInterval LifeTimeInterval::split(int atPosition, int newStart)
     if (newInterval._ranges.first().end == atPosition)
         newInterval._ranges.removeFirst();
 
-    if (newStart == Invalid) {
+    if (newStart == InvalidPosition) {
         // the temp stays inactive for the rest of its lifetime
         newInterval = LifeTimeInterval();
     } else {
@@ -3793,7 +4970,7 @@ LifeTimeInterval LifeTimeInterval::split(int atPosition, int newStart)
 }
 
 void LifeTimeInterval::dump(QTextStream &out) const {
-    _temp.dump(out);
+    IRPrinter(&out).print(const_cast<Temp *>(&_temp));
     out << ": ends at " << _end << " with ranges ";
     if (_ranges.isEmpty())
         out << "(none)";
@@ -3801,23 +4978,87 @@ void LifeTimeInterval::dump(QTextStream &out) const {
         if (i > 0) out << ", ";
         out << _ranges[i].start << " - " << _ranges[i].end;
     }
-    if (_reg != Invalid)
+    if (_reg != InvalidRegister)
         out << " (register " << _reg << ")";
 }
 
-bool LifeTimeInterval::lessThan(const LifeTimeInterval &r1, const LifeTimeInterval &r2) {
-    if (r1._ranges.first().start == r2._ranges.first().start) {
-        if (r1.isSplitFromInterval() == r2.isSplitFromInterval())
-            return r1._ranges.last().end < r2._ranges.last().end;
+bool LifeTimeInterval::lessThan(const LifeTimeInterval *r1, const LifeTimeInterval *r2) {
+    if (r1->_ranges.first().start == r2->_ranges.first().start) {
+        if (r1->isSplitFromInterval() == r2->isSplitFromInterval())
+            return r1->_ranges.last().end < r2->_ranges.last().end;
         else
-            return r1.isSplitFromInterval();
+            return r1->isSplitFromInterval();
     } else
-        return r1._ranges.first().start < r2._ranges.first().start;
+        return r1->_ranges.first().start < r2->_ranges.first().start;
 }
 
-bool LifeTimeInterval::lessThanForTemp(const LifeTimeInterval &r1, const LifeTimeInterval &r2)
+bool LifeTimeInterval::lessThanForTemp(const LifeTimeInterval *r1, const LifeTimeInterval *r2)
 {
-    return r1.temp() < r2.temp();
+    return r1->temp() < r2->temp();
+}
+
+LifeTimeIntervals::LifeTimeIntervals(IR::Function *function)
+    : _basicBlockPosition(function->basicBlockCount())
+    , _positionForStatement(function->statementCount(), IR::Stmt::InvalidId)
+    , _lastPosition(0)
+{
+    _intervals.reserve(function->tempCount + 32); // we reserve a bit more space for intervals, because the register allocator will add intervals with fixed ranges for each register.
+    renumber(function);
+}
+
+// Renumbering works as follows:
+//  - phi statements are not numbered
+//  - statement numbers start at 0 (zero) and increment get an even number (lastPosition + 2)
+//  - basic blocks start at firstStatementNumber - 1, or rephrased: lastPosition + 1
+//  - basic blocks end at the number of the last statement
+// And during life-time calculation the next rule is used:
+//  - any temporary starts its life-time at definingStatementPosition + 1
+//
+// This numbering simulates half-open intervals. For example:
+//   0: %1 = 1
+//   2: %2 = 2
+//   4: %3 = %1 + %2
+//   6: print(%3)
+// Here the half-open life-time intervals would be:
+//   %1: (0-4]
+//   %2: (2-4]
+//   %3: (4-6]
+// Instead, we use the even statement positions for uses of temporaries, and the odd positions for
+// their definitions:
+//   %1: [1-4]
+//   %2: [3-4]
+//   %3: [5-6]
+// This has the nice advantage that placing %3 (for example) is really easy: the start will
+// never overlap with the end of the uses of the operands used in the defining statement.
+//
+// The reason to start a basic-block at firstStatementPosition - 1 is to have correct start
+// positions for target temporaries of phi-nodes. Those temporaries will now start before the
+// first statement. This also means that any moves that get generated when transforming out of SSA
+// form, will not interfere with (read: overlap) any defining statements in the preceding
+// basic-block.
+void LifeTimeIntervals::renumber(IR::Function *function)
+{
+    foreach (BasicBlock *bb, function->basicBlocks()) {
+        if (bb->isRemoved())
+            continue;
+
+        _basicBlockPosition[bb->index()].start = _lastPosition + 1;
+
+        foreach (Stmt *s, bb->statements()) {
+            if (s->asPhi())
+                continue;
+
+            _lastPosition += 2;
+            _positionForStatement[s->id()] = _lastPosition;
+        }
+
+        _basicBlockPosition[bb->index()].end = _lastPosition;
+    }
+}
+
+LifeTimeIntervals::~LifeTimeIntervals()
+{
+    qDeleteAll(_intervals);
 }
 
 Optimizer::Optimizer(IR::Function *function)
@@ -3825,7 +5066,7 @@ Optimizer::Optimizer(IR::Function *function)
     , inSSA(false)
 {}
 
-void Optimizer::run(QQmlEnginePrivate *qmlEngine)
+void Optimizer::run(QQmlEnginePrivate *qmlEngine, bool doTypeInference, bool peelLoops)
 {
 #if defined(SHOW_SSA)
     qout << "##### NOW IN FUNCTION " << (function->name ? qPrintable(*function->name) : "anonymous!")
@@ -3845,47 +5086,81 @@ void Optimizer::run(QQmlEnginePrivate *qmlEngine)
     if (!function->hasTry && !function->hasWith && !function->module->debugMode && doSSA) {
 //        qout << "SSA for " << (function->name ? qPrintable(*function->name) : "<anonymous>") << endl;
 
+        ConvertArgLocals(function).toTemps();
+        showMeTheCode(function);
+
         // Calculate the dominator tree:
         DominatorTree df(function);
 
-//        qout << "Converting to SSA..." << endl;
-        convertToSSA(function, df);
-//        showMeTheCode(function);
+        {
+            // This is in a separate scope, because loop-peeling doesn't (yet) update the LoopInfo
+            // calculated by the LoopDetection. So by putting it in a separate scope, it is not
+            // available after peeling.
 
-//        qout << "Starting def/uses calculation..." << endl;
-        DefUsesCalculator defUses(function);
+            LoopDetection loopDetection(df);
+            loopDetection.run(function);
+            showMeTheCode(function);
+//            cfg2dot(function, loopDetection.allLoops());
+
+            if (peelLoops) {
+                QVector<LoopDetection::LoopInfo *> innerLoops = loopDetection.innermostLoops();
+                LoopPeeling(df).run(innerLoops);
+
+//                cfg2dot(function, loopDetection.allLoops());
+                showMeTheCode(function);
+                if (!innerLoops.isEmpty())
+                    verifyImmediateDominators(df, function);
+            }
+        }
+
+        verifyCFG(function);
+        verifyNoPointerSharing(function);
+
+        df.computeDF();
+
+        verifyCFG(function);
+        verifyImmediateDominators(df, function);
+
+        DefUses defUses(function);
+
+//        qout << "Converting to SSA..." << endl;
+        convertToSSA(function, df, defUses);
+//        showMeTheCode(function);
+//        defUses.dump();
 
 //        qout << "Cleaning up phi nodes..." << endl;
         cleanupPhis(defUses);
-//        showMeTheCode(function);
+        showMeTheCode(function);
 
-//        qout << "Running type inference..." << endl;
-        TypeInference(qmlEngine, defUses).run(function);
-//        showMeTheCode(function);
+        StatementWorklist worklist(function);
 
-//        qout << "Doing reverse inference..." << endl;
-        ReverseInference(defUses).run(function);
-//        showMeTheCode(function);
+        if (doTypeInference) {
+//            qout << "Running type inference..." << endl;
+            TypeInference(qmlEngine, defUses).run(worklist);
+            showMeTheCode(function);
 
-//        qout << "Doing type propagation..." << endl;
-        TypePropagation(defUses).run(function);
-//        showMeTheCode(function);
+//            qout << "Doing reverse inference..." << endl;
+            ReverseInference(defUses).run(function);
+//            showMeTheCode(function);
 
-        // Transform the CFG into edge-split SSA.
-//        qout << "Starting edge splitting..." << endl;
-        splitCriticalEdges(function, df);
-//        showMeTheCode(function);
+//            qout << "Doing type propagation..." << endl;
+            TypePropagation(defUses).run(function, worklist);
+//            showMeTheCode(function);
+            verifyNoPointerSharing(function);
+        }
 
         static bool doOpt = qgetenv("QV4_NO_OPT").isEmpty();
         if (doOpt) {
 //            qout << "Running SSA optimization..." << endl;
-            optimizeSSA(function, defUses, df);
-//            showMeTheCode(function);
+            worklist.reset();
+            optimizeSSA(worklist, defUses, df);
+            showMeTheCode(function);
+
+            verifyImmediateDominators(df, function);
+            verifyCFG(function);
         }
 
-//        qout << "Doing block merging..." << endl;
-//        mergeBasicBlocks(function);
-//        showMeTheCode(function);
+        verifyNoPointerSharing(function);
 
         // Basic-block cycles that are unreachable (i.e. for loops in a then-part where the
         // condition is calculated to be always false) are not yet removed. This will choke the
@@ -3894,10 +5169,19 @@ void Optimizer::run(QQmlEnginePrivate *qmlEngine)
         cleanupBasicBlocks(function);
 //        showMeTheCode(function);
 
+        // Transform the CFG into edge-split SSA.
+//        qout << "Starting edge splitting..." << endl;
+        splitCriticalEdges(function, df, worklist, defUses);
+//        showMeTheCode(function);
+
+        verifyImmediateDominators(df, function);
+        verifyCFG(function);
+
 //        qout << "Doing block scheduling..." << endl;
 //        df.dumpImmediateDominators();
         startEndLoops = BlockScheduler(function, df).go();
         showMeTheCode(function);
+//        cfg2dot(function);
 
 #ifndef QT_NO_DEBUG
         checkCriticalEdges(function->basicBlocks());
@@ -3960,7 +5244,7 @@ void Optimizer::convertOutOfSSA() {
     }
 }
 
-QVector<LifeTimeInterval> Optimizer::lifeTimeIntervals() const
+LifeTimeIntervals::Ptr Optimizer::lifeTimeIntervals() const
 {
     Q_ASSERT(isInSSA());
 
@@ -4021,8 +5305,6 @@ static inline bool overlappingStorage(const Temp &t1, const Temp &t2)
     // This is the same as the operator==, but for one detail: memory locations are not sensitive
     // to types, and neither are general-purpose registers.
 
-    if (t1.scope != t2.scope)
-        return false;
     if (t1.index != t2.index)
         return false; // different position, where-ever that may (physically) be.
     if (t1.kind != t2.kind)
@@ -4103,7 +5385,7 @@ QList<IR::Move *> MoveMapping::insertMoves(BasicBlock *bb, IR::Function *functio
 
     int insertionPoint = atEnd ? bb->statements().size() - 1 : 0;
     foreach (const Move &m, _moves) {
-        IR::Move *move = function->New<IR::Move>();
+        IR::Move *move = function->NewStmt<IR::Move>();
         move->init(clone(m.to, function), clone(m.from, function));
         move->swap = m.needsSwap;
         bb->insertStatementBefore(insertionPoint++, move);
@@ -4184,3 +5466,5 @@ MoveMapping::Action MoveMapping::schedule(const Move &m, QList<Move> &todo, QLis
 //            Construction and Destruction of Static Single Assignment Form.
 //  [Appel]   A.W. Appel. Modern Compiler Implementation in Java. Second edition, Cambridge
 //            University Press.
+//  [Ramalingam] G. Ramalingam and T. Reps. An Incremental Algorithm for Maintaining the Dominator
+//               Tree of a Reducible Flowgraph.

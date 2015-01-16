@@ -42,9 +42,9 @@ Item {
             id: row2
             height: childrenRect.height
             move: Transition{NumberAnimation{properties:"x"}}
-            Repeater{ 
-                id: repeater 
-                model: 0; 
+            Repeater{
+                id: repeater
+                model: 0;
                 delegate: Component{ Rectangle { color: "yellow"; width:20; height:20;}}
             }
             Rectangle{id: r2a; width:20; height:20; color: "red"}

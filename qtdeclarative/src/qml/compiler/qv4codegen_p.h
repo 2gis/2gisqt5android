@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -256,28 +248,20 @@ protected:
     struct Loop {
         AST::LabelledStatement *labelledStatement;
         AST::Statement *node;
-        QV4::IR::BasicBlock *groupStartBlock;
         QV4::IR::BasicBlock *breakBlock;
         QV4::IR::BasicBlock *continueBlock;
         Loop *parent;
         ScopeAndFinally *scopeAndFinally;
 
-        Loop(AST::Statement *node, QV4::IR::BasicBlock *groupStartBlock, QV4::IR::BasicBlock *breakBlock, QV4::IR::BasicBlock *continueBlock, Loop *parent)
-            : labelledStatement(0), node(node), groupStartBlock(groupStartBlock), breakBlock(breakBlock), continueBlock(continueBlock), parent(parent) {}
+        Loop(AST::Statement *node, QV4::IR::BasicBlock *breakBlock, QV4::IR::BasicBlock *continueBlock, Loop *parent)
+            : labelledStatement(0), node(node), breakBlock(breakBlock), continueBlock(continueBlock), parent(parent) {}
     };
 
     void enterEnvironment(AST::Node *node);
     void leaveEnvironment();
 
-    void enterLoop(AST::Statement *node, QV4::IR::BasicBlock *startBlock, QV4::IR::BasicBlock *breakBlock, QV4::IR::BasicBlock *continueBlock);
+    void enterLoop(AST::Statement *node, QV4::IR::BasicBlock *breakBlock, QV4::IR::BasicBlock *continueBlock);
     void leaveLoop();
-    QV4::IR::BasicBlock *groupStartBlock() const
-    {
-        for (Loop *it = _loop; it; it = it->parent)
-            if (it->groupStartBlock)
-                return it->groupStartBlock;
-        return 0;
-    }
     QV4::IR::BasicBlock *exceptionHandler() const
     {
         if (_exceptionHandlers.isEmpty())
@@ -299,11 +283,11 @@ protected:
     QV4::IR::Expr *subscript(QV4::IR::Expr *base, QV4::IR::Expr *index);
     QV4::IR::Expr *argument(QV4::IR::Expr *expr);
     QV4::IR::Expr *reference(QV4::IR::Expr *expr);
-    QV4::IR::Expr *unop(QV4::IR::AluOp op, QV4::IR::Expr *expr);
-    QV4::IR::Expr *binop(QV4::IR::AluOp op, QV4::IR::Expr *left, QV4::IR::Expr *right);
+    QV4::IR::Expr *unop(QV4::IR::AluOp op, QV4::IR::Expr *expr, const AST::SourceLocation &loc = AST::SourceLocation());
+    QV4::IR::Expr *binop(QV4::IR::AluOp op, QV4::IR::Expr *left, QV4::IR::Expr *right, const AST::SourceLocation &loc = AST::SourceLocation());
     QV4::IR::Expr *call(QV4::IR::Expr *base, QV4::IR::ExprList *args);
-    void move(QV4::IR::Expr *target, QV4::IR::Expr *source, QV4::IR::AluOp op = QV4::IR::OpInvalid);
-    void cjump(QV4::IR::Expr *cond, QV4::IR::BasicBlock *iftrue, QV4::IR::BasicBlock *iffalse);
+    QV4::IR::Stmt *move(QV4::IR::Expr *target, QV4::IR::Expr *source, QV4::IR::AluOp op = QV4::IR::OpInvalid);
+    QV4::IR::Stmt *cjump(QV4::IR::Expr *cond, QV4::IR::BasicBlock *iftrue, QV4::IR::BasicBlock *iffalse);
 
     // Returns index in _module->functions
     int defineFunction(const QString &name, AST::Node *ast,

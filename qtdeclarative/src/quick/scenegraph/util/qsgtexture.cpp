@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtQuick module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -47,6 +39,10 @@
 #include <private/qqmlglobal_p.h>
 #include <QtGui/qguiapplication.h>
 #include <QtGui/qpa/qplatformnativeinterface.h>
+#include <QtGui/qopenglcontext.h>
+#include <QtGui/qopenglfunctions.h>
+
+#include <private/qsgmaterialshader_p.h>
 
 #if defined(Q_OS_LINUX) && !defined(Q_OS_ANDROID) && !defined(__UCLIBC__)
 #define CAN_BACKTRACE_EXECINFO
@@ -65,14 +61,12 @@
 #include <QHash>
 #endif
 
+static QElapsedTimer qsg_renderer_timer;
+
 #ifndef QT_NO_DEBUG
 static bool qsg_leak_check = !qgetenv("QML_LEAK_CHECK").isEmpty();
 #endif
 
-#ifndef QSG_NO_RENDER_TIMING
-static bool qsg_render_timing = !qgetenv("QSG_RENDER_TIMING").isEmpty();
-static QElapsedTimer qsg_renderer_timer;
-#endif
 
 #ifndef GL_BGRA
 #define GL_BGRA 0x80E1
@@ -206,7 +200,7 @@ static void qt_debug_remove_texture(QSGTexture* texture)
     arbitrary input textures, such as YUV video frames or 8 bit alpha
     masks. The scene graph backend provides a default implementation
     of normal color textures. As the implementation of these may be
-    hardware specific, they are are constructed via the factory
+    hardware specific, they are constructed via the factory
     function QQuickWindow::createTextureFromImage().
 
     The texture is a wrapper around an OpenGL texture, which texture
@@ -273,6 +267,23 @@ static void qt_debug_remove_texture(QSGTexture* texture)
     \internal
  */
 
+#ifndef QT_NO_DEBUG
+Q_GLOBAL_STATIC(QSet<QSGTexture *>, qsg_valid_texture_set)
+Q_GLOBAL_STATIC(QMutex, qsg_valid_texture_mutex)
+
+bool qsg_safeguard_texture(QSGTexture *texture)
+{
+    QMutexLocker locker(qsg_valid_texture_mutex());
+    if (!qsg_valid_texture_set()->contains(texture)) {
+        qWarning() << "Invalid texture accessed:" << (void *) texture;
+        qsg_set_material_failure();
+        QOpenGLContext::currentContext()->functions()->glBindTexture(GL_TEXTURE_2D, 0);
+        return false;
+    }
+    return true;
+}
+#endif
+
 /*!
     Constructs the QSGTexture base class.
  */
@@ -282,6 +293,9 @@ QSGTexture::QSGTexture()
 #ifndef QT_NO_DEBUG
     if (qsg_leak_check)
         qt_debug_add_texture(this);
+
+    QMutexLocker locker(qsg_valid_texture_mutex());
+    qsg_valid_texture_set()->insert(this);
 #endif
 }
 
@@ -293,6 +307,9 @@ QSGTexture::~QSGTexture()
 #ifndef QT_NO_DEBUG
     if (qsg_leak_check)
         qt_debug_remove_texture(this);
+
+    QMutexLocker locker(qsg_valid_texture_mutex());
+    qsg_valid_texture_set()->remove(this);
 #endif
 }
 
@@ -496,6 +513,7 @@ QSGTexture::WrapMode QSGTexture::verticalWrapMode() const
 void QSGTexture::updateBindOptions(bool force)
 {
     Q_D(QSGTexture);
+    QOpenGLFunctions *funcs = QOpenGLContext::currentContext()->functions();
     force |= isAtlasTexture();
 
     if (force || d->filteringChanged) {
@@ -509,8 +527,8 @@ void QSGTexture::updateBindOptions(bool force)
             else if (d->mipmapMode == Linear)
                 minFilter = linear ? GL_LINEAR_MIPMAP_LINEAR : GL_NEAREST_MIPMAP_LINEAR;
         }
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, minFilter);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, magFilter);
+        funcs->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, minFilter);
+        funcs->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, magFilter);
         d->filteringChanged = false;
     }
 
@@ -524,8 +542,8 @@ void QSGTexture::updateBindOptions(bool force)
                 qWarning("Scene Graph: This system does not support the REPEAT wrap mode for non-power-of-two textures.");
         }
 #endif
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, d->horizontalWrap == Repeat ? GL_REPEAT : GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, d->verticalWrap == Repeat ? GL_REPEAT : GL_CLAMP_TO_EDGE);
+        funcs->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, d->horizontalWrap == Repeat ? GL_REPEAT : GL_CLAMP_TO_EDGE);
+        funcs->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, d->verticalWrap == Repeat ? GL_REPEAT : GL_CLAMP_TO_EDGE);
         d->wrapChanged = false;
     }
 }
@@ -545,8 +563,8 @@ QSGPlainTexture::QSGPlainTexture()
 
 QSGPlainTexture::~QSGPlainTexture()
 {
-    if (m_texture_id && m_owns_texture)
-        glDeleteTextures(1, &m_texture_id);
+    if (m_texture_id && m_owns_texture && QOpenGLContext::currentContext())
+        QOpenGLContext::currentContext()->functions()->glDeleteTextures(1, &m_texture_id);
 }
 
 void qsg_swizzleBGRAToRGBA(QImage *image)
@@ -579,7 +597,7 @@ int QSGPlainTexture::textureId() const
             return 0;
         } else if (m_texture_id == 0){
             // Generate a texture id for use later and return it.
-            glGenTextures(1, &const_cast<QSGPlainTexture *>(this)->m_texture_id);
+            QOpenGLContext::currentContext()->functions()->glGenTextures(1, &const_cast<QSGPlainTexture *>(this)->m_texture_id);
             return m_texture_id;
         }
     }
@@ -589,7 +607,7 @@ int QSGPlainTexture::textureId() const
 void QSGPlainTexture::setTextureId(int id)
 {
     if (m_texture_id && m_owns_texture)
-        glDeleteTextures(1, &m_texture_id);
+        QOpenGLContext::currentContext()->functions()->glDeleteTextures(1, &m_texture_id);
 
     m_texture_id = id;
     m_dirty_texture = false;
@@ -600,11 +618,12 @@ void QSGPlainTexture::setTextureId(int id)
 
 void QSGPlainTexture::bind()
 {
+    QOpenGLContext *context = QOpenGLContext::currentContext();
+    QOpenGLFunctions *funcs = context->functions();
     if (!m_dirty_texture) {
-        glBindTexture(GL_TEXTURE_2D, m_texture_id);
+        funcs->glBindTexture(GL_TEXTURE_2D, m_texture_id);
         if (mipmapFiltering() != QSGTexture::None && !m_mipmaps_generated) {
-            QOpenGLContext *ctx = QOpenGLContext::currentContext();
-            ctx->functions()->glGenerateMipmap(GL_TEXTURE_2D);
+            funcs->glGenerateMipmap(GL_TEXTURE_2D);
             m_mipmaps_generated = true;
         }
         updateBindOptions(m_dirty_bind_options);
@@ -614,25 +633,20 @@ void QSGPlainTexture::bind()
 
     m_dirty_texture = false;
 
-#ifndef QSG_NO_RENDER_TIMING
-    bool profileFrames = qsg_render_timing || QQuickProfiler::enabled;
+    bool profileFrames = QSG_LOG_TIME_TEXTURE().isDebugEnabled() ||
+            QQuickProfiler::profilingSceneGraph();
     if (profileFrames)
         qsg_renderer_timer.start();
-#endif
 
     if (m_image.isNull()) {
         if (m_texture_id && m_owns_texture) {
-            glDeleteTextures(1, &m_texture_id);
-#ifndef QSG_NO_RENDER_TIMING
-            if (qsg_render_timing) {
-                qDebug("   - texture deleted in %dms (size: %dx%d)",
-                       (int) qsg_renderer_timer.elapsed(),
-                       m_texture_size.width(),
-                       m_texture_size.height());
-            }
-            Q_QUICK_SG_PROFILE1(QQuickProfiler::SceneGraphTextureDeletion, (
+            funcs->glDeleteTextures(1, &m_texture_id);
+            qCDebug(QSG_LOG_TIME_TEXTURE, "plain texture deleted in %dms - %dx%d",
+                    (int) qsg_renderer_timer.elapsed(),
+                    m_texture_size.width(),
+                    m_texture_size.height());
+            Q_QUICK_SG_PROFILE(QQuickProfiler::SceneGraphTextureDeletion, (
                     qsg_renderer_timer.nsecsElapsed()));
-#endif
         }
         m_texture_id = 0;
         m_texture_size = QSize();
@@ -642,30 +656,42 @@ void QSGPlainTexture::bind()
     }
 
     if (m_texture_id == 0)
-        glGenTextures(1, &m_texture_id);
-    glBindTexture(GL_TEXTURE_2D, m_texture_id);
+        funcs->glGenTextures(1, &m_texture_id);
+    funcs->glBindTexture(GL_TEXTURE_2D, m_texture_id);
 
-#ifndef QSG_NO_RENDER_TIMING
     qint64 bindTime = 0;
     if (profileFrames)
         bindTime = qsg_renderer_timer.nsecsElapsed();
-#endif
 
     // ### TODO: check for out-of-memory situations...
-    int w = m_image.width();
-    int h = m_image.height();
 
     QImage tmp = (m_image.format() == QImage::Format_RGB32 || m_image.format() == QImage::Format_ARGB32_Premultiplied)
                  ? m_image
                  : m_image.convertToFormat(QImage::Format_ARGB32_Premultiplied);
+
+    // Downscale the texture to fit inside the max texture limit if it is too big.
+    // It would be better if the image was already downscaled to the right size,
+    // but this information is not always available at that time, so as a last
+    // resort we can do it here. Texture coordinates are normalized, so it
+    // won't cause any problems and actual texture sizes will be written
+    // based on QSGTexture::textureSize which is updated after this, so that
+    // should be ok.
+    int max;
+    if (QSGRenderContext *rc = QSGRenderContext::from(context))
+        max = rc->maxTextureSize();
+    else
+        funcs->glGetIntegerv(GL_MAX_TEXTURE_SIZE, &max);
+    if (tmp.width() > max || tmp.height() > max) {
+        tmp = tmp.scaled(qMin(max, tmp.width()), qMin(max, tmp.height()), Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+        m_texture_size = tmp.size();
+    }
+
     if (tmp.width() * 4 != tmp.bytesPerLine())
         tmp = tmp.copy();
 
-#ifndef QSG_NO_RENDER_TIMING
     qint64 convertTime = 0;
     if (profileFrames)
         convertTime = qsg_renderer_timer.nsecsElapsed();
-#endif
 
     updateBindOptions(m_dirty_bind_options);
 
@@ -683,7 +709,6 @@ void QSGPlainTexture::bind()
     static bool wrongfullyReportsBgra8888Support = false;
 #endif
 
-    QOpenGLContext *context = QOpenGLContext::currentContext();
     if (context->hasExtension(QByteArrayLiteral("GL_EXT_bgra"))) {
         externalFormat = GL_BGRA;
 #ifdef QT_OPENGL_ES
@@ -706,54 +731,45 @@ void QSGPlainTexture::bind()
         qsg_swizzleBGRAToRGBA(&tmp);
     }
 
-#ifndef QSG_NO_RENDER_TIMING
     qint64 swizzleTime = 0;
     if (profileFrames)
         swizzleTime = qsg_renderer_timer.nsecsElapsed();
-#endif
-    glTexImage2D(GL_TEXTURE_2D, 0, internalFormat, w, h, 0, externalFormat, GL_UNSIGNED_BYTE, tmp.constBits());
 
-#ifndef QSG_NO_RENDER_TIMING
+    funcs->glTexImage2D(GL_TEXTURE_2D, 0, internalFormat, m_texture_size.width(), m_texture_size.height(), 0, externalFormat, GL_UNSIGNED_BYTE, tmp.constBits());
+
     qint64 uploadTime = 0;
     if (profileFrames)
         uploadTime = qsg_renderer_timer.nsecsElapsed();
-#endif
-
 
     if (mipmapFiltering() != QSGTexture::None) {
-        context->functions()->glGenerateMipmap(GL_TEXTURE_2D);
+        funcs->glGenerateMipmap(GL_TEXTURE_2D);
         m_mipmaps_generated = true;
     }
 
-#ifndef QSG_NO_RENDER_TIMING
     qint64 mipmapTime = 0;
-    if (qsg_render_timing) {
+    if (profileFrames) {
         mipmapTime = qsg_renderer_timer.nsecsElapsed();
-
-        qDebug("   - plaintexture(%dx%d) bind=%d, convert=%d, swizzle=%d (%s->%s), upload=%d, mipmap=%d, total=%d",
-               m_texture_size.width(), m_texture_size.height(),
-               int(bindTime/1000000),
-               int((convertTime - bindTime)/1000000),
-               int((swizzleTime - convertTime)/1000000),
-               externalFormat == GL_BGRA ? "BGRA" : "RGBA",
-               internalFormat == GL_BGRA ? "BGRA" : "RGBA",
-               int((uploadTime - swizzleTime)/1000000),
-               int((mipmapTime - uploadTime)/1000000),
-               (int) qsg_renderer_timer.elapsed());
-
+        qCDebug(QSG_LOG_TIME_TEXTURE,
+                "plain texture uploaded in: %dms (%dx%d), bind=%d, convert=%d, swizzle=%d (%s->%s), upload=%d, mipmap=%d%s",
+                int(mipmapTime / 1000000),
+                m_texture_size.width(), m_texture_size.height(),
+                int(bindTime / 1000000),
+                int((convertTime - bindTime)/1000000),
+                int((swizzleTime - convertTime)/1000000),
+                (externalFormat == GL_BGRA ? "BGRA" : "RGBA"),
+                (internalFormat == GL_BGRA ? "BGRA" : "RGBA"),
+                int((uploadTime - swizzleTime)/1000000),
+                int((mipmapTime - uploadTime)/1000000),
+                m_texture_size != m_image.size() ? " (scaled to GL_MAX_TEXTURE_SIZE)" : "");
     }
 
-    Q_QUICK_SG_PROFILE1(QQuickProfiler::SceneGraphTexturePrepare, (
+    Q_QUICK_SG_PROFILE(QQuickProfiler::SceneGraphTexturePrepare, (
             bindTime,
             convertTime - bindTime,
             swizzleTime - convertTime,
             uploadTime - swizzleTime,
             qsg_renderer_timer.nsecsElapsed() - uploadTime));
 
-#endif
-
-
-    m_texture_size = QSize(w, h);
     m_texture_rect = QRectF(0, 0, 1, 1);
 
     m_dirty_bind_options = false;

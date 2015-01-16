@@ -93,14 +93,14 @@ public slots:
         }
 
         m_renderFbo->bind();
-        glViewport(0, 0, m_size.width(), m_size.height());
+        context->functions()->glViewport(0, 0, m_size.width(), m_size.height());
 
         m_logoRenderer->render();
 
         // We need to flush the contents to the FBO before posting
         // the texture to the other thread, otherwise, we might
         // get unexpected results.
-        glFlush();
+        context->functions()->glFlush();
 
         m_renderFbo->bindDefault();
         qSwap(m_renderFbo, m_displayFbo);
@@ -191,6 +191,8 @@ public slots:
             delete m_texture;
             m_texture = m_window->createTextureFromId(newId, size);
             setTexture(m_texture);
+
+            markDirty(DirtyMaterial);
 
             // This will notify the rendering thread that the texture is now being rendered
             // and it can start rendering to the other one.

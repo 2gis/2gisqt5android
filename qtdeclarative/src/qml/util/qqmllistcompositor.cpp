@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -951,7 +943,7 @@ void QQmlListCompositor::clear()
 void QQmlListCompositor::listItemsInserted(
         QVector<Insert> *translatedInsertions,
         void *list,
-        const QVector<QQmlChangeSet::Insert> &insertions,
+        const QVector<QQmlChangeSet::Change> &insertions,
         const QVector<MovedFlags> *movedFlags)
 {
     QT_QML_TRACE_LISTCOMPOSITOR(<< list << insertions)
@@ -966,7 +958,7 @@ void QQmlListCompositor::listItemsInserted(
             it.incrementIndexes(it->count);
             continue;
         }
-        foreach (const QQmlChangeSet::Insert &insertion, insertions) {
+        foreach (const QQmlChangeSet::Change &insertion, insertions) {
             int offset = insertion.index - it->index;
             if ((offset > 0 && offset < it->count)
                     || (offset == 0 && it->prepend())
@@ -1064,8 +1056,8 @@ void QQmlListCompositor::listItemsInserted(
     QT_QML_TRACE_LISTCOMPOSITOR(<< list << index << count)
     Q_ASSERT(count > 0);
 
-    QVector<QQmlChangeSet::Insert> insertions;
-    insertions.append(QQmlChangeSet::Insert(index, count));
+    QVector<QQmlChangeSet::Change> insertions;
+    insertions.append(QQmlChangeSet::Change(index, count));
 
     listItemsInserted(translatedInsertions, list, insertions);
 }
@@ -1073,8 +1065,8 @@ void QQmlListCompositor::listItemsInserted(
 void QQmlListCompositor::listItemsRemoved(
         QVector<Remove> *translatedRemovals,
         void *list,
-        QVector<QQmlChangeSet::Remove> *removals,
-        QVector<QQmlChangeSet::Insert> *insertions,
+        QVector<QQmlChangeSet::Change> *removals,
+        QVector<QQmlChangeSet::Change> *insertions,
         QVector<MovedFlags> *movedFlags)
 {
     QT_QML_TRACE_LISTCOMPOSITOR(<< list << *removals)
@@ -1086,7 +1078,7 @@ void QQmlListCompositor::listItemsRemoved(
             continue;
         }
         bool removed = false;
-        for (QVector<QQmlChangeSet::Remove>::iterator removal = removals->begin();
+        for (QVector<QQmlChangeSet::Change>::iterator removal = removals->begin();
                 !removed && removal != removals->end();
                 ++removal) {
             int relativeIndex = removal->index - it->index;
@@ -1104,7 +1096,7 @@ void QQmlListCompositor::listItemsRemoved(
                 }
                 if (removal->isMove()) {
                     // If the removal was part of a move find the corresponding insert.
-                    QVector<QQmlChangeSet::Insert>::iterator insertion = insertions->begin();
+                    QVector<QQmlChangeSet::Change>::iterator insertion = insertions->begin();
                     for (; insertion != insertions->end() && insertion->moveId != removal->moveId;
                             ++insertion) {}
                     Q_ASSERT(insertion != insertions->end());
@@ -1114,11 +1106,11 @@ void QQmlListCompositor::listItemsRemoved(
                         // If the remove started before the current range, split it and the
                         // corresponding insert so we're only working with intersecting part.
                         int splitMoveId = ++m_moveId;
-                        removal = removals->insert(removal, QQmlChangeSet::Remove(
+                        removal = removals->insert(removal, QQmlChangeSet::Change(
                                 removal->index, -relativeIndex, splitMoveId));
                         ++removal;
                         removal->count -= -relativeIndex;
-                        insertion = insertions->insert(insertion, QQmlChangeSet::Insert(
+                        insertion = insertions->insert(insertion, QQmlChangeSet::Change(
                                 insertion->index, -relativeIndex, splitMoveId));
                         ++insertion;
                         insertion->index += -relativeIndex;
@@ -1135,10 +1127,10 @@ void QQmlListCompositor::listItemsRemoved(
                         if (removeCount < removal->count) {
                             // If the remove doesn't encompass all of the current range,
                             // split it and the corresponding insert.
-                            removal = removals->insert(removal, QQmlChangeSet::Remove(
+                            removal = removals->insert(removal, QQmlChangeSet::Change(
                                     removal->index, removeCount, translatedRemoval.moveId));
                             ++removal;
-                            insertion = insertions->insert(insertion, QQmlChangeSet::Insert(
+                            insertion = insertions->insert(insertion, QQmlChangeSet::Change(
                                     insertion->index, removeCount, translatedRemoval.moveId));
                             ++insertion;
 
@@ -1253,8 +1245,8 @@ void QQmlListCompositor::listItemsRemoved(
     QT_QML_TRACE_LISTCOMPOSITOR(<< list << index << count)
     Q_ASSERT(count >= 0);
 
-    QVector<QQmlChangeSet::Remove> removals;
-    removals.append(QQmlChangeSet::Remove(index, count));
+    QVector<QQmlChangeSet::Change> removals;
+    removals.append(QQmlChangeSet::Change(index, count));
     listItemsRemoved(translatedRemovals, list, &removals, 0, 0);
 }
 
@@ -1280,11 +1272,11 @@ void QQmlListCompositor::listItemsMoved(
     QT_QML_TRACE_LISTCOMPOSITOR(<< list << from << to << count)
     Q_ASSERT(count >= 0);
 
-    QVector<QQmlChangeSet::Remove> removals;
-    QVector<QQmlChangeSet::Insert> insertions;
+    QVector<QQmlChangeSet::Change> removals;
+    QVector<QQmlChangeSet::Change> insertions;
     QVector<MovedFlags> movedFlags;
-    removals.append(QQmlChangeSet::Remove(from, count, 0));
-    insertions.append(QQmlChangeSet::Insert(to, count, 0));
+    removals.append(QQmlChangeSet::Change(from, count, 0));
+    insertions.append(QQmlChangeSet::Change(to, count, 0));
 
     listItemsRemoved(translatedRemovals, list, &removals, &insertions, &movedFlags);
     listItemsInserted(translatedInsertions, list, insertions, &movedFlags);
@@ -1342,16 +1334,16 @@ void QQmlListCompositor::listItemsChanged(
 void QQmlListCompositor::transition(
         Group from,
         Group to,
-        QVector<QQmlChangeSet::Remove> *removes,
-        QVector<QQmlChangeSet::Insert> *inserts)
+        QVector<QQmlChangeSet::Change> *removes,
+        QVector<QQmlChangeSet::Change> *inserts)
 {
     int removeCount = 0;
     for (iterator it(m_ranges.next, 0, Default, m_groupCount); *it != &m_ranges; *it = it->next) {
         if (it == from && it != to) {
-            removes->append(QQmlChangeSet::Remove(it.index[from]- removeCount, it->count));
+            removes->append(QQmlChangeSet::Change(it.index[from]- removeCount, it->count));
             removeCount += it->count;
         } else if (it != from && it == to) {
-            inserts->append(QQmlChangeSet::Insert(it.index[to], it->count));
+            inserts->append(QQmlChangeSet::Change(it.index[to], it->count));
         }
         it.incrementIndexes(it->count);
     }

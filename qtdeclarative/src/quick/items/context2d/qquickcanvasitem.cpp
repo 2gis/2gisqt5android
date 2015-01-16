@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtQuick module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -59,6 +51,23 @@
 #include <private/qv4scopedvalue_p.h>
 
 QT_BEGIN_NAMESPACE
+
+class QQuickCanvasNode : public QSGSimpleTextureNode
+{
+public:
+    QQuickCanvasNode() {
+        qsgnode_set_description(this, QStringLiteral("canvasnode"));
+        setOwnsTexture(true);
+    }
+};
+
+class QQuickCanvasTextureProvider : public QSGTextureProvider
+{
+public:
+    QQuickCanvasNode *node;
+    QSGTexture *texture() const Q_DECL_OVERRIDE { return node ? node->texture() : 0; }
+    void fireTextureChanged() { emit textureChanged(); }
+};
 
 QQuickCanvasPixmap::QQuickCanvasPixmap(const QImage& image)
     : m_pixmap(0)
@@ -166,6 +175,8 @@ public:
     QHash<QUrl, QQmlRefPointer<QQuickCanvasPixmap> > pixmaps;
     QUrl baseUrl;
     QMap<int, QV4::PersistentValue> animationCallbacks;
+    mutable QQuickCanvasTextureProvider *textureProvider;
+    QQuickCanvasNode *node;
 };
 
 QQuickCanvasItemPrivate::QQuickCanvasItemPrivate()
@@ -179,6 +190,8 @@ QQuickCanvasItemPrivate::QQuickCanvasItemPrivate()
     , available(false)
     , renderTarget(QQuickCanvasItem::Image)
     , renderStrategy(QQuickCanvasItem::Immediate)
+    , textureProvider(0)
+    , node(0)
 {
     implicitAntialiasing = true;
 }
@@ -262,7 +275,7 @@ QQuickCanvasItemPrivate::~QQuickCanvasItemPrivate()
     \l{http://en.wikipedia.org/wiki/Screen_tearing}{screen tearing}) which will further
     impact pixel operations with \c Canvas.FrambufferObject render target.
 
-    \section1 Tips for Porting Existing HTML5 Canvas applications
+    \section1 Tips for Porting Existing HTML5 Canvas Applications
 
     Although the Canvas item is provides a HTML5 like API, HTML5 canvas
     applications need to be modified to run in the Canvas item:
@@ -277,6 +290,11 @@ QQuickCanvasItemPrivate::~QQuickCanvasItemPrivate()
        them in the \c onImageLoaded handler.
     \endlist
 
+    Starting Qt 5.4, the Canvas is a
+    \l{QSGTextureProvider}{texture provider}
+    and can be used directly in \l {ShaderEffect}{ShaderEffects} and other
+    classes that consume texture providers.
+
     \sa Context2D
 */
 
@@ -290,10 +308,12 @@ QQuickCanvasItem::~QQuickCanvasItem()
 {
     Q_D(QQuickCanvasItem);
     delete d->context;
+    if (d->textureProvider)
+        QQuickWindowQObjectCleanupJob::schedule(window(), d->textureProvider);
 }
 
 /*!
-    \qmlproperty size QtQuick::Canvas::available
+    \qmlproperty bool QtQuick::Canvas::available
 
     Indicates when Canvas is able to provide a drawing context to operate on.
 */
@@ -604,6 +624,22 @@ void QQuickCanvasItem::releaseResources()
         delete d->context;
         d->context = 0;
     }
+    d->node = 0; // managed by the scene graph, just reset the pointer
+    if (d->textureProvider) {
+        QQuickWindowQObjectCleanupJob::schedule(window(), d->textureProvider);
+        d->textureProvider = 0;
+    }
+}
+
+void QQuickCanvasItem::invalidateSceneGraph()
+{
+    Q_D(QQuickCanvasItem);
+    if (d->context)
+        d->context->deleteLater();
+    d->context = 0;
+    d->node = 0; // managed by the scene graph, just reset the pointer
+    delete d->textureProvider;
+    d->textureProvider = 0;
 }
 
 void QQuickCanvasItem::componentComplete()
@@ -631,7 +667,10 @@ void QQuickCanvasItem::itemChange(QQuickItem::ItemChange change, const QQuickIte
         return;
 
     d->window = value.window;
-    if (d->window->openglContext() != 0) // available context == initialized
+    QSGRenderContext *context = QQuickWindowPrivate::get(d->window)->context;
+
+    // Rendering to FramebufferObject needs a valid OpenGL context.
+    if (context != 0 && (d->renderTarget != FramebufferObject || context->isValid()))
         sceneGraphInitialized();
     else
         connect(d->window, SIGNAL(sceneGraphInitialized()), SLOT(sceneGraphInitialized()));
@@ -678,27 +717,25 @@ void QQuickCanvasItem::updatePolish()
     }
 }
 
-class QQuickCanvasNode : public QSGSimpleTextureNode
-{
-public:
-    ~QQuickCanvasNode()
-    {
-        delete texture();
-    }
-};
-
 QSGNode *QQuickCanvasItem::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData *)
 {
     Q_D(QQuickCanvasItem);
 
     if (!d->context || d->canvasWindow.size().isEmpty()) {
+        if (d->textureProvider) {
+            d->textureProvider->node = 0;
+            d->textureProvider->fireTextureChanged();
+        }
         delete oldNode;
         return 0;
     }
 
     QQuickCanvasNode *node = static_cast<QQuickCanvasNode*>(oldNode);
-    if (!node)
+    if (!node) {
         node = new QQuickCanvasNode();
+        d->node = node;
+    }
+
 
     if (d->smooth)
         node->setFiltering(QSGTexture::Linear);
@@ -712,30 +749,59 @@ QSGNode *QQuickCanvasItem::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData
 
     QQuickContext2D *ctx = qobject_cast<QQuickContext2D *>(d->context);
     QQuickContext2DTexture *factory = ctx->texture();
-    QSGTexture *texture = factory->textureForNextFrame(node->texture());
+    QSGTexture *texture = factory->textureForNextFrame(node->texture(), window());
     if (!texture) {
         delete node;
+        d->node = 0;
+        if (d->textureProvider) {
+            d->textureProvider->node = 0;
+            d->textureProvider->fireTextureChanged();
+        }
         return 0;
     }
 
     node->setTexture(texture);
     node->setRect(QRectF(QPoint(0, 0), d->canvasWindow.size()));
+
+    if (d->textureProvider) {
+        d->textureProvider->node = node;
+        d->textureProvider->fireTextureChanged();
+    }
     return node;
 }
 
-/*!
-    \qmlmethod object QtQuick::Canvas::getContext(string contextId, any... args)
+bool QQuickCanvasItem::isTextureProvider() const
+{
+    return true;
+}
 
-    Returns a drawing context or null if no context available.
+QSGTextureProvider *QQuickCanvasItem::textureProvider() const
+{
+    Q_D(const QQuickCanvasItem);
+    QQuickWindow *w = window();
+    if (!w || !w->openglContext() || QThread::currentThread() != w->openglContext()->thread()) {
+        qWarning("QQuickCanvasItem::textureProvider: can only be queried on the rendering thread of an exposed window");
+        return 0;
+    }
+    if (!d->textureProvider)
+        d->textureProvider = new QQuickCanvasTextureProvider;
+    d->textureProvider->node = d->node;
+    return d->textureProvider;
+}
+
+/*!
+    \qmlmethod object QtQuick::Canvas::getContext(string contextId, ... args)
+
+    Returns a drawing context, or \c null if no context is available.
 
     The \a contextId parameter names the required context. The Canvas item
     will return a context that implements the required drawing mode. After the
-    first call to getContext any subsequent call to getContext with the same
+    first call to getContext, any subsequent call to getContext with the same
     contextId will return the same context object.
 
     If the context type is not supported or the canvas has previously been
-    requested to provide a different and incompatible context type, null will
-    be returned.
+    requested to provide a different and incompatible context type, \c null
+    will be returned.
 
     Canvas only supports a 2d context.
 */

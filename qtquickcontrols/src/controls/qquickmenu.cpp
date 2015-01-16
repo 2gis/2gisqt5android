@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the Qt Quick Controls module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -51,7 +43,7 @@
 #include <QtGui/qpa/qplatformtheme.h>
 #include <QtGui/qpa/qplatformmenu.h>
 #include <qquickitem.h>
-#include <QtQuick/private/qquickrendercontrol_p.h>
+#include <QtQuick/QQuickRenderControl>
 
 QT_BEGIN_NAMESPACE
 
@@ -375,14 +367,25 @@ QQuickWindow *QQuickMenu::findParentWindow()
 
 void QQuickMenu::popup()
 {
-    QPoint mousePos = QCursor::pos();
-    if (QQuickWindow *parentWindow = findParentWindow())
+    QQuickWindow *quickWindow = findParentWindow();
+    QPoint renderOffset;
+    QWindow *renderWindow = QQuickRenderControl::renderWindowFor(quickWindow, &renderOffset);
+    QWindow *parentWindow = renderWindow ? renderWindow : quickWindow;
+    QScreen *screen = parentWindow ? parentWindow->screen() : qGuiApp->primaryScreen();
+    QPoint mousePos = QCursor::pos(screen);
+
+    if (mousePos.x() == int(qInf())) {
+        // ### fixme: no mouse pos registered. Get pos from touch...
+        mousePos = screen->availableGeometry().center();
+    }
+
+    if (parentWindow)
         mousePos = parentWindow->mapFromGlobal(mousePos);
 
-    __popup(mousePos.x(), mousePos.y());
+    __popup(QRectF(mousePos.x() - renderOffset.x(), mousePos.y() - renderOffset.y(), 0, 0));
 }
 
-void QQuickMenu::__popup(qreal x, qreal y, int atItemIndex)
+void QQuickMenu::__popup(const QRectF &targetRect, int atItemIndex, MenuType menuType)
 {
     if (popupVisible()) {
         __closeMenu();
@@ -397,19 +400,23 @@ void QQuickMenu::__popup(qreal x, qreal y, int atItemIndex)
     QQuickMenuBase *atItem = menuItemAtIndex(atItemIndex);
 
     QQuickWindow *quickWindow = findParentWindow();
-    QWindow *parentWindow = quickWindow;
-    QWindow *renderWindow = QQuickRenderControl::renderWindowFor(static_cast<QQuickWindow *>(parentWindow));
-    if (renderWindow)
-        parentWindow = renderWindow; // may not be a QQuickWindow anymore (happens when using QQuickWidget)
+    QPoint renderOffset;
+    QWindow *renderWindow = QQuickRenderControl::renderWindowFor(quickWindow, &renderOffset);
+    QWindow *parentWindow = renderWindow ? renderWindow : quickWindow;
+    // parentWindow may not be a QQuickWindow (happens when using QQuickWidget)
 
     if (m_platformMenu) {
-        QPointF screenPosition(x + m_xOffset, y + m_yOffset);
+        QRectF globalTargetRect = targetRect.translated(m_xOffset, m_yOffset);
         if (visualItem()) {
-            if (qGuiApp->isRightToLeft())
-                screenPosition.rx() -= qMax(static_cast<qreal>(m_minimumWidth), m_menuContentItem->width());
-            screenPosition = visualItem()->mapToScene(screenPosition);
+            if (qGuiApp->isRightToLeft()) {
+                qreal w = qMax(static_cast<qreal>(m_minimumWidth), m_menuContentItem->width());
+                globalTargetRect.moveLeft(w - targetRect.x() - targetRect.width());
+            }
+            globalTargetRect = visualItem()->mapRectToScene(globalTargetRect);
         }
-        m_platformMenu->showPopup(parentWindow, screenPosition.toPoint(), atItem ? atItem->platformItem() : 0);
+        globalTargetRect.translate(renderOffset);
+        m_platformMenu->setMenuType(QPlatformMenu::MenuType(menuType));
+        m_platformMenu->showPopup(parentWindow, globalTargetRect.toRect(), atItem ? atItem->platformItem() : 0);
     } else {
         m_popupWindow = new QQuickMenuPopupWindow();
         if (visualItem())
@@ -422,7 +429,8 @@ void QQuickMenu::__popup(qreal x, qreal y, int atItemIndex)
         connect(m_popupWindow, SIGNAL(visibleChanged(bool)), this, SLOT(windowVisibleChanged(bool)));
         connect(m_popupWindow, SIGNAL(geometryChanged()), this, SIGNAL(__popupGeometryChanged()));
 
-        m_popupWindow->setPosition(x + m_xOffset, y + m_yOffset);
+        m_popupWindow->setPosition(targetRect.x() + m_xOffset + renderOffset.x(),
+                                   targetRect.y() + targetRect.height() + m_yOffset + renderOffset.y());
         m_popupWindow->show();
     }
 }
@@ -462,12 +470,16 @@ void QQuickMenu::__closeMenu()
 
 void QQuickMenu::__dismissMenu()
 {
-    QQuickMenuPopupWindow *topMenuWindow = m_popupWindow;
-    while (topMenuWindow) {
-        QQuickMenuPopupWindow *pw = qobject_cast<QQuickMenuPopupWindow *>(topMenuWindow->transientParent());
-        if (!pw)
-            topMenuWindow->dismissPopup();
-        topMenuWindow = pw;
+    if (m_platformMenu) {
+        m_platformMenu->dismiss();
+    } else {
+        QQuickMenuPopupWindow *topMenuWindow = m_popupWindow;
+        while (topMenuWindow) {
+            QQuickMenuPopupWindow *pw = qobject_cast<QQuickMenuPopupWindow *>(topMenuWindow->transientParent());
+            if (!pw)
+                topMenuWindow->dismissPopup();
+            topMenuWindow = pw;
+        }
     }
 }
 
@@ -670,8 +682,6 @@ void QQuickMenu::setupMenuItem(QQuickMenuBase *item, int platformIndex)
 void QQuickMenu::append_menuItems(QQuickMenuItems *list, QObject *o)
 {
     if (QQuickMenu *menu = qobject_cast<QQuickMenu *>(list->object)) {
-        Q_ASSERT(o->parent() == menu);
-
         if (QQuickMenuBase *menuItem = qobject_cast<QQuickMenuBase *>(o)) {
             menu->m_menuItems.append(menuItem);
             menu->setupMenuItem(menuItem);

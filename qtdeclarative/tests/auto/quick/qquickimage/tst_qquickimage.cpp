@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -56,6 +48,7 @@
 #include <QtGui/QPainter>
 #include <QtGui/QImageReader>
 #include <QQuickWindow>
+#include <QQuickView>
 #include <QQuickImageProvider>
 
 #include "../../shared/util.h"
@@ -106,6 +99,7 @@ private slots:
     void sourceSizeChanges();
     void correctStatus();
     void highdpi();
+    void hugeImages();
 
 private:
     QQmlEngine engine;
@@ -153,9 +147,9 @@ void tst_qquickimage::imageSource_data()
     QTest::newRow("local no cache") << testFileUrl("colors.png").toString() << 120.0 << 120.0 << false << false << false << "";
     QTest::newRow("local async") << testFileUrl("colors1.png").toString() << 120.0 << 120.0 << false << true << true << "";
     QTest::newRow("local not found") << testFileUrl("no-such-file.png").toString() << 0.0 << 0.0 << false
-        << false << true << "file::2:1: QML Image: Cannot open: " + testFileUrl("no-such-file.png").toString();
+        << false << true << "<Unknown File>:2:1: QML Image: Cannot open: " + testFileUrl("no-such-file.png").toString();
     QTest::newRow("local async not found") << testFileUrl("no-such-file-1.png").toString() << 0.0 << 0.0 << false
-        << true << true << "file::2:1: QML Image: Cannot open: " + testFileUrl("no-such-file-1.png").toString();
+        << true << true << "<Unknown File>:2:1: QML Image: Cannot open: " + testFileUrl("no-such-file-1.png").toString();
     QTest::newRow("remote") << SERVER_ADDR "/colors.png" << 120.0 << 120.0 << true << false << true << "";
     QTest::newRow("remote redirected") << SERVER_ADDR "/oldcolors.png" << 120.0 << 120.0 << true << false << false << "";
     if (QImageReader::supportedImageFormats().contains("svg"))
@@ -163,7 +157,7 @@ void tst_qquickimage::imageSource_data()
     if (QImageReader::supportedImageFormats().contains("svgz"))
         QTest::newRow("remote svgz") << SERVER_ADDR "/heart.svgz" << 550.0 << 500.0 << true << false << false << "";
     QTest::newRow("remote not found") << SERVER_ADDR "/no-such-file.png" << 0.0 << 0.0 << true
-        << false << true << "file::2:1: QML Image: Error downloading " SERVER_ADDR "/no-such-file.png - server replied: Not found";
+        << false << true << "<Unknown File>:2:1: QML Image: Error downloading " SERVER_ADDR "/no-such-file.png - server replied: Not found";
 
 }
 
@@ -177,9 +171,9 @@ void tst_qquickimage::imageSource()
     QFETCH(bool, cache);
     QFETCH(QString, error);
 
-    TestHTTPServer server(SERVER_PORT);
+    TestHTTPServer server;
     if (remote) {
-        QVERIFY(server.isValid());
+        QVERIFY2(server.listen(SERVER_PORT), qPrintable(server.errorString()));
         server.serveDirectory(dataDirectory());
         server.addRedirect("oldcolors.png", SERVER_ADDR "/colors.png");
     }
@@ -263,8 +257,9 @@ void tst_qquickimage::resized()
 
 void tst_qquickimage::preserveAspectRatio()
 {
-    QQuickView *window = new QQuickView(0);
+    QScopedPointer<QQuickView> window(new QQuickView(0));
     window->show();
+    QVERIFY(QTest::qWaitForWindowExposed(window.data()));
 
     window->setSource(testFileUrl("aspectratio.qml"));
     QQuickImage *image = qobject_cast<QQuickImage*>(window->rootObject());
@@ -279,7 +274,6 @@ void tst_qquickimage::preserveAspectRatio()
     QVERIFY(image != 0);
     QCOMPARE(image->height(), 60.);
     QCOMPARE(image->width(), 60.);
-    delete window;
 }
 
 void tst_qquickimage::smooth()
@@ -312,7 +306,7 @@ void tst_qquickimage::mirror()
         QWindow dummy;          // On BlackBerry first window is always full screen,
         dummy.showFullScreen(); // so make test window a second window.
 #endif
-        QQuickView *window = new QQuickView;
+        QScopedPointer<QQuickView> window(new QQuickView);
         window->setSource(testFileUrl("mirror.qml"));
 
         QQuickImage *obj = window->rootObject()->findChild<QQuickImage*>("image");
@@ -321,11 +315,10 @@ void tst_qquickimage::mirror()
         obj->setFillMode(fillMode);
         obj->setProperty("mirror", true);
         window->showNormal();
-        QVERIFY(QTest::qWaitForWindowExposed(window));
+        QVERIFY(QTest::qWaitForWindowExposed(window.data()));
 
         QImage screenshot = window->grabWindow();
         screenshots[fillMode] = screenshot;
-        delete window;
     }
 
     foreach (QQuickImage::FillMode fillMode, fillModes) {
@@ -529,8 +522,8 @@ void tst_qquickimage::noLoading()
 {
     qRegisterMetaType<QQuickImageBase::Status>();
 
-    TestHTTPServer server(SERVER_PORT);
-    QVERIFY(server.isValid());
+    TestHTTPServer server;
+    QVERIFY2(server.listen(SERVER_PORT), qPrintable(server.errorString()));
     server.serveDirectory(dataDirectory());
     server.addRedirect("oldcolors.png", SERVER_ADDR "/colors.png");
 
@@ -644,10 +637,10 @@ void tst_qquickimage::sourceSize_QTBUG_14303()
 
 void tst_qquickimage::sourceSize_QTBUG_16389()
 {
-    QQuickView *window = new QQuickView(0);
+    QScopedPointer<QQuickView> window(new QQuickView(0));
     window->setSource(testFileUrl("qtbug_16389.qml"));
     window->show();
-    qApp->processEvents();
+    QVERIFY(QTest::qWaitForWindowExposed(window.data()));
 
     QQuickImage *image = findItem<QQuickImage>(window->rootObject(), "iconImage");
     QQuickItem *handle = findItem<QQuickItem>(window->rootObject(), "blueHandle");
@@ -663,16 +656,15 @@ void tst_qquickimage::sourceSize_QTBUG_16389()
     QCOMPARE(image->sourceSize().height(), 200);
     QCOMPARE(image->paintedWidth(), 20.0);
     QCOMPARE(image->paintedHeight(), 20.0);
-
-    delete window;
 }
 
 // QTBUG-15690
 void tst_qquickimage::nullPixmapPaint()
 {
-    QQuickView *window = new QQuickView(0);
+    QScopedPointer<QQuickView> window(new QQuickView(0));
     window->setSource(testFileUrl("nullpixmap.qml"));
     window->show();
+    QVERIFY(QTest::qWaitForWindowExposed(window.data()));
 
     QQuickImage *image = qobject_cast<QQuickImage*>(window->rootObject());
     QTRY_VERIFY(image != 0);
@@ -681,23 +673,20 @@ void tst_qquickimage::nullPixmapPaint()
     QQmlTestMessageHandler messageHandler;
     // used to print "QTransform::translate with NaN called"
     QPixmap pm = QPixmap::fromImage(window->grabWindow());
-    const QStringList glErrors =  messageHandler.messages().filter(QLatin1String("QGLContext::makeCurrent(): Failed."), Qt::CaseInsensitive);
-    QVERIFY2(glErrors.size() == messageHandler.messages().size(), qPrintable(messageHandler.messageString()));
+    QVERIFY2(messageHandler.messages().size() == 0, qPrintable(messageHandler.messageString()));
     delete image;
-
-    delete window;
 }
 
 void tst_qquickimage::imageCrash_QTBUG_22125()
 {
-    TestHTTPServer server(SERVER_PORT);
-    QVERIFY(server.isValid());
+    TestHTTPServer server;
+    QVERIFY2(server.listen(SERVER_PORT), qPrintable(server.errorString()));
     server.serveDirectory(dataDirectory(), TestHTTPServer::Delay);
 
     {
         QQuickView view(testFileUrl("qtbug_22125.qml"));
         view.show();
-        qApp->processEvents();
+        QVERIFY(QTest::qWaitForWindowExposed(&view));
         qApp->processEvents();
         // shouldn't crash when the view drops out of scope due to
         // QQuickPixmapData attempting to dereference a pointer to
@@ -739,14 +728,14 @@ void tst_qquickimage::sourceSize()
     QFETCH(qreal, implicitWidth);
     QFETCH(qreal, implicitHeight);
 
-    QQuickView *window = new QQuickView(0);
+    QScopedPointer<QQuickView> window(new QQuickView(0));
     QQmlContext *ctxt = window->rootContext();
     ctxt->setContextProperty("srcWidth", sourceWidth);
     ctxt->setContextProperty("srcHeight", sourceHeight);
 
     window->setSource(testFileUrl("sourceSize.qml"));
     window->show();
-    qApp->processEvents();
+    QVERIFY(QTest::qWaitForWindowExposed(window.data()));
 
     QQuickImage *image = qobject_cast<QQuickImage*>(window->rootObject());
     QVERIFY(image);
@@ -755,14 +744,12 @@ void tst_qquickimage::sourceSize()
     QCOMPARE(image->sourceSize().height(), sourceHeight);
     QCOMPARE(image->implicitWidth(), implicitWidth);
     QCOMPARE(image->implicitHeight(), implicitHeight);
-
-    delete window;
 }
 
 void tst_qquickimage::sourceSizeChanges()
 {
-    TestHTTPServer server(14449);
-    QVERIFY(server.isValid());
+    TestHTTPServer server;
+    QVERIFY2(server.listen(14449), qPrintable(server.errorString()));
     server.serveDirectory(dataDirectory());
 
     QQmlEngine engine;
@@ -827,8 +814,8 @@ void tst_qquickimage::sourceSizeChanges()
 
 void tst_qquickimage::progressAndStatusChanges()
 {
-    TestHTTPServer server(14449);
-    QVERIFY(server.isValid());
+    TestHTTPServer server;
+    QVERIFY2(server.listen(14449), qPrintable(server.errorString()));
     server.serveDirectory(dataDirectory());
 
     QQmlEngine engine;
@@ -935,8 +922,8 @@ void tst_qquickimage::correctStatus()
 
 void tst_qquickimage::highdpi()
 {
-    TestHTTPServer server(14449);
-    QVERIFY(server.isValid());
+    TestHTTPServer server;
+    QVERIFY2(server.listen(SERVER_PORT), qPrintable(server.errorString()));
     server.serveDirectory(dataDirectory());
 
     QString componentStr = "import QtQuick 2.0\nImage { source: srcImage ;  }";
@@ -974,6 +961,21 @@ void tst_qquickimage::highdpi()
     QCOMPARE(obj->paintedHeight(), 300.0);
 
     delete obj;
+}
+
+void tst_qquickimage::hugeImages()
+{
+    QQuickView view;
+    view.setSource(testFileUrl("hugeImages.qml"));
+    view.setGeometry(0, 0, 200, 200);
+    view.create();
+
+    QImage contents = view.grabWindow();
+
+    QCOMPARE(contents.pixel(0, 0), qRgba(255, 0, 0, 255));
+    QCOMPARE(contents.pixel(99, 99), qRgba(255, 0, 0, 255));
+    QCOMPARE(contents.pixel(100, 0), qRgba(0, 0, 255, 255));
+    QCOMPARE(contents.pixel(199, 99), qRgba(0, 0, 255, 255));
 }
 
 QTEST_MAIN(tst_qquickimage)

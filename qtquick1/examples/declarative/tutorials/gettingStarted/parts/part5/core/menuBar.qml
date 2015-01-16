@@ -67,7 +67,7 @@ Rectangle {
             Text {
                 height: parent.height
                 anchors { right: labelRow.left ; verticalCenter: parent.bottom }
-                text: "menu:    " 
+                text: "menu:    "
                 color: "lightblue"
                 font { weight: Font.Light; italic: true }
                 smooth: true
@@ -97,13 +97,13 @@ Rectangle {
                     id: editButton
                     height: 20; width: 50
                     buttonColor : menuListView.currentIndex == 1? Qt.darker(editColor, 1.5) : Qt.darker(editColor, 1.9)
-                    scale: menuListView.currentIndex == 1? 1.25: 1    
+                    scale: menuListView.currentIndex == 1? 1.25: 1
                     label: "Edit"
                     radius: 1
                     labelSize: menuListView.currentIndex == 1? 16:12
                     smooth:true
                     //on a button click, change the list's currently selected item to EditMenu
-                    onButtonClick: menuListView.currentIndex = 1    
+                    onButtonClick: menuListView.currentIndex = 1
                     gradient: Gradient {
                         GradientStop { position: 0.0; color: editColor }
                         GradientStop { position: 1.0; color: "#136F6F6F" }
@@ -123,7 +123,7 @@ Rectangle {
             //control the movement of the menu switching
             snapMode: ListView.SnapOneItem
             orientation: ListView.Horizontal
-            boundsBehavior: Flickable.StopAtBounds 
+            boundsBehavior: Flickable.StopAtBounds
             flickDeceleration: 5000
             highlightFollowsCurrentItem: true
             highlightMoveDuration:240

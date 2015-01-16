@@ -194,7 +194,7 @@ Item {
             Button {
                 text: "Create"
                 onClicked: {
-                    try { 
+                    try {
                         Qt.createQmlObject(qmlText.text, window, 'CustomObject');
                     } catch(err) {
                         dialog.show('Error on line ' + err.qmlErrors[0].lineNumber + '\n' + err.qmlErrors[0].message);

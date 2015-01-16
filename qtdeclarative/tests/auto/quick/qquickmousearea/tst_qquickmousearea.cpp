@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -86,6 +78,7 @@ private slots:
     void resetDrag();
     void dragging_data() { acceptedButton_data(); }
     void dragging();
+    void dragSmoothed();
     void dragThreshold();
     void invalidDrag_data() { rejectedButton_data(); }
     void invalidDrag();
@@ -95,6 +88,7 @@ private slots:
     void updateMouseAreaPosOnResize();
     void noOnClickedWithPressAndHold();
     void onMousePressRejected();
+    void pressedCanceledOnWindowDeactivate_data();
     void pressedCanceledOnWindowDeactivate();
     void doubleClick_data() { acceptedButton_data(); }
     void doubleClick();
@@ -122,6 +116,8 @@ private slots:
     void moveAndReleaseWithoutPress();
     void nestedStopAtBounds();
     void nestedStopAtBounds_data();
+    void containsPress_data();
+    void containsPress();
 
 private:
     void acceptedButton_data();
@@ -334,6 +330,50 @@ void tst_QQuickMouseArea::dragging()
     QCOMPARE(blackRect->y(), 61.0);
 }
 
+void tst_QQuickMouseArea::dragSmoothed()
+{
+    QQuickView window;
+    QByteArray errorMessage;
+    QVERIFY2(initView(window, testFileUrl("dragging.qml"), true, &errorMessage), errorMessage.constData());
+
+    window.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&window));
+    QVERIFY(window.rootObject() != 0);
+
+    QQuickMouseArea *mouseRegion = window.rootObject()->findChild<QQuickMouseArea*>("mouseregion");
+    QQuickDrag *drag = mouseRegion->drag();
+    drag->setThreshold(5);
+
+    mouseRegion->setAcceptedButtons(Qt::LeftButton);
+    QQuickItem *blackRect = window.rootObject()->findChild<QQuickItem*>("blackrect");
+    QVERIFY(blackRect != 0);
+    QVERIFY(blackRect == drag->target());
+    QVERIFY(!drag->active());
+    QTest::mousePress(&window, Qt::LeftButton, 0, QPoint(100,100));
+    QVERIFY(!drag->active());
+    QTest::mouseMove(&window, QPoint(100, 102), 50);
+    QTest::mouseMove(&window, QPoint(100, 106), 50);
+    QTest::mouseMove(&window, QPoint(100, 122), 50);
+    QTRY_COMPARE(blackRect->x(), 50.0);
+    QTRY_COMPARE(blackRect->y(), 66.0);
+    QTest::mouseRelease(&window, Qt::LeftButton, 0, QPoint(100,122));
+
+    // reset rect position
+    blackRect->setX(50.0);
+    blackRect->setY(50.0);
+
+    // now try with smoothed disabled
+    drag->setSmoothed(false);
+    QVERIFY(!drag->active());
+    QTest::mousePress(&window, Qt::LeftButton, 0, QPoint(100,100));
+    QVERIFY(!drag->active());
+    QTest::mouseMove(&window, QPoint(100, 102), 50);
+    QTest::mouseMove(&window, QPoint(100, 106), 50);
+    QTest::mouseMove(&window, QPoint(100, 122), 50);
+    QTRY_COMPARE(blackRect->x(), 50.0);
+    QTRY_COMPARE(blackRect->y(), 72.0);
+    QTest::mouseRelease(&window, Qt::LeftButton, 0, QPoint(100, 122));
+}
 
 void tst_QQuickMouseArea::dragThreshold()
 {
@@ -692,8 +732,19 @@ void tst_QQuickMouseArea::onMousePressRejected()
     QVERIFY(!window.rootObject()->property("mr1_canceled").toBool());
     QVERIFY(!window.rootObject()->property("mr2_released").toBool());
 }
+
+void tst_QQuickMouseArea::pressedCanceledOnWindowDeactivate_data()
+{
+    QTest::addColumn<bool>("doubleClick");
+    QTest::newRow("simple click") << false;
+    QTest::newRow("double click") << true;
+}
+
+
 void tst_QQuickMouseArea::pressedCanceledOnWindowDeactivate()
 {
+    QFETCH(bool, doubleClick);
+
     QQuickView window;
     QByteArray errorMessage;
     QVERIFY2(initView(window, testFileUrl("pressedCanceled.qml"), true, &errorMessage), errorMessage.constData());
@@ -702,14 +753,41 @@ void tst_QQuickMouseArea::pressedCanceledOnWindowDeactivate()
     QVERIFY(window.rootObject() != 0);
     QVERIFY(!window.rootObject()->property("pressed").toBool());
     QVERIFY(!window.rootObject()->property("canceled").toBool());
-    QVERIFY(!window.rootObject()->property("released").toBool());
+
+    int expectedRelease = 0;
+    int expectedClicks = 0;
+    QCOMPARE(window.rootObject()->property("released").toInt(), expectedRelease);
+    QCOMPARE(window.rootObject()->property("clicked").toInt(), expectedClicks);
+
 
     QMouseEvent pressEvent(QEvent::MouseButtonPress, QPoint(100, 100), Qt::LeftButton, Qt::LeftButton, 0);
+    QMouseEvent releaseEvent(QEvent::MouseButtonRelease, QPoint(100, 100), Qt::LeftButton, Qt::LeftButton, 0);
+
     QGuiApplication::sendEvent(&window, &pressEvent);
 
     QVERIFY(window.rootObject()->property("pressed").toBool());
     QVERIFY(!window.rootObject()->property("canceled").toBool());
-    QVERIFY(!window.rootObject()->property("released").toBool());
+    QCOMPARE(window.rootObject()->property("released").toInt(), expectedRelease);
+    QCOMPARE(window.rootObject()->property("clicked").toInt(), expectedClicks);
+
+    if (doubleClick) {
+        QGuiApplication::sendEvent(&window, &releaseEvent);
+        QVERIFY(!window.rootObject()->property("pressed").toBool());
+        QVERIFY(!window.rootObject()->property("canceled").toBool());
+        QCOMPARE(window.rootObject()->property("released").toInt(), ++expectedRelease);
+        QCOMPARE(window.rootObject()->property("clicked").toInt(), ++expectedClicks);
+
+        QGuiApplication::sendEvent(&window, &pressEvent);
+        QMouseEvent pressEvent2(QEvent::MouseButtonDblClick, QPoint(100, 100), Qt::LeftButton, Qt::LeftButton, 0);
+        QGuiApplication::sendEvent(&window, &pressEvent2);
+
+        QVERIFY(window.rootObject()->property("pressed").toBool());
+        QVERIFY(!window.rootObject()->property("canceled").toBool());
+        QCOMPARE(window.rootObject()->property("released").toInt(), expectedRelease);
+        QCOMPARE(window.rootObject()->property("clicked").toInt(), expectedClicks);
+        QCOMPARE(window.rootObject()->property("doubleClicked").toInt(), 1);
+    }
+
 
     QWindow *secondWindow = qvariant_cast<QWindow*>(window.rootObject()->property("secondWindow"));
     secondWindow->setProperty("visible", true);
@@ -717,22 +795,24 @@ void tst_QQuickMouseArea::pressedCanceledOnWindowDeactivate()
 
     QVERIFY(!window.rootObject()->property("pressed").toBool());
     QVERIFY(window.rootObject()->property("canceled").toBool());
-    QVERIFY(!window.rootObject()->property("released").toBool());
+    QCOMPARE(window.rootObject()->property("released").toInt(), expectedRelease);
+    QCOMPARE(window.rootObject()->property("clicked").toInt(), expectedClicks);
 
     //press again
     QGuiApplication::sendEvent(&window, &pressEvent);
     QVERIFY(window.rootObject()->property("pressed").toBool());
     QVERIFY(!window.rootObject()->property("canceled").toBool());
-    QVERIFY(!window.rootObject()->property("released").toBool());
+    QCOMPARE(window.rootObject()->property("released").toInt(), expectedRelease);
+    QCOMPARE(window.rootObject()->property("clicked").toInt(), expectedClicks);
 
     QTest::qWait(200);
 
     //release
-    QMouseEvent releaseEvent(QEvent::MouseButtonRelease, QPoint(100, 100), Qt::LeftButton, Qt::LeftButton, 0);
     QGuiApplication::sendEvent(&window, &releaseEvent);
     QVERIFY(!window.rootObject()->property("pressed").toBool());
     QVERIFY(!window.rootObject()->property("canceled").toBool());
-    QVERIFY(window.rootObject()->property("released").toBool());
+    QCOMPARE(window.rootObject()->property("released").toInt(), ++expectedRelease);
+    QCOMPARE(window.rootObject()->property("clicked").toInt(), ++expectedClicks);
 }
 
 void tst_QQuickMouseArea::doubleClick()
@@ -1637,6 +1717,69 @@ void tst_QQuickMouseArea::nestedStopAtBounds()
     QTRY_COMPARE(outer->drag()->active(), false);
     QTRY_COMPARE(inner->drag()->active(), true);
     QTest::mouseRelease(&view, Qt::LeftButton, 0, position);
+}
+
+void tst_QQuickMouseArea::containsPress_data()
+{
+    QTest::addColumn<bool>("hoverEnabled");
+
+    QTest::newRow("hover enabled") << true;
+    QTest::newRow("hover disaabled") << false;
+}
+
+void tst_QQuickMouseArea::containsPress()
+{
+    QFETCH(bool, hoverEnabled);
+
+    QQuickView window;
+    QByteArray errorMessage;
+    QVERIFY2(initView(window, testFileUrl("containsPress.qml"), true, &errorMessage), errorMessage.constData());
+    window.show();
+    window.requestActivate();
+    QVERIFY(QTest::qWaitForWindowExposed(&window));
+    QQuickItem *root = window.rootObject();
+    QVERIFY(root != 0);
+
+    QQuickMouseArea *mouseArea = window.rootObject()->findChild<QQuickMouseArea*>("mouseArea");
+    QVERIFY(mouseArea != 0);
+
+    QSignalSpy containsPressSpy(mouseArea, SIGNAL(containsPressChanged()));
+
+    mouseArea->setHoverEnabled(hoverEnabled);
+
+    QTest::mouseMove(&window, QPoint(22,33));
+    QCOMPARE(mouseArea->hovered(), false);
+    QCOMPARE(mouseArea->pressed(), false);
+    QCOMPARE(mouseArea->containsPress(), false);
+
+    QTest::mouseMove(&window, QPoint(200,200));
+    QCOMPARE(mouseArea->hovered(), hoverEnabled);
+    QCOMPARE(mouseArea->pressed(), false);
+    QCOMPARE(mouseArea->containsPress(), false);
+
+    QTest::mousePress(&window, Qt::LeftButton, Qt::NoModifier, QPoint(200,200));
+    QCOMPARE(mouseArea->hovered(), true);
+    QTRY_COMPARE(mouseArea->pressed(), true);
+    QCOMPARE(mouseArea->containsPress(), true);
+    QCOMPARE(containsPressSpy.count(), 1);
+
+    QTest::mouseMove(&window, QPoint(22,33));
+    QCOMPARE(mouseArea->hovered(), false);
+    QCOMPARE(mouseArea->pressed(), true);
+    QCOMPARE(mouseArea->containsPress(), false);
+    QCOMPARE(containsPressSpy.count(), 2);
+
+    QTest::mouseMove(&window, QPoint(200,200));
+    QCOMPARE(mouseArea->hovered(), true);
+    QCOMPARE(mouseArea->pressed(), true);
+    QCOMPARE(mouseArea->containsPress(), true);
+    QCOMPARE(containsPressSpy.count(), 3);
+
+    QTest::mouseRelease(&window, Qt::LeftButton, Qt::NoModifier, QPoint(200,200));
+    QCOMPARE(mouseArea->hovered(), hoverEnabled);
+    QCOMPARE(mouseArea->pressed(), false);
+    QCOMPARE(mouseArea->containsPress(), false);
+    QCOMPARE(containsPressSpy.count(), 4);
 }
 
 QTEST_MAIN(tst_QQuickMouseArea)

@@ -1,41 +1,33 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Copyright (C) 2012 Richard Moore <rich@kde.org>
 ** Copyright (C) 2012 David Faure <david.faure@kdab.com>
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -284,6 +276,53 @@ unsigned long QX11Info::getTimestamp()
         return 0;
     QScreen* screen = QGuiApplication::primaryScreen();
     return static_cast<xcb_timestamp_t>(reinterpret_cast<quintptr>(native->nativeResourceForScreen("gettimestamp", screen)));
+}
+
+/*!
+    Returns the startup ID that will be used for the next window to be shown by this process.
+
+    After the next window is shown, the next startup ID will be empty.
+
+    http://standards.freedesktop.org/startup-notification-spec/startup-notification-latest.txt
+
+    \since 5.4
+    \sa setNextStartupId()
+*/
+QByteArray QX11Info::nextStartupId()
+{
+    if (!qApp)
+        return 0;
+    QPlatformNativeInterface *native = qApp->platformNativeInterface();
+    if (!native)
+        return 0;
+    return static_cast<char *>(native->nativeResourceForIntegration("startupid"));
+}
+
+/*!
+    Sets the next startup ID to \a id.
+
+    This is the startup ID that will be used for the next window to be shown by this process.
+
+    The startup ID of the first window comes from the environment variable DESKTOP_STARTUP_ID.
+    This method is useful for subsequent windows, when the request comes from another process
+    (e.g. via DBus).
+
+    \since 5.4
+    \sa nextStartupId()
+*/
+void QX11Info::setNextStartupId(const QByteArray &id)
+{
+    if (!qApp)
+        return;
+    QPlatformNativeInterface *native = qApp->platformNativeInterface();
+    if (!native)
+        return;
+    typedef void (*SetStartupIdFunc)(const char*);
+    SetStartupIdFunc func = reinterpret_cast<SetStartupIdFunc>(native->nativeResourceFunctionForIntegration("setstartupid"));
+    if (func)
+        func(id.constData());
+    else
+        qWarning("Internal error: QPA plugin doesn't implement setStartupId");
 }
 
 /*!

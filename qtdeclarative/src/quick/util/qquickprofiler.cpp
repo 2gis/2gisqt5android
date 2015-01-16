@@ -5,35 +5,27 @@
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -48,7 +40,7 @@ QT_BEGIN_NAMESPACE
 
 // instance will be set, unset in constructor. Allows static methods to be inlined.
 QQuickProfiler *QQuickProfiler::s_instance = 0;
-bool QQuickProfiler::enabled = false;
+quint64 QQuickProfiler::featuresEnabled = 0;
 
 // convert to QByteArrays that can be sent to the debug client
 // use of QDataStream can skew results
@@ -88,7 +80,7 @@ void QQuickProfilerData::toByteArrays(QList<QByteArray> &messages) const
                     // RendererFrame: preprocessTime, updateTime, bindingTime, renderTime
                     case QQuickProfiler::SceneGraphRendererFrame: ds << subtime_1 << subtime_2 << subtime_3 << subtime_4; break;
                     // AdaptationLayerFrame: glyphCount (which is an integer), glyphRenderTime, glyphStoreTime
-                    case QQuickProfiler::SceneGraphAdaptationLayerFrame: ds << (int)subtime_1 << subtime_2 << subtime_3; break;
+                    case QQuickProfiler::SceneGraphAdaptationLayerFrame: ds << subtime_1 << subtime_2 << subtime_3; break;
                     // ContextFrame: compiling material time
                     case QQuickProfiler::SceneGraphContextFrame: ds << subtime_1; break;
                     // RenderLoop: syncTime, renderTime, swapTime
@@ -103,8 +95,8 @@ void QQuickProfilerData::toByteArrays(QList<QByteArray> &messages) const
                     case QQuickProfiler::SceneGraphWindowsRenderShow: ds << subtime_1 << subtime_2 << subtime_3; break;
                     // WindowsAnimations: update time
                     case QQuickProfiler::SceneGraphWindowsAnimations: ds << subtime_1; break;
-                    // WindowsRenderWindow: polish time; always comes packed after a RenderLoop
-                    case QQuickProfiler::SceneGraphWindowsPolishFrame: ds << subtime_4; break;
+                    // non-threaded rendering: polish time
+                    case QQuickProfiler::SceneGraphPolishFrame: ds << subtime_1; break;
                     default:break;
                 }
                 break;
@@ -137,7 +129,7 @@ void QQuickProfiler::initialize()
 
 void animationTimerCallback(qint64 delta)
 {
-    Q_QUICK_PROFILE(animationFrame(delta,
+    Q_QUICK_PROFILE(QQuickProfiler::ProfileAnimations, animationFrame(delta,
             QThread::currentThread() == QCoreApplication::instance()->thread() ?
             QQuickProfiler::GuiThread : QQuickProfiler::RenderThread));
 }
@@ -166,10 +158,10 @@ QQuickProfiler::QQuickProfiler(QQmlProfilerService *service) :
     m_timer.start();
 
     // We can always do DirectConnection here as all methods are protected by mutexes
-    connect(this, SIGNAL(profilingEnabled()), this, SLOT(startProfilingImpl()),
+    connect(this, SIGNAL(profilingEnabled(quint64)), this, SLOT(startProfilingImpl(quint64)),
             Qt::DirectConnection);
-    connect(this, SIGNAL(profilingEnabledWhileWaiting()), this, SLOT(startProfilingImpl()),
-            Qt::DirectConnection);
+    connect(this, SIGNAL(profilingEnabledWhileWaiting(quint64)),
+            this, SLOT(startProfilingImpl(quint64)), Qt::DirectConnection);
     connect(this, SIGNAL(referenceTimeKnown(QElapsedTimer)), this, SLOT(setTimer(QElapsedTimer)),
             Qt::DirectConnection);
     connect(this, SIGNAL(profilingDisabled()), this, SLOT(stopProfilingImpl()),
@@ -187,23 +179,23 @@ QQuickProfiler::QQuickProfiler(QQmlProfilerService *service) :
 QQuickProfiler::~QQuickProfiler()
 {
     QMutexLocker lock(&m_dataMutex);
-    enabled = false;
+    featuresEnabled = 0;
     s_instance = 0;
 }
 
-void QQuickProfiler::startProfilingImpl()
+void QQuickProfiler::startProfilingImpl(quint64 features)
 {
     QMutexLocker lock(&m_dataMutex);
     next = 0;
     m_data.clear();
-    enabled = true;
+    featuresEnabled = features;
 }
 
 void QQuickProfiler::stopProfilingImpl()
 {
     {
         QMutexLocker lock(&m_dataMutex);
-        enabled = false;
+        featuresEnabled = 0;
         next = 0;
     }
     service->dataReady(this);

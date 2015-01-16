@@ -5,35 +5,27 @@
 **
 ** This file is part of the QtSerialPort module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -114,6 +106,11 @@ private slots:
 
     void asynchronousWriteByTimer_data();
     void asynchronousWriteByTimer();
+
+#ifdef Q_OS_WIN
+    void readBufferOverflow();
+    void readAfterInputClear();
+#endif
 
 protected slots:
     void handleBytesWrittenAndExitLoopSlot(qint64 bytesWritten);
@@ -470,26 +467,27 @@ void tst_QSerialPort::twoStageSynchronousLoopback()
     senderPort.waitForBytesWritten(waitMsecs);
     QTest::qSleep(waitMsecs);
     receiverPort.waitForReadyRead(waitMsecs);
-    QCOMPARE(newlineArray.size(), receiverPort.bytesAvailable());
+    QCOMPARE(receiverPort.bytesAvailable(), qint64(newlineArray.size()));
+
     receiverPort.write(receiverPort.readAll());
     receiverPort.waitForBytesWritten(waitMsecs);
     QTest::qSleep(waitMsecs);
     senderPort.waitForReadyRead(waitMsecs);
-    QCOMPARE(newlineArray.size(), senderPort.bytesAvailable());
-    QCOMPARE(newlineArray, senderPort.readAll());
+    QCOMPARE(senderPort.bytesAvailable(), qint64(newlineArray.size()));
+    QCOMPARE(senderPort.readAll(), newlineArray);
 
     // second stage
     senderPort.write(newlineArray);
     senderPort.waitForBytesWritten(waitMsecs);
     QTest::qSleep(waitMsecs);
     receiverPort.waitForReadyRead(waitMsecs);
-    QCOMPARE(newlineArray.size(), receiverPort.bytesAvailable());
+    QCOMPARE(receiverPort.bytesAvailable(), qint64(newlineArray.size()));
     receiverPort.write(receiverPort.readAll());
     receiverPort.waitForBytesWritten(waitMsecs);
     QTest::qSleep(waitMsecs);
     senderPort.waitForReadyRead(waitMsecs);
-    QCOMPARE(newlineArray.size(), senderPort.bytesAvailable());
-    QCOMPARE(newlineArray, senderPort.readAll());
+    QCOMPARE(senderPort.bytesAvailable(), qint64(newlineArray.size()));
+    QCOMPARE(senderPort.readAll(), newlineArray);
 }
 
 void tst_QSerialPort::synchronousReadWrite()
@@ -515,7 +513,7 @@ void tst_QSerialPort::synchronousReadWrite()
     while ((readData.size() < writeData.size()) && receiverPort.waitForReadyRead(100))
         readData.append(receiverPort.readAll());
 
-    QCOMPARE(writeData, readData);
+    QCOMPARE(readData, writeData);
 }
 
 class AsyncReader : public QObject
@@ -665,6 +663,78 @@ void tst_QSerialPort::asynchronousWriteByTimer()
     QCOMPARE(receiverPort.bytesAvailable(), qint64(alphabetArray.size()));
     QCOMPARE(receiverPort.readAll(), alphabetArray);
 }
+
+#ifdef Q_OS_WIN
+void tst_QSerialPort::readBufferOverflow()
+{
+    clearReceiver();
+
+    QSerialPort senderPort(m_senderPortName);
+    QVERIFY(senderPort.open(QSerialPort::WriteOnly));
+
+    QSerialPort receiverPort(m_receiverPortName);
+    QVERIFY(receiverPort.open(QSerialPort::ReadOnly));
+
+    const int readBufferSize = alphabetArray.size() / 2;
+    receiverPort.setReadBufferSize(readBufferSize);
+    QCOMPARE(receiverPort.readBufferSize(), qint64(readBufferSize));
+
+    QCOMPARE(senderPort.write(alphabetArray), qint64(alphabetArray.size()));
+    QVERIFY2(senderPort.waitForBytesWritten(100), "Waiting for bytes written failed");
+
+    QByteArray readData;
+    while (receiverPort.waitForReadyRead(100)) {
+        QVERIFY(receiverPort.bytesAvailable() > 0);
+        readData += receiverPort.readAll();
+    }
+
+    QCOMPARE(readData, alphabetArray);
+
+    // No more bytes available
+    QVERIFY(receiverPort.bytesAvailable() == 0);
+}
+
+void tst_QSerialPort::readAfterInputClear()
+{
+    clearReceiver();
+
+    QSerialPort senderPort(m_senderPortName);
+    QVERIFY(senderPort.open(QSerialPort::WriteOnly));
+
+    QSerialPort receiverPort(m_receiverPortName);
+    QVERIFY(receiverPort.open(QSerialPort::ReadOnly));
+
+    const int readBufferSize = alphabetArray.size() / 2;
+    receiverPort.setReadBufferSize(readBufferSize);
+    QCOMPARE(receiverPort.readBufferSize(), qint64(readBufferSize));
+
+    const int waitMsecs = 100;
+
+    // First write more than read buffer size
+    QCOMPARE(senderPort.write(alphabetArray), qint64(alphabetArray.size()));
+    QVERIFY2(senderPort.waitForBytesWritten(waitMsecs), "Waiting for bytes written failed");
+
+    // Wait for first part of data into read buffer
+    while (receiverPort.waitForReadyRead(waitMsecs));
+    QCOMPARE(receiverPort.bytesAvailable(), qint64(readBufferSize));
+    // Wait for second part of data into driver's FIFO
+    QTest::qSleep(waitMsecs);
+
+    QVERIFY(receiverPort.clear(QSerialPort::Input));
+    QCOMPARE(receiverPort.bytesAvailable(), qint64(0));
+
+    // Second write less than read buffer size
+    QCOMPARE(senderPort.write(newlineArray), qint64(newlineArray.size()));
+    QVERIFY2(senderPort.waitForBytesWritten(waitMsecs), "Waiting for bytes written failed");
+
+    while (receiverPort.waitForReadyRead(waitMsecs));
+    QCOMPARE(receiverPort.bytesAvailable(), qint64(newlineArray.size()));
+    QCOMPARE(receiverPort.readAll(), newlineArray);
+
+    // No more bytes available
+    QVERIFY(receiverPort.bytesAvailable() == 0);
+}
+#endif
 
 QTEST_MAIN(tst_QSerialPort)
 #include "tst_qserialport.moc"

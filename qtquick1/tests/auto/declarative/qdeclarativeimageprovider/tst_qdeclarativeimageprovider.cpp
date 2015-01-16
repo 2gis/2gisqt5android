@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -99,10 +91,10 @@ public:
         if (id == QLatin1String("no-such-file.png"))
             return QImage();
 
-        int width = 100; 
+        int width = 100;
         int height = 100;
         QImage image(width, height, QImage::Format_RGB32);
-        if (size) 
+        if (size)
             *size = QSize(width, height);
         if (requestedSize.isValid())
             image = image.scaled(requestedSize);
@@ -136,10 +128,10 @@ public:
         if (id == QLatin1String("no-such-file.png"))
             return QPixmap();
 
-        int width = 100; 
+        int width = 100;
         int height = 100;
         QPixmap image(width, height);
-        if (size) 
+        if (size)
             *size = QSize(width, height);
         if (requestedSize.isValid())
             image = image.scaled(requestedSize);
@@ -155,7 +147,7 @@ Q_DECLARE_METATYPE(TestQPixmapProvider*);
 QString tst_qdeclarativeimageprovider::newImageFileName() const
 {
     // need to generate new filenames each time or else images are loaded
-    // from cache and we won't get loading status changes when testing 
+    // from cache and we won't get loading status changes when testing
     // async loading
     static int count = 0;
     return QString("image://test/image-%1.png").arg(count++);
@@ -200,11 +192,11 @@ void tst_qdeclarativeimageprovider::fillRequestTestsData(const QString &id)
 
     QTest::newRow(QTest::toString(id + " missing"))
         << "image://test/no-such-file.png" << "no-such-file.png" << "" << QSize(100,100)
-        << "file::2:1: QML Image: Failed to get image from provider: image://test/no-such-file.png";
+        << "<Unknown File>:2:1: QML Image: Failed to get image from provider: image://test/no-such-file.png";
 
     QTest::newRow(QTest::toString(id + " unknown provider"))
         << "image://bogus/exists.png" << "" << "" << QSize()
-        << "file::2:1: QML Image: Failed to get image from provider: image://bogus/exists.png";
+        << "<Unknown File>:2:1: QML Image: Failed to get image from provider: image://bogus/exists.png";
 }
 
 void tst_qdeclarativeimageprovider::runTest(bool async, QDeclarativeImageProvider *provider)
@@ -223,7 +215,7 @@ void tst_qdeclarativeimageprovider::runTest(bool async, QDeclarativeImageProvide
     engine.addImageProvider("test", provider);
     QVERIFY(engine.imageProvider("test") != 0);
 
-    QString componentStr = "import QtQuick 1.0\nImage { source: \"" + source + "\"; " 
+    QString componentStr = "import QtQuick 1.0\nImage { source: \"" + source + "\"; "
             + (async ? "asynchronous: true; " : "")
             + properties + " }";
     QDeclarativeComponent component(&engine);
@@ -231,7 +223,7 @@ void tst_qdeclarativeimageprovider::runTest(bool async, QDeclarativeImageProvide
     QDeclarativeImage *obj = qobject_cast<QDeclarativeImage*>(component.create());
     QVERIFY(obj != 0);
 
-    if (async) 
+    if (async)
         QTRY_VERIFY(obj->status() == QDeclarativeImage::Loading);
 
     QCOMPARE(obj->source(), QUrl(source));
@@ -344,7 +336,7 @@ void tst_qdeclarativeimageprovider::removeProvider()
 
     // remove the provider and confirm
     QString fileName = newImageFileName();
-    QString error("file::2:1: QML Image: Failed to get image from provider: " + fileName);
+    QString error("<Unknown File>:2:1: QML Image: Failed to get image from provider: " + fileName);
     QTest::ignoreMessage(QtWarningMsg, error.toUtf8());
 
     engine.removeImageProvider("test");

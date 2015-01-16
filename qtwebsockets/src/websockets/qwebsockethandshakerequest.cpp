@@ -5,35 +5,27 @@
 **
 ** This file is part of the QtWebSockets module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -226,11 +218,11 @@ void QWebSocketHandshakeRequest::readHandshake(QTextStream &textStream)
             clear();
             return;
         }
-        m_headers.insertMulti(headerField.at(0), headerField.at(1));
+        m_headers.insertMulti(headerField.at(0).toLower(), headerField.at(1));
         headerLine = textStream.readLine();
     }
 
-    const QString host = m_headers.value(QStringLiteral("Host"), QString());
+    const QString host = m_headers.value(QStringLiteral("host"), QString());
     m_requestUrl = QUrl::fromEncoded(resourceName.toLatin1());
     if (m_requestUrl.isRelative())
         m_requestUrl.setHost(host);
@@ -239,7 +231,7 @@ void QWebSocketHandshakeRequest::readHandshake(QTextStream &textStream)
         m_requestUrl.setScheme(scheme);
     }
 
-    const QStringList versionLines = m_headers.values(QStringLiteral("Sec-WebSocket-Version"));
+    const QStringList versionLines = m_headers.values(QStringLiteral("sec-websocket-version"));
     for (QStringList::const_iterator v = versionLines.begin(); v != versionLines.end(); ++v) {
         const QStringList versions = (*v).split(QStringLiteral(","), QString::SkipEmptyParts);
         for (QStringList::const_iterator i = versions.begin(); i != versions.end(); ++i) {
@@ -256,11 +248,11 @@ void QWebSocketHandshakeRequest::readHandshake(QTextStream &textStream)
     }
     //sort in descending order
     std::sort(m_versions.begin(), m_versions.end(), std::greater<QWebSocketProtocol::Version>());
-    m_key = m_headers.value(QStringLiteral("Sec-WebSocket-Key"), QString());
+    m_key = m_headers.value(QStringLiteral("sec-websocket-key"), QString());
     //must contain "Upgrade", case-insensitive
-    const QString upgrade = m_headers.value(QStringLiteral("Upgrade"), QString());
+    const QString upgrade = m_headers.value(QStringLiteral("upgrade"), QString());
     //must be equal to "websocket", case-insensitive
-    const QString connection = m_headers.value(QStringLiteral("Connection"), QString());
+    const QString connection = m_headers.value(QStringLiteral("connection"), QString());
     const QStringList connectionLine = connection.split(QStringLiteral(","),
                                                         QString::SkipEmptyParts);
     QStringList connectionValues;
@@ -268,14 +260,14 @@ void QWebSocketHandshakeRequest::readHandshake(QTextStream &textStream)
         connectionValues << (*c).trimmed();
 
     //optional headers
-    m_origin = m_headers.value(QStringLiteral("Sec-WebSocket-Origin"), QString());
-    const QStringList protocolLines = m_headers.values(QStringLiteral("Sec-WebSocket-Protocol"));
+    m_origin = m_headers.value(QStringLiteral("sec-websocket-origin"), QString());
+    const QStringList protocolLines = m_headers.values(QStringLiteral("sec-websocket-protocol"));
     for (QStringList::const_iterator pl = protocolLines.begin(); pl != protocolLines.end(); ++pl) {
         QStringList protocols = (*pl).split(QStringLiteral(","), QString::SkipEmptyParts);
         for (QStringList::const_iterator p = protocols.begin(); p != protocols.end(); ++p)
             m_protocols << (*p).trimmed();
     }
-    const QStringList extensionLines = m_headers.values(QStringLiteral("Sec-WebSocket-Extensions"));
+    const QStringList extensionLines = m_headers.values(QStringLiteral("sec-websocket-extensions"));
     for (QStringList::const_iterator el = extensionLines.begin();
          el != extensionLines.end(); ++el) {
         QStringList extensions = (*el).split(QStringLiteral(","), QString::SkipEmptyParts);

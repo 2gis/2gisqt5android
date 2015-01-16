@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtPositioning module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -70,7 +62,7 @@ QT_BEGIN_NAMESPACE
     They also feature a number of important utility methods that make otherwise complex
     calculations simple to use, such as \l atDistanceAndAzimuth().
 
-    \section2 Accuracy
+    \section1 Accuracy
 
     The latitude, longitude and altitude attributes stored in the coordinate type are represented
     as doubles, giving them approximately 16 decimal digits of precision -- enough to specify
@@ -78,7 +70,7 @@ QT_BEGIN_NAMESPACE
     \l distanceTo() also use doubles for all intermediate values, but the inherent inaccuracies in
     their spherical Earth model dominate the amount of error in their output.
 
-    \section2 Example Usage
+    \section1 Example Usage
 
     Use properties of type \l variant to store a \c {coordinate}.  To create a \c coordinate use
     one of the methods described below.  In all cases, specifying the \l altitude attribute is
@@ -107,9 +99,9 @@ QT_BEGIN_NAMESPACE
     When integrating with C++, note that any QGeoCoordinate value passed into QML from C++ is
     automatically converted into a \c coordinate value, and vice-versa.
 
-    \section2 Properties
+    \section1 Properties
 
-    \section3 latitude
+    \section2 latitude
 
     \code
     real latitude
@@ -120,7 +112,7 @@ QT_BEGIN_NAMESPACE
     and a negative latitude indicates the Southern Hemisphere.
     If the property has not been set, its default value is NaN.
 
-    \section3 longitude
+    \section2 longitude
 
     \code
     real longitude
@@ -131,7 +123,7 @@ QT_BEGIN_NAMESPACE
     and a negative longitude indicates the Western Hemisphere
     If the property has not been set, its default value is NaN.
 
-    \section3 altitude
+    \section2 altitude
 
     \code
     real altitude
@@ -140,7 +132,7 @@ QT_BEGIN_NAMESPACE
     This property holds the value of altitude (meters above sea level).
     If the property has not been set, its default value is NaN.
 
-    \section3 isValid
+    \section2 isValid
 
     \code
     bool isValid
@@ -156,9 +148,9 @@ QT_BEGIN_NAMESPACE
 
     This is a read-only property.
 
-    \section2 Methods
+    \section1 Methods
 
-    \section3 distanceTo()
+    \section2 distanceTo()
 
     \code
     real distanceTo(coordinate other)
@@ -170,7 +162,7 @@ QT_BEGIN_NAMESPACE
     This calculation returns the great-circle distance between the two coordinates, with an
     assumption that the Earth is spherical for the purpose of this calculation.
 
-    \section3 azimuthTo()
+    \section2 azimuthTo()
 
     \code
     real azimuth(coordinate other)
@@ -181,7 +173,7 @@ QT_BEGIN_NAMESPACE
 
     There is an assumption that the Earth is spherical for the purpose of this calculation.
 
-    \section3 atDistanceAndAzimuth()
+    \section2 atDistanceAndAzimuth()
 
     \code
     coordinate atDistanceAndAzimuth(real distance, real azimuth)

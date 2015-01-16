@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the tools applications of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -544,9 +536,8 @@ void Document::removeScriptPragmas(QString &script)
 Document::Document(bool debugMode)
     : jsModule(debugMode)
     , program(0)
-    , jsGenerator(&jsModule, sizeof(QV4::CompiledData::QmlUnit))
+    , jsGenerator(&jsModule)
     , unitFlags(0)
-    , javaScriptCompilationUnit(0)
 {
 }
 
@@ -558,9 +549,8 @@ IRBuilder::IRBuilder(const QSet<QString> &illegalNames)
 {
 }
 
-bool IRBuilder::generateFromQml(const QString &code, const QString &url, const QString &urlString, Document *output)
+bool IRBuilder::generateFromQml(const QString &code, const QString &url, Document *output)
 {
-    this->url = url;
     QQmlJS::AST::UiProgram *program = 0;
     {
         QQmlJS::Lexer lexer(&output->jsParserEngine);
@@ -574,7 +564,7 @@ bool IRBuilder::generateFromQml(const QString &code, const QString &url, const Q
             foreach (const QQmlJS::DiagnosticMessage &m, parser.diagnosticMessages()) {
 
                 if (m.isWarning()) {
-                    qWarning("%s:%d : %s", qPrintable(urlString), m.loc.startLine, qPrintable(m.message));
+                    qWarning("%s:%d : %s", qPrintable(url), m.loc.startLine, qPrintable(m.message));
                     continue;
                 }
 
@@ -1509,9 +1499,9 @@ bool IRBuilder::isStatementNodeScript(QQmlJS::AST::Statement *statement)
     return true;
 }
 
-QV4::CompiledData::QmlUnit *QmlUnitGenerator::generate(Document &output)
+QV4::CompiledData::Unit *QmlUnitGenerator::generate(Document &output)
 {
-    QV4::CompiledData::CompilationUnit *compilationUnit = output.javaScriptCompilationUnit;
+    QQmlRefPointer<QV4::CompiledData::CompilationUnit> compilationUnit = output.javaScriptCompilationUnit;
     QV4::CompiledData::Unit *jsUnit = compilationUnit->createUnitData(&output);
     const uint unitSize = jsUnit->unitSize;
 
@@ -1532,22 +1522,24 @@ QV4::CompiledData::QmlUnit *QmlUnitGenerator::generate(Document &output)
         objectsSize += signalTableSize;
     }
 
-    const int totalSize = unitSize + importSize + objectOffsetTableSize + objectsSize;
+    const int totalSize = unitSize + importSize + objectOffsetTableSize + objectsSize + output.jsGenerator.stringTable.sizeOfTableAndData();
     char *data = (char*)malloc(totalSize);
     memcpy(data, jsUnit, unitSize);
     if (jsUnit != compilationUnit->data)
         free(jsUnit);
     jsUnit = 0;
 
-    QV4::CompiledData::QmlUnit *qmlUnit = reinterpret_cast<QV4::CompiledData::QmlUnit *>(data);
-    qmlUnit->qmlUnitSize = totalSize;
-    qmlUnit->header.flags |= output.unitFlags;
-    qmlUnit->header.flags |= QV4::CompiledData::Unit::IsQml;
+    QV4::CompiledData::Unit *qmlUnit = reinterpret_cast<QV4::CompiledData::Unit *>(data);
+    qmlUnit->unitSize = totalSize;
+    qmlUnit->flags |= output.unitFlags;
+    qmlUnit->flags |= QV4::CompiledData::Unit::IsQml;
     qmlUnit->offsetToImports = unitSize;
     qmlUnit->nImports = output.imports.count();
     qmlUnit->offsetToObjects = unitSize + importSize;
     qmlUnit->nObjects = output.objects.count();
     qmlUnit->indexOfRootObject = output.indexOfRootObject;
+    qmlUnit->offsetToStringTable = totalSize - output.jsGenerator.stringTable.sizeOfTableAndData();
+    qmlUnit->stringTableSize = output.jsGenerator.stringTable.stringCount();
 
     // write imports
     char *importPtr = data + qmlUnit->offsetToImports;
@@ -1634,10 +1626,12 @@ QV4::CompiledData::QmlUnit *QmlUnitGenerator::generate(Document &output)
     // enable flag if we encountered pragma Singleton
     foreach (Pragma *p, output.pragmas) {
         if (p->type == Pragma::PragmaSingleton) {
-            qmlUnit->header.flags |= QV4::CompiledData::Unit::IsSingleton;
+            qmlUnit->flags |= QV4::CompiledData::Unit::IsSingleton;
             break;
         }
     }
+
+    output.jsGenerator.stringTable.serialize(qmlUnit);
 
     return qmlUnit;
 }
@@ -1814,13 +1808,22 @@ static QV4::IR::Type resolveQmlType(QQmlEnginePrivate *qmlEngine, QV4::IR::Membe
     }
 
     if (type->isCompositeSingleton()) {
-        QQmlTypeData *tdata = qmlEngine->typeLoader.getType(type->singletonInstanceInfo()->url);
+        QQmlRefPointer<QQmlTypeData> tdata = qmlEngine->typeLoader.getType(type->singletonInstanceInfo()->url);
         Q_ASSERT(tdata);
-        Q_ASSERT(tdata->isComplete());
-        initMetaObjectResolver(resolver, qmlEngine->propertyCacheForType(tdata->compiledData()->metaTypeId));
-        tdata->release();
-        resolver->flags |= AllPropertiesAreFinal;
-        return resolver->resolveMember(qmlEngine, resolver, member);
+        tdata->release(); // Decrease the reference count added from QQmlTypeLoader::getType()
+        // When a singleton tries to reference itself, it may not be complete yet.
+        if (tdata->isComplete()) {
+            initMetaObjectResolver(resolver, qmlEngine->propertyCacheForType(tdata->compiledData()->metaTypeId));
+            resolver->flags |= AllPropertiesAreFinal;
+            return resolver->resolveMember(qmlEngine, resolver, member);
+        }
+    }  else if (type->isSingleton()) {
+        const QMetaObject *singletonMeta = type->singletonInstanceInfo()->instanceMetaObject;
+        if (singletonMeta) { // QJSValue-based singletons cannot be accelerated
+            initMetaObjectResolver(resolver, qmlEngine->cache(singletonMeta));
+            member->kind = QV4::IR::Member::MemberOfSingletonObject;
+            return resolver->resolveMember(qmlEngine, resolver, member);
+        }
     } else if (const QMetaObject *attachedMeta = type->attachedPropertiesType()) {
         QQmlPropertyCache *cache = qmlEngine->cache(attachedMeta);
         initMetaObjectResolver(resolver, cache);

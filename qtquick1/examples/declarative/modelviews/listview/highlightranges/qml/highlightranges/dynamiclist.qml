@@ -84,7 +84,7 @@ Rectangle {
     // The delegate for each fruit in the model:
     Component {
         id: listDelegate
-        
+
         Item {
             id: delegateItem
             width: listView.width; height: 55
@@ -107,7 +107,7 @@ Rectangle {
                 Column {
                     anchors.verticalCenter: parent.verticalCenter
 
-                    Text { 
+                    Text {
                         text: name
                         font.pixelSize: 15
                         color: "white"
@@ -133,7 +133,7 @@ Rectangle {
                     onClicked: fruitModel.setProperty(index, "cost", cost + 0.25)
                 }
 
-                Text { 
+                Text {
                     id: costText
                     anchors.verticalCenter: parent.verticalCenter
                     text: '$' + Number(cost).toFixed(2)
@@ -183,7 +183,7 @@ Rectangle {
         anchors { left: parent.left; bottom: parent.bottom; margins: 20 }
         spacing: 10
 
-        TextButton { 
+        TextButton {
             text: "Add an item"
             onClicked: {
                 fruitModel.append({
@@ -194,8 +194,8 @@ Rectangle {
             }
         }
 
-        TextButton { 
-            text: "Remove all items" 
+        TextButton {
+            text: "Remove all items"
             onClicked: fruitModel.clear()
         }
     }

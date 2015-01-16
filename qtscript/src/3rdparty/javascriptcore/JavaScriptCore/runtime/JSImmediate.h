@@ -26,11 +26,13 @@
 
 #if !USE(JSVALUE32_64)
 
+#include "JSValue.h"
+
 #include <wtf/Assertions.h>
 #include <wtf/AlwaysInline.h>
 #include <wtf/MathExtras.h>
 #include <wtf/StdLibExtras.h>
-#include "JSValue.h"
+
 #include <limits>
 #include <limits.h>
 #include <stdarg.h>
@@ -490,7 +492,7 @@ namespace JSC {
         const int intVal = static_cast<int>(d);
 
         // Check for data loss from conversion to int.
-        if (intVal != d || (!intVal && signbit(d)))
+        if (intVal != d || (!intVal && std::signbit(d)))
             return fromNumberOutsideIntegerRange(d);
 
         return from(intVal);

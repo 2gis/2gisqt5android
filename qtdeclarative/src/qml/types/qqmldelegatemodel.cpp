@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -61,17 +53,23 @@ class QQmlDelegateModelItem;
 
 struct DelegateModelGroupFunction: QV4::FunctionObject
 {
-    V4_OBJECT
+    struct Data : FunctionObject::Data {
+        Data(QV4::ExecutionContext *scope, uint flag, QV4::ReturnedValue (*code)(QQmlDelegateModelItem *item, uint flag, const QV4::ValueRef arg))
+            : FunctionObject::Data(scope, QStringLiteral("DelegateModelGroupFunction"))
+            , flag(flag)
+            , code(code)
+        {
+            setVTable(staticVTable());
+        }
 
-    QV4::ReturnedValue (*code)(QQmlDelegateModelItem *item, uint flag, const QV4::ValueRef arg);
-    uint flag;
+        uint flag;
+        QV4::ReturnedValue (*code)(QQmlDelegateModelItem *item, uint flag, const QV4::ValueRef arg);
+    };
+    V4_OBJECT(QV4::FunctionObject)
 
-    DelegateModelGroupFunction(QV4::ExecutionContext *scope, uint flag, QV4::ReturnedValue (*code)(QQmlDelegateModelItem *item, uint flag, const QV4::ValueRef arg))
-        : FunctionObject(scope, QStringLiteral("DelegateModelGroupFunction"))
-        , code(code)
-        , flag(flag)
+    static DelegateModelGroupFunction *create(QV4::ExecutionContext *scope, uint flag, QV4::ReturnedValue (*code)(QQmlDelegateModelItem *item, uint flag, const QV4::ValueRef arg))
     {
-        setVTable(staticVTable());
+        return scope->engine()->memoryManager->alloc<DelegateModelGroupFunction>(scope, flag, code);
     }
 
     static QV4::ReturnedValue construct(QV4::Managed *m, QV4::CallData *)
@@ -89,7 +87,7 @@ struct DelegateModelGroupFunction: QV4::FunctionObject
             return v4->currentContext()->throwTypeError(QStringLiteral("Not a valid VisualData object"));
 
         QV4::ScopedValue v(scope, callData->argument(0));
-        return f->code(o->item, f->flag, v);
+        return f->d()->code(o->d()->item, f->d()->flag, v);
     }
 };
 
@@ -103,8 +101,7 @@ public:
     QQmlDelegateModelEngineData(QV8Engine *engine);
     ~QQmlDelegateModelEngineData();
 
-    QV4::ReturnedValue array(QV8Engine *engine, const QVector<QQmlChangeSet::Remove> &changes);
-    QV4::ReturnedValue array(QV8Engine *engine, const QVector<QQmlChangeSet::Insert> &changes);
+    QV4::ReturnedValue array(QV8Engine *engine, const QVector<QQmlChangeSet::Change> &changes);
 
     QV4::PersistentValue changeProto;
 };
@@ -722,8 +719,8 @@ void QQmlDelegateModelPrivate::updateFilterGroup()
 
     QQmlDelegateModelGroupPrivate::get(m_groups[m_compositorGroup])->emitters.insert(this);
     if (m_compositorGroup != previousGroup) {
-        QVector<QQmlChangeSet::Remove> removes;
-        QVector<QQmlChangeSet::Insert> inserts;
+        QVector<QQmlChangeSet::Change> removes;
+        QVector<QQmlChangeSet::Change> inserts;
         m_compositor.transition(previousGroup, m_compositorGroup, &removes, &inserts);
 
         QQmlChangeSet changeSet;
@@ -903,7 +900,7 @@ QObject *QQmlDelegateModelPrivate::object(Compositor::Group group, int index, bo
     if (!m_delegate || index < 0 || index >= m_compositor.count(group)) {
         qWarning() << "DelegateModel::item: index out range" << index << m_compositor.count(group);
         return 0;
-    } else if (!m_context->isValid()) {
+    } else if (!m_context || !m_context->isValid()) {
         return 0;
     }
 
@@ -946,7 +943,7 @@ QObject *QQmlDelegateModelPrivate::object(Compositor::Group group, int index, bo
             cacheItem->incubationTask->index[i] = it.index[i];
 
         QQmlContextData *ctxt = new QQmlContextData;
-        ctxt->setParent(QQmlContextData::get(creationContext  ? creationContext : m_context));
+        ctxt->setParent(QQmlContextData::get(creationContext  ? creationContext : m_context.data()));
         ctxt->contextObject = cacheItem;
         cacheItem->contextData = ctxt;
 
@@ -1143,7 +1140,7 @@ static void incrementIndexes(QQmlDelegateModelItem *cacheItem, int count, const 
 
 void QQmlDelegateModelPrivate::itemsInserted(
         const QVector<Compositor::Insert> &inserts,
-        QVarLengthArray<QVector<QQmlChangeSet::Insert>, Compositor::MaximumGroupCount> *translatedInserts,
+        QVarLengthArray<QVector<QQmlChangeSet::Change>, Compositor::MaximumGroupCount> *translatedInserts,
         QHash<int, QList<QQmlDelegateModelItem *> > *movedItems)
 {
     int cacheIndex = 0;
@@ -1159,7 +1156,7 @@ void QQmlDelegateModelPrivate::itemsInserted(
         for (int i = 1; i < m_groupCount; ++i) {
             if (insert.inGroup(i)) {
                 (*translatedInserts)[i].append(
-                        QQmlChangeSet::Insert(insert.index[i], insert.count, insert.moveId));
+                        QQmlChangeSet::Change(insert.index[i], insert.count, insert.moveId));
                 inserted[i] += insert.count;
             }
         }
@@ -1200,7 +1197,7 @@ void QQmlDelegateModelPrivate::itemsInserted(
 
 void QQmlDelegateModelPrivate::itemsInserted(const QVector<Compositor::Insert> &inserts)
 {
-    QVarLengthArray<QVector<QQmlChangeSet::Insert>, Compositor::MaximumGroupCount> translatedInserts(m_groupCount);
+    QVarLengthArray<QVector<QQmlChangeSet::Change>, Compositor::MaximumGroupCount> translatedInserts(m_groupCount);
     itemsInserted(inserts, &translatedInserts);
     Q_ASSERT(m_cache.count() == m_compositor.count(Compositor::Cache));
     if (!m_delegate)
@@ -1234,7 +1231,7 @@ void QQmlDelegateModel::_q_itemsInserted(int index, int count)
 
 void QQmlDelegateModelPrivate::itemsRemoved(
         const QVector<Compositor::Remove> &removes,
-        QVarLengthArray<QVector<QQmlChangeSet::Remove>, Compositor::MaximumGroupCount> *translatedRemoves,
+        QVarLengthArray<QVector<QQmlChangeSet::Change>, Compositor::MaximumGroupCount> *translatedRemoves,
         QHash<int, QList<QQmlDelegateModelItem *> > *movedItems)
 {
     int cacheIndex = 0;
@@ -1251,7 +1248,7 @@ void QQmlDelegateModelPrivate::itemsRemoved(
         for (int i = 1; i < m_groupCount; ++i) {
             if (remove.inGroup(i)) {
                 (*translatedRemoves)[i].append(
-                        QQmlChangeSet::Remove(remove.index[i], remove.count, remove.moveId));
+                        QQmlChangeSet::Change(remove.index[i], remove.count, remove.moveId));
                 removed[i] -= remove.count;
             }
         }
@@ -1318,7 +1315,7 @@ void QQmlDelegateModelPrivate::itemsRemoved(
 
 void QQmlDelegateModelPrivate::itemsRemoved(const QVector<Compositor::Remove> &removes)
 {
-    QVarLengthArray<QVector<QQmlChangeSet::Remove>, Compositor::MaximumGroupCount> translatedRemoves(m_groupCount);
+    QVarLengthArray<QVector<QQmlChangeSet::Change>, Compositor::MaximumGroupCount> translatedRemoves(m_groupCount);
     itemsRemoved(removes, &translatedRemoves);
     Q_ASSERT(m_cache.count() == m_compositor.count(Compositor::Cache));
     if (!m_delegate)
@@ -1356,10 +1353,10 @@ void QQmlDelegateModelPrivate::itemsMoved(
 {
     QHash<int, QList<QQmlDelegateModelItem *> > movedItems;
 
-    QVarLengthArray<QVector<QQmlChangeSet::Remove>, Compositor::MaximumGroupCount> translatedRemoves(m_groupCount);
+    QVarLengthArray<QVector<QQmlChangeSet::Change>, Compositor::MaximumGroupCount> translatedRemoves(m_groupCount);
     itemsRemoved(removes, &translatedRemoves, &movedItems);
 
-    QVarLengthArray<QVector<QQmlChangeSet::Insert>, Compositor::MaximumGroupCount> translatedInserts(m_groupCount);
+    QVarLengthArray<QVector<QQmlChangeSet::Change>, Compositor::MaximumGroupCount> translatedInserts(m_groupCount);
     itemsInserted(inserts, &translatedInserts, &movedItems);
     Q_ASSERT(m_cache.count() == m_compositor.count(Compositor::Cache));
     Q_ASSERT(movedItems.isEmpty());
@@ -1409,7 +1406,7 @@ void QQmlDelegateModelPrivate::emitModelUpdated(const QQmlChangeSet &changeSet, 
 
 void QQmlDelegateModelPrivate::emitChanges()
 {
-    if (m_transaction || !m_complete || !m_context->isValid())
+    if (m_transaction || !m_complete || !m_context || !m_context->isValid())
         return;
 
     m_transaction = true;
@@ -1603,7 +1600,7 @@ QQmlDelegateModelAttached *QQmlDelegateModel::qmlAttachedProperties(QObject *obj
 
 bool QQmlDelegateModelPrivate::insert(Compositor::insert_iterator &before, const QV4::ValueRef object, int groups)
 {
-    if (!m_context->isValid())
+    if (!m_context || !m_context->isValid())
         return false;
 
     QQmlDelegateModelItem *cacheItem = m_adaptorModel.createItem(m_cacheMetaType, m_context->engine(), -1);
@@ -1696,43 +1693,44 @@ void QQmlDelegateModelItemMetaType::initializePrototype()
     QV4::ScopedProperty p(scope);
 
     s = v4->newString(QStringLiteral("isUnresolved"));
-    p->setGetter(new (v4->memoryManager) DelegateModelGroupFunction(v4->rootContext, 30, QQmlDelegateModelItem::get_member));
+    QV4::ScopedFunctionObject f(scope);
+    p->setGetter((f = DelegateModelGroupFunction::create(v4->rootContext, 30, QQmlDelegateModelItem::get_member)));
     p->setSetter(0);
-    proto->insertMember(s, p, QV4::Attr_Accessor|QV4::Attr_NotConfigurable|QV4::Attr_NotEnumerable);
+    proto->insertMember(s.getPointer(), p, QV4::Attr_Accessor|QV4::Attr_NotConfigurable|QV4::Attr_NotEnumerable);
 
     s = v4->newString(QStringLiteral("inItems"));
-    p->setGetter(new (v4->memoryManager) DelegateModelGroupFunction(v4->rootContext, QQmlListCompositor::Default, QQmlDelegateModelItem::get_member));
-    p->setSetter(new (v4->memoryManager) DelegateModelGroupFunction(v4->rootContext, QQmlListCompositor::Default, QQmlDelegateModelItem::set_member));
-    proto->insertMember(s, p, QV4::Attr_Accessor|QV4::Attr_NotConfigurable|QV4::Attr_NotEnumerable);
+    p->setGetter((f = DelegateModelGroupFunction::create(v4->rootContext, QQmlListCompositor::Default, QQmlDelegateModelItem::get_member)));
+    p->setSetter((f = DelegateModelGroupFunction::create(v4->rootContext, QQmlListCompositor::Default, QQmlDelegateModelItem::set_member)));
+    proto->insertMember(s.getPointer(), p, QV4::Attr_Accessor|QV4::Attr_NotConfigurable|QV4::Attr_NotEnumerable);
 
     s = v4->newString(QStringLiteral("inPersistedItems"));
-    p->setGetter(new (v4->memoryManager) DelegateModelGroupFunction(v4->rootContext, QQmlListCompositor::Persisted, QQmlDelegateModelItem::get_member));
-    p->setSetter(new (v4->memoryManager) DelegateModelGroupFunction(v4->rootContext, QQmlListCompositor::Persisted, QQmlDelegateModelItem::set_member));
-    proto->insertMember(s, p, QV4::Attr_Accessor|QV4::Attr_NotConfigurable|QV4::Attr_NotEnumerable);
+    p->setGetter((f = DelegateModelGroupFunction::create(v4->rootContext, QQmlListCompositor::Persisted, QQmlDelegateModelItem::get_member)));
+    p->setSetter((f = DelegateModelGroupFunction::create(v4->rootContext, QQmlListCompositor::Persisted, QQmlDelegateModelItem::set_member)));
+    proto->insertMember(s.getPointer(), p, QV4::Attr_Accessor|QV4::Attr_NotConfigurable|QV4::Attr_NotEnumerable);
 
     s = v4->newString(QStringLiteral("itemsIndex"));
-    p->setGetter(new (v4->memoryManager) DelegateModelGroupFunction(v4->rootContext, QQmlListCompositor::Default, QQmlDelegateModelItem::get_index));
-    proto->insertMember(s, p, QV4::Attr_Accessor|QV4::Attr_NotConfigurable|QV4::Attr_NotEnumerable);
+    p->setGetter((f = DelegateModelGroupFunction::create(v4->rootContext, QQmlListCompositor::Default, QQmlDelegateModelItem::get_index)));
+    proto->insertMember(s.getPointer(), p, QV4::Attr_Accessor|QV4::Attr_NotConfigurable|QV4::Attr_NotEnumerable);
 
     s = v4->newString(QStringLiteral("persistedItemsIndex"));
-    p->setGetter(new (v4->memoryManager) DelegateModelGroupFunction(v4->rootContext, QQmlListCompositor::Persisted, QQmlDelegateModelItem::get_index));
+    p->setGetter((f = DelegateModelGroupFunction::create(v4->rootContext, QQmlListCompositor::Persisted, QQmlDelegateModelItem::get_index)));
     p->setSetter(0);
-    proto->insertMember(s, p, QV4::Attr_Accessor|QV4::Attr_NotConfigurable|QV4::Attr_NotEnumerable);
+    proto->insertMember(s.getPointer(), p, QV4::Attr_Accessor|QV4::Attr_NotConfigurable|QV4::Attr_NotEnumerable);
 
     for (int i = 2; i < groupNames.count(); ++i) {
         QString propertyName = QStringLiteral("in") + groupNames.at(i);
         propertyName.replace(2, 1, propertyName.at(2).toUpper());
         s = v4->newString(propertyName);
-        p->setGetter(new (v4->memoryManager) DelegateModelGroupFunction(v4->rootContext, i + 1, QQmlDelegateModelItem::get_member));
-        p->setSetter(new (v4->memoryManager) DelegateModelGroupFunction(v4->rootContext, i + 1, QQmlDelegateModelItem::set_member));
-        proto->insertMember(s, p, QV4::Attr_Accessor|QV4::Attr_NotConfigurable|QV4::Attr_NotEnumerable);
+        p->setGetter((f = DelegateModelGroupFunction::create(v4->rootContext, i + 1, QQmlDelegateModelItem::get_member)));
+        p->setSetter((f = DelegateModelGroupFunction::create(v4->rootContext, i + 1, QQmlDelegateModelItem::set_member)));
+        proto->insertMember(s.getPointer(), p, QV4::Attr_Accessor|QV4::Attr_NotConfigurable|QV4::Attr_NotEnumerable);
     }
     for (int i = 2; i < groupNames.count(); ++i) {
         const QString propertyName = groupNames.at(i) + QStringLiteral("Index");
         s = v4->newString(propertyName);
-        p->setGetter(new (v4->memoryManager) DelegateModelGroupFunction(v4->rootContext, i + 1, QQmlDelegateModelItem::get_index));
+        p->setGetter((f = DelegateModelGroupFunction::create(v4->rootContext, i + 1, QQmlDelegateModelItem::get_index)));
         p->setSetter(0);
-        proto->insertMember(s, p, QV4::Attr_Accessor|QV4::Attr_NotConfigurable|QV4::Attr_NotEnumerable);
+        proto->insertMember(s.getPointer(), p, QV4::Attr_Accessor|QV4::Attr_NotConfigurable|QV4::Attr_NotEnumerable);
     }
     modelItemProto = proto;
 }
@@ -1780,46 +1778,46 @@ int QQmlDelegateModelItemMetaType::parseGroups(const QV4::ValueRef groups) const
 QV4::ReturnedValue QQmlDelegateModelItem::get_model(QV4::CallContext *ctx)
 {
     QV4::Scope scope(ctx);
-    QV4::Scoped<QQmlDelegateModelItemObject> o(scope, ctx->callData->thisObject.as<QQmlDelegateModelItemObject>());
+    QV4::Scoped<QQmlDelegateModelItemObject> o(scope, ctx->d()->callData->thisObject.as<QQmlDelegateModelItemObject>());
     if (!o)
         return ctx->throwTypeError(QStringLiteral("Not a valid VisualData object"));
-    if (!o->item->metaType->model)
+    if (!o->d()->item->metaType->model)
         return QV4::Encode::undefined();
 
-    return o->item->get();
+    return o->d()->item->get();
 }
 
 QV4::ReturnedValue QQmlDelegateModelItem::get_groups(QV4::CallContext *ctx)
 {
     QV4::Scope scope(ctx);
-    QV4::Scoped<QQmlDelegateModelItemObject> o(scope, ctx->callData->thisObject.as<QQmlDelegateModelItemObject>());
+    QV4::Scoped<QQmlDelegateModelItemObject> o(scope, ctx->d()->callData->thisObject.as<QQmlDelegateModelItemObject>());
     if (!o)
         return ctx->throwTypeError(QStringLiteral("Not a valid VisualData object"));
 
     QStringList groups;
-    for (int i = 1; i < o->item->metaType->groupCount; ++i) {
-        if (o->item->groups & (1 << i))
-            groups.append(o->item->metaType->groupNames.at(i - 1));
+    for (int i = 1; i < o->d()->item->metaType->groupCount; ++i) {
+        if (o->d()->item->groups & (1 << i))
+            groups.append(o->d()->item->metaType->groupNames.at(i - 1));
     }
 
-    return ctx->engine->v8Engine->fromVariant(groups);
+    return scope.engine->v8Engine->fromVariant(groups);
 }
 
 QV4::ReturnedValue QQmlDelegateModelItem::set_groups(QV4::CallContext *ctx)
 {
     QV4::Scope scope(ctx);
-    QV4::Scoped<QQmlDelegateModelItemObject> o(scope, ctx->callData->thisObject.as<QQmlDelegateModelItemObject>());
+    QV4::Scoped<QQmlDelegateModelItemObject> o(scope, ctx->d()->callData->thisObject.as<QQmlDelegateModelItemObject>());
     if (!o)
         return ctx->throwTypeError(QStringLiteral("Not a valid VisualData object"));
-    if (!ctx->callData->argc)
+    if (!ctx->d()->callData->argc)
         return ctx->throwTypeError();
 
-    if (!o->item->metaType->model)
+    if (!o->d()->item->metaType->model)
         return QV4::Encode::undefined();
-    QQmlDelegateModelPrivate *model = QQmlDelegateModelPrivate::get(o->item->metaType->model);
+    QQmlDelegateModelPrivate *model = QQmlDelegateModelPrivate::get(o->d()->item->metaType->model);
 
-    const int groupFlags = model->m_cacheMetaType->parseGroups(ctx->callData->args[0]);
-    const int cacheIndex = model->m_cache.indexOf(o->item);
+    const int groupFlags = model->m_cacheMetaType->parseGroups(ctx->d()->callData->args[0]);
+    const int cacheIndex = model->m_cache.indexOf(o->d()->item);
     Compositor::iterator it = model->m_compositor.find(Compositor::Cache, cacheIndex);
     model->setGroups(it, 1, Compositor::Cache, groupFlags);
     return QV4::Encode::undefined();
@@ -1861,14 +1859,14 @@ QV4::ReturnedValue QQmlDelegateModelItem::get_index(QQmlDelegateModelItem *thisI
 
 DEFINE_OBJECT_VTABLE(QQmlDelegateModelItemObject);
 
-QQmlDelegateModelItemObject::~QQmlDelegateModelItemObject()
+QQmlDelegateModelItemObject::Data::~Data()
 {
     item->Dispose();
 }
 
 void QQmlDelegateModelItemObject::destroy(Managed *that)
 {
-    static_cast<QQmlDelegateModelItemObject *>(that)->~QQmlDelegateModelItemObject();
+    static_cast<QQmlDelegateModelItemObject *>(that)->d()->~Data();
 }
 
 
@@ -2442,7 +2440,7 @@ QQmlV4Handle QQmlDelegateModelGroup::get(int index)
         return QQmlV4Handle(QV4::Encode::undefined());
 
     QQmlDelegateModelPrivate *model = QQmlDelegateModelPrivate::get(d->model);
-    if (!model->m_context->isValid()) {
+    if (!model->m_context || !model->m_context->isValid()) {
         return QQmlV4Handle(QV4::Encode::undefined());
     } else if (index < 0 || index >= model->m_compositor.count(d->group)) {
         qmlInfo(this) << tr("get: index out of range");
@@ -2470,7 +2468,7 @@ QQmlV4Handle QQmlDelegateModelGroup::get(int index)
     QV8Engine *v8 = model->m_cacheMetaType->v8Engine;
     QV4::ExecutionEngine *v4 = QV8Engine::getV4(v8);
     QV4::Scope scope(v4);
-    QV4::ScopedObject o(scope, new (v4->memoryManager) QQmlDelegateModelItemObject(v4, cacheItem));
+    QV4::ScopedObject o(scope, v4->memoryManager->alloc<QQmlDelegateModelItemObject>(v4, cacheItem));
     QV4::ScopedObject p(scope, model->m_cacheMetaType->modelItemProto.value());
     o->setPrototype(p.getPointer());
     ++cacheItem->scriptRef;
@@ -2493,7 +2491,7 @@ bool QQmlDelegateModelGroupPrivate::parseIndex(const QV4::ValueRef value, int *i
     QV4::Scoped<QQmlDelegateModelItemObject> object(scope, value);
 
     if (object) {
-        QQmlDelegateModelItem * const cacheItem = object->item;
+        QQmlDelegateModelItem * const cacheItem = object->d()->item;
         if (QQmlDelegateModelPrivate *model = cacheItem->metaType->model
                 ? QQmlDelegateModelPrivate::get(cacheItem->metaType->model)
                 : 0) {
@@ -3070,8 +3068,8 @@ void QQmlPartsModel::updateFilterGroup()
 
     QQmlDelegateModelGroupPrivate::get(model->m_groups[m_compositorGroup])->emitters.insert(this);
     if (m_compositorGroup != previousGroup) {
-        QVector<QQmlChangeSet::Remove> removes;
-        QVector<QQmlChangeSet::Insert> inserts;
+        QVector<QQmlChangeSet::Change> removes;
+        QVector<QQmlChangeSet::Change> inserts;
         model->m_compositor.transition(previousGroup, m_compositorGroup, &removes, &inserts);
 
         QQmlChangeSet changeSet;
@@ -3212,67 +3210,77 @@ void QQmlPartsModel::emitModelUpdated(const QQmlChangeSet &changeSet, bool reset
 
 struct QQmlDelegateModelGroupChange : QV4::Object
 {
-    V4_OBJECT
-    QQmlDelegateModelGroupChange(QV4::ExecutionEngine *engine)
-        : Object(engine)
-    {
-        setVTable(staticVTable());
+    struct Data : QV4::Object::Data {
+        Data(QV4::ExecutionEngine *engine)
+            : Object::Data(engine)
+        {
+            setVTable(staticVTable());
+        }
+        QQmlChangeSet::Change change;
+    };
+    V4_OBJECT(QV4::Object)
+
+    static QQmlDelegateModelGroupChange *create(QV4::ExecutionEngine *e) {
+        return e->memoryManager->alloc<QQmlDelegateModelGroupChange>(e);
     }
 
     static QV4::ReturnedValue method_get_index(QV4::CallContext *ctx) {
         QV4::Scope scope(ctx);
-        QV4::Scoped<QQmlDelegateModelGroupChange> that(scope, ctx->callData->thisObject.as<QQmlDelegateModelGroupChange>());
+        QV4::Scoped<QQmlDelegateModelGroupChange> that(scope, ctx->d()->callData->thisObject.as<QQmlDelegateModelGroupChange>());
         if (!that)
             return ctx->throwTypeError();
-        return QV4::Encode(that->change.index);
+        return QV4::Encode(that->d()->change.index);
     }
     static QV4::ReturnedValue method_get_count(QV4::CallContext *ctx) {
         QV4::Scope scope(ctx);
-        QV4::Scoped<QQmlDelegateModelGroupChange> that(scope, ctx->callData->thisObject.as<QQmlDelegateModelGroupChange>());
+        QV4::Scoped<QQmlDelegateModelGroupChange> that(scope, ctx->d()->callData->thisObject.as<QQmlDelegateModelGroupChange>());
         if (!that)
             return ctx->throwTypeError();
-        return QV4::Encode(that->change.count);
+        return QV4::Encode(that->d()->change.count);
     }
     static QV4::ReturnedValue method_get_moveId(QV4::CallContext *ctx) {
         QV4::Scope scope(ctx);
-        QV4::Scoped<QQmlDelegateModelGroupChange> that(scope, ctx->callData->thisObject.as<QQmlDelegateModelGroupChange>());
+        QV4::Scoped<QQmlDelegateModelGroupChange> that(scope, ctx->d()->callData->thisObject.as<QQmlDelegateModelGroupChange>());
         if (!that)
             return ctx->throwTypeError();
-        if (that->change.moveId < 0)
+        if (that->d()->change.moveId < 0)
             return QV4::Encode::undefined();
-        return QV4::Encode(that->change.moveId);
+        return QV4::Encode(that->d()->change.moveId);
     }
-
-    QQmlChangeSet::Change change;
 };
 
 DEFINE_OBJECT_VTABLE(QQmlDelegateModelGroupChange);
 
-class QQmlDelegateModelGroupChangeArray : public QV4::Object
+struct QQmlDelegateModelGroupChangeArray : public QV4::Object
 {
-    V4_OBJECT
+    struct Data : QV4::Object::Data {
+        Data(QV4::ExecutionEngine *engine, const QVector<QQmlChangeSet::Change> &changes)
+            : Object::Data(engine)
+            , changes(changes)
+        {
+            setVTable(staticVTable());
+            QV4::Scope scope(engine);
+            QV4::ScopedObject o(scope, this);
+            o->setArrayType(QV4::ArrayData::Custom);
+        }
+        QVector<QQmlChangeSet::Change> changes;
+    };
+    V4_OBJECT(QV4::Object)
 public:
-    QQmlDelegateModelGroupChangeArray(QV4::ExecutionEngine *engine)
-        : Object(engine)
+    static QQmlDelegateModelGroupChangeArray *create(QV4::ExecutionEngine *engine, const QVector<QQmlChangeSet::Change> &changes)
     {
-        setVTable(staticVTable());
-        QV4::Scope scope(engine);
-        QV4::ScopedObject protectThis(scope, this);
-        Q_UNUSED(protectThis);
-        setArrayType(QV4::ArrayData::Custom);
+        return engine->memoryManager->alloc<QQmlDelegateModelGroupChangeArray>(engine, changes);
     }
-    virtual ~QQmlDelegateModelGroupChangeArray() {}
 
-    virtual quint32 count() const = 0;
-    virtual const QQmlChangeSet::Change &at(int index) const = 0;
+    quint32 count() const { return d()->changes.count(); }
+    const QQmlChangeSet::Change &at(int index) const { return d()->changes.at(index); }
 
     static QV4::ReturnedValue getIndexed(QV4::Managed *m, uint index, bool *hasProperty)
     {
+        Q_ASSERT(m->as<QQmlDelegateModelGroupChangeArray>());
         QV4::ExecutionEngine *v4 = m->engine();
         QV4::Scope scope(v4);
-        QV4::Scoped<QQmlDelegateModelGroupChangeArray> array(scope, m->as<QQmlDelegateModelGroupChangeArray>());
-        if (!array)
-            return v4->currentContext()->throwTypeError();
+        QV4::Scoped<QQmlDelegateModelGroupChangeArray> array(scope, static_cast<QQmlDelegateModelGroupChangeArray *>(m));
 
         if (index >= array->count()) {
             if (hasProperty)
@@ -3283,20 +3291,19 @@ public:
         const QQmlChangeSet::Change &change = array->at(index);
 
         QV4::ScopedObject changeProto(scope, engineData(v4->v8Engine)->changeProto.value());
-        QV4::Scoped<QQmlDelegateModelGroupChange> object(scope, new (v4->memoryManager) QQmlDelegateModelGroupChange(v4));
+        QV4::Scoped<QQmlDelegateModelGroupChange> object(scope, QQmlDelegateModelGroupChange::create(v4));
         object->setPrototype(changeProto.getPointer());
-        object->change = change;
+        object->d()->change = change;
 
         if (hasProperty)
             *hasProperty = true;
         return object.asReturnedValue();
     }
 
-    static QV4::ReturnedValue get(QV4::Managed *m, const QV4::StringRef name, bool *hasProperty)
+    static QV4::ReturnedValue get(QV4::Managed *m, QV4::String *name, bool *hasProperty)
     {
-        QQmlDelegateModelGroupChangeArray *array = m->as<QQmlDelegateModelGroupChangeArray>();
-        if (!array)
-            return m->engine()->currentContext()->throwTypeError();
+        Q_ASSERT(m->as<QQmlDelegateModelGroupChangeArray>());
+        QQmlDelegateModelGroupChangeArray *array = static_cast<QQmlDelegateModelGroupChangeArray *>(m);
 
         if (name->equals(m->engine()->id_length)) {
             if (hasProperty)
@@ -3307,46 +3314,12 @@ public:
         return Object::get(m, name, hasProperty);
     }
     static void destroy(Managed *that) {
-        QQmlDelegateModelGroupChangeArray *array = that->as<QQmlDelegateModelGroupChangeArray>();
-        assert(array);
-        array->~QQmlDelegateModelGroupChangeArray();
+        static_cast<QQmlDelegateModelGroupChangeArray *>(that)->d()->~Data();
     }
 
 };
 
 DEFINE_OBJECT_VTABLE(QQmlDelegateModelGroupChangeArray);
-
-class QQmlDelegateModelGroupRemoveArray : public QQmlDelegateModelGroupChangeArray
-{
-public:
-    QQmlDelegateModelGroupRemoveArray(QV4::ExecutionEngine *engine, const QVector<QQmlChangeSet::Remove> &changes)
-        : QQmlDelegateModelGroupChangeArray(engine)
-        , changes(changes)
-    {
-    }
-
-    quint32 count() const { return changes.count(); }
-    const QQmlChangeSet::Change &at(int index) const { return changes.at(index); }
-
-private:
-    QVector<QQmlChangeSet::Remove> changes;
-};
-
-class QQmlDelegateModelGroupInsertArray : public QQmlDelegateModelGroupChangeArray
-{
-public:
-    QQmlDelegateModelGroupInsertArray(QV4::ExecutionEngine *engine, const QVector<QQmlChangeSet::Insert> &changes)
-        : QQmlDelegateModelGroupChangeArray(engine)
-        , changes(changes)
-    {
-    }
-
-    quint32 count() const { return changes.count(); }
-    const QQmlChangeSet::Change &at(int index) const { return changes.at(index); }
-
-private:
-    QVector<QQmlChangeSet::Insert> changes;
-};
 
 QQmlDelegateModelEngineData::QQmlDelegateModelEngineData(QV8Engine *e)
 {
@@ -3364,16 +3337,12 @@ QQmlDelegateModelEngineData::~QQmlDelegateModelEngineData()
 {
 }
 
-QV4::ReturnedValue QQmlDelegateModelEngineData::array(QV8Engine *engine, const QVector<QQmlChangeSet::Remove> &changes)
+QV4::ReturnedValue QQmlDelegateModelEngineData::array(QV8Engine *engine, const QVector<QQmlChangeSet::Change> &changes)
 {
     QV4::ExecutionEngine *v4 = QV8Engine::getV4(engine);
-    return (new (v4->memoryManager) QQmlDelegateModelGroupRemoveArray(v4, changes))->asReturnedValue();
-}
-
-QV4::ReturnedValue QQmlDelegateModelEngineData::array(QV8Engine *engine, const QVector<QQmlChangeSet::Insert> &changes)
-{
-    QV4::ExecutionEngine *v4 = QV8Engine::getV4(engine);
-    return (new (v4->memoryManager) QQmlDelegateModelGroupInsertArray(v4, changes))->asReturnedValue();
+    QV4::Scope scope(v4);
+    QV4::ScopedObject o(scope, QQmlDelegateModelGroupChangeArray::create(v4, changes));
+    return o.asReturnedValue();
 }
 
 QT_END_NAMESPACE

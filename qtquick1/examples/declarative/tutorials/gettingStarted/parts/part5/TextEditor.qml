@@ -46,7 +46,7 @@ Rectangle {
     width: 1000; height: 1000
     property int partition: height/3
     state: "DRAWER_CLOSED"
-    
+
     //Item 1: MenuBar on the top portion of the screen
     MenuBar{
         id:menuBar
@@ -59,7 +59,7 @@ Rectangle {
         y:drawer.height
         color: "#3F3F3F"
         fontColor: "#DCDCCC"
-         height: partition*2; width:parent.width        
+         height: partition*2; width:parent.width
     }
     //Item 3: The drawer handle
     Rectangle{
@@ -78,10 +78,10 @@ Rectangle {
             id: arrowIcon
             source: "images/arrow.png"
             anchors.horizontalCenter: parent.horizontalCenter
-            
+
             Behavior{NumberAnimation{property: "rotation";easing.type: Easing.OutExpo }}
         }
-        
+
         MouseArea{
             id: drawerMouseArea
             anchors.fill:parent
@@ -105,14 +105,14 @@ Rectangle {
             PropertyChanges { target: menuBar; y: 0}
             PropertyChanges { target: textArea; y: partition + drawer.height}
             PropertyChanges { target: drawer; y: partition}
-            PropertyChanges { target: arrowIcon; rotation: 180} 
+            PropertyChanges { target: arrowIcon; rotation: 180}
         },
         State{
             name: "DRAWER_CLOSED"
             PropertyChanges { target: menuBar; y:-height; }
             PropertyChanges { target: textArea; y: drawer.height; height: screen.height - drawer.height}
             PropertyChanges { target: drawer; y: 0}
-            PropertyChanges { target: arrowIcon; rotation: 0} 
+            PropertyChanges { target: arrowIcon; rotation: 0}
         }
     ]
 

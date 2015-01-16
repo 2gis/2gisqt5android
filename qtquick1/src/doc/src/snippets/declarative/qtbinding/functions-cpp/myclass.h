@@ -48,7 +48,7 @@ public:
     Q_INVOKABLE void cppMethod(const QString &msg) {
         qDebug() << "Called the C++ method with" << msg;
     }
-    
+
 public slots:
     void cppSlot(int number) {
         qDebug() << "Called the C++ slot with" << number;

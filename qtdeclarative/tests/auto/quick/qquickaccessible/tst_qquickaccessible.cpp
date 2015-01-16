@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -41,7 +33,7 @@
 
 
 #include <QtTest/QtTest>
-#include "QtTest/qtestaccessible.h"
+#include <QtTest/qtestaccessible.h>
 
 #include <QtGui/qaccessible.h>
 #include <QtGui/private/qguiapplication_p.h>
@@ -114,6 +106,7 @@ private slots:
     void basicPropertiesTest();
     void hitTest();
     void checkableTest();
+    void ignoredTest();
 };
 
 tst_QQuickAccessible::tst_QQuickAccessible()
@@ -340,40 +333,46 @@ void tst_QQuickAccessible::hitTest()
     // check the root item from app
     QAccessibleInterface *appIface = QAccessible::queryAccessibleInterface(qApp);
     QVERIFY(appIface);
-    QAccessibleInterface *itemHit(appIface->childAt(rootRect.x() + 200, rootRect.y() + 50));
+    QAccessibleInterface *itemHit = appIface->childAt(rootRect.x() + 200, rootRect.y() + 50);
     QVERIFY(itemHit);
-    QCOMPARE(rootRect, itemHit->rect());
+    QCOMPARE(itemHit->rect(), rootRect);
 
-    // hit rect1
-    QAccessibleInterface *rect1(rootItem->child(0));
-    QRect rect1Rect = rect1->rect();
-    QAccessibleInterface *rootItemIface = rootItem->childAt(rect1Rect.x() + 10, rect1Rect.y() + 10);
-    QVERIFY(rootItemIface);
-    QCOMPARE(rect1Rect, rootItemIface->rect());
-    QCOMPARE(rootItemIface->text(QAccessible::Name), QLatin1String("rect1"));
+    QAccessibleInterface *rootItemIface;
+    for (int c = 0; c < rootItem->childCount(); ++c) {
+        QAccessibleInterface *iface = rootItem->child(c);
+        QString name = iface->text(QAccessible::Name);
+        if (name == QLatin1String("rect1")) {
+            // hit rect1
+            QAccessibleInterface *rect1 = iface;
+            QRect rect1Rect = rect1->rect();
+            QAccessibleInterface *rootItemIface = rootItem->childAt(rect1Rect.x() + 10, rect1Rect.y() + 10);
+            QVERIFY(rootItemIface);
+            QCOMPARE(rect1Rect, rootItemIface->rect());
+            QCOMPARE(rootItemIface->text(QAccessible::Name), QLatin1String("rect1"));
 
-    // should also work from top level (app)
-    QAccessibleInterface *app(QAccessible::queryAccessibleInterface(qApp));
-    QAccessibleInterface *itemHit2(topLevelChildAt(app, rect1Rect.x() + 10, rect1Rect.y() + 10));
-    QVERIFY(itemHit2);
-    QCOMPARE(itemHit2->rect(), rect1Rect);
-    QCOMPARE(itemHit2->text(QAccessible::Name), QLatin1String("rect1"));
+            // should also work from top level (app)
+            QAccessibleInterface *app(QAccessible::queryAccessibleInterface(qApp));
+            QAccessibleInterface *itemHit2(topLevelChildAt(app, rect1Rect.x() + 10, rect1Rect.y() + 10));
+            QVERIFY(itemHit2);
+            QCOMPARE(itemHit2->rect(), rect1Rect);
+            QCOMPARE(itemHit2->text(QAccessible::Name), QLatin1String("rect1"));
+        } else if (name == QLatin1String("rect2")) {
+            QAccessibleInterface *rect2 = iface;
+            // FIXME: This is seems broken on OS X
+            // QCOMPARE(rect2->rect().translated(rootItem->rect().x(), rootItem->rect().y()), QRect(0, 50, 100, 100));
+            QAccessibleInterface *rect20 = rect2->child(0);
+            QVERIFY(rect20);
+            QCOMPARE(rect20->text(QAccessible::Name), QLatin1String("rect20"));
+            QPoint p = rect20->rect().bottomRight() + QPoint(20, 20);
+            QAccessibleInterface *rect201 = rect20->childAt(p.x(), p.y());
+            QVERIFY(rect201);
+            QCOMPARE(rect201->text(QAccessible::Name), QLatin1String("rect201"));
+            rootItemIface = topLevelChildAt(windowIface, p.x(), p.y());
+            QVERIFY(rootItemIface);
+            QCOMPARE(rootItemIface->text(QAccessible::Name), QLatin1String("rect201"));
 
-    // hit rect201
-    QAccessibleInterface *rect2(rootItem->child(1));
-    QVERIFY(rect2);
-    // FIXME: This is seems broken on mac
-    // QCOMPARE(rect2->rect().translated(rootItem->rect().x(), rootItem->rect().y()), QRect(0, 50, 100, 100));
-    QAccessibleInterface *rect20(rect2->child(0));
-    QVERIFY(rect20);
-    QAccessibleInterface *rect201(rect20->child(1));
-    QVERIFY(rect201);
-
-    QRect rect201Rect = rect201->rect();
-    rootItemIface = windowIface->childAt(rect201Rect.x() + 20, rect201Rect.y() + 20);
-    QVERIFY(rootItemIface);
-    QCOMPARE(rootItemIface->rect(), rect201Rect);
-    QCOMPARE(rootItemIface->text(QAccessible::Name), QLatin1String("rect201"));
+        }
+    }
 
     delete window;
     QTestAccessibility::clearEvents();
@@ -384,8 +383,6 @@ void tst_QQuickAccessible::checkableTest()
     QScopedPointer<QQuickView> window(new QQuickView());
     window->setSource(testFileUrl("checkbuttons.qml"));
     window->show();
-    window->requestActivate();
-    QVERIFY(QTest::qWaitForWindowActive(window.data()));
 
     QQuickItem *contentItem = window->contentItem();
     QVERIFY(contentItem);
@@ -455,6 +452,36 @@ void tst_QQuickAccessible::checkableTest()
     QVERIFY(!(checkBox2->state().checked));
     QVERIFY(checkBox2->state().checkable);
 
+    QTestAccessibility::clearEvents();
+}
+
+void tst_QQuickAccessible::ignoredTest()
+{
+    QScopedPointer<QQuickView> window(new QQuickView());
+    window->setSource(testFileUrl("ignored.qml"));
+    window->show();
+
+    QQuickItem *contentItem = window->contentItem();
+    QVERIFY(contentItem);
+    QQuickItem *rootItem = contentItem->childItems().first();
+    QVERIFY(rootItem);
+
+    // the window becomes active
+    QAccessible::State activatedChange;
+    activatedChange.active = true;
+
+    QAccessibleInterface *iface = QAccessible::queryAccessibleInterface(window.data());
+    QVERIFY(iface);
+    QAccessibleInterface *rectangleA = iface->child(0);
+
+    QCOMPARE(rectangleA->role(), QAccessible::StaticText);
+    QCOMPARE(rectangleA->text(QAccessible::Name), QLatin1String("A"));
+    static const char *expected = "BEFIHD";
+    // check if node "C" and "G" is skipped and that the order is as expected.
+    for (int i = 0; i < rectangleA->childCount(); ++i) {
+        QAccessibleInterface *child = rectangleA->child(i);
+        QCOMPARE(child->text(QAccessible::Name), QString(QLatin1Char(expected[i])));
+    }
     QTestAccessibility::clearEvents();
 }
 

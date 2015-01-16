@@ -238,8 +238,16 @@
 
     </xsl:template>
 
-    <!-- Format a string constant as QString(QLatin1Char('X')) or QStringLiteral("foo"), respectively -->
-    <xsl:template name="string-constant">
+    <!-- Format a string constant for comparison as QLatin1String("foo") - they're all ascii-only -->
+    <xsl:template name="string-constant-for-comparison">
+        <xsl:param name="literal"/>
+        <xsl:text>QLatin1String("</xsl:text>
+        <xsl:value-of select="$literal"/>
+        <xsl:text>")</xsl:text>
+    </xsl:template>
+
+    <!-- Format a string constant for storage as QString(QLatin1Char('X')) or QLatin1String("foo"), respectively -->
+    <xsl:template name="string-constant-for-storage">
     <xsl:param name="literal"/>
         <xsl:choose>
             <xsl:when test="string-length($literal) &lt; 2">
@@ -286,7 +294,7 @@
                 </xsl:variable>
 
                 <xsl:text>        if (name == </xsl:text>
-                <xsl:call-template name="string-constant">
+                <xsl:call-template name="string-constant-for-comparison">
                     <xsl:with-param name="literal" select="@name"/>
                 </xsl:call-template>
                 <xsl:text>) {&endl;</xsl:text>
@@ -332,7 +340,7 @@
             <xsl:variable name="array" select="@maxOccurs = 'unbounded'"/>
 
             <xsl:text>            if (tag == </xsl:text>
-            <xsl:call-template name="string-constant">
+            <xsl:call-template name="string-constant-for-comparison">
                 <xsl:with-param name="literal" select="$lower-name"/>
             </xsl:call-template>
             <xsl:text>) {&endl;</xsl:text>
@@ -465,7 +473,7 @@
             <xsl:value-of select="$cap-name"/>
             <xsl:text>())&endl;</xsl:text>
             <xsl:text>        writer.writeAttribute(</xsl:text>
-            <xsl:call-template name="string-constant">
+            <xsl:call-template name="string-constant-for-storage">
                 <xsl:with-param name="literal" select="$lower-name"/>
             </xsl:call-template>
 
@@ -521,7 +529,7 @@
                         </xsl:variable>
 
                         <xsl:text>            writer.writeTextElement(</xsl:text>
-                        <xsl:call-template name="string-constant">
+                        <xsl:call-template name="string-constant-for-storage">
                             <xsl:with-param name="literal" select="$camel-case-name"/>
                         </xsl:call-template>
                         <xsl:text>, </xsl:text>
@@ -542,7 +550,7 @@
                         <xsl:text>();&endl;</xsl:text>
                         <xsl:text>            if (v != 0) {&endl;</xsl:text>
                         <xsl:text>                v->write(writer, </xsl:text>
-                        <xsl:call-template name="string-constant">
+                        <xsl:call-template name="string-constant-for-storage">
                             <xsl:with-param name="literal" select="$lower-name"/>
                         </xsl:call-template>
                         <xsl:text>);&endl;</xsl:text>
@@ -601,7 +609,7 @@
                     <xsl:choose>
                         <xsl:when test="$xs-type-cat = 'pointer'">
                             <xsl:text>        v->write(writer, </xsl:text>
-                            <xsl:call-template name="string-constant">
+                            <xsl:call-template name="string-constant-for-storage">
                                 <xsl:with-param name="literal" select="$lower-name"/>
                             </xsl:call-template>
                             <xsl:text>);&endl;</xsl:text>
@@ -615,7 +623,7 @@
                             </xsl:variable>
 
                             <xsl:text>        writer.writeTextElement(</xsl:text>
-                            <xsl:call-template name="string-constant">
+                            <xsl:call-template name="string-constant-for-storage">
                                 <xsl:with-param name="literal" select="$lower-name"/>
                             </xsl:call-template>
                             <xsl:text>, </xsl:text>
@@ -634,7 +642,7 @@
                             <xsl:text>        m_</xsl:text>
                             <xsl:value-of select="$camel-case-name"/>
                             <xsl:text>->write(writer, </xsl:text>
-                            <xsl:call-template name="string-constant">
+                            <xsl:call-template name="string-constant-for-storage">
                                 <xsl:with-param name="literal" select="$lower-name"/>
                             </xsl:call-template>
                             <xsl:text>);&endl;</xsl:text>
@@ -647,7 +655,7 @@
                                 </xsl:call-template>
                             </xsl:variable>
                             <xsl:text>        writer.writeTextElement(</xsl:text>
-                            <xsl:call-template name="string-constant">
+                            <xsl:call-template name="string-constant-for-storage">
                                 <xsl:with-param name="literal" select="$lower-name"/>
                             </xsl:call-template>
                             <xsl:text>, </xsl:text>
@@ -903,40 +911,32 @@
 
 <xsl:text>/****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
-** This file is part of the tools applications of the Qt Toolkit.
+** This file is part of the Qt Linguist of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **

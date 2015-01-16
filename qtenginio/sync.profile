@@ -11,8 +11,8 @@
 #   - an empty string to use the same branch under test (dependencies will become "refs/heads/master" if we are in the master branch)
 #
 %dependencies = (
-    "qtbase" => "",
-    "qtdeclarative" => "",
-    "qtxmlpatterns" => "",
+    "qtbase" => "refs/heads/5.4",
+    "qtdeclarative" => "refs/heads/5.4",
+    "qtxmlpatterns" => "refs/heads/5.4",
 );
 

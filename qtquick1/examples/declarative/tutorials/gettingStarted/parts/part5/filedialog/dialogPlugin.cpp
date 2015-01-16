@@ -44,11 +44,11 @@
 #include <QtDeclarative/qdeclarative.h>
 
 void DialogPlugin::registerTypes(const char *uri){
-    
+
     //register the class Directory into QML as a "Directory" element version 1.0
     qmlRegisterType<Directory>(uri, 1, 0, "Directory");
     qmlRegisterType<File>(uri,1,0,"File");
-    
+
     //qRegisterMetaType<QDeclarativeListProperty<QString> > ("QDeclarativeListProperty<QString>");
-        
+
 }

@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtQuick module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -113,9 +105,6 @@ bool QSGNodeUpdater::isNodeBlocked(QSGNode *node, QSGNode *root) const
 
 void QSGNodeUpdater::enterTransformNode(QSGTransformNode *t)
 {
-    if (t->dirtyState() & QSGNode::DirtyMatrix)
-        ++m_force_update;
-
 #ifdef QSG_UPDATER_DEBUG
     qDebug() << "enter transform:" << t << "force=" << m_force_update;
 #endif
@@ -142,9 +131,6 @@ void QSGNodeUpdater::leaveTransformNode(QSGTransformNode *t)
 #ifdef QSG_UPDATER_DEBUG
     qDebug() << "leave transform:" << t;
 #endif
-
-    if (t->dirtyState() & QSGNode::DirtyMatrix)
-        --m_force_update;
 
     if (!t->matrix().isIdentity()) {
         m_combined_matrix_stack.pop_back();
@@ -217,9 +203,6 @@ void QSGNodeUpdater::leaveRenderNode(QSGRenderNode *r)
 
 void QSGNodeUpdater::enterOpacityNode(QSGOpacityNode *o)
 {
-    if (o->dirtyState() & QSGNode::DirtyOpacity)
-        ++m_force_update;
-
     qreal opacity = m_opacity_stack.last() * o->opacity();
     o->setCombinedOpacity(opacity);
     m_opacity_stack.add(opacity);
@@ -252,14 +235,10 @@ void QSGNodeUpdater::visitNode(QSGNode *n)
     qDebug() << "enter:" << n;
 #endif
 
-    if (!n->dirtyState() && !m_force_update)
+    if (!m_force_update)
         return;
     if (n->isSubtreeBlocked())
         return;
-
-    bool forceUpdate = n->dirtyState() & (QSGNode::DirtyNodeAdded | QSGNode::DirtyForceUpdate);
-    if (forceUpdate)
-        ++m_force_update;
 
     switch (n->type()) {
     case QSGNode::TransformNodeType: {
@@ -296,11 +275,6 @@ void QSGNodeUpdater::visitNode(QSGNode *n)
         visitChildren(n);
         break;
     }
-
-    if (forceUpdate)
-        --m_force_update;
-
-    n->clearDirty();
 }
 
 QT_END_NAMESPACE

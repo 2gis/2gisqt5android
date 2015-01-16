@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -66,14 +58,14 @@ QV4::ReturnedValue QJSValuePrivate::getValue(QV4::ExecutionEngine *e)
     }
 
     if (value.isEmpty()) {
-        value = QV4::Encode(engine->newString(string));
+        value = QV4::Encode(engine->v8Engine->fromVariant(unboundData));
         PersistentValuePrivate **listRoot = &engine->memoryManager->m_persistentValues;
         prev = listRoot;
         next = *listRoot;
         *prev = this;
         if (next)
             next->prev = &this->next;
-        string = QString();
+        unboundData.clear();
     }
     return value.asReturnedValue();
 }
@@ -361,8 +353,21 @@ bool QJSValue::isVariant() const
 */
 QString QJSValue::toString() const
 {
-    if (d->value.isEmpty())
-        return d->string;
+    if (d->value.isEmpty()) {
+        if (d->unboundData.type() == QVariant::Map)
+            return QStringLiteral("[object Object]");
+        else if (d->unboundData.type() == QVariant::List) {
+            const QVariantList list = d->unboundData.toList();
+            QString result;
+            for (int i = 0; i < list.count(); ++i) {
+                if (i > 0)
+                    result.append(QLatin1Char(','));
+                result.append(list.at(i).toString());
+            }
+            return result;
+        }
+        return d->unboundData.toString();
+    }
     return d->value.toQStringNoThrow();
 }
 
@@ -380,12 +385,18 @@ QString QJSValue::toString() const
 */
 double QJSValue::toNumber() const
 {
-    if (d->value.isEmpty())
-        return RuntimeHelpers::stringToNumber(d->string);
+    if (d->value.isEmpty()) {
+        if (d->unboundData.type() == QVariant::String)
+            return RuntimeHelpers::stringToNumber(d->unboundData.toString());
+        else if (d->unboundData.canConvert<double>())
+            return d->unboundData.value<double>();
+        else
+            return std::numeric_limits<double>::quiet_NaN();
+    }
 
     QV4::ExecutionContext *ctx = d->engine ? d->engine->currentContext() : 0;
     double dbl = d->value.toNumber();
-    if (ctx && ctx->engine->hasException) {
+    if (ctx && ctx->d()->engine->hasException) {
         ctx->catchException();
         return 0;
     }
@@ -406,12 +417,16 @@ double QJSValue::toNumber() const
 */
 bool QJSValue::toBool() const
 {
-    if (d->value.isEmpty())
-        return d->string.length() > 0;
+    if (d->value.isEmpty()) {
+        if (d->unboundData.userType() == QMetaType::QString)
+            return d->unboundData.toString().length() > 0;
+        else
+            return d->unboundData.toBool();
+    }
 
     QV4::ExecutionContext *ctx = d->engine ? d->engine->currentContext() : 0;
     bool b = d->value.toBoolean();
-    if (ctx && ctx->engine->hasException) {
+    if (ctx && ctx->d()->engine->hasException) {
         ctx->catchException();
         return false;
     }
@@ -432,12 +447,16 @@ bool QJSValue::toBool() const
 */
 qint32 QJSValue::toInt() const
 {
-    if (d->value.isEmpty())
-        return QV4::Primitive::toInt32(RuntimeHelpers::stringToNumber(d->string));
+    if (d->value.isEmpty()) {
+        if (d->unboundData.userType() == QMetaType::QString)
+            return QV4::Primitive::toInt32(RuntimeHelpers::stringToNumber(d->unboundData.toString()));
+        else
+            return d->unboundData.toInt();
+    }
 
     QV4::ExecutionContext *ctx = d->engine ? d->engine->currentContext() : 0;
     qint32 i = d->value.toInt32();
-    if (ctx && ctx->engine->hasException) {
+    if (ctx && ctx->d()->engine->hasException) {
         ctx->catchException();
         return 0;
     }
@@ -458,12 +477,16 @@ qint32 QJSValue::toInt() const
 */
 quint32 QJSValue::toUInt() const
 {
-    if (d->value.isEmpty())
-        return QV4::Primitive::toUInt32(RuntimeHelpers::stringToNumber(d->string));
+    if (d->value.isEmpty()) {
+        if (d->unboundData.userType() == QMetaType::QString)
+            return QV4::Primitive::toUInt32(RuntimeHelpers::stringToNumber(d->unboundData.toString()));
+        else
+            return d->unboundData.toUInt();
+    }
 
     QV4::ExecutionContext *ctx = d->engine ? d->engine->currentContext() : 0;
     quint32 u = d->value.toUInt32();
-    if (ctx && ctx->engine->hasException) {
+    if (ctx && ctx->d()->engine->hasException) {
         ctx->catchException();
         return 0;
     }
@@ -495,7 +518,7 @@ quint32 QJSValue::toUInt() const
 QVariant QJSValue::toVariant() const
 {
     if (d->value.isEmpty())
-        return QVariant(d->string);
+        return d->unboundData;
 
     return QV4::VariantObject::toVariant(d->value);
 }
@@ -682,7 +705,7 @@ QJSValue QJSValue::prototype() const
     Scoped<Object> p(scope, o->prototype());
     if (!p)
         return QJSValue(NullValue);
-    return new QJSValuePrivate(o->internalClass->engine, p);
+    return new QJSValuePrivate(o->internalClass()->engine, p);
 }
 
 /*!
@@ -783,8 +806,10 @@ bool QJSValue::equals(const QJSValue& other) const
 {
     if (d->value.isEmpty()) {
         if (other.d->value.isEmpty())
-            return d->string == other.d->string;
-        return js_equal(d->string, QV4::ValueRef(other.d->value));
+            return d->unboundData == other.d->unboundData;
+        if (d->unboundData.type() == QVariant::Map || d->unboundData.type() == QVariant::List)
+            return false;
+        return js_equal(d->unboundData.toString(), QV4::ValueRef(other.d->value));
     }
     if (other.d->value.isEmpty())
         return other.equals(*this);
@@ -818,9 +843,11 @@ bool QJSValue::strictlyEquals(const QJSValue& other) const
 {
     if (d->value.isEmpty()) {
         if (other.d->value.isEmpty())
-            return d->string == other.d->string;
+            return d->unboundData == other.d->unboundData;
+        if (d->unboundData.type() == QVariant::Map || d->unboundData.type() == QVariant::List)
+            return false;
         if (other.d->value.isString())
-            return d->string == other.d->value.stringValue()->toQString();
+            return d->unboundData.toString() == other.d->value.stringValue()->toQString();
         return false;
     }
     if (other.d->value.isEmpty())
@@ -861,7 +888,7 @@ QJSValue QJSValue::property(const QString& name) const
     s->makeIdentifier();
     QV4::ExecutionContext *ctx = engine->currentContext();
     QV4::ScopedValue result(scope);
-    result = o->get(s);
+    result = o->get(s.getPointer());
     if (scope.hasException())
         result = ctx->catchException();
 
@@ -893,7 +920,7 @@ QJSValue QJSValue::property(quint32 arrayIndex) const
 
     QV4::ExecutionContext *ctx = engine->currentContext();
     QV4::ScopedValue result(scope);
-    result = arrayIndex == UINT_MAX ? o->get(engine->id_uintMax) : o->getIndexed(arrayIndex);
+    result = arrayIndex == UINT_MAX ? o->get(engine->id_uintMax.getPointer()) : o->getIndexed(arrayIndex);
     if (scope.hasException())
         result = ctx->catchException();
     return new QJSValuePrivate(engine, result);
@@ -936,7 +963,7 @@ void QJSValue::setProperty(const QString& name, const QJSValue& value)
     QV4::ExecutionContext *ctx = engine->currentContext();
     s->makeIdentifier();
     QV4::ScopedValue v(scope, value.d->getValue(engine));
-    o->put(s, v);
+    o->put(s.getPointer(), v);
     if (scope.hasException())
         ctx->catchException();
 }
@@ -969,7 +996,7 @@ void QJSValue::setProperty(quint32 arrayIndex, const QJSValue& value)
     if (arrayIndex != UINT_MAX)
         o->putIndexed(arrayIndex, v);
     else
-        o->put(engine->id_uintMax, v);
+        o->put(engine->id_uintMax.getPointer(), v);
     if (scope.hasException())
         ctx->catchException();
 }
@@ -1004,7 +1031,7 @@ bool QJSValue::deleteProperty(const QString &name)
         return false;
 
     ScopedString s(scope, engine->newString(name));
-    bool b = o->deleteProperty(s);
+    bool b = o->deleteProperty(s.getPointer());
     if (scope.hasException())
         ctx->catchException();
     return b;
@@ -1028,7 +1055,7 @@ bool QJSValue::hasProperty(const QString &name) const
         return false;
 
     ScopedString s(scope, engine->newIdentifier(name));
-    return o->hasProperty(s);
+    return o->hasProperty(s.getPointer());
 }
 
 /*!
@@ -1049,7 +1076,7 @@ bool QJSValue::hasOwnProperty(const QString &name) const
         return false;
 
     ScopedString s(scope, engine->newIdentifier(name));
-    return o->hasOwnProperty(s);
+    return o->hasOwnProperty(s.getPointer());
 }
 
 /*!

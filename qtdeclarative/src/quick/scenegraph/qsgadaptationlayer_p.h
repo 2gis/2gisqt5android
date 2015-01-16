@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtQuick module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -67,8 +59,53 @@ class TextureReference;
 class QSGDistanceFieldGlyphCacheManager;
 class QSGDistanceFieldGlyphNode;
 class QOpenGLContext;
+class QSGImageNode;
+class QSGPainterNode;
+class QSGRectangleNode;
+class QSGGlyphNode;
+class QSGNinePatchNode;
+class QSGRootNode;
 
-class Q_QUICK_PRIVATE_EXPORT QSGRectangleNode : public QSGGeometryNode
+class Q_QUICK_PRIVATE_EXPORT QSGNodeVisitorEx
+{
+public:
+    // visit(...) returns true if the children are supposed to be
+    // visisted and false if they're supposed to be skipped by the visitor.
+
+    virtual bool visit(QSGTransformNode *) = 0;
+    virtual void endVisit(QSGTransformNode *) = 0;
+    virtual bool visit(QSGClipNode *) = 0;
+    virtual void endVisit(QSGClipNode *) = 0;
+    virtual bool visit(QSGGeometryNode *) = 0;
+    virtual void endVisit(QSGGeometryNode *) = 0;
+    virtual bool visit(QSGOpacityNode *) = 0;
+    virtual void endVisit(QSGOpacityNode *) = 0;
+    virtual bool visit(QSGImageNode *) = 0;
+    virtual void endVisit(QSGImageNode *) = 0;
+    virtual bool visit(QSGPainterNode *) = 0;
+    virtual void endVisit(QSGPainterNode *) = 0;
+    virtual bool visit(QSGRectangleNode *) = 0;
+    virtual void endVisit(QSGRectangleNode *) = 0;
+    virtual bool visit(QSGGlyphNode *) = 0;
+    virtual void endVisit(QSGGlyphNode *) = 0;
+    virtual bool visit(QSGNinePatchNode *) = 0;
+    virtual void endVisit(QSGNinePatchNode *) = 0;
+    virtual bool visit(QSGRootNode *) = 0;
+    virtual void endVisit(QSGRootNode *) = 0;
+
+    void visitChildren(QSGNode *node);
+};
+
+
+class Q_QUICK_PRIVATE_EXPORT QSGVisitableNode : public QSGGeometryNode
+{
+public:
+    QSGVisitableNode() { setFlag(IsVisitableNode); }
+
+    virtual void accept(QSGNodeVisitorEx *) = 0;
+};
+
+class Q_QUICK_PRIVATE_EXPORT QSGRectangleNode : public QSGVisitableNode
 {
 public:
     virtual void setRect(const QRectF &rect) = 0;
@@ -81,10 +118,12 @@ public:
     virtual void setAligned(bool aligned) = 0;
 
     virtual void update() = 0;
+
+    virtual void accept(QSGNodeVisitorEx *visitor) { if (visitor->visit(this)) visitor->visitChildren(this); visitor->endVisit(this); }
 };
 
 
-class Q_QUICK_PRIVATE_EXPORT QSGImageNode : public QSGGeometryNode
+class Q_QUICK_PRIVATE_EXPORT QSGImageNode : public QSGVisitableNode
 {
 public:
     virtual void setTargetRect(const QRectF &rect) = 0;
@@ -103,10 +142,68 @@ public:
     virtual void setVerticalWrapMode(QSGTexture::WrapMode wrapMode) = 0;
 
     virtual void update() = 0;
+
+    virtual void accept(QSGNodeVisitorEx *visitor) { if (visitor->visit(this)) visitor->visitChildren(this); visitor->endVisit(this); }
 };
 
+class Q_QUICK_PRIVATE_EXPORT QSGPainterNode : public QSGVisitableNode
+{
+public:
 
-class Q_QUICK_PRIVATE_EXPORT QSGGlyphNode : public QSGGeometryNode
+    virtual void setPreferredRenderTarget(QQuickPaintedItem::RenderTarget target) = 0;
+    virtual void setSize(const QSize &size) = 0;
+    virtual void setDirty(const QRect &dirtyRect = QRect()) = 0;
+    virtual void setOpaquePainting(bool opaque) = 0;
+    virtual void setLinearFiltering(bool linearFiltering) = 0;
+    virtual void setMipmapping(bool mipmapping) = 0;
+    virtual void setSmoothPainting(bool s) = 0;
+    virtual void setFillColor(const QColor &c) = 0;
+    virtual void setContentsScale(qreal s) = 0;
+    virtual void setFastFBOResizing(bool dynamic) = 0;
+
+    virtual QImage toImage() const = 0;
+    virtual void update() = 0;
+    virtual QSGTexture *texture() const = 0;
+
+    virtual void accept(QSGNodeVisitorEx *visitor) { if (visitor->visit(this)) visitor->visitChildren(this); visitor->endVisit(this); }
+};
+
+class Q_QUICK_PRIVATE_EXPORT QSGNinePatchNode : public QSGVisitableNode
+{
+public:
+    virtual void setTexture(QSGTexture *texture) = 0;
+    virtual void setBounds(const QRectF &bounds) = 0;
+    virtual void setDevicePixelRatio(qreal ratio) = 0;
+    virtual void setPadding(qreal left, qreal top, qreal right, qreal bottom) = 0;
+
+    virtual void update() = 0;
+
+    virtual void accept(QSGNodeVisitorEx *visitor) { if (visitor->visit(this)) visitor->visitChildren(this); visitor->endVisit(this); }
+};
+
+class Q_QUICK_EXPORT QSGLayer : public QSGDynamicTexture
+{
+    Q_OBJECT
+public:
+    virtual void setItem(QSGNode *item) = 0;
+    virtual void setRect(const QRectF &rect) = 0;
+    virtual void setSize(const QSize &size) = 0;
+    virtual void scheduleUpdate() = 0;
+    virtual QImage toImage() const = 0;
+    virtual void setLive(bool live) = 0;
+    virtual void setRecursive(bool recursive) = 0;
+    virtual void setFormat(GLenum format) = 0;
+    virtual void setHasMipmaps(bool mipmap) = 0;
+    virtual void setDevicePixelRatio(qreal ratio) = 0;
+    Q_SLOT virtual void markDirtyTexture() = 0;
+    Q_SLOT virtual void invalidated() = 0;
+
+Q_SIGNALS:
+    void updateRequested();
+    void scheduledUpdateCompleted();
+};
+
+class Q_QUICK_PRIVATE_EXPORT QSGGlyphNode : public QSGVisitableNode
 {
 public:
     enum AntialiasingMode
@@ -134,6 +231,7 @@ public:
     void setOwnerElement(QQuickItem *ownerElement) { m_ownerElement = ownerElement; }
     QQuickItem *ownerElement() const { return m_ownerElement; }
 
+    virtual void accept(QSGNodeVisitorEx *visitor) { if (visitor->visit(this)) visitor->visitChildren(this); visitor->endVisit(this); }
 protected:
     QRectF m_bounding_rect;
     QQuickItem *m_ownerElement;
@@ -246,6 +344,10 @@ protected:
     GLuint textureIdForGlyph(glyph_t glyph) const;
 
     GlyphData &glyphData(glyph_t glyph);
+
+#if defined(QSG_DISTANCEFIELD_CACHE_DEBUG)
+    void saveTexture(GLuint textureId, int width, int height) const;
+#endif
 
     inline bool isCoreProfile() const { return m_coreProfile; }
 

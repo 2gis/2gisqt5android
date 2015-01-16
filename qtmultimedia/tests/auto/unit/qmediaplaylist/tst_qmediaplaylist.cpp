@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -86,6 +78,7 @@ private slots:
     void currentItem();
     void saveAndLoad();
     void loadM3uFile();
+    void loadPLSFile();
     void playbackMode();
     void playbackMode_data();
     void shuffle();
@@ -356,8 +349,10 @@ void tst_QMediaPlaylist::saveAndLoad()
     QVERIFY(playlist.error() == QMediaPlaylist::FormatNotSupportedError);
     QVERIFY(!playlist.errorString().isEmpty());
 
+    QSignalSpy loadedSignal(&playlist, SIGNAL(loaded()));
     QSignalSpy errorSignal(&playlist, SIGNAL(loadFailed()));
     playlist.load(&buffer, "unsupported_format");
+    QTRY_VERIFY(loadedSignal.isEmpty());
     QCOMPARE(errorSignal.size(), 1);
     QVERIFY(playlist.error() != QMediaPlaylist::NoError);
     QVERIFY(!playlist.errorString().isEmpty());
@@ -367,8 +362,10 @@ void tst_QMediaPlaylist::saveAndLoad()
     QVERIFY(playlist.error() != QMediaPlaylist::NoError);
     QVERIFY(!playlist.errorString().isEmpty());
 
+    loadedSignal.clear();
     errorSignal.clear();
     playlist.load(QUrl::fromLocalFile(QLatin1String("tmp.unsupported_format")), "unsupported_format");
+    QTRY_VERIFY(loadedSignal.isEmpty());
     QCOMPARE(errorSignal.size(), 1);
     QVERIFY(playlist.error() == QMediaPlaylist::FormatNotSupportedError);
     QVERIFY(!playlist.errorString().isEmpty());
@@ -380,7 +377,11 @@ void tst_QMediaPlaylist::saveAndLoad()
     buffer.seek(0);
 
     QMediaPlaylist playlist2;
+    QSignalSpy loadedSignal2(&playlist2, SIGNAL(loaded()));
+    QSignalSpy errorSignal2(&playlist2, SIGNAL(loadFailed()));
     playlist2.load(&buffer, "m3u");
+    QCOMPARE(loadedSignal2.size(), 1);
+    QTRY_VERIFY(errorSignal2.isEmpty());
     QCOMPARE(playlist.error(), QMediaPlaylist::NoError);
 
     QCOMPARE(playlist.mediaCount(), playlist2.mediaCount());
@@ -390,9 +391,13 @@ void tst_QMediaPlaylist::saveAndLoad()
     res = playlist.save(QUrl::fromLocalFile(QLatin1String("tmp.m3u")), "m3u");
     QVERIFY(res);
 
+    loadedSignal2.clear();
+    errorSignal2.clear();
     playlist2.clear();
     QVERIFY(playlist2.isEmpty());
     playlist2.load(QUrl::fromLocalFile(QLatin1String("tmp.m3u")), "m3u");
+    QCOMPARE(loadedSignal2.size(), 1);
+    QTRY_VERIFY(errorSignal2.isEmpty());
     QCOMPARE(playlist.error(), QMediaPlaylist::NoError);
 
     QCOMPARE(playlist.mediaCount(), playlist2.mediaCount());
@@ -406,12 +411,20 @@ void tst_QMediaPlaylist::loadM3uFile()
     QMediaPlaylist playlist;
 
     // Try to load playlist that does not exist in the testdata folder
+    QSignalSpy loadSpy(&playlist, SIGNAL(loaded()));
+    QSignalSpy loadFailedSpy(&playlist, SIGNAL(loadFailed()));
     QString testFileName = QFINDTESTDATA("testdata");
     playlist.load(QUrl::fromLocalFile(testFileName + "/missing_file.m3u"));
+    QTRY_VERIFY(loadSpy.isEmpty());
+    QVERIFY(!loadFailedSpy.isEmpty());
     QVERIFY(playlist.error() != QMediaPlaylist::NoError);
 
+    loadSpy.clear();
+    loadFailedSpy.clear();
     testFileName = QFINDTESTDATA("testdata/test.m3u");
     playlist.load(QUrl::fromLocalFile(testFileName));
+    QTRY_VERIFY(!loadSpy.isEmpty());
+    QVERIFY(loadFailedSpy.isEmpty());
     QCOMPARE(playlist.error(), QMediaPlaylist::NoError);
     QCOMPARE(playlist.mediaCount(), 7);
 
@@ -428,10 +441,80 @@ void tst_QMediaPlaylist::loadM3uFile()
     //ensure #2 suffix is not stripped from path
     testFileName = QFINDTESTDATA("testdata/testfile2#suffix");
     QCOMPARE(playlist.media(6).canonicalUrl(), QUrl::fromLocalFile(testFileName));
+
     // check ability to load from QNetworkRequest
+    loadSpy.clear();
+    loadFailedSpy.clear();
+    playlist.load(QNetworkRequest(QUrl::fromLocalFile(QFINDTESTDATA("testdata/test.m3u"))));
+    QTRY_VERIFY(!loadSpy.isEmpty());
+    QVERIFY(loadFailedSpy.isEmpty());
+}
+
+void tst_QMediaPlaylist::loadPLSFile()
+{
+    QMediaPlaylist playlist;
+
+    // Try to load playlist that does not exist in the testdata folder
     QSignalSpy loadSpy(&playlist, SIGNAL(loaded()));
     QSignalSpy loadFailedSpy(&playlist, SIGNAL(loadFailed()));
-    playlist.load(QNetworkRequest(QUrl::fromLocalFile(QFINDTESTDATA("testdata/test.m3u"))));
+    QString testFileName = QFINDTESTDATA("testdata");
+    playlist.load(QUrl::fromLocalFile(testFileName + "/missing_file.pls"));
+    QTRY_VERIFY(loadSpy.isEmpty());
+    QVERIFY(!loadFailedSpy.isEmpty());
+    QVERIFY(playlist.error() != QMediaPlaylist::NoError);
+
+    // Try to load empty playlist
+    loadSpy.clear();
+    loadFailedSpy.clear();
+    testFileName = QFINDTESTDATA("testdata/empty.pls");
+    playlist.load(QUrl::fromLocalFile(testFileName));
+    QTRY_VERIFY(!loadSpy.isEmpty());
+    QVERIFY(loadFailedSpy.isEmpty());
+    QCOMPARE(playlist.error(), QMediaPlaylist::NoError);
+    QCOMPARE(playlist.mediaCount(), 0);
+
+    // Try to load regular playlist
+    loadSpy.clear();
+    loadFailedSpy.clear();
+    testFileName = QFINDTESTDATA("testdata/test.pls");
+    playlist.load(QUrl::fromLocalFile(testFileName));
+    QTRY_VERIFY(!loadSpy.isEmpty());
+    QVERIFY(loadFailedSpy.isEmpty());
+    QCOMPARE(playlist.error(), QMediaPlaylist::NoError);
+    QCOMPARE(playlist.mediaCount(), 7);
+
+    QCOMPARE(playlist.media(0).canonicalUrl(), QUrl(QLatin1String("http://test.host/path")));
+    QCOMPARE(playlist.media(1).canonicalUrl(), QUrl(QLatin1String("http://test.host/path")));
+    testFileName = QFINDTESTDATA("testdata/testfile");
+    QCOMPARE(playlist.media(2).canonicalUrl(),
+             QUrl::fromLocalFile(testFileName));
+    testFileName = QFINDTESTDATA("testdata");
+    QCOMPARE(playlist.media(3).canonicalUrl(),
+             QUrl::fromLocalFile(testFileName + "/testdir/testfile"));
+    QCOMPARE(playlist.media(4).canonicalUrl(), QUrl(QLatin1String("file:///testdir/testfile")));
+    QCOMPARE(playlist.media(5).canonicalUrl(), QUrl(QLatin1String("file://path/name#suffix")));
+    //ensure #2 suffix is not stripped from path
+    testFileName = QFINDTESTDATA("testdata/testfile2#suffix");
+    QCOMPARE(playlist.media(6).canonicalUrl(), QUrl::fromLocalFile(testFileName));
+
+    // Try to load a totem-pl generated playlist
+    // (Format doesn't respect the spec)
+    loadSpy.clear();
+    loadFailedSpy.clear();
+    playlist.clear();
+    testFileName = QFINDTESTDATA("testdata/totem-pl-example.pls");
+    playlist.load(QUrl::fromLocalFile(testFileName));
+    QTRY_VERIFY(!loadSpy.isEmpty());
+    QVERIFY(loadFailedSpy.isEmpty());
+    QCOMPARE(playlist.error(), QMediaPlaylist::NoError);
+    QCOMPARE(playlist.mediaCount(), 1);
+    QCOMPARE(playlist.media(0).canonicalUrl(), QUrl(QLatin1String("http://test.host/path")));
+
+
+    // check ability to load from QNetworkRequest
+    loadSpy.clear();
+    loadFailedSpy.clear();
+    playlist.load(QNetworkRequest(QUrl::fromLocalFile(QFINDTESTDATA("testdata/test.pls"))));
     QTRY_VERIFY(!loadSpy.isEmpty());
     QVERIFY(loadFailedSpy.isEmpty());
 }

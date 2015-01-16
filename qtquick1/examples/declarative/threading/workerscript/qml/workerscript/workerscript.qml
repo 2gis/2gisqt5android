@@ -59,7 +59,7 @@ Rectangle {
         anchors.left: parent.left; anchors.leftMargin: 20
         color: "red"
 
-        MouseArea { 
+        MouseArea {
             anchors.fill: parent
             onClicked: myWorker.sendMessage( { rectangle: "red", x: mouse.x, y: mouse.y } );
         }
@@ -70,7 +70,7 @@ Rectangle {
         anchors.right: parent.right; anchors.rightMargin: 20
         color: "blue"
 
-        MouseArea { 
+        MouseArea {
             anchors.fill: parent
             onClicked: myWorker.sendMessage( { rectangle: "blue", x: mouse.x, y: mouse.y } );
         }

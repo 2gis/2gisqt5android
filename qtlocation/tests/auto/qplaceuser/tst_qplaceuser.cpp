@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -71,19 +63,19 @@ void tst_QPlaceUser::constructorTest()
     QVERIFY(user.name().isEmpty());
     QVERIFY(user.userId().isEmpty());
 
-    user.setName(QLatin1String("Thomas Anderson"));
-    user.setUserId(QLatin1String("Neo"));
+    user.setName(QStringLiteral("Thomas Anderson"));
+    user.setUserId(QStringLiteral("Neo"));
 
     QPlaceUser user2(user);
-    QCOMPARE(user2.name(), QLatin1String("Thomas Anderson"));
-    QCOMPARE(user2.userId(), QLatin1String("Neo"));
+    QCOMPARE(user2.name(), QStringLiteral("Thomas Anderson"));
+    QCOMPARE(user2.userId(), QStringLiteral("Neo"));
 }
 
 void tst_QPlaceUser::nameTest()
 {
     QPlaceUser user;
-    user.setName(QLatin1String("Thomas Anderson"));
-    QCOMPARE(user.name(), QLatin1String("Thomas Anderson"));
+    user.setName(QStringLiteral("Thomas Anderson"));
+    QCOMPARE(user.name(), QStringLiteral("Thomas Anderson"));
     user.setName(QString());
     QVERIFY(user.name().isEmpty());
 }
@@ -91,8 +83,8 @@ void tst_QPlaceUser::nameTest()
 void tst_QPlaceUser::userIdTest()
 {
     QPlaceUser user;
-    user.setUserId(QLatin1String("Neo"));
-    QCOMPARE(user.userId(), QLatin1String("Neo"));
+    user.setUserId(QStringLiteral("Neo"));
+    QCOMPARE(user.userId(), QStringLiteral("Neo"));
     user.setUserId(QString());
     QVERIFY(user.userId().isEmpty());
 }
@@ -100,12 +92,12 @@ void tst_QPlaceUser::userIdTest()
 void tst_QPlaceUser::operatorsTest()
 {
     QPlaceUser user1;
-    user1.setName(QLatin1String("Thomas Anderson"));
-    user1.setUserId(QLatin1String("Neo"));
+    user1.setName(QStringLiteral("Thomas Anderson"));
+    user1.setUserId(QStringLiteral("Neo"));
 
     QPlaceUser user2;
-    user2.setName(QLatin1String("Thomas Anderson"));
-    user2.setUserId(QLatin1String("Neo"));
+    user2.setName(QStringLiteral("Thomas Anderson"));
+    user2.setUserId(QStringLiteral("Neo"));
 
     QVERIFY(user1 == user2);
     QVERIFY(!(user1 != user2));
@@ -126,10 +118,10 @@ void tst_QPlaceUser::operatorsTest()
 
     QFETCH(QString, field);
 
-    if (field == QLatin1String("name"))
-        user3.setName(QLatin1String("bob"));
-    else if (field == QLatin1String("userId"))
-        user3.setUserId(QLatin1String("Morpheus"));
+    if (field == QStringLiteral("name"))
+        user3.setName(QStringLiteral("bob"));
+    else if (field == QStringLiteral("userId"))
+        user3.setUserId(QStringLiteral("Morpheus"));
     else
         qFatal("Unknown data field");
 

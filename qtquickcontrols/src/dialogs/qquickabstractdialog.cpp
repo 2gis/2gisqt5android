@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtQuick.Dialogs module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -43,6 +35,7 @@
 #include "qquickitem.h"
 
 #include <private/qguiapplication_p.h>
+#include <private/qqmlglobal_p.h>
 #include <QWindow>
 #include <QQmlComponent>
 #include <QQuickWindow>
@@ -96,6 +89,7 @@ void QQuickAbstractDialog::setVisible(bool v)
             if (!m_dialogWindow && m_hasNativeWindows) {
                 QQuickWindow *win = new QQuickWindow;
                 ((QObject *)win)->setParent(this); // memory management only
+                win->setFlags(Qt::Dialog);
                 m_dialogWindow = win;
                 m_contentItem->setParentItem(win->contentItem());
                 QSize minSize = QSize(m_contentItem->implicitWidth(), m_contentItem->implicitHeight());
@@ -116,22 +110,28 @@ void QQuickAbstractDialog::setVisible(bool v)
                 connect(win, SIGNAL(heightChanged(int)), this, SLOT(windowGeometryChanged()));
             }
 
-            QQuickItem *parentItem = qobject_cast<QQuickItem *>(parent());
-
-            // If the platform does not support multiple windows, but the dialog is
-            // implemented as an Item, then try to decorate it as a fake window and make it visible.
-            if (parentItem && !m_dialogWindow && !m_windowDecoration) {
-                if (m_decorationComponent) {
-                    if (m_decorationComponent->isLoading())
-                        connect(m_decorationComponent, SIGNAL(statusChanged(QQmlComponent::Status)),
-                                this, SLOT(decorationLoaded()));
-                    else
-                        decorationLoaded();
+            if (!m_dialogWindow) {
+                if (Q_UNLIKELY(!parentWindow())) {
+                    qWarning("cannot set dialog visible: no window");
+                    return;
                 }
-                // Window decoration wasn't possible, so just reparent it into the scene
-                else {
-                    m_contentItem->setParentItem(parentItem);
-                    m_contentItem->setZ(10000);
+                m_dialogWindow = parentWindow();
+
+                // If the platform does not support multiple windows, but the dialog is
+                // implemented as an Item, then try to decorate it as a fake window and make it visible.
+                if (!m_windowDecoration) {
+                    if (m_decorationComponent) {
+                        if (m_decorationComponent->isLoading())
+                            connect(m_decorationComponent, SIGNAL(statusChanged(QQmlComponent::Status)),
+                                    this, SLOT(decorationLoaded()));
+                        else
+                            decorationLoaded(); // do the reparenting of contentItem on top of it
+                    }
+                    // Window decoration wasn't possible, so just reparent it into the scene
+                    else {
+                        m_contentItem->setParentItem(parentWindow()->contentItem());
+                        m_contentItem->setZ(10000);
+                    }
                 }
             }
         }
@@ -150,6 +150,7 @@ void QQuickAbstractDialog::setVisible(bool v)
                 connect(m_dialogWindow, SIGNAL(yChanged(int)), this, SLOT(setY(int)));
                 connect(m_dialogWindow, SIGNAL(widthChanged(int)), this, SLOT(setWidth(int)));
                 connect(m_dialogWindow, SIGNAL(heightChanged(int)), this, SLOT(setHeight(int)));
+                connect(m_contentItem, SIGNAL(implicitHeightChanged()), this, SLOT(implicitHeightChanged()));
             }
             if (!m_visibleChangedConnected) {
                 connect(m_dialogWindow, SIGNAL(visibleChanged(bool)), this, SLOT(visibleChanged(bool)));
@@ -174,9 +175,9 @@ void QQuickAbstractDialog::setVisible(bool v)
 void QQuickAbstractDialog::decorationLoaded()
 {
     bool ok = false;
-    QQuickItem *parentItem = qobject_cast<QQuickItem *>(parent());
-    while (parentItem->parentItem() && !parentItem->parentItem()->inherits("QQuickRootItem"))
-        parentItem = parentItem->parentItem();
+    Q_ASSERT(parentWindow());
+    QQuickItem *parentItem = parentWindow()->contentItem();
+    Q_ASSERT(parentItem);
     if (m_decorationComponent->isError()) {
         qWarning() << m_decorationComponent->errors();
     } else {
@@ -250,11 +251,20 @@ void QQuickAbstractDialog::minimumHeightChanged()
         m_contentItem->property("minimumHeight").toReal()));
 }
 
+void QQuickAbstractDialog::implicitHeightChanged()
+{
+    if (m_contentItem->implicitHeight() < m_dialogWindow->minimumHeight())
+        m_dialogWindow->setMinimumHeight(m_contentItem->implicitHeight());
+}
+
 QQuickWindow *QQuickAbstractDialog::parentWindow()
 {
-    QQuickItem *parentItem = qobject_cast<QQuickItem *>(parent());
-    if (parentItem)
-        m_parentWindow = parentItem->window();
+    if (!m_parentWindow) {
+        // Usually a dialog is declared inside an Item; but if its QObject parent
+        // is a Window, that's the window we are interested in. (QTBUG-38578)
+        QQuickItem *parentItem = qobject_cast<QQuickItem *>(parent());
+        m_parentWindow = (parentItem ? parentItem->window() : qmlobject_cast<QQuickWindow *>(parent()));
+    }
     return m_parentWindow;
 }
 
@@ -294,6 +304,25 @@ int QQuickAbstractDialog::height() const
     if (m_dialogWindow)
         return m_dialogWindow->height();
     return m_sizeAspiration.height();
+}
+
+/*
+    A non-fullscreen dialog is not allowed to be too large
+    to fit on the screen in either orientation (portrait or landscape).
+    That way on platforms which can do rotation, the dialog does not
+    change its size when the screen is rotated.  So the value returned
+    here is the maximum for both width and height.  We need to know
+    at init time, not wait until the dialog's content item is shown in
+    a window so that the desktopAvailableWidth and Height will be valid
+    in the Screen attached property.  And to allow space for window borders,
+    the max is further reduced by 10%.
+*/
+int QQuickAbstractDialog::__maximumDimension() const
+{
+    QScreen *screen = QGuiApplication::primaryScreen();
+    return (screen ?
+                qMin(screen->availableVirtualGeometry().width(), screen->availableVirtualGeometry().height()) :
+                480) * 9 / 10;
 }
 
 void QQuickAbstractDialog::setX(int arg)

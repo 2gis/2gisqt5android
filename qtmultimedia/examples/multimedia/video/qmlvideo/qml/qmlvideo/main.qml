@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the Qt Mobility Components.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -43,28 +35,21 @@ import QtQuick 2.0
 
 Rectangle {
     id: root
-    width: 640
-    height: 360
+    anchors.fill: parent
     color: "black"
 
     property string source1
     property string source2
-    property color bgColor: "#002244"
+    property color bgColor: "black"
     property real volume: 0.25
     property bool perfMonitorsLogging: false
     property bool perfMonitorsVisible: false
 
     QtObject {
         id: d
-        property int itemHeight: 40
+        property int itemHeight: root.height > root.width ? root.width / 10 : root.height / 10
         property int buttonHeight: 0.8 * itemHeight
-        property int margins: 10
-    }
-
-    // Create ScreenSaver element via Loader, so this app will still run if the
-    // SystemInfo module is not available
-    Loader {
-        source: "DisableScreenSaver.qml"
+        property int margins: 5
     }
 
     Loader {
@@ -79,7 +64,6 @@ Rectangle {
         }
 
         function init() {
-            console.log("[qmlvideo] performanceLoader.init logging " + root.perfMonitorsLogging + " visible " + root.perfMonitorsVisible)
             var enabled = root.perfMonitorsLogging || root.perfMonitorsVisible
             source = enabled ? "../performancemonitor/PerformanceItem.qml" : ""
         }
@@ -107,6 +91,9 @@ Rectangle {
                 right: exitButton.left
                 margins: d.margins
             }
+            bgColor: "#212121"
+            bgColorSelected: "#757575"
+            textColorSelected: "white"
             height: d.buttonHeight
             text: (root.source1 == "") ? "Select file 1" : root.source1
             onClicked: fileBrowser1.show()
@@ -120,6 +107,9 @@ Rectangle {
                 right: exitButton.left
                 margins: d.margins
             }
+            bgColor: "#212121"
+            bgColorSelected: "#757575"
+            textColorSelected: "white"
             height: d.buttonHeight
             text: (root.source2 == "") ? "Select file 2" : root.source2
             onClicked: fileBrowser2.show()
@@ -132,26 +122,58 @@ Rectangle {
                 right: parent.right
                 margins: d.margins
             }
-            width: 50
+            bgColor: "#212121"
+            bgColorSelected: "#757575"
+            textColorSelected: "white"
+            width: parent.width / 10
             height: d.buttonHeight
             text: "Exit"
             onClicked: Qt.quit()
         }
 
+        Row {
+            id: modes
+            anchors.top: openFile2Button.bottom
+            anchors.margins: 0
+            anchors.topMargin: 5
+            Button {
+                width: root.width / 2
+                height: 0.8 * d.itemHeight
+                bgColor: "#212121"
+                radius: 0
+                text: "Video Modes"
+                enabled: false
+            }
+            Button {
+                width: root.width / 2
+                height: 0.8 * d.itemHeight
+                bgColor: "#212121"
+                radius: 0
+                text: "Camera Modes"
+                enabled: false
+            }
+        }
+
+        Rectangle {
+            id: divider
+            height: 1
+            width: parent.width
+            color: "black"
+            anchors.top: modes.bottom
+        }
+
         SceneSelectionPanel {
             id: sceneSelectionPanel
             itemHeight: d.itemHeight
-            color: "#004444"
+            color: "#212121"
             anchors {
-                top: openFile2Button.bottom
+                top: divider.bottom
                 left: parent.left
                 right: parent.right
                 bottom: parent.bottom
-                margins: d.margins
             }
-            radius: 10
+            radius: 0
             onSceneSourceChanged: {
-                console.log("[qmlvideo] main.onSceneSourceChanged source " + sceneSource)
                 sceneLoader.source = sceneSource
                 var scene = null
                 var innerVisible = true
@@ -221,7 +243,9 @@ Rectangle {
 
     ErrorDialog {
         id: errorDialog
-        anchors.fill: parent
+        anchors.fill: root
+        dialogWidth: d.itemHeight * 5
+        dialogHeight: d.itemHeight * 3
         enabled: false
     }
 
@@ -238,7 +262,6 @@ Rectangle {
     }
 
     function closeScene() {
-        console.log("[qmlvideo] main.closeScene")
         sceneSelectionPanel.sceneSource = ""
     }
 }

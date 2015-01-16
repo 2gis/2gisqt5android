@@ -18,5 +18,5 @@ Item {
             validator: RegExpValidator { regExp: /[a-zA-z]{2,4}/ }
         }
     }
-        
+
 }

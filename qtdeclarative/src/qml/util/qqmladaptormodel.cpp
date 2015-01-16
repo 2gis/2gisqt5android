@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -66,11 +58,11 @@ V8_DEFINE_EXTENSION(QQmlAdaptorModelEngineData, engineData)
 static QV4::ReturnedValue get_index(QV4::CallContext *ctx)
 {
     QV4::Scope scope(ctx);
-    QV4::Scoped<QQmlDelegateModelItemObject> o(scope, ctx->callData->thisObject.as<QQmlDelegateModelItemObject>());
+    QV4::Scoped<QQmlDelegateModelItemObject> o(scope, ctx->d()->callData->thisObject.as<QQmlDelegateModelItemObject>());
     if (!o)
         return ctx->throwTypeError(QStringLiteral("Not a valid VisualData object"));
 
-    return QV4::Encode(o->item->index);
+    return QV4::Encode(o->d()->item->index);
 }
 
 template <typename T, typename M> static void setModelDataType(QMetaObjectBuilder *builder, M *metaType)
@@ -198,14 +190,14 @@ public:
     static QV4::ReturnedValue get_hasModelChildren(QV4::CallContext *ctx)
     {
         QV4::Scope scope(ctx);
-        QV4::Scoped<QQmlDelegateModelItemObject> o(scope, ctx->callData->thisObject.as<QQmlDelegateModelItemObject>());
+        QV4::Scoped<QQmlDelegateModelItemObject> o(scope, ctx->d()->callData->thisObject.as<QQmlDelegateModelItemObject>());
         if (!o)
             return ctx->throwTypeError(QStringLiteral("Not a valid VisualData object"));
 
-        const QQmlAdaptorModel *const model = static_cast<QQmlDMCachedModelData *>(o->item)->type->model;
-        if (o->item->index >= 0 && *model) {
+        const QQmlAdaptorModel *const model = static_cast<QQmlDMCachedModelData *>(o->d()->item)->type->model;
+        if (o->d()->item->index >= 0 && *model) {
             const QAbstractItemModel * const aim = model->aim();
-            return QV4::Encode(aim->hasChildren(aim->index(o->item->index, 0, model->rootIndex)));
+            return QV4::Encode(aim->hasChildren(aim->index(o->d()->item->index, 0, model->rootIndex)));
         } else {
             return QV4::Encode(false);
         }
@@ -227,9 +219,11 @@ public:
             const QByteArray &propertyName = it.key();
 
             QV4::ScopedString name(scope, v4->newString(QString::fromUtf8(propertyName)));
-            p->setGetter(new (v4->memoryManager) QV4::IndexedBuiltinFunction(v4->rootContext, propertyId, QQmlDMCachedModelData::get_property));
-            p->setSetter(new (v4->memoryManager) QV4::IndexedBuiltinFunction(v4->rootContext, propertyId, QQmlDMCachedModelData::set_property));
-            proto->insertMember(name, p, QV4::Attr_Accessor|QV4::Attr_NotEnumerable|QV4::Attr_NotConfigurable);
+            QV4::ScopedFunctionObject g(scope, v4->memoryManager->alloc<QV4::IndexedBuiltinFunction>(v4->rootContext, propertyId, QQmlDMCachedModelData::get_property));
+            QV4::ScopedFunctionObject s(scope, v4->memoryManager->alloc<QV4::IndexedBuiltinFunction>(v4->rootContext, propertyId, QQmlDMCachedModelData::set_property));
+            p->setGetter(g);
+            p->setSetter(s);
+            proto->insertMember(name.getPointer(), p, QV4::Attr_Accessor|QV4::Attr_NotEnumerable|QV4::Attr_NotConfigurable);
         }
         prototype = proto;
     }
@@ -343,18 +337,18 @@ bool QQmlDMCachedModelData::resolveIndex(const QQmlAdaptorModel &, int idx)
 QV4::ReturnedValue QQmlDMCachedModelData::get_property(QV4::CallContext *ctx, uint propertyId)
 {
     QV4::Scope scope(ctx);
-    QV4::Scoped<QQmlDelegateModelItemObject> o(scope, ctx->callData->thisObject.as<QQmlDelegateModelItemObject>());
+    QV4::Scoped<QQmlDelegateModelItemObject> o(scope, ctx->d()->callData->thisObject.as<QQmlDelegateModelItemObject>());
     if (!o)
         return ctx->throwTypeError(QStringLiteral("Not a valid VisualData object"));
 
-    QQmlDMCachedModelData *modelData = static_cast<QQmlDMCachedModelData *>(o->item);
-    if (o->item->index == -1) {
+    QQmlDMCachedModelData *modelData = static_cast<QQmlDMCachedModelData *>(o->d()->item);
+    if (o->d()->item->index == -1) {
         if (!modelData->cachedData.isEmpty()) {
-            return ctx->engine->v8Engine->fromVariant(
+            return ctx->d()->engine->v8Engine->fromVariant(
                     modelData->cachedData.at(modelData->type->hasModelData ? 0 : propertyId));
         }
     } else if (*modelData->type->model) {
-        return ctx->engine->v8Engine->fromVariant(
+        return ctx->d()->engine->v8Engine->fromVariant(
                 modelData->value(modelData->type->propertyRoles.at(propertyId)));
     }
     return QV4::Encode::undefined();
@@ -363,22 +357,22 @@ QV4::ReturnedValue QQmlDMCachedModelData::get_property(QV4::CallContext *ctx, ui
 QV4::ReturnedValue QQmlDMCachedModelData::set_property(QV4::CallContext *ctx, uint propertyId)
 {
     QV4::Scope scope(ctx);
-    QV4::Scoped<QQmlDelegateModelItemObject> o(scope, ctx->callData->thisObject.as<QQmlDelegateModelItemObject>());
+    QV4::Scoped<QQmlDelegateModelItemObject> o(scope, ctx->d()->callData->thisObject.as<QQmlDelegateModelItemObject>());
     if (!o)
         return ctx->throwTypeError(QStringLiteral("Not a valid VisualData object"));
-    if (!ctx->callData->argc)
+    if (!ctx->d()->callData->argc)
         return ctx->throwTypeError();
 
-    if (o->item->index == -1) {
-        QQmlDMCachedModelData *modelData = static_cast<QQmlDMCachedModelData *>(o->item);
+    if (o->d()->item->index == -1) {
+        QQmlDMCachedModelData *modelData = static_cast<QQmlDMCachedModelData *>(o->d()->item);
         if (!modelData->cachedData.isEmpty()) {
             if (modelData->cachedData.count() > 1) {
-                modelData->cachedData[propertyId] = ctx->engine->v8Engine->toVariant(ctx->callData->args[0], QVariant::Invalid);
-                QMetaObject::activate(o->item, o->item->metaObject(), propertyId, 0);
+                modelData->cachedData[propertyId] = scope.engine->v8Engine->toVariant(ctx->d()->callData->args[0], QVariant::Invalid);
+                QMetaObject::activate(o->d()->item, o->d()->item->metaObject(), propertyId, 0);
             } else if (modelData->cachedData.count() == 1) {
-                modelData->cachedData[0] = ctx->engine->v8Engine->toVariant(ctx->callData->args[0], QVariant::Invalid);
-                QMetaObject::activate(o->item, o->item->metaObject(), 0, 0);
-                QMetaObject::activate(o->item, o->item->metaObject(), 1, 0);
+                modelData->cachedData[0] = scope.engine->v8Engine->toVariant(ctx->d()->callData->args[0], QVariant::Invalid);
+                QMetaObject::activate(o->d()->item, o->d()->item->metaObject(), 0, 0);
+                QMetaObject::activate(o->d()->item, o->d()->item->metaObject(), 1, 0);
             }
         }
     }
@@ -431,7 +425,7 @@ public:
         }
         QV4::Scope scope(v4);
         QV4::ScopedObject proto(scope, type->prototype.value());
-        QV4::ScopedObject o(scope, new (proto->engine()->memoryManager) QQmlDelegateModelItemObject(proto->engine(), this));
+        QV4::ScopedObject o(scope, proto->engine()->memoryManager->alloc<QQmlDelegateModelItemObject>(proto->engine(), this));
         o->setPrototype(proto.getPointer());
         ++scriptRef;
         return o.asReturnedValue();
@@ -585,23 +579,23 @@ public:
     static QV4::ReturnedValue get_modelData(QV4::CallContext *ctx)
     {
         QV4::Scope scope(ctx);
-        QV4::Scoped<QQmlDelegateModelItemObject> o(scope, ctx->callData->thisObject.as<QQmlDelegateModelItemObject>());
+        QV4::Scoped<QQmlDelegateModelItemObject> o(scope, ctx->d()->callData->thisObject.as<QQmlDelegateModelItemObject>());
         if (!o)
             return ctx->throwTypeError(QStringLiteral("Not a valid VisualData object"));
 
-        return ctx->engine->v8Engine->fromVariant(static_cast<QQmlDMListAccessorData *>(o->item)->cachedData);
+        return scope.engine->v8Engine->fromVariant(static_cast<QQmlDMListAccessorData *>(o->d()->item)->cachedData);
     }
 
     static QV4::ReturnedValue set_modelData(QV4::CallContext *ctx)
     {
         QV4::Scope scope(ctx);
-        QV4::Scoped<QQmlDelegateModelItemObject> o(scope, ctx->callData->thisObject.as<QQmlDelegateModelItemObject>());
+        QV4::Scoped<QQmlDelegateModelItemObject> o(scope, ctx->d()->callData->thisObject.as<QQmlDelegateModelItemObject>());
         if (!o)
             return ctx->throwTypeError(QStringLiteral("Not a valid VisualData object"));
-        if (!ctx->callData->argc)
+        if (!ctx->d()->callData->argc)
             return ctx->throwTypeError();
 
-        static_cast<QQmlDMListAccessorData *>(o->item)->setModelData(ctx->engine->v8Engine->toVariant(ctx->callData->args[0], QVariant::Invalid));
+        static_cast<QQmlDMListAccessorData *>(o->d()->item)->setModelData(scope.engine->v8Engine->toVariant(ctx->d()->callData->args[0], QVariant::Invalid));
         return QV4::Encode::undefined();
     }
 
@@ -609,7 +603,7 @@ public:
     {
         QQmlAdaptorModelEngineData *data = engineData(v4->v8Engine);
         QV4::Scope scope(v4);
-        QV4::ScopedObject o(scope, new (v4->memoryManager) QQmlDelegateModelItemObject(v4, this));
+        QV4::ScopedObject o(scope, v4->memoryManager->alloc<QQmlDelegateModelItemObject>(v4, this));
         QV4::ScopedObject p(scope, data->listItemProto.value());
         o->setPrototype(p.getPointer());
         ++scriptRef;

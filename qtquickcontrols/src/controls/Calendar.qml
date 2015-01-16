@@ -176,6 +176,14 @@ Control {
     property bool weekNumbersVisible: false
 
     /*!
+        This property determines the visibility of the navigation bar.
+        \since QtQuick.Controls 1.3
+
+        The default value is \c true.
+    */
+    property bool navigationBarVisible: true
+
+    /*!
         \qmlproperty enum Calendar::dayOfWeekFormat
 
         The format in which the days of the week (in the header) are displayed.
@@ -272,6 +280,18 @@ Control {
         The corresponding handler is \c onDoubleClicked.
     */
     signal doubleClicked(date date)
+
+    /*!
+        \qmlsignal Calendar::pressAndHold(date date)
+        \since QtQuick.Controls 1.3
+
+        Emitted when the mouse is pressed and held on a valid date in the calendar.
+
+        \a date is the date that the mouse was pressed on.
+
+        The corresponding handler is \c onPressAndHold.
+    */
+    signal pressAndHold(date date)
 
     /*!
         Sets visibleMonth to the previous month.

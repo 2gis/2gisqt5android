@@ -2,40 +2,32 @@
 **
 ** Copyright (C) 2014 Jolla Ltd.
 ** Contact: Aaron McCarthy <aaron.mccarthy@jollamobile.com>
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtPositioning module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -87,22 +79,12 @@ QT_BEGIN_NAMESPACE
 namespace
 {
 
-bool equalOrNaN(double a, double b)
+bool equalOrNaN(qreal a, qreal b)
 {
     return a == b || (qIsNaN(a) && qIsNaN(b));
 }
 
-bool equalOrNaN(float a, float b)
-{
-    return a == b || (qIsNaN(a) && qIsNaN(b));
-}
-
-bool exclusiveNaN(double a, double b)
-{
-    return qIsNaN(a) != qIsNaN(b);
-}
-
-bool exclusiveNaN(float a, float b)
+bool exclusiveNaN(qreal a, qreal b)
 {
     return qIsNaN(a) != qIsNaN(b);
 }
@@ -152,7 +134,10 @@ void QDeclarativePosition::setPosition(const QGeoPositionInfo &info)
     bool emitVerticalSpeedValidChanged = exclusiveNaN(pVerticalSpeed, verticalSpeed);
 
     // magnetic variation
-    // not in QML API
+    const qreal pMagneticVariation = m_info.attribute(QGeoPositionInfo::MagneticVariation);
+    const qreal magneticVariation = info.attribute(QGeoPositionInfo::MagneticVariation);
+    bool emitMagneticVariationChanged = !equalOrNaN(pMagneticVariation, magneticVariation);
+    bool emitMagneticVariationValidChanged = exclusiveNaN(pMagneticVariation, magneticVariation);
 
     // horizontal accuracy
     const qreal pHorizontalAccuracy = m_info.attribute(QGeoPositionInfo::HorizontalAccuracy);
@@ -198,6 +183,10 @@ void QDeclarativePosition::setPosition(const QGeoPositionInfo &info)
         emit verticalAccuracyChanged();
     if (emitVerticalAccuracyValidChanged)
         emit verticalAccuracyValidChanged();
+    if (emitMagneticVariationChanged)
+        emit magneticVariationChanged();
+    if (emitMagneticVariationValidChanged)
+        emit magneticVariationValidChanged();
 }
 
 /*!
@@ -437,6 +426,38 @@ bool QDeclarativePosition::isVerticalSpeedValid() const
 double QDeclarativePosition::verticalSpeed() const
 {
     return m_info.attribute(QGeoPositionInfo::VerticalSpeed);
+}
+
+/*!
+    \qmlproperty bool Position::magneticVariationValid
+    \since Qt Positioning 5.4
+
+    This property is true if \l magneticVariation has been set (to indicate whether that data has been
+    received or not, as every update does not necessarily contain all data).
+
+    \sa magneticVariation
+*/
+bool QDeclarativePosition::isMagneticVariationValid() const
+{
+    return !qIsNaN(m_info.attribute(QGeoPositionInfo::MagneticVariation));
+}
+
+/*!
+    \qmlproperty double Position::magneticVariation
+    \since Qt Positioning 5.4
+
+    This property holds the angle between the horizontal component of the
+    magnetic field and true north, in degrees. Also known as magnetic
+    declination. A positive value indicates a clockwise direction from
+    true north and a negative value indicates a counter-clockwise direction.
+
+    It is a read-only property.
+
+    \sa magneticVariationValid
+*/
+double QDeclarativePosition::magneticVariation() const
+{
+    return m_info.attribute(QGeoPositionInfo::MagneticVariation);
 }
 
 #include "moc_qdeclarativeposition_p.cpp"

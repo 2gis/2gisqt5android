@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -193,6 +185,44 @@ int qmlRegisterUncreatableType(const char *uri, int versionMajor, int versionMin
 
         0,
         metaObjectRevision
+    };
+
+    return QQmlPrivate::qmlregister(QQmlPrivate::TypeRegistration, &type);
+}
+
+template<typename T, typename E>
+int qmlRegisterExtendedUncreatableType(const char *uri, int versionMajor, int versionMinor, const char *qmlName, const QString& reason)
+{
+    QML_GETTYPENAMES
+
+    QQmlAttachedPropertiesFunc attached = QQmlPrivate::attachedPropertiesFunc<E>();
+    const QMetaObject * attachedMetaObject = QQmlPrivate::attachedPropertiesMetaObject<E>();
+    if (!attached) {
+        attached = QQmlPrivate::attachedPropertiesFunc<T>();
+        attachedMetaObject = QQmlPrivate::attachedPropertiesMetaObject<T>();
+    }
+
+    QQmlPrivate::RegisterType type = {
+        0,
+
+        qRegisterNormalizedMetaType<T *>(pointerName.constData()),
+        qRegisterNormalizedMetaType<QQmlListProperty<T> >(listName.constData()),
+        0, 0,
+        reason,
+
+        uri, versionMajor, versionMinor, qmlName, &T::staticMetaObject,
+
+        attached,
+        attachedMetaObject,
+
+        QQmlPrivate::StaticCastSelector<T,QQmlParserStatus>::cast(),
+        QQmlPrivate::StaticCastSelector<T,QQmlPropertyValueSource>::cast(),
+        QQmlPrivate::StaticCastSelector<T,QQmlPropertyValueInterceptor>::cast(),
+
+        QQmlPrivate::createParent<E>, &E::staticMetaObject,
+
+        0,
+        0
     };
 
     return QQmlPrivate::qmlregister(QQmlPrivate::TypeRegistration, &type);
@@ -414,6 +444,45 @@ int qmlRegisterCustomType(const char *uri, int versionMajor, int versionMinor,
     return QQmlPrivate::qmlregister(QQmlPrivate::TypeRegistration, &type);
 }
 
+template<typename T, typename E>
+int qmlRegisterCustomExtendedType(const char *uri, int versionMajor, int versionMinor,
+                          const char *qmlName, QQmlCustomParser *parser)
+{
+    QML_GETTYPENAMES
+
+    QQmlAttachedPropertiesFunc attached = QQmlPrivate::attachedPropertiesFunc<E>();
+    const QMetaObject * attachedMetaObject = QQmlPrivate::attachedPropertiesMetaObject<E>();
+    if (!attached) {
+        attached = QQmlPrivate::attachedPropertiesFunc<T>();
+        attachedMetaObject = QQmlPrivate::attachedPropertiesMetaObject<T>();
+    }
+
+    QQmlPrivate::RegisterType type = {
+        0,
+
+        qRegisterNormalizedMetaType<T *>(pointerName.constData()),
+        qRegisterNormalizedMetaType<QQmlListProperty<T> >(listName.constData()),
+        sizeof(T), QQmlPrivate::createInto<T>,
+        QString(),
+
+        uri, versionMajor, versionMinor, qmlName, &T::staticMetaObject,
+
+        attached,
+        attachedMetaObject,
+
+        QQmlPrivate::StaticCastSelector<T,QQmlParserStatus>::cast(),
+        QQmlPrivate::StaticCastSelector<T,QQmlPropertyValueSource>::cast(),
+        QQmlPrivate::StaticCastSelector<T,QQmlPropertyValueInterceptor>::cast(),
+
+        QQmlPrivate::createParent<E>, &E::staticMetaObject,
+
+        parser,
+        0
+    };
+
+    return QQmlPrivate::qmlregister(QQmlPrivate::TypeRegistration, &type);
+}
+
 class QQmlContext;
 class QQmlEngine;
 class QJSValue;
@@ -433,7 +502,7 @@ namespace QtQml {
 }
 #endif
 
-#ifdef Q_CC_CLANG
+#if defined(Q_CC_CLANG) && !defined(Q_CC_INTEL)
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wheader-hygiene"
 #endif
@@ -441,7 +510,7 @@ namespace QtQml {
 // This is necessary to allow for QtQuick1 and QtQuick2 scenes in a single application.
 using namespace QtQml;
 
-#ifdef Q_CC_CLANG
+#if defined(Q_CC_CLANG) && !defined(Q_CC_INTEL)
 #pragma clang diagnostic pop
 #endif
 

@@ -50,11 +50,11 @@ Item {
         size.height: parent.height
 
         /*
-            Below we create a linear layout using the GraphicsLinearLayout item 
-            (defined by the GraphicsLinearLayoutObject class in linearlayout.h). 
+            Below we create a linear layout using the GraphicsLinearLayout item
+            (defined by the GraphicsLinearLayoutObject class in linearlayout.h).
 
             The first LayoutItem uses 'GraphicsLinearLayout.spacing' to set the
-            item's spacing: this is an attached property, set using the 
+            item's spacing: this is an attached property, set using the
             properties defined in the LinearLayoutAttached class (also defined
             in linearlayout.h).
         */

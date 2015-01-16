@@ -2,7 +2,6 @@ include($QT_INSTALL_DOCS/global/qt-module-defaults.qdocconf)
 
 project                 = QtMultimedia
 description             = Qt Multimedia Documentation
-url                     = http://qt-project.org/doc/qt-$QT_VER
 version                 = $QT_VERSION
 
 # The following parameters are for creating a qhp file, the qhelpgenerator
@@ -26,7 +25,7 @@ qhp.QtMultimedia.subprojects.classes.selectors = class fake:headerfile
 qhp.QtMultimedia.subprojects.classes.sortPages = true
 qhp.QtMultimedia.subprojects.qmltypes.title = QML Types
 qhp.QtMultimedia.subprojects.qmltypes.indexTitle = Qt Multimedia QML Types
-qhp.QtMultimedia.subprojects.qmltypes.selectors = fake:qmlclass
+qhp.QtMultimedia.subprojects.qmltypes.selectors = qmlclass
 qhp.QtMultimedia.subprojects.qmltypes.sortPages = true
 
 exampledirs += ../../../examples/multimedia \

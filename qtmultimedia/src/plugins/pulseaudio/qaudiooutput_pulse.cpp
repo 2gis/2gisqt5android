@@ -5,35 +5,27 @@
 **
 ** This file is part of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -159,6 +151,7 @@ QPulseAudioOutput::QPulseAudioOutput(const QByteArray &device)
     , m_audioBuffer(0)
     , m_resuming(false)
     , m_volume(1.0)
+    , m_customVolumeRequired(false)
 {
     connect(m_tickTimer, SIGNAL(timeout()), SLOT(userFeed()));
 }
@@ -306,13 +299,25 @@ bool QPulseAudioOutput::open()
     pa_stream_set_latency_update_callback(m_stream, outputStreamLatencyCallback, this);
 
     pa_volume_t paVolume;
-    if (qFuzzyCompare(m_volume, 0.0)) {
-        paVolume = PA_VOLUME_MUTED;
-        m_volume = 0.0;
-    } else {
-        paVolume = qFloor(m_volume * PA_VOLUME_NORM + 0.5);
+
+    /* streams without a custom volume set are expected to already have a
+     * sensible volume set by Pulse, so we don't set it explicitly.
+     *
+     * explicit setting also breaks volume handling on sailfish, where each
+     * stream's volume is set separately inside pulseaudio, with the
+     * exception of streams that already have a volume set (i.e. if we set
+     * it here, we'd ignore system volume).
+     */
+    if (m_customVolumeRequired) {
+        if (qFuzzyCompare(m_volume, 0.0)) {
+            paVolume = PA_VOLUME_MUTED;
+            m_volume = 0.0;
+        } else {
+            paVolume = qFloor(m_volume * PA_VOLUME_NORM + 0.5);
+        }
+
+        pa_cvolume_set(&m_chVolume, m_spec.channels, paVolume);
     }
-    pa_cvolume_set(&m_chVolume, m_spec.channels, paVolume);
 
     if (m_bufferSize <= 0 && m_category == LOW_LATENCY_CATEGORY_NAME) {
         m_bufferSize = bytesPerSecond * LowLatencyBufferSizeMs / qint64(1000);
@@ -325,7 +330,7 @@ bool QPulseAudioOutput::open()
     requestedBuffer.prebuf = (uint32_t)-1;
     requestedBuffer.tlength = m_bufferSize;
 
-    if (pa_stream_connect_playback(m_stream, m_device.data(), (m_bufferSize > 0) ? &requestedBuffer : NULL, (pa_stream_flags_t)0, &m_chVolume, NULL) < 0) {
+    if (pa_stream_connect_playback(m_stream, m_device.data(), (m_bufferSize > 0) ? &requestedBuffer : NULL, (pa_stream_flags_t)0, m_customVolumeRequired ? &m_chVolume : NULL, NULL) < 0) {
         qWarning() << "pa_stream_connect_playback() failed!";
         pa_stream_unref(m_stream);
         m_stream = 0;
@@ -591,7 +596,7 @@ qint64 QPulseAudioOutput::elapsedUSecs() const
     if (m_deviceState == QAudio::StoppedState)
         return 0;
 
-    return m_clockStamp.elapsed() * 1000;
+    return m_clockStamp.elapsed() * qint64(1000);
 }
 
 void QPulseAudioOutput::reset()
@@ -636,6 +641,7 @@ void QPulseAudioOutput::setVolume(qreal vol)
 {
     if (vol >= 0.0 && vol <= 1.0) {
         if (!qFuzzyCompare(m_volume, vol)) {
+            m_customVolumeRequired = true;
             m_volume = vol;
             if (m_opened) {
                 QPulseAudioEngine *pulseEngine = QPulseAudioEngine::instance();

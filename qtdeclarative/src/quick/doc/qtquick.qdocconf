@@ -2,7 +2,6 @@ include($QT_INSTALL_DOCS/global/qt-module-defaults.qdocconf)
 
 project                 = QtQuick
 description             = Qt Quick Reference Documentation
-url                     = http://qt-project.org/doc/qt-$QT_VER
 version                 = $QT_VERSION
 
 examplesinstallpath     = quick
@@ -21,7 +20,7 @@ qhp.QtQuick.customFilters.Qt.filterAttributes = qtquick $QT_VERSION
 qhp.QtQuick.subprojects         = qmltypes classes examples
 qhp.QtQuick.subprojects.qmltypes.title = QML Types
 qhp.QtQuick.subprojects.qmltypes.indexTitle = Qt Quick QML Types
-qhp.QtQuick.subprojects.qmltypes.selectors = fake:qmlclass
+qhp.QtQuick.subprojects.qmltypes.selectors = qmlclass
 qhp.QtQuick.subprojects.qmltypes.sortPages = true
 qhp.QtQuick.subprojects.classes.title = Classes
 qhp.QtQuick.subprojects.classes.title = C++ Classes
@@ -63,9 +62,10 @@ headerdirs += ../../plugins
 sourcedirs += ../../plugins
 
 #exclude certain directories
-excludedirs += ../../imports/dialogs \
-               ../../imports/models \
-               ../../../examples/quick/dialogs
+excludedirs += ../../imports/models \
+               ../../imports/statemachine
+
+examples.fileextensions        += "*.qm"
 
 manifestmeta.thumbnail.names += "QtQuick/Threaded ListModel Example"
 

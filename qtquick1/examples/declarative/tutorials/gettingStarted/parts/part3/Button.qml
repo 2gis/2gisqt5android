@@ -50,20 +50,20 @@ Rectangle {
     //these properties act as constants, useable outside this QML file
     property int buttonHeight: 75
     property int buttonWidth: 150
-    
+
     //the color highlight when the mouse hovers on the rectangle
     property color onHoverColor: "gold"
     property color borderColor: "white"
 
     //buttonColor is set to the button's main color
-    property color buttonColor: "lightblue"    
+    property color buttonColor: "lightblue"
 
     //set appearance properties
     radius:10
     smooth: true
     border{color: "white"; width: 3}
     width: buttonWidth; height: buttonHeight
-    
+
     Text{
         id: buttonLabel
         anchors.centerIn: parent
@@ -77,11 +77,11 @@ Rectangle {
     }
 
     //define the clickable area to be the whole rectangle
-    MouseArea{ 
+    MouseArea{
         id: buttonMouseArea
         anchors.fill: parent    //stretch the area to the parent's dimension
         onClicked: buttonClick()
-             
+
         //if true, then onEntered and onExited called if mouse hovers in the mouse area
                 //if false, a button must be clicked to detect the mouse hover
                 hoverEnabled: true
@@ -90,7 +90,7 @@ Rectangle {
                 onEntered: parent.border.color = onHoverColor
                 //remove the border if the mouse exits the button mouse area
                 onExited:  parent.border.color = borderColor
-        
+
     }
 
     //change the color of the button when pressed

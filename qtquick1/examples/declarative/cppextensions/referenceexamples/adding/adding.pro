@@ -1,7 +1,7 @@
 QT += declarative
 
 SOURCES += main.cpp \
-           person.cpp 
+           person.cpp
 HEADERS += person.h
 RESOURCES += adding.qrc
 

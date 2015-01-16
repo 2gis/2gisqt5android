@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -45,6 +37,8 @@
 #ifndef V4_BOOTSTRAP
 #include <private/qqmlpropertycache_p.h>
 #endif
+
+#include <QtCore/QBuffer>
 #include <QtCore/qtextstream.h>
 #include <QtCore/qdebug.h>
 #include <QtCore/qset.h>
@@ -84,41 +78,41 @@ const char *opname(AluOp op)
     case OpInvalid: return "?";
 
     case OpIfTrue: return "(bool)";
-    case OpNot: return "!";
-    case OpUMinus: return "-";
-    case OpUPlus: return "+";
-    case OpCompl: return "~";
-    case OpIncrement: return "++";
-    case OpDecrement: return "--";
+    case OpNot: return "not";
+    case OpUMinus: return "neg";
+    case OpUPlus: return "plus";
+    case OpCompl: return "invert";
+    case OpIncrement: return "incr";
+    case OpDecrement: return "decr";
 
-    case OpBitAnd: return "&";
-    case OpBitOr: return "|";
-    case OpBitXor: return "^";
+    case OpBitAnd: return "bitand";
+    case OpBitOr: return "bitor";
+    case OpBitXor: return "bitxor";
 
-    case OpAdd: return "+";
-    case OpSub: return "-";
-    case OpMul: return "*";
-    case OpDiv: return "/";
-    case OpMod: return "%";
+    case OpAdd: return "add";
+    case OpSub: return "sub";
+    case OpMul: return "mul";
+    case OpDiv: return "div";
+    case OpMod: return "mod";
 
-    case OpLShift: return "<<";
-    case OpRShift: return ">>";
-    case OpURShift: return ">>>";
+    case OpLShift: return "shl";
+    case OpRShift: return "shr";
+    case OpURShift: return "asr";
 
-    case OpGt: return ">";
-    case OpLt: return "<";
-    case OpGe: return ">=";
-    case OpLe: return "<=";
-    case OpEqual: return "==";
-    case OpNotEqual: return "!=";
-    case OpStrictEqual: return "===";
-    case OpStrictNotEqual: return "!==";
+    case OpGt: return "gt";
+    case OpLt: return "lt";
+    case OpGe: return "ge";
+    case OpLe: return "le";
+    case OpEqual: return "eq";
+    case OpNotEqual: return "ne";
+    case OpStrictEqual: return "se";
+    case OpStrictNotEqual: return "sne";
 
     case OpInstanceof: return "instanceof";
     case OpIn: return "in";
 
-    case OpAnd: return "&&";
-    case OpOr: return "||";
+    case OpAnd: return "and";
+    case OpOr: return "or";
 
     default: return "?";
 
@@ -231,6 +225,7 @@ struct RemoveSharedExpressions: IR::StmtVisitor, IR::ExprVisitor
     virtual void visitRegExp(RegExp *) {}
     virtual void visitName(Name *) {}
     virtual void visitTemp(Temp *) {}
+    virtual void visitArgLocal(ArgLocal *) {}
     virtual void visitClosure(Closure *) {}
 
     virtual void visitConvert(Convert *e)
@@ -275,104 +270,6 @@ struct RemoveSharedExpressions: IR::StmtVisitor, IR::ExprVisitor
     }
 };
 
-static QString dumpStart(const Expr *e) {
-    if (e->type == UnknownType)
-//        return QStringLiteral("**UNKNOWN**");
-        return QString();
-
-    QString result = typeName(e->type);
-#ifndef V4_BOOTSTRAP
-    const Temp *temp = const_cast<Expr*>(e)->asTemp();
-    if (e->type == QObjectType && temp && temp->memberResolver.isQObjectResolver) {
-        result += QLatin1Char('<');
-        result += QString::fromUtf8(static_cast<QQmlPropertyCache*>(temp->memberResolver.data)->className());
-        result += QLatin1Char('>');
-    }
-#endif
-    result += QLatin1Char('{');
-    return result;
-}
-
-static const char *dumpEnd(const Expr *e) {
-    if (e->type == UnknownType)
-        return "";
-    else
-        return "}";
-}
-
-void Const::dump(QTextStream &out) const
-{
-    if (type != UndefinedType && type != NullType)
-        out << dumpStart(this);
-    switch (type) {
-    case QV4::IR::UndefinedType:
-        out << "undefined";
-        break;
-    case QV4::IR::NullType:
-        out << "null";
-        break;
-    case QV4::IR::BoolType:
-        out << (value ? "true" : "false");
-        break;
-    case QV4::IR::MissingType:
-        out << "missing";
-        break;
-    default:
-        if (int(value) == 0 && int(value) == value) {
-            if (isNegative(value))
-                out << "-0";
-            else
-                out << "0";
-        } else {
-            out << QString::number(value, 'g', 16);
-        }
-        break;
-    }
-    if (type != UndefinedType && type != NullType)
-        out << dumpEnd(this);
-}
-
-void String::dump(QTextStream &out) const
-{
-    out << '"' << escape(*value) << '"';
-}
-
-QString String::escape(const QString &s)
-{
-    QString r;
-    for (int i = 0; i < s.length(); ++i) {
-        const QChar ch = s.at(i);
-        if (ch == QLatin1Char('\n'))
-            r += QStringLiteral("\\n");
-        else if (ch == QLatin1Char('\r'))
-            r += QStringLiteral("\\r");
-        else if (ch == QLatin1Char('\\'))
-            r += QStringLiteral("\\\\");
-        else if (ch == QLatin1Char('"'))
-            r += QStringLiteral("\\\"");
-        else if (ch == QLatin1Char('\''))
-            r += QStringLiteral("\\'");
-        else
-            r += ch;
-    }
-    return r;
-}
-
-void RegExp::dump(QTextStream &out) const
-{
-    char f[3];
-    int i = 0;
-    if (flags & RegExp_Global)
-        f[i++] = 'g';
-    if (flags & RegExp_IgnoreCase)
-        f[i++] = 'i';
-    if (flags & RegExp_Multiline)
-        f[i++] = 'm';
-    f[i] = 0;
-
-    out << '/' << *value << '/' << f;
-}
-
 void Name::initGlobal(const QString *id, quint32 line, quint32 column)
 {
     this->id = id;
@@ -406,7 +303,7 @@ void Name::init(Builtin builtin, quint32 line, quint32 column)
     this->column = column;
 }
 
-static const char *builtin_to_string(Name::Builtin b)
+const char *builtin_to_string(Name::Builtin b)
 {
     switch (b) {
     case Name::builtin_invalid:
@@ -453,185 +350,11 @@ static const char *builtin_to_string(Name::Builtin b)
     return "builtin_(###FIXME)";
 };
 
-void Name::dump(QTextStream &out) const
-{
-    if (id)
-        out << *id;
-    else
-        out << builtin_to_string(builtin);
-}
-
-void Temp::dump(QTextStream &out) const
-{
-    out << dumpStart(this);
-    switch (kind) {
-    case Formal:           out << '#' << index; break;
-    case ScopedFormal:     out << '#' << index
-                               << '@' << scope; break;
-    case Local:            out << '$' << index; break;
-    case ScopedLocal:      out << '$' << index
-                               << '@' << scope; break;
-    case VirtualRegister:  out << '%' << index; break;
-    case PhysicalRegister: out << (type == DoubleType ? "fp" : "r")
-                               << index; break;
-    case StackSlot:        out << '&' << index; break;
-    default:               out << "INVALID";
-    }
-    out << dumpEnd(this);
-}
-
 bool operator<(const Temp &t1, const Temp &t2) Q_DECL_NOTHROW
 {
     if (t1.kind < t2.kind) return true;
     if (t1.kind > t2.kind) return false;
-    if (t1.index < t2.index) return true;
-    if (t1.index > t2.index) return false;
-    return t1.scope < t2.scope;
-}
-
-void Closure::dump(QTextStream &out) const
-{
-    QString name = functionName ? *functionName : QString();
-    if (name.isEmpty())
-        name.sprintf("%x", value);
-    out << "closure(" << name << ')';
-}
-
-void Convert::dump(QTextStream &out) const
-{
-    out << dumpStart(this);
-    out << "convert(";
-    expr->dump(out);
-    out << ')' << dumpEnd(this);
-}
-
-void Unop::dump(QTextStream &out) const
-{
-    out << dumpStart(this) << opname(op);
-    expr->dump(out);
-    out << dumpEnd(this);
-}
-
-void Binop::dump(QTextStream &out) const
-{
-    out << dumpStart(this);
-    left->dump(out);
-    out << ' ' << opname(op) << ' ';
-    right->dump(out);
-    out << dumpEnd(this);
-}
-
-void Call::dump(QTextStream &out) const
-{
-    base->dump(out);
-    out << '(';
-    for (ExprList *it = args; it; it = it->next) {
-        if (it != args)
-            out << ", ";
-        it->expr->dump(out);
-    }
-    out << ')';
-}
-
-void New::dump(QTextStream &out) const
-{
-    out << "new ";
-    base->dump(out);
-    out << '(';
-    for (ExprList *it = args; it; it = it->next) {
-        if (it != args)
-            out << ", ";
-        it->expr->dump(out);
-    }
-    out << ')';
-}
-
-void Subscript::dump(QTextStream &out) const
-{
-    base->dump(out);
-    out << '[';
-    index->dump(out);
-    out << ']';
-}
-
-void Member::dump(QTextStream &out) const
-{
-    if (kind != MemberOfEnum && attachedPropertiesIdOrEnumValue != 0 && !base->asTemp())
-        out << "[[attached property from " << attachedPropertiesIdOrEnumValue << "]]";
-    else
-        base->dump(out);
-    out << '.' << *name;
-#ifndef V4_BOOTSTRAP
-    if (property)
-        out << " (meta-property " << property->coreIndex << " <" << QMetaType::typeName(property->propType) << ">)";
-#endif
-}
-
-void Exp::dump(QTextStream &out, Mode)
-{
-    out << "(void) ";
-    expr->dump(out);
-    out << ';';
-}
-
-void Move::dump(QTextStream &out, Mode mode)
-{
-    Q_UNUSED(mode);
-
-    target->dump(out);
-    out << ' ';
-    if (swap)
-        out << "<=> ";
-    else
-        out << "= ";
-//    if (source->type != target->type)
-//        out << typeName(source->type) << "_to_" << typeName(target->type) << '(';
-    source->dump(out);
-//    if (source->type != target->type)
-//        out << ')';
-    out << ';';
-}
-
-void Jump::dump(QTextStream &out, Mode mode)
-{
-    Q_UNUSED(mode);
-    out << "goto " << 'L' << target->index() << ';';
-}
-
-void CJump::dump(QTextStream &out, Mode mode)
-{
-    Q_UNUSED(mode);
-    out << "if (";
-    cond->dump(out);
-    if (mode == HIR)
-        out << ") goto " << 'L' << iftrue->index() << "; else goto " << 'L' << iffalse->index() << ';';
-    else
-        out << ") goto " << 'L' << iftrue->index() << ";";
-}
-
-void Ret::dump(QTextStream &out, Mode)
-{
-    out << "return";
-    if (expr) {
-        out << ' ';
-        expr->dump(out);
-    }
-    out << ';';
-}
-
-void Phi::dump(QTextStream &out, Stmt::Mode mode)
-{
-    Q_UNUSED(mode);
-
-    targetTemp->dump(out);
-    out << " = phi(";
-    for (int i = 0, ei = d->incoming.size(); i < ei; ++i) {
-        if (i > 0)
-            out << ", ";
-        if (d->incoming[i])
-            d->incoming[i]->dump(out);
-    }
-    out << ");";
+    return t1.index < t2.index;
 }
 
 Function *Module::newFunction(const QString &name, Function *outer)
@@ -680,6 +403,7 @@ Function::Function(Module *module, Function *outer, const QString &name)
     , line(-1)
     , column(-1)
     , _allBasicBlocks(0)
+    , _statementCount(0)
 {
     this->name = newString(name);
     _basicBlocks.reserve(8);
@@ -704,9 +428,9 @@ const QString *Function::newString(const QString &text)
     return &*strings.insert(text);
 }
 
-BasicBlock *Function::newBasicBlock(BasicBlock *containingLoop, BasicBlock *catchBlock, BasicBlockInsertMode mode)
+BasicBlock *Function::newBasicBlock(BasicBlock *catchBlock, BasicBlockInsertMode mode)
 {
-    BasicBlock *block = new BasicBlock(this, containingLoop, catchBlock);
+    BasicBlock *block = new BasicBlock(this, catchBlock);
     return mode == InsertBlock ? addBasicBlock(block) : block;
 }
 
@@ -732,21 +456,6 @@ int Function::liveBasicBlocksCount() const
         if (!bb->isRemoved())
             ++count;
     return count;
-}
-
-void Function::dump(QTextStream &out, Stmt::Mode mode)
-{
-    QString n = name ? *name : QString();
-    if (n.isEmpty())
-        n.sprintf("%p", this);
-    out << "function " << n << "() {" << endl;
-    foreach (const QString *formal, formals)
-        out << "\treceive " << *formal << ';' << endl;
-    foreach (const QString *local, locals)
-        out << "\tlocal " << *local << ';' << endl;
-    foreach (BasicBlock *bb, basicBlocks())
-        bb->dump(out, mode);
-    out << '}' << endl;
 }
 
 void Function::removeSharedExpressions()
@@ -777,6 +486,26 @@ void Function::renumberBasicBlocks()
         basicBlock(i)->changeIndex(i);
 }
 
+BasicBlock *Function::getOrCreateBasicBlock(int index)
+{
+    if (_basicBlocks.size() <= index) {
+        const int oldSize = _basicBlocks.size();
+        _basicBlocks.resize(index + 1);
+        for (int i = oldSize; i <= index; ++i) {
+            BasicBlock *block = new BasicBlock(this, 0);
+            block->setIndex(i);
+            _basicBlocks[i] = block;
+        }
+    }
+
+    return _basicBlocks.at(index);
+}
+
+void Function::setStatementCount(int cnt)
+{
+    _statementCount = cnt;
+}
+
 BasicBlock::~BasicBlock()
 {
     foreach (Stmt *s, _statements)
@@ -793,23 +522,23 @@ Temp *BasicBlock::TEMP(unsigned index)
 {
     Q_ASSERT(!isRemoved());
     Temp *e = function->New<Temp>();
-    e->init(Temp::VirtualRegister, index, 0);
+    e->init(Temp::VirtualRegister, index);
     return e;
 }
 
-Temp *BasicBlock::ARG(unsigned index, unsigned scope)
+ArgLocal *BasicBlock::ARG(unsigned index, unsigned scope)
 {
     Q_ASSERT(!isRemoved());
-    Temp *e = function->New<Temp>();
-    e->init(scope ? Temp::ScopedFormal : Temp::Formal, index, scope);
+    ArgLocal *e = function->New<ArgLocal>();
+    e->init(scope ? ArgLocal::ScopedFormal : ArgLocal::Formal, index, scope);
     return e;
 }
 
-Temp *BasicBlock::LOCAL(unsigned index, unsigned scope)
+ArgLocal *BasicBlock::LOCAL(unsigned index, unsigned scope)
 {
     Q_ASSERT(!isRemoved());
-    Temp *e = function->New<Temp>();
-    e->init(scope ? Temp::ScopedLocal : Temp::Local, index, scope);
+    ArgLocal *e = function->New<ArgLocal>();
+    e->init(scope ? ArgLocal::ScopedLocal : ArgLocal::Local, index, scope);
     return e;
 }
 
@@ -949,7 +678,7 @@ Stmt *BasicBlock::EXP(Expr *expr)
     if (isTerminated())
         return 0;
 
-    Exp *s = function->New<Exp>();
+    Exp *s = function->NewStmt<Exp>();
     s->init(expr);
     appendStatement(s);
     return s;
@@ -961,7 +690,7 @@ Stmt *BasicBlock::MOVE(Expr *target, Expr *source)
     if (isTerminated())
         return 0;
 
-    Move *s = function->New<Move>();
+    Move *s = function->NewStmt<Move>();
     s->init(target, source);
     appendStatement(s);
     return s;
@@ -973,7 +702,7 @@ Stmt *BasicBlock::JUMP(BasicBlock *target)
     if (isTerminated())
         return 0;
 
-    Jump *s = function->New<Jump>();
+    Jump *s = function->NewStmt<Jump>();
     s->init(target);
     appendStatement(s);
 
@@ -997,8 +726,8 @@ Stmt *BasicBlock::CJUMP(Expr *cond, BasicBlock *iftrue, BasicBlock *iffalse)
         return JUMP(iftrue);
     }
 
-    CJump *s = function->New<CJump>();
-    s->init(cond, iftrue, iffalse);
+    CJump *s = function->NewStmt<CJump>();
+    s->init(cond, iftrue, iffalse, this);
     appendStatement(s);
 
     Q_ASSERT(! out.contains(iftrue));
@@ -1016,33 +745,16 @@ Stmt *BasicBlock::CJUMP(Expr *cond, BasicBlock *iftrue, BasicBlock *iffalse)
     return s;
 }
 
-Stmt *BasicBlock::RET(Temp *expr)
+Stmt *BasicBlock::RET(Expr *expr)
 {
     Q_ASSERT(!isRemoved());
     if (isTerminated())
         return 0;
 
-    Ret *s = function->New<Ret>();
+    Ret *s = function->NewStmt<Ret>();
     s->init(expr);
     appendStatement(s);
     return s;
-}
-
-void BasicBlock::dump(QTextStream &out, Stmt::Mode mode)
-{
-    out << 'L' << index() << ':';
-    if (catchBlock)
-        out << " (catchBlock L" << catchBlock->index() << ")";
-    out << endl;
-    foreach (Stmt *s, statements()) {
-        out << '\t';
-        s->dump(out, mode);
-
-        if (s->location.isValid())
-            out << " // line: " << s->location.startLine << " ; column: " << s->location.startColumn;
-
-        out << endl;
-    }
 }
 
 void BasicBlock::setStatements(const QVector<Stmt *> &newStatements)
@@ -1060,7 +772,7 @@ void BasicBlock::setStatements(const QVector<Stmt *> &newStatements)
 void BasicBlock::appendStatement(Stmt *statement)
 {
     Q_ASSERT(!isRemoved());
-    if (nextLocation.isValid())
+    if (nextLocation.startLine)
         statement->location = nextLocation;
     _statements.append(statement);
 }
@@ -1069,6 +781,14 @@ void BasicBlock::prependStatement(Stmt *stmt)
 {
     Q_ASSERT(!isRemoved());
     _statements.prepend(stmt);
+}
+
+void BasicBlock::prependStatements(const QVector<Stmt *> &stmts)
+{
+    Q_ASSERT(!isRemoved());
+    QVector<Stmt *> newStmts = stmts;
+    newStmts += _statements;
+    _statements = newStmts;
 }
 
 void BasicBlock::insertStatementBefore(Stmt *before, Stmt *newStmt)
@@ -1156,6 +876,11 @@ void CloneExpr::visitTemp(Temp *e)
     cloned = cloneTemp(e, block->function);
 }
 
+void CloneExpr::visitArgLocal(ArgLocal *e)
+{
+    cloned = cloneArgLocal(e, block->function);
+}
+
 void CloneExpr::visitClosure(Closure *e)
 {
     cloned = block->CLOSURE(e->value);
@@ -1195,6 +920,396 @@ void CloneExpr::visitMember(Member *e)
 {
     Expr *clonedBase = clone(e->base);
     cloned = block->MEMBER(clonedBase, e->name, e->property, e->kind, e->attachedPropertiesIdOrEnumValue);
+}
+
+IRPrinter::IRPrinter(QTextStream *out)
+    : out(out)
+    , positionSize(Stmt::InvalidId)
+    , currentBB(0)
+{
+}
+
+IRPrinter::~IRPrinter()
+{
+}
+
+void IRPrinter::print(Stmt *s)
+{
+    s->accept(this);
+}
+
+void IRPrinter::print(const Expr &e)
+{
+    const_cast<Expr *>(&e)->accept(this);
+}
+
+void IRPrinter::print(Expr *e)
+{
+    e->accept(this);
+}
+
+void IRPrinter::print(Function *f)
+{
+    if (positionSize == Stmt::InvalidId)
+        positionSize = QString::number(f->statementCount()).size();
+
+    QString n = f->name ? *f->name : QString();
+    if (n.isEmpty())
+        n.sprintf("%p", f);
+    *out << "function " << n << '(';
+
+    for (int i = 0; i < f->formals.size(); ++i) {
+        if (i != 0)
+            *out << ", ";
+        *out << *f->formals.at(i);
+    }
+    *out << ')' << endl
+        << '{' << endl;
+
+    foreach (const QString *local, f->locals)
+        *out << "    local var " << *local << endl;
+
+    bool needsSeperator = !f->locals.isEmpty();
+    foreach (BasicBlock *bb, f->basicBlocks()) {
+        if (bb->isRemoved())
+            continue;
+
+        if (needsSeperator)
+            *out << endl;
+        else
+            needsSeperator = true;
+        print(bb);
+    }
+    *out << '}' << endl;
+}
+
+void IRPrinter::print(BasicBlock *bb)
+{
+    std::swap(currentBB, bb);
+    printBlockStart();
+
+    foreach (Stmt *s, currentBB->statements()) {
+        if (!s)
+            continue;
+
+        QByteArray str;
+        QBuffer buf(&str);
+        buf.open(QIODevice::WriteOnly);
+        QTextStream os(&buf);
+        QTextStream *prevOut = &os;
+        std::swap(out, prevOut);
+        addStmtNr(s);
+        s->accept(this);
+        if (s->location.startLine) {
+            out->flush();
+            for (int i = 58 - str.length(); i > 0; --i)
+                *out << ' ';
+            *out << "    ; line: " << s->location.startLine << ", column: " << s->location.startColumn;
+        }
+
+        out->flush();
+        std::swap(out, prevOut);
+
+        *out << "    " << str << endl;
+    }
+
+    std::swap(currentBB, bb);
+}
+
+void IRPrinter::visitExp(Exp *s)
+{
+    *out << "void ";
+    s->expr->accept(this);
+}
+
+void IRPrinter::visitMove(Move *s)
+{
+    if (Temp *targetTemp = s->target->asTemp())
+        if (!s->swap && targetTemp->type != UnknownType)
+            *out << typeName(targetTemp->type) << ' ';
+
+    s->target->accept(this);
+    *out << ' ';
+    if (s->swap)
+        *out << "<=> ";
+    else
+        *out << "= ";
+    s->source->accept(this);
+}
+
+void IRPrinter::visitJump(Jump *s)
+{
+    *out << "goto L" << s->target->index();
+}
+
+void IRPrinter::visitCJump(CJump *s)
+{
+    *out << "if ";
+    s->cond->accept(this);
+    *out << " goto L" << s->iftrue->index()
+         << " else goto L" << s->iffalse->index();
+}
+
+void IRPrinter::visitRet(Ret *s)
+{
+    *out << "return";
+    if (s->expr) {
+        *out << ' ';
+        s->expr->accept(this);
+    }
+}
+
+void IRPrinter::visitPhi(Phi *s)
+{
+    if (s->targetTemp->type != UnknownType)
+        *out << typeName(s->targetTemp->type) << ' ';
+
+    s->targetTemp->accept(this);
+    *out << " = phi ";
+    for (int i = 0, ei = s->d->incoming.size(); i < ei; ++i) {
+        if (i > 0)
+            *out << ", ";
+        if (currentBB)
+            *out << 'L' << currentBB->in.at(i)->index() << ": ";
+        if (s->d->incoming[i])
+            s->d->incoming[i]->accept(this);
+    }
+}
+
+void IRPrinter::visitConst(Const *e)
+{
+    switch (e->type) {
+    case QV4::IR::UndefinedType:
+        *out << "undefined";
+        break;
+    case QV4::IR::NullType:
+        *out << "null";
+        break;
+    case QV4::IR::BoolType:
+        *out << (e->value ? "true" : "false");
+        break;
+    case QV4::IR::MissingType:
+        *out << "missing";
+        break;
+    default:
+        if (int(e->value) == 0 && int(e->value) == e->value) {
+            if (isNegative(e->value))
+                *out << "-0";
+            else
+                *out << "0";
+        } else {
+            *out << QString::number(e->value, 'g', 16);
+        }
+        break;
+    }
+}
+
+void IRPrinter::visitString(String *e)
+{
+    *out << '"' << escape(*e->value) << '"';
+}
+
+void IRPrinter::visitRegExp(RegExp *e)
+{
+    char f[3];
+    int i = 0;
+    if (e->flags & RegExp::RegExp_Global)
+        f[i++] = 'g';
+    if (e->flags & RegExp::RegExp_IgnoreCase)
+        f[i++] = 'i';
+    if (e->flags & RegExp::RegExp_Multiline)
+        f[i++] = 'm';
+    f[i] = 0;
+
+    *out << '/' << *e->value << '/' << f;
+}
+
+void IRPrinter::visitName(Name *e)
+{
+    if (e->id) {
+        if (*e->id != QStringLiteral("this"))
+            *out << '.';
+        *out << *e->id;
+    } else {
+        *out << builtin_to_string(e->builtin);
+    }
+}
+
+void IRPrinter::visitTemp(Temp *e)
+{
+    switch (e->kind) {
+    case Temp::VirtualRegister:  *out << '%' << e->index; break;
+    case Temp::PhysicalRegister: *out << (e->type == DoubleType ? "fp" : "r")
+                                     << e->index; break;
+    case Temp::StackSlot:        *out << '&' << e->index; break;
+    default:                     *out << "INVALID";
+    }
+}
+
+void IRPrinter::visitArgLocal(ArgLocal *e)
+{
+    switch (e->kind) {
+    case ArgLocal::Formal:           *out << '#' << e->index; break;
+    case ArgLocal::ScopedFormal:     *out << '#' << e->index
+                                     << '@' << e->scope; break;
+    case ArgLocal::Local:            *out << '$' << e->index; break;
+    case ArgLocal::ScopedLocal:      *out << '$' << e->index
+                                     << '@' << e->scope; break;
+    default:                     *out << "INVALID";
+    }
+}
+
+void IRPrinter::visitClosure(Closure *e)
+{
+    QString name = e->functionName ? *e->functionName : QString();
+    if (name.isEmpty())
+        name.sprintf("%x", e->value);
+    *out << "closure " << name;
+}
+
+void IRPrinter::visitConvert(Convert *e)
+{
+    *out << "convert " << typeName(e->expr->type) << " to " << typeName(e->type) << ' ';
+    e->expr->accept(this);
+}
+
+void IRPrinter::visitUnop(Unop *e)
+{
+    *out << opname(e->op) << ' ';
+    e->expr->accept(this);
+}
+
+void IRPrinter::visitBinop(Binop *e)
+{
+    *out << opname(e->op) << ' ';
+    e->left->accept(this);
+    *out << ", ";
+    e->right->accept(this);
+}
+
+void IRPrinter::visitCall(Call *e)
+{
+    *out << "call ";
+    e->base->accept(this);
+    *out << '(';
+    for (ExprList *it = e->args; it; it = it->next) {
+        if (it != e->args)
+            *out << ", ";
+        it->expr->accept(this);
+    }
+    *out << ')';
+}
+
+void IRPrinter::visitNew(New *e)
+{
+    *out << "new ";
+    e->base->accept(this);
+    *out << '(';
+    for (ExprList *it = e->args; it; it = it->next) {
+        if (it != e->args)
+            *out << ", ";
+        it->expr->accept(this);
+    }
+    *out << ')';
+}
+
+void IRPrinter::visitSubscript(Subscript *e)
+{
+    e->base->accept(this);
+    *out << '[';
+    e->index->accept(this);
+    *out << ']';
+}
+
+void IRPrinter::visitMember(Member *e)
+{
+    if (e->kind != Member::MemberOfEnum
+            && e->attachedPropertiesIdOrEnumValue != 0 && !e->base->asTemp())
+        *out << "[[attached property from " << e->attachedPropertiesIdOrEnumValue << "]]";
+    else
+        e->base->accept(this);
+    *out << '.' << *e->name;
+#ifndef V4_BOOTSTRAP
+    if (e->property)
+        *out << " (meta-property " << e->property->coreIndex
+            << " <" << QMetaType::typeName(e->property->propType)
+            << ">)";
+#endif
+}
+
+QString IRPrinter::escape(const QString &s)
+{
+    QString r;
+    for (int i = 0; i < s.length(); ++i) {
+        const QChar ch = s.at(i);
+        if (ch == QLatin1Char('\n'))
+            r += QStringLiteral("\\n");
+        else if (ch == QLatin1Char('\r'))
+            r += QStringLiteral("\\r");
+        else if (ch == QLatin1Char('\\'))
+            r += QStringLiteral("\\\\");
+        else if (ch == QLatin1Char('"'))
+            r += QStringLiteral("\\\"");
+        else if (ch == QLatin1Char('\''))
+            r += QStringLiteral("\\'");
+        else
+            r += ch;
+    }
+    return r;
+}
+
+void IRPrinter::addStmtNr(Stmt *s)
+{
+    if (s->id() >= 0)
+        addJustifiedNr(s->id());
+}
+
+void IRPrinter::addJustifiedNr(int pos)
+{
+    if (positionSize == Stmt::InvalidId) {
+        *out << pos << ": ";
+    } else {
+        QString posStr;
+        if (pos != Stmt::InvalidId)
+            posStr = QString::number(pos);
+        *out << posStr.rightJustified(positionSize);
+        if (pos == Stmt::InvalidId)
+            *out << "  ";
+        else
+            *out << ": ";
+    }
+}
+
+void IRPrinter::printBlockStart()
+{
+    if (currentBB->isRemoved()) {
+        *out << "(block has been removed)";
+        return;
+    }
+
+    QByteArray str;
+    str.append('L');
+    str.append(QByteArray::number(currentBB->index()));
+    str.append(':');
+    if (currentBB->catchBlock) {
+        str.append(" (exception handler L");
+        str.append(QByteArray::number(currentBB->catchBlock->index()));
+        str.append(')');
+    }
+    for (int i = 66 - str.length(); i; --i)
+        str.append(' ');
+    *out << str;
+
+    *out << "; predecessors:";
+    foreach (BasicBlock *in, currentBB->in)
+        *out << " L" << in->index();
+    if (currentBB->in.isEmpty())
+        *out << " none";
+    if (BasicBlock *container = currentBB->containingGroup())
+        *out << ", container: L" << container->index();
+    if (currentBB->isGroupStart())
+        *out << ", loop_header: yes";
+    *out << endl;
 }
 
 } // end of namespace IR

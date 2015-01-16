@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -77,13 +69,17 @@ struct QObjectSlotDispatcher;
 
 struct Q_QML_EXPORT QObjectWrapper : public QV4::Object
 {
-    V4_OBJECT
+    struct Data : QV4::Object::Data {
+        Data(ExecutionEngine *engine, QObject *object);
+        QPointer<QObject> object;
+    };
+    V4_OBJECT(QV4::Object)
 
     enum RevisionMode { IgnoreRevision, CheckRevision };
 
     static void initializeBindings(ExecutionEngine *engine);
 
-    QObject *object() const { return m_object.data(); }
+    QObject *object() const { return d()->object.data(); }
 
     ReturnedValue getQmlProperty(ExecutionContext *ctx, QQmlContextData *qmlContext, String *name, RevisionMode revisionMode, bool *hasProperty = 0, bool includeImports = false);
     static ReturnedValue getQmlProperty(ExecutionContext *ctx, QQmlContextData *qmlContext, QObject *object, String *name, RevisionMode revisionMode, bool *hasProperty = 0);
@@ -106,16 +102,12 @@ private:
 
     static ReturnedValue create(ExecutionEngine *engine, QObject *object);
 
-    QObjectWrapper(ExecutionEngine *engine, QObject *object);
-
     QQmlPropertyData *findProperty(ExecutionEngine *engine, QQmlContextData *qmlContext, String *name, RevisionMode revisionMode, QQmlPropertyData *local) const;
 
-    QPointer<QObject> m_object;
-
-    static ReturnedValue get(Managed *m, const StringRef name, bool *hasProperty);
-    static void put(Managed *m, const StringRef name, const ValueRef value);
-    static PropertyAttributes query(const Managed *, StringRef name);
-    static void advanceIterator(Managed *m, ObjectIterator *it, StringRef name, uint *index, Property *p, PropertyAttributes *attributes);
+    static ReturnedValue get(Managed *m, String *name, bool *hasProperty);
+    static void put(Managed *m, String *name, const ValueRef value);
+    static PropertyAttributes query(const Managed *, String *name);
+    static void advanceIterator(Managed *m, ObjectIterator *it, String *&name, uint *index, Property *p, PropertyAttributes *attributes);
     static void markObjects(Managed *that, QV4::ExecutionEngine *e);
     static void destroy(Managed *that);
 
@@ -123,26 +115,25 @@ private:
     static ReturnedValue method_disconnect(CallContext *ctx);
 };
 
-struct QObjectMethod : public QV4::FunctionObject
+struct Q_QML_EXPORT QObjectMethod : public QV4::FunctionObject
 {
-    V4_OBJECT
+    struct Data : QV4::FunctionObject::Data {
+        Data(QV4::ExecutionContext *scope, QObject *object, int index, const ValueRef qmlGlobal);
+        QPointer<QObject> object;
+        int index;
+        QV4::PersistentValue qmlGlobal;
+    };
+    V4_OBJECT(QV4::FunctionObject)
 
     enum { DestroyMethod = -1, ToStringMethod = -2 };
 
     static ReturnedValue create(QV4::ExecutionContext *scope, QObject *object, int index, const ValueRef qmlGlobal = Primitive::undefinedValue());
 
-    int methodIndex() const { return m_index; }
-    QObject *object() const { return m_object.data(); }
-
-private:
-    QObjectMethod(QV4::ExecutionContext *scope, QObject *object, int index, const ValueRef qmlGlobal);
+    int methodIndex() const { return d()->index; }
+    QObject *object() const { return d()->object.data(); }
 
     QV4::ReturnedValue method_toString(QV4::ExecutionContext *ctx);
     QV4::ReturnedValue method_destroy(QV4::ExecutionContext *ctx, const ValueRef args, int argc);
-
-    QPointer<QObject> m_object;
-    int m_index;
-    QV4::PersistentValue m_qmlGlobal;
 
     static ReturnedValue call(Managed *, CallData *callData);
 
@@ -150,26 +141,28 @@ private:
 
     static void destroy(Managed *that)
     {
-        static_cast<QObjectMethod *>(that)->~QObjectMethod();
+        static_cast<QObjectMethod *>(that)->d()->~Data();
     }
 };
 
 struct QmlSignalHandler : public QV4::Object
 {
-    V4_OBJECT
+    struct Data : QV4::Object::Data {
+        Data(ExecutionEngine *engine, QObject *object, int signalIndex);
+        QPointer<QObject> object;
+        int signalIndex;
+    };
+    V4_OBJECT(QV4::Object)
 
-    QmlSignalHandler(ExecutionEngine *engine, QObject *object, int signalIndex);
 
-    int signalIndex() const { return m_signalIndex; }
-    QObject *object() const { return m_object.data(); }
+    int signalIndex() const { return d()->signalIndex; }
+    QObject *object() const { return d()->object.data(); }
 
 private:
-    QPointer<QObject> m_object;
-    int m_signalIndex;
 
     static void destroy(Managed *that)
     {
-        static_cast<QmlSignalHandler *>(that)->~QmlSignalHandler();
+        static_cast<QmlSignalHandler *>(that)->d()->~Data();
     }
 };
 
@@ -194,8 +187,6 @@ public:
 private Q_SLOTS:
     void removeDestroyedObject(QObject*);
 };
-
-DEFINE_REF(QObjectWrapper, Object);
 
 }
 

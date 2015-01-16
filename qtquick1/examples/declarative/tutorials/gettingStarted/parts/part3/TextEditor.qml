@@ -47,7 +47,7 @@ Rectangle {
     border.color:"black"
     //the screen is partitioned into the MenuBar and TextArea. 1/3 of the screen is assigned to the MenuBar
     property int partition: height/3
-    
+
     MenuBar{
         id:menuBar
         height: partition

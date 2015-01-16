@@ -35,11 +35,65 @@
 
     This example demonstrates how to add a custom Java class to an Android application, and
     how to call into this using the JNI convenience APIs in the Qt Android Extras module.
+    The application UI is created by using Qt Quick.
 
     Click on either of the smiley faces to put a notification in the status area of the Android
     device.
 
     \include examples-run.qdocinc
+
+    \section1 Calling Java Methods from C++ Code
+
+    We define a custom Java class called \c NotificationClient in the
+    NotificationClient.java file:
+
+    \quotefromfile notification/android-sources/src/org/qtproject/example/notification/NotificationClient.java
+    \skipto org.qtproject.example.notification
+    \printuntil /^\}/
+
+    In the NotificationClient C++ class header file, notificationclient.h, we
+    declare a simple C++ API to display notifications on an Android device. It
+    consists of a single string property, \c notification, and a slot,
+    \c updateAndroidNotification(), that calls the Java code:
+
+    \quotefromfile notification/notificationclient.h
+    \skipto Q_PROPERTY
+    \printuntil )
+    \dots
+    \skipto private slots
+    \printuntil updateAndroidNotification()
+
+    A NotificationClient object is exposed to the QML in the main source file,
+    main.cpp:
+
+    \quotefromfile notification/main.cpp
+    \skipto QQuickView view;
+    \printuntil notificationClient);
+
+    In the NotificationClient C++ class source file, notificationclient.cpp, we
+    import the QtAndroidJniObject class to be able to use its functions:
+
+    \quotefromfile notification/notificationclient.cpp
+    \skipto QAndroidJniObject
+    \printuntil >
+
+    We connect the \c notificationChanged() signal to the
+    \c updateAndroidNotification() slot to update the notification text when the
+    \c notification property changes:
+
+    \printuntil }
+
+    The \c NotificationClient::updateAndroidNotification() function calls the
+    Java method. We construct a Java string from the \c notification string
+    property:
+
+    \skipto updateAndroidNotification()
+    \printuntil fromString
+
+    And pass the string object as a parameter to the Java \c notify() method.
+    Note that we must supply the signature ourselves:
+
+    \printuntil }
 
     \sa {Qt for Android}, {Qt Android Extras}
 */

@@ -53,7 +53,7 @@ Item {
         smooth: true
     }
 
-    Text { 
+    Text {
         id: captionItem
         anchors.horizontalCenter: parent.horizontalCenter; anchors.bottom: parent.bottom
     }

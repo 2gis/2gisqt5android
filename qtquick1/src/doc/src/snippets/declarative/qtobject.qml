@@ -41,7 +41,7 @@
 import QtQuick 1.0
 
 Item {
-    QtObject { 
+    QtObject {
         id: attributes
         property string name
         property int size

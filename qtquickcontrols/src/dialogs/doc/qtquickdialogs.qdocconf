@@ -2,7 +2,6 @@ include($QT_INSTALL_DOCS/global/qt-module-defaults.qdocconf)
 
 project                 = QtQuickDialogs
 description             = Qt Quick Dialogs Reference Documentation
-url                     = http://qt-project.org/doc/qt-$QT_VER
 version                 = $QT_VERSION
 
 qhp.projects            = QtQuickDialogs
@@ -20,7 +19,7 @@ qhp.QtQuickDialogs.customFilters.Qt.filterAttributes = qtquickdialogs $QT_VERSIO
 qhp.QtQuickDialogs.subprojects = qtquickdialogsqmltypes
 qhp.QtQuickDialogs.subprojects.qtquickdialogsqmltypes.title = QML Types
 qhp.QtQuickDialogs.subprojects.qtquickdialogsqmltypes.indexTitle = Qt Quick Dialogs QML Types
-qhp.QtQuickDialogs.subprojects.qtquickdialogsqmltypes.selectors = fake:qmlclass
+qhp.QtQuickDialogs.subprojects.qtquickdialogsqmltypes.selectors = qmlclass
 qhp.QtQuickDialogs.subprojects.qtquickdialogsqmltypes.sortPages = true
 
 depends = qtqml qtquick qtgui qtwidgets qtdoc

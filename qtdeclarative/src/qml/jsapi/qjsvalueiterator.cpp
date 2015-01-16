@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -108,8 +100,10 @@ QJSValueIterator::QJSValueIterator(const QJSValue& object)
         return;
     QV4::Scope scope(v4);
     QV4::Scoped<QV4::ForEachIteratorObject> it(scope, d_ptr->iterator.value());
-    it->it.flags =  QV4::ObjectIterator::NoFlags;
-    it->it.next(d_ptr->nextName, &d_ptr->nextIndex, &d_ptr->nextProperty, &d_ptr->nextAttributes);
+    it->d()->it.flags =  QV4::ObjectIterator::NoFlags;
+    QV4::String *nm = 0;
+    it->d()->it.next(nm, &d_ptr->nextIndex, &d_ptr->nextProperty, &d_ptr->nextAttributes);
+    d_ptr->nextName = nm;
 }
 
 /*!
@@ -155,7 +149,9 @@ bool QJSValueIterator::next()
         return false;
     QV4::Scope scope(v4);
     QV4::Scoped<QV4::ForEachIteratorObject> it(scope, d_ptr->iterator.value());
-    it->it.next(d_ptr->nextName, &d_ptr->nextIndex, &d_ptr->nextProperty, &d_ptr->nextAttributes);
+    QV4::String *nm = 0;
+    it->d()->it.next(nm, &d_ptr->nextIndex, &d_ptr->nextProperty, &d_ptr->nextAttributes);
+    d_ptr->nextName = nm;
     return !!d_ptr->currentName || d_ptr->currentIndex != UINT_MAX;
 }
 
@@ -229,8 +225,10 @@ QJSValueIterator& QJSValueIterator::operator=(QJSValue& object)
     QV4::ScopedObject o(scope, jsp->value);
     d_ptr->iterator = v4->newForEachIteratorObject(v4->currentContext(), o)->asReturnedValue();
     QV4::Scoped<QV4::ForEachIteratorObject> it(scope, d_ptr->iterator.value());
-    it->it.flags =  QV4::ObjectIterator::NoFlags;
-    it->it.next(d_ptr->nextName, &d_ptr->nextIndex, &d_ptr->nextProperty, &d_ptr->nextAttributes);
+    it->d()->it.flags =  QV4::ObjectIterator::NoFlags;
+    QV4::String *nm = 0;
+    it->d()->it.next(nm, &d_ptr->nextIndex, &d_ptr->nextProperty, &d_ptr->nextAttributes);
+    d_ptr->nextName = nm;
     return *this;
 }
 

@@ -147,11 +147,12 @@
 #include <wtf/AlwaysInline.h>
 #include <wtf/Assertions.h>
 #include <wtf/FastMalloc.h>
-#include <wtf/MathExtras.h>
 #include <wtf/Vector.h>
 #include <wtf/Threading.h>
 
 #include <stdio.h>
+
+#include <wtf/MathExtras.h>
 
 #if COMPILER(MSVC)
 #pragma warning(disable: 4244)
@@ -2395,7 +2396,7 @@ void doubleToStringInJavaScriptFormat(double d, DtoaBuffer buffer, unsigned* res
     ASSERT(buffer);
 
     // avoid ever printing -NaN, in JS conceptually there is only one NaN value
-    if (isnan(d)) {
+    if (std::isnan(d)) {
         append(buffer, "NaN", 3);
         if (resultLength)
             *resultLength = 3;

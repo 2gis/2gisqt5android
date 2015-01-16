@@ -80,7 +80,7 @@ Rectangle {
     signal buttonClick()
 
     //define the clickable area to be the whole rectangle
-    MouseArea { 
+    MouseArea {
         id: buttonMouseArea
         anchors.fill: parent    //stretch the area to the parent's dimension
         onClicked: buttonClick()

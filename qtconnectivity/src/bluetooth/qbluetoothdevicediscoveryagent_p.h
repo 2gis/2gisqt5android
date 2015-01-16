@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtBluetooth module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -65,8 +57,14 @@
 #include <QtBluetooth/QBluetoothLocalDevice>
 
 #ifdef QT_BLUEZ_BLUETOOTH
+#include "bluez/bluez5_helper_p.h"
+
 class OrgBluezManagerInterface;
 class OrgBluezAdapterInterface;
+class OrgFreedesktopDBusObjectManagerInterface;
+class OrgFreedesktopDBusPropertiesInterface;
+class OrgBluezAdapter1Interface;
+class OrgBluezDevice1Interface;
 
 QT_BEGIN_NAMESPACE
 class QDBusVariant;
@@ -80,14 +78,17 @@ QT_BEGIN_NAMESPACE
 
 class QBluetoothDeviceDiscoveryAgentPrivate
 #if defined(QT_QNX_BLUETOOTH) || defined(QT_ANDROID_BLUETOOTH)
-: public QObject {
+    : public QObject
+{
     Q_OBJECT
 #else
 {
 #endif
     Q_DECLARE_PUBLIC(QBluetoothDeviceDiscoveryAgent)
 public:
-    QBluetoothDeviceDiscoveryAgentPrivate(const QBluetoothAddress &deviceAdapter);
+    QBluetoothDeviceDiscoveryAgentPrivate(
+            const QBluetoothAddress &deviceAdapter,
+            QBluetoothDeviceDiscoveryAgent *parent);
     ~QBluetoothDeviceDiscoveryAgentPrivate();
 
     void start();
@@ -97,6 +98,14 @@ public:
 #ifdef QT_BLUEZ_BLUETOOTH
     void _q_deviceFound(const QString &address, const QVariantMap &dict);
     void _q_propertyChanged(const QString &name, const QDBusVariant &value);
+    void _q_InterfacesAdded(const QDBusObjectPath &object_path,
+                            InterfaceList interfaces_and_properties);
+    void _q_discoveryFinished();
+    void _q_discoveryInterrupted(const QString &path);
+    void _q_PropertiesChanged(const QString &interface,
+                              const QVariantMap &changed_properties,
+                              const QStringList &invalidated_properties);
+    void _q_extendedDeviceDiscoveryTimeout();
 #endif
 
 private:
@@ -107,12 +116,12 @@ private:
     QString errorString;
 
 #ifdef QT_ANDROID_BLUETOOTH
-private Q_SLOTS:
+private slots:
     void processDiscoveryFinished();
-    void processDiscoveredDevices(const QBluetoothDeviceInfo& info);
+    void processDiscoveredDevices(const QBluetoothDeviceInfo &info);
 
 private:
-    DeviceDiscoveryBroadcastReceiver* receiver;
+    DeviceDiscoveryBroadcastReceiver *receiver;
     QBluetoothAddress m_adapterAddress;
     bool m_active;
     QAndroidJniObject adapter;
@@ -124,8 +133,19 @@ private:
     bool pendingStart;
     OrgBluezManagerInterface *manager;
     OrgBluezAdapterInterface *adapter;
+    OrgFreedesktopDBusObjectManagerInterface *managerBluez5;
+    OrgBluezAdapter1Interface *adapterBluez5;
+    QTimer *discoveryTimer;
+    QList<OrgFreedesktopDBusPropertiesInterface *> propertyMonitors;
+
+    void deviceFoundBluez5(const QString& devicePath);
+    void startBluez5();
+
+    bool useExtendedDiscovery;
+    QTimer extendedDiscoveryTimer;
+
 #elif defined(QT_QNX_BLUETOOTH)
-    private Q_SLOTS:
+private slots:
     void finished();
     void remoteDevicesChanged(int);
     void controlReply(ppsResult result);
@@ -138,7 +158,7 @@ private:
 
     int m_rdfd;
     bool m_active;
-    enum Ops{
+    enum Ops {
         None,
         Cancel,
         Start
@@ -150,7 +170,6 @@ private:
 #endif
 
     QBluetoothDeviceDiscoveryAgent *q_ptr;
-
 };
 
 QT_END_NAMESPACE

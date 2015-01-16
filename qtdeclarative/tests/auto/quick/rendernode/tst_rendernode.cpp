@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -44,6 +36,7 @@
 #include <QtQuick/qquickitem.h>
 #include <QtQuick/qquickview.h>
 #include <QtGui/qopenglcontext.h>
+#include <QtGui/qopenglfunctions.h>
 #include <QtGui/qscreen.h>
 #include <private/qsgrendernode_p.h>
 
@@ -72,6 +65,7 @@ public:
 private slots:
     void renderOrder();
     void messUpState();
+    void matrix();
 };
 
 class ClearNode : public QSGRenderNode
@@ -85,8 +79,8 @@ public:
     virtual void render(const RenderState &)
     {
         // If clip has been set, scissoring will make sure the right area is cleared.
-        glClearColor(color.redF(), color.greenF(), color.blueF(), 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT);
+        QOpenGLContext::currentContext()->functions()->glClearColor(color.redF(), color.greenF(), color.blueF(), 1.0f);
+        QOpenGLContext::currentContext()->functions()->glClear(GL_COLOR_BUFFER_BIT);
     }
 
     QColor color;
@@ -128,9 +122,11 @@ private:
     QColor m_color;
 };
 
-class MessUpNode : public QSGRenderNode
+class MessUpNode : public QSGRenderNode, protected QOpenGLFunctions
 {
 public:
+    MessUpNode() : initialized(false) { }
+
     virtual StateFlags changedStates()
     {
         return StateFlags(DepthState) | StencilState | ScissorState | ColorState | BlendState
@@ -139,17 +135,17 @@ public:
 
     virtual void render(const RenderState &)
     {
+        if (!initialized) {
+            initializeOpenGLFunctions();
+            initialized = true;
+        }
         // Don't draw anything, just mess up the state
         glViewport(10, 10, 10, 10);
         glDisable(GL_SCISSOR_TEST);
         glDepthMask(true);
         glEnable(GL_DEPTH_TEST);
         glDepthFunc(GL_EQUAL);
-#if defined(QT_OPENGL_ES)
         glClearDepthf(1);
-#else
-        glClearDepth(1);
-#endif
         glClearStencil(42);
         glClearColor(1.0f, 0.5f, 1.0f, 0.0f);
         glClear(GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
@@ -162,6 +158,8 @@ public:
         glFrontFace(frontFace == GL_CW ? GL_CCW : GL_CW);
         glEnable(GL_CULL_FACE);
     }
+
+    bool initialized;
 };
 
 class MessUpItem : public QQuickItem
@@ -259,6 +257,84 @@ void tst_rendernode::messUpState()
              msgColorMismatchAt(errorMessage, x2, y3).constData());
     QCOMPARE(fb.pixel(x2, y4), qRgb(0x00, 0x00, 0x00));
     QCOMPARE(fb.pixel(x2, y5), qRgb(0x00, 0x00, 0x00));
+}
+
+class StateRecordingRenderNode : public QSGRenderNode
+{
+public:
+    StateFlags changedStates() { return StateFlags(-1); }
+    void render(const RenderState &) {
+        matrices[name] = *matrix();
+
+    }
+
+    QString name;
+    static QHash<QString, QMatrix4x4> matrices;
+};
+
+QHash<QString, QMatrix4x4> StateRecordingRenderNode::matrices;
+
+class StateRecordingRenderNodeItem : public QQuickItem
+{
+    Q_OBJECT
+public:
+    StateRecordingRenderNodeItem() { setFlag(ItemHasContents, true); }
+    QSGNode *updatePaintNode(QSGNode *r, UpdatePaintNodeData *) {
+        if (r)
+            return r;
+        StateRecordingRenderNode *rn = new StateRecordingRenderNode();
+        rn->name = objectName();
+        return rn;
+    }
+};
+
+void tst_rendernode::matrix()
+{
+    qmlRegisterType<StateRecordingRenderNodeItem>("RenderNode", 1, 0, "StateRecorder");
+    StateRecordingRenderNode::matrices.clear();
+    runTest("matrix.qml");
+
+    QMatrix4x4 noRotateOffset;
+    noRotateOffset.translate(20, 20);
+    {   QMatrix4x4 result = StateRecordingRenderNode::matrices.value(QStringLiteral("no-clip; no-rotation"));
+        QCOMPARE(result, noRotateOffset);
+    }
+    {   QMatrix4x4 result = StateRecordingRenderNode::matrices.value(QStringLiteral("parent-clip; no-rotation"));
+        QCOMPARE(result, noRotateOffset);
+    }
+    {   QMatrix4x4 result = StateRecordingRenderNode::matrices.value(QStringLiteral("self-clip; no-rotation"));
+        QCOMPARE(result, noRotateOffset);
+    }
+
+    QMatrix4x4 parentRotation;
+    parentRotation.translate(10, 10);   // parent at x/y: 10
+    parentRotation.translate(5, 5);     // rotate 90 around center (width/height: 10)
+    parentRotation.rotate(90, 0, 0, 1);
+    parentRotation.translate(-5, -5);
+    parentRotation.translate(10, 10);   // StateRecorder at: x/y: 10
+    {   QMatrix4x4 result = StateRecordingRenderNode::matrices.value(QStringLiteral("no-clip; parent-rotation"));
+        QCOMPARE(result, parentRotation);
+    }
+    {   QMatrix4x4 result = StateRecordingRenderNode::matrices.value(QStringLiteral("parent-clip; parent-rotation"));
+        QCOMPARE(result, parentRotation);
+    }
+    {   QMatrix4x4 result = StateRecordingRenderNode::matrices.value(QStringLiteral("self-clip; parent-rotation"));
+        QCOMPARE(result, parentRotation);
+    }
+
+    QMatrix4x4 selfRotation;
+    selfRotation.translate(10, 10);   // parent at x/y: 10
+    selfRotation.translate(10, 10);   // StateRecorder at: x/y: 10
+    selfRotation.rotate(90, 0, 0, 1); // rotate 90, width/height: 0
+    {   QMatrix4x4 result = StateRecordingRenderNode::matrices.value(QStringLiteral("no-clip; self-rotation"));
+        QCOMPARE(result, selfRotation);
+    }
+    {   QMatrix4x4 result = StateRecordingRenderNode::matrices.value(QStringLiteral("parent-clip; self-rotation"));
+        QCOMPARE(result, selfRotation);
+    }
+    {   QMatrix4x4 result = StateRecordingRenderNode::matrices.value(QStringLiteral("self-clip; self-rotation"));
+        QCOMPARE(result, selfRotation);
+    }
 }
 
 

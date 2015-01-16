@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtDeclarative module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -75,17 +67,17 @@ namespace QDeclarativeJS { namespace AST { class Node; } }
 /*
     XXX
 
-    These types are created (and owned) by the QDeclarativeXmlParser and consumed by the 
+    These types are created (and owned) by the QDeclarativeXmlParser and consumed by the
     QDeclarativeCompiler.  During the compilation phase the compiler will update some of
     the fields for both its own use and for the use of the upcoming QDeclarativeDom API.
 
-    The types are part of the generic sounding "QDeclarativeParser" namespace for legacy 
+    The types are part of the generic sounding "QDeclarativeParser" namespace for legacy
     reasons (there used to be more in this namespace) and will be cleaned up and
     migrated into a more appropriate location shortly.
 */
 namespace QDeclarativeParser
 {
-    struct Location 
+    struct Location
     {
         Location() : line(-1), column(-1) {}
         int line;
@@ -116,9 +108,9 @@ namespace QDeclarativeParser
     {
     public:
         Object();
-        virtual ~Object(); 
+        virtual ~Object();
 
-        // Type of the object.  The integer is an index into the 
+        // Type of the object.  The integer is an index into the
         // QDeclarativeCompiledData::types array, or -1 if the object is a property
         // group.
         int type;
@@ -140,9 +132,9 @@ namespace QDeclarativeParser
         // Custom parsed data
         QByteArray custom;
         // Bit mask of the properties assigned bindings
-        QByteArray bindingBitmask; 
+        QByteArray bindingBitmask;
         void setBindingBit(int);
-        // Returns the metaobject for this type, or 0 if not available.  
+        // Returns the metaobject for this type, or 0 if not available.
         // Internally selectd between the metatype and extObject variables
         const QMetaObject *metaObject() const;
 
@@ -178,7 +170,7 @@ namespace QDeclarativeParser
 
         // Script blocks that were nested under this object
         struct ScriptBlock {
-            enum Pragma { 
+            enum Pragma {
                 None   = 0x00000000,
                 Shared = 0x00000001
             };
@@ -189,7 +181,7 @@ namespace QDeclarativeParser
             Pragmas pragmas;
         };
 
-        // The bytes to cast instances by to get to the QDeclarativeParserStatus 
+        // The bytes to cast instances by to get to the QDeclarativeParserStatus
         // interface.  -1 indicates the type doesn't support this interface.
         // Set by the QDeclarativeCompiler.
         int parserStatusCast;
@@ -332,7 +324,7 @@ namespace QDeclarativeParser
         void addValue(Value *v);
         void addOnValue(Value *v);
 
-        // The QVariant::Type of the property, or 0 (QVariant::Invalid) if 
+        // The QVariant::Type of the property, or 0 (QVariant::Invalid) if
         // unknown.
         int type;
         // The metaobject index of this property, or -1 if unknown.
@@ -351,14 +343,14 @@ namespace QDeclarativeParser
         Object *value;
         // The property name
         QByteArray name;
-        // True if this property was accessed as the default property.  
+        // True if this property was accessed as the default property.
         bool isDefault;
         // True if the setting of this property will be deferred.  Set by the
         // QDeclarativeCompiler
         bool isDeferred;
         // True if this property is a value-type pseudo-property
         bool isValueTypeSubProperty;
-        // True if this property is a property alias.  Set by the 
+        // True if this property is a property alias.  Set by the
         // QDeclarativeCompiler
         bool isAlias;
 

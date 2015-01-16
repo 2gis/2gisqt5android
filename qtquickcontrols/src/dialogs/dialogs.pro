@@ -39,19 +39,24 @@ HEADERS += \
     qquickabstractdialog_p.h \
     qquickdialog_p.h
 
+WIDGET_DIALOGS_QML_FILES = \
+    WidgetMessageDialog.qml \
+    WidgetFileDialog.qml \
+    WidgetColorDialog.qml \
+    WidgetFontDialog.qml
+
 DIALOGS_QML_FILES += \
     DefaultMessageDialog.qml \
-    WidgetMessageDialog.qml \
     DefaultFileDialog.qml \
-    WidgetFileDialog.qml \
     DefaultColorDialog.qml \
-    WidgetColorDialog.qml \
     DefaultFontDialog.qml \
-    WidgetFontDialog.qml \
     DefaultDialogWrapper.qml \
     qml/ColorSlider.qml \
     qml/DefaultWindowDecoration.qml \
+    qml/IconButtonStyle.qml \
+    qml/IconGlyph.qml \
     qml/qmldir \
+    qml/icons.ttf \
     images/critical.png \
     images/information.png \
     images/question.png \
@@ -63,8 +68,11 @@ DIALOGS_QML_FILES += \
     images/slider_handle.png \
     images/sunken_frame.png \
     images/window_border.png \
-    images/folder.png \
-    images/up.png
+    $$WIDGET_DIALOGS_QML_FILES
+
+ios|android|blackberry|winrt {
+    DIALOGS_QML_FILES -= $$WIDGET_DIALOGS_QML_FILES
+}
 
 QT += quick-private gui gui-private core core-private qml qml-private
 

@@ -49,7 +49,7 @@ LayoutItem {    //Sized by the layout
 
     Rectangle { color: "yellow"; anchors.fill: parent }
 
-    Rectangle { 
+    Rectangle {
         width: 100; height: 100
         anchors.top: parent.top; anchors.right: parent.right
         color: "green"

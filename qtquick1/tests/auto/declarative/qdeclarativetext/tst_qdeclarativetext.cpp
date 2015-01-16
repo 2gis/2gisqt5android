@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -77,7 +69,7 @@ private slots:
     void lineCount();
     void lineHeight();
 
-    // ### these tests may be trivial    
+    // ### these tests may be trivial
     void horizontalAlignment();
     void horizontalAlignment_RightToLeft();
     void verticalAlignment();
@@ -704,7 +696,7 @@ void tst_qdeclarativetext::font()
         QCOMPARE(textObject->font().italic(), false);
     }
 
-    { 
+    {
         QString componentStr = "import QtQuick 1.0\nText { font.bold: true; text: \"Hello World\" }";
         QDeclarativeComponent textComponent(&engine);
         textComponent.setData(componentStr.toLatin1(), QUrl::fromLocalFile(""));
@@ -714,7 +706,7 @@ void tst_qdeclarativetext::font()
         QCOMPARE(textObject->font().italic(), false);
     }
 
-    { 
+    {
         QString componentStr = "import QtQuick 1.0\nText { font.italic: true; text: \"Hello World\" }";
         QDeclarativeComponent textComponent(&engine);
         textComponent.setData(componentStr.toLatin1(), QUrl::fromLocalFile(""));
@@ -724,7 +716,7 @@ void tst_qdeclarativetext::font()
         QCOMPARE(textObject->font().bold(), false);
     }
 
-    { 
+    {
         QString componentStr = "import QtQuick 1.0\nText { font.family: \"Helvetica\"; text: \"Hello World\" }";
         QDeclarativeComponent textComponent(&engine);
         textComponent.setData(componentStr.toLatin1(), QUrl::fromLocalFile(""));
@@ -735,7 +727,7 @@ void tst_qdeclarativetext::font()
         QCOMPARE(textObject->font().italic(), false);
     }
 
-    { 
+    {
         QString componentStr = "import QtQuick 1.0\nText { font.family: \"\"; text: \"Hello World\" }";
         QDeclarativeComponent textComponent(&engine);
         textComponent.setData(componentStr.toLatin1(), QUrl::fromLocalFile(""));
@@ -749,7 +741,7 @@ void tst_qdeclarativetext::style()
 {
     //test style
     for (int i = 0; i < styles.size(); i++)
-    { 
+    {
         QString componentStr = "import QtQuick 1.0\nText { style: \"" + styleStrings.at(i) + "\"; styleColor: \"white\"; text: \"Hello World\" }";
         QDeclarativeComponent textComponent(&engine);
         textComponent.setData(componentStr.toLatin1(), QUrl::fromLocalFile(""));
@@ -775,7 +767,7 @@ void tst_qdeclarativetext::color()
 {
     //test style
     for (int i = 0; i < colorStrings.size(); i++)
-    { 
+    {
         QString componentStr = "import QtQuick 1.0\nText { color: \"" + colorStrings.at(i) + "\"; text: \"Hello World\" }";
         QDeclarativeComponent textComponent(&engine);
         textComponent.setData(componentStr.toLatin1(), QUrl::fromLocalFile(""));
@@ -786,7 +778,7 @@ void tst_qdeclarativetext::color()
     }
 
     for (int i = 0; i < colorStrings.size(); i++)
-    { 
+    {
         QString componentStr = "import QtQuick 1.0\nText { styleColor: \"" + colorStrings.at(i) + "\"; text: \"Hello World\" }";
         QDeclarativeComponent textComponent(&engine);
         textComponent.setData(componentStr.toLatin1(), QUrl::fromLocalFile(""));
@@ -796,9 +788,9 @@ void tst_qdeclarativetext::color()
         // default color to black?
         QCOMPARE(textObject->color(), QColor("black"));
     }
-    
+
     for (int i = 0; i < colorStrings.size(); i++)
-    { 
+    {
         for (int j = 0; j < colorStrings.size(); j++)
         {
             QString componentStr = "import QtQuick 1.0\nText { color: \"" + colorStrings.at(i) + "\"; styleColor: \"" + colorStrings.at(j) + "\"; text: \"Hello World\" }";
@@ -1153,7 +1145,7 @@ void tst_qdeclarativetext::embeddedImages()
 
     if (!error.isEmpty())
         QTest::ignoreMessage(QtWarningMsg, error.toLatin1());
-    
+
     QDeclarativeComponent textComponent(&engine, qmlfile);
     QDeclarativeText *textObject = qobject_cast<QDeclarativeText*>(textComponent.create());
 
@@ -1307,11 +1299,11 @@ void tst_qdeclarativetext::testQtQuick11Attributes_data()
         << ":1 \"Text.lineHeightMode\" is not available in QtQuick 1.0.\n";
 
     QTest::newRow("lineCount") << "property int foo: lineCount"
-        << "<Unknown File>: ReferenceError: Can't find variable: lineCount"
+        << "<Unknown File>:1: ReferenceError: Can't find variable: lineCount"
         << "";
 
     QTest::newRow("truncated") << "property bool foo: truncated"
-        << "<Unknown File>: ReferenceError: Can't find variable: truncated"
+        << "<Unknown File>:1: ReferenceError: Can't find variable: truncated"
         << "";
 }
 

@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtNfc module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -174,7 +166,10 @@ void tst_QNdefMessage::tst_parse_data()
         QList<QNdefRecord> recordList;
         recordList.append(record);
         QTest::newRow("chunked") << data << QNdefMessage(recordList) << QVariantList();
-        QCOMPARE(qHash(record), 1887494681LL);
+
+        const QByteArray recordContent = record.type() + record.id()
+                                         + record.payload();
+        QCOMPARE(recordContent, QByteArray::fromHex(QByteArray("7479706569647061796c6f6164")));
     }
 
     // NFC-RTD Text
@@ -202,9 +197,13 @@ void tst_QNdefMessage::tst_parse_data()
         QList<QNdefRecord> recordList;
         recordList.append(record);
         QTest::newRow("nfc-rtd text") << data << QNdefMessage(recordList)
-                                      << (QVariantList() << QLatin1String("Test String")
-                                                         << QLatin1String("en"));
-        QCOMPARE(qHash(record), 3247259560LL);
+                                      << (QVariantList() << QStringLiteral("Test String")
+                                                         << QStringLiteral("en"));
+
+        const QByteArray recordContent = record.type() + record.id()
+                                         + record.payload();
+        QCOMPARE(recordContent,
+                 QByteArray::fromHex(QByteArray("5402656e5465737420537472696e67")));
     }
 
     // NFC-RTD Text
@@ -235,8 +234,12 @@ void tst_QNdefMessage::tst_parse_data()
             << data << QNdefMessage(recordList)
             << (QVariantList() << QString::fromUtf8("\343\203\206\343\202\271\343\203\210\346\226"
                                                     "\207\345\255\227\345\210\227")
-                               << QLatin1String("ja"));
-        QCOMPARE(qHash(record), 3407917933LL);
+                               << QStringLiteral("ja"));
+
+        const QByteArray recordContent = record.type() + record.id()
+                                         + record.payload();
+        QCOMPARE(recordContent,
+                 QByteArray::fromHex(QByteArray("54026a61e38386e382b9e38388e69687e5ad97e58897")));
     }
 
     // NFC-RTD URI
@@ -244,7 +247,7 @@ void tst_QNdefMessage::tst_parse_data()
         QByteArray type("U");
         QByteArray payload;
         payload.append(char(0x00));
-        payload.append("http://qt.nokia.com/");
+        payload.append("http://qt-project.org/");
 
         QByteArray data;
         data.append(char(0xc1));
@@ -259,13 +262,17 @@ void tst_QNdefMessage::tst_parse_data()
         QNdefRecord record;
         record.setTypeNameFormat(QNdefRecord::NfcRtd);
         record.setType("U");
-        record.setPayload(QByteArray("\000http://qt.nokia.com/", 21));
+        record.setPayload(QByteArray("\000http://qt-project.org/", 23));
         QList<QNdefRecord> recordList;
         recordList.append(record);
-        QTest::newRow("nfc-rtd uri http://qt.nokia.com/")
+        QTest::newRow("nfc-rtd uri http://qt-project.org/")
             << data << QNdefMessage(recordList)
-            << (QVariantList() << QUrl(QLatin1String("http://qt.nokia.com/")));
-        QCOMPARE(qHash(record), 4030951038LL);
+            << (QVariantList() << QUrl(QStringLiteral("http://qt-project.org/")));
+
+        const QByteArray recordContent = record.type() + record.id()
+                                         + record.payload();
+        QCOMPARE(recordContent,
+                 QByteArray::fromHex(QByteArray("5500687474703a2f2f71742d70726f6a6563742e6f72672f")));
     }
 
     // NFC-RTD URI
@@ -273,7 +280,7 @@ void tst_QNdefMessage::tst_parse_data()
         QByteArray type("U");
         QByteArray payload;
         payload.append(char(0x03));
-        payload.append("qt.nokia.com/");
+        payload.append("qt-project.org/");
 
         QByteArray data;
         data.append(char(0xc1));
@@ -288,13 +295,17 @@ void tst_QNdefMessage::tst_parse_data()
         QNdefRecord record;
         record.setTypeNameFormat(QNdefRecord::NfcRtd);
         record.setType("U");
-        record.setPayload(QByteArray("\003qt.nokia.com/", 14));
+        record.setPayload(QByteArray("\003qt-project.org/", 16));
         QList<QNdefRecord> recordList;
         recordList.append(record);
-        QTest::newRow("nfc-rtd uri abbrev http://qt.nokia.com/")
+        QTest::newRow("nfc-rtd uri abbrev http://qt-project.org/")
             << data << QNdefMessage(recordList)
-            << (QVariantList() << QUrl(QLatin1String("http://qt.nokia.com/")));
-        QCOMPARE(qHash(record), 132405495LL);
+            << (QVariantList() << QUrl(QStringLiteral("http://qt-project.org/")));
+
+        const QByteArray recordContent = record.type() + record.id()
+                                         + record.payload();
+        QCOMPARE(recordContent,
+                 QByteArray::fromHex(QByteArray("550371742d70726f6a6563742e6f72672f")));
     }
 
     // NFC-RTD URI
@@ -322,8 +333,12 @@ void tst_QNdefMessage::tst_parse_data()
         recordList.append(record);
         QTest::newRow("nfc-rtd uri tel:+1234567890")
             << data << QNdefMessage(recordList)
-            << (QVariantList() << QUrl(QLatin1String("tel:+1234567890")));
-        QCOMPARE(qHash(record), 3757269174LL);
+            << (QVariantList() << QUrl(QStringLiteral("tel:+1234567890")));
+
+        const QByteArray recordContent = record.type() + record.id()
+                                         + record.payload();
+        QCOMPARE(recordContent,
+                 QByteArray::fromHex(QByteArray("55052b31323334353637383930")));
     }
 
     // Truncated message
@@ -332,7 +347,7 @@ void tst_QNdefMessage::tst_parse_data()
         QByteArray id("Test ID");
         QByteArray payload;
         payload.append(char(0x00));
-        payload.append("http://qt.nokia.com/");
+        payload.append("http://qt-project.org/");
         QByteArray data;
         data.append(char(0xc9));   // MB=1, ME=1, IL=1
 

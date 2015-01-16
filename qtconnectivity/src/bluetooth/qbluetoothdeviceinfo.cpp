@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtBluetooth module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -49,6 +41,8 @@ QT_BEGIN_NAMESPACE
     \inmodule QtBluetooth
     \brief The QBluetoothDeviceInfo class stores information about the Bluetooth
     device.
+
+    \since 5.2
 
     QBluetoothDeviceInfo provides information about a Bluetooth device's name, address and class of device.
 */
@@ -216,7 +210,6 @@ QT_BEGIN_NAMESPACE
     \value HealthStepCounter            A pedometer.
 */
 
-
 /*!
     \enum QBluetoothDeviceInfo::ServiceClass
 
@@ -247,20 +240,35 @@ QT_BEGIN_NAMESPACE
     \value DataUnavailable  No data is available.
 */
 
-QBluetoothDeviceInfoPrivate::QBluetoothDeviceInfoPrivate()
-    : valid(false), cached(false), rssi(1),
-      serviceClasses(QBluetoothDeviceInfo::NoService),
-      majorDeviceClass(QBluetoothDeviceInfo::MiscellaneousDevice),
-      minorDeviceClass(0),
-      serviceUuidsCompleteness(QBluetoothDeviceInfo::DataUnavailable)
+/*!
+    \enum QBluetoothDeviceInfo::CoreConfiguration
+    \since 5.4
+
+    This enum describes the configuration of the device.
+
+    \value UnknownCoreConfiguration             The type of the Bluetooth device cannot be determined.
+    \value BaseRateCoreConfiguration            The device is a standard Bluetooth device.
+    \value BaseRateAndLowEnergyCoreConfiguration    The device is a Bluetooth Smart device with support
+                                                for standard and Low Energy device.
+    \value LowEnergyCoreConfiguration           The device is a Bluetooth Low Energy device.
+*/
+QBluetoothDeviceInfoPrivate::QBluetoothDeviceInfoPrivate() :
+    valid(false),
+    cached(false),
+    rssi(1),
+    serviceClasses(QBluetoothDeviceInfo::NoService),
+    majorDeviceClass(QBluetoothDeviceInfo::MiscellaneousDevice),
+    minorDeviceClass(0),
+    serviceUuidsCompleteness(QBluetoothDeviceInfo::DataUnavailable),
+    deviceCoreConfiguration(QBluetoothDeviceInfo::UnknownCoreConfiguration)
 {
 }
 
 /*!
     Constructs an invalid QBluetoothDeviceInfo object.
 */
-QBluetoothDeviceInfo::QBluetoothDeviceInfo()
-: d_ptr(new QBluetoothDeviceInfoPrivate)
+QBluetoothDeviceInfo::QBluetoothDeviceInfo() :
+    d_ptr(new QBluetoothDeviceInfoPrivate)
 {
 }
 
@@ -278,8 +286,9 @@ QBluetoothDeviceInfo::QBluetoothDeviceInfo()
         \row \li 13 - 23 \li 11 \li Service class.
     \endtable
 */
-QBluetoothDeviceInfo::QBluetoothDeviceInfo(const QBluetoothAddress &address, const QString &name, quint32 classOfDevice)
-: d_ptr(new QBluetoothDeviceInfoPrivate)
+QBluetoothDeviceInfo::QBluetoothDeviceInfo(const QBluetoothAddress &address, const QString &name,
+                                           quint32 classOfDevice) :
+    d_ptr(new QBluetoothDeviceInfoPrivate)
 {
     Q_D(QBluetoothDeviceInfo);
 
@@ -300,8 +309,8 @@ QBluetoothDeviceInfo::QBluetoothDeviceInfo(const QBluetoothAddress &address, con
 /*!
     Constructs a QBluetoothDeviceInfo that is a copy of \a other.
 */
-QBluetoothDeviceInfo::QBluetoothDeviceInfo(const QBluetoothDeviceInfo &other)
-: d_ptr(new QBluetoothDeviceInfoPrivate)
+QBluetoothDeviceInfo::QBluetoothDeviceInfo(const QBluetoothDeviceInfo &other) :
+    d_ptr(new QBluetoothDeviceInfoPrivate)
 {
     *this = other;
 }
@@ -323,6 +332,7 @@ bool QBluetoothDeviceInfo::isValid() const
 
     return d->valid;
 }
+
 /*!
   Returns the signal strength when the device was last scanned
   */
@@ -359,6 +369,7 @@ QBluetoothDeviceInfo &QBluetoothDeviceInfo::operator=(const QBluetoothDeviceInfo
     d->serviceUuidsCompleteness = other.d_func()->serviceUuidsCompleteness;
     d->serviceUuids = other.d_func()->serviceUuids;
     d->rssi = other.d_func()->rssi;
+    d->deviceCoreConfiguration = other.d_func()->deviceCoreConfiguration;
 
     return *this;
 }
@@ -370,29 +381,30 @@ bool QBluetoothDeviceInfo::operator==(const QBluetoothDeviceInfo &other) const
 {
     Q_D(const QBluetoothDeviceInfo);
 
-    if(d->cached != other.d_func()->cached)
+    if (d->cached != other.d_func()->cached)
         return false;
-    if(d->valid != other.d_func()->valid)
+    if (d->valid != other.d_func()->valid)
         return false;
-    if(d->majorDeviceClass != other.d_func()->majorDeviceClass)
+    if (d->majorDeviceClass != other.d_func()->majorDeviceClass)
         return false;
-    if(d->minorDeviceClass != other.d_func()->minorDeviceClass)
+    if (d->minorDeviceClass != other.d_func()->minorDeviceClass)
         return false;
-    if(d->serviceClasses != other.d_func()->serviceClasses)
+    if (d->serviceClasses != other.d_func()->serviceClasses)
         return false;
-    if(d->name != other.d_func()->name)
+    if (d->name != other.d_func()->name)
         return false;
-    if(d->address != other.d_func()->address)
+    if (d->address != other.d_func()->address)
         return false;
-    if(d->serviceUuidsCompleteness != other.d_func()->serviceUuidsCompleteness)
+    if (d->serviceUuidsCompleteness != other.d_func()->serviceUuidsCompleteness)
         return false;
-    if(d->serviceUuids.count() != other.d_func()->serviceUuids.count())
+    if (d->serviceUuids.count() != other.d_func()->serviceUuids.count())
         return false;
-    if(d->serviceUuids != other.d_func()->serviceUuids)
+    if (d->serviceUuids != other.d_func()->serviceUuids)
+        return false;
+    if (d->deviceCoreConfiguration != other.d_func()->deviceCoreConfiguration)
         return false;
 
     return true;
-
 }
 
 /*!
@@ -458,7 +470,8 @@ quint8 QBluetoothDeviceInfo::minorDeviceClass() const
 /*!
     Sets the list of service UUIDs to \a uuids and the completeness of the data to \a completeness.
 */
-void QBluetoothDeviceInfo::setServiceUuids(const QList<QBluetoothUuid> &uuids, DataCompleteness completeness)
+void QBluetoothDeviceInfo::setServiceUuids(const QList<QBluetoothUuid> &uuids,
+                                           DataCompleteness completeness)
 {
     Q_D(QBluetoothDeviceInfo);
 
@@ -495,6 +508,35 @@ QBluetoothDeviceInfo::DataCompleteness QBluetoothDeviceInfo::serviceUuidsComplet
     Q_D(const QBluetoothDeviceInfo);
 
     return d->serviceUuidsCompleteness;
+}
+
+/*!
+    Sets the CoreConfigurations of the device to \a coreConfigs. This will help to make a difference
+    between regular and Low Energy devices.
+
+    \sa coreConfigurations()
+    \since 5.4
+*/
+void QBluetoothDeviceInfo::setCoreConfigurations(QBluetoothDeviceInfo::CoreConfigurations coreConfigs)
+{
+    Q_D(QBluetoothDeviceInfo);
+
+    d->deviceCoreConfiguration = coreConfigs;
+}
+
+/*!
+
+    Returns the configuration of the device. If device configuration is not set,
+    basic rate device configuration will be returned.
+
+    \sa setCoreConfigurations()
+    \since 5.4
+*/
+QBluetoothDeviceInfo::CoreConfigurations QBluetoothDeviceInfo::coreConfigurations() const
+{
+    Q_D(const QBluetoothDeviceInfo);
+
+    return d->deviceCoreConfiguration;
 }
 
 /*!

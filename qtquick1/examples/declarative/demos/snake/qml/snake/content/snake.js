@@ -63,7 +63,7 @@ function startNewGame()
             link.dying = false;
         } else {
             if(linkComponent.status != Component.Ready) {
-                if(linkComponent.status == Component.Error) 
+                if (linkComponent.status == Component.Error)
                     console.log(linkComponent.errorString());
                 else
                     console.log("Still loading linkComponent");

@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -91,64 +83,10 @@ QV4::ExecutableAllocator::ChunkOfPages *CompilationUnit::chunkForFunction(int fu
     return handle->chunk();
 }
 
-
-
-/* Platform/Calling convention/Architecture specific section */
-
-#if CPU(X86_64)
-#  if OS(LINUX) || OS(MAC_OS_X)
-static const Assembler::RegisterID calleeSavedRegisters[] = {
-    JSC::X86Registers::ebx,
-    JSC::X86Registers::r12, // LocalsRegister
-    JSC::X86Registers::r13,
-    JSC::X86Registers::r14, // ContextRegister
-    JSC::X86Registers::r15
-};
-#  elif OS(WINDOWS)
-static const Assembler::RegisterID calleeSavedRegisters[] = {
-    JSC::X86Registers::ebx,
-    JSC::X86Registers::esi,
-    JSC::X86Registers::edi,
-    JSC::X86Registers::r12, // LocalsRegister
-    JSC::X86Registers::r13,
-    JSC::X86Registers::r14, // ContextRegister
-    JSC::X86Registers::r15
-};
-#  endif
-#endif
-
-#if CPU(X86)
-static const Assembler::RegisterID calleeSavedRegisters[] = {
-    JSC::X86Registers::ebx, // temporary register
-    JSC::X86Registers::esi, // ContextRegister
-    JSC::X86Registers::edi  // LocalsRegister
-};
-#endif
-
-#if CPU(ARM)
-static const Assembler::RegisterID calleeSavedRegisters[] = {
-    JSC::ARMRegisters::r11,
-    JSC::ARMRegisters::r10,
-    JSC::ARMRegisters::r9,
-    JSC::ARMRegisters::r8,
-    JSC::ARMRegisters::r7,
-    JSC::ARMRegisters::r6,
-    JSC::ARMRegisters::r5,
-    JSC::ARMRegisters::r4
-};
-#endif
-
-const int Assembler::calleeSavedRegisterCount = sizeof(calleeSavedRegisters) / sizeof(calleeSavedRegisters[0]);
-
-/* End of platform/calling convention/architecture specific section */
-
-
 const Assembler::VoidType Assembler::Void;
 
-Assembler::Assembler(InstructionSelection *isel, IR::Function* function, QV4::ExecutableAllocator *executableAllocator,
-                     int maxArgCountForBuiltins)
-    : _stackLayout(function, maxArgCountForBuiltins)
-    , _constTable(this)
+Assembler::Assembler(InstructionSelection *isel, IR::Function* function, QV4::ExecutableAllocator *executableAllocator)
+    : _constTable(this)
     , _function(function)
     , _nextBlock(0)
     , _executableAllocator(executableAllocator)
@@ -223,33 +161,47 @@ void Assembler::generateCJumpOnCompare(RelationalCondition cond, RegisterID left
     }
 }
 
-Assembler::Pointer Assembler::loadTempAddress(RegisterID baseReg, IR::Temp *t)
+Assembler::Pointer Assembler::loadAddress(RegisterID tmp, IR::Expr *e)
+{
+    IR::Temp *t = e->asTemp();
+    if (t)
+        return loadTempAddress(t);
+    else
+        return loadArgLocalAddress(tmp, e->asArgLocal());
+}
+
+Assembler::Pointer Assembler::loadTempAddress(IR::Temp *t)
+{
+    if (t->kind == IR::Temp::StackSlot)
+        return stackSlotPointer(t);
+    else
+        Q_UNREACHABLE();
+}
+
+Assembler::Pointer Assembler::loadArgLocalAddress(RegisterID baseReg, IR::ArgLocal *al)
 {
     int32_t offset = 0;
-    int scope = t->scope;
+    int scope = al->scope;
     RegisterID context = ContextRegister;
     if (scope) {
-        loadPtr(Address(ContextRegister, qOffsetOf(ExecutionContext, outer)), baseReg);
+        loadPtr(Address(ContextRegister, qOffsetOf(ExecutionContext::Data, outer)), baseReg);
         --scope;
         context = baseReg;
         while (scope) {
-            loadPtr(Address(context, qOffsetOf(ExecutionContext, outer)), context);
+            loadPtr(Address(context, qOffsetOf(ExecutionContext::Data, outer)), context);
             --scope;
         }
     }
-    switch (t->kind) {
-    case IR::Temp::Formal:
-    case IR::Temp::ScopedFormal: {
-        loadPtr(Address(context, qOffsetOf(ExecutionContext, callData)), baseReg);
-        offset = sizeof(CallData) + (t->index - 1) * sizeof(Value);
+    switch (al->kind) {
+    case IR::ArgLocal::Formal:
+    case IR::ArgLocal::ScopedFormal: {
+        loadPtr(Address(context, qOffsetOf(ExecutionContext::Data, callData)), baseReg);
+        offset = sizeof(CallData) + (al->index - 1) * sizeof(Value);
     } break;
-    case IR::Temp::Local:
-    case IR::Temp::ScopedLocal: {
-        loadPtr(Address(context, qOffsetOf(CallContext, locals)), baseReg);
-        offset = t->index * sizeof(Value);
-    } break;
-    case IR::Temp::StackSlot: {
-        return stackSlotPointer(t);
+    case IR::ArgLocal::Local:
+    case IR::ArgLocal::ScopedLocal: {
+        loadPtr(Address(context, qOffsetOf(CallContext::Data, locals)), baseReg);
+        offset = al->index * sizeof(Value);
     } break;
     default:
         Q_UNREACHABLE();
@@ -259,7 +211,7 @@ Assembler::Pointer Assembler::loadTempAddress(RegisterID baseReg, IR::Temp *t)
 
 Assembler::Pointer Assembler::loadStringAddress(RegisterID reg, const QString &string)
 {
-    loadPtr(Address(Assembler::ContextRegister, qOffsetOf(QV4::ExecutionContext, compilationUnit)), Assembler::ScratchRegister);
+    loadPtr(Address(Assembler::ContextRegister, qOffsetOf(QV4::ExecutionContext::Data, compilationUnit)), Assembler::ScratchRegister);
     loadPtr(Address(Assembler::ScratchRegister, qOffsetOf(QV4::CompiledData::CompilationUnit, runtimeStrings)), reg);
     const int id = _isel->registerString(string);
     return Pointer(reg, id * sizeof(QV4::StringValue));
@@ -267,43 +219,62 @@ Assembler::Pointer Assembler::loadStringAddress(RegisterID reg, const QString &s
 
 void Assembler::loadStringRef(RegisterID reg, const QString &string)
 {
-    loadPtr(Address(Assembler::ContextRegister, qOffsetOf(QV4::ExecutionContext, compilationUnit)), reg);
+    loadPtr(Address(Assembler::ContextRegister, qOffsetOf(QV4::ExecutionContext::Data, compilationUnit)), reg);
     loadPtr(Address(reg, qOffsetOf(QV4::CompiledData::CompilationUnit, runtimeStrings)), reg);
     const int id = _isel->registerString(string);
-    addPtr(TrustedImmPtr(id * sizeof(QV4::StringValue)), reg);
+    loadPtr(Address(reg, id * sizeof(QV4::StringValue)), reg);
 }
 
-void Assembler::storeValue(QV4::Primitive value, IR::Temp* destination)
+void Assembler::storeValue(QV4::Primitive value, IR::Expr *destination)
 {
-    Address addr = loadTempAddress(ScratchRegister, destination);
+    Address addr = loadAddress(ScratchRegister, destination);
     storeValue(value, addr);
 }
 
-void Assembler::enterStandardStackFrame()
+void Assembler::enterStandardStackFrame(const RegisterInformation &regularRegistersToSave,
+                                        const RegisterInformation &fpRegistersToSave)
 {
-    platformEnterStandardStackFrame();
+    platformEnterStandardStackFrame(this);
 
-    // ### FIXME: Handle through calleeSavedRegisters mechanism
-    // or eliminate StackFrameRegister altogether.
     push(StackFrameRegister);
     move(StackPointerRegister, StackFrameRegister);
 
-    int frameSize = _stackLayout.calculateStackFrameSize();
-
+    const int frameSize = _stackLayout->calculateStackFrameSize();
     subPtr(TrustedImm32(frameSize), StackPointerRegister);
 
-    for (int i = 0; i < calleeSavedRegisterCount; ++i)
-        storePtr(calleeSavedRegisters[i], Address(StackFrameRegister, -(i + 1) * sizeof(void*)));
-
+    Address slotAddr(StackFrameRegister, 0);
+    for (int i = 0, ei = regularRegistersToSave.size(); i < ei; ++i) {
+        Q_ASSERT(regularRegistersToSave.at(i).isRegularRegister());
+        slotAddr.offset -= RegisterSize;
+        storePtr(regularRegistersToSave.at(i).reg<RegisterID>(), slotAddr);
+    }
+    for (int i = 0, ei = fpRegistersToSave.size(); i < ei; ++i) {
+        Q_ASSERT(fpRegistersToSave.at(i).isFloatingPoint());
+        slotAddr.offset -= sizeof(double);
+        JSC::MacroAssembler::storeDouble(fpRegistersToSave.at(i).reg<FPRegisterID>(), slotAddr);
+    }
 }
 
-void Assembler::leaveStandardStackFrame()
+void Assembler::leaveStandardStackFrame(const RegisterInformation &regularRegistersToSave,
+                                        const RegisterInformation &fpRegistersToSave)
 {
-    // restore the callee saved registers
-    for (int i = calleeSavedRegisterCount - 1; i >= 0; --i)
-        loadPtr(Address(StackFrameRegister, -(i + 1) * sizeof(void*)), calleeSavedRegisters[i]);
+    Address slotAddr(StackFrameRegister, -regularRegistersToSave.size() * RegisterSize - fpRegistersToSave.size() * sizeof(double));
 
-    int frameSize = _stackLayout.calculateStackFrameSize();
+    // restore the callee saved registers
+    for (int i = fpRegistersToSave.size() - 1; i >= 0; --i) {
+        Q_ASSERT(fpRegistersToSave.at(i).isFloatingPoint());
+        JSC::MacroAssembler::loadDouble(slotAddr, fpRegistersToSave.at(i).reg<FPRegisterID>());
+        slotAddr.offset += sizeof(double);
+    }
+    for (int i = regularRegistersToSave.size() - 1; i >= 0; --i) {
+        Q_ASSERT(regularRegistersToSave.at(i).isRegularRegister());
+        loadPtr(slotAddr, regularRegistersToSave.at(i).reg<RegisterID>());
+        slotAddr.offset += RegisterSize;
+    }
+
+    Q_ASSERT(slotAddr.offset == 0);
+
+    const int frameSize = _stackLayout->calculateStackFrameSize();
     // Work around bug in ARMv7Assembler.h where add32(imm, sp, sp) doesn't
     // work well for large immediates.
 #if CPU(ARM_THUMB2)
@@ -314,7 +285,7 @@ void Assembler::leaveStandardStackFrame()
 #endif
 
     pop(StackFrameRegister);
-    platformLeaveStandardStackFrame();
+    platformLeaveStandardStackFrame(this);
 }
 
 
@@ -347,13 +318,12 @@ Assembler::Jump Assembler::genTryDoubleConversion(IR::Expr *src, Assembler::FPRe
         break;
     }
 
-    IR::Temp *sourceTemp = src->asTemp();
-    Q_ASSERT(sourceTemp);
+    Q_ASSERT(src->asTemp() || src->asArgLocal());
 
     // It's not a number type, so it cannot be in a register.
-    Q_ASSERT(sourceTemp->kind != IR::Temp::PhysicalRegister || sourceTemp->type == IR::BoolType);
+    Q_ASSERT(src->asArgLocal() || src->asTemp()->kind != IR::Temp::PhysicalRegister || src->type == IR::BoolType);
 
-    Assembler::Pointer tagAddr = loadTempAddress(Assembler::ScratchRegister, sourceTemp);
+    Assembler::Pointer tagAddr = loadAddress(Assembler::ScratchRegister, src);
     tagAddr.offset += 4;
     load32(tagAddr, Assembler::ScratchRegister);
 
@@ -380,24 +350,9 @@ Assembler::Jump Assembler::genTryDoubleConversion(IR::Expr *src, Assembler::FPRe
     return isNoDbl;
 }
 
-#if !defined(QT_NO_DEBUG) || defined(QT_FORCE_ASSERTS)
-namespace {
-inline bool isPregOrConst(IR::Expr *e)
-{
-    if (IR::Temp *t = e->asTemp())
-        return t->kind == IR::Temp::PhysicalRegister;
-    return e->asConst() != 0;
-}
-} // anonymous namespace
-#endif
-
 Assembler::Jump Assembler::branchDouble(bool invertCondition, IR::AluOp op,
                                                    IR::Expr *left, IR::Expr *right)
 {
-    Q_ASSERT(isPregOrConst(left));
-    Q_ASSERT(isPregOrConst(right));
-    Q_ASSERT(left->asConst() == 0 || right->asConst() == 0);
-
     Assembler::DoubleCondition cond;
     switch (op) {
     case IR::OpGt: cond = Assembler::DoubleGreaterThan; break;
@@ -414,8 +369,35 @@ Assembler::Jump Assembler::branchDouble(bool invertCondition, IR::AluOp op,
     if (invertCondition)
         cond = JSC::MacroAssembler::invert(cond);
 
-    return JSC::MacroAssembler::branchDouble(cond, toDoubleRegister(left), toDoubleRegister(right));
+    return JSC::MacroAssembler::branchDouble(cond, toDoubleRegister(left, FPGpr0), toDoubleRegister(right, FPGpr1));
 }
 
+Assembler::Jump Assembler::branchInt32(bool invertCondition, IR::AluOp op, IR::Expr *left, IR::Expr *right)
+{
+    Assembler::RelationalCondition cond;
+    switch (op) {
+    case IR::OpGt: cond = Assembler::GreaterThan; break;
+    case IR::OpLt: cond = Assembler::LessThan; break;
+    case IR::OpGe: cond = Assembler::GreaterThanOrEqual; break;
+    case IR::OpLe: cond = Assembler::LessThanOrEqual; break;
+    case IR::OpEqual:
+    case IR::OpStrictEqual: cond = Assembler::Equal; break;
+    case IR::OpNotEqual:
+    case IR::OpStrictNotEqual: cond = Assembler::NotEqual; break;
+    default:
+        Q_UNREACHABLE();
+    }
+    if (invertCondition)
+        cond = JSC::MacroAssembler::invert(cond);
+
+    return JSC::MacroAssembler::branch32(cond,
+                                         toInt32Register(left, Assembler::ScratchRegister),
+                                         toInt32Register(right, Assembler::ReturnValueRegister));
+}
+
+void Assembler::setStackLayout(int maxArgCountForBuiltins, int regularRegistersToSave, int fpRegistersToSave)
+{
+    _stackLayout.reset(new StackLayout(_function, maxArgCountForBuiltins, regularRegistersToSave, fpRegistersToSave));
+}
 
 #endif

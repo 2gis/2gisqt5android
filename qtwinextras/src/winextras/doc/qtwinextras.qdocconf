@@ -2,7 +2,6 @@ include($QT_INSTALL_DOCS/global/qt-module-defaults.qdocconf)
 
 project                 = QtWinExtras
 description             = Qt Windows Extras Reference Documentation
-url                     = http://qt-project.org/doc/qt-$QT_VER
 version                 = $QT_VERSION
 
 exampledirs += ../../../examples/winextras \
@@ -40,7 +39,7 @@ qhp.QtWinExtras.subprojects.examples.indexTitle = Qt Windows Extras Examples
 qhp.QtWinExtras.subprojects.examples.selectors = fake:example
 qhp.QtWinExtras.subprojects.qmltypes.title = QML Types
 qhp.QtWinExtras.subprojects.qmltypes.indexTitle = Qt Windows Extras QML Types
-qhp.QtWinExtras.subprojects.qmltypes.selectors = fake:qmlclass
+qhp.QtWinExtras.subprojects.qmltypes.selectors = qmlclass
 qhp.QtWinExtras.subprojects.qmltypes.sortPages = true
 
 navigation.landingpage = "Qt Windows Extras"

@@ -51,7 +51,7 @@ class DialogPlugin : public QDeclarativeExtensionPlugin
     public:
         //registerTypes is inherited from QDeclarativeExtensionPlugin
         void registerTypes(const char *uri);
-        
+
 };
 
 #endif

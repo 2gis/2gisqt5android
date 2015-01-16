@@ -51,14 +51,14 @@ Q_IMPORT_PLUGIN(UIKit)
 
 static QString qStringFromNSString(NSString *nsstring)
 {
-	return QString::fromUtf8([nsstring UTF8String]);
+    return QString::fromUtf8([nsstring UTF8String]);
 }
 
 static QString documentsDirectory()
 {
-	NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
-	NSString *documentsDirectory = [paths objectAtIndex:0];
-	return qStringFromNSString(documentsDirectory);
+    NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
+    NSString *documentsDirectory = [paths objectAtIndex:0];
+    return qStringFromNSString(documentsDirectory);
 }
 
 int main(int argc, char *argv[]) {
@@ -68,7 +68,7 @@ int main(int argc, char *argv[]) {
     QApplication app(argc, argv);
     QmlApplicationViewer viewer;
     viewer.setOrientation(QmlApplicationViewer::ScreenOrientationAuto);
-	viewer.engine()->setOfflineStoragePath(documentsDirectory());
+    viewer.engine()->setOfflineStoragePath(documentsDirectory());
     NSString *resourcePath = [[NSBundle mainBundle] resourcePath];
     viewer.setMainQmlFile(qStringFromNSString([resourcePath stringByAppendingPathComponent:@"qml/main.qml"]));
     viewer.showMaximized();

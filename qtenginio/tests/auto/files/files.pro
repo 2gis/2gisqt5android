@@ -1,5 +1,4 @@
 QT       += testlib enginio enginio-private core-private
-QT       -= gui
 
 DEFINES += TEST_FILE_PATH=\\\"$$_PRO_FILE_PWD_/../common/enginio.png\\\"
 

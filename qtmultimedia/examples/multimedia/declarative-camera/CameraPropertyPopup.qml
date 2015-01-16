@@ -1,6 +1,6 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the examples of the Qt Toolkit.
@@ -40,7 +40,7 @@
 
 import QtQuick 2.0
 
-Rectangle {
+Popup {
     id: propertyPopup
 
     property alias model : view.model
@@ -53,12 +53,6 @@ Rectangle {
 
     width: columns*itemWidth + view.anchors.margins*2
     height: Math.ceil(model.count/columns)*itemHeight + view.anchors.margins*2 + 25
-
-    radius: 5
-    border.color: "#000000"
-    border.width: 2
-    smooth: true
-    color: "#5e5e5e"
 
     signal selected
 

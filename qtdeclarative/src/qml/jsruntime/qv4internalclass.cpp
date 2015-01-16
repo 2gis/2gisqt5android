@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -155,18 +147,18 @@ InternalClass::InternalClass(const QV4::InternalClass &other)
 void InternalClass::changeMember(Object *object, String *string, PropertyAttributes data, uint *index)
 {
     uint idx;
-    InternalClass *newClass = object->internalClass->changeMember(string, data, &idx);
+    InternalClass *newClass = object->internalClass()->changeMember(string, data, &idx);
     if (index)
         *index = idx;
 
-    if (newClass->size > object->internalClass->size) {
-        Q_ASSERT(newClass->size == object->internalClass->size + 1);
-        memmove(object->memberData.data() + idx + 2, object->memberData.data() + idx + 1, (object->internalClass->size - idx - 1)*sizeof(Value));
-    } else if (newClass->size < object->internalClass->size) {
-        Q_ASSERT(newClass->size == object->internalClass->size - 1);
-        memmove(object->memberData.data() + idx + 1, object->memberData.data() + idx + 2, (object->internalClass->size - idx - 2)*sizeof(Value));
+    if (newClass->size > object->internalClass()->size) {
+        Q_ASSERT(newClass->size == object->internalClass()->size + 1);
+        memmove(object->memberData().data() + idx + 2, object->memberData().data() + idx + 1, (object->internalClass()->size - idx - 1)*sizeof(Value));
+    } else if (newClass->size < object->internalClass()->size) {
+        Q_ASSERT(newClass->size == object->internalClass()->size - 1);
+        memmove(object->memberData().data() + idx + 1, object->memberData().data() + idx + 2, (object->internalClass()->size - idx - 2)*sizeof(Value));
     }
-    object->internalClass = newClass;
+    object->setInternalClass(newClass);
 }
 
 InternalClass *InternalClass::changeMember(String *string, PropertyAttributes data, uint *index)
@@ -181,7 +173,7 @@ InternalClass *InternalClass::changeMember(String *string, PropertyAttributes da
     if (data == propertyData.at(idx))
         return this;
 
-    Transition t = { { string->identifier }, (int)data.flags() };
+    Transition t = { { string->d()->identifier }, (int)data.flags() };
     QHash<Transition, InternalClass *>::const_iterator tit = transitions.constFind(t);
     if (tit != transitions.constEnd())
         return tit.value();
@@ -271,40 +263,30 @@ InternalClass *InternalClass::changeVTable(const ManagedVTable *vt)
     return newClass;
 }
 
-void InternalClass::addMember(Object *object, StringRef string, PropertyAttributes data, uint *index)
-{
-    return addMember(object, string.getPointer(), data, index);
-}
-
 void InternalClass::addMember(Object *object, String *string, PropertyAttributes data, uint *index)
 {
     data.resolve();
-    object->internalClass->engine->identifierTable->identifier(string);
-    if (object->internalClass->propertyTable.lookup(string->identifier) < object->internalClass->size) {
+    object->internalClass()->engine->identifierTable->identifier(string);
+    if (object->internalClass()->propertyTable.lookup(string->d()->identifier) < object->internalClass()->size) {
         changeMember(object, string, data, index);
         return;
     }
 
     uint idx;
-    InternalClass *newClass = object->internalClass->addMemberImpl(string, data, &idx);
+    InternalClass *newClass = object->internalClass()->addMemberImpl(string, data, &idx);
     if (index)
         *index = idx;
 
-    object->internalClass = newClass;
+    object->setInternalClass(newClass);
 }
 
-
-InternalClass *InternalClass::addMember(StringRef string, PropertyAttributes data, uint *index)
-{
-    return addMember(string.getPointer(), data, index);
-}
 
 InternalClass *InternalClass::addMember(String *string, PropertyAttributes data, uint *index)
 {
     data.resolve();
     engine->identifierTable->identifier(string);
 
-    if (propertyTable.lookup(string->identifier) < size)
+    if (propertyTable.lookup(string->d()->identifier) < size)
         return changeMember(string, data, index);
 
     return addMemberImpl(string, data, index);
@@ -312,7 +294,7 @@ InternalClass *InternalClass::addMember(String *string, PropertyAttributes data,
 
 InternalClass *InternalClass::addMemberImpl(String *string, PropertyAttributes data, uint *index)
 {
-    Transition t = { { string->identifier }, (int)data.flags() };
+    Transition t = { { string->d()->identifier }, (int)data.flags() };
     QHash<Transition, InternalClass *>::const_iterator tit = transitions.constFind(t);
 
     if (index)
@@ -322,7 +304,7 @@ InternalClass *InternalClass::addMemberImpl(String *string, PropertyAttributes d
 
     // create a new class and add it to the tree
     InternalClass *newClass = engine->newClass(*this);
-    PropertyHash::Entry e = { string->identifier, newClass->size };
+    PropertyHash::Entry e = { string->d()->identifier, newClass->size };
     newClass->propertyTable.addEntry(e, newClass->size);
 
     // The incoming string can come from anywhere, so make sure to
@@ -346,15 +328,15 @@ InternalClass *InternalClass::addMemberImpl(String *string, PropertyAttributes d
 
 void InternalClass::removeMember(Object *object, Identifier *id)
 {
-    InternalClass *oldClass = object->internalClass;
+    InternalClass *oldClass = object->internalClass();
     uint propIdx = oldClass->propertyTable.lookup(id);
     Q_ASSERT(propIdx < oldClass->size);
 
     Transition t = { { id } , -1 };
-    QHash<Transition, InternalClass *>::const_iterator tit = object->internalClass->transitions.constFind(t);
+    QHash<Transition, InternalClass *>::const_iterator tit = object->internalClass()->transitions.constFind(t);
 
-    if (tit != object->internalClass->transitions.constEnd()) {
-        object->internalClass = tit.value();
+    if (tit != object->internalClass()->transitions.constEnd()) {
+        object->setInternalClass(tit.value());
     } else {
         // create a new class and add it to the tree
         InternalClass *newClass = oldClass->engine->emptyClass->changeVTable(oldClass->vtable);
@@ -365,24 +347,19 @@ void InternalClass::removeMember(Object *object, Identifier *id)
             if (!oldClass->propertyData.at(i).isEmpty())
                 newClass = newClass->addMember(oldClass->nameMap.at(i), oldClass->propertyData.at(i));
         }
-        object->internalClass = newClass;
+        object->setInternalClass(newClass);
     }
 
     // remove the entry in memberdata
-    memmove(object->memberData.data() + propIdx, object->memberData.data() + propIdx + 1, (object->internalClass->size - propIdx)*sizeof(Value));
+    memmove(object->memberData().data() + propIdx, object->memberData().data() + propIdx + 1, (object->internalClass()->size - propIdx)*sizeof(Value));
 
-    oldClass->transitions.insert(t, object->internalClass);
-}
-
-uint InternalClass::find(const StringRef string)
-{
-    return find(string.getPointer());
+    oldClass->transitions.insert(t, object->internalClass());
 }
 
 uint InternalClass::find(const String *string)
 {
     engine->identifierTable->identifier(string);
-    const Identifier *id = string->identifier;
+    const Identifier *id = string->d()->identifier;
 
     uint index = propertyTable.lookup(id);
     if (index < size)
@@ -435,25 +412,24 @@ InternalClass *InternalClass::frozen()
 
 void InternalClass::destroy()
 {
-    if (!engine)
-        return;
-    engine = 0;
+    QList<InternalClass *> destroyStack;
+    destroyStack.append(this);
 
-    propertyTable.~PropertyHash();
-    nameMap.~SharedInternalClassData<String *>();
-    propertyData.~SharedInternalClassData<PropertyAttributes>();
-
-    if (m_sealed)
-        m_sealed->destroy();
-
-    if (m_frozen)
-        m_frozen->destroy();
-
-    for (QHash<Transition, InternalClass *>::ConstIterator it = transitions.begin(), end = transitions.end();
-         it != end; ++it)
-        it.value()->destroy();
-
-    transitions.clear();
+    while (!destroyStack.isEmpty()) {
+        InternalClass *next = destroyStack.takeLast();
+        if (!next->engine)
+            continue;
+        next->engine = 0;
+        next->propertyTable.~PropertyHash();
+        next->nameMap.~SharedInternalClassData<String *>();
+        next->propertyData.~SharedInternalClassData<PropertyAttributes>();
+        if (next->m_sealed)
+            destroyStack.append(next->m_sealed);
+        if (next->m_frozen)
+            destroyStack.append(next->m_frozen);
+        destroyStack.append(next->transitions.values());
+        next->transitions.clear();
+    }
 }
 
 struct InternalClassPoolVisitor

@@ -44,7 +44,7 @@
     Enginio backend. The backend can be created using the dashboard, where the Cloud Address Book preconfigured backend
     can be chosen.
 
-    \section1 Backend description
+    \section1 Backend Description
     We recommend to use preconfigured backend, because it contains already all data and structures that are
     needed to run these examples, but it is not difficult to create the backend from scratch too.
     The backend should contain one custom object type \c objects.addressbook having properties:
@@ -58,7 +58,7 @@
     All properties are of \c string type and have to be indexed, because only indexed properties will be searched
     by the full text search.
 
-    \section1 Application design
+    \section1 Application Design
     The application's ui mainly consists of a table showing all addresses and a text filed where a query
     can be typed. A user should be able to sort addresses or highlight an address containing a specified phrase.
 

@@ -1,44 +1,38 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
 #include "testtypes.h"
+
+#include <private/qqmlcompiler_p.h>
 
 void registerTypes()
 {
@@ -94,6 +88,8 @@ void registerTypes()
     qmlRegisterCustomType<CustomBinding>("Test", 1, 0, "CustomBinding", new CustomBindingParser);
     qmlRegisterCustomType<SimpleObjectWithCustomParser>("Test", 1, 0, "SimpleObjectWithCustomParser", new SimpleObjectCustomParser);
 
+    qmlRegisterCustomExtendedType<SimpleObjectWithCustomParser, SimpleObjectExtension>("Test", 1, 0, "SimpleExtendedObjectWithCustomParser", new SimpleObjectCustomParser);
+
     qmlRegisterType<RootObjectInCreationTester>("Test", 1, 0, "RootObjectInCreationTester");
 }
 
@@ -105,105 +101,70 @@ QVariant myCustomVariantTypeConverter(const QString &data)
 }
 
 
-QByteArray CustomBindingParser::compile(const QV4::CompiledData::QmlUnit *qmlUnit, const QList<const QV4::CompiledData::Binding *> &bindings)
-{
-    QByteArray result;
-    QDataStream ds(&result, QIODevice::WriteOnly);
-
-    ds << bindings.count();
-    for (int i = 0; i < bindings.count(); ++i) {
-        const QV4::CompiledData::Binding *binding = bindings.at(i);
-        ds << qmlUnit->header.stringAt(binding->propertyNameIndex);
-
-        Q_ASSERT(binding->type == QV4::CompiledData::Binding::Type_Script);
-        int bindingId = bindingIdentifier(binding);
-        ds << bindingId;
-
-        ds << binding->location.line;
-    }
-
-    return result;
-}
-
-void CustomBindingParser::setCustomData(QObject *object, const QByteArray &data, QQmlCompiledData*)
+void CustomBindingParser::applyBindings(QObject *object, QQmlCompiledData *cdata, const QList<const QV4::CompiledData::Binding *> &bindings)
 {
     CustomBinding *customBinding = qobject_cast<CustomBinding*>(object);
     Q_ASSERT(customBinding);
-    customBinding->m_bindingData = data;
+    customBinding->cdata = cdata;
+    customBinding->bindings = bindings;
 }
 
 void CustomBinding::componentComplete()
 {
     Q_ASSERT(m_target);
 
-    QDataStream ds(m_bindingData);
-    int count;
-    ds >> count;
-    for (int i = 0; i < count; ++i) {
-        QString name;
-        ds >> name;
+    foreach (const QV4::CompiledData::Binding *binding, bindings) {
+        QString name = cdata->compilationUnit->data->stringAt(binding->propertyNameIndex);
 
-        int bindingId;
-        ds >> bindingId;
+        int bindingId = binding->value.compiledScriptIndex;
 
-        int line;
-        ds >> line;
+        QQmlContextData *context = QQmlContextData::get(qmlContext(this));
 
-        QQmlBinding *binding = QQmlBinding::createBinding(QQmlBinding::Identifier(bindingId), m_target, qmlContext(this));
+        QV4::Scope scope(QQmlEnginePrivate::getV4Engine(qmlEngine(this)));
+        QV4::ScopedValue function(scope, QV4::QmlBindingWrapper::createQmlCallableForFunction(context, m_target, cdata->compilationUnit->runtimeFunctions[bindingId]));
+        QQmlBinding *qmlBinding = new QQmlBinding(function, m_target, context);
 
         QQmlProperty property(m_target, name, qmlContext(this));
-        binding->setTarget(property);
-        QQmlPropertyPrivate::setBinding(property, binding);
+        qmlBinding->setTarget(property);
+        QQmlPropertyPrivate::setBinding(property, qmlBinding);
     }
 }
 
-QByteArray EnumSupportingCustomParser::compile(const QV4::CompiledData::QmlUnit *qmlUnit, const QList<const QV4::CompiledData::Binding *> &bindings)
+void EnumSupportingCustomParser::verifyBindings(const QV4::CompiledData::Unit *qmlUnit, const QList<const QV4::CompiledData::Binding *> &bindings)
 {
-    Q_UNUSED(qmlUnit)
-
     if (bindings.count() != 1) {
         error(bindings.first(), QStringLiteral("Custom parser invoked incorrectly for unit test"));
-        return QByteArray();
+        return;
     }
 
     const QV4::CompiledData::Binding *binding = bindings.first();
-    if (qmlUnit->header.stringAt(binding->propertyNameIndex) != QStringLiteral("foo")) {
+    if (qmlUnit->stringAt(binding->propertyNameIndex) != QStringLiteral("foo")) {
         error(binding, QStringLiteral("Custom parser invoked with the wrong property name"));
-        return QByteArray();
+        return;
     }
 
     if (binding->type != QV4::CompiledData::Binding::Type_Script) {
         error(binding, QStringLiteral("Custom parser invoked with the wrong property value. Expected script that evaluates to enum"));
-        return QByteArray();
+        return;
     }
-    QByteArray script = qmlUnit->header.stringAt(binding->stringIndex).toUtf8();
+    QByteArray script = qmlUnit->stringAt(binding->stringIndex).toUtf8();
     bool ok;
     int v = evaluateEnum(script, &ok);
     if (!ok) {
         error(binding, QStringLiteral("Custom parser invoked with the wrong property value. Script did not evaluate to enum"));
-        return QByteArray();
+        return;
     }
     if (v != MyEnum1Class::A_13) {
         error(binding, QStringLiteral("Custom parser invoked with the wrong property value. Enum value is not the expected value."));
-        return QByteArray();
+        return;
     }
-
-    return QByteArray();
 }
 
-
-QByteArray SimpleObjectCustomParser::compile(const QV4::CompiledData::QmlUnit *, const QList<const QV4::CompiledData::Binding *> &bindings)
+void SimpleObjectCustomParser::applyBindings(QObject *object, QQmlCompiledData *, const QList<const QV4::CompiledData::Binding *> &bindings)
 {
-    return QByteArray::number(bindings.count());
-}
-
-void SimpleObjectCustomParser::setCustomData(QObject *object, const QByteArray &data, QQmlCompiledData*)
-{
-   SimpleObjectWithCustomParser *o = qobject_cast<SimpleObjectWithCustomParser*>(object);
-   Q_ASSERT(o);
-   bool ok = false;
-   o->setCustomBindingsCount(data.toInt(&ok));
-   Q_ASSERT(ok);
+    SimpleObjectWithCustomParser *o = qobject_cast<SimpleObjectWithCustomParser*>(object);
+    Q_ASSERT(o);
+    o->setCustomBindingsCount(bindings.count());
 }
 
 

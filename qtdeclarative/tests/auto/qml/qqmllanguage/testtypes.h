@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -54,7 +46,7 @@
 #include <QtQml/qqmlpropertyvaluesource.h>
 #include <QtQml/qqmlscriptstring.h>
 #include <QtQml/qqmlproperty.h>
-
+#include <private/qqmlcompiler_p.h>
 #include <private/qqmlcustomparser_p.h>
 
 QVariant myCustomVariantTypeConverter(const QString &data);
@@ -739,15 +731,15 @@ class MyCustomParserType : public QObject
 class MyCustomParserTypeParser : public QQmlCustomParser
 {
 public:
-    QByteArray compile(const QV4::CompiledData::QmlUnit *, const QList<const QV4::CompiledData::Binding *> &) { return QByteArray(); }
-    void setCustomData(QObject *, const QByteArray &, QQmlCompiledData*) {}
+    virtual void verifyBindings(const QV4::CompiledData::Unit *, const QList<const QV4::CompiledData::Binding *> &) {}
+    virtual void applyBindings(QObject *, QQmlCompiledData *, const QList<const QV4::CompiledData::Binding *> &) {}
 };
 
 class EnumSupportingCustomParser : public QQmlCustomParser
 {
 public:
-    QByteArray compile(const QV4::CompiledData::QmlUnit *qmlUnit, const QList<const QV4::CompiledData::Binding *> &bindings);
-    void setCustomData(QObject *, const QByteArray &, QQmlCompiledData*) {}
+    virtual void verifyBindings(const QV4::CompiledData::Unit *, const QList<const QV4::CompiledData::Binding *> &);
+    virtual void applyBindings(QObject *, QQmlCompiledData *, const QList<const QV4::CompiledData::Binding *> &) {}
 };
 
 class MyParserStatus : public QObject, public QQmlParserStatus
@@ -1112,13 +1104,15 @@ public:
     void setTarget(QObject *newTarget) { m_target = newTarget; }
 
     QPointer<QObject> m_target;
+    QQmlRefPointer<QQmlCompiledData> cdata;
+    QList<const QV4::CompiledData::Binding*> bindings;
     QByteArray m_bindingData;
 };
 
 class CustomBindingParser : public QQmlCustomParser
 {
-    virtual QByteArray compile(const QV4::CompiledData::QmlUnit *qmlUnit, const QList<const QV4::CompiledData::Binding *> &bindings);
-    virtual void setCustomData(QObject *object, const QByteArray &data, QQmlCompiledData *);
+    virtual void verifyBindings(const QV4::CompiledData::Unit *, const QList<const QV4::CompiledData::Binding *> &) {}
+    virtual void applyBindings(QObject *, QQmlCompiledData *, const QList<const QV4::CompiledData::Binding *> &);
 };
 
 class SimpleObjectWithCustomParser : public QObject
@@ -1142,10 +1136,29 @@ private:
     int m_customBindingsCount;
 };
 
+class SimpleObjectExtension : public QObject
+{
+    Q_OBJECT
+    Q_PROPERTY(int extendedProperty READ extendedProperty WRITE setExtendedProperty NOTIFY extendedPropertyChanged)
+public:
+    SimpleObjectExtension(QObject *parent = 0)
+        : QObject(parent)
+        , m_extendedProperty(1584)
+    {}
+
+    void setExtendedProperty(int extendedProperty) { m_extendedProperty = extendedProperty; emit extendedPropertyChanged(); }
+    int extendedProperty() const { return m_extendedProperty; }
+
+signals:
+   void extendedPropertyChanged();
+private:
+   int m_extendedProperty;
+};
+
 class SimpleObjectCustomParser : public QQmlCustomParser
 {
-    virtual QByteArray compile(const QV4::CompiledData::QmlUnit *, const QList<const QV4::CompiledData::Binding *> &bindings);
-    virtual void setCustomData(QObject *object, const QByteArray &data, QQmlCompiledData *);
+    virtual void verifyBindings(const QV4::CompiledData::Unit *, const QList<const QV4::CompiledData::Binding *> &) {}
+    virtual void applyBindings(QObject *, QQmlCompiledData *, const QList<const QV4::CompiledData::Binding *> &);
 };
 
 class RootObjectInCreationTester : public QObject

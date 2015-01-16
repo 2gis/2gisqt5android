@@ -3,9 +3,12 @@ TEMPLATE = subdirs
 SUBDIRS += \
 #     cmake \
     enginioclient \
-    files \
     notifications \
     identity \
+
+qtHaveModule(gui) {
+    SUBDIRS += files
+}
 
 qtHaveModule(quick) {
     SUBDIRS += qmltests

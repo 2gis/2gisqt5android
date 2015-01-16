@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtLocation module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -50,14 +42,10 @@
 #include <QPixmap>
 #include <QDebug>
 
-#include <Qt3D/qgltexture2d.h>
-
 Q_DECLARE_METATYPE(QList<QGeoTileSpec>)
 Q_DECLARE_METATYPE(QSet<QGeoTileSpec>)
 
 QT_BEGIN_NAMESPACE
-QMutex QGeoTileCache::cleanupMutex_;
-QList<QGLTexture2D*> QGeoTileCache::cleanupList_;
 
 class QGeoCachedTileMemory
 {
@@ -75,8 +63,7 @@ public:
 };
 
 QGeoTileTexture::QGeoTileTexture()
-    : texture(0),
-      textureBound(false) {}
+    : textureBound(false) {}
 
 void QCache3QTileEvictionPolicy::aboutToBeRemoved(const QGeoTileSpec &key, QSharedPointer<QGeoCachedTileDisk> obj)
 {
@@ -100,7 +87,6 @@ QGeoCachedTileDisk::~QGeoCachedTileDisk()
 
 QGeoTileTexture::~QGeoTileTexture()
 {
-    QGeoTileCache::evictFromTextureCache(this);
 }
 
 QGeoTileCache::QGeoTileCache(const QString &directory, QObject *parent)
@@ -274,25 +260,6 @@ int QGeoTileCache::textureUsage() const
     return textureCache_.totalCost();
 }
 
-void QGeoTileCache::GLContextAvailable()
-{
-    QMutexLocker ml(&cleanupMutex_);
-
-    /* Throttle the cleanup to 10 items/frame to avoid blocking the render
-     * for too long. Normally only 6-20 tiles are on screen at a time so
-     * eviction rates shouldn't be much higher than this. */
-    int todo = qMin(cleanupList_.size(), 10);
-    for (int i = 0; i < todo; ++i) {
-        QGLTexture2D *texture = cleanupList_.front();
-        if (texture) {
-            texture->release();
-            texture->cleanupResources();
-            delete texture;
-        }
-        cleanupList_.pop_front();
-    }
-}
-
 QSharedPointer<QGeoTileTexture> QGeoTileCache::get(const QGeoTileSpec &spec)
 {
     QSharedPointer<QGeoTileTexture> tt = textureCache_.object(spec);
@@ -372,12 +339,6 @@ void QGeoTileCache::evictFromMemoryCache(QGeoCachedTileMemory * /* tm  */)
 {
 }
 
-void QGeoTileCache::evictFromTextureCache(QGeoTileTexture *tt)
-{
-    QMutexLocker ml(&cleanupMutex_);
-    cleanupList_ << tt->texture;
-}
-
 QSharedPointer<QGeoCachedTileDisk> QGeoTileCache::addToDiskCache(const QGeoTileSpec &spec, const QString &filename)
 {
     QSharedPointer<QGeoCachedTileDisk> td(new QGeoCachedTileDisk);
@@ -409,15 +370,9 @@ QSharedPointer<QGeoTileTexture> QGeoTileCache::addToTextureCache(const QGeoTileS
 {
     QSharedPointer<QGeoTileTexture> tt(new QGeoTileTexture);
     tt->spec = spec;
-    tt->texture = new QGLTexture2D();
-    tt->texture->setPixmap(pixmap);
-    tt->texture->setHorizontalWrap(QGL::ClampToEdge);
-    tt->texture->setVerticalWrap(QGL::ClampToEdge);
+    tt->image = pixmap.toImage();
 
-    /* Do not bind/cleanImage on the texture here -- it needs to be done
-     * in the render thread (by qgeomapscene) */
-
-    int textureCost = pixmap.width() * pixmap.height() * pixmap.depth() / 8;
+    int textureCost = tt->image.width() * tt->image.height() * tt->image.depth() / 8;
     textureCache_.insert(spec, tt, textureCost);
 
     return tt;

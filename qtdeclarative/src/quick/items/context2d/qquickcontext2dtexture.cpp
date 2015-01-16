@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtQuick module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -233,7 +225,7 @@ void QQuickContext2DTexture::paintWithoutTiles(QQuickContext2DCommandBuffer *ccb
 
     p.setCompositionMode(QPainter::CompositionMode_SourceOver);
 
-    ccb->replay(&p, m_state);
+    ccb->replay(&p, m_state, scaleFactor());
     endPainting();
     markDirtyTexture();
 }
@@ -277,7 +269,7 @@ void QQuickContext2DTexture::paint(QQuickContext2DCommandBuffer *ccb)
             QQuickContext2D::State oldState = m_state;
             foreach (QQuickContext2DTile* tile, m_tiles) {
                 if (tile->dirty()) {
-                    ccb->replay(tile->createPainter(m_smooth, m_antialiasing), oldState);
+                    ccb->replay(tile->createPainter(m_smooth, m_antialiasing), oldState, scaleFactor());
                     tile->drawFinished();
                     tile->markDirty(false);
                 }
@@ -424,10 +416,18 @@ QQuickContext2DFBOTexture::~QQuickContext2DFBOTexture()
     delete m_paint_device;
 
     if (QOpenGLContext::currentContext())
-        glDeleteTextures(2, m_displayTextures);
+        QOpenGLContext::currentContext()->functions()->glDeleteTextures(2, m_displayTextures);
 }
 
-QSGTexture *QQuickContext2DFBOTexture::textureForNextFrame(QSGTexture *lastTexture)
+QVector2D QQuickContext2DFBOTexture::scaleFactor() const
+{
+    if (!m_fbo)
+        return QVector2D(1, 1);
+    return QVector2D(m_fbo->width() / m_fboSize.width(),
+                     m_fbo->height() / m_fboSize.height());
+}
+
+QSGTexture *QQuickContext2DFBOTexture::textureForNextFrame(QSGTexture *lastTexture, QQuickWindow *)
 {
     QSGPlainTexture *texture = static_cast<QSGPlainTexture *>(lastTexture);
 
@@ -508,7 +508,7 @@ void QQuickContext2DFBOTexture::grabImage(const QRectF& rf)
         } else {
             QImage grabbed;
             GLAcquireContext ctx(m_gl, m_surface);
-            grabbed = m_fbo->toImage().mirrored().copy(rf.toRect());
+            grabbed = m_fbo->toImage().scaled(m_fboSize, Qt::IgnoreAspectRatio, Qt::SmoothTransformation).mirrored().copy(rf.toRect());
             m_context->setGrabbedImage(grabbed);
         }
     }
@@ -570,7 +570,14 @@ QPaintDevice* QQuickContext2DFBOTexture::beginPainting()
         } else {
             QOpenGLFramebufferObjectFormat format;
             format.setAttachment(QOpenGLFramebufferObject::CombinedDepthStencil);
-            m_fbo = new QOpenGLFramebufferObject(m_fboSize, format);
+            QSize s = m_fboSize;
+            if (m_antialiasing) { // do supersampling since multisampling is not available
+                GLint max;
+                QOpenGLContext::currentContext()->functions()->glGetIntegerv(GL_MAX_TEXTURE_SIZE, &max);
+                if (s.width() * 2 <= max && s.height() * 2 <= max)
+                    s = s * 2;
+            }
+            m_fbo = new QOpenGLFramebufferObject(s, format);
         }
     }
 
@@ -611,15 +618,16 @@ void QQuickContext2DFBOTexture::endPainting()
         if (m_onCustomThread)
             m_mutex.lock();
 
+        QOpenGLFunctions *funcs = QOpenGLContext::currentContext()->functions();
         if (m_displayTextures[0] == 0) {
             m_displayTexture = 1;
-            glGenTextures(2, m_displayTextures);
+            funcs->glGenTextures(2, m_displayTextures);
         }
 
         m_fbo->bind();
         GLuint target = m_displayTexture == 0 ? 1 : 0;
-        glBindTexture(GL_TEXTURE_2D, m_displayTextures[target]);
-        glCopyTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 0, 0, m_fbo->width(), m_fbo->height(), 0);
+        funcs->glBindTexture(GL_TEXTURE_2D, m_displayTextures[target]);
+        funcs->glCopyTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 0, 0, m_fbo->width(), m_fbo->height(), 0);
 
         if (m_onCustomThread)
             m_mutex.unlock();
@@ -658,22 +666,15 @@ void QQuickContext2DImageTexture::grabImage(const QRectF& rf)
     QQuickContext2D::mutex.unlock();
 }
 
-QSGTexture *QQuickContext2DImageTexture::textureForNextFrame(QSGTexture *last)
+QSGTexture *QQuickContext2DImageTexture::textureForNextFrame(QSGTexture *last, QQuickWindow *window)
 {
-    QSGPlainTexture *texture = static_cast<QSGPlainTexture *>(last);
-
     if (m_onCustomThread)
         m_mutex.lock();
 
-    if (!texture) {
-        texture = new QSGPlainTexture();
-        texture->setHasAlphaChannel(true);
-        m_dirtyTexture = true;
-    }
-    if (m_dirtyTexture) {
-        texture->setImage(m_displayImage);
-        m_dirtyTexture = false;
-    }
+    delete last;
+
+    QSGTexture *texture = window->createTextureFromImage(m_displayImage, QQuickWindow::TextureCanUseAtlas);
+    m_dirtyTexture = false;
 
     if (m_onCustomThread)
         m_mutex.unlock();

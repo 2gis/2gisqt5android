@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -51,8 +43,8 @@ using namespace QV4;
 DEFINE_OBJECT_VTABLE(NumberCtor);
 DEFINE_OBJECT_VTABLE(NumberObject);
 
-NumberCtor::NumberCtor(ExecutionContext *scope)
-    : FunctionObject(scope, QStringLiteral("Number"))
+NumberCtor::Data::Data(ExecutionContext *scope)
+    : FunctionObject::Data(scope, QStringLiteral("Number"))
 {
     setVTable(staticVTable());
 }
@@ -71,7 +63,7 @@ ReturnedValue NumberCtor::call(Managed *, CallData *callData)
     return Encode(dbl);
 }
 
-void NumberPrototype::init(ExecutionEngine *engine, ObjectRef ctor)
+void NumberPrototype::init(ExecutionEngine *engine, Object *ctor)
 {
     Scope scope(engine);
     ScopedObject o(scope);
@@ -103,40 +95,40 @@ void NumberPrototype::init(ExecutionEngine *engine, ObjectRef ctor)
 
 inline ReturnedValue thisNumberValue(ExecutionContext *ctx)
 {
-    if (ctx->callData->thisObject.isNumber())
-        return ctx->callData->thisObject.asReturnedValue();
-    NumberObject *n = ctx->callData->thisObject.asNumberObject();
+    if (ctx->d()->callData->thisObject.isNumber())
+        return ctx->d()->callData->thisObject.asReturnedValue();
+    NumberObject *n = ctx->d()->callData->thisObject.asNumberObject();
     if (!n)
         return ctx->throwTypeError();
-    return n->value.asReturnedValue();
+    return n->value().asReturnedValue();
 }
 
 inline double thisNumber(ExecutionContext *ctx)
 {
-    if (ctx->callData->thisObject.isNumber())
-        return ctx->callData->thisObject.asDouble();
-    NumberObject *n = ctx->callData->thisObject.asNumberObject();
+    if (ctx->d()->callData->thisObject.isNumber())
+        return ctx->d()->callData->thisObject.asDouble();
+    NumberObject *n = ctx->d()->callData->thisObject.asNumberObject();
     if (!n)
         return ctx->throwTypeError();
-    return n->value.asDouble();
+    return n->value().asDouble();
 }
 
 ReturnedValue NumberPrototype::method_toString(CallContext *ctx)
 {
     double num = thisNumber(ctx);
-    if (ctx->engine->hasException)
+    if (ctx->d()->engine->hasException)
         return Encode::undefined();
 
-    if (ctx->callData->argc && !ctx->callData->args[0].isUndefined()) {
-        int radix = ctx->callData->args[0].toInt32();
+    if (ctx->d()->callData->argc && !ctx->d()->callData->args[0].isUndefined()) {
+        int radix = ctx->d()->callData->args[0].toInt32();
         if (radix < 2 || radix > 36)
             return ctx->throwError(QString::fromLatin1("Number.prototype.toString: %0 is not a valid radix")
                             .arg(radix));
 
         if (std::isnan(num)) {
-            return ctx->engine->newString(QStringLiteral("NaN"))->asReturnedValue();
+            return ctx->d()->engine->newString(QStringLiteral("NaN"))->asReturnedValue();
         } else if (qIsInf(num)) {
-            return ctx->engine->newString(QLatin1String(num < 0 ? "-Infinity" : "Infinity"))->asReturnedValue();
+            return ctx->d()->engine->newString(QLatin1String(num < 0 ? "-Infinity" : "Infinity"))->asReturnedValue();
         }
 
         if (radix != 10) {
@@ -166,7 +158,7 @@ ReturnedValue NumberPrototype::method_toString(CallContext *ctx)
             }
             if (negative)
                 str.prepend(QLatin1Char('-'));
-            return ctx->engine->newString(str)->asReturnedValue();
+            return ctx->d()->engine->newString(str)->asReturnedValue();
         }
     }
 
@@ -178,7 +170,7 @@ ReturnedValue NumberPrototype::method_toLocaleString(CallContext *ctx)
     Scope scope(ctx);
     ScopedValue v(scope, thisNumberValue(ctx));
     ScopedString str(scope, v->toString(ctx));
-    if (ctx->engine->hasException)
+    if (ctx->d()->engine->hasException)
         return Encode::undefined();
     return str.asReturnedValue();
 }
@@ -191,19 +183,19 @@ ReturnedValue NumberPrototype::method_valueOf(CallContext *ctx)
 ReturnedValue NumberPrototype::method_toFixed(CallContext *ctx)
 {
     double v = thisNumber(ctx);
-    if (ctx->engine->hasException)
+    if (ctx->d()->engine->hasException)
         return Encode::undefined();
 
     double fdigits = 0;
 
-    if (ctx->callData->argc > 0)
-        fdigits = ctx->callData->args[0].toInteger();
+    if (ctx->d()->callData->argc > 0)
+        fdigits = ctx->d()->callData->args[0].toInteger();
 
     if (std::isnan(fdigits))
         fdigits = 0;
 
     if (fdigits < 0 || fdigits > 20)
-        return ctx->throwRangeError(ctx->callData->thisObject);
+        return ctx->throwRangeError(ctx->d()->callData->thisObject);
 
     QString str;
     if (std::isnan(v))
@@ -214,22 +206,22 @@ ReturnedValue NumberPrototype::method_toFixed(CallContext *ctx)
         str = QString::number(v, 'f', int (fdigits));
     else
         return RuntimeHelpers::stringFromNumber(ctx, v)->asReturnedValue();
-    return ctx->engine->newString(str)->asReturnedValue();
+    return ctx->d()->engine->newString(str)->asReturnedValue();
 }
 
 ReturnedValue NumberPrototype::method_toExponential(CallContext *ctx)
 {
     Scope scope(ctx);
     double d = thisNumber(ctx);
-    if (ctx->engine->hasException)
+    if (ctx->d()->engine->hasException)
         return Encode::undefined();
 
     int fdigits = -1;
 
-    if (ctx->callData->argc && !ctx->callData->args[0].isUndefined()) {
-        fdigits = ctx->callData->args[0].toInt32();
+    if (ctx->d()->callData->argc && !ctx->d()->callData->args[0].isUndefined()) {
+        fdigits = ctx->d()->callData->args[0].toInt32();
         if (fdigits < 0 || fdigits > 20) {
-            ScopedString error(scope, ctx->engine->newString(QStringLiteral("Number.prototype.toExponential: fractionDigits out of range")));
+            ScopedString error(scope, ctx->d()->engine->newString(QStringLiteral("Number.prototype.toExponential: fractionDigits out of range")));
             return ctx->throwRangeError(error);
         }
     }
@@ -239,22 +231,22 @@ ReturnedValue NumberPrototype::method_toExponential(CallContext *ctx)
     double_conversion::DoubleToStringConverter::EcmaScriptConverter().ToExponential(d, fdigits, &builder);
     QString result = QString::fromLatin1(builder.Finalize());
 
-    return ctx->engine->newString(result)->asReturnedValue();
+    return ctx->d()->engine->newString(result)->asReturnedValue();
 }
 
 ReturnedValue NumberPrototype::method_toPrecision(CallContext *ctx)
 {
     Scope scope(ctx);
     ScopedValue v(scope, thisNumberValue(ctx));
-    if (ctx->engine->hasException)
+    if (ctx->d()->engine->hasException)
         return Encode::undefined();
 
-    if (!ctx->callData->argc || ctx->callData->args[0].isUndefined())
+    if (!ctx->d()->callData->argc || ctx->d()->callData->args[0].isUndefined())
         return RuntimeHelpers::toString(ctx, v);
 
-    double precision = ctx->callData->args[0].toInt32();
+    double precision = ctx->d()->callData->args[0].toInt32();
     if (precision < 1 || precision > 21) {
-        ScopedString error(scope, ctx->engine->newString(QStringLiteral("Number.prototype.toPrecision: precision out of range")));
+        ScopedString error(scope, ctx->d()->engine->newString(QStringLiteral("Number.prototype.toPrecision: precision out of range")));
         return ctx->throwRangeError(error);
     }
 
@@ -263,5 +255,5 @@ ReturnedValue NumberPrototype::method_toPrecision(CallContext *ctx)
     double_conversion::DoubleToStringConverter::EcmaScriptConverter().ToPrecision(v->asDouble(), precision, &builder);
     QString result = QString::fromLatin1(builder.Finalize());
 
-    return ctx->engine->newString(result)->asReturnedValue();
+    return ctx->d()->engine->newString(result)->asReturnedValue();
 }

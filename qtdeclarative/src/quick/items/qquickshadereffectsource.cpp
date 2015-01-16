@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtQuick module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -50,46 +42,9 @@
 #include "qopenglframebufferobject.h"
 #include "qmath.h"
 #include <QtQuick/private/qsgtexture_p.h>
+#include <QtCore/QRunnable>
 
 QT_BEGIN_NAMESPACE
-
-DEFINE_BOOL_CONFIG_OPTION(qmlFboOverlay, QML_FBO_OVERLAY)
-DEFINE_BOOL_CONFIG_OPTION(qmlFboFlushBeforeDetach, QML_FBO_FLUSH_BEFORE_DETACH)
-
-namespace
-{
-    class BindableFbo : public QSGBindable
-    {
-    public:
-        BindableFbo(QOpenGLFramebufferObject *fbo, QSGDepthStencilBuffer *depthStencil);
-        virtual ~BindableFbo();
-        virtual void bind() const;
-    private:
-        QOpenGLFramebufferObject *m_fbo;
-        QSGDepthStencilBuffer *m_depthStencil;
-    };
-
-    BindableFbo::BindableFbo(QOpenGLFramebufferObject *fbo, QSGDepthStencilBuffer *depthStencil)
-        : m_fbo(fbo)
-        , m_depthStencil(depthStencil)
-    {
-    }
-
-    BindableFbo::~BindableFbo()
-    {
-        if (qmlFboFlushBeforeDetach())
-            glFlush();
-        if (m_depthStencil)
-            m_depthStencil->detach();
-    }
-
-    void BindableFbo::bind() const
-    {
-        m_fbo->bind();
-        if (m_depthStencil)
-            m_depthStencil->attach();
-    }
-}
 
 class QQuickShaderEffectSourceTextureProvider : public QSGTextureProvider
 {
@@ -112,378 +67,28 @@ public:
         return sourceTexture;
     }
 
-    QQuickShaderEffectTexture *sourceTexture;
+    QSGLayer *sourceTexture;
 
     QSGTexture::Filtering mipmapFiltering;
     QSGTexture::Filtering filtering;
     QSGTexture::WrapMode horizontalWrap;
     QSGTexture::WrapMode verticalWrap;
 };
-#include "qquickshadereffectsource.moc"
 
-
-QQuickShaderEffectSourceNode::QQuickShaderEffectSourceNode()
+class QQuickShaderEffectSourceCleanup : public QRunnable
 {
-    setFlag(UsePreprocess, true);
-}
-
-void QQuickShaderEffectSourceNode::markDirtyTexture()
-{
-    markDirty(DirtyMaterial);
-}
-
-
-QQuickShaderEffectTexture::QQuickShaderEffectTexture(QQuickItem *shaderSource)
-    : QSGDynamicTexture()
-    , m_item(0)
-    , m_device_pixel_ratio(1)
-    , m_format(GL_RGBA)
-    , m_renderer(0)
-    , m_fbo(0)
-    , m_secondaryFbo(0)
-    , m_transparentTexture(0)
-#ifdef QSG_DEBUG_FBO_OVERLAY
-    , m_debugOverlay(0)
-#endif
-    , m_context(QQuickItemPrivate::get(shaderSource)->sceneGraphRenderContext())
-    , m_mipmap(false)
-    , m_live(true)
-    , m_recursive(false)
-    , m_dirtyTexture(true)
-    , m_multisamplingChecked(false)
-    , m_multisampling(false)
-    , m_grab(false)
-{
-}
-
-QQuickShaderEffectTexture::~QQuickShaderEffectTexture()
-{
-    invalidated();
-}
-
-void QQuickShaderEffectTexture::invalidated()
-{
-    delete m_renderer;
-    m_renderer = 0;
-    delete m_fbo;
-    delete m_secondaryFbo;
-    m_fbo = m_secondaryFbo = 0;
-#ifdef QSG_DEBUG_FBO_OVERLAY
-    delete m_debugOverlay;
-    m_debugOverlay = 0;
-#endif
-    if (m_transparentTexture) {
-        glDeleteTextures(1, &m_transparentTexture);
-        m_transparentTexture = 0;
+public:
+    QQuickShaderEffectSourceCleanup(QSGLayer *t, QQuickShaderEffectSourceTextureProvider *p)
+        : texture(t)
+        , provider(p)
+    {}
+    void run() Q_DECL_OVERRIDE {
+        delete texture;
+        delete provider;
     }
-}
-
-int QQuickShaderEffectTexture::textureId() const
-{
-    return m_fbo ? m_fbo->texture() : 0;
-}
-
-bool QQuickShaderEffectTexture::hasAlphaChannel() const
-{
-    return m_format != GL_RGB;
-}
-
-bool QQuickShaderEffectTexture::hasMipmaps() const
-{
-    return m_mipmap;
-}
-
-
-void QQuickShaderEffectTexture::bind()
-{
-#ifndef QT_NO_DEBUG
-    if (!m_recursive && m_fbo && ((m_multisampling && m_secondaryFbo->isBound()) || m_fbo->isBound()))
-        qWarning("ShaderEffectSource: \'recursive\' must be set to true when rendering recursively.");
-#endif
-
-    if (!m_fbo && m_format == GL_RGBA) {
-        if (m_transparentTexture == 0) {
-            glGenTextures(1, &m_transparentTexture);
-            glBindTexture(GL_TEXTURE_2D, m_transparentTexture);
-            const uint zero = 0;
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 1, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE, &zero);
-        } else {
-            glBindTexture(GL_TEXTURE_2D, m_transparentTexture);
-        }
-    } else {
-        glBindTexture(GL_TEXTURE_2D, m_fbo ? m_fbo->texture() : 0);
-        updateBindOptions();
-    }
-}
-
-bool QQuickShaderEffectTexture::updateTexture()
-{
-    bool doGrab = (m_live || m_grab) && m_dirtyTexture;
-    if (doGrab)
-        grab();
-    if (m_grab)
-        emit scheduledUpdateCompleted();
-    m_grab = false;
-    return doGrab;
-}
-
-void QQuickShaderEffectTexture::setHasMipmaps(bool mipmap)
-{
-    if (mipmap == m_mipmap)
-        return;
-    m_mipmap = mipmap;
-    if (m_mipmap && m_fbo && !m_fbo->format().mipmap())
-        markDirtyTexture();
-}
-
-
-void QQuickShaderEffectTexture::setItem(QSGNode *item)
-{
-    if (item == m_item)
-        return;
-    m_item = item;
-
-    if (m_live && !m_item) {
-        delete m_fbo;
-        delete m_secondaryFbo;
-        m_fbo = m_secondaryFbo = 0;
-        m_depthStencilBuffer.clear();
-    }
-
-    markDirtyTexture();
-}
-
-void QQuickShaderEffectTexture::setRect(const QRectF &rect)
-{
-    if (rect == m_rect)
-        return;
-    m_rect = rect;
-    markDirtyTexture();
-}
-
-void QQuickShaderEffectTexture::setSize(const QSize &size)
-{
-    if (size == m_size)
-        return;
-    m_size = size;
-
-    if (m_live && m_size.isNull()) {
-        delete m_fbo;
-        delete m_secondaryFbo;
-        m_fbo = m_secondaryFbo = 0;
-        m_depthStencilBuffer.clear();
-    }
-
-    markDirtyTexture();
-}
-
-void QQuickShaderEffectTexture::setFormat(GLenum format)
-{
-    if (format == m_format)
-        return;
-    m_format = format;
-    markDirtyTexture();
-}
-
-void QQuickShaderEffectTexture::setLive(bool live)
-{
-    if (live == m_live)
-        return;
-    m_live = live;
-
-    if (m_live && (!m_item || m_size.isNull())) {
-        delete m_fbo;
-        delete m_secondaryFbo;
-        m_fbo = m_secondaryFbo = 0;
-        m_depthStencilBuffer.clear();
-    }
-
-    markDirtyTexture();
-}
-
-void QQuickShaderEffectTexture::scheduleUpdate()
-{
-    if (m_grab)
-        return;
-    m_grab = true;
-    if (m_dirtyTexture)
-        emit updateRequested();
-}
-
-void QQuickShaderEffectTexture::setRecursive(bool recursive)
-{
-    m_recursive = recursive;
-}
-
-void QQuickShaderEffectTexture::markDirtyTexture()
-{
-    m_dirtyTexture = true;
-    if (m_live || m_grab)
-        emit updateRequested();
-}
-
-void QQuickShaderEffectTexture::grab()
-{
-    if (!m_item || m_size.isNull()) {
-        delete m_fbo;
-        delete m_secondaryFbo;
-        m_fbo = m_secondaryFbo = 0;
-        m_depthStencilBuffer.clear();
-        m_dirtyTexture = false;
-        return;
-    }
-    QSGNode *root = m_item;
-    while (root->firstChild() && root->type() != QSGNode::RootNodeType)
-        root = root->firstChild();
-    if (root->type() != QSGNode::RootNodeType)
-        return;
-
-    if (!m_renderer) {
-        m_renderer = m_context->createRenderer();
-        connect(m_renderer, SIGNAL(sceneGraphChanged()), this, SLOT(markDirtyTexture()));
-    }
-    m_renderer->setDevicePixelRatio(m_device_pixel_ratio);
-    m_renderer->setRootNode(static_cast<QSGRootNode *>(root));
-
-    bool deleteFboLater = false;
-    if (!m_fbo || m_fbo->size() != m_size || m_fbo->format().internalTextureFormat() != m_format
-        || (!m_fbo->format().mipmap() && m_mipmap))
-    {
-        if (!m_multisamplingChecked) {
-            if (m_context->openglContext()->format().samples() <= 1) {
-                m_multisampling = false;
-            } else {
-                const QSet<QByteArray> extensions = m_context->openglContext()->extensions();
-                m_multisampling = extensions.contains(QByteArrayLiteral("GL_EXT_framebuffer_multisample"))
-                    && extensions.contains(QByteArrayLiteral("GL_EXT_framebuffer_blit"));
-            }
-            m_multisamplingChecked = true;
-        }
-        if (m_multisampling) {
-            // Don't delete the FBO right away in case it is used recursively.
-            deleteFboLater = true;
-            delete m_secondaryFbo;
-            QOpenGLFramebufferObjectFormat format;
-
-            format.setInternalTextureFormat(m_format);
-            format.setSamples(m_context->openglContext()->format().samples());
-            m_secondaryFbo = new QOpenGLFramebufferObject(m_size, format);
-            m_depthStencilBuffer = m_context->depthStencilBufferForFbo(m_secondaryFbo);
-        } else {
-            QOpenGLFramebufferObjectFormat format;
-            format.setInternalTextureFormat(m_format);
-            format.setMipmap(m_mipmap);
-            if (m_recursive) {
-                deleteFboLater = true;
-                delete m_secondaryFbo;
-                m_secondaryFbo = new QOpenGLFramebufferObject(m_size, format);
-                glBindTexture(GL_TEXTURE_2D, m_secondaryFbo->texture());
-                updateBindOptions(true);
-                m_depthStencilBuffer = m_context->depthStencilBufferForFbo(m_secondaryFbo);
-            } else {
-                delete m_fbo;
-                delete m_secondaryFbo;
-                m_fbo = new QOpenGLFramebufferObject(m_size, format);
-                m_secondaryFbo = 0;
-                glBindTexture(GL_TEXTURE_2D, m_fbo->texture());
-                updateBindOptions(true);
-                m_depthStencilBuffer = m_context->depthStencilBufferForFbo(m_fbo);
-            }
-        }
-    }
-
-    if (m_recursive && !m_secondaryFbo) {
-        // m_fbo already created, m_recursive was just set.
-        Q_ASSERT(m_fbo);
-        Q_ASSERT(!m_multisampling);
-
-        m_secondaryFbo = new QOpenGLFramebufferObject(m_size, m_fbo->format());
-        glBindTexture(GL_TEXTURE_2D, m_secondaryFbo->texture());
-        updateBindOptions(true);
-    }
-
-    // Render texture.
-    root->markDirty(QSGNode::DirtyForceUpdate); // Force matrix, clip and opacity update.
-    m_renderer->nodeChanged(root, QSGNode::DirtyForceUpdate); // Force render list update.
-
-#ifdef QSG_DEBUG_FBO_OVERLAY
-    if (qmlFboOverlay()) {
-        if (!m_debugOverlay)
-            m_debugOverlay = new QSGSimpleRectNode();
-        m_debugOverlay->setRect(QRectF(0, 0, m_size.width(), m_size.height()));
-        m_debugOverlay->setColor(QColor(0xff, 0x00, 0x80, 0x40));
-        root->appendChildNode(m_debugOverlay);
-    }
-#endif
-
-    m_dirtyTexture = false;
-
-    QOpenGLContext *ctx = m_context->openglContext();
-    m_renderer->setDeviceRect(m_size);
-    m_renderer->setViewportRect(m_size);
-    QRectF mirrored(m_rect.left(), m_rect.bottom(), m_rect.width(), -m_rect.height());
-    m_renderer->setProjectionMatrixToRect(mirrored);
-    m_renderer->setClearColor(Qt::transparent);
-
-    if (m_multisampling) {
-        m_renderer->renderScene(BindableFbo(m_secondaryFbo, m_depthStencilBuffer.data()));
-
-        if (deleteFboLater) {
-            delete m_fbo;
-            QOpenGLFramebufferObjectFormat format;
-            format.setInternalTextureFormat(m_format);
-            format.setAttachment(QOpenGLFramebufferObject::NoAttachment);
-            format.setMipmap(m_mipmap);
-            format.setSamples(0);
-            m_fbo = new QOpenGLFramebufferObject(m_size, format);
-            glBindTexture(GL_TEXTURE_2D, m_fbo->texture());
-            updateBindOptions(true);
-        }
-
-        QRect r(QPoint(), m_size);
-        QOpenGLFramebufferObject::blitFramebuffer(m_fbo, r, m_secondaryFbo, r);
-    } else {
-        if (m_recursive) {
-            m_renderer->renderScene(BindableFbo(m_secondaryFbo, m_depthStencilBuffer.data()));
-
-            if (deleteFboLater) {
-                delete m_fbo;
-                QOpenGLFramebufferObjectFormat format;
-                format.setAttachment(QOpenGLFramebufferObject::CombinedDepthStencil);
-                format.setInternalTextureFormat(m_format);
-                format.setMipmap(m_mipmap);
-                m_fbo = new QOpenGLFramebufferObject(m_size, format);
-                glBindTexture(GL_TEXTURE_2D, m_fbo->texture());
-                updateBindOptions(true);
-            }
-            qSwap(m_fbo, m_secondaryFbo);
-        } else {
-            m_renderer->renderScene(BindableFbo(m_fbo, m_depthStencilBuffer.data()));
-        }
-    }
-
-    if (m_mipmap) {
-        glBindTexture(GL_TEXTURE_2D, textureId());
-        ctx->functions()->glGenerateMipmap(GL_TEXTURE_2D);
-    }
-
-    root->markDirty(QSGNode::DirtyForceUpdate); // Force matrix, clip, opacity and render list update.
-
-#ifdef QSG_DEBUG_FBO_OVERLAY
-    if (qmlFboOverlay())
-        root->removeChildNode(m_debugOverlay);
-#endif
-    if (m_recursive)
-        markDirtyTexture(); // Continuously update if 'live' and 'recursive'.
-}
-
-QImage QQuickShaderEffectTexture::toImage() const
-{
-    if (m_fbo)
-        return m_fbo->toImage();
-
-    return QImage();
-}
+    QSGLayer *texture;
+    QQuickShaderEffectSourceTextureProvider *provider;
+};
 
 /*!
     \qmltype ShaderEffectSource
@@ -590,11 +195,15 @@ QQuickShaderEffectSource::QQuickShaderEffectSource(QQuickItem *parent)
 
 QQuickShaderEffectSource::~QQuickShaderEffectSource()
 {
-    if (m_texture)
-        m_texture->deleteLater();
-
-    if (m_provider)
-        m_provider->deleteLater();
+    if (window()) {
+        window()->scheduleRenderJob(new QQuickShaderEffectSourceCleanup(m_texture, m_provider),
+                                    QQuickWindow::AfterSynchronizingStage);
+    } else {
+        // If we don't have a window, these should already have been
+        // released in invalidateSG or in releaseResrouces()
+        Q_ASSERT(!m_texture);
+        Q_ASSERT(!m_provider);
+    }
 
     if (m_sourceItem) {
         QQuickItemPrivate *sd = QQuickItemPrivate::get(m_sourceItem);
@@ -616,7 +225,8 @@ void QQuickShaderEffectSource::ensureTexture()
                "QQuickShaderEffectSource::ensureTexture",
                "Cannot be used outside the rendering thread");
 
-    m_texture = new QQuickShaderEffectTexture(this);
+    QSGRenderContext *rc = QQuickItemPrivate::get(this)->sceneGraphRenderContext();
+    m_texture = rc->sceneGraphContext()->createLayer(rc);
     connect(QQuickItemPrivate::get(this)->window, SIGNAL(sceneGraphInvalidated()), m_texture, SLOT(invalidated()), Qt::DirectConnection);
     connect(m_texture, SIGNAL(updateRequested()), this, SLOT(update()));
     connect(m_texture, SIGNAL(scheduledUpdateCompleted()), this, SIGNAL(scheduledUpdateCompleted()));
@@ -710,19 +320,29 @@ void QQuickShaderEffectSource::setSourceItem(QQuickItem *item)
         if (window())
             d->derefWindow();
     }
+
     m_sourceItem = item;
 
-    if (item) {
-        QQuickItemPrivate *d = QQuickItemPrivate::get(item);
-        // 'item' needs a window to get a scene graph node. It usually gets one through its
-        // parent, but if the source item is "inline" rather than a reference -- i.e.
-        // "sourceItem: Item { }" instead of "sourceItem: foo" -- it will not get a parent.
-        // In those cases, 'item' should get the window from 'this'.
-        if (window())
-            d->refWindow(window());
-        d->refFromEffectItem(m_hideSource);
-        d->addItemChangeListener(this, QQuickItemPrivate::Geometry);
-        connect(m_sourceItem, SIGNAL(destroyed(QObject*)), this, SLOT(sourceItemDestroyed(QObject*)));
+    if (m_sourceItem) {
+        if (window() == m_sourceItem->window()
+                || (window() == 0 && m_sourceItem->window())
+                || (m_sourceItem->window() == 0 && window())) {
+            QQuickItemPrivate *d = QQuickItemPrivate::get(item);
+            // 'item' needs a window to get a scene graph node. It usually gets one through its
+            // parent, but if the source item is "inline" rather than a reference -- i.e.
+            // "sourceItem: Item { }" instead of "sourceItem: foo" -- it will not get a parent.
+            // In those cases, 'item' should get the window from 'this'.
+            if (window())
+                d->refWindow(window());
+            else if (m_sourceItem->window())
+                d->refWindow(m_sourceItem->window());
+            d->refFromEffectItem(m_hideSource);
+            d->addItemChangeListener(this, QQuickItemPrivate::Geometry);
+            connect(m_sourceItem, SIGNAL(destroyed(QObject*)), this, SLOT(sourceItemDestroyed(QObject*)));
+        } else {
+            qWarning("ShaderEffectSource: sourceItem and ShaderEffectSource must both be children of the same window.");
+            m_sourceItem = 0;
+        }
     }
     update();
     emit sourceItemChanged();
@@ -961,15 +581,26 @@ static void get_wrap_mode(QQuickShaderEffectSource::WrapMode mode, QSGTexture::W
 
 void QQuickShaderEffectSource::releaseResources()
 {
-    if (m_texture) {
-        m_texture->deleteLater();
+    if (m_texture || m_provider) {
+        window()->scheduleRenderJob(new QQuickShaderEffectSourceCleanup(m_texture, m_provider),
+                                    QQuickWindow::AfterSynchronizingStage);
         m_texture = 0;
-    }
-    if (m_provider) {
-        m_provider->deleteLater();
         m_provider = 0;
     }
 }
+
+class QQuickShaderSourceAttachedNode : public QObject, public QSGNode
+{
+    Q_OBJECT
+public:
+    Q_SLOT void markTextureDirty() {
+        QSGNode *pn = QSGNode::parent();
+        if (pn) {
+            Q_ASSERT(pn->type() == QSGNode::GeometryNodeType);
+            pn->markDirty(DirtyMaterial);
+        }
+    }
+};
 
 QSGNode *QQuickShaderEffectSource::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData *)
 {
@@ -997,7 +628,7 @@ QSGNode *QQuickShaderEffectSource::updatePaintNode(QSGNode *oldNode, UpdatePaint
 
     // Crate large textures on high-dpi displays.
     if (sourceItem())
-        textureSize *= d->window->devicePixelRatio();
+        textureSize *= d->window->effectiveDevicePixelRatio();
 
     const QSize minTextureSize = d->sceneGraphContext()->minimumFBOSize();
     // Keep power-of-two by doubling the size.
@@ -1006,7 +637,7 @@ QSGNode *QQuickShaderEffectSource::updatePaintNode(QSGNode *oldNode, UpdatePaint
     while (textureSize.height() < minTextureSize.height())
         textureSize.rheight() *= 2;
 
-    m_texture->setDevicePixelRatio(d->window->devicePixelRatio());
+    m_texture->setDevicePixelRatio(d->window->effectiveDevicePixelRatio());
     m_texture->setSize(textureSize);
     m_texture->setRecursive(m_recursive);
     m_texture->setFormat(GLenum(m_format));
@@ -1036,11 +667,14 @@ QSGNode *QQuickShaderEffectSource::updatePaintNode(QSGNode *oldNode, UpdatePaint
         return 0;
     }
 
-    QQuickShaderEffectSourceNode *node = static_cast<QQuickShaderEffectSourceNode *>(oldNode);
+    QSGImageNode *node = static_cast<QSGImageNode *>(oldNode);
     if (!node) {
-        node = new QQuickShaderEffectSourceNode;
+        node = d->sceneGraphContext()->createImageNode();
+        node->setFlag(QSGNode::UsePreprocess);
         node->setTexture(m_texture);
-        connect(m_texture, SIGNAL(updateRequested()), node, SLOT(markDirtyTexture()));
+        QQuickShaderSourceAttachedNode *attached = new QQuickShaderSourceAttachedNode;
+        node->appendChildNode(attached);
+        connect(m_texture, SIGNAL(updateRequested()), attached, SLOT(markTextureDirty()));
     }
 
     // If live and recursive, update continuously.
@@ -1058,6 +692,16 @@ QSGNode *QQuickShaderEffectSource::updatePaintNode(QSGNode *oldNode, UpdatePaint
     return node;
 }
 
+void QQuickShaderEffectSource::invalidateSceneGraph()
+{
+    if (m_texture)
+        delete m_texture;
+    if (m_provider)
+        delete m_provider;
+    m_texture = 0;
+    m_provider = 0;
+}
+
 void QQuickShaderEffectSource::itemChange(ItemChange change, const ItemChangeData &value)
 {
     if (change == QQuickItem::ItemSceneChange && m_sourceItem) {
@@ -1069,5 +713,7 @@ void QQuickShaderEffectSource::itemChange(ItemChange change, const ItemChangeDat
     }
     QQuickItem::itemChange(change, value);
 }
+
+#include "qquickshadereffectsource.moc"
 
 QT_END_NAMESPACE

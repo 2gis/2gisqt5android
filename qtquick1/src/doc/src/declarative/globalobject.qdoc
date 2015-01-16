@@ -36,14 +36,14 @@ Contains all the properties of the JavaScript global object, plus:
 \section1 Qt Object
 
 The \l{QmlGlobalQtObject}{Qt object} provides useful enums and functions from Qt, for use in all QML
-files. 
+files.
 
 \section1 XMLHttpRequest
 
 \target XMLHttpRequest
 
-QML script supports the XMLHttpRequest object, which can be used to asynchronously obtain 
-data from over a network.  
+QML script supports the XMLHttpRequest object, which can be used to asynchronously obtain
+data from over a network.
 
 The XMLHttpRequest API implements the same \l {http://www.w3.org/TR/XMLHttpRequest/}{W3C standard}
 as many popular web browsers with following exceptions:
@@ -89,7 +89,7 @@ browser.  The following objects and properties are supported by the QML implemen
 \endlist
 
 \li
-\list 
+\list
 \li tagName
 \endlist
 
@@ -101,7 +101,7 @@ browser.  The following objects and properties are supported by the QML implemen
 \endlist
 
 \li
-\list 
+\list
 \li data
 \li length
 \endlist

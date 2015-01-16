@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the Qt Mobility Components.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -250,14 +242,19 @@ void MFPlayerSession::handleSourceError(long hr)
 
 void MFPlayerSession::handleMediaSourceReady()
 {
-    if (QMediaPlayer::LoadingMedia != m_status || !m_sourceResolver)
+    if (QMediaPlayer::LoadingMedia != m_status || !m_sourceResolver || m_sourceResolver != sender())
         return;
 #ifdef DEBUG_MEDIAFOUNDATION
     qDebug() << "handleMediaSourceReady";
 #endif
     HRESULT hr = S_OK;
-    IMFPresentationDescriptor* sourcePD;
     IMFMediaSource* mediaSource = m_sourceResolver->mediaSource();
+
+    DWORD dwCharacteristics = 0;
+    mediaSource->GetCharacteristics(&dwCharacteristics);
+    emit seekableUpdate(MFMEDIASOURCE_CAN_SEEK & dwCharacteristics);
+
+    IMFPresentationDescriptor* sourcePD;
     hr = mediaSource->CreatePresentationDescriptor(&sourcePD);
     if (SUCCEEDED(hr)) {
         m_duration = 0;
@@ -266,6 +263,7 @@ void MFPlayerSession::handleMediaSourceReady()
         //convert from 100 nanosecond to milisecond
         emit durationUpdate(qint64(m_duration / 10000));
         setupPlaybackTopology(mediaSource, sourcePD);
+        sourcePD->Release();
     } else {
         changeStatus(QMediaPlayer::InvalidMedia);
         emit error(QMediaPlayer::ResourceError, tr("Cannot create presentation descriptor."), true);
@@ -423,12 +421,15 @@ IMFTopologyNode* MFPlayerSession::addOutputNode(IMFStreamDescriptor *streamDesc,
                 if (SUCCEEDED(hr)) {
                     hr = node->SetUINT32(MF_TOPONODE_STREAMID, sinkID);
                     if (SUCCEEDED(hr)) {
-                        if (SUCCEEDED(topology->AddNode(node)))
+                        if (SUCCEEDED(topology->AddNode(node))) {
+                            handler->Release();
                             return node;
+                        }
                     }
                 }
             }
         }
+        handler->Release();
     }
     node->Release();
     return NULL;
@@ -617,42 +618,39 @@ HRESULT BindOutputNode(IMFTopologyNode *pNode)
 // Sets the IMFStreamSink pointers on all of the output nodes in a topology.
 HRESULT BindOutputNodes(IMFTopology *pTopology)
 {
-    DWORD cNodes = 0;
-
-    IMFCollection *collection = NULL;
-    IUnknown *element = NULL;
-    IMFTopologyNode *node = NULL;
+    IMFCollection *collection;
 
     // Get the collection of output nodes.
     HRESULT hr = pTopology->GetOutputNodeCollection(&collection);
 
     // Enumerate all of the nodes in the collection.
-    if (SUCCEEDED(hr))
+    if (SUCCEEDED(hr)) {
+        DWORD cNodes;
         hr = collection->GetElementCount(&cNodes);
 
-    if (SUCCEEDED(hr)) {
-        for (DWORD i = 0; i < cNodes; i++) {
-            hr = collection->GetElement(i, &element);
-            if (FAILED(hr))
-                break;
+        if (SUCCEEDED(hr)) {
+            for (DWORD i = 0; i < cNodes; i++) {
+                IUnknown *element;
+                hr = collection->GetElement(i, &element);
+                if (FAILED(hr))
+                    break;
 
-            hr = element->QueryInterface(IID_IMFTopologyNode, (void**)&node);
-            if (FAILED(hr))
-                break;
+                IMFTopologyNode *node;
+                hr = element->QueryInterface(IID_IMFTopologyNode, (void**)&node);
+                element->Release();
+                if (FAILED(hr))
+                    break;
 
-            // Bind this node.
-            hr = BindOutputNode(node);
-            if (FAILED(hr))
-                break;
+                // Bind this node.
+                hr = BindOutputNode(node);
+                node->Release();
+                if (FAILED(hr))
+                    break;
+            }
         }
+        collection->Release();
     }
 
-    if (collection)
-        collection->Release();
-    if (element)
-        element->Release();
-    if (node)
-        node->Release();
     return hr;
 }
 
@@ -1510,8 +1508,11 @@ HRESULT MFPlayerSession::Invoke(IMFAsyncResult *pResult)
         }
     }
 
-    if (!m_closing)
+    if (!m_closing) {
         emit sessionEvent(pEvent);
+    } else {
+        pEvent->Release();
+    }
     return S_OK;
 }
 
@@ -1634,13 +1635,6 @@ void MFPlayerSession::handleSessionEvent(IMFMediaEvent *sessionEvent)
                 }
             }
 
-            if (SUCCEEDED(MFGetService(m_session, MR_STREAM_VOLUME_SERVICE, IID_PPV_ARGS(&m_volumeControl))))
-                setVolumeInternal(m_muted ? 0 : m_volume);
-
-            DWORD dwCharacteristics = 0;
-            m_sourceResolver->mediaSource()->GetCharacteristics(&dwCharacteristics);
-            emit seekableUpdate(MFMEDIASOURCE_CAN_SEEK & dwCharacteristics);
-
             // Topology is resolved and successfuly set, this happens only after loading a new media.
             // Make sure we always start the media from the beginning
             m_varStart.vt = VT_I8;
@@ -1707,6 +1701,9 @@ void MFPlayerSession::handleSessionEvent(IMFMediaEvent *sessionEvent)
                         }
                     }
                     MFGetService(m_session, MFNETSOURCE_STATISTICS_SERVICE, IID_PPV_ARGS(&m_netsourceStatistics));
+
+                    if (SUCCEEDED(MFGetService(m_session, MR_STREAM_VOLUME_SERVICE, IID_PPV_ARGS(&m_volumeControl))))
+                        setVolumeInternal(m_muted ? 0 : m_volume);
                 }
             }
         }

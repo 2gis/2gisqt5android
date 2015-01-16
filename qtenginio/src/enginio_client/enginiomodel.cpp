@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtEnginio module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -161,7 +153,7 @@ EnginioBaseModelPrivate::~EnginioBaseModelPrivate()
     delete _replyConnectionConntext;
 }
 
-void EnginioBaseModelPrivate::receivedNotification(QJsonObject data)
+void EnginioBaseModelPrivate::receivedNotification(const QJsonObject &data)
 {
     const QJsonObject origin = data[EnginioString::origin].toObject();
     const QString requestId = origin[EnginioString::apiRequestId].toString();
@@ -404,6 +396,7 @@ EnginioBaseModel::~EnginioBaseModel()
   \value ObjectTypeRole \c What is item type
   \value SyncedRole \c Mark if an item is in sync with the backend
   \value CustomPropertyRole \c The first role id that may be used for dynamically created roles.
+  \value JsonObjectRole \c Object like representation of an item
   \omitvalue InvalidRole
 
   Additionally EnginioModel supports dynamic roles which are mapped
@@ -413,7 +406,7 @@ EnginioBaseModel::~EnginioBaseModel()
   \note Some objects may not contain value for a static role, it may happen
   for example when an item is not in sync with the backend.
 
-  \sa EnginioBaseModel::roleNames()
+  \sa QAbstractItemModel::roleNames()
 */
 
 /*!
@@ -480,6 +473,25 @@ void EnginioModel::setOperation(Enginio::Operation operation)
 }
 
 /*!
+  Reload the model data from the server.
+  This is similar to reset and will emit \l modelAboutToBeReset() and \l modelReset().
+  This function invalidated the internal state of the model, reloads it from the backend
+  and resets all views.
+
+  \note when using this function while other requests to the server are made the result
+  is undefined. For example when calling append() and then reset() before append finished,
+  the model may or may not contain the result of the append operation.
+
+  \return reply from backend
+  \since 1.1
+*/
+EnginioReply *EnginioModel::reload()
+{
+    Q_D(EnginioModel);
+    return d->reload();
+}
+
+/*!
   \include model-append.qdocinc
   \sa EnginioClient::create()
 */
@@ -543,6 +555,34 @@ EnginioReply *EnginioModel::setData(int row, const QVariant &value, const QStrin
     return d->setValue(row, role, value);
 }
 
+/*!
+  \overload
+  Update a \a value on \a row of this model's local cache
+  and send an update request to the Enginio backend.
+
+  All properties of the \a value will be used to update the item in \a row.
+  This can be useful to update multiple item's properties with one request.
+
+  \return reply from backend
+  \sa EnginioClient::update()
+*/
+EnginioReply *EnginioModel::setData(int row, const QJsonObject &value)
+{
+    Q_D(EnginioModel);
+    if (Q_UNLIKELY(!d->enginio())) {
+        qWarning("EnginioModel::setData(): Enginio client is not set");
+        return 0;
+    }
+
+    if (unsigned(row) >= unsigned(d->rowCount())) {
+        EnginioClientConnectionPrivate *client = EnginioClientConnectionPrivate::get(d->enginio());
+        QNetworkReply *nreply = new EnginioFakeReply(client, EnginioClientConnectionPrivate::constructErrorMessage(EnginioString::EnginioModel_setProperty_row_is_out_of_range));
+        EnginioReply *ereply = new EnginioReply(client, nreply);
+        return ereply;
+    }
+
+    return d->setData(row, value, Enginio::JsonObjectRole);
+}
 
 Qt::ItemFlags EnginioBaseModel::flags(const QModelIndex &index) const
 {

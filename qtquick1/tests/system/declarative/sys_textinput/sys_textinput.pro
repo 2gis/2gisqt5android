@@ -1,3 +1,3 @@
 CONFIG+=systemtest
-SOURCES=sys_textinput.qtt 
+SOURCES=sys_textinput.qtt
 DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0

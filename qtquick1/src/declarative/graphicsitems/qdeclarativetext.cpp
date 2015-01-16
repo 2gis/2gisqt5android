@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the QtDeclarative module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -100,14 +92,14 @@ QDeclarativeTextPrivate::QDeclarativeTextPrivate()
     QGraphicsItemPrivate::flags = QGraphicsItemPrivate::flags & ~QGraphicsItem::ItemHasNoContents;
 }
 
-QTextDocumentWithImageResources::QTextDocumentWithImageResources(QDeclarativeText *parent) 
+QTextDocumentWithImageResources::QTextDocumentWithImageResources(QDeclarativeText *parent)
 : QTextDocument(parent), outstanding(0)
 {
 }
 
 QTextDocumentWithImageResources::~QTextDocumentWithImageResources()
 {
-    if (!m_resources.isEmpty()) 
+    if (!m_resources.isEmpty())
         qDeleteAll(m_resources);
 }
 
@@ -489,7 +481,7 @@ QPixmap QDeclarativeTextPrivate::textLayoutImage(bool drawStyle)
 }
 
 /*!
-    Paints the QDeclarativeTextPrivate::layout QTextLayout into \a painter at \a pos.  If 
+    Paints the QDeclarativeTextPrivate::layout QTextLayout into \a painter at \a pos.  If
     \a drawStyle is true, the style color overrides all colors in the document.
 */
 void QDeclarativeTextPrivate::drawTextLayout(QPainter *painter, const QPointF &pos, bool drawStyle)
@@ -544,7 +536,7 @@ QPixmap QDeclarativeTextPrivate::textDocumentImage(bool drawStyle)
 /*!
     Mark the image cache as dirty.
 */
-void QDeclarativeTextPrivate::invalidateImageCache() 
+void QDeclarativeTextPrivate::invalidateImageCache()
 {
     Q_Q(QDeclarativeText);
 
@@ -601,13 +593,13 @@ void QDeclarativeTextPrivate::checkImageCache()
             break;
         }
 
-    } 
+    }
 
     imageCacheDirty = false;
 }
 
-/*! 
-    Ensures the QDeclarativeTextPrivate::doc variable is set to a valid text document 
+/*!
+    Ensures the QDeclarativeTextPrivate::doc variable is set to a valid text document
 */
 void QDeclarativeTextPrivate::ensureDoc()
 {
@@ -743,15 +735,15 @@ QDeclarativeText::~QDeclarativeText()
     \qmlsignal Text::onLinkActivated(string link)
 
     This handler is called when the user clicks on a link embedded in the text.
-    The link must be in rich text or HTML format and the 
-    \a link string provides access to the particular link. 
+    The link must be in rich text or HTML format and the
+    \a link string provides access to the particular link.
 
     \snippet doc/src/snippets/declarative/text/onLinkActivated.qml 0
 
-    The example code will display the text 
+    The example code will display the text
     "The main website is at \l{http://qt.nokia.com}{Nokia Qt DF}."
 
-    Clicking on the highlighted link will output 
+    Clicking on the highlighted link will output
     \tt{http://qt.nokia.com link activated} to the console.
 */
 
@@ -1053,7 +1045,7 @@ void QDeclarativeText::setStyleColor(const QColor &color)
 
     Note that for a single line of text, the size of the text is the area of the text. In this common case,
     all alignments are equivalent. If you want the text to be, say, centered in its parent, then you will
-    need to either modify the Item::anchors, or set horizontalAlignment to Text.AlignHCenter and bind the width to 
+    need to either modify the Item::anchors, or set horizontalAlignment to Text.AlignHCenter and bind the width to
     that of the parent.
 
     When using the attached property \l {LayoutMirroring::enabled} to mirror application
@@ -1185,7 +1177,7 @@ void QDeclarativeText::setWrapMode(WrapMode mode)
 
     d->wrapMode = mode;
     d->updateLayout();
-    
+
     emit wrapModeChanged();
 }
 
@@ -1269,7 +1261,7 @@ void QDeclarativeText::resetMaximumLineCount()
     The way the text property should be displayed.
 
     Supported text formats are:
-    
+
     \list
     \li Text.AutoText (default)
     \li Text.PlainText
@@ -1382,7 +1374,7 @@ void QDeclarativeText::setElideMode(QDeclarativeText::TextElideMode mode)
 
     d->elideMode = mode;
     d->updateLayout();
-    
+
     emit elideModeChanged(d->elideMode);
 }
 

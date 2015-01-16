@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -50,6 +42,7 @@
 #include <Enginio/enginioreply.h>
 #include <Enginio/enginiomodel.h>
 #include <Enginio/enginioidentity.h>
+#include <Enginio/enginiooauth2authentication.h>
 
 #include "../common/common.h"
 
@@ -98,6 +91,11 @@ private slots:
     void deleteModelDurringRequests();
     void updatingRoles();
     void setData();
+    void setJsonData();
+    void data();
+    void setInvalidJsonData();
+    void reload();
+    void identityChange();
 private:
     template<class T>
     void externallyRemovedImpl();
@@ -119,6 +117,23 @@ void tst_EnginioModel::initTestCase()
     // The test operates on user data.
     EnginioTests::prepareTestUsersAndUserGroups(_backendId);
     EnginioTests::prepareTestObjectType(_backendName);
+
+    // Object types for the reload test
+    QJsonObject reload1;
+    reload1["name"] = QStringLiteral("reload1");
+    QJsonObject title;
+    title["name"] = QStringLiteral("title");
+    title["type"] = QStringLiteral("string");
+    title["indexed"] = false;
+    QJsonArray properties;
+    properties.append(title);
+    reload1["properties"] = properties;
+    QVERIFY(_backendManager.createObjectType(_backendName, EnginioTests::TESTAPP_ENV, reload1));
+
+    QJsonObject reload2;
+    reload2["name"] = QStringLiteral("reload2");
+    reload2["properties"] = properties;
+    QVERIFY(_backendManager.createObjectType(_backendName, EnginioTests::TESTAPP_ENV, reload2));
 }
 
 void tst_EnginioModel::cleanupTestCase()
@@ -1254,25 +1269,31 @@ void tst_EnginioModel::delayedRequestBeforeInitialModelReset()
     EnginioClient client;
     client.setBackendId(_backendId);
     client.setServiceUrl(EnginioTests::TESTAPP_URL);
-    for (int i = 0; i < 24 ; ++i) {
-        QString objectType = "objects." + EnginioTests::CUSTOM_OBJECT1;
-        QJsonObject query;
-        query.insert("objectType", objectType);
 
+    QString objectType = "objects." + EnginioTests::CUSTOM_OBJECT1;
+    QJsonObject query;
+    query.insert("objectType", objectType);
+    query.insert("title", QString::fromUtf8("appendAndRemoveModel"));
+
+    QJsonObject object;
+    object["title"] = "New Title";
+
+    for (int i = 0; i < 24 ; ++i) {
         EnginioModel model;
         QSignalSpy resetSpy(&model, SIGNAL(modelReset()));
         model.setQuery(query);
         model.setClient(&client);
 
-        query.insert("title", QString::fromUtf8("appendAndRemoveModel"));
         EnginioReply *append1 = model.append(query);
         EnginioReply *append2 = model.append(query);
-        EnginioReply *update = model.setData(0, QString::fromUtf8("appendAndRemoveModel1"), "title");
+        EnginioReply *update1 = model.setData(0, QString::fromUtf8("appendAndRemoveModel1"), "title");
+        EnginioReply *update2 = model.setData(0, object);
         EnginioReply *remove = model.remove(1);
-        QTRY_VERIFY(append1->isFinished() && append2->isFinished() && remove->isFinished() && update->isFinished());
+        QTRY_VERIFY(append1->isFinished() && append2->isFinished() && remove->isFinished() && update1->isFinished() && update2->isFinished());
         QVERIFY(!append1->isError() || append1->errorString().contains("EnginioModel: The query was changed before the request could be sent"));
         QVERIFY(!append2->isError() || append2->errorString().contains("EnginioModel: The query was changed before the request could be sent"));
-        QVERIFY(!update->isError() || update->errorString().contains("EnginioModel: The query was changed before the request could be sent"));
+        QVERIFY(!update1->isError() || update1->errorString().contains("EnginioModel: The query was changed before the request could be sent"));
+        QVERIFY(!update2->isError() || update1->errorString().contains("EnginioModel: The query was changed before the request could be sent"));
         QVERIFY(!remove->isError() || remove->errorString().contains("EnginioModel: The query was changed before the request could be sent"));
         if (resetSpy.isEmpty())
             break;
@@ -1332,10 +1353,15 @@ void tst_EnginioModel::deleteModelDurringRequests()
         EnginioModel model;
         model.setQuery(query);
         model.setClient(&client);
+
         query.insert("title", QString::fromUtf8("deleteModelDurringRequests"));
+        QJsonObject object = query;
+        object.insert("count", 111);
+
         replies.append(model.append(query));
         replies.append(model.append(query));
         replies.append(model.setData(0, QString::fromUtf8("deleteModelDurringRequests1"), "title"));
+        replies.append(model.setData(1, object));
         replies.append(model.remove(0));
     }
 
@@ -1428,6 +1454,21 @@ void tst_EnginioModel::updatingRoles()
     QCOMPARE(model.roleNames()[CustomModel::InvalidRole], QByteArray("objectType"));
 }
 
+struct CustomModel: public EnginioModel {
+    enum Roles {
+        TitleRole = Enginio::CustomPropertyRole,
+        CountRole
+    };
+
+    virtual QHash<int, QByteArray> roleNames() const Q_DECL_OVERRIDE
+    {
+        QHash<int, QByteArray> roles = EnginioModel::roleNames();
+        roles.insert(TitleRole, "title");
+        roles.insert(CountRole, "count");
+        return roles;
+    }
+};
+
 void tst_EnginioModel::setData()
 {
     QString propertyName = "title";
@@ -1439,18 +1480,7 @@ void tst_EnginioModel::setData()
     client.setBackendId(_backendId);
     client.setServiceUrl(EnginioTests::TESTAPP_URL);
 
-    struct Model: public EnginioModel {
-        enum Roles {
-            TitleRole = Enginio::CustomPropertyRole
-        };
-
-        virtual QHash<int, QByteArray> roleNames() const Q_DECL_OVERRIDE
-        {
-            QHash<int, QByteArray> roles = EnginioModel::roleNames();
-            roles.insert(TitleRole, "title");
-            return roles;
-        }
-    } model;
+    CustomModel model;
 
     model.disableNotifications();
     model.setQuery(query);
@@ -1484,7 +1514,148 @@ void tst_EnginioModel::setData()
     QVERIFY(!model.setData(model.index(-1, 1), QVariant()));
 
     // make a correct setData call
-    QVERIFY(model.setData(model.index(0), QString::fromLatin1("1111"), Model::TitleRole));
+    QVERIFY(model.setData(model.index(0), QString::fromLatin1("1111"), CustomModel::TitleRole));
+}
+
+void tst_EnginioModel::setJsonData()
+{
+    EnginioClient client;
+    client.setBackendId(_backendId);
+    client.setServiceUrl(EnginioTests::TESTAPP_URL);
+
+    QString propertyName1 = "title";
+    QString propertyName2 = "count";
+    QString objectType = "objects." + EnginioTests::CUSTOM_OBJECT1;
+    QJsonObject query;
+    query.insert("objectType", objectType);
+
+    CustomModel model;
+
+    model.disableNotifications();
+    model.setQuery(query);
+
+    {   // init the model
+        QSignalSpy spy(&model, SIGNAL(modelReset()));
+        model.setClient(&client);
+
+        QTRY_VERIFY(spy.count() > 0);
+    }
+
+    if (model.rowCount() < 1) {
+        QJsonObject o;
+        o.insert(propertyName1, QString::fromLatin1("o"));
+        o.insert(propertyName2, 123);
+        o.insert("objectType", objectType);
+        model.append(o);
+    }
+
+    QTRY_VERIFY(model.rowCount());
+
+    QJsonObject object = model.data(model.index(0)).toJsonValue().toObject();
+    QVERIFY(!object.isEmpty());
+
+    object[propertyName1] = object[propertyName1].toString() + QString::fromLatin1("o");
+    object[propertyName2] = object[propertyName2].toInt() + 123;
+
+    EnginioReply *reply = model.setData(0, object);
+    QTRY_VERIFY(reply->isFinished());
+    CHECK_NO_ERROR(reply);
+
+    QJsonObject data = reply->data();
+    QCOMPARE(data[propertyName1], object[propertyName1]);
+    QCOMPARE(data[propertyName2], object[propertyName2]);
+}
+
+void tst_EnginioModel::data()
+{
+    EnginioClient client;
+    client.setBackendId(_backendId);
+    client.setServiceUrl(EnginioTests::TESTAPP_URL);
+
+    QString propertyName1 = "title";
+    QString propertyName2 = "count";
+    QString objectType = "objects." + EnginioTests::CUSTOM_OBJECT1;
+    QJsonObject query;
+    query.insert("objectType", objectType);
+
+    CustomModel model;
+
+    model.disableNotifications();
+    model.setQuery(query);
+
+    {   // init the model
+        QSignalSpy spy(&model, SIGNAL(modelReset()));
+        model.setClient(&client);
+
+        QTRY_VERIFY(spy.count() > 0);
+    }
+
+    if (model.rowCount() < 1) {
+        QJsonObject o;
+        o.insert(propertyName1, QString::fromLatin1("o"));
+        o.insert(propertyName2, 123);
+        o.insert("objectType", objectType);
+        model.append(o);
+    }
+
+    QTRY_VERIFY(model.rowCount());
+    QModelIndex index = model.index(0);
+    QJsonObject item = model.data(index, Enginio::JsonObjectRole).toJsonValue().toObject();
+    QVERIFY(!item.isEmpty());
+
+    QCOMPARE(model.data(index, Enginio::IdRole).toJsonValue(), QJsonValue(item["id"]));
+    QCOMPARE(model.data(index, Enginio::CreatedAtRole).toJsonValue(), QJsonValue(item["createdAt"]));
+    QCOMPARE(model.data(index, Enginio::UpdatedAtRole).toJsonValue(), QJsonValue(item["updatedAt"]));
+}
+
+void tst_EnginioModel::setInvalidJsonData()
+{
+    EnginioClient client;
+    client.setBackendId(_backendId);
+    client.setServiceUrl(EnginioTests::TESTAPP_URL);
+
+    QString propertyName1 = "title";
+    QString propertyName2 = "count";
+    QString objectType = "objects." + EnginioTests::CUSTOM_OBJECT1;
+    QJsonObject query;
+    query.insert("objectType", objectType);
+
+    CustomModel model;
+
+    model.disableNotifications();
+    model.setQuery(query);
+
+    QJsonObject object;
+    {
+        QSignalSpy spy(&model, SIGNAL(modelReset()));
+        model.setClient(&client);
+
+        object.insert(propertyName1, QString::fromLatin1("o"));
+        object.insert(propertyName2, 123);
+        object.insert("objectType", objectType);
+
+        QTRY_VERIFY(spy.count() > 0);
+    }
+
+    if (model.rowCount() < 1) {
+        QJsonObject o;
+        o.insert(propertyName1, QString::fromLatin1("o"));
+        o.insert(propertyName2, 123);
+        o.insert("objectType", objectType);
+        model.append(o);
+    }
+
+    QVector<EnginioReply *> replies;
+    replies.append(model.setData(-1, object));
+    replies.append(model.setData(model.rowCount(), object));
+
+    QTRY_VERIFY(model.rowCount());
+    replies.append(model.setData(0, QJsonObject()));
+
+    foreach (const EnginioReply *reply, replies){
+        QTRY_VERIFY(reply->isFinished());
+        QVERIFY(reply->isError());
+    }
 }
 
 struct DeleteReplyCountHelper
@@ -1555,6 +1726,150 @@ void tst_EnginioModel::deleteReply()
     qDeleteAll(replies);
 
     QTRY_COMPARE(counter, replies.count());
+}
+
+QJsonObject createTestObject(const QString &name, const QString &type)
+{
+    QJsonObject obj;
+    obj.insert("title", name);
+    obj.insert("objectType", type);
+    return obj;
+}
+
+void tst_EnginioModel::reload()
+{
+    QString objectType = "objects.reload1";
+
+    EnginioClient client;
+    client.setBackendId(_backendId);
+    client.setServiceUrl(EnginioTests::TESTAPP_URL);
+
+    QJsonObject query;
+    query.insert("objectType", objectType);
+
+    EnginioModel model;
+    model.disableNotifications();
+    model.setQuery(query);
+    model.setClient(&client);
+
+    QCOMPARE(model.rowCount(), 0);
+
+    // create an object, since notification are disabled the model cannot know about it
+    EnginioReply *r1(client.create(createTestObject(QString::fromLatin1("o1"), objectType)));
+    QTRY_VERIFY(r1->isFinished());
+    CHECK_NO_ERROR(r1);
+    QCOMPARE(model.rowCount(), 0);
+
+    // reload and verify that the object appears
+    EnginioReply *reload(model.reload());
+    QTRY_VERIFY(reload->isFinished());
+    CHECK_NO_ERROR(reload);
+    QCOMPARE(model.rowCount(), 1);
+
+    // this test mostly checks that we don't crash
+    // when calling reload while other operations are on-going it is undefined
+    // if the result contains the data of them or not
+
+    // create object and reload before that is finished
+    EnginioReply *r2(client.create(createTestObject(QString::fromLatin1("o2"), objectType)));
+    EnginioReply *reload2 = model.reload();
+    QVERIFY(reload2);
+    QTRY_VERIFY(r2->isFinished());
+    CHECK_NO_ERROR(r2);
+    QTRY_VERIFY(reload2->isFinished());
+    CHECK_NO_ERROR(reload2);
+
+    // create object bug delay it's response until reload is done
+    EnginioReply *r3(client.create(createTestObject(QString::fromLatin1("o3"), objectType)));
+    QVERIFY(r3);
+    r3->setDelayFinishedSignal(true);
+    EnginioReply *reload3(model.reload());
+    QVERIFY(reload3);
+    QTRY_VERIFY(reload3->isFinished());
+    r3->setDelayFinishedSignal(false);
+    QTRY_VERIFY(r3->isFinished());
+
+    // make sure we are in a defined state again
+    reload = model.reload();
+    QTRY_VERIFY(reload->isFinished());
+    QCOMPARE(model.rowCount(), 3);
+
+    EnginioReply *r4(model.append(createTestObject(QString::fromLatin1("o4"), objectType)));
+    EnginioReply *reload4(model.reload());
+    EnginioReply *r5(model.append(createTestObject(QString::fromLatin1("o5"), objectType)));
+    EnginioReply *reload5(model.reload());
+    QTRY_VERIFY(r4->isFinished() && reload4->isFinished() && r5->isFinished() && reload5->isFinished());
+
+    reload = model.reload();
+    QTRY_VERIFY(reload->isFinished());
+    QCOMPARE(model.rowCount(), 5);
+
+    // randomly reordered append and reset calls
+    EnginioReply *r6(model.append(createTestObject(QString::fromLatin1("o6"), objectType)));
+    r6->setDelayFinishedSignal(true);
+    EnginioReply *reload6(model.reload());
+    reload6->setDelayFinishedSignal(true);
+    EnginioReply *r7(model.append(createTestObject(QString::fromLatin1("o7"), objectType)));
+    r7->setDelayFinishedSignal(true);
+    EnginioReply *reload7(model.reload());
+    EnginioReply *c7(model.setData(6, QString::fromLatin1("object7"), QString::fromLatin1("title")));
+    EnginioReply *c5(model.setData(4, QString::fromLatin1("object5"), QString::fromLatin1("title")));
+    QTRY_VERIFY(reload7->isFinished());
+    r6->setDelayFinishedSignal(false);
+    r7->setDelayFinishedSignal(false);
+    reload6->setDelayFinishedSignal(false);
+    QTRY_VERIFY(c5->isFinished() && c7->isFinished() && r6->isFinished() && r7->isFinished() && reload6->isFinished());
+
+    reload = model.reload();
+    QTRY_VERIFY(reload->isFinished());
+    QCOMPARE(model.rowCount(), 7);
+
+    // completely try to mess it up by changing the query
+    // object type reload2 is empty
+    EnginioReply *reload8 = model.reload();
+    reload8->setDelayFinishedSignal(true);
+    QJsonObject query2;
+    query2.insert("objectTypes", "objects.reload2");
+    model.setQuery(query2);
+
+    QSignalSpy spy(&model, SIGNAL(modelReset()));
+    QTRY_VERIFY(spy.count());
+    reload8->setDelayFinishedSignal(false);
+    QTRY_VERIFY(reload8->isFinished());
+    QCOMPARE(model.rowCount(), 0);
+}
+
+void tst_EnginioModel::identityChange()
+{
+    EnginioClient client;
+    QObject::connect(&client, SIGNAL(error(EnginioReply *)), this, SLOT(error(EnginioReply *)));
+    client.setBackendId("5376019e698b3c6ad500095a");
+
+    QJsonObject query;
+    query["objectType"] = "objects.EnginioModelIdentityChange";
+
+    EnginioModel model;
+    model.setQuery(query);
+    model.setClient(&client);
+
+    EnginioOAuth2Authentication identity1;
+    identity1.setUser("test1");
+    identity1.setPassword("test1");
+
+    EnginioOAuth2Authentication identity2;
+    identity2.setUser("test2");
+    identity2.setPassword("test2");
+
+    QTRY_COMPARE(model.rowCount(), 1);  // There is only one publicly visible element
+
+    client.setIdentity(&identity1);
+    QTRY_COMPARE(model.rowCount(), 2);  // Test1 sees one additional element
+
+    client.setIdentity(&identity2);
+    QTRY_COMPARE(model.rowCount(), 3);  // Test2 sees two additional elements
+
+    client.setIdentity(0);
+    QTRY_COMPARE(model.rowCount(), 1);
 }
 
 QTEST_MAIN(tst_EnginioModel)

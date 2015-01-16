@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -122,6 +114,8 @@ private slots:
     void selfDeletingBinding();
     void extendedObjectPropertyLookup();
     void extendedObjectPropertyLookup2();
+    void uncreatableExtendedObjectFailureCheck();
+    void extendedObjectPropertyLookup3();
     void scriptErrors();
     void functionErrors();
     void propertyAssignmentErrors();
@@ -205,6 +199,8 @@ private slots:
     void sequenceSort_data();
     void sequenceSort();
     void dateParse();
+    void utcDate();
+    void negativeYear();
     void qtbug_22464();
     void qtbug_21580();
     void singleV8BindingDestroyedDuringEvaluation();
@@ -219,6 +215,7 @@ private slots:
     void deletedEngine();
     void libraryScriptAssert();
     void variantsAssignedUndefined();
+    void variants();
     void qtbug_9792();
     void qtcreatorbug_1289();
     void noSpuriousWarningsAtShutdown();
@@ -321,8 +318,10 @@ private slots:
     void lazyBindingEvaluation();
     void varPropertyAccessOnObjectWithInvalidContext();
     void importedScriptsAccessOnObjectWithInvalidContext();
+    void importedScriptsWithoutQmlMode();
     void contextObjectOnLazyBindings();
     void garbageCollectionDuringCreation();
+    void qtbug_39520();
 
 private:
 //    static void propertyVarWeakRefCallback(v8::Persistent<v8::Value> object, void* parameter);
@@ -748,13 +747,13 @@ void tst_qqmlecmascript::arrayExpressions()
 
     MyExpression expr(&context, "[a, b, c, 10]");
     QVariant result = expr.evaluate();
-    QCOMPARE(result.userType(), qMetaTypeId<QVariantList>());
-    QVariantList list = qvariant_cast<QVariantList>(result);
-    QCOMPARE(list.count(), 4);
-    QCOMPARE(list.at(0).value<QObject*>(), &obj1);
-    QCOMPARE(list.at(1).value<QObject*>(), &obj2);
-    QCOMPARE(list.at(2).value<QObject*>(), &obj3);
-    QCOMPARE(list.at(3).value<int>(), 10);
+    QCOMPARE(result.userType(), qMetaTypeId<QJSValue>());
+    QJSValue list = qvariant_cast<QJSValue>(result);
+    QCOMPARE(list.property("length").toInt(), 4);
+    QCOMPARE(list.property(0).toQObject(), &obj1);
+    QCOMPARE(list.property(1).toQObject(), &obj2);
+    QCOMPARE(list.property(2).toQObject(), &obj3);
+    QCOMPARE(list.property(3).toInt(), 10);
 }
 
 // Tests that modifying a context property will reevaluate expressions
@@ -1830,6 +1829,38 @@ void tst_qqmlecmascript::extendedObjectPropertyLookup2()
 
     QVariant returnValue;
     QVERIFY(QMetaObject::invokeMethod(object, "getValue", Q_RETURN_ARG(QVariant, returnValue)));
+    QCOMPARE(returnValue.toInt(), 42);
+
+    delete object;
+}
+
+/*
+Test failure when trying to create and uncreatable extended type object.
+ */
+void tst_qqmlecmascript::uncreatableExtendedObjectFailureCheck()
+{
+    QQmlComponent component(&engine, testFileUrl("uncreatableExtendedObjectFailureCheck.qml"));
+
+    QObject *object = component.create();
+    QVERIFY(object == 0);
+}
+
+/*
+Test that an subclass of an uncreatable extended object contains all the required properties.
+ */
+void tst_qqmlecmascript::extendedObjectPropertyLookup3()
+{
+    QQmlComponent component(&engine, testFileUrl("extendedObjectPropertyLookup3.qml"));
+
+    QObject *object = component.create();
+    QVERIFY(object != 0);
+
+    QVariant returnValue;
+    QVERIFY(QMetaObject::invokeMethod(object, "getAbstractProperty", Q_RETURN_ARG(QVariant, returnValue)));
+    QCOMPARE(returnValue.toInt(), -1);
+    QVERIFY(QMetaObject::invokeMethod(object, "getImplementedProperty", Q_RETURN_ARG(QVariant, returnValue)));
+    QCOMPARE(returnValue.toInt(), 883);
+    QVERIFY(QMetaObject::invokeMethod(object, "getExtendedProperty", Q_RETURN_ARG(QVariant, returnValue)));
     QCOMPARE(returnValue.toInt(), 42);
 
     delete object;
@@ -3925,7 +3956,7 @@ void tst_qqmlecmascript::verifyContextLifetime(QQmlContextData *ctxt) {
                 Q_UNUSED(temporaryScope)
             }
 
-            engine->gc();
+            ctxt->engine->collectGarbage();
             qml = scripts->getIndexed(i);
             newContext = QV4::QmlContextWrapper::getContext(qml);
             QVERIFY(scriptContext == newContext);
@@ -4172,8 +4203,8 @@ void tst_qqmlecmascript::importScripts()
     QFETCH(QStringList, propertyNames);
     QFETCH(QVariantList, propertyValues);
 
-    TestHTTPServer server(8111);
-    QVERIFY(server.isValid());
+    TestHTTPServer server;
+    QVERIFY2(server.listen(8111), qPrintable(server.errorString()));
     server.serveDirectory(dataDirectory() + "/remote");
 
     QStringList importPathList = engine.importPathList();
@@ -4781,7 +4812,7 @@ void tst_qqmlecmascript::propertyVarCpp()
     QCOMPARE(object->property("varProperty2"), QVariant(QLatin1String("randomString")));
     QCOMPARE(object->property("varProperty2").userType(), (int)QVariant::String);
     // now enforce behaviour when accessing JavaScript objects from cpp.
-    QCOMPARE(object->property("jsobject").userType(), (int)QVariant::Map);
+    QCOMPARE(object->property("jsobject").userType(), qMetaTypeId<QJSValue>());
     delete object;
 }
 
@@ -5136,7 +5167,7 @@ void tst_qqmlecmascript::objectConversion()
     QVERIFY(object != 0);
     QVariant retn;
     QMetaObject::invokeMethod(object, "circularObject", Q_RETURN_ARG(QVariant, retn));
-    QCOMPARE(retn.value<QVariantMap>().value("test"), QVariant(100));
+    QCOMPARE(retn.value<QJSValue>().property("test").toInt(), int(100));
 
     delete object;
 }
@@ -5404,7 +5435,7 @@ void tst_qqmlecmascript::sequenceConversionWrite()
         QVERIFY(seq != 0);
 
         // we haven't registered QList<QPoint> as a sequence type, so writing shouldn't work.
-        QString warningOne = qmlFile.toString() + QLatin1String(":16: Error: Cannot assign QVariantList to an unregistered type");
+        QString warningOne = qmlFile.toString() + QLatin1String(":16: Error: Cannot assign QJSValue to an unregistered type");
         QTest::ignoreMessage(QtWarningMsg, warningOne.toLatin1().constData());
 
         QMetaObject::invokeMethod(object, "performTest");
@@ -5549,7 +5580,7 @@ void tst_qqmlecmascript::assignSequenceTypes()
     MySequenceConversionObject *object = qobject_cast<MySequenceConversionObject *>(component.create());
     QVERIFY(object != 0);
     QCOMPARE(object->intListProperty(), (QList<int>() << 1 << 2));
-    QCOMPARE(object->qrealListProperty(), (QList<qreal>() << 1.1 << 2.2));
+    QCOMPARE(object->qrealListProperty(), (QList<qreal>() << 1.1 << 2.2 << 3));
     QCOMPARE(object->boolListProperty(), (QList<bool>() << false << true));
     QCOMPARE(object->urlListProperty(), (QList<QUrl>() << QUrl("http://www.example1.com") << QUrl("http://www.example2.com")));
     QCOMPARE(object->stringListProperty(), (QList<QString>() << QLatin1String("one") << QLatin1String("two")));
@@ -5577,7 +5608,7 @@ void tst_qqmlecmascript::assignSequenceTypes()
     MySequenceConversionObject *object = qobject_cast<MySequenceConversionObject *>(component.create());
     QVERIFY(object != 0);
     QCOMPARE(object->intListProperty(), (QList<int>() << 1));
-    QCOMPARE(object->qrealListProperty(), (QList<qreal>() << 1.1));
+    QCOMPARE(object->qrealListProperty(), (QList<qreal>() << 1));
     QCOMPARE(object->boolListProperty(), (QList<bool>() << false));
     QCOMPARE(object->urlListProperty(), (QList<QUrl>() << QUrl(testFileUrl("example.html"))));
     delete object;
@@ -5589,7 +5620,7 @@ void tst_qqmlecmascript::assignSequenceTypes()
     MySequenceConversionObject *object = qobject_cast<MySequenceConversionObject *>(component.create());
     QVERIFY(object != 0);
     QCOMPARE(object->intListProperty(), (QList<int>() << 1 << 2));
-    QCOMPARE(object->qrealListProperty(), (QList<qreal>() << 1.1 << 2.2));
+    QCOMPARE(object->qrealListProperty(), (QList<qreal>() << 1.1 << 2.2 << 3));
     QCOMPARE(object->boolListProperty(), (QList<bool>() << false << true));
     QCOMPARE(object->urlListProperty(), (QList<QUrl>() << QUrl("http://www.example1.com") << QUrl("http://www.example2.com")));
     QCOMPARE(object->stringListProperty(), (QList<QString>() << QLatin1String("one") << QLatin1String("two")));
@@ -5617,7 +5648,7 @@ void tst_qqmlecmascript::assignSequenceTypes()
     MySequenceConversionObject *object = qobject_cast<MySequenceConversionObject *>(component.create());
     QVERIFY(object != 0);
     QCOMPARE(object->intListProperty(), (QList<int>() << 1));
-    QCOMPARE(object->qrealListProperty(), (QList<qreal>() << 1.1));
+    QCOMPARE(object->qrealListProperty(), (QList<qreal>() << 1));
     QCOMPARE(object->boolListProperty(), (QList<bool>() << false));
     QCOMPARE(object->urlListProperty(), (QList<QUrl>() << QUrl(testFileUrl("example.html"))));
     delete object;
@@ -5707,6 +5738,29 @@ void tst_qqmlecmascript::variantsAssignedUndefined()
 
 
     delete object;
+}
+
+void tst_qqmlecmascript::variants()
+{
+    QQmlComponent component(&engine, testFileUrl("variants.qml"));
+
+    QObject *object = component.create();
+    QVERIFY(object != 0);
+
+    QVERIFY(object->property("undefinedVariant").type() == QVariant::Invalid);
+    QVERIFY(object->property("nullVariant").type() == (int)QMetaType::VoidStar);
+    QVERIFY(object->property("intVariant").type() == QVariant::Int);
+    QVERIFY(object->property("doubleVariant").type() == QVariant::Double);
+
+    QVariant result;
+    QMetaObject::invokeMethod(object, "checkNull", Q_RETURN_ARG(QVariant, result));
+    QCOMPARE(result.toBool(), true);
+
+    QMetaObject::invokeMethod(object, "checkUndefined", Q_RETURN_ARG(QVariant, result));
+    QCOMPARE(result.toBool(), true);
+
+    QMetaObject::invokeMethod(object, "checkNumber", Q_RETURN_ARG(QVariant, result));
+    QCOMPARE(result.toBool(), true);
 }
 
 void tst_qqmlecmascript::qtbug_9792()
@@ -6000,8 +6054,8 @@ void tst_qqmlecmascript::include()
 
     // Remote - error
     {
-    TestHTTPServer server(8111);
-    QVERIFY(server.isValid());
+    TestHTTPServer server;
+    QVERIFY2(server.listen(8111), qPrintable(server.errorString()));
     server.serveDirectory(dataDirectory());
 
     QQmlComponent component(&engine, testFileUrl("include_remote_missing.qml"));
@@ -6042,8 +6096,8 @@ void tst_qqmlecmascript::includeRemoteSuccess()
 #endif
 
     // Remote - success
-    TestHTTPServer server(8111);
-    QVERIFY(server.isValid());
+    TestHTTPServer server;
+    QVERIFY2(server.listen(8111), qPrintable(server.errorString()));
     server.serveDirectory(dataDirectory());
 
     QQmlComponent component(&engine, testFileUrl("include_remote.qml"));
@@ -7310,6 +7364,37 @@ void tst_qqmlecmascript::dateParse()
 
 }
 
+void tst_qqmlecmascript::utcDate()
+{
+    QQmlComponent component(&engine, testFileUrl("utcdate.qml"));
+
+    QObject *object = component.create();
+    if (object == 0)
+        qDebug() << component.errorString();
+    QVERIFY(object != 0);
+
+    QVariant q;
+    QVariant val = QString::fromLatin1("2014-07-16T23:30:31");
+    QMetaObject::invokeMethod(object, "check_utc", Q_RETURN_ARG(QVariant, q), Q_ARG(QVariant, val));
+    QVERIFY(q.toBool() == true);
+}
+
+void tst_qqmlecmascript::negativeYear()
+{
+    QQmlComponent component(&engine, testFileUrl("negativeyear.qml"));
+
+    QObject *object = component.create();
+    if (object == 0)
+        qDebug() << component.errorString();
+    QVERIFY(object != 0);
+
+    QVariant q;
+    QMetaObject::invokeMethod(object, "check_negative",
+                              Q_RETURN_ARG(QVariant, q));
+    // Strip the timezone. It should be irrelevant as the date was created with the same one.
+    QCOMPARE(q.toString().left(32), QStringLiteral("result: Mon Jan 1 00:00:00 -2000"));
+}
+
 void tst_qqmlecmascript::concatenatedStringPropertyAccess()
 {
     QQmlComponent component(&engine, testFileUrl("concatenatedStringPropertyAccess.qml"));
@@ -7609,6 +7694,16 @@ void tst_qqmlecmascript::importedScriptsAccessOnObjectWithInvalidContext()
    QTRY_VERIFY(obj->property("success") == true);
 }
 
+void tst_qqmlecmascript::importedScriptsWithoutQmlMode()
+{
+   QQmlComponent component(&engine, testFileUrl("importScriptsWithoutQmlMode.qml"));
+   QScopedPointer<QObject> obj(component.create());
+   if (obj.isNull())
+       qDebug() << component.errors().first().toString();
+   QVERIFY(!obj.isNull());
+   QTRY_VERIFY(obj->property("success") == true);
+}
+
 void tst_qqmlecmascript::contextObjectOnLazyBindings()
 {
     QQmlComponent component(&engine, testFileUrl("contextObjectOnLazyBindings.qml"));
@@ -7646,6 +7741,30 @@ void tst_qqmlecmascript::garbageCollectionDuringCreation()
 
     gc(engine);
     QCOMPARE(container->dataChildren.count(), 0);
+}
+
+void tst_qqmlecmascript::qtbug_39520()
+{
+    QQmlComponent component(&engine);
+    component.setData("import QtQuick 2.0\n"
+                      "Item {\n"
+                      "    property string s\n"
+                      "    Component.onCompleted: test()\n"
+                      "    function test() {\n"
+                      "    var count = 1 * 1000 * 1000\n"
+                      "    var t = ''\n"
+                      "    for (var i = 0; i < count; ++i)\n"
+                      "        t += 'testtest ' + i + '\n'\n"
+                      "    s = t\n"
+                      "    }\n"
+                      "}\n",
+                      QUrl());
+
+    QScopedPointer<QObject> object(component.create());
+    QVERIFY(!object.isNull());
+
+    QString s = object->property("s").toString();
+    QCOMPARE(s.count('\n'), 1 * 1000 * 1000);
 }
 
 QTEST_MAIN(tst_qqmlecmascript)

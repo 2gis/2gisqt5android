@@ -5,35 +5,27 @@
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
+** a written agreement between you and Digia. For licensing terms and
+** conditions see http://qt.digia.com/licensing. For further information
 ** use the contact form at http://qt.digia.com/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
 ** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** rights. These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -64,14 +56,14 @@
 
 QT_BEGIN_NAMESPACE
 
-#define Q_QML_PROFILE_IF_ENABLED(profiler, Code)\
-    if (profiler && profiler->enabled) {\
+#define Q_QML_PROFILE_IF_ENABLED(feature, profiler, Code)\
+    if (profiler && (profiler->featuresEnabled & (1 << feature))) {\
         Code;\
     } else\
         (void)0
 
-#define Q_QML_PROFILE(profiler, Method)\
-    Q_QML_PROFILE_IF_ENABLED(profiler, profiler->Method)
+#define Q_QML_PROFILE(feature, profiler, Method)\
+    Q_QML_PROFILE_IF_ENABLED(feature, profiler, profiler->Method)
 
 // This struct is somewhat dangerous to use:
 // The messageType is a bit field. You can pack multiple messages into
@@ -170,10 +162,10 @@ public:
 
     QQmlProfiler();
 
-    bool enabled;
+    quint64 featuresEnabled;
 
 public slots:
-    void startProfiling();
+    void startProfiling(quint64 features);
     void stopProfiling();
     void reportData();
     void setTimer(const QElapsedTimer &timer) { m_timer = timer; }
@@ -212,12 +204,14 @@ struct QQmlBindingProfiler : public QQmlProfilerHelper {
     QQmlBindingProfiler(QQmlProfiler *profiler, const QString &url, int line, int column) :
         QQmlProfilerHelper(profiler)
     {
-        Q_QML_PROFILE(profiler, startBinding(url, line, column));
+        Q_QML_PROFILE(QQmlProfilerDefinitions::ProfileBinding, profiler,
+                      startBinding(url, line, column));
     }
 
     ~QQmlBindingProfiler()
     {
-        Q_QML_PROFILE(profiler, endRange<Binding>());
+        Q_QML_PROFILE(QQmlProfilerDefinitions::ProfileBinding, profiler,
+                      endRange<Binding>());
     }
 };
 
@@ -225,12 +219,14 @@ struct QQmlHandlingSignalProfiler : public QQmlProfilerHelper {
     QQmlHandlingSignalProfiler(QQmlProfiler *profiler, QQmlBoundSignalExpression *expression) :
         QQmlProfilerHelper(profiler)
     {
-        Q_QML_PROFILE(profiler, startHandlingSignal(expression->sourceLocation()));
+        Q_QML_PROFILE(QQmlProfilerDefinitions::ProfileHandlingSignal, profiler,
+                      startHandlingSignal(expression->sourceLocation()));
     }
 
     ~QQmlHandlingSignalProfiler()
     {
-        Q_QML_PROFILE(profiler, endRange<QQmlProfiler::HandlingSignal>());
+        Q_QML_PROFILE(QQmlProfilerDefinitions::ProfileHandlingSignal, profiler,
+                      endRange<QQmlProfiler::HandlingSignal>());
     }
 };
 
@@ -238,12 +234,12 @@ struct QQmlCompilingProfiler : public QQmlProfilerHelper {
     QQmlCompilingProfiler(QQmlProfiler *profiler, const QString &name) :
         QQmlProfilerHelper(profiler)
     {
-        Q_QML_PROFILE(profiler, startCompiling(name));
+        Q_QML_PROFILE(QQmlProfilerDefinitions::ProfileCompiling, profiler, startCompiling(name));
     }
 
     ~QQmlCompilingProfiler()
     {
-        Q_QML_PROFILE(profiler, endRange<Compiling>());
+        Q_QML_PROFILE(QQmlProfilerDefinitions::ProfileCompiling, profiler, endRange<Compiling>());
     }
 };
 
@@ -286,20 +282,20 @@ private:
     QFiniteStack<Data> ranges;
 };
 
-#define Q_QML_OC_PROFILE(profilerMember, Code)\
-    Q_QML_PROFILE_IF_ENABLED(profilerMember.profiler, Code)
+#define Q_QML_OC_PROFILE(member, Code)\
+    Q_QML_PROFILE_IF_ENABLED(QQmlProfilerDefinitions::ProfileCreating, member.profiler, Code)
 
 class QQmlObjectCreationProfiler : public QQmlVmeProfiler::Data {
 public:
 
     QQmlObjectCreationProfiler(QQmlProfiler *profiler) : profiler(profiler)
     {
-        Q_QML_PROFILE(profiler, startCreating());
+        Q_QML_PROFILE(QQmlProfilerDefinitions::ProfileCreating, profiler, startCreating());
     }
 
     ~QQmlObjectCreationProfiler()
     {
-        Q_QML_PROFILE(profiler, endRange<QQmlProfilerDefinitions::Creating>());
+        Q_QML_PROFILE(QQmlProfilerDefinitions::ProfileCreating, profiler, endRange<QQmlProfilerDefinitions::Creating>());
     }
 
     void update(const QString &typeName, const QUrl &url, int line, int column)
@@ -320,7 +316,7 @@ public:
     QQmlObjectCompletionProfiler(QQmlVmeProfiler *parent) :
         profiler(parent->profiler)
     {
-        Q_QML_PROFILE_IF_ENABLED(profiler, {
+        Q_QML_PROFILE_IF_ENABLED(QQmlProfilerDefinitions::ProfileCreating, profiler, {
             QQmlVmeProfiler::Data data = parent->pop();
             profiler->startCreating(data.m_typeName, data.m_url, data.m_line, data.m_column);
         });
@@ -328,7 +324,8 @@ public:
 
     ~QQmlObjectCompletionProfiler()
     {
-        Q_QML_PROFILE(profiler, endRange<QQmlProfilerDefinitions::Creating>());
+        Q_QML_PROFILE(QQmlProfilerDefinitions::ProfileCreating, profiler,
+                      endRange<QQmlProfilerDefinitions::Creating>());
     }
 private:
     QQmlProfiler *profiler;
