@@ -16,3 +16,12 @@ qtbase/include/QtCore/qfeatures.h
 *.BASE.*
 *.LOCAL.*
 *.REMOTE.*
+
+qtwebengine/src/3rdparty/chromium/chrome/browser/media/chrome_qt.desktop_streams_registry.o
+qtwebengine/src/3rdparty/chromium/chrome/common/chrome_qt.localized_error.o
+qtwebengine/src/3rdparty/chromium/chrome/common/net/chrome_qt.net_error_info.o
+qtwebengine/src/3rdparty/ninja/build.ninja
+qtwebengine/src/3rdparty/ninja/build/
+qtwebengine/src/3rdparty/ninja/ninja
+qtwebengine/src/core/core_generated.gyp
+qtwebengine/src/core/qmake_extras.gypi
