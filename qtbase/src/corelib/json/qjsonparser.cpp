@@ -321,12 +321,11 @@ QJsonDocument Parser::parse(QJsonParseError *error)
         goto error;
     }
 
-    /* 2GIS This block has been added between Qt 5.3.2 and Qt 5.4.0. It breaks any JSON parsing.
     eatSpace();
     if (json < end) {
         lastError = QJsonParseError::GarbageAtEnd;
         goto error;
-    } */
+    }
 
     END;
     {
