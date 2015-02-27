@@ -44,14 +44,14 @@ QString valueSpy;
 
 Q_DECLARE_METATYPE(QDBusConnection::RegisterOptions)
 
-class MyServer : public QDBusServer
+class MyServer : public QDBusServer, protected QDBusContext
 {
     Q_OBJECT
     Q_CLASSINFO("D-Bus Interface", "org.qtproject.autotests.qmyserver")
 
 public:
-    MyServer(QString addr = "unix:tmpdir=/tmp", QObject* parent = 0)
-        : QDBusServer(addr, parent),
+    MyServer(QObject* parent = 0)
+        : QDBusServer(parent),
           m_conn("none"),
           obj(NULL)
     {
@@ -67,12 +67,22 @@ public:
 public slots:
     QString address() const
     {
+        if (!QDBusServer::isConnected())
+            sendErrorReply(QDBusServer::lastError().name(), QDBusServer::lastError().message());
         return QDBusServer::address();
     }
 
-    bool isConnected() const
+    void waitForConnected()
     {
-        return m_conn.isConnected();
+        if (callPendingReply.type() != QDBusMessage::InvalidMessage) {
+            sendErrorReply(QDBusError::NotSupported, "One call already pending!");
+            return;
+        }
+        if (m_conn.isConnected())
+            return;
+        // not connected, we'll reply later
+        setDelayedReply(true);
+        callPendingReply = message();
     }
 
     Q_NOREPLY void requestSync(const QString &seq)
@@ -131,6 +141,11 @@ public slots:
         valueSpy.clear();
     }
 
+    void quit()
+    {
+        qApp->quit();
+    }
+
 signals:
     Q_SCRIPTABLE void syncReceived(const QString &sequence);
 
@@ -139,10 +154,16 @@ private slots:
     {
         m_conn = con;
         con.registerObject(objectPath, this, QDBusConnection::ExportScriptableSignals);
+
+        if (callPendingReply.type() != QDBusMessage::InvalidMessage) {
+            QDBusConnection::sessionBus().send(callPendingReply.createReply());
+            callPendingReply = QDBusMessage();
+        }
     }
 
 private:
     QDBusConnection m_conn;
+    QDBusMessage callPendingReply;
     MyObject* obj;
 };
 
@@ -161,6 +182,7 @@ int main(int argc, char *argv[])
     con.registerObject(objectPath, &server, QDBusConnection::ExportAllSlots);
 
     printf("ready.\n");
+    fflush(stdout);
 
     return app.exec();
 }

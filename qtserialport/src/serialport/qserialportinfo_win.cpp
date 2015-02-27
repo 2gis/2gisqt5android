@@ -74,7 +74,7 @@ static QString toStringAndTrimNullCharacter(const QByteArray &buffer)
 
 static QStringList portNamesFromHardwareDeviceMap()
 {
-    HKEY hKey = 0;
+    HKEY hKey = Q_NULLPTR;
     if (::RegOpenKeyEx(HKEY_LOCAL_MACHINE, L"HARDWARE\\DEVICEMAP\\SERIALCOMM", 0, KEY_QUERY_VALUE, &hKey) != ERROR_SUCCESS)
         return QStringList();
 
@@ -88,7 +88,7 @@ static QStringList portNamesFromHardwareDeviceMap()
     forever {
         DWORD requiredValueNameChars = maximumValueNameInChars;
         const LONG ret = ::RegEnumValue(hKey, index, reinterpret_cast<wchar_t *>(outputValueName.data()), &requiredValueNameChars,
-                                        NULL, NULL, reinterpret_cast<unsigned char *>(outputBuffer.data()), &requiredDataBytes);
+                                        Q_NULLPTR, Q_NULLPTR, reinterpret_cast<unsigned char *>(outputBuffer.data()), &requiredDataBytes);
         if (ret == ERROR_MORE_DATA) {
             outputBuffer.resize(requiredDataBytes);
         } else if (ret == ERROR_SUCCESS) {
@@ -172,7 +172,7 @@ static QString devicePortName(HDEVINFO deviceInfoSet, PSP_DEVINFO_DATA deviceInf
         DWORD dataType = 0;
         QByteArray outputBuffer;
         forever {
-            const LONG ret = ::RegQueryValueEx(key, reinterpret_cast<const wchar_t *>(portNameKey.utf16()), NULL, &dataType,
+            const LONG ret = ::RegQueryValueEx(key, reinterpret_cast<const wchar_t *>(portNameKey.utf16()), Q_NULLPTR, &dataType,
                                                reinterpret_cast<unsigned char *>(outputBuffer.data()), &bytesRequired);
             if (ret == ERROR_MORE_DATA) {
                 outputBuffer.resize(bytesRequired);
@@ -293,7 +293,7 @@ QList<QSerialPortInfo> QSerialPortInfo::availablePorts()
     QList<QSerialPortInfo> serialPortInfoList;
 
     foreach (const GuidFlagsPair &uniquePair, guidFlagsPairs()) {
-        const HDEVINFO deviceInfoSet = ::SetupDiGetClassDevs(reinterpret_cast<const GUID *>(&uniquePair.first), NULL, 0, uniquePair.second);
+        const HDEVINFO deviceInfoSet = ::SetupDiGetClassDevs(reinterpret_cast<const GUID *>(&uniquePair.first), Q_NULLPTR, Q_NULLPTR, uniquePair.second);
         if (deviceInfoSet == INVALID_HANDLE_VALUE)
             return serialPortInfoList;
 
@@ -312,23 +312,23 @@ QList<QSerialPortInfo> QSerialPortInfo::availablePorts()
                 continue;
             }
 
-            QSerialPortInfo serialPortInfo;
+            QSerialPortInfoPrivate priv;
 
-            serialPortInfo.d_ptr->portName = portName;
-            serialPortInfo.d_ptr->device = QSerialPortPrivate::portNameToSystemLocation(portName);
-            serialPortInfo.d_ptr->description = deviceDescription(deviceInfoSet, &deviceInfoData);
-            serialPortInfo.d_ptr->manufacturer = deviceManufacturer(deviceInfoSet, &deviceInfoData);
+            priv.portName = portName;
+            priv.device = QSerialPortInfoPrivate::portNameToSystemLocation(portName);
+            priv.description = deviceDescription(deviceInfoSet, &deviceInfoData);
+            priv.manufacturer = deviceManufacturer(deviceInfoSet, &deviceInfoData);
 
             const QString instanceIdentifier = deviceInstanceIdentifier(deviceInfoData.DevInst);
 
-            serialPortInfo.d_ptr->serialNumber =
+            priv.serialNumber =
                     deviceSerialNumber(instanceIdentifier, deviceInfoData.DevInst);
-            serialPortInfo.d_ptr->vendorIdentifier =
-                    deviceVendorIdentifier(instanceIdentifier, serialPortInfo.d_ptr->hasVendorIdentifier);
-            serialPortInfo.d_ptr->productIdentifier =
-                    deviceProductIdentifier(instanceIdentifier, serialPortInfo.d_ptr->hasProductIdentifier);
+            priv.vendorIdentifier =
+                    deviceVendorIdentifier(instanceIdentifier, priv.hasVendorIdentifier);
+            priv.productIdentifier =
+                    deviceProductIdentifier(instanceIdentifier, priv.hasProductIdentifier);
 
-            serialPortInfoList.append(serialPortInfo);
+            serialPortInfoList.append(priv);
         }
         ::SetupDiDestroyDeviceInfoList(deviceInfoSet);
     }
@@ -336,10 +336,10 @@ QList<QSerialPortInfo> QSerialPortInfo::availablePorts()
     foreach (const QString &portName, portNamesFromHardwareDeviceMap()) {
         if (std::find_if(serialPortInfoList.begin(), serialPortInfoList.end(),
                          SerialPortNameEqualFunctor(portName)) == serialPortInfoList.end()) {
-            QSerialPortInfo serialPortInfo;
-            serialPortInfo.d_ptr->portName = portName;
-            serialPortInfo.d_ptr->device = QSerialPortPrivate::portNameToSystemLocation(portName);
-            serialPortInfoList.append(serialPortInfo);
+            QSerialPortInfoPrivate priv;
+            priv.portName = portName;
+            priv.device =  QSerialPortInfoPrivate::portNameToSystemLocation(portName);
+            serialPortInfoList.append(priv);
         }
     }
 
@@ -354,7 +354,7 @@ QList<qint32> QSerialPortInfo::standardBaudRates()
 bool QSerialPortInfo::isBusy() const
 {
     const HANDLE handle = ::CreateFile(reinterpret_cast<const wchar_t*>(systemLocation().utf16()),
-                                           GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, NULL);
+                                           GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, Q_NULLPTR);
 
     if (handle == INVALID_HANDLE_VALUE) {
         if (::GetLastError() == ERROR_ACCESS_DENIED)
@@ -368,7 +368,7 @@ bool QSerialPortInfo::isBusy() const
 bool QSerialPortInfo::isValid() const
 {
     const HANDLE handle = ::CreateFile(reinterpret_cast<const wchar_t*>(systemLocation().utf16()),
-                                           GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, NULL);
+                                           GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, Q_NULLPTR);
 
     if (handle == INVALID_HANDLE_VALUE) {
         if (::GetLastError() != ERROR_ACCESS_DENIED)
@@ -377,6 +377,19 @@ bool QSerialPortInfo::isValid() const
         ::CloseHandle(handle);
     }
     return true;
+}
+
+QString QSerialPortInfoPrivate::portNameToSystemLocation(const QString &source)
+{
+    return source.startsWith(QStringLiteral("COM"))
+            ? (QStringLiteral("\\\\.\\") + source) : source;
+}
+
+QString QSerialPortInfoPrivate::portNameFromSystemLocation(const QString &source)
+{
+    return (source.startsWith(QStringLiteral("\\\\.\\"))
+            || source.startsWith(QStringLiteral("//./")))
+            ? source.mid(4) : source;
 }
 
 QT_END_NAMESPACE

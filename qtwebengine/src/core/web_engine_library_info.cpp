@@ -101,7 +101,12 @@ static inline CFBundleRef frameworkBundle()
 static QString getPath(CFBundleRef frameworkBundle)
 {
     QString path;
-    if (frameworkBundle) {
+    // The following is a fix for QtWebEngineProcess crashes on OS X 10.7 and before.
+    // We use it for the other OS X versions as well to make sure it works and because
+    // the directory structure should be the same.
+    if (qApp->applicationName() == QLatin1String(QTWEBENGINEPROCESS_NAME)) {
+        path = QDir::cleanPath(qApp->applicationDirPath() % QLatin1String("/../../../.."));
+    } else if (frameworkBundle) {
         CFURLRef bundleUrl = CFBundleCopyBundleURL(frameworkBundle);
         CFStringRef bundlePath = CFURLCopyFileSystemPath(bundleUrl, kCFURLPOSIXPathStyle);
         path = QString::fromCFString(bundlePath);
@@ -114,7 +119,12 @@ static QString getPath(CFBundleRef frameworkBundle)
 static QString getResourcesPath(CFBundleRef frameworkBundle)
 {
     QString path;
-    if (frameworkBundle) {
+    // The following is a fix for QtWebEngineProcess crashes on OS X 10.7 and before.
+    // We use it for the other OS X versions as well to make sure it works and because
+    // the directory structure should be the same.
+    if (qApp->applicationName() == QLatin1String(QTWEBENGINEPROCESS_NAME)) {
+        path = getPath(frameworkBundle) % QLatin1String("/Resources");
+    } else if (frameworkBundle) {
         CFURLRef resourcesRelativeUrl = CFBundleCopyResourcesDirectoryURL(frameworkBundle);
         CFStringRef resourcesRelativePath = CFURLCopyFileSystemPath(resourcesRelativeUrl, kCFURLPOSIXPathStyle);
         path = getPath(frameworkBundle) % QLatin1Char('/') % QString::fromCFString(resourcesRelativePath);
@@ -171,7 +181,7 @@ QString localesPath()
 #if defined(OS_MACOSX) && defined(QT_MAC_FRAMEWORK_BUILD)
     return getResourcesPath(frameworkBundle()) % QLatin1String("/qtwebengine_locales");
 #else
-    return location(QLibraryInfo::TranslationsPath) % QLatin1String("/qtwebengine_locales");
+    return location(QLibraryInfo::TranslationsPath) % QDir::separator() % QLatin1String("qtwebengine_locales");
 #endif
 }
 
@@ -204,7 +214,7 @@ base::FilePath WebEngineLibraryInfo::getPath(int key)
 #if defined(OS_MACOSX) && defined(QT_MAC_FRAMEWORK_BUILD)
         return toFilePath(getResourcesPath(frameworkBundle()) % QLatin1String("/qtwebengine_resources.pak"));
 #else
-        return toFilePath(location(QLibraryInfo::DataPath) % QLatin1String("/qtwebengine_resources.pak"));
+        return toFilePath(location(QLibraryInfo::DataPath) % QDir::separator() %  QLatin1String("qtwebengine_resources.pak"));
 #endif
     case base::FILE_EXE:
     case content::CHILD_PROCESS_EXE:

@@ -171,6 +171,7 @@
         return self;
 
     m_inSendEventToFocusObject = NO;
+    m_inSelectionChange = NO;
     m_inputContext = inputContext;
 
     QVariantMap platformData = [self imValue:Qt::ImPlatformData].toMap();
@@ -263,10 +264,14 @@
     // will set the new first-responder to our next-responder, and in the latter
     // case we'll have an active responder candidate.
     if ([UIResponder currentFirstResponder] == [self nextResponder]) {
-        // We have resigned the keyboard, and transferred back to the parent view, so unset focus object
+        // We have resigned the keyboard, and transferred first responder back to the parent view
         Q_ASSERT(!FirstResponderCandidate::currentCandidate());
-        qImDebug() << "keyboard was closed, clearing focus object";
-        m_inputContext->clearCurrentFocusObject();
+        if ([self imValue:Qt::ImEnabled].toBool()) {
+            // The current focus object expects text input, but there
+            // is no keyboard to get input from. So we clear focus.
+            qImDebug() << "no keyboard available, clearing focus object";
+            m_inputContext->clearCurrentFocusObject();
+        }
     } else {
         // We've lost responder status because another Qt window was made active,
         // another QIOSTextResponder was made first-responder, another UIView was
@@ -298,6 +303,7 @@
         return;
 
     if (updatedProperties & (Qt::ImCursorPosition | Qt::ImAnchorPosition)) {
+        QScopedValueRollback<BOOL> rollback(m_inSelectionChange, true);
         [self.inputDelegate selectionWillChange:self];
         [self.inputDelegate selectionDidChange:self];
     }
@@ -345,6 +351,15 @@
 
 - (void)setSelectedTextRange:(UITextRange *)range
 {
+    if (m_inSelectionChange) {
+        // After [UITextInputDelegate selectionWillChange], UIKit will cancel
+        // any ongoing auto correction (if enabled) and ask us to set an empty selection.
+        // This is contradictory to our current attempt to set a selection, so we ignore
+        // the callback. UIKit will be re-notified of the new selection after
+        // [UITextInputDelegate selectionDidChange].
+        return;
+    }
+
     QUITextRange *r = static_cast<QUITextRange *>(range);
     QList<QInputMethodEvent::Attribute> attrs;
     attrs << QInputMethodEvent::Attribute(QInputMethodEvent::Selection, r.range.location, r.range.length, 0);

@@ -537,16 +537,15 @@ static inline int toKeyOrUnicode(int vk, int scancode, unsigned char *kbdBuffer,
     Q_ASSERT(vk > 0 && vk < 256);
     int code = 0;
     QChar unicodeBuffer[5];
-    // While key combinations containing alt and ctrl might trigger the third assignment of a key
-    // (for example "alt+ctrl+q" causes '@' on a German layout), ToUnicode often does not return the
-    // wanted character if only the ctrl modifier is used. Thus we unset this modifier temporarily
-    // if it is not used together with alt.
-    const unsigned char controlState = kbdBuffer[VK_MENU] ? 0 : kbdBuffer[VK_CONTROL];
-    if (controlState)
-        kbdBuffer[VK_CONTROL] = 0;
     int res = ToUnicode(vk, scancode, kbdBuffer, reinterpret_cast<LPWSTR>(unicodeBuffer), 5, 0);
-    if (controlState)
+    // When Ctrl modifier is used ToUnicode does not return correct values. In order to assign the
+    // right key the control modifier is removed for just that function if the previous call failed.
+    if (res == 0 && kbdBuffer[VK_CONTROL]) {
+        const unsigned char controlState = kbdBuffer[VK_CONTROL];
+        kbdBuffer[VK_CONTROL] = 0;
+        res = ToUnicode(vk, scancode, kbdBuffer, reinterpret_cast<LPWSTR>(unicodeBuffer), 5, 0);
         kbdBuffer[VK_CONTROL] = controlState;
+    }
     if (res)
         code = unicodeBuffer[0].toUpper().unicode();
 
@@ -833,7 +832,10 @@ bool QWindowsKeyMapper::translateMultimediaKeyEventInternal(QWindow *window, con
 
     const int qtKey = CmdTbl[cmd];
     sendExtendedPressRelease(receiver, qtKey, Qt::KeyboardModifier(state), 0, 0, 0);
-    return true;
+    // QTBUG-43343: Make sure to return false if Qt does not handle the key, otherwise,
+    // the keys are not passed to the active media player.
+    const QKeySequence sequence(Qt::Modifier(state) + qtKey);
+    return QGuiApplicationPrivate::instance()->shortcutMap.hasShortcutForKeySequence(sequence);
 #else
     Q_UNREACHABLE();
     return false;

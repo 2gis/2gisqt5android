@@ -163,7 +163,6 @@ QWindow *QGuiApplicationPrivate::focus_window = 0;
 static QBasicMutex applicationFontMutex;
 QFont *QGuiApplicationPrivate::app_font = 0;
 bool QGuiApplicationPrivate::obey_desktop_settings = true;
-bool QGuiApplicationPrivate::noGrab = false;
 
 static qreal fontSmoothingGamma = 1.7;
 
@@ -875,7 +874,7 @@ QWindowList QGuiApplication::topLevelWindows()
 /*!
     Returns the primary (or default) screen of the application.
 
-    This will be the screen where QWindows are shown, unless otherwise specified.
+    This will be the screen where QWindows are initially shown, unless otherwise specified.
 */
 QScreen *QGuiApplication::primaryScreen()
 {
@@ -1196,20 +1195,10 @@ void QGuiApplicationPrivate::eventDispatcherReady()
     platform_integration->initialize();
 }
 
-#if defined(QT_DEBUG) && defined(Q_OS_LINUX)
-// Find out if our parent process is gdb by looking at the 'exe' symlink under /proc.
-static bool runningUnderDebugger()
-{
-    const QFileInfo parentProcExe(QStringLiteral("/proc/") + QString::number(getppid()) + QStringLiteral("/exe"));
-    return parentProcExe.isSymLink() && parentProcExe.symLinkTarget().endsWith(QLatin1String("/gdb"));
-}
-#endif
-
 void QGuiApplicationPrivate::init()
 {
     QCoreApplicationPrivate::is_app_running = false; // Starting up.
 
-    bool doGrabUnderDebugger = false;
     bool loadTestability = false;
     QList<QByteArray> pluginList;
     // Get command line params
@@ -1244,10 +1233,6 @@ void QGuiApplicationPrivate::init()
                     QDir::setCurrent(qbundlePath.section(QLatin1Char('/'), 0, -2));
             }
 #endif
-        } else if (arg == "-nograb") {
-            QGuiApplicationPrivate::noGrab = true;
-        } else if (arg == "-dograb") {
-            doGrabUnderDebugger = true;
 #ifndef QT_NO_SESSIONMANAGER
         } else if (arg == "-session" && i < argc-1) {
             ++i;
@@ -1272,16 +1257,6 @@ void QGuiApplicationPrivate::init()
         argv[j] = 0;
         argc = j;
     }
-
-#if defined(QT_DEBUG) && defined(Q_OS_LINUX)
-    if (!doGrabUnderDebugger && !QGuiApplicationPrivate::noGrab && runningUnderDebugger()) {
-        QGuiApplicationPrivate::noGrab = true;
-        qDebug("Qt: gdb: -nograb added to command-line options.\n"
-               "\t Use the -dograb option to enforce grabbing.");
-    }
-#else
-    Q_UNUSED(doGrabUnderDebugger)
-#endif
 
     // Load environment exported generic plugins
     foreach (const QByteArray &plugin, qgetenv("QT_QPA_GENERIC_PLUGINS").split(','))
@@ -2193,6 +2168,9 @@ void QGuiApplicationPrivate::processTabletLeaveProximityEvent(QWindowSystemInter
 #ifndef QT_NO_GESTURES
 void QGuiApplicationPrivate::processGestureEvent(QWindowSystemInterfacePrivate::GestureEvent *e)
 {
+    if (e->window.isNull())
+        return;
+
     QNativeGestureEvent ev(e->type, e->pos, e->pos, e->globalPos, e->realValue, e->sequenceId, e->intValue);
     ev.setTimestamp(e->timestamp);
     QGuiApplication::sendSpontaneousEvent(e->window, &ev);
@@ -3425,15 +3403,21 @@ void QGuiApplicationPrivate::_q_updateFocusObject(QObject *object)
 {
     Q_Q(QGuiApplication);
 
+    QPlatformInputContext *inputContext = platformIntegration()->inputContext();
     bool enabled = false;
-    if (object) {
-        QInputMethodQueryEvent query(Qt::ImEnabled);
+    if (object && inputContext) {
+        QInputMethodQueryEvent query(Qt::ImEnabled | Qt::ImHints);
         QGuiApplication::sendEvent(object, &query);
         enabled = query.value(Qt::ImEnabled).toBool();
+        if (enabled) {
+            static const bool supportsHiddenText = inputContext->hasCapability(QPlatformInputContext::HiddenTextCapability);
+            const Qt::InputMethodHints hints = static_cast<Qt::InputMethodHints>(query.value(Qt::ImHints).toInt());
+            if ((hints & Qt::ImhHiddenText) && !supportsHiddenText)
+                enabled = false;
+        }
     }
 
     QPlatformInputContextPrivate::setInputMethodAccepted(enabled);
-    QPlatformInputContext *inputContext = platformIntegration()->inputContext();
     if (inputContext)
         inputContext->setFocusObject(object);
     emit q->focusObjectChanged(object);

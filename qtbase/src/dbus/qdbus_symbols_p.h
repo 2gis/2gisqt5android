@@ -107,6 +107,9 @@ DEFINEFUNC(dbus_bool_t        , dbus_connection_add_filter, (DBusConnection     
                                                              void                      *user_data,
                                                              DBusFreeFunction           free_data_function),
            (connection, function, user_data, free_data_function), return)
+DEFINEFUNC(dbus_bool_t        , dbus_connection_can_send_type, (DBusConnection             *connection,
+                                                                int                         type),
+           (connection, type), return)
 DEFINEFUNC(void               , dbus_connection_close,      (DBusConnection             *connection),
            (connection), return)
 DEFINEFUNC(DBusDispatchStatus , dbus_connection_dispatch,   (DBusConnection             *connection),
@@ -319,6 +322,8 @@ DEFINEFUNC(void         , dbus_pending_call_unref, (DBusPendingCall             
 
 /* dbus-server.h */
 DEFINEFUNC(dbus_bool_t , dbus_server_allocate_data_slot, (dbus_int32_t     *slot_p),
+           (slot_p), return)
+DEFINEFUNC(void        , dbus_server_free_data_slot,     (dbus_int32_t     *slot_p),
            (slot_p), return)
 DEFINEFUNC(void        , dbus_server_disconnect, (DBusServer     *server),
            (server), )

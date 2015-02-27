@@ -40,13 +40,13 @@
 
 //! [0]
 cd <anywhere>
-gunzip qt-everywhere-opensource-src-5.4.0.tar.gz
-tar xf qt-everywhere-opensource-src-5.4.0.tar
+gunzip qt-everywhere-opensource-src-5.4.1.tar.gz
+tar xf qt-everywhere-opensource-src-5.4.1.tar
 //! [0]
 
 
 //! [1]
-~/qt-everywhere-opensource-src-5.4.0
+~/qt-everywhere-opensource-src-5.4.1
 //! [1]
 
 
@@ -55,7 +55,7 @@ tar xf qt-everywhere-opensource-src-5.4.0.tar
 //! [embedded help]
 
 //! [2]
-cd  ~/qt-everywhere-opensource-src-5.4.0
+cd  ~/qt-everywhere-opensource-src-5.4.1
 ./configure -embedded [architecture]
 //! [2]
 
@@ -71,11 +71,11 @@ su -c "make install"
 
 
 //! [5]
-PATH=/usr/local/Qt-5.4.0/bin:$PATH
+PATH=/usr/local/Qt-5.4.1/bin:$PATH
 export PATH
 //! [5]
 
 
 //! [6]
-setenv PATH /usr/local/Qt-5.4.0/bin:$PATH
+setenv PATH /usr/local/Qt-5.4.1/bin:$PATH
 //! [6]

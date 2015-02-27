@@ -381,12 +381,12 @@
 
     \section1 Step 2: Unpacking the Archive
         Unpack the archive if you have not done so already. For example,
-        if you have the \c{qt-everywhere-opensource-src-5.4.0.tar.gz}
+        if you have the \c{qt-everywhere-opensource-src-5.4.1.tar.gz}
         package, type the following commands at a command line prompt:
 
     \snippet snippets/code/doc_src_installation.qdoc 0
 
-        This creates the directory \c{/tmp/qt-everywhere-opensource-src-5.4.0}
+        This creates the directory \c{/tmp/qt-everywhere-opensource-src-5.4.1}
         containing the files from the archive. We only support the GNU version of
         the tar archiving utility. Note that on some systems it is called gtar.
 
@@ -396,7 +396,7 @@
         \c{./configure} script in the package directory.
 
         By default, Qt is configured for installation in the
-        \c{/usr/local/Qt-5.4.0} directory, but this can be
+        \c{/usr/local/Qt-5.4.1} directory, but this can be
         changed by using the \c{-prefix} option.
 
     \snippet snippets/code/doc_src_installation.qdoc 1
@@ -447,7 +447,7 @@
 
         For compilers that do not support rpath you must also extended the
         \c LD_LIBRARY_PATH environment variable to include
-        \c{/usr/local/Qt-5.4.0/lib}. On Linux with GCC this step
+        \c{/usr/local/Qt-5.4.1/lib}. On Linux with GCC this step
         is not needed.
 */
 

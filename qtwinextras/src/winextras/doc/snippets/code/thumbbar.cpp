@@ -44,7 +44,7 @@ void initializeThumbnailToolBar(QWidget *widget)
 {
     Q_ASSERT(widget->windowHandle()); // Note: this requires the window to be shown.
 //! [thumbbar_cpp]
-    QWinThumbnailToolBar *thumbbar = QWinThumbnailToolBar(widget);
+    QWinThumbnailToolBar *thumbbar = new QWinThumbnailToolBar(widget);
     thumbbar->setWindow(widget->windowHandle());
 
     QWinThumbnailToolButton *settings = new QWinThumbnailToolButton(thumbbar);

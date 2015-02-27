@@ -82,6 +82,7 @@ struct serial_struct {
 };
 #define ASYNC_SPD_CUST  0x0030
 #define ASYNC_SPD_MASK  0x1030
+#define PORT_UNKNOWN    0
 #endif
 
 QT_BEGIN_NAMESPACE
@@ -131,9 +132,6 @@ public:
     qint64 bytesToWrite() const;
     qint64 writeData(const char *data, qint64 maxSize);
 
-    static QString portNameToSystemLocation(const QString &port);
-    static QString portNameFromSystemLocation(const QString &location);
-
     static qint32 baudRateFromSetting(qint32 setting);
     static qint32 settingFromBaudRate(qint32 baudRate);
 
@@ -145,10 +143,6 @@ public:
 
     QSocketNotifier *readNotifier;
     QSocketNotifier *writeNotifier;
-
-    bool readPortNotifierCalled;
-    bool readPortNotifierState;
-    bool readPortNotifierStateSet;
 
     bool emittedReadyRead;
     bool emittedBytesWritten;
@@ -177,7 +171,7 @@ private:
 
     bool waitForReadOrWrite(bool *selectForRead, bool *selectForWrite,
                             bool checkRead, bool checkWrite,
-                            int msecs, bool *timedOut);
+                            int msecs);
 
     qint64 readFromPort(char *data, qint64 maxSize);
     qint64 writeToPort(const char *data, qint64 maxSize);

@@ -173,22 +173,13 @@ bool UIDelegatesManager::ensureComponentLoaded(ComponentType type)
     *component = (new QQmlComponent(engine, QUrl::fromLocalFile(fi.absoluteFilePath()), QQmlComponent::PreferSynchronous, m_view));
 
     if ((*component)->status() != QQmlComponent::Ready) {
-#ifdef UI_DELEGATES_DEBUG
         Q_FOREACH (const QQmlError& err, (*component)->errors())
-            fprintf(stderr, "  component error: %s\n", qPrintable(err.toString()));
-#endif
+            qWarning("QtWebEngine: component error: %s\n", qPrintable(err.toString()));
+        delete *component;
+        *component = 0;
         return false;
     }
     return true;
-}
-
-QQmlContext *UIDelegatesManager::creationContextForComponent(QQmlComponent *component)
-{
-    Q_ASSERT(component);
-
-    QQmlContext* baseContext = component->creationContext() ? component->creationContext() : qmlContext(m_view);
-    Q_ASSERT(baseContext);
-    return baseContext;
 }
 
 #define CHECK_QML_SIGNAL_PROPERTY(prop, location) \
@@ -200,7 +191,7 @@ void UIDelegatesManager::addMenuItem(MenuItemHandler *menuItemHandler, const QSt
     Q_ASSERT(menuItemHandler);
     if (!ensureComponentLoaded(MenuItem))
         return;
-    QObject *it = menuItemComponent->beginCreate(creationContextForComponent(menuItemComponent));
+    QObject *it = menuItemComponent->beginCreate(qmlContext(m_view));
 
     QQmlProperty(it, QStringLiteral("text")).write(text);
     QQmlProperty(it, QStringLiteral("iconName")).write(iconName);
@@ -224,7 +215,7 @@ void UIDelegatesManager::addMenuSeparator(QObject *menu)
     if (!ensureComponentLoaded(MenuSeparator))
         return;
 
-    QQmlContext *itemContext = creationContextForComponent(menuSeparatorComponent);
+    QQmlContext *itemContext = qmlContext(m_view);
     QObject *sep = menuSeparatorComponent->create(itemContext);
     sep->setParent(menu);
 
@@ -238,7 +229,7 @@ QObject *UIDelegatesManager::addMenu(QObject *parentMenu, const QString &title, 
 
     if (!ensureComponentLoaded(Menu))
         return 0;
-    QQmlContext *context(creationContextForComponent(menuComponent));
+    QQmlContext *context = qmlContext(m_view);
     QObject *menu = menuComponent->beginCreate(context);
     // Useful when not using Qt Quick Controls' Menu
     if (QQuickItem* item = qobject_cast<QQuickItem*>(menu))
@@ -296,8 +287,12 @@ void UIDelegatesManager::showDialog(QSharedPointer<JavaScriptDialogController> d
         Q_UNREACHABLE();
     }
 
-    if (!ensureComponentLoaded(dialogComponentType))
+    if (!ensureComponentLoaded(dialogComponentType)) {
+        // Let the controller know it couldn't be loaded
+        qWarning("Failed to load dialog, rejecting.");
+        dialogController->reject();
         return;
+    }
 
     QQmlComponent *dialogComponent = Q_NULLPTR;
     switch (dialogComponentType) {
@@ -306,7 +301,7 @@ void UIDelegatesManager::showDialog(QSharedPointer<JavaScriptDialogController> d
         Q_UNREACHABLE();
     }
 
-    QQmlContext *context(creationContextForComponent(dialogComponent));
+    QQmlContext *context = qmlContext(m_view);
     QObject *dialog = dialogComponent->beginCreate(context);
     dialog->setParent(m_view);
     QQmlProperty textProp(dialog, QStringLiteral("text"));
@@ -314,15 +309,6 @@ void UIDelegatesManager::showDialog(QSharedPointer<JavaScriptDialogController> d
 
     QQmlProperty titleProp(dialog, QStringLiteral("title"));
     titleProp.write(title);
-
-    if (dialogComponentType == PromptDialog) {
-        QQmlProperty promptProp(dialog, QStringLiteral("prompt"));
-        promptProp.write(dialogController->defaultPrompt());
-        QQmlProperty inputSignal(dialog, QStringLiteral("onInput"));
-        CHECK_QML_SIGNAL_PROPERTY(inputSignal, dialogComponent->url());
-        static int setTextIndex = dialogController->metaObject()->indexOfSlot("textProvided(QString)");
-        QObject::connect(dialog, inputSignal.method(), dialogController.data(), dialogController->metaObject()->method(setTextIndex));
-    }
 
     QQmlProperty acceptSignal(dialog, QStringLiteral("onAccepted"));
     QQmlProperty rejectSignal(dialog, QStringLiteral("onRejected"));
@@ -333,6 +319,18 @@ void UIDelegatesManager::showDialog(QSharedPointer<JavaScriptDialogController> d
     QObject::connect(dialog, acceptSignal.method(), dialogController.data(), dialogController->metaObject()->method(acceptIndex));
     static int rejectIndex = dialogController->metaObject()->indexOfSlot("reject()");
     QObject::connect(dialog, rejectSignal.method(), dialogController.data(), dialogController->metaObject()->method(rejectIndex));
+
+    if (dialogComponentType == PromptDialog) {
+        QQmlProperty promptProp(dialog, QStringLiteral("prompt"));
+        promptProp.write(dialogController->defaultPrompt());
+        QQmlProperty inputSignal(dialog, QStringLiteral("onInput"));
+        CHECK_QML_SIGNAL_PROPERTY(inputSignal, dialogComponent->url());
+        static int setTextIndex = dialogController->metaObject()->indexOfSlot("textProvided(QString)");
+        QObject::connect(dialog, inputSignal.method(), dialogController.data(), dialogController->metaObject()->method(setTextIndex));
+        QQmlProperty closingSignal(dialog, QStringLiteral("onClosing"));
+        QObject::connect(dialog, closingSignal.method(), dialogController.data(), dialogController->metaObject()->method(rejectIndex));
+    }
+
     dialogComponent->completeCreate();
 
     QObject::connect(dialogController.data(), &JavaScriptDialogController::dialogCloseRequested, dialog, &QObject::deleteLater);
@@ -391,7 +389,7 @@ void UIDelegatesManager::showFilePicker(WebContentsAdapterClient::FileChooserMod
     if (!ensureComponentLoaded(FilePicker))
         return;
 
-    QQmlContext *context(creationContextForComponent(filePickerComponent));
+    QQmlContext *context = qmlContext(m_view);
     QObject *filePicker = filePickerComponent->beginCreate(context);
     if (QQuickItem* item = qobject_cast<QQuickItem*>(filePicker))
         item->setParentItem(m_view);

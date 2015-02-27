@@ -207,7 +207,9 @@ QMouseEvent::QMouseEvent(Type type, const QPointF &localPos, Qt::MouseButton but
                          Qt::MouseButtons buttons, Qt::KeyboardModifiers modifiers)
     : QInputEvent(type, modifiers), l(localPos), w(localPos), b(button), mouseState(buttons), caps(0)
 {
+#ifndef QT_NO_CURSOR
     s = QCursor::pos();
+#endif
 }
 
 
@@ -281,7 +283,6 @@ QMouseEvent::~QMouseEvent()
 
   \sa Qt::MouseEventSource
   \sa QGraphicsSceneMouseEvent::source()
-  \sa QGraphicsSceneMouseEvent::setSource()
  */
 Qt::MouseEventSource QMouseEvent::source() const
 {
@@ -297,7 +298,6 @@ Qt::MouseEventSource QMouseEvent::source() const
 
      \sa Qt::MouseEventFlag
      \sa QGraphicsSceneMouseEvent::flags()
-     \sa QGraphicsSceneMouseEvent::setFlags()
  */
 Qt::MouseEventFlags QMouseEvent::flags() const
 {
@@ -1545,7 +1545,9 @@ QContextMenuEvent::~QContextMenuEvent()
 QContextMenuEvent::QContextMenuEvent(Reason reason, const QPoint &pos)
     : QInputEvent(ContextMenu), p(pos), reas(reason)
 {
+#ifndef QT_NO_CURSOR
     gp = QCursor::pos();
+#endif
 }
 
 /*!

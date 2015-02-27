@@ -16,6 +16,7 @@ src_tools_rcc.CONFIG = host_build
 
 src_tools_qlalr.subdir = tools/qlalr
 src_tools_qlalr.target = sub-qlalr
+src_tools_qlalr.CONFIG = host_build
 force_bootstrap: src_tools_qlalr.depends = src_tools_bootstrap
 else: src_tools_qlalr.depends = src_corelib
 
@@ -82,6 +83,7 @@ src_testlib.depends = src_corelib   # src_gui & src_widgets are not build-depend
 
 src_3rdparty_harfbuzzng.subdir = $$PWD/3rdparty/harfbuzz-ng
 src_3rdparty_harfbuzzng.target = sub-3rdparty-harfbuzzng
+src_3rdparty_harfbuzzng.depends = src_corelib   # for the Qt atomics
 
 src_angle.subdir = $$PWD/angle
 src_angle.target = sub-angle

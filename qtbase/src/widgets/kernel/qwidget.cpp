@@ -9408,9 +9408,11 @@ void QWidget::focusOutEvent(QFocusEvent *)
     if (focusPolicy() != Qt::NoFocus || !isWindow())
         update();
 
-    // automatically hide the SIP
+#ifndef Q_OS_IOS
+    // FIXME: revisit autoSIP logic, QTBUG-42906
     if (qApp->autoSipEnabled() && testAttribute(Qt::WA_InputMethodEnabled))
         qApp->inputMethod()->hide();
+#endif
 }
 
 /*!
@@ -10511,8 +10513,9 @@ void QWidgetPrivate::setParent_sys(QWidget *newparent, Qt::WindowFlags f)
             QWidget *parentWithWindow =
                 newparent ? (newparent->windowHandle() ? newparent : newparent->nativeParentWidget()) : 0;
             if (parentWithWindow) {
-                if (f & Qt::Window) {
-                    q->windowHandle()->setTransientParent(parentWithWindow->windowHandle());
+                QWidget *topLevel = parentWithWindow->window();
+                if ((f & Qt::Window) && topLevel && topLevel->windowHandle()) {
+                    q->windowHandle()->setTransientParent(topLevel->windowHandle());
                     q->windowHandle()->setParent(0);
                 } else {
                     q->windowHandle()->setTransientParent(0);
@@ -12389,10 +12392,9 @@ static void releaseMouseGrabOfWidget(QWidget *widget)
     \note Only visible widgets can grab mouse input. If isVisible()
     returns \c false for a widget, that widget cannot call grabMouse().
 
-    \note \b{(Mac OS X developers)} For \e Cocoa, calling
-    grabMouse() on a widget only works when the mouse is inside the
-    frame of that widget.  For \e Carbon, it works outside the widget's
-    frame as well, like for Windows and X11.
+    \note On Windows, grabMouse() only works when the mouse is inside a window
+    owned by the process.
+    On OS X, grabMouse() only works when the mouse is inside the frame of that widget.
 
     \sa releaseMouse(), grabKeyboard(), releaseKeyboard()
 */
@@ -12413,7 +12415,7 @@ void QWidget::grabMouse()
 
     \warning Grabbing the mouse might lock the terminal.
 
-    \note \b{(Mac OS X developers)} See the note in QWidget::grabMouse().
+    \note See the note in QWidget::grabMouse().
 
     \sa releaseMouse(), grabKeyboard(), releaseKeyboard(), setCursor()
 */

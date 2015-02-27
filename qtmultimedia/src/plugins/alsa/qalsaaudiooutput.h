@@ -62,7 +62,7 @@ QT_BEGIN_NAMESPACE
 
 class QAlsaAudioOutput : public QAbstractAudioOutput
 {
-    friend class OutputPrivate;
+    friend class AlsaOutputPrivate;
     Q_OBJECT
 public:
     QAlsaAudioOutput(const QByteArray &device);
@@ -132,18 +132,17 @@ private:
     snd_pcm_t* handle;
     snd_pcm_access_t access;
     snd_pcm_format_t pcmformat;
-    snd_timestamp_t* timestamp;
     snd_pcm_hw_params_t *hwparams;
     qreal m_volume;
 };
 
-class OutputPrivate : public QIODevice
+class AlsaOutputPrivate : public QIODevice
 {
     friend class QAlsaAudioOutput;
     Q_OBJECT
 public:
-    OutputPrivate(QAlsaAudioOutput* audio);
-    ~OutputPrivate();
+    AlsaOutputPrivate(QAlsaAudioOutput* audio);
+    ~AlsaOutputPrivate();
 
     qint64 readData( char* data, qint64 len);
     qint64 writeData(const char* data, qint64 len);

@@ -49,6 +49,11 @@ public slots:
         if (!QDBusConnection::sessionBus().send(msg.createReply(msg.arguments())))
             exit(1);
     }
+
+    void quit()
+    {
+        qApp->quit();
+    }
 };
 
 int main(int argc, char *argv[])
@@ -66,6 +71,7 @@ int main(int argc, char *argv[])
     con.registerObject(objectPath, &pong, QDBusConnection::ExportAllSlots);
 
     printf("ready.\n");
+    fflush(stdout);
 
     return app.exec();
 }

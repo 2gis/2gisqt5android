@@ -42,14 +42,14 @@ static const char objectPath[] = "/org/qtproject/qmyserver";
 int MyObject::callCount = 0;
 QVariantList MyObject::callArgs;
 
-class MyServer : public QDBusServer
+class MyServer : public QDBusServer, protected QDBusContext
 {
     Q_OBJECT
     Q_CLASSINFO("D-Bus Interface", "org.qtproject.autotests.qmyserver")
 
 public:
-    MyServer(QString addr = "unix:tmpdir=/tmp", QObject* parent = 0)
-        : QDBusServer(addr, parent),
+    MyServer(QObject* parent = 0)
+        : QDBusServer(parent),
           m_conn("none")
     {
         connect(this, SIGNAL(newConnection(QDBusConnection)), SLOT(handleConnection(QDBusConnection)));
@@ -58,12 +58,22 @@ public:
 public slots:
     QString address() const
     {
+        if (!QDBusServer::isConnected())
+            sendErrorReply(QDBusServer::lastError().name(), QDBusServer::lastError().message());
         return QDBusServer::address();
     }
 
-    bool isConnected() const
+    void waitForConnected()
     {
-        return m_conn.isConnected();
+        if (callPendingReply.type() != QDBusMessage::InvalidMessage) {
+            sendErrorReply(QDBusError::NotSupported, "One call already pending!");
+            return;
+        }
+        if (m_conn.isConnected())
+            return;
+        // not connected, we'll reply later
+        setDelayedReply(true);
+        callPendingReply = message();
     }
 
     void emitSignal(const QString &interface, const QString &name, const QString &arg)
@@ -86,7 +96,6 @@ public slots:
 
     QVariantList callArgs()
     {
-        qDebug() << "callArgs" << MyObject::callArgs.count();
         return MyObject::callArgs;
     }
 
@@ -110,6 +119,10 @@ public slots:
         return obj.m_complexProp;
     }
 
+    void quit()
+    {
+        qApp->quit();
+    }
 
 private slots:
     void handleConnection(const QDBusConnection& con)
@@ -118,10 +131,15 @@ private slots:
         m_conn.registerObject("/", &obj, QDBusConnection::ExportAllProperties
                        | QDBusConnection::ExportAllSlots
                        | QDBusConnection::ExportAllInvokables);
+        if (callPendingReply.type() != QDBusMessage::InvalidMessage) {
+            QDBusConnection::sessionBus().send(callPendingReply.createReply());
+            callPendingReply = QDBusMessage();
+        }
     }
 
 private:
     QDBusConnection m_conn;
+    QDBusMessage callPendingReply;
     MyObject obj;
 };
 
@@ -140,6 +158,7 @@ int main(int argc, char *argv[])
     con.registerObject(objectPath, &server, QDBusConnection::ExportAllSlots);
 
     printf("ready.\n");
+    fflush(stdout);
 
     return app.exec();
 }

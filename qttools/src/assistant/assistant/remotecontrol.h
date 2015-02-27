@@ -51,7 +51,6 @@ public:
     RemoteControl(MainWindow *mainWindow);
 
 private slots:
-    void receivedData();
     void handleCommandString(const QString &cmdString);
     void applyCache();
 

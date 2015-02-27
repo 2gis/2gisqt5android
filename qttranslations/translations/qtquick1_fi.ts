@@ -16,489 +16,483 @@
     <name>QDeclarativeAbstractAnimation</name>
     <message>
         <source>Cannot animate non-existent property &quot;%1&quot;</source>
-        <translatorcomment>QML-virheilmoitukset on jätetty kääntämättä, koska ne on tarkoitettu vain ohjelmistokehittäjille ja koska niillä haetaan usein lisätietoa hakukoneella. Suomentaminen todennäköisesti hankaloittaisi ymmärtämistä ja vikojen jäljittämistä.</translatorcomment>
-        <translation>Cannot animate non-existent property &quot;%1&quot;</translation>
+        <translation>Olematonta ominaisuutta ”%1” ei voi animoida</translation>
     </message>
     <message>
         <source>Cannot animate read-only property &quot;%1&quot;</source>
-        <translation>Cannot animate read-only property &quot;%1&quot;</translation>
+        <translation>Kirjoitussuojattua ominaisuutta ”%1” ei voi animoida</translation>
     </message>
     <message>
         <source>Animation is an abstract class</source>
-        <translation>Animation is an abstract class</translation>
+        <translation>Animation on abstrakti luokka</translation>
     </message>
 </context>
 <context>
     <name>QDeclarativeAnchorAnimation</name>
     <message>
         <source>Cannot set a duration of &lt; 0</source>
-        <translation>Cannot set a duration of &lt; 0</translation>
+        <translation>Kestoksi ei voi asettaa &lt; 0</translation>
     </message>
 </context>
 <context>
     <name>QDeclarativeAnchors</name>
     <message>
         <source>Possible anchor loop detected on fill.</source>
-        <translation>Possible anchor loop detected on fill.</translation>
+        <translation>Mahdollinen ankkurisilmukka havaittu fill-ominaisuudessa.</translation>
     </message>
     <message>
         <source>Possible anchor loop detected on centerIn.</source>
-        <translation>Possible anchor loop detected on centerIn.</translation>
+        <translation>Mahdollinen ankkurisilmukka havaittu centerIn-ominaisuudessa.</translation>
     </message>
     <message>
         <source>Cannot anchor to an item that isn&apos;t a parent or sibling.</source>
-        <translation>Cannot anchor to an item that isn&apos;t a parent or sibling.</translation>
+        <translation>Ei voida ankkuroida kohteeseen, joka ei ole ylemmän tai saman tason kohde.</translation>
     </message>
     <message>
         <source>Possible anchor loop detected on vertical anchor.</source>
-        <translation>Possible anchor loop detected on vertical anchor.</translation>
+        <translation>Mahdollinen ankkurisilmukka havaittu pystysuuntaisessa ankkurissa.</translation>
     </message>
     <message>
         <source>Possible anchor loop detected on horizontal anchor.</source>
-        <translation>Possible anchor loop detected on horizontal anchor.</translation>
+        <translation>Mahdollinen ankkurisilmukka havaittu vaakasuuntaisessa ankkurissa.</translation>
     </message>
     <message>
         <source>Cannot specify left, right, and hcenter anchors.</source>
-        <translation>Cannot specify left, right, and hcenter anchors.</translation>
+        <translation>Left-, right- ja hcenter-ankkureita ei voi määrittää samanaikaisesti.</translation>
     </message>
     <message>
         <source>Cannot anchor to a null item.</source>
-        <translation>Cannot anchor to a null item.</translation>
+        <translation>Null-kohteeseen ei voi ankkuroida.</translation>
     </message>
     <message>
         <source>Cannot anchor a horizontal edge to a vertical edge.</source>
-        <translation>Cannot anchor a horizontal edge to a vertical edge.</translation>
+        <translation>Vaakasuoraa reunaa ei voi ankkuroida pystysuoraan reunaan.</translation>
     </message>
     <message>
         <source>Cannot anchor item to self.</source>
-        <translation>Cannot anchor item to self.</translation>
+        <translation>Kohdetta ei voi ankkuroida itseensä.</translation>
     </message>
     <message>
         <source>Cannot specify top, bottom, and vcenter anchors.</source>
-        <translation>Cannot specify top, bottom, and vcenter anchors.</translation>
+        <translation>Top-, bottom- ja vcenter-ankkureita ei voi määrittää samanaikaisesti.</translation>
     </message>
     <message>
         <source>Baseline anchor cannot be used in conjunction with top, bottom, or vcenter anchors.</source>
-        <translation>Baseline anchor cannot be used in conjunction with top, bottom, or vcenter anchors.</translation>
+        <translation>Baseline-ankkuria ei voi käyttää top-, bottom- tai vcenter-ankkurien yhteydessä.</translation>
     </message>
     <message>
         <source>Cannot anchor a vertical edge to a horizontal edge.</source>
-        <translation>Cannot anchor a vertical edge to a horizontal edge.</translation>
+        <translation>Pystysuoraa reunaa ei voi ankkuroida vaakasuoraan reunaan.</translation>
     </message>
 </context>
 <context>
     <name>QDeclarativeAnimatedImage</name>
     <message>
         <source>Qt was built without support for QMovie</source>
-        <translation>Qt was built without support for QMovie</translation>
+        <translation>Qt käännettiin ilman QMovie-tukea</translation>
     </message>
 </context>
 <context>
     <name>QDeclarativeApplication</name>
     <message>
         <source>Application is an abstract class</source>
-        <translation>Application is an abstract class</translation>
+        <translation>Application on abstrakti luokka</translation>
     </message>
 </context>
 <context>
     <name>QDeclarativeBehavior</name>
     <message>
         <source>Cannot change the animation assigned to a Behavior.</source>
-        <translation>Cannot change the animation assigned to a Behavior.</translation>
+        <translation>Behavioriin liitettyä animaatiota ei voi vaihtaa.</translation>
     </message>
 </context>
 <context>
     <name>QDeclarativeBinding</name>
     <message>
         <source>Binding loop detected for property &quot;%1&quot;</source>
-        <translation>Binding loop detected for property &quot;%1&quot;</translation>
+        <translation>Sitomissilmukka havaittu ominaisuudelle ”%1”</translation>
     </message>
 </context>
 <context>
     <name>QDeclarativeCompiledBindings</name>
     <message>
         <source>Binding loop detected for property &quot;%1&quot;</source>
-        <translation>Binding loop detected for property &quot;%1&quot;</translation>
+        <translation>Sitomissilmukka havaittu ominaisuudelle ”%1”</translation>
     </message>
 </context>
 <context>
     <name>QDeclarativeCompiler</name>
     <message>
         <source>Invalid property assignment: &quot;%1&quot; is a read-only property</source>
-        <translation>Invalid property assignment: &quot;%1&quot; is a read-only property</translation>
+        <translation>Virheellinen sijoitus ominaisuuteen: ”%1” on kirjoitussuojattu ominaisuus</translation>
     </message>
     <message>
         <source>Invalid property assignment: unknown enumeration</source>
-        <translation>Invalid property assignment: unknown enumeration</translation>
+        <translation>Virheellinen sijoitus ominaisuuteen: tuntematon enumeraatio</translation>
     </message>
     <message>
         <source>Invalid property assignment: string expected</source>
-        <translation>Invalid property assignment: string expected</translation>
+        <translation>Virheellinen sijoitus ominaisuuteen: odotettiin merkkijonoa</translation>
     </message>
     <message>
         <source>Invalid property assignment: url expected</source>
-        <translation>Invalid property assignment: url expected</translation>
+        <translation>Virheellinen sijoitus ominaisuuteen: odotettiin URL:ää</translation>
     </message>
     <message>
         <source>Invalid property assignment: unsigned int expected</source>
-        <translation>Invalid property assignment: unsigned int expected</translation>
+        <translation>Virheellinen sijoitus ominaisuuteen: odotettiin etumerkitöntä kokonaislukua</translation>
     </message>
     <message>
         <source>Invalid property assignment: int expected</source>
-        <translation>Invalid property assignment: int expected</translation>
+        <translation>Virheellinen sijoitus ominaisuuteen: odotettiin kokonaislukua</translation>
     </message>
     <message>
         <source>Invalid property assignment: number expected</source>
-        <translation>Invalid property assignment: number expected</translation>
+        <translation>Virheellinen sijoitus ominaisuuteen: odotettiin lukua</translation>
     </message>
     <message>
         <source>Invalid property assignment: color expected</source>
-        <translation>Invalid property assignment: color expected</translation>
+        <translation>Virheellinen sijoitus ominaisuuteen: odotettiin väriä</translation>
     </message>
     <message>
         <source>Invalid property assignment: date expected</source>
-        <translation>Invalid property assignment: date expected</translation>
+        <translation>Virheellinen sijoitus ominaisuuteen: odotettiin päivämäärää</translation>
     </message>
     <message>
         <source>Invalid property assignment: time expected</source>
-        <translation>Invalid property assignment: time expected</translation>
+        <translation>Virheellinen sijoitus ominaisuuteen: odotettiin aikaa</translation>
     </message>
     <message>
         <source>Invalid property assignment: datetime expected</source>
-        <translation>Invalid property assignment: datetime expected</translation>
+        <translation>Virheellinen sijoitus ominaisuuteen: odotettiin datetime-tyyppiä</translation>
     </message>
     <message>
         <source>Invalid property assignment: point expected</source>
-        <translation>Invalid property assignment: point expected</translation>
+        <translation>Virheellinen sijoitus ominaisuuteen: odotettiin pistettä</translation>
     </message>
     <message>
         <source>Invalid property assignment: size expected</source>
-        <translation>Invalid property assignment: size expected</translation>
+        <translation>Virheellinen sijoitus ominaisuuteen: odotettiin kokoa</translation>
     </message>
     <message>
         <source>Invalid property assignment: rect expected</source>
-        <translation>Invalid property assignment: rect expected</translation>
+        <translation>Virheellinen sijoitus ominaisuuteen: odotettiin rect-rakennetta</translation>
     </message>
     <message>
         <source>Invalid property assignment: boolean expected</source>
-        <translation>Invalid property assignment: boolean expected</translation>
+        <translation>Virheellinen sijoitus ominaisuuteen: odotettiin boolean-arvoa</translation>
     </message>
     <message>
         <source>Invalid property assignment: 3D vector expected</source>
-        <translation>Invalid property assignment: 3D vector expected</translation>
+        <translation>Virheellinen sijoitus ominaisuuteen: odotettiin 3D-vektoria</translation>
     </message>
     <message>
         <source>Invalid property assignment: unsupported type &quot;%1&quot;</source>
-        <translation>Invalid property assignment: unsupported type &quot;%1&quot;</translation>
+        <translation>Virheellinen sijoitus ominaisuuteen: tukematon tyyppi ”%1”</translation>
     </message>
     <message>
         <source>Element is not creatable.</source>
-        <translation>Element is not creatable.</translation>
+        <translation>Elementtiä ei ole mahdollista luoda.</translation>
     </message>
     <message>
         <source>Component elements may not contain properties other than id</source>
-        <translation>Component elements may not contain properties other than id</translation>
+        <translation>Component-elementeillä ei saa olla muita ominaisuuksia kuin id</translation>
     </message>
     <message>
         <source>Invalid component id specification</source>
-        <translation>Invalid component id specification</translation>
+        <translation>Virheellinen komponentin id-määrittely</translation>
     </message>
     <message>
         <source>id is not unique</source>
-        <translation>id is not unique</translation>
+        <translation>id ei ole ainutkertainen</translation>
     </message>
     <message>
         <source>Invalid component body specification</source>
-        <translation>Invalid component body specification</translation>
+        <translation>Virheellinen komponentin rungon määrittely</translation>
     </message>
     <message>
         <source>Component objects cannot declare new properties.</source>
-        <translation>Component objects cannot declare new properties.</translation>
+        <translation>Component-oliot eivät voi esitellä uusia ominaisuuksia.</translation>
     </message>
     <message>
         <source>Component objects cannot declare new signals.</source>
-        <translation>Component objects cannot declare new signals.</translation>
+        <translation>Component-oliot eivät voi esitellä uusia signaaleja.</translation>
     </message>
     <message>
         <source>Component objects cannot declare new functions.</source>
-        <translation>Component objects cannot declare new functions.</translation>
+        <translation>Component-oliot eivät voi esitellä uusia funktioita.</translation>
     </message>
     <message>
         <source>Cannot create empty component specification</source>
-        <translation>Cannot create empty component specification</translation>
+        <translation>Ei voida luoda tyhjää Component-määrittelyä</translation>
     </message>
     <message>
         <source>&quot;%1.%2&quot; is not available in %3 %4.%5.</source>
-        <translation>&quot;%1.%2&quot; is not available in %3 %4.%5.</translation>
+        <translation>”%1.%2” ei ole käytettävissä moduulissa %3 %4.%5.</translation>
     </message>
     <message>
         <source>&quot;%1.%2&quot; is not available due to component versioning.</source>
-        <translation>&quot;%1.%2&quot; is not available due to component versioning.</translation>
+        <translation>”%1.%2” ei ole käytettävissä johtuen komponenttiversioinnista.</translation>
     </message>
     <message>
         <source>Incorrectly specified signal assignment</source>
-        <translation>Incorrectly specified signal assignment</translation>
+        <translation>Väärin määritelty sijoitus signaaliin</translation>
     </message>
     <message>
         <source>Cannot assign a value to a signal (expecting a script to be run)</source>
-        <translation>Cannot assign a value to a signal (expecting a script to be run)</translation>
+        <translation>Signaaliin ei voi sijoittaa arvoa (odotettiin suoritettavaa skriptiä)</translation>
     </message>
     <message>
         <source>Empty signal assignment</source>
-        <translation>Empty signal assignment</translation>
+        <translation>Tyhjä sijoitus signaaliin</translation>
     </message>
     <message>
         <source>Empty property assignment</source>
-        <translation>Empty property assignment</translation>
+        <translation>Tyhjä sijoitus ominaisuuteen</translation>
     </message>
     <message>
         <source>Attached properties cannot be used here</source>
-        <translation>Attached properties cannot be used here</translation>
+        <translation>Liitettyjä ominaisuuksia ei voida käyttää tässä</translation>
     </message>
     <message>
         <source>Non-existent attached object</source>
-        <translation>Non-existent attached object</translation>
+        <translation>Olematon liitetty olio</translation>
     </message>
     <message>
         <source>Invalid attached object assignment</source>
-        <translation>Invalid attached object assignment</translation>
+        <translation>Virheellinen sijoitus liitettyyn olioon</translation>
     </message>
     <message>
         <source>Cannot assign to non-existent default property</source>
-        <translation>Cannot assign to non-existent default property</translation>
+        <translation>Olemattomaan oletusominaisuuteen ei voi sijoittaa</translation>
     </message>
     <message>
         <source>Cannot assign to non-existent property &quot;%1&quot;</source>
-        <translation>Cannot assign to non-existent property &quot;%1&quot;</translation>
+        <translation>Olemattomaan ominaisuuteen ”%1” ei voi sijoittaa</translation>
     </message>
     <message>
         <source>Invalid use of namespace</source>
-        <translation>Invalid use of namespace</translation>
+        <translation>Virheellinen nimiavaruuden käyttö</translation>
     </message>
     <message>
         <source>Not an attached property name</source>
-        <translation>Not an attached property name</translation>
+        <translation>Ei ole liitetyn ominaisuuden nimi</translation>
     </message>
     <message>
         <source>Invalid use of id property</source>
-        <translation>Invalid use of id property</translation>
+        <translation>Virheellinen id-ominaisuuden käyttö</translation>
     </message>
     <message>
         <source>Property has already been assigned a value</source>
-        <translation>Property has already been assigned a value</translation>
+        <translation>Ominaisuudelle on jo sijoitettu arvo</translation>
     </message>
     <message>
         <source>Invalid grouped property access</source>
-        <translation>Invalid grouped property access</translation>
+        <translation>Virheellinen ryhmäominaisuuden käyttö</translation>
     </message>
     <message>
         <source>Cannot assign a value directly to a grouped property</source>
-        <translation>Cannot assign a value directly to a grouped property</translation>
+        <translation>Arvoa ei voi sijoittaa suoraan ryhmäominaisuuteen</translation>
     </message>
     <message>
         <source>Invalid property use</source>
-        <translation>Invalid property use</translation>
+        <translation>Virheellinen ominaisuuden käyttö</translation>
     </message>
     <message>
         <source>Property assignment expected</source>
-        <translation>Property assignment expected</translation>
+        <translation>Odotettiin sijoitusta ominaisuuteen</translation>
     </message>
     <message>
         <source>Single property assignment expected</source>
-        <translation>Single property assignment expected</translation>
+        <translation>Odotettiin yksittäistä sijoitusta ominaisuuteen</translation>
     </message>
     <message>
         <source>Unexpected object assignment</source>
-        <translation>Unexpected object assignment</translation>
+        <translation>Odottamaton sijoitus olioon</translation>
     </message>
     <message>
         <source>Cannot assign object to list</source>
-        <translation>Cannot assign object to list</translation>
+        <translation>Oliota ei voi sijoittaa listaan</translation>
     </message>
     <message>
         <source>Can only assign one binding to lists</source>
-        <translation>Can only assign one binding to lists</translation>
+        <translation>Listoihin voi sijoittaa vain yhden sidonnan</translation>
     </message>
     <message>
         <source>Cannot assign primitives to lists</source>
-        <translation>Cannot assign primitives to lists</translation>
+        <translation>Listoihin ei voi sijoittaa primitiiviarvoja</translation>
     </message>
     <message>
         <source>Cannot assign multiple values to a script property</source>
-        <translation>Cannot assign multiple values to a script property</translation>
+        <translation>Skriptiominaisuuteen ei voi sijoittaa useita arvoja</translation>
     </message>
     <message>
         <source>Invalid property assignment: script expected</source>
-        <translation>Invalid property assignment: script expected</translation>
+        <translation>Virheellinen sijoitus ominaisuuteen: odotettiin skriptiä</translation>
     </message>
     <message>
         <source>Cannot assign multiple values to a singular property</source>
-        <translation>Cannot assign multiple values to a singular property</translation>
+        <translation>Yksikölliseen ominaisuuteen ei voi sijoittaa useita arvoja</translation>
     </message>
     <message>
         <source>Cannot assign object to property</source>
-        <translation>Cannot assign object to property</translation>
+        <translation>Ominaisuuteen ei voi sijoittaa oliota</translation>
     </message>
     <message>
         <source>&quot;%1&quot; cannot operate on &quot;%2&quot;</source>
-        <translation>&quot;%1&quot; cannot operate on &quot;%2&quot;</translation>
+        <translation>”%1” ei voi toimia arvolla ”%2”</translation>
     </message>
     <message>
         <source>Duplicate default property</source>
-        <translation>Duplicate default property</translation>
+        <translation>Oletusominaisuuden kaksoiskappale</translation>
     </message>
     <message>
         <source>Duplicate property name</source>
-        <translation>Duplicate property name</translation>
+        <translation>Ominaisuuden nimen kaksoiskappale</translation>
     </message>
     <message>
         <source>Property names cannot begin with an upper case letter</source>
-        <translation>Property names cannot begin with an upper case letter</translation>
+        <translation>Ominaisuuksien nimet eivät voi alkaa suuraakkosella</translation>
     </message>
     <message>
         <source>Illegal property name</source>
-        <translation>Illegal property name</translation>
+        <translation>Virheellinen ominaisuuden nimi</translation>
     </message>
     <message>
         <source>Duplicate signal name</source>
-        <translation>Duplicate signal name</translation>
+        <translation>Signaalin nimen kaksoiskappale</translation>
     </message>
     <message>
         <source>Signal names cannot begin with an upper case letter</source>
-        <translation>Signal names cannot begin with an upper case letter</translation>
+        <translation>Signaalien nimet eivät voi alkaa suuraakkosella</translation>
     </message>
     <message>
         <source>Illegal signal name</source>
-        <translation>Illegal signal name</translation>
+        <translation>Virheellinen signaalin nimi</translation>
     </message>
     <message>
         <source>Duplicate method name</source>
-        <translation>Duplicate method name</translation>
+        <translation>Metodin nimen kaksoiskappale</translation>
     </message>
     <message>
         <source>Method names cannot begin with an upper case letter</source>
-        <translation>Method names cannot begin with an upper case letter</translation>
+        <translation>Metodien nimet eivät voi alkaa suuraakkosella</translation>
     </message>
     <message>
         <source>Illegal method name</source>
-        <translation>Illegal method name</translation>
+        <translation>Virheellinen metodin nimi</translation>
     </message>
     <message>
         <source>Property value set multiple times</source>
-        <translation>Property value set multiple times</translation>
+        <translation>Ominaisuuden arvo on asetettu useita kertoja</translation>
     </message>
     <message>
         <source>Invalid property nesting</source>
-        <translation>Invalid property nesting</translation>
+        <translation>Virheellinen ominaisuuden sisäkkäisyys</translation>
     </message>
     <message>
         <source>Cannot override FINAL property</source>
-        <translation>Cannot override FINAL property</translation>
+        <translation>FINAL-ominaisuutta ei voi korvata</translation>
     </message>
     <message>
         <source>Invalid property type</source>
-        <translation>Invalid property type</translation>
+        <translation>Virheellinen ominaisuuden tyyppi</translation>
     </message>
     <message>
         <source>Invalid empty ID</source>
-        <translation>Invalid empty ID</translation>
+        <translation>Virheellinen tyhjä ID</translation>
     </message>
     <message>
         <source>IDs cannot start with an uppercase letter</source>
-        <translation>IDs cannot start with an uppercase letter</translation>
+        <translation>ID:t eivät voi alkaa suuraakkosella</translation>
     </message>
     <message>
         <source>IDs must start with a letter or underscore</source>
-        <translation>IDs must start with a letter or underscore</translation>
+        <translation>ID:iden on alettava aakkosella tai alaviivalla</translation>
     </message>
     <message>
         <source>IDs must contain only letters, numbers, and underscores</source>
-        <translation>IDs must contain only letters, numbers, and underscores</translation>
+        <translation>ID:t saavat sisältää vain aakkosia, numeroita ja alaviivoja</translation>
     </message>
     <message>
         <source>ID illegally masks global JavaScript property</source>
-        <translation>ID illegally masks global JavaScript property</translation>
+        <translation>ID peittää laittomasti globaalin JavaScript-ominaisuuden</translation>
     </message>
     <message>
         <source>No property alias location</source>
-        <translation>No property alias location</translation>
+        <translation>Ominaisuusaliaksella ei ole sijaintia</translation>
     </message>
     <message>
         <source>Invalid alias location</source>
-        <translation>Invalid alias location</translation>
+        <translation>Virheellinen aliaksen sijainti</translation>
     </message>
     <message>
         <source>Invalid alias reference. An alias reference must be specified as &lt;id&gt;, &lt;id&gt;.&lt;property&gt; or &lt;id&gt;.&lt;value property&gt;.&lt;property&gt;</source>
-        <translation>Invalid alias reference. An alias reference must be specified as &lt;id&gt;, &lt;id&gt;.&lt;property&gt; or &lt;id&gt;.&lt;value property&gt;.&lt;property&gt;</translation>
+        <translation>Virheellinen aliasviite. Aliasviite on määritettävä yhtenä seuraavista: &lt;id&gt;, &lt;id&gt;.&lt;ominaisuus&gt; tai &lt;id&gt;.&lt;arvo-ominaisuus&gt;.&lt;ominaisuus&gt;</translation>
     </message>
     <message>
         <source>Invalid alias reference. Unable to find id &quot;%1&quot;</source>
-        <translation>Invalid alias reference. Unable to find id &quot;%1&quot;</translation>
+        <translation>Virheellinen aliasviite. Id:tä ”%1” ei löydy</translation>
     </message>
     <message>
         <source>Alias property exceeds alias bounds</source>
-        <translation>Alias property exceeds alias bounds</translation>
+        <translation>Aliasominaisuus ylittää aliasrajat</translation>
     </message>
 </context>
 <context>
     <name>QDeclarativeComponent</name>
     <message>
         <source>Invalid empty URL</source>
-        <translatorcomment>Tämä viesti on suomennettu, koska siitä voi olla hyötyä myös ongelmaa selvittävälle Qt:lla tehdyn ohjelman loppukäyttäjälle eikä tämän viestin suomentamisen luulisi vaikeuttavan ongelman selvittämistä.</translatorcomment>
         <translation>Virheellinen tyhjä URL</translation>
     </message>
     <message>
         <source>createObject: value is not an object</source>
-        <translation>createObject: value is not an object</translation>
+        <translation>createObject: arvo ei ole olio</translation>
     </message>
 </context>
 <context>
     <name>QDeclarativeConnections</name>
     <message>
         <source>Cannot assign to non-existent property &quot;%1&quot;</source>
-        <translation>Cannot assign to non-existent property &quot;%1&quot;</translation>
+        <translation>Olemattomaan ominaisuuteen ”%1” ei voi sijoittaa</translation>
     </message>
     <message>
         <source>Connections: nested objects not allowed</source>
-        <translation>Connections: nested objects not allowed</translation>
+        <translation>Yhteydet: sisäkkäiset oliot eivät ole sallittuja</translation>
     </message>
     <message>
         <source>Connections: syntax error</source>
-        <translation>Connections: syntax error</translation>
+        <translation>Yhteydet: syntaksivirhe</translation>
     </message>
     <message>
         <source>Connections: script expected</source>
-        <translation>Connections: script expected</translation>
+        <translation>Yhteydet: odotettiin skriptiä</translation>
     </message>
 </context>
 <context>
     <name>QDeclarativeEngine</name>
     <message>
         <source>executeSql called outside transaction()</source>
-        <translation>executeSql called outside transaction()</translation>
+        <translation>executeSql kutsuttu funktion transaction() ulkopuolella</translation>
     </message>
     <message>
         <source>Read-only Transaction</source>
-        <translatorcomment>Tämä viesti on suomennettu, koska siitä voi olla hyötyä myös ongelmaa selvittävälle Qt:lla tehdyn ohjelman loppukäyttäjälle eikä tämän viestin suomentamisen luulisi vaikeuttavan ongelman selvittämistä.</translatorcomment>
-        <translation>Vain lukeva tietokantatapahtuma</translation>
+        <translation>Kirjoitussuojattu tietokantatapahtuma</translation>
     </message>
     <message>
         <source>Version mismatch: expected %1, found %2</source>
-        <translatorcomment>Tämä viesti on suomennettu, koska siitä voi olla hyötyä myös ongelmaa selvittävälle Qt:lla tehdyn ohjelman loppukäyttäjälle eikä tämän viestin suomentamisen luulisi vaikeuttavan ongelman selvittämistä.</translatorcomment>
         <translation>Ero versioissa: odotettiin %1, löytyi %2</translation>
     </message>
     <message>
         <source>SQL transaction failed</source>
-        <translatorcomment>Tämä viesti on suomennettu, koska siitä voi olla hyötyä myös ongelmaa selvittävälle Qt:lla tehdyn ohjelman loppukäyttäjälle eikä tämän viestin suomentamisen luulisi vaikeuttavan ongelman selvittämistä.</translatorcomment>
         <translation>SQL-tietokantatapahtuma epäonnistui</translation>
     </message>
     <message>
         <source>transaction: missing callback</source>
-        <translation>transaction: missing callback</translation>
+        <translation>tietokantatapahtuma: puuttuva callback-funktio</translation>
     </message>
     <message>
         <source>SQL: database version mismatch</source>
-        <translatorcomment>Tämä viesti on suomennettu, koska siitä voi olla hyötyä myös ongelmaa selvittävälle Qt:lla tehdyn ohjelman loppukäyttäjälle eikä tämän viestin suomentamisen luulisi vaikeuttavan ongelman selvittämistä.</translatorcomment>
         <translation>SQL: tietokannan versio ei täsmää</translation>
     </message>
 </context>
@@ -506,337 +500,330 @@
     <name>QDeclarativeFlipable</name>
     <message>
         <source>front is a write-once property</source>
-        <translation>front is a write-once property</translation>
+        <translation>front on kertakirjoitettava ominaisuus</translation>
     </message>
     <message>
         <source>back is a write-once property</source>
-        <translation>back is a write-once property</translation>
+        <translation>back on kertakirjoitettava ominaisuus</translation>
     </message>
 </context>
 <context>
     <name>QDeclarativeGestureArea</name>
     <message>
         <source>Cannot assign to non-existent property &quot;%1&quot;</source>
-        <translation>Cannot assign to non-existent property &quot;%1&quot;</translation>
+        <translation>Olemattomaan ominaisuuteen ”%1” ei voi sijoittaa</translation>
     </message>
     <message>
         <source>GestureArea: nested objects not allowed</source>
-        <translation>GestureArea: nested objects not allowed</translation>
+        <translation>GestureArea: sisäkkäiset oliot eivät ole sallittuja</translation>
     </message>
     <message>
         <source>GestureArea: syntax error</source>
-        <translation>GestureArea: syntax error</translation>
+        <translation>GestureArea: syntaksivirhe</translation>
     </message>
     <message>
         <source>GestureArea: script expected</source>
-        <translation>GestureArea: script expected</translation>
+        <translation>GestureArea: odotettiin skriptiä</translation>
     </message>
 </context>
 <context>
     <name>QDeclarativeImportDatabase</name>
     <message>
         <source>plugin cannot be loaded for module &quot;%1&quot;: %2</source>
-        <translation>plugin cannot be loaded for module &quot;%1&quot;: %2</translation>
+        <translation>moduulin ”%1” liitännäistä ei voida ladata: %2</translation>
     </message>
     <message>
         <source>module &quot;%1&quot; plugin &quot;%2&quot; not found</source>
-        <translation>module &quot;%1&quot; plugin &quot;%2&quot; not found</translation>
+        <translation>moduulin ”%1” liitännäistä ”%2” ei löytynyt</translation>
     </message>
     <message>
         <source>module &quot;%1&quot; version %2.%3 is not installed</source>
-        <translation>module &quot;%1&quot; version %2.%3 is not installed</translation>
+        <translation>moduulin ”%1” versiota %2.%3 ei ole asennettu</translation>
     </message>
     <message>
         <source>module &quot;%1&quot; is not installed</source>
-        <translatorcomment>Tämä viesti on suomennettu, koska siitä voi olla hyötyä myös ongelmaa selvittävälle Qt:lla tehdyn ohjelman loppukäyttäjälle eikä tämän viestin suomentamisen luulisi vaikeuttavan ongelman selvittämistä.</translatorcomment>
-        <translation>moduulia ”%1” ei ole asennettu</translation>
+        <translation>moduuli ”%1” ei ole asennettu</translation>
     </message>
     <message>
         <source>&quot;%1&quot;: no such directory</source>
-        <translatorcomment>Tämä viesti on suomennettu, koska siitä voi olla hyötyä myös ongelmaa selvittävälle Qt:lla tehdyn ohjelman loppukäyttäjälle eikä tämän viestin suomentamisen luulisi vaikeuttavan ongelman selvittämistä.</translatorcomment>
         <translation>”%1”: hakemistoa ei ole olemassa</translation>
     </message>
     <message>
         <source>import &quot;%1&quot; has no qmldir and no namespace</source>
-        <translation>import &quot;%1&quot; has no qmldir and no namespace</translation>
+        <translation>tuonnilla ”%1” ei ole qmldir-tiedostoa eikä nimiavaruutta</translation>
     </message>
     <message>
         <source>- %1 is not a namespace</source>
-        <translation>- %1 is not a namespace</translation>
+        <translation>– %1 ei ole nimiavaruus</translation>
     </message>
     <message>
         <source>- nested namespaces not allowed</source>
-        <translation>- nested namespaces not allowed</translation>
+        <translation>– sisäkkäiset nimiavaruudet eivät ole sallittuja</translation>
     </message>
     <message>
         <source>local directory</source>
-        <translatorcomment>Tämä viesti on suomennettu, koska siitä voi olla hyötyä myös ongelmaa selvittävälle Qt:lla tehdyn ohjelman loppukäyttäjälle eikä tämän viestin suomentamisen luulisi vaikeuttavan ongelman selvittämistä.</translatorcomment>
         <translation>paikallinen hakemisto</translation>
     </message>
     <message>
         <source>is ambiguous. Found in %1 and in %2</source>
-        <translatorcomment>Tämä viesti on suomennettu, koska siitä voi olla hyötyä myös ongelmaa selvittävälle Qt:lla tehdyn ohjelman loppukäyttäjälle eikä tämän viestin suomentamisen luulisi vaikeuttavan ongelman selvittämistä.</translatorcomment>
         <translation>ei ole yksiselitteinen. Löytyi sijainneista %1 ja %2</translation>
     </message>
     <message>
         <source>is ambiguous. Found in %1 in version %2.%3 and %4.%5</source>
-        <translatorcomment>Tämä viesti on suomennettu, koska siitä voi olla hyötyä myös ongelmaa selvittävälle Qt:lla tehdyn ohjelman loppukäyttäjälle eikä tämän viestin suomentamisen luulisi vaikeuttavan ongelman selvittämistä.</translatorcomment>
         <translation>ei ole yksiselitteinen. Sijainnista %1 löytyi versiot %2.%3 ja %4.%5</translation>
     </message>
     <message>
         <source>is instantiated recursively</source>
-        <translation>is instantiated recursively</translation>
+        <translation>on rekursiivinen ilmentymä</translation>
     </message>
     <message>
         <source>is not a type</source>
-        <translation>is not a type</translation>
+        <translation>ei ole tyyppi</translation>
     </message>
     <message>
         <source>File name case mismatch for &quot;%1&quot;</source>
-        <translation>File name case mismatch for &quot;%1&quot;</translation>
+        <translation>Tiedostonimen kirjainkoko ei täsmää polussa ”%1”</translation>
     </message>
 </context>
 <context>
     <name>QDeclarativeKeyNavigationAttached</name>
     <message>
         <source>KeyNavigation is only available via attached properties</source>
-        <translation>KeyNavigation is only available via attached properties</translation>
+        <translation>KeyNavigation on käytettävissä vain liitettyjen ominaisuuksien välityksellä</translation>
     </message>
 </context>
 <context>
     <name>QDeclarativeKeysAttached</name>
     <message>
         <source>Keys is only available via attached properties</source>
-        <translation>Keys is only available via attached properties</translation>
+        <translation>Keys on käytettävissä vain liitettyjen ominaisuuksien välityksellä</translation>
     </message>
 </context>
 <context>
     <name>QDeclarativeLayoutMirroringAttached</name>
     <message>
         <source>LayoutDirection attached property only works with Items</source>
-        <translation>LayoutDirection attached property only works with Items</translation>
+        <translation>Liitetty ominaisuus LayoutDirection toimii vain Items-olioiden kanssa</translation>
     </message>
     <message>
         <source>LayoutMirroring is only available via attached properties</source>
-        <translation>LayoutMirroring is only available via attached properties</translation>
+        <translation>LayoutMirroring on käytettävissä vain liitettyjen ominaisuuksien välityksellä</translation>
     </message>
 </context>
 <context>
     <name>QDeclarativeListModel</name>
     <message>
         <source>remove: index %1 out of range</source>
-        <translation>remove: index %1 out of range</translation>
+        <translation>remove: indeksi %1 on lukualueen ulkopuolella</translation>
     </message>
     <message>
         <source>insert: value is not an object</source>
-        <translation>insert: value is not an object</translation>
+        <translation>insert: arvo ei ole olio</translation>
     </message>
     <message>
         <source>insert: index %1 out of range</source>
-        <translation>insert: index %1 out of range</translation>
+        <translation>insert: indeksi %1 on lukualueen ulkopuolella</translation>
     </message>
     <message>
         <source>move: out of range</source>
-        <translation>move: out of range</translation>
+        <translation>move: lukualueen ulkopuolella</translation>
     </message>
     <message>
         <source>append: value is not an object</source>
-        <translation>append: value is not an object</translation>
+        <translation>append: arvo ei ole olio</translation>
     </message>
     <message>
         <source>set: value is not an object</source>
-        <translation>set: value is not an object</translation>
+        <translation>set: arvo ei ole olio</translation>
     </message>
     <message>
         <source>set: index %1 out of range</source>
-        <translation>set: index %1 out of range</translation>
+        <translation>set: indeksi %1 on lukualueen ulkopuolella</translation>
     </message>
     <message>
         <source>ListElement: cannot contain nested elements</source>
-        <translation>ListElement: cannot contain nested elements</translation>
+        <translation>ListElement: ei voi sisältää sisäkkäisiä elementtejä</translation>
     </message>
     <message>
         <source>ListElement: cannot use reserved &quot;id&quot; property</source>
-        <translation>ListElement: cannot use reserved &quot;id&quot; property</translation>
+        <translation>ListElement: ei voi käyttää varattua ”id”-ominaisuutta</translation>
     </message>
     <message>
         <source>ListElement: cannot use script for property value</source>
-        <translation>ListElement: cannot use script for property value</translation>
+        <translation>ListElement: ominaisuuden arvolle ei voi käyttää skriptiä</translation>
     </message>
     <message>
         <source>ListModel: undefined property &apos;%1&apos;</source>
-        <translation>ListModel: undefined property &apos;%1&apos;</translation>
+        <translation>ListModel: määrittelemätön ominaisuus ”%1”</translation>
     </message>
 </context>
 <context>
     <name>QDeclarativeLoader</name>
     <message>
         <source>Loader does not support loading non-visual elements.</source>
-        <translation>Loader does not support loading non-visual elements.</translation>
+        <translation>Lataaja ei tue ei-visuaalisten elementtien lataamista.</translation>
     </message>
 </context>
 <context>
     <name>QDeclarativeParentAnimation</name>
     <message>
         <source>Unable to preserve appearance under complex transform</source>
-        <translation>Unable to preserve appearance under complex transform</translation>
+        <translation>Ulkoasua ei pystytä säilyttämään kompleksimuunnoksen ollessa käytössä</translation>
     </message>
     <message>
         <source>Unable to preserve appearance under non-uniform scale</source>
-        <translation>Unable to preserve appearance under non-uniform scale</translation>
+        <translation>Ulkoasua ei pystytä säilyttämään epätasaisen skaalauksen ollessa käytössä</translation>
     </message>
     <message>
         <source>Unable to preserve appearance under scale of 0</source>
-        <translation>Unable to preserve appearance under scale of 0</translation>
+        <translation>Ulkoasua ei pystytä säilyttämään nollan suuruisen skaalauksen ollessa käytössä</translation>
     </message>
 </context>
 <context>
     <name>QDeclarativeParentChange</name>
     <message>
         <source>Unable to preserve appearance under complex transform</source>
-        <translation>Unable to preserve appearance under complex transform</translation>
+        <translation>Ulkoasua ei pystytä säilyttämään kompleksimuunnoksen ollessa käytössä</translation>
     </message>
     <message>
         <source>Unable to preserve appearance under non-uniform scale</source>
-        <translation>Unable to preserve appearance under non-uniform scale</translation>
+        <translation>Ulkoasua ei pystytä säilyttämään epätasaisen skaalauksen ollessa käytössä</translation>
     </message>
     <message>
         <source>Unable to preserve appearance under scale of 0</source>
-        <translation>Unable to preserve appearance under scale of 0</translation>
+        <translation>Ulkoasua ei pystytä säilyttämään nollan suuruisen skaalauksen ollessa käytössä</translation>
     </message>
 </context>
 <context>
     <name>QDeclarativeParser</name>
     <message>
         <source>Illegal unicode escape sequence</source>
-        <translation>Illegal unicode escape sequence</translation>
+        <translation>Virheellinen Unicode-koodinvaihtosekvenssi</translation>
     </message>
     <message>
         <source>Illegal character</source>
-        <translation>Illegal character</translation>
+        <translation>Virheellinen merkki</translation>
     </message>
     <message>
         <source>Unclosed string at end of line</source>
-        <translation>Unclosed string at end of line</translation>
+        <translation>Päättämätön merkkijono rivin lopussa</translation>
     </message>
     <message>
         <source>Illegal escape sequence</source>
-        <translation>Illegal escape sequence</translation>
+        <translation>Virheellinen koodinvaihtosekvenssi</translation>
     </message>
     <message>
         <source>Unclosed comment at end of file</source>
-        <translation>Unclosed comment at end of file</translation>
+        <translation>Päättämätön kommentti tiedoston lopussa</translation>
     </message>
     <message>
         <source>Illegal syntax for exponential number</source>
-        <translation>Illegal syntax for exponential number</translation>
+        <translation>Virheellinen syntaksi eksponenttiluvulle</translation>
     </message>
     <message>
         <source>Identifier cannot start with numeric literal</source>
-        <translation>Identifier cannot start with numeric literal</translation>
+        <translation>Tunniste ei voi alkaa numeerisella literaalilla</translation>
     </message>
     <message>
         <source>Unterminated regular expression literal</source>
-        <translation>Unterminated regular expression literal</translation>
+        <translation>Päättämätön säännöllisen lausekkeen literaali</translation>
     </message>
     <message>
         <source>Invalid regular expression flag &apos;%0&apos;</source>
-        <translation>Invalid regular expression flag &apos;%0&apos;</translation>
+        <translation>Virheellinen säännöllisen lausekkeen lippu ”%0”</translation>
     </message>
     <message>
         <source>Unterminated regular expression backslash sequence</source>
-        <translation>Unterminated regular expression backslash sequence</translation>
+        <translation>Päättämätön säännöllisen lausekkeen kenoviivasekvenssi</translation>
     </message>
     <message>
         <source>Unterminated regular expression class</source>
-        <translation>Unterminated regular expression class</translation>
+        <translation>Päättämätön säännöllisen lausekkeen luokka</translation>
     </message>
     <message>
         <source>Syntax error</source>
-        <translatorcomment>Tämä viesti on suomennettu, koska siitä voi olla hyötyä myös ongelmaa selvittävälle Qt:lla tehdyn ohjelman loppukäyttäjälle eikä tämän viestin suomentamisen luulisi vaikeuttavan ongelman selvittämistä.</translatorcomment>
         <translation>Syntaksivirhe</translation>
     </message>
     <message>
         <source>Unexpected token `%1&apos;</source>
-        <translation>Unexpected token `%1&apos;</translation>
+        <translation>Odottamaton merkkijono ”%1”</translation>
     </message>
     <message>
         <source>Expected token `%1&apos;</source>
-        <translation>Expected token `%1&apos;</translation>
+        <translation>Odotettiin merkkijonoa ”%1”</translation>
     </message>
     <message>
         <source>Property value set multiple times</source>
-        <translation>Property value set multiple times</translation>
+        <translation>Ominaisuuden arvo on asetettu useita kertoja</translation>
     </message>
     <message>
         <source>Expected type name</source>
-        <translation>Expected type name</translation>
+        <translation>Odotettiin tyyppinimeä</translation>
     </message>
     <message>
         <source>Invalid import qualifier ID</source>
-        <translation>Invalid import qualifier ID</translation>
+        <translation>Virheellinen tuonnin tarkennetunniste</translation>
     </message>
     <message>
         <source>Reserved name &quot;Qt&quot; cannot be used as an qualifier</source>
-        <translation>Reserved name &quot;Qt&quot; cannot be used as an qualifier</translation>
+        <translation>Varattua nimeä ”Qt” ei voi käyttää tarkenteena</translation>
     </message>
     <message>
         <source>Script import qualifiers must be unique.</source>
-        <translation>Script import qualifiers must be unique.</translation>
+        <translation>Skriptien tuonnin tarkenteiden on oltava ainutkertaisia.</translation>
     </message>
     <message>
         <source>Script import requires a qualifier</source>
-        <translation>Script import requires a qualifier</translation>
+        <translation>Skriptin tuonti vaatii tarkenteen</translation>
     </message>
     <message>
         <source>Library import requires a version</source>
-        <translation>Library import requires a version</translation>
+        <translation>Kirjaston tuonti vaatii version</translation>
     </message>
     <message>
         <source>Expected parameter type</source>
-        <translation>Expected parameter type</translation>
+        <translation>Odotettiin parametrityyppiä</translation>
     </message>
     <message>
         <source>Invalid property type modifier</source>
-        <translation>Invalid property type modifier</translation>
+        <translation>Virheellinen ominaisuuden tyyppimäärite</translation>
     </message>
     <message>
         <source>Unexpected property type modifier</source>
-        <translation>Unexpected property type modifier</translation>
+        <translation>Odottamaton ominaisuuden tyyppimäärite</translation>
     </message>
     <message>
         <source>Expected property type</source>
-        <translation>Expected property type</translation>
+        <translation>Odotettiin ominaisuuden tyyppiä</translation>
     </message>
     <message>
         <source>Readonly not yet supported</source>
-        <translation>Readonly not yet supported</translation>
+        <translation>Kirjoitussuojausta ei vielä tueta</translation>
     </message>
     <message>
         <source>JavaScript declaration outside Script element</source>
-        <translation>JavaScript declaration outside Script element</translation>
+        <translation>JavaScript-esittely Script-elementin ulkopuolella</translation>
     </message>
 </context>
 <context>
     <name>QDeclarativePauseAnimation</name>
     <message>
         <source>Cannot set a duration of &lt; 0</source>
-        <translation>Cannot set a duration of &lt; 0</translation>
+        <translation>Kestoksi ei voi asettaa &lt; 0</translation>
     </message>
 </context>
 <context>
     <name>QDeclarativePixmap</name>
     <message>
         <source>Error decoding: %1: %2</source>
-        <translation>Error decoding: %1: %2</translation>
+        <translation>Virhe dekoodattaessa: %1: %2</translation>
     </message>
     <message>
         <source>Failed to get image from provider: %1</source>
-        <translation>Failed to get image from provider: %1</translation>
+        <translation>Kuvan saaminen tarjoajalta epäonnistui: %1</translation>
     </message>
     <message>
         <source>Cannot open: %1</source>
-        <translatorcomment>Tämä viesti on suomennettu, koska siitä voi olla hyötyä myös ongelmaa selvittävälle Qt:lla tehdyn ohjelman loppukäyttäjälle eikä tämän viestin suomentamisen luulisi vaikeuttavan ongelman selvittämistä.</translatorcomment>
         <translation>Ei voi avata: %1</translation>
     </message>
 </context>
@@ -844,48 +831,48 @@
     <name>QDeclarativePropertyAnimation</name>
     <message>
         <source>Cannot set a duration of &lt; 0</source>
-        <translation>Cannot set a duration of &lt; 0</translation>
+        <translation>Kestoksi ei voi asettaa &lt; 0</translation>
     </message>
 </context>
 <context>
     <name>QDeclarativePropertyChanges</name>
     <message>
         <source>PropertyChanges does not support creating state-specific objects.</source>
-        <translation>PropertyChanges does not support creating state-specific objects.</translation>
+        <translation>PropertyChanges ei tue tilakohtaisten olioiden luomista.</translation>
     </message>
     <message>
         <source>Cannot assign to non-existent property &quot;%1&quot;</source>
-        <translation>Cannot assign to non-existent property &quot;%1&quot;</translation>
+        <translation>Olemattomaan ominaisuuteen ”%1” ei voi sijoittaa</translation>
     </message>
     <message>
         <source>Cannot assign to read-only property &quot;%1&quot;</source>
-        <translation>Cannot assign to read-only property &quot;%1&quot;</translation>
+        <translation>Kirjoitussuojattuun ominaisuuteen ”%1” ei voi sijoittaa</translation>
     </message>
 </context>
 <context>
     <name>QDeclarativeTextInput</name>
     <message>
         <source>Could not load cursor delegate</source>
-        <translation>Could not load cursor delegate</translation>
+        <translation>Kohdistimen delegaatin lataaminen epäonnistui</translation>
     </message>
     <message>
         <source>Could not instantiate cursor delegate</source>
-        <translation>Could not instantiate cursor delegate</translation>
+        <translation>Kohdistimen delegaatin ilmentymän luonti epäonnistui</translation>
     </message>
 </context>
 <context>
     <name>QDeclarativeTypeLoader</name>
     <message>
         <source>Script %1 unavailable</source>
-        <translation>Script %1 unavailable</translation>
+        <translation>Skripti %1 ei ole käytettävissä</translation>
     </message>
     <message>
         <source>Type %1 unavailable</source>
-        <translation>Type %1 unavailable</translation>
+        <translation>Tyyppi %1 ei ole käytettävissä</translation>
     </message>
     <message>
         <source>Namespace %1 cannot be used as a type</source>
-        <translation>Namespace %1 cannot be used as a type</translation>
+        <translation>Nimiavaruutta %1 ei voi käyttää tyyppinä</translation>
     </message>
     <message>
         <source>%1 %2</source>
@@ -896,78 +883,78 @@
     <name>QDeclarativeVME</name>
     <message>
         <source>Unable to create object of type %1</source>
-        <translation>Unable to create object of type %1</translation>
+        <translation>%1-tyyppisen olion luonti epäonnistui</translation>
     </message>
     <message>
         <source>Cannot assign value %1 to property %2</source>
-        <translation>Cannot assign value %1 to property %2</translation>
+        <translation>Arvoa %1 ei voi sijoittaa ominaisuuteen %2</translation>
     </message>
     <message>
         <source>Cannot assign object type %1 with no default method</source>
-        <translation>Cannot assign object type %1 with no default method</translation>
+        <translation>Ei voida sijoittaa oliotyyppiä %1 ilman oletusmetodia</translation>
     </message>
     <message>
         <source>Cannot connect mismatched signal/slot %1 %vs. %2</source>
-        <translation>Cannot connect mismatched signal/slot %1 %vs. %2</translation>
+        <translation>Ei voi yhdistää eroavaa signaalia/slot-funktiota %1 %vs. %2</translation>
     </message>
     <message>
         <source>Cannot assign an object to signal property %1</source>
-        <translation>Cannot assign an object to signal property %1</translation>
+        <translation>Oliota ei voi sijoittaa signaaliominaisuuteen %1</translation>
     </message>
     <message>
         <source>Cannot assign object to list</source>
-        <translation>Cannot assign object to list</translation>
+        <translation>Oliota ei voi sijoittaa listaan</translation>
     </message>
     <message>
         <source>Cannot assign object to interface property</source>
-        <translation>Cannot assign object to interface property</translation>
+        <translation>Oliota ei voi sijoittaa rajapintaominaisuuteen</translation>
     </message>
     <message>
         <source>Unable to create attached object</source>
-        <translation>Unable to create attached object</translation>
+        <translation>Liitetyn olion luonti epäonnistui</translation>
     </message>
     <message>
         <source>Cannot set properties on %1 as it is null</source>
-        <translation>Cannot set properties on %1 as it is null</translation>
+        <translation>Olion %1 ominaisuuksia ei voi asettaa, koska se on null</translation>
     </message>
 </context>
 <context>
     <name>QDeclarativeVisualDataModel</name>
     <message>
         <source>Delegate component must be Item type.</source>
-        <translation>Delegate component must be Item type.</translation>
+        <translation>Delegaattikomponentin on oltava Item-tyyppinen.</translation>
     </message>
 </context>
 <context>
     <name>QDeclarativeXmlListModel</name>
     <message>
         <source>Qt was built without support for xmlpatterns</source>
-        <translation>Qt was built without support for xmlpatterns</translation>
+        <translation>Qt käännettiin ilman xmlpatterns-tukea</translation>
     </message>
 </context>
 <context>
     <name>QDeclarativeXmlListModelRole</name>
     <message>
         <source>An XmlRole query must not start with &apos;/&apos;</source>
-        <translation>An XmlRole query must not start with &apos;/&apos;</translation>
+        <translation>XmlRole-kysely ei saa alkaa merkillä ”/”</translation>
     </message>
 </context>
 <context>
     <name>QDeclarativeXmlRoleList</name>
     <message>
         <source>An XmlListModel query must start with &apos;/&apos; or &quot;//&quot;</source>
-        <translation>An XmlListModel query must start with &apos;/&apos; or &quot;//&quot;</translation>
+        <translation>XmlListModel-kyselyn on alettava joko merkillä ”/” tai merkeillä ”//”</translation>
     </message>
 </context>
 <context>
     <name>QObject</name>
     <message>
         <source>&quot;%1&quot; duplicates a previous role name and will be disabled.</source>
-        <translation>&quot;%1&quot; duplicates a previous role name and will be disabled.</translation>
+        <translation>”%1” on edellisen roolinimen kaksoiskappale ja se otetaan pois käytöstä.</translation>
     </message>
     <message>
         <source>invalid query: &quot;%1&quot;</source>
-        <translation>invalid query: &quot;%1&quot;</translation>
+        <translation>virheellinen kysely: ”%1”</translation>
     </message>
 </context>
 <context>

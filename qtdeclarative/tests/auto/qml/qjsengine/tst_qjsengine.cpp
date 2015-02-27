@@ -173,6 +173,8 @@ private slots:
 
     void privateMethods();
 
+    void intConversion_QTBUG43309();
+
 signals:
     void testSignal();
 };
@@ -3138,6 +3140,8 @@ void tst_QJSEngine::callConstants()
                     "  var one; one();\n"
                     "  var two = null; two();\n"
                     "}\n");
+    QJSValue exceptionResult = engine.evaluate("true()");
+    QCOMPARE(exceptionResult.toString(), QString("TypeError: true is not a function"));
 }
 
 void tst_QJSEngine::installTranslatorFunctions()
@@ -3599,6 +3603,16 @@ void tst_QJSEngine::privateMethods()
         it.next();
         QVERIFY(!privateMethods.contains(it.name()));
     }
+}
+
+void tst_QJSEngine::intConversion_QTBUG43309()
+{
+    // This failed in the interpreter:
+    QJSEngine engine;
+    QString jsCode = "var n = 0.1; var m = (n*255) | 0; m";
+    QJSValue result = engine.evaluate( jsCode );
+    QVERIFY(result.isNumber());
+    QCOMPARE(result.toNumber(), 25.0);
 }
 
 QTEST_MAIN(tst_QJSEngine)

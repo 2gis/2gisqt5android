@@ -36,6 +36,7 @@
 
 #include "qserialport.h"
 #include "qserialportinfo.h"
+#include "qserialportinfo_p.h"
 
 #ifdef Q_OS_WINCE
 #include "qserialport_wince_p.h"
@@ -69,8 +70,6 @@ QSerialPortPrivateData::QSerialPortPrivateData(QSerialPort *q)
     , stopBits(QSerialPort::OneStop)
     , flowControl(QSerialPort::NoFlowControl)
     , policy(QSerialPort::IgnorePolicy)
-    , dataTerminalReady(false)
-    , requestToSend(false)
 #if QT_DEPRECATED_SINCE(5,3)
     , settingsRestoredOnClose(true)
 #endif
@@ -435,7 +434,7 @@ QSerialPort::~QSerialPort()
 void QSerialPort::setPortName(const QString &name)
 {
     Q_D(QSerialPort);
-    d->systemLocation = QSerialPortPrivate::portNameToSystemLocation(name);
+    d->systemLocation = QSerialPortInfoPrivate::portNameToSystemLocation(name);
 }
 
 /*!
@@ -446,7 +445,7 @@ void QSerialPort::setPortName(const QString &name)
 void QSerialPort::setPort(const QSerialPortInfo &serialPortInfo)
 {
     Q_D(QSerialPort);
-    d->systemLocation = QSerialPortPrivate::portNameToSystemLocation(serialPortInfo.systemLocation());
+    d->systemLocation = serialPortInfo.systemLocation();
 }
 
 /*!
@@ -460,7 +459,7 @@ void QSerialPort::setPort(const QSerialPortInfo &serialPortInfo)
         \li Brief Description
     \row
         \li Windows
-        \li Removes the prefix "\\\\.\\" from the system location
+        \li Removes the prefix "\\\\.\\" or "//./" from the system location
            and returns the remainder of the string.
     \row
         \li Windows CE
@@ -471,16 +470,9 @@ void QSerialPort::setPort(const QSerialPortInfo &serialPortInfo)
         \li Returns the system location as it is,
            as it is equivalent to the port name.
     \row
-        \li GNU/Linux
+        \li Unix, BSD
         \li Removes the prefix "/dev/" from the system location
            and returns the remainder of the string.
-    \row
-        \li Mac OSX
-        \li Removes the prefix "/dev/cu." and "/dev/tty." from the
-           system location and returns the remainder of the string.
-    \row
-        \li Other *nix
-        \li  The same as for GNU/Linux.
     \endtable
 
     \sa setPort(), QSerialPortInfo::portName()
@@ -488,7 +480,7 @@ void QSerialPort::setPort(const QSerialPortInfo &serialPortInfo)
 QString QSerialPort::portName() const
 {
     Q_D(const QSerialPort);
-    return QSerialPortPrivate::portNameFromSystemLocation(d->systemLocation);
+    return QSerialPortInfoPrivate::portNameFromSystemLocation(d->systemLocation);
 }
 
 /*!
@@ -527,20 +519,16 @@ bool QSerialPort::open(OpenMode mode)
     if (!d->open(mode))
         return false;
 
-    QIODevice::open(mode);
-
     if (!d->setBaudRate()
         || !d->setDataBits(d->dataBits)
         || !d->setParity(d->parity)
         || !d->setStopBits(d->stopBits)
         || !d->setFlowControl(d->flowControl)) {
-        close();
+        d->close();
         return false;
     }
 
-    d->dataTerminalReady = isDataTerminalReady();
-    d->requestToSend = isRequestToSend();
-
+    QIODevice::open(mode);
     return true;
 }
 
@@ -871,11 +859,10 @@ bool QSerialPort::setDataTerminalReady(bool set)
         return false;
     }
 
+    const bool dataTerminalReady = isDataTerminalReady();
     const bool retval = d->setDataTerminalReady(set);
-    if (retval && (d->dataTerminalReady != set)) {
-        d->dataTerminalReady = set;
+    if (retval && (dataTerminalReady != set))
         emit dataTerminalReadyChanged(set);
-    }
 
     return retval;
 }
@@ -919,11 +906,10 @@ bool QSerialPort::setRequestToSend(bool set)
         return false;
     }
 
+    const bool requestToSend = isRequestToSend();
     const bool retval = d->setRequestToSend(set);
-    if (retval && (d->requestToSend != set)) {
-        d->requestToSend = set;
+    if (retval && (requestToSend != set))
         emit requestToSendChanged(set);
-    }
 
     return retval;
 }

@@ -39,10 +39,10 @@
 **
 ****************************************************************************/
 
-
-
 #include "qsslcertificate.h"
 #include "qsslcertificate_p.h"
+
+#include "qssl_p.h"
 #include "qsslkey.h"
 #include "qsslkey_p.h"
 #include "qsslcertificateextension.h"
@@ -83,8 +83,9 @@ bool QSslCertificate::isSelfSigned() const
     if (d->null)
         return false;
 
-    qWarning("QSslCertificate::isSelfSigned: This function does not check, whether the certificate "
-             "is actually signed. It just checks whether issuer and subject are identical");
+    qCWarning(lcSsl,
+              "QSslCertificate::isSelfSigned: This function does not check, whether the certificate "
+              "is actually signed. It just checks whether issuer and subject are identical");
     return d->subjectMatchesIssuer;
 }
 

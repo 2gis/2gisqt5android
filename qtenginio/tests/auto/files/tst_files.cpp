@@ -138,7 +138,7 @@ void tst_Files::fileUploadDownload()
     QVERIFY(!_id.isEmpty());
 
     QString fileName = QStringLiteral("test.png");
-    QString filePath = QStringLiteral(TEST_FILE_PATH);
+    QString filePath = QFINDTESTDATA(QStringLiteral("enginio.png"));
     QFile file(filePath);
     QVERIFY(file.exists());
     QString fileId;

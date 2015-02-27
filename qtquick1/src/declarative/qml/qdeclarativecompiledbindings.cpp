@@ -2024,7 +2024,7 @@ bool QDeclarativeBindingCompilerPrivate::parseName(AST::Node *node, Result &type
                     if (subscription(subscribeName, &type))
                         find.find.subscribeIndex = subscriptionIndex(subscribeName);
                     else
-                        find.find.subscribeIndex = -1;
+                        find.find.subscribeIndex = ~0;
 
                     bytecode << find;
                     type.unknownType = true;
@@ -2085,7 +2085,7 @@ bool QDeclarativeBindingCompilerPrivate::parseName(AST::Node *node, Result &type
                 if (subscription(subscribeName, &type))
                     prop.find.subscribeIndex = subscriptionIndex(subscribeName);
                 else
-                    prop.find.subscribeIndex = -1;
+                    prop.find.subscribeIndex = ~0;
 
                 type.unknownType = true;
                 type.metaObject = 0;

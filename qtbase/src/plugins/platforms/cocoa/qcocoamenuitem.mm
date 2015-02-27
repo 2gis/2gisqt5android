@@ -256,8 +256,8 @@ NSMenuItem *QCocoaMenuItem::sync()
             if (depth == 3 || !menubar)
                 break; // Menu item too deep in the hierarchy, or not connected to any menubar
 
-            MenuRole newDetectedRole = detectMenuRole(m_text);
-            switch (newDetectedRole) {
+            m_detectedRole = detectMenuRole(m_text);
+            switch (m_detectedRole) {
             case QPlatformMenuItem::AboutRole:
                 if (m_text.indexOf(QRegExp(QString::fromLatin1("qt$"), Qt::CaseInsensitive)) == -1)
                     mergeItem = [loader aboutMenuItem];
@@ -271,15 +271,12 @@ NSMenuItem *QCocoaMenuItem::sync()
                 mergeItem = [loader quitMenuItem];
                 break;
             default:
-                if (newDetectedRole >= CutRole && newDetectedRole < RoleCount && menubar)
-                    mergeItem = menubar->itemForRole(newDetectedRole);
+                if (m_detectedRole >= CutRole && m_detectedRole < RoleCount && menubar)
+                    mergeItem = menubar->itemForRole(m_detectedRole);
                 if (!m_text.isEmpty())
                     m_textSynced = true;
                 break;
             }
-
-            m_detectedRole = newDetectedRole;
-
             break;
         }
 
@@ -323,17 +320,22 @@ NSMenuItem *QCocoaMenuItem::sync()
         text += QLatin1String(" (") + accel.toString(QKeySequence::NativeText) + QLatin1String(")");
 
     QString finalString = qt_mac_removeMnemonics(text);
+    bool useAttributedTitle = false;
     // Cocoa Font and title
     if (m_font.resolve()) {
         NSFont *customMenuFont = [NSFont fontWithName:QCFString::toNSString(m_font.family())
                                   size:m_font.pointSize()];
-        NSArray *keys = [NSArray arrayWithObjects:NSFontAttributeName, nil];
-        NSArray *objects = [NSArray arrayWithObjects:customMenuFont, nil];
-        NSDictionary *attributes = [NSDictionary dictionaryWithObjects:objects forKeys:keys];
-        NSAttributedString *str = [[[NSAttributedString alloc] initWithString:QCFString::toNSString(finalString)
-                                 attributes:attributes] autorelease];
-       [m_native setAttributedTitle: str];
-    } else {
+        if (customMenuFont) {
+            NSArray *keys = [NSArray arrayWithObjects:NSFontAttributeName, nil];
+            NSArray *objects = [NSArray arrayWithObjects:customMenuFont, nil];
+            NSDictionary *attributes = [NSDictionary dictionaryWithObjects:objects forKeys:keys];
+            NSAttributedString *str = [[[NSAttributedString alloc] initWithString:QCFString::toNSString(finalString)
+                                     attributes:attributes] autorelease];
+            [m_native setAttributedTitle: str];
+            useAttributedTitle = true;
+        }
+    }
+    if (!useAttributedTitle) {
        [m_native setTitle: QCFString::toNSString(finalString)];
     }
 

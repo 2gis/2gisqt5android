@@ -251,7 +251,9 @@ public:
     inline char digitToCLocale(QChar c) const;
 
     // this function is used in QIntValidator (QtGui)
-    Q_CORE_EXPORT bool validateChars(const QString &str, NumberMode numMode, QByteArray *buff, int decDigits = -1) const;
+    Q_CORE_EXPORT bool validateChars(const QString &str, NumberMode numMode,
+                                     QByteArray *buff, int decDigits = -1,
+                                     bool rejectGroupSeparators = false) const;
 
 public:
     quint16 m_language_id, m_script_id, m_country_id;
@@ -416,9 +418,9 @@ Q_STATIC_ASSERT(!ascii_isspace('\0'));
 Q_STATIC_ASSERT(!ascii_isspace('\a'));
 Q_STATIC_ASSERT(!ascii_isspace('a'));
 Q_STATIC_ASSERT(!ascii_isspace('\177'));
-Q_STATIC_ASSERT(!ascii_isspace('\200'));
-Q_STATIC_ASSERT(!ascii_isspace('\xA0'));
-Q_STATIC_ASSERT(!ascii_isspace('\377'));
+Q_STATIC_ASSERT(!ascii_isspace(uchar('\200')));
+Q_STATIC_ASSERT(!ascii_isspace(uchar('\xA0')));
+Q_STATIC_ASSERT(!ascii_isspace(uchar('\377')));
 #endif
 
 QT_END_NAMESPACE

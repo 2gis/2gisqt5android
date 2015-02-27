@@ -37,6 +37,7 @@
 #include "qwindowsdrag.h"
 #include "qwindowsscreen.h"
 #include "qwindowsscaling.h"
+#include "qwindowsintegration.h"
 #ifdef QT_NO_CURSOR
 #  include "qwindowscursor.h"
 #endif
@@ -514,8 +515,12 @@ void WindowCreationData::fromWindow(const QWindow *w, const Qt::WindowFlags flag
                 if (flags & Qt::WindowSystemMenuHint)
                     style |= WS_SYSMENU;
                 else if (dialog) {
-                    style |= WS_SYSMENU | WS_BORDER; // QTBUG-2027, dialogs without system menu.
-                    exStyle |= WS_EX_DLGMODALFRAME;
+                    // QTBUG-2027, dialogs without system menu.
+                    style |= WS_SYSMENU;
+                    if (!(flags & Qt::FramelessWindowHint)) {
+                        style |= WS_BORDER;
+                        exStyle |= WS_EX_DLGMODALFRAME;
+                    }
                 }
                 if (flags & Qt::WindowMinimizeButtonHint)
                     style |= WS_MINIMIZEBOX;
@@ -559,10 +564,11 @@ QWindowsWindowData
         Q_ASSERT(result.hwnd);
         const LONG_PTR style = GetWindowLongPtr(result.hwnd, GWL_STYLE);
         const LONG_PTR exStyle = GetWindowLongPtr(result.hwnd, GWL_EXSTYLE);
-        result.geometry = frameGeometry(result.hwnd, !GetParent(result.hwnd));
-        result.frame = QWindowsGeometryHint::frame(style, exStyle);
         result.embedded = false;
-        qCDebug(lcQpaWindows) << "Foreign window: " << w << result.hwnd << result.geometry << result.frame;
+        result.frame = QWindowsGeometryHint::frame(style, exStyle);
+        result.geometry = frameGeometry(result.hwnd, !GetParent(result.hwnd))
+            .marginsRemoved(result.frame);
+        qCDebug(lcQpaWindows) << "Foreign window: " << w << result.hwnd << result.geometry;
         return result;
     }
 
@@ -801,7 +807,7 @@ QWindowCreationContext::QWindowCreationContext(const QWindow *w,
                                                const QRect &geometry,
                                                const QMargins &cm,
                                                DWORD style_, DWORD exStyle_) :
-    geometryHint(w, cm), style(style_), exStyle(exStyle_),
+    geometryHint(w, cm), window(w), style(style_), exStyle(exStyle_),
     requestedGeometry(geometry), obtainedGeometry(geometry),
     margins(QWindowsGeometryHint::frame(style, exStyle)), customMargins(cm),
     frameX(CW_USEDEFAULT), frameY(CW_USEDEFAULT),
@@ -889,7 +895,8 @@ QWindowsWindow::QWindowsWindow(QWindow *aWindow, const QWindowsWindowData &data)
     updateDropSite();
 
 #ifndef Q_OS_WINCE
-    if (QWindowsContext::instance()->systemInfo() & QWindowsContext::SI_SupportsTouch) {
+    if ((QWindowsContext::instance()->systemInfo() & QWindowsContext::SI_SupportsTouch)
+        && aWindow->type() != Qt::ForeignWindow) {
         if (QWindowsContext::user32dll.registerTouchWindow(m_data.hwnd, 0)) {
             setFlag(TouchRegistered);
         } else {
@@ -952,7 +959,8 @@ void QWindowsWindow::destroyWindow()
         setDropSiteEnabled(false);
 #ifndef QT_NO_OPENGL
         if (m_surface) {
-            m_data.staticOpenGLContext->destroyWindowSurface(m_surface);
+            if (QWindowsStaticOpenGLContext *staticOpenGLContext = QWindowsIntegration::staticOpenGLContext())
+                staticOpenGLContext->destroyWindowSurface(m_surface);
             m_surface = 0;
         }
 #endif
@@ -1305,21 +1313,7 @@ void QWindowsWindow::setGeometryDp(const QRect &rectIn)
         const QMargins margins = frameMarginsDp();
         rect.moveTopLeft(rect.topLeft() + QPoint(margins.left(), margins.top()));
     }
-    const QSize oldSize = m_data.geometry.size();
     m_data.geometry = rect;
-    const QSize newSize = rect.size();
-    // Check on hint.
-    if (newSize != oldSize) {
-        const QWindowsGeometryHint hint(window(), m_data.customMargins);
-        if (!hint.validSize(newSize)) {
-            qWarning("%s: Attempt to set a size (%dx%d) violating the constraints"
-                     "(%dx%d - %dx%d) on window %s/'%s'.", __FUNCTION__,
-                     newSize.width(), newSize.height(),
-                     hint.minimumSize.width(), hint.minimumSize.height(),
-                     hint.maximumSize.width(), hint.maximumSize.height(),
-                     window()->metaObject()->className(), qPrintable(window()->objectName()));
-        }
-    }
     if (m_data.hwnd) {
         // A ResizeEvent with resulting geometry will be sent. If we cannot
         // achieve that size (for example, window title minimal constraint),
@@ -1768,6 +1762,8 @@ void QWindowsWindow::windowEvent(QEvent *event)
     case QEvent::WindowBlocked: // Blocked by another modal window.
         setEnabled(false);
         setFlag(BlockedByModal);
+        if (hasMouseCapture())
+            ReleaseCapture();
         break;
     case QEvent::WindowUnblocked:
         setEnabled(true);
@@ -1783,6 +1779,47 @@ void QWindowsWindow::propagateSizeHints()
     qCDebug(lcQpaWindows) << __FUNCTION__ << this << window();
 }
 
+bool QWindowsWindow::handleGeometryChangingMessage(MSG *message, const QWindow *qWindow, const QMargins &marginsDp)
+{
+#ifndef Q_OS_WINCE
+    if (!qWindow->isTopLevel()) // Implement hasHeightForWidth().
+        return false;
+    WINDOWPOS *windowPos = reinterpret_cast<WINDOWPOS *>(message->lParam);
+    if ((windowPos->flags & (SWP_NOCOPYBITS | SWP_NOSIZE)))
+        return false;
+    const QRect suggestedFrameGeometryDp(windowPos->x, windowPos->y,
+                                         windowPos->cx, windowPos->cy);
+    const qreal factor = QWindowsScaling::factor();
+    const QRect suggestedGeometryDp = suggestedFrameGeometryDp - marginsDp;
+    const QRectF suggestedGeometry = QRectF(QPointF(suggestedGeometryDp.topLeft()) / factor,
+                                            QSizeF(suggestedGeometryDp.size()) / factor);
+    const QRectF correctedGeometryF =
+        qt_window_private(const_cast<QWindow *>(qWindow))->closestAcceptableGeometry(suggestedGeometry);
+    if (!correctedGeometryF.isValid())
+        return false;
+    const QRect correctedFrameGeometryDp
+        = QRectF(correctedGeometryF.topLeft() * factor,
+                 correctedGeometryF.size() * factor).toRect()
+          + marginsDp;
+    if (correctedFrameGeometryDp == suggestedFrameGeometryDp)
+        return false;
+    windowPos->x = correctedFrameGeometryDp.left();
+    windowPos->y = correctedFrameGeometryDp.top();
+    windowPos->cx = correctedFrameGeometryDp.width();
+    windowPos->cy = correctedFrameGeometryDp.height();
+    return true;
+#else // !Q_OS_WINCE
+    Q_UNUSED(message)
+    return false;
+#endif
+}
+
+bool QWindowsWindow::handleGeometryChanging(MSG *message) const
+{
+    const QMargins marginsDp = window()->isTopLevel() ? frameMarginsDp() : QMargins();
+    return QWindowsWindow::handleGeometryChangingMessage(message, window(), marginsDp);
+}
+
 QMargins QWindowsWindow::frameMarginsDp() const
 {
     // Frames are invalidated by style changes (window state, flags).
@@ -1790,7 +1827,12 @@ QMargins QWindowsWindow::frameMarginsDp() const
     // event sequences, introduce a dirty flag mechanism to be able
     // to cache results.
     if (testFlag(FrameDirty)) {
-        m_data.frame = QWindowsGeometryHint::frame(style(), exStyle());
+        // Always skip calculating style-dependent margins for windows claimed to be frameless.
+        // This allows users to remove the margins by handling WM_NCCALCSIZE with WS_THICKFRAME set
+        // to ensure Areo snap still works (QTBUG-40578).
+        m_data.frame = window()->flags() & Qt::FramelessWindowHint
+            ? QMargins(0, 0, 0, 0)
+            : QWindowsGeometryHint::frame(style(), exStyle());
         clearFlag(FrameDirty);
     }
     return m_data.frame + m_data.customMargins;
@@ -2262,8 +2304,10 @@ void *QWindowsWindow::surface(void *nativeConfig)
 #ifdef QT_NO_OPENGL
     return 0;
 #else
-    if (!m_surface)
-        m_surface = m_data.staticOpenGLContext->createWindowSurface(m_data.hwnd, nativeConfig);
+    if (!m_surface) {
+        if (QWindowsStaticOpenGLContext *staticOpenGLContext = QWindowsIntegration::staticOpenGLContext())
+            m_surface = staticOpenGLContext->createWindowSurface(m_data.hwnd, nativeConfig);
+    }
 
     return m_surface;
 #endif
