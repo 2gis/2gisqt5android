@@ -49,25 +49,38 @@ namespace {
 class JavaScriptJob: public Debugger::Job
 {
     QV4::ExecutionEngine *engine;
+    int frameNr;
     const QString &script;
 
 public:
-    JavaScriptJob(QV4::ExecutionEngine *engine, const QString &script)
+    JavaScriptJob(QV4::ExecutionEngine *engine, int frameNr, const QString &script)
         : engine(engine)
+        , frameNr(frameNr)
         , script(script)
     {}
 
     void run()
     {
-        QV4::Scope scope(engine);
-        QV4::ExecutionContext *ctx = engine->currentContext();
-        ContextStateSaver ctxSaver(ctx);
-        QV4::ScopedValue result(scope);
+        Scope scope(engine);
 
+        ExecutionContextSaver saver(engine->currentContext());
+
+        if (frameNr > 0) {
+            Value *savedContexts = scope.alloc(frameNr);
+            for (int i = 0; i < frameNr; ++i) {
+                savedContexts[i] = engine->currentContext();
+                engine->popContext();
+            }
+        }
+
+        ExecutionContext *ctx = engine->currentContext();
         QV4::Script script(ctx, this->script);
         script.strictMode = ctx->d()->strictMode;
-        script.inheritContext = false;
+        // In order for property lookups in QML to work, we need to disable fast v4 lookups. That
+        // is a side-effect of inheritContext.
+        script.inheritContext = true;
         script.parse();
+        QV4::ScopedValue result(scope);
         if (!scope.engine->hasException)
             result = script.run();
         if (scope.engine->hasException)
@@ -85,7 +98,7 @@ class EvalJob: public JavaScriptJob
 
 public:
     EvalJob(QV4::ExecutionEngine *engine, const QString &script)
-        : JavaScriptJob(engine, script)
+        : JavaScriptJob(engine, /*frameNr*/-1, script)
         , result(false)
     {}
 
@@ -105,8 +118,8 @@ class ExpressionEvalJob: public JavaScriptJob
     Debugger::Collector *collector;
 
 public:
-    ExpressionEvalJob(ExecutionEngine *engine, const QString &expression, Debugger::Collector *collector)
-        : JavaScriptJob(engine, expression)
+    ExpressionEvalJob(ExecutionEngine *engine, int frameNr, const QString &expression, Debugger::Collector *collector)
+        : JavaScriptJob(engine, frameNr, expression)
         , collector(collector)
     {
     }
@@ -486,13 +499,10 @@ QVector<ExecutionContext::ContextType> Debugger::getScopeTypes(int frame) const
 void Debugger::evaluateExpression(int frameNr, const QString &expression, Debugger::Collector *resultsCollector)
 {
     Q_ASSERT(state() == Paused);
-    Q_UNUSED(frameNr);
 
     Q_ASSERT(m_runningJob == 0);
-    ExpressionEvalJob job(m_engine, expression, resultsCollector);
-    m_runningJob = &job;
-    m_runningJob->run();
-    m_runningJob = 0;
+    ExpressionEvalJob job(m_engine, frameNr, expression, resultsCollector);
+    runInEngine(&job);
 }
 
 void Debugger::maybeBreakAtInstruction()
@@ -501,7 +511,6 @@ void Debugger::maybeBreakAtInstruction()
         return;
 
     QMutexLocker locker(&m_lock);
-    int lineNumber = engine()->currentContext()->d()->lineNumber;
 
     if (m_gatherSources) {
         m_gatherSources->run();
@@ -525,8 +534,12 @@ void Debugger::maybeBreakAtInstruction()
     if (m_pauseRequested) { // Serve debugging requests from the agent
         m_pauseRequested = false;
         pauseAndWait(PauseRequest);
-    } else if (m_haveBreakPoints && reallyHitTheBreakPoint(getFunction()->sourceFile(), lineNumber)) {
-        pauseAndWait(BreakPoint);
+    } else if (m_haveBreakPoints) {
+        if (Function *f = getFunction()) {
+            const int lineNumber = engine()->currentContext()->d()->lineNumber;
+            if (reallyHitTheBreakPoint(f->sourceFile(), lineNumber))
+                pauseAndWait(BreakPoint);
+        }
     }
 }
 
@@ -571,12 +584,10 @@ void Debugger::aboutToThrow()
 Function *Debugger::getFunction() const
 {
     ExecutionContext *context = m_engine->currentContext();
-    if (CallContext *callCtx = context->asCallContext())
-        return callCtx->d()->function->function();
-    else {
-        Q_ASSERT(context->d()->type == QV4::ExecutionContext::Type_GlobalContext);
+    if (const FunctionObject *function = context->getFunctionObject())
+        return function->function();
+    else
         return context->d()->engine->globalCode;
-    }
 }
 
 void Debugger::pauseAndWait(PauseReason reason)

@@ -1,6 +1,6 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2015 Digia Plc and/or its subsidiary(-ies).
 ** Copyright (C) 2014 Intel Corporation
 ** Contact: http://www.qt-project.org/legal
 **
@@ -116,10 +116,11 @@ QLibrarySettings::QLibrarySettings()
         QStringList children = settings->childGroups();
 #ifdef QT_BOOTSTRAPPED
         haveEffectiveSourcePaths = children.contains(QLatin1String("EffectiveSourcePaths"));
-        haveEffectivePaths = haveEffectiveSourcePaths || children.contains(QLatin1String("EffectivePaths"));
 #else
-        haveEffectivePaths = children.contains(QLatin1String("EffectivePaths"));
+        // EffectiveSourcePaths is for the Qt build only, so needs no backwards compat trickery.
+        bool haveEffectiveSourcePaths = false;
 #endif
+        haveEffectivePaths = haveEffectiveSourcePaths || children.contains(QLatin1String("EffectivePaths"));
         // Backwards compat: an existing but empty file is claimed to contain the Paths section.
         havePaths = (!haveEffectivePaths && !children.contains(QLatin1String(platformsSection)))
                     || children.contains(QLatin1String("Paths"));
@@ -128,9 +129,7 @@ QLibrarySettings::QLibrarySettings()
             settings.reset(0);
 #else
     } else {
-#ifdef QT_BOOTSTRAPPED
         haveEffectiveSourcePaths = false;
-#endif
         haveEffectivePaths = false;
         havePaths = false;
 #endif
@@ -605,7 +604,7 @@ extern "C" void qt_core_boilerplate();
 void qt_core_boilerplate()
 {
     printf("This is the QtCore library version " QT_BUILD_STR "\n"
-           "Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).\n"
+           "Copyright (C) 2015 Digia Plc and/or its subsidiary(-ies).\n"
            "Contact: http://www.qt-project.org/legal\n"
            "\n"
            "Build date:          %s\n"

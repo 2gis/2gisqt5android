@@ -675,15 +675,23 @@ static inline bool findPlatformWindowHelper(const POINT &screenPoint, unsigned c
 #ifndef Q_OS_WINCE
     const HWND child = ChildWindowFromPointEx(*hwnd, point, cwexFlags);
 #else
+//  Under Windows CE we don't use ChildWindowFromPointEx as it's not available
+//  and ChildWindowFromPoint does not work properly.
     Q_UNUSED(cwexFlags)
-    const HWND child = ChildWindowFromPoint(*hwnd, point);
+    const HWND child = WindowFromPoint(point);
 #endif
     if (!child || child == *hwnd)
         return false;
     if (QWindowsWindow *window = context->findPlatformWindow(child)) {
         *result = window;
         *hwnd = child;
+#ifndef Q_OS_WINCE
         return true;
+#else
+//      WindowFromPoint does not return same handle in two sequential calls, which leads
+//      to an endless loop, but calling WindowFromPoint once is good enough.
+        return false;
+#endif
     }
 #ifndef Q_OS_WINCE // Does not have  WS_EX_TRANSPARENT .
     // QTBUG-40555: despite CWP_SKIPINVISIBLE, it is possible to hit on invisible
@@ -952,6 +960,9 @@ bool QWindowsContext::windowsProc(HWND hwnd, UINT message,
             return true;
         case QtWindows::CalculateSize:
             return QWindowsGeometryHint::handleCalculateSize(d->m_creationContext->customMargins, msg, result);
+        case QtWindows::GeometryChangingEvent:
+            return QWindowsWindow::handleGeometryChangingMessage(&msg, d->m_creationContext->window,
+                                                                 d->m_creationContext->margins + d->m_creationContext->customMargins);
         default:
             break;
         }
@@ -995,6 +1006,8 @@ bool QWindowsContext::windowsProc(HWND hwnd, UINT message,
         return QWindowsGeometryHint::handleCalculateSize(platformWindow->customMargins(), msg, result);
     case QtWindows::NonClientHitTest:
         return platformWindow->handleNonClientHitTest(QPoint(msg.pt.x, msg.pt.y), result);
+    case QtWindows::GeometryChangingEvent:
+        return platformWindow->QWindowsWindow::handleGeometryChanging(&msg);
 #endif // !Q_OS_WINCE
     case QtWindows::ExposeEvent:
         return platformWindow->handleWmPaint(hwnd, message, wParam, lParam);

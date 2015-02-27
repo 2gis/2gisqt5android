@@ -66,27 +66,66 @@ public:
     {}
 
     QRawFontPrivate(const QRawFontPrivate &other)
-        : hintingPreference(other.hintingPreference)
+        : fontEngine(other.fontEngine)
+        , hintingPreference(other.hintingPreference)
         , thread(other.thread)
     {
-        fontEngine = other.fontEngine;
+#ifndef QT_NO_DEBUG
+        Q_ASSERT(fontEngine == 0 || thread == QThread::currentThread());
+#endif
         if (fontEngine != 0)
             fontEngine->ref.ref();
     }
 
     ~QRawFontPrivate()
     {
+#ifndef QT_NO_DEBUG
         Q_ASSERT(ref.load() == 0);
+#endif
         cleanUp();
+    }
+
+    inline void cleanUp()
+    {
+        setFontEngine(0);
+        hintingPreference = QFont::PreferDefaultHinting;
     }
 
     inline bool isValid() const
     {
-        Q_ASSERT(thread == 0 || thread == QThread::currentThread());
+#ifndef QT_NO_DEBUG
+        Q_ASSERT(fontEngine == 0 || thread == QThread::currentThread());
+#endif
         return fontEngine != 0;
     }
 
-    void cleanUp();
+    inline void setFontEngine(QFontEngine *engine)
+    {
+#ifndef QT_NO_DEBUG
+        Q_ASSERT(fontEngine == 0 || thread == QThread::currentThread());
+#endif
+        if (fontEngine == engine)
+            return;
+
+        if (fontEngine != 0) {
+            if (!fontEngine->ref.deref())
+                delete fontEngine;
+#ifndef QT_NO_DEBUG
+            thread = 0;
+#endif
+        }
+
+        fontEngine = engine;
+
+        if (fontEngine != 0) {
+            fontEngine->ref.ref();
+#ifndef QT_NO_DEBUG
+            thread = QThread::currentThread();
+            Q_ASSERT(thread);
+#endif
+        }
+    }
+
     void loadFromData(const QByteArray &fontData,
                               qreal pixelSize,
                               QFont::HintingPreference hintingPreference);
@@ -95,9 +134,10 @@ public:
 
     QFontEngine *fontEngine;
     QFont::HintingPreference hintingPreference;
-    QThread *thread;
     QAtomicInt ref;
 
+private:
+    QThread *thread;
 };
 
 QT_END_NAMESPACE

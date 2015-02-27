@@ -491,12 +491,15 @@ void tst_QDBusAbstractAdaptor::initTestCase()
     commonInit();
 
     // start peer server
-    #ifdef Q_OS_WIN
-    proc.start("qmyserver");
-    #else
-    proc.start("./qmyserver/qmyserver");
-    #endif
-    QVERIFY(proc.waitForStarted());
+#ifdef Q_OS_WIN
+#  define EXE ".exe"
+#else
+#  define EXE ""
+#endif
+    proc.setProcessChannelMode(QProcess::ForwardedErrorChannel);
+    proc.start(QFINDTESTDATA("qmyserver/qmyserver" EXE));
+    QVERIFY2(proc.waitForStarted(), qPrintable(proc.errorString()));
+    QVERIFY(proc.waitForReadyRead());
 
     WaitForQMyServer w;
     QVERIFY(w.ok());
@@ -511,16 +514,17 @@ void tst_QDBusAbstractAdaptor::initTestCase()
     QDBusConnection peercon = QDBusConnection::connectToPeer(address, "peer");
     QVERIFY(peercon.isConnected());
 
-    QDBusMessage req2 = QDBusMessage::createMethodCall(serviceName, objectPath, interfaceName, "isConnected");
+    QDBusMessage req2 = QDBusMessage::createMethodCall(serviceName, objectPath, interfaceName, "waitForConnected");
     QDBusMessage rpl2 = QDBusConnection::sessionBus().call(req2);
-    QVERIFY(rpl2.type() == QDBusMessage::ReplyMessage);
-    QVERIFY(rpl2.arguments().at(0).toBool());
+    QVERIFY2(rpl2.type() == QDBusMessage::ReplyMessage, rpl2.errorMessage().toLatin1());
 }
 
 void tst_QDBusAbstractAdaptor::cleanupTestCase()
 {
+    QDBusMessage msg = QDBusMessage::createMethodCall(serviceName, objectPath, interfaceName, "quit");
+    QDBusConnection::sessionBus().call(msg);
+    proc.waitForFinished(200);
     proc.close();
-    proc.kill();
 }
 
 void tst_QDBusAbstractAdaptor::methodCalls_data()

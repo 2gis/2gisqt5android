@@ -627,7 +627,7 @@ void QStyle::drawItemPixmap(QPainter *painter, const QRect &rect, int alignment,
     indicator or button bevel.
 
     \omitvalue PE_IndicatorViewItemCheck
-    \value PE_FrameStatusBar Frame
+    \value PE_FrameStatusBar  Obsolete. Use PE_FrameStatusBarItem instead.
 
     \value PE_PanelButtonCommand  Button used to initiate an action, for
         example, a QPushButton.
@@ -1663,7 +1663,8 @@ void QStyle::drawItemPixmap(QPainter *painter, const QRect &rect, int alignment,
 
     \value SH_Header_ArrowAlignment The placement of the sorting
         indicator may appear in list or table headers. Possible values
-        are Qt::Left or Qt::Right.
+        are Qt::Alignment values (that is, an OR combination of
+        Qt::AlignmentFlag flags).
 
     \value SH_Slider_SnapToValue  Sliders snap to values while moving,
         as they do on Windows.

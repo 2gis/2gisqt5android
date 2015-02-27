@@ -46,7 +46,7 @@ static QString findDescription(HKEY parentKeyHandle, const QString &subKey)
     const static QString valueName(QStringLiteral("FriendlyName"));
 
     QString result;
-    HKEY hSubKey = 0;
+    HKEY hSubKey = Q_NULLPTR;
     LONG res = ::RegOpenKeyEx(parentKeyHandle, reinterpret_cast<const wchar_t *>(subKey.utf16()),
                               0, KEY_QUERY_VALUE | KEY_ENUMERATE_SUB_KEYS, &hSubKey);
 
@@ -55,12 +55,12 @@ static QString findDescription(HKEY parentKeyHandle, const QString &subKey)
         DWORD dataType = 0;
         DWORD dataSize = 0;
         res = ::RegQueryValueEx(hSubKey, reinterpret_cast<const wchar_t *>(valueName.utf16()),
-                                NULL, &dataType, NULL, &dataSize);
+                                Q_NULLPTR, &dataType, Q_NULLPTR, &dataSize);
 
         if (res == ERROR_SUCCESS) {
             QByteArray data(dataSize, 0);
             res = ::RegQueryValueEx(hSubKey, reinterpret_cast<const wchar_t *>(valueName.utf16()),
-                                    NULL, NULL,
+                                    Q_NULLPTR, Q_NULLPTR,
                                     reinterpret_cast<unsigned char *>(data.data()),
                                     &dataSize);
 
@@ -81,7 +81,7 @@ static QString findDescription(HKEY parentKeyHandle, const QString &subKey)
             QByteArray data(dataSize, 0);
             while (::RegEnumKeyEx(hSubKey, index++,
                                   reinterpret_cast<wchar_t *>(data.data()), &dataSize,
-                                  NULL, NULL, NULL, NULL) == ERROR_SUCCESS) {
+                                  Q_NULLPTR, Q_NULLPTR, Q_NULLPTR, Q_NULLPTR) == ERROR_SUCCESS) {
 
                 result = findDescription(hSubKey,
                                          QString::fromUtf16(reinterpret_cast<ushort *>(data.data()), dataSize));
@@ -105,13 +105,13 @@ QList<QSerialPortInfo> QSerialPortInfo::availablePorts()
                                              &di);
     if (hSearch != INVALID_HANDLE_VALUE) {
         do {
-            QSerialPortInfo serialPortInfo;
-            serialPortInfo.d_ptr->device = QString::fromWCharArray(di.szLegacyName);
-            serialPortInfo.d_ptr->portName = QSerialPortPrivate::portNameFromSystemLocation(serialPortInfo.d_ptr->device);
-            serialPortInfo.d_ptr->description = findDescription(HKEY_LOCAL_MACHINE,
-                                                      QString::fromWCharArray(di.szDeviceKey));
+            QSerialPortInfoPrivate priv;
+            priv.device = QString::fromWCharArray(di.szLegacyName);
+            priv.portName = QSerialPortInfoPrivate::portNameFromSystemLocation(priv.device);
+            priv.description = findDescription(HKEY_LOCAL_MACHINE,
+                                               QString::fromWCharArray(di.szDeviceKey));
 
-            serialPortInfoList.append(serialPortInfo);
+            serialPortInfoList.append(priv);
 
         } while (::FindNextDevice(hSearch, &di));
         ::FindClose(hSearch);
@@ -128,7 +128,7 @@ QList<qint32> QSerialPortInfo::standardBaudRates()
 bool QSerialPortInfo::isBusy() const
 {
     const HANDLE handle = ::CreateFile(reinterpret_cast<const wchar_t*>(systemLocation().utf16()),
-                                           GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, NULL);
+                                           GENERIC_READ | GENERIC_WRITE, 0, Q_NULLPTR, OPEN_EXISTING, 0, Q_NULLPTR);
 
     if (handle == INVALID_HANDLE_VALUE) {
         if (::GetLastError() == ERROR_ACCESS_DENIED)
@@ -142,7 +142,7 @@ bool QSerialPortInfo::isBusy() const
 bool QSerialPortInfo::isValid() const
 {
     const HANDLE handle = ::CreateFile(reinterpret_cast<const wchar_t*>(systemLocation().utf16()),
-                                           GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, NULL);
+                                           GENERIC_READ | GENERIC_WRITE, 0, Q_NULLPTR, OPEN_EXISTING, 0, Q_NULLPTR);
 
     if (handle == INVALID_HANDLE_VALUE) {
         if (::GetLastError() != ERROR_ACCESS_DENIED)
@@ -151,6 +151,18 @@ bool QSerialPortInfo::isValid() const
         ::CloseHandle(handle);
     }
     return true;
+}
+
+QString QSerialPortInfoPrivate::portNameToSystemLocation(const QString &source)
+{
+    return source.endsWith(QLatin1Char(':'))
+            ? source : (source + QLatin1Char(':'));
+}
+
+QString QSerialPortInfoPrivate::portNameFromSystemLocation(const QString &source)
+{
+    return source.endsWith(QLatin1Char(':'))
+            ? source.mid(0, source.size() - 1) : source;
 }
 
 QT_END_NAMESPACE

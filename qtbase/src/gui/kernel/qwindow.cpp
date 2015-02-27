@@ -411,6 +411,15 @@ void QWindowPrivate::clearFocusObject()
 {
 }
 
+// Allows for manipulating the suggested geometry before a resize/move
+// event in derived classes for platforms that support it, for example to
+// implement heightForWidth().
+QRectF QWindowPrivate::closestAcceptableGeometry(const QRectF &rect) const
+{
+    Q_UNUSED(rect)
+    return QRectF();
+}
+
 /*!
     Sets the \a surfaceType of the window.
 
@@ -1639,8 +1648,6 @@ QPlatformSurface *QWindow::surfaceHandle() const
 bool QWindow::setKeyboardGrabEnabled(bool grab)
 {
     Q_D(QWindow);
-    if (grab && QGuiApplicationPrivate::noGrab)
-        return false;
     if (d->platformWindow)
         return d->platformWindow->setKeyboardGrabEnabled(grab);
     return false;
@@ -1658,8 +1665,6 @@ bool QWindow::setKeyboardGrabEnabled(bool grab)
 bool QWindow::setMouseGrabEnabled(bool grab)
 {
     Q_D(QWindow);
-    if (grab && QGuiApplicationPrivate::noGrab)
-        return false;
     if (d->platformWindow)
         return d->platformWindow->setMouseGrabEnabled(grab);
     return false;
@@ -2388,7 +2393,8 @@ void QWindowPrivate::setCursor(const QCursor *newCursor)
         hasCursor = false;
     }
     // Only attempt to set cursor and emit signal if there is an actual platform cursor
-    if (q->screen()->handle()->cursor()) {
+    QScreen* screen = q->screen();
+    if (screen && screen->handle()->cursor()) {
         applyCursor();
         QEvent event(QEvent::CursorChange);
         QGuiApplication::sendEvent(q, &event);

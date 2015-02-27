@@ -246,7 +246,7 @@ void tst_QDBusConnection::connectToBus()
 
         QDBusConnection con2("foo");
         QVERIFY(!con2.isConnected());
-        QVERIFY(!con2.lastError().isValid());
+        QVERIFY(con2.lastError().isValid());
 
         con2 = con;
         QVERIFY(con.isConnected());
@@ -274,7 +274,7 @@ void tst_QDBusConnection::connectToBus()
     {
         QDBusConnection con("bubu");
         QVERIFY(!con.isConnected());
-        QVERIFY(!con.lastError().isValid());
+        QVERIFY(con.lastError().isValid());
     }
 
     QByteArray address = qgetenv("DBUS_SESSION_BUS_ADDRESS");
@@ -294,15 +294,17 @@ void tst_QDBusConnection::connectToPeer()
                 "", "newconn");
         QVERIFY(!con.isConnected());
         QVERIFY(con.lastError().isValid());
+        QDBusConnection::disconnectFromPeer("newconn");
     }
 
-    QDBusServer server("unix:tmpdir=/tmp", 0);
+    QDBusServer server;
 
     {
         QDBusConnection con = QDBusConnection::connectToPeer(
                 "unix:abstract=/tmp/dbus-XXXXXXXXXX,guid=00000000000000000000000000000000", "newconn2");
         QVERIFY(!con.isConnected());
         QVERIFY(con.lastError().isValid());
+        QDBusConnection::disconnectFromPeer("newconn2");
     }
 
     {
@@ -314,7 +316,7 @@ void tst_QDBusConnection::connectToPeer()
 
         QDBusConnection con2("foo");
         QVERIFY(!con2.isConnected());
-        QVERIFY(!con2.lastError().isValid());
+        QVERIFY(con2.lastError().isValid());
 
         con2 = con;
         QVERIFY(con.isConnected());
@@ -342,7 +344,7 @@ void tst_QDBusConnection::connectToPeer()
     {
         QDBusConnection con("bubu");
         QVERIFY(!con.isConnected());
-        QVERIFY(!con.lastError().isValid());
+        QVERIFY(con.lastError().isValid());
     }
 }
 
@@ -381,9 +383,7 @@ class MyServer : public QDBusServer
 {
     Q_OBJECT
 public:
-    MyServer(QString path, QString addr, QObject* parent) : QDBusServer(addr, parent),
-                                                            m_path(path),
-                                                            m_connections()
+    MyServer(QString path) : m_path(path), m_connections()
     {
         connect(this, SIGNAL(newConnection(QDBusConnection)), SLOT(handleConnection(QDBusConnection)));
     }
@@ -446,7 +446,7 @@ void tst_QDBusConnection::registerObjectPeer()
 {
     QFETCH(QString, path);
 
-    MyServer server(path, "unix:tmpdir=/tmp", 0);
+    MyServer server(path);
 
     QDBusConnection::connectToPeer(server.address(), "beforeFoo");
 
@@ -594,8 +594,7 @@ class MyServer2 : public QDBusServer
 {
     Q_OBJECT
 public:
-    MyServer2(QString addr, QObject* parent) : QDBusServer(addr, parent),
-                                               m_conn("none")
+    MyServer2() : m_conn("none")
     {
         connect(this, SIGNAL(newConnection(QDBusConnection)), SLOT(handleConnection(QDBusConnection)));
     }
@@ -620,7 +619,7 @@ private:
 
 void tst_QDBusConnection::registerObjectPeer2()
 {
-    MyServer2 server("unix:tmpdir=/tmp", 0);
+    MyServer2 server;
     QDBusConnection con = QDBusConnection::connectToPeer(server.address(), "foo");
     QCoreApplication::processEvents();
     QVERIFY(con.isConnected());
@@ -775,7 +774,7 @@ void tst_QDBusConnection::registerQObjectChildren()
 
 void tst_QDBusConnection::registerQObjectChildrenPeer()
 {
-    MyServer2 server("unix:tmpdir=/tmp", 0);
+    MyServer2 server;
     QDBusConnection con = QDBusConnection::connectToPeer(server.address(), "foo");
     QCoreApplication::processEvents();
     QVERIFY(con.isConnected());

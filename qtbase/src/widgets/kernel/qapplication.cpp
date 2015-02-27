@@ -3320,12 +3320,10 @@ bool QApplication::notify(QObject *receiver, QEvent *e)
             QWidget* w = static_cast<QWidget *>(receiver);
             QWheelEvent* wheel = static_cast<QWheelEvent*>(e);
 
-            // QTBUG-40656, combo and other popups should close when the main window gets a wheel event.
-            while (QWidget *popup = QApplication::activePopupWidget()) {
+            // QTBUG-40656, QTBUG-42731: ignore wheel events when a popup (QComboBox) is open.
+            if (const QWidget *popup = QApplication::activePopupWidget()) {
                 if (w->window() != popup)
-                    popup->close();
-                else
-                    break;
+                    return true;
             }
 
             QPoint relpos = wheel->pos();
@@ -4172,11 +4170,13 @@ void QApplicationPrivate::giveFocusAccordingToFocusPolicy(QWidget *widget, QEven
 {
     const bool setFocusOnRelease = QGuiApplication::styleHints()->setFocusOnTouchRelease();
     Qt::FocusPolicy focusPolicy = Qt::ClickFocus;
+    static QPointer<QWidget> focusedWidgetOnTouchBegin = 0;
 
     switch (event->type()) {
         case QEvent::MouseButtonPress:
         case QEvent::MouseButtonDblClick:
         case QEvent::TouchBegin:
+            focusedWidgetOnTouchBegin = QApplication::focusWidget();
             if (setFocusOnRelease)
                 return;
             break;
@@ -4184,6 +4184,11 @@ void QApplicationPrivate::giveFocusAccordingToFocusPolicy(QWidget *widget, QEven
         case QEvent::TouchEnd:
             if (!setFocusOnRelease)
                 return;
+            if (focusedWidgetOnTouchBegin != QApplication::focusWidget()) {
+                // Focus widget was changed while delivering press/move events.
+                // To not interfere with application logic, we leave focus as-is
+                return;
+            }
             break;
         case QEvent::Wheel:
             focusPolicy = Qt::WheelFocus;
@@ -4230,8 +4235,9 @@ bool QApplicationPrivate::shouldSetFocus(QWidget *w, Qt::FocusPolicy policy)
     return true;
 }
 
-void QApplicationPrivate::updateTouchPointsForWidget(QWidget *widget, QTouchEvent *touchEvent)
+bool QApplicationPrivate::updateTouchPointsForWidget(QWidget *widget, QTouchEvent *touchEvent)
 {
+    bool containsPress = false;
     for (int i = 0; i < touchEvent->touchPoints().count(); ++i) {
         QTouchEvent::TouchPoint &touchPoint = touchEvent->_touchPoints[i];
 
@@ -4244,7 +4250,11 @@ void QApplicationPrivate::updateTouchPointsForWidget(QWidget *widget, QTouchEven
         touchPoint.d->rect = rect;
         touchPoint.d->startPos = widget->mapFromGlobal(touchPoint.startScreenPos().toPoint()) + delta;
         touchPoint.d->lastPos = widget->mapFromGlobal(touchPoint.lastScreenPos().toPoint()) + delta;
+
+        if (touchPoint.state() == Qt::TouchPointPressed)
+            containsPress = true;
     }
+    return containsPress;
 }
 
 void QApplicationPrivate::initializeMultitouch()
@@ -4391,10 +4401,13 @@ bool QApplicationPrivate::translateRawTouchEvent(QWidget *window,
                                QApplication::keyboardModifiers(),
                                it.value().first,
                                it.value().second);
-        updateTouchPointsForWidget(widget, &touchEvent);
+        bool containsPress = updateTouchPointsForWidget(widget, &touchEvent);
         touchEvent.setTimestamp(timestamp);
         touchEvent.setWindow(window->windowHandle());
         touchEvent.setTarget(widget);
+
+        if (containsPress)
+            widget->setAttribute(Qt::WA_WState_AcceptedTouchBeginEvent);
 
         switch (touchEvent.type()) {
         case QEvent::TouchBegin:

@@ -72,20 +72,17 @@
 # include "private/qcore_unix_p.h"
 #endif
 
-#if !defined QT_NO_REGULAREXPRESSION && !defined(QT_BOOTSTRAPPED)
-#ifdef __has_include
-#if __has_include(<cxxabi.h>) && __has_include(<execinfo.h>)
-#define QLOGGING_HAVE_BACKTRACE
-#endif
-#elif defined(__GLIBCXX__) && defined(__GLIBC__) // (because older version of gcc don't have __has_include)
-#define QLOGGING_HAVE_BACKTRACE
+#ifndef __has_include
+#  define __has_include(x) 0
 #endif
 
-#ifdef QLOGGING_HAVE_BACKTRACE
-#include <qregularexpression.h>
-#include <cxxabi.h>
-#include <execinfo.h>
-#endif
+#if !defined QT_NO_REGULAREXPRESSION && !defined(QT_BOOTSTRAPPED)
+#  if (defined(__GLIBC__) && defined(__GLIBCXX__)) || (__has_include(<cxxabi.h>) && __has_include(<execinfo.h>))
+#    define QLOGGING_HAVE_BACKTRACE
+#    include <qregularexpression.h>
+#    include <cxxabi.h>
+#    include <execinfo.h>
+#  endif
 #endif
 
 #include <stdio.h>
@@ -869,7 +866,7 @@ QMessagePattern::QMessagePattern()
 
 QMessagePattern::~QMessagePattern()
 {
-    for (int i = 0; literals[i] != 0; ++i)
+    for (int i = 0; literals[i]; ++i)
         delete [] literals[i];
     delete [] literals;
     literals = 0;
@@ -879,8 +876,12 @@ QMessagePattern::~QMessagePattern()
 
 void QMessagePattern::setPattern(const QString &pattern)
 {
+    if (literals) {
+        for (int i = 0; literals[i]; ++i)
+            delete [] literals[i];
+        delete [] literals;
+    }
     delete [] tokens;
-    delete [] literals;
 
     // scanner
     QList<QString> lexemes;
@@ -1286,8 +1287,8 @@ static void android_default_message_handler(QtMsgType type,
     case QtFatalMsg: priority = ANDROID_LOG_FATAL; break;
     };
 
-    __android_log_print(priority, "Qt", "%s:%d (%s): %s\n",
-                        context.file, context.line,
+    __android_log_print(priority, qPrintable(QCoreApplication::applicationName()),
+                        "%s:%d (%s): %s\n", context.file, context.line,
                         context.function, qPrintable(message));
 }
 #endif //Q_OS_ANDROID

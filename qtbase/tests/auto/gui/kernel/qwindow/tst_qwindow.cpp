@@ -154,6 +154,7 @@ public:
     void reset()
     {
         m_received.clear();
+        m_framePositionsOnMove.clear();
     }
 
     bool event(QEvent *event)
@@ -162,6 +163,8 @@ public:
         m_order << event->type();
         if (event->type() == QEvent::Expose)
             m_exposeRegion = static_cast<QExposeEvent *>(event)->region();
+        else if (event->type() == QEvent::Move)
+            m_framePositionsOnMove << framePosition();
 
         return QWindow::event(event);
     }
@@ -181,6 +184,7 @@ public:
         return m_exposeRegion;
     }
 
+    QVector<QPoint> m_framePositionsOnMove;
 private:
     QHash<QEvent::Type, int> m_received;
     QVector<QEvent::Type> m_order;
@@ -294,6 +298,8 @@ void tst_QWindow::positioning()
     QTRY_VERIFY(window.received(QEvent::Resize) > 0);
 #endif
 
+    QTest::qWait(2000);
+
     QTRY_COMPARE(originalPos, window.position());
     QTRY_COMPARE(originalFramePos, window.framePosition());
     QTRY_COMPARE(originalMargins, window.frameMargins());
@@ -301,12 +307,20 @@ void tst_QWindow::positioning()
     // if our positioning is actually fully respected by the window manager
     // test whether it correctly handles frame positioning as well
     if (originalPos == geometry.topLeft() && (originalMargins.top() != 0 || originalMargins.left() != 0)) {
-        QPoint framePos = QPlatformScreen::platformScreenForWindow(&window)->availableGeometry().topLeft() + QPoint(40, 40);
+        QPoint framePos = QPlatformScreen::platformScreenForWindow(&window)->availableGeometry().center();
 
         window.reset();
+        const QPoint oldFramePos = window.framePosition();
         window.setFramePosition(framePos);
 
         QTRY_VERIFY(window.received(QEvent::Move));
+        if (window.framePosition() != framePos) {
+            qDebug() << "About to fail auto-test. Here is some additional information:";
+            qDebug() << "window.framePosition() == " << window.framePosition();
+            qDebug() << "old frame position == " << oldFramePos;
+            qDebug() << "We received " << window.received(QEvent::Move) << " move events";
+            qDebug() << "frame positions after each move event:" << window.m_framePositionsOnMove;
+        }
         QTRY_COMPARE(framePos, window.framePosition());
         QTRY_COMPARE(originalMargins, window.frameMargins());
         QCOMPARE(window.position(), window.framePosition() + QPoint(originalMargins.left(), originalMargins.top()));

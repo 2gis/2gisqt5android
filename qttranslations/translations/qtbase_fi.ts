@@ -43,11 +43,11 @@
     <name>QAbstractSocket</name>
     <message>
         <source>Socket operation timed out</source>
-        <translation>Pistoketoiminnon aikakatkaisu</translation>
+        <translation>Sokettitoiminnon aikakatkaisu</translation>
     </message>
     <message>
         <source>Operation on socket is not supported</source>
-        <translation>Pistoketoimintoa ei tueta</translation>
+        <translation>Sokettitoimintoa ei tueta</translation>
     </message>
     <message>
         <source>Host not found</source>
@@ -67,7 +67,7 @@
     </message>
     <message>
         <source>Socket is not connected</source>
-        <translation>Pistoketta ei ole yhdistetty</translation>
+        <translation>Sokettia ei ole yhdistetty</translation>
     </message>
     <message>
         <source>Network unreachable</source>
@@ -858,7 +858,7 @@ Peru painamalla ESC</translation>
     </message>
     <message>
         <source>Files of type:</source>
-        <translation>Tiedostotyyppi:</translation>
+        <translation>Tiedostotyypit:</translation>
     </message>
     <message>
         <source>Find Directory</source>
@@ -983,11 +983,6 @@ Haluatko silti poistaa sen?</translation>
     <message>
         <source>Drive</source>
         <translation>Asema</translation>
-    </message>
-    <message>
-        <source>%1 File</source>
-        <extracomment>%1 is a file name suffix, for example txt</extracomment>
-        <translation>%1-tiedosto</translation>
     </message>
     <message>
         <source>File</source>
@@ -1635,48 +1630,6 @@ Haluatko silti poistaa sen?</translation>
     </message>
 </context>
 <context>
-    <name>QImageReader</name>
-    <message>
-        <source>Invalid device</source>
-        <translation>Virheellinen laite</translation>
-    </message>
-    <message>
-        <source>File not found</source>
-        <translation>Tiedostoa ei löydy</translation>
-    </message>
-    <message>
-        <source>Unsupported image format</source>
-        <translation>Kuvamuotoa ei tueta</translation>
-    </message>
-    <message>
-        <source>Unable to read image data</source>
-        <translation>Kuvadatan lukeminen epäonnistui</translation>
-    </message>
-    <message>
-        <source>Unknown error</source>
-        <translation>Tuntematon virhe</translation>
-    </message>
-</context>
-<context>
-    <name>QImageWriter</name>
-    <message>
-        <source>Unknown error</source>
-        <translation>Tuntematon virhe</translation>
-    </message>
-    <message>
-        <source>Device is not set</source>
-        <translation>Laitetta ei ole asetettu</translation>
-    </message>
-    <message>
-        <source>Device not writable</source>
-        <translation>Laitteeseen ei voi kirjoittaa</translation>
-    </message>
-    <message>
-        <source>Unsupported image format</source>
-        <translation>Kuvamuotoa ei tueta</translation>
-    </message>
-</context>
-<context>
     <name>QInputDialog</name>
     <message>
         <source>Enter a value:</source>
@@ -1740,10 +1693,6 @@ Haluatko silti poistaa sen?</translation>
     <message>
         <source>too large document</source>
         <translation>liian suuri dokumentti</translation>
-    </message>
-    <message>
-        <source>garbage at the end of the document</source>
-        <translation>roskaa dokumentin lopussa</translation>
     </message>
 </context>
 <context>
@@ -1915,7 +1864,7 @@ Haluatko silti poistaa sen?</translation>
     </message>
     <message>
         <source>%1: Socket operation timed out</source>
-        <translation>%1: Pistoketoiminnon aikakatkaisu</translation>
+        <translation>%1: Sokettitoiminnon aikakatkaisu</translation>
     </message>
     <message>
         <source>%1: Datagram too large</source>
@@ -1927,7 +1876,7 @@ Haluatko silti poistaa sen?</translation>
     </message>
     <message>
         <source>%1: The socket operation is not supported</source>
-        <translation>%1: Pistoketoimintoa ei tueta</translation>
+        <translation>%1: Pistokeoperaatiota ei tueta</translation>
     </message>
     <message>
         <source>%1: Operation not permitted when socket is in this state</source>
@@ -2125,20 +2074,27 @@ Haluatko silti poistaa sen?</translation>
         <translation>&lt;h3&gt;Tietoja Qt:stä&lt;/h3&gt;&lt;p&gt;Tämä ohjelma käyttää Qt-versiota %1.&lt;/p&gt;</translation>
     </message>
     <message>
-        <source>&lt;p&gt;Qt is a C++ toolkit for cross-platform application development.&lt;/p&gt;&lt;p&gt;Qt provides single-source portability across all major desktop operating systems. It is also available for embedded Linux and other embedded and mobile operating systems.&lt;/p&gt;&lt;p&gt;Qt is available under three different licensing options designed to accommodate the needs of our various users.&lt;/p&gt;&lt;p&gt;Qt licensed under our commercial license agreement is appropriate for development of proprietary/commercial software where you do not want to share any source code with third parties or otherwise cannot comply with the terms of the GNU LGPL version 3 or GNU LGPL version 2.1.&lt;/p&gt;&lt;p&gt;Qt licensed under the GNU LGPL version 3 is appropriate for the development of Qt applications provided you can comply with the terms and conditions of the GNU LGPL version 3.&lt;/p&gt;&lt;p&gt;Qt licensed under the GNU LGPL version 2.1 is appropriate for the development of Qt applications provided you can comply with the terms and conditions of the GNU LGPL version 2.1.&lt;/p&gt;&lt;p&gt;Please see &lt;a href=&quot;http://%2/&quot;&gt;%2&lt;/a&gt; for an overview of Qt licensing.&lt;/p&gt;&lt;p&gt;Copyright (C) %1 Digia Plc and/or its subsidiary(-ies) and other contributors.&lt;/p&gt;&lt;p&gt;Qt and the Qt logo are trademarks of Digia Plc and/or its subsidiary(-ies).&lt;/p&gt;&lt;p&gt;Qt is a Digia product developed as an open source project. See &lt;a href=&quot;http://%3/&quot;&gt;%3&lt;/a&gt; for more information.&lt;/p&gt;</source>
+        <source>&lt;p&gt;Qt is a C++ toolkit for cross-platform application development.&lt;/p&gt;&lt;p&gt;Qt provides single-source portability across all major desktop operating systems. It is also available for embedded Linux and other embedded and mobile operating systems.&lt;/p&gt;&lt;p&gt;Qt is available under three different licensing options designed to accommodate the needs of our various users.&lt;/p&gt;&lt;p&gt;Qt licensed under our commercial license agreement is appropriate for development of proprietary/commercial software where you do not want to share any source code with third parties or otherwise cannot comply with the terms of the GNU LGPL version 2.1 or GNU GPL version 3.0.&lt;/p&gt;&lt;p&gt;Qt licensed under the GNU LGPL version 2.1 is appropriate for the development of Qt applications provided you can comply with the terms and conditions of the GNU LGPL version 2.1.&lt;/p&gt;&lt;p&gt;Qt licensed under the GNU General Public License version 3.0 is appropriate for the development of Qt applications where you wish to use such applications in combination with software subject to the terms of the GNU GPL version 3.0 or where you are otherwise willing to comply with the terms of the GNU GPL version 3.0.&lt;/p&gt;&lt;p&gt;Please see &lt;a href=&quot;http://qt.digia.com/Product/Licensing/&quot;&gt;qt.digia.com/Product/Licensing&lt;/a&gt; for an overview of Qt licensing.&lt;/p&gt;&lt;p&gt;Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies) and other contributors.&lt;/p&gt;&lt;p&gt;Qt and the Qt logo are trademarks of Digia Plc and/or its subsidiary(-ies).&lt;/p&gt;&lt;p&gt;Qt is developed as an open source project on &lt;a href=&quot;http://qt-project.org/&quot;&gt;qt-project.org&lt;/a&gt;.&lt;/p&gt;&lt;p&gt;Qt is a Digia product. See &lt;a href=&quot;http://qt.digia.com/&quot;&gt;qt.digia.com&lt;/a&gt; for more information.&lt;/p&gt;</source>
         <translation>&lt;p&gt;Qt on C++-työkalupaketti alustariippumattomaan sovelluskehitykseen.&lt;/p&gt;
 &lt;p&gt;Qt tarjoaa saman lähdekoodin siirrettävyyden kaikkiin merkittäviin työpöytäkäyttöjärjestelmiin.
 Qt on myös saatavilla sulautetulle Linuxille ja muille mobiili- sekä sulautetuille käyttöjärjestelmille.&lt;/p&gt;
 &lt;p&gt;Qt on saatavilla kolmella eri lisenssillä, jotka on tarkoitettu vastaamaan erilaisten käyttäjien tarpeisiin.&lt;/p&gt;
 &lt;p&gt;Kaupallisen lisenssisopimuksen ehtojen mukaisesti lisensoitu Qt sopii omisteisen tai kaupallisen ohjelmiston
 kehittämiseen silloin, kun lähdekoodia ei haluta jakaa kolmansille osapuolille tai ei voida muuten noudattaa
-GNU LGPL 3:n tai GNU LGPL 2.1:n ehtoja.&lt;/p&gt;
-&lt;p&gt;GNU LGPL 3:n ehtojen mukaisesti lisensoitu Qt sopii Qt-sovellusten kehittämiseen silloin, kun GNU LGPL 3:n ehtoja voidaan noudattaa.&lt;/p&gt;
-&lt;p&gt;GNU LGPL 2.1:n ehtojen mukaisesti lisensoitu Qt sopii Qt-sovellusten kehittämiseen silloin, kun GNU LGPL 2.1:n ehtoja voidaan noudattaa.&lt;/p&gt;
-&lt;p&gt;Katso yhteenveto Qt-lisensoinnista osoitteesta &lt;a href=&quot;http://%2/&quot;&gt;%2&lt;/a&gt;.&lt;/p&gt;
-&lt;p&gt;Copyright © %1 Digia Plc ja/tai sen tytäryhtiö(t) ja muut tekijät.&lt;/p&gt;
+GNU LGPL 2.1:n tai GNU GPL 3.0:n ehtoja.&lt;/p&gt;
+&lt;p&gt;GNU LGPL 2.1:n ehtojen mukaisesti lisensoitu Qt sopii Qt-sovellusten kehittämiseen silloin,
+kun GNU LGPL 2.1:n ehtoja voidaan noudattaa.&lt;/p&gt;
+&lt;p&gt;GNU General Public License 3.0:n ehtojen mukaisesti lisensoitu Qt 
+sopii sellaisten Qt-sovellusten kehittämiseen, joita halutaan yhdistää GNU GPL 3.0:n ehtoja noudattavan ohjelmiston kanssa tai joissa muuten halutaan noudattaa GNU 
+GPL 3.0:n ehtoja.&lt;/p&gt;
+&lt;p&gt;Katso yhteenveto Qt-lisensoinnista osoitteesta &lt;a 
+href=&quot;http://qt.digia.com/Product/Licensing&quot;&gt;
+qt.digia.com/Product/Licensing&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;Copyright © 2014 Digia Plc ja/tai sen tytäryhtiö(t) ja muut avustajat.&lt;/p&gt;
 &lt;p&gt;Qt ja Qt-logo ovat Digia Plc:n ja/tai sen tytäryhtiö(ide)n tavaramerkkejä.&lt;/p&gt;
-&lt;p&gt;Qt on Digia-tuote, jota kehitetään avoimen lähdekoodin projektina. Katso lisätietoja osoitteesta &lt;a href=&quot;http://%3/&quot;&gt;%3&lt;/a&gt;.&lt;/p&gt;</translation>
+&lt;p&gt;Qt:ta kehitetään avoimen lähdekoodin projektina osoitteessa &lt;a href=&quot;http://qt-project.org/&quot;&gt;qt-project.org&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;Qt on Digia-tuote. Katso lisätietoja osoitteesta &lt;a 
+href=&quot;http://qt.digia.com/&quot;&gt;qt.digia.com&lt;/a&gt;.&lt;/p&gt;</translation>
     </message>
     <message>
         <source>About Qt</source>
@@ -2149,15 +2105,15 @@ GNU LGPL 3:n tai GNU LGPL 2.1:n ehtoja.&lt;/p&gt;
     <name>QNativeSocketEngine</name>
     <message>
         <source>Unable to initialize non-blocking socket</source>
-        <translation>Estämättömän pistokkeen alustaminen epäonnistui</translation>
+        <translation>Estämättömän soketin alustaminen epäonnistui</translation>
     </message>
     <message>
         <source>Unable to initialize broadcast socket</source>
-        <translation>Yleislähetyspistokkeen alustaminen epäonnistui</translation>
+        <translation>Yleislähetyssoketin alustaminen epäonnistui</translation>
     </message>
     <message>
         <source>Attempt to use IPv6 socket on a platform with no IPv6 support</source>
-        <translation>Yritettiin käyttää IPv6-pistoketta IPv6-tuettomalla alustalla</translation>
+        <translation>Yritettiin käyttää IPv6-sokettia IPv6-tuettomalla alustalla</translation>
     </message>
     <message>
         <source>The remote host closed the connection</source>
@@ -2173,7 +2129,7 @@ GNU LGPL 3:n tai GNU LGPL 2.1:n ehtoja.&lt;/p&gt;
     </message>
     <message>
         <source>Unsupported socket operation</source>
-        <translation>Tätä pistoketoimintoa ei tueta</translation>
+        <translation>Tätä sokettitoimintoa ei tueta</translation>
     </message>
     <message>
         <source>Protocol type not supported</source>
@@ -2181,7 +2137,7 @@ GNU LGPL 3:n tai GNU LGPL 2.1:n ehtoja.&lt;/p&gt;
     </message>
     <message>
         <source>Invalid socket descriptor</source>
-        <translation>Virheellinen pistokkeen tunniste</translation>
+        <translation>Virheellinen soketin tunniste</translation>
     </message>
     <message>
         <source>Host unreachable</source>
@@ -2237,11 +2193,11 @@ GNU LGPL 3:n tai GNU LGPL 2.1:n ehtoja.&lt;/p&gt;
     </message>
     <message>
         <source>Another socket is already listening on the same port</source>
-        <translation>Toinen pistoke kuuntelee jo samaa porttia</translation>
+        <translation>Toinen soketti kuuntelee jo samaa porttia</translation>
     </message>
     <message>
         <source>Operation on non-socket</source>
-        <translation>Ei ole pistoke</translation>
+        <translation>Ei ole soketti</translation>
     </message>
     <message>
         <source>The proxy type is invalid for this operation</source>
@@ -2278,7 +2234,7 @@ GNU LGPL 3:n tai GNU LGPL 2.1:n ehtoja.&lt;/p&gt;
     </message>
     <message>
         <source>Socket error on %1: %2</source>
-        <translation>Pistokevirhe kohteessa %1: %2</translation>
+        <translation>Sokettivirhe kohteessa %1: %2</translation>
     </message>
     <message>
         <source>Remote host closed the connection prematurely on %1</source>
@@ -2369,7 +2325,7 @@ GNU LGPL 3:n tai GNU LGPL 2.1:n ehtoja.&lt;/p&gt;
     <name>QNetworkReplyHttpImpl</name>
     <message>
         <source>Operation canceled</source>
-        <translation>Toiminto keskeytettiin</translation>
+        <translation>Toiminto peruttu</translation>
     </message>
     <message>
         <source>No suitable proxy found</source>
@@ -2380,7 +2336,7 @@ GNU LGPL 3:n tai GNU LGPL 2.1:n ehtoja.&lt;/p&gt;
     <name>QNetworkReplyImpl</name>
     <message>
         <source>Operation canceled</source>
-        <translation>Toiminto keskeytettiin</translation>
+        <translation>Toiminto peruttu</translation>
     </message>
 </context>
 <context>
@@ -3790,7 +3746,7 @@ Poista toinen niistä käytöstä.</translation>
     </message>
     <message>
         <source>invalid escape sequence in character class</source>
-        <translation>virheellinen ohjauskoodi merkkiluokassa</translation>
+        <translation>virheellinen koodinvaihtosekvenssi merkkiluokassa</translation>
     </message>
     <message>
         <source>range out of order in character class</source>
@@ -4052,42 +4008,6 @@ Poista toinen niistä käytöstä.</translation>
         <source>character value in \u.... sequence is too large</source>
         <translation>merkin arvo \u... -sekvenssissä on liian suuri</translation>
     </message>
-    <message>
-        <source>invalid UTF-32 string</source>
-        <translation>virheellinen UTF-32-merkkijono</translation>
-    </message>
-    <message>
-        <source>setting UTF is disabled by the application</source>
-        <translation>sovellus on poistanut UTF:n asettamisen käytöstä</translation>
-    </message>
-    <message>
-        <source>non-hex character in \x{} (closing brace missing?)</source>
-        <translation>muu kuin heksamerkki \x{}-merkinnän sisällä (puuttuuko sulkeva kaarisulje?)</translation>
-    </message>
-    <message>
-        <source>non-octal character in \o{} (closing brace missing?)</source>
-        <translation>muu kuin oktaalimerkki \o{}-merkinnän sisällä (puuttuuko sulkeva kaarisulje?)</translation>
-    </message>
-    <message>
-        <source>missing opening brace after \o</source>
-        <translation>aloittava kaarisulje puuttuu \o-merkinnän jälkeen</translation>
-    </message>
-    <message>
-        <source>parentheses are too deeply nested</source>
-        <translation>liian paljon sisäkkäisiä sulkeita</translation>
-    </message>
-    <message>
-        <source>invalid range in character class</source>
-        <translation>virheellinen alue merkkiluokassa</translation>
-    </message>
-    <message>
-        <source>group name must start with a non-digit</source>
-        <translation>ryhmän nimen täytyy alkaa muulla kuin numerolla</translation>
-    </message>
-    <message>
-        <source>parentheses are too deeply nested (stack check)</source>
-        <translation>liian paljon sisäkkäisiä sulkeita (pinotarkistus)</translation>
-    </message>
 </context>
 <context>
     <name>QSQLite2Driver</name>
@@ -4178,10 +4098,6 @@ Poista toinen niistä käytöstä.</translation>
     <message>
         <source>Existing file %1 is not writable</source>
         <translation>Ei voida kirjoittaa olemassa olevaan tiedostoon %1</translation>
-    </message>
-    <message>
-        <source>Filename refers to a directory</source>
-        <translation>Tiedostonimi viittaa kansioon</translation>
     </message>
     <message>
         <source>Writing canceled by application</source>
@@ -4668,6 +4584,10 @@ Poista toinen niistä käytöstä.</translation>
         <translation>Yhteisö</translation>
     </message>
     <message>
+        <source>Audio Rewind</source>
+        <translation>Takaisinkelaus</translation>
+    </message>
+    <message>
         <source>Back Forward</source>
         <translation>Takaisin eteenpäin</translation>
     </message>
@@ -4904,6 +4824,10 @@ Poista toinen niistä käytöstä.</translation>
         <translation>Ultra-laajakaista</translation>
     </message>
     <message>
+        <source>Audio Forward</source>
+        <translation>Eteenpäin</translation>
+    </message>
+    <message>
         <source>Audio Repeat</source>
         <translation>Toista uudelleen</translation>
     </message>
@@ -4942,86 +4866,6 @@ Poista toinen niistä käytöstä.</translation>
     <message>
         <source>Hibernate</source>
         <translation>Lepotila</translation>
-    </message>
-    <message>
-        <source>Media Rewind</source>
-        <translation>Median takaisinkelaus</translation>
-    </message>
-    <message>
-        <source>Media Fast Forward</source>
-        <translation>Median eteenpäinkelaus</translation>
-    </message>
-    <message>
-        <source>Power Down</source>
-        <translation>Sammutus</translation>
-    </message>
-    <message>
-        <source>Microphone Mute</source>
-        <translation>Mikrofonin vaimennus</translation>
-    </message>
-    <message>
-        <source>Red</source>
-        <translation>Punainen</translation>
-    </message>
-    <message>
-        <source>Green</source>
-        <translation>Vihreä</translation>
-    </message>
-    <message>
-        <source>Yellow</source>
-        <translation>Keltainen</translation>
-    </message>
-    <message>
-        <source>Blue</source>
-        <translation>Sininen</translation>
-    </message>
-    <message>
-        <source>Channel Up</source>
-        <translation>Seuraava kanava</translation>
-    </message>
-    <message>
-        <source>Channel Down</source>
-        <translation>Edellinen kanava</translation>
-    </message>
-    <message>
-        <source>Guide</source>
-        <translation>Opas</translation>
-    </message>
-    <message>
-        <source>Info</source>
-        <translation>Info</translation>
-    </message>
-    <message>
-        <source>Settings</source>
-        <translation>Asetukset</translation>
-    </message>
-    <message>
-        <source>Microphone Volume Up</source>
-        <translation>Mikrofonin äänenvoimakkuuden lisäys</translation>
-    </message>
-    <message>
-        <source>Microphone Volume Down</source>
-        <translation>Mikrofonin äänenvoimakkuuden vähennys</translation>
-    </message>
-    <message>
-        <source>New</source>
-        <translation>Uusi</translation>
-    </message>
-    <message>
-        <source>Open</source>
-        <translation>Avaa</translation>
-    </message>
-    <message>
-        <source>Find</source>
-        <translation>Etsi</translation>
-    </message>
-    <message>
-        <source>Undo</source>
-        <translation>Kumoa</translation>
-    </message>
-    <message>
-        <source>Redo</source>
-        <translation>Tee uudelleen</translation>
     </message>
     <message>
         <source>Print Screen</source>
@@ -5271,10 +5115,6 @@ Poista toinen niistä käytöstä.</translation>
         <translation>Lähennä</translation>
     </message>
     <message>
-        <source>Exit</source>
-        <translation>Poistu</translation>
-    </message>
-    <message>
         <source>Ctrl</source>
         <translation>Ctrl</translation>
     </message>
@@ -5410,6 +5250,11 @@ Poista toinen niistä käytöstä.</translation>
         <translation>viesti</translation>
     </message>
     <message>
+        <source>window</source>
+        <extracomment>Role of an accessible object</extracomment>
+        <translation>ikkuna</translation>
+    </message>
+    <message>
         <source>filler</source>
         <extracomment>Role of an accessible object</extracomment>
         <translation>täyte</translation>
@@ -5456,9 +5301,7 @@ Poista toinen niistä käytöstä.</translation>
     </message>
     <message>
         <source>frame</source>
-        <extracomment>Role of an accessible object: a window with frame and title
-----------
-Role of an accessible object</extracomment>
+        <extracomment>Role of an accessible object</extracomment>
         <translation>kehys</translation>
     </message>
     <message>
@@ -5672,51 +5515,6 @@ Role of an accessible object</extracomment>
         <translation>kerrospaneeli</translation>
     </message>
     <message>
-        <source>web document</source>
-        <extracomment>Role of an accessible object</extracomment>
-        <translation>verkkodokumentti</translation>
-    </message>
-    <message>
-        <source>paragraph</source>
-        <extracomment>Role of an accessible object</extracomment>
-        <translation>tekstikappale</translation>
-    </message>
-    <message>
-        <source>section</source>
-        <extracomment>Role of an accessible object</extracomment>
-        <translation>osa</translation>
-    </message>
-    <message>
-        <source>color chooser</source>
-        <extracomment>Role of an accessible object</extracomment>
-        <translation>värivalitsin</translation>
-    </message>
-    <message>
-        <source>footer</source>
-        <extracomment>Role of an accessible object</extracomment>
-        <translation>alatunniste</translation>
-    </message>
-    <message>
-        <source>form</source>
-        <extracomment>Role of an accessible object</extracomment>
-        <translation>lomake</translation>
-    </message>
-    <message>
-        <source>heading</source>
-        <extracomment>Role of an accessible object</extracomment>
-        <translation>otsikko</translation>
-    </message>
-    <message>
-        <source>note</source>
-        <extracomment>Role of an accessible object</extracomment>
-        <translation>huomio</translation>
-    </message>
-    <message>
-        <source>complementary content</source>
-        <extracomment>Role of an accessible object</extracomment>
-        <translation>täydentävä sisältö</translation>
-    </message>
-    <message>
         <source>unknown</source>
         <extracomment>Role of an accessible object</extracomment>
         <translation>tuntematon</translation>
@@ -5727,10 +5525,6 @@ Role of an accessible object</extracomment>
     <message>
         <source>Error creating SSL context (%1)</source>
         <translation>Virhe luotaessa SSL-kontekstia (%1)</translation>
-    </message>
-    <message>
-        <source>unsupported protocol</source>
-        <translation>protokollaa ei tueta</translation>
     </message>
     <message>
         <source>Invalid or empty cipher list (%1)</source>
@@ -6020,7 +5814,7 @@ Role of an accessible object</extracomment>
     <name>QTcpServer</name>
     <message>
         <source>Operation on socket is not supported</source>
-        <translation>Pistoketoimintoa ei tueta</translation>
+        <translation>Sokettitoimintoa ei tueta</translation>
     </message>
 </context>
 <context>
@@ -6031,7 +5825,7 @@ Role of an accessible object</extracomment>
     </message>
     <message>
         <source>Sequential device (eg socket) for image read not supported</source>
-        <translation>Sarjalaitetta (esim. pistoketta) ei tueta kuvan lukemiseen</translation>
+        <translation>Sarjalaitetta (esim. sokettia) ei tueta kuvan lukemiseen</translation>
     </message>
     <message>
         <source>Seek file/device for image read failed</source>
@@ -6228,21 +6022,6 @@ Role of an accessible object</extracomment>
     </message>
 </context>
 <context>
-    <name>QWindowsDirect2DIntegration</name>
-    <message>
-        <source>Qt cannot load the direct2d platform plugin because the Direct2D version on this system is too old. The minimum system requirement for this platform plugin is Windows 7 SP1 with Platform Update.
-
-The minimum Direct2D version required is %1.%2.%3.%4. The Direct2D version on this system is %5.%6.%7.%8.</source>
-        <translation>Qt ei voi ladata direct2d-alustaliitännäistä, koska järjestelmän Direct2D-versio on liian vanha. Tämä alustaliitännäinen vaatii vähintään Windows 7 SP 1:n Platform Updatella.
-
-Direct2D-version vähimmäisvaatimus on %1.%2.%3.%4. Järjestelmän Direct2D-versio on %5.%6.%7.%8.</translation>
-    </message>
-    <message>
-        <source>Cannot load direct2d platform plugin</source>
-        <translation>direct2d-alustaliitännäistä ei voida ladata</translation>
-    </message>
-</context>
-<context>
     <name>QWizard</name>
     <message>
         <source>Go Back</source>
@@ -6313,7 +6092,7 @@ Direct2D-version vähimmäisvaatimus on %1.%2.%3.%4. Järjestelmän Direct2D-ver
     </message>
     <message>
         <source>tag mismatch</source>
-        <translation>tunniste ei täsmää</translation>
+        <translation>tagi ei täsmää</translation>
     </message>
     <message>
         <source>error occurred while parsing content</source>
@@ -6325,7 +6104,7 @@ Direct2D-version vähimmäisvaatimus on %1.%2.%3.%4. Järjestelmän Direct2D-ver
     </message>
     <message>
         <source>invalid name for processing instruction</source>
-        <translation>virheellinen prosessointikäskyn nimi</translation>
+        <translation>virheellinen nimi käskyn suorittamiseen</translation>
     </message>
     <message>
         <source>version expected while reading the XML declaration</source>
@@ -6333,15 +6112,15 @@ Direct2D-version vähimmäisvaatimus on %1.%2.%3.%4. Järjestelmän Direct2D-ver
     </message>
     <message>
         <source>wrong value for standalone declaration</source>
-        <translation>väärä arvo standalone-esittelylle</translation>
+        <translation>väärä arvo erillisesittelylle</translation>
     </message>
     <message>
         <source>encoding declaration or standalone declaration expected while reading the XML declaration</source>
-        <translation>odotettiin encoding-esittelyä tai standalone-esittelyä XML-esittelyä luettaessa</translation>
+        <translation>odotettiin koodausesittelyä tai erillisesittelyä XML-esittelyä luettaessa</translation>
     </message>
     <message>
         <source>standalone declaration expected while reading the XML declaration</source>
-        <translation>odotettiin standalone-esittelyä XML-esittelyä luettaessa</translation>
+        <translation>odotettiin erillisesittelyä XML-esittelyä luettaessa</translation>
     </message>
     <message>
         <source>error occurred while parsing document type definition</source>
@@ -6415,8 +6194,8 @@ Direct2D-version vähimmäisvaatimus on %1.%2.%3.%4. Järjestelmän Direct2D-ver
         <translation>Laiton nimiavaruuden esittely.</translation>
     </message>
     <message>
-        <source>Attribute &apos;%1&apos; redefined.</source>
-        <translation>Attribuutti ”%1” määritelty uudelleen.</translation>
+        <source>Attribute redefined.</source>
+        <translation>Attribuutti määritelty uudelleen.</translation>
     </message>
     <message>
         <source>Unexpected character &apos;%1&apos; in public id literal.</source>
@@ -6432,7 +6211,7 @@ Direct2D-version vähimmäisvaatimus on %1.%2.%3.%4. Järjestelmän Direct2D-ver
     </message>
     <message>
         <source>The standalone pseudo attribute must appear after the encoding.</source>
-        <translation>Standalone-pseudoattribuutin on oltava encoding-attribuutin jälkeen.</translation>
+        <translation>Erillisen pseudoattribuutin on esiinnyttävä koodauksen jäljessä.</translation>
     </message>
     <message>
         <source>%1 is an invalid encoding name.</source>
@@ -6444,7 +6223,7 @@ Direct2D-version vähimmäisvaatimus on %1.%2.%3.%4. Järjestelmän Direct2D-ver
     </message>
     <message>
         <source>Standalone accepts only yes or no.</source>
-        <translation>Standalonen arvoksi kelpaa vain yes tai no.</translation>
+        <translation>Vain kyllä tai ei hyväksytään erillismäärittelyssä.</translation>
     </message>
     <message>
         <source>Invalid attribute in XML declaration.</source>
@@ -6484,11 +6263,11 @@ Direct2D-version vähimmäisvaatimus on %1.%2.%3.%4. Järjestelmän Direct2D-ver
     </message>
     <message>
         <source>NDATA in parameter entity declaration.</source>
-        <translation>NDATA parametrientiteettiesittelyssä.</translation>
+        <translation>NDATA parametrientiteettimäärittelyssä.</translation>
     </message>
     <message>
         <source>XML declaration not at start of document.</source>
-        <translation>XML-esittely ei ole dokumentin alussa.</translation>
+        <translation>XML-määrittely ei ole dokumentin alussa.</translation>
     </message>
     <message>
         <source>%1 is an invalid processing instruction name.</source>
@@ -6512,7 +6291,7 @@ Direct2D-version vähimmäisvaatimus on %1.%2.%3.%4. Järjestelmän Direct2D-ver
     </message>
     <message>
         <source>Entity &apos;%1&apos; not declared.</source>
-        <translation>Entiteettiä ”%1” ei ole esitelty.</translation>
+        <translation>Entiteettiä ”%1” ei ole määritelty.</translation>
     </message>
     <message>
         <source>Reference to unparsed entity &apos;%1&apos;.</source>

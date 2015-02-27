@@ -233,6 +233,7 @@ private:
     virtual void recalcAdvances(QGlyphLayout *glyphs, ShaperFlags flags) const;
     virtual QImage alphaMapForGlyph(glyph_t g) { return alphaMapForGlyph(g, 0); }
     virtual QImage alphaMapForGlyph(glyph_t, QFixed);
+    QImage alphaMapForGlyph(glyph_t glyph, QFixed subPixelPosition, const QTransform &t);
     virtual QImage alphaRGBMapForGlyph(glyph_t, QFixed subPixelPosition, const QTransform &t);
     virtual glyph_metrics_t alphaMapBoundingBox(glyph_t glyph,
                                                 QFixed subPixelPosition,
@@ -265,12 +266,9 @@ private:
     inline Glyph *loadGlyph(uint glyph, QFixed subPixelPosition, GlyphFormat format = Format_None, bool fetchMetricsOnly = false) const
     { return loadGlyph(cacheEnabled ? &defaultGlyphSet : 0, glyph, subPixelPosition, format, fetchMetricsOnly); }
     Glyph *loadGlyph(QGlyphSet *set, uint glyph, QFixed subPixelPosition, GlyphFormat = Format_None, bool fetchMetricsOnly = false) const;
-    Glyph *loadGlyphFor(glyph_t g, QFixed subPixelPosition, GlyphFormat format);
+    Glyph *loadGlyphFor(glyph_t g, QFixed subPixelPosition, GlyphFormat format, const QTransform &t, bool fetchBoundingBox = false);
 
     QGlyphSet *loadTransformedGlyphSet(const QTransform &matrix);
-    bool loadGlyphs(QGlyphSet *gs, const glyph_t *glyphs, int num_glyphs,
-                    const QFixedPoint *positions,
-                    GlyphFormat format = Format_Render);
 
     QFontEngineFT(const QFontDef &fd);
     virtual ~QFontEngineFT();
@@ -292,7 +290,7 @@ private:
 protected:
 
     QFreetypeFace *freetype;
-    int default_load_flags;
+    mutable int default_load_flags;
     HintStyle default_hint_style;
     bool antialias;
     bool transform;

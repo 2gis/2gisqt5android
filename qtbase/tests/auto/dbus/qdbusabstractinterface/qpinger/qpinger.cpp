@@ -38,13 +38,13 @@ static const char serviceName[] = "org.qtproject.autotests.qpinger";
 static const char objectPath[] = "/org/qtproject/qpinger";
 //static const char *interfaceName = serviceName;
 
-class PingerServer : public QDBusServer
+class PingerServer : public QDBusServer, protected QDBusContext
 {
     Q_OBJECT
     Q_CLASSINFO("D-Bus Interface", "org.qtproject.autotests.qpinger")
 public:
-    PingerServer(QString addr = "unix:tmpdir=/tmp", QObject* parent = 0)
-        : QDBusServer(addr, parent),
+    PingerServer(QObject* parent = 0)
+        : QDBusServer(parent),
           m_conn("none")
     {
         connect(this, SIGNAL(newConnection(QDBusConnection)), SLOT(handleConnection(QDBusConnection)));
@@ -54,12 +54,22 @@ public:
 public slots:
     QString address() const
     {
+        if (!QDBusServer::isConnected())
+            sendErrorReply(QDBusServer::lastError().name(), QDBusServer::lastError().message());
         return QDBusServer::address();
     }
 
-    bool isConnected() const
+    void waitForConnected()
     {
-        return m_conn.isConnected();
+        if (callPendingReply.type() != QDBusMessage::InvalidMessage) {
+            sendErrorReply(QDBusError::NotSupported, "One call already pending!");
+            return;
+        }
+        if (m_conn.isConnected())
+            return;
+        // not connected, we'll reply later
+        setDelayedReply(true);
+        callPendingReply = message();
     }
 
     void reset()
@@ -85,16 +95,26 @@ public slots:
         emit targetObj.complexSignal(reg);
     }
 
+    void quit()
+    {
+        qApp->quit();
+    }
+
 private slots:
     void handleConnection(const QDBusConnection& con)
     {
         m_conn = con;
         m_conn.registerObject("/", &targetObj, QDBusConnection::ExportScriptableContents);
+        if (callPendingReply.type() != QDBusMessage::InvalidMessage) {
+            QDBusConnection::sessionBus().send(callPendingReply.createReply());
+            callPendingReply = QDBusMessage();
+        }
     }
 
 private:
     Interface targetObj;
     QDBusConnection m_conn;
+    QDBusMessage callPendingReply;
 };
 
 int main(int argc, char *argv[])
@@ -116,6 +136,7 @@ int main(int argc, char *argv[])
     con.registerObject(objectPath, &server, QDBusConnection::ExportAllSlots);
 
     printf("ready.\n");
+    fflush(stdout);
 
     return app.exec();
 }

@@ -145,6 +145,10 @@
 #  if defined(__INTEL_COMPILER)
 /* Intel C++ also masquerades as GCC */
 #    define Q_CC_INTEL      (__INTEL_COMPILER)
+#    ifdef __clang__
+/* Intel C++ masquerades as Clang masquerading as GCC */
+#      define Q_CC_CLANG    305
+#    endif
 #    define Q_ASSUME_IMPL(expr)  __assume(expr)
 #    define Q_UNREACHABLE_IMPL() __builtin_unreachable()
 #    if __INTEL_COMPILER >= 1300 && !defined(__APPLE__)
@@ -154,17 +158,17 @@
 /* Clang also masquerades as GCC */
 #    if defined(__apple_build_version__)
 #      /* http://en.wikipedia.org/wiki/Xcode#Toolchain_Versions */
-#      if __apple_build_version__ >= 600051
+#      if __apple_build_version__ >= 6000051
 #        define Q_CC_CLANG 305
-#      elif __apple_build_version__ >= 503038
+#      elif __apple_build_version__ >= 5030038
 #        define Q_CC_CLANG 304
-#      elif __apple_build_version__ >= 500275
+#      elif __apple_build_version__ >= 5000275
 #        define Q_CC_CLANG 303
-#      elif __apple_build_version__ >= 425024
+#      elif __apple_build_version__ >= 4250024
 #        define Q_CC_CLANG 302
-#      elif __apple_build_version__ >= 318045
+#      elif __apple_build_version__ >= 3180045
 #        define Q_CC_CLANG 301
-#      elif __apple_build_version__ >= 211101
+#      elif __apple_build_version__ >= 2111001
 #        define Q_CC_CLANG 300
 #      else
 #        error "Unknown Apple Clang version"
@@ -553,6 +557,10 @@
 #      define Q_COMPILER_UNRESTRICTED_UNIONS
 #    endif
 #    if __INTEL_COMPILER >= 1500
+#      if __INTEL_COMPILER * 100 + __INTEL_COMPILER_UPDATE >= 150001
+//       the bug mentioned above is fixed in 15.0.1
+#        define Q_COMPILER_CONSTEXPR
+#      endif
 #      define Q_COMPILER_ALIGNAS
 #      define Q_COMPILER_ALIGNOF
 #      define Q_COMPILER_INHERITING_CONSTRUCTORS

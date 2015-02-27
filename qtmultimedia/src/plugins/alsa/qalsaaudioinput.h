@@ -62,7 +62,7 @@
 QT_BEGIN_NAMESPACE
 
 
-class InputPrivate;
+class AlsaInputPrivate;
 
 class RingBuffer
 {
@@ -153,17 +153,16 @@ private:
     snd_pcm_uframes_t period_frames;
     snd_pcm_access_t access;
     snd_pcm_format_t pcmformat;
-    snd_timestamp_t* timestamp;
     snd_pcm_hw_params_t *hwparams;
     qreal m_volume;
 };
 
-class InputPrivate : public QIODevice
+class AlsaInputPrivate : public QIODevice
 {
     Q_OBJECT
 public:
-    InputPrivate(QAlsaAudioInput* audio);
-    ~InputPrivate();
+    AlsaInputPrivate(QAlsaAudioInput* audio);
+    ~AlsaInputPrivate();
 
     qint64 readData( char* data, qint64 len);
     qint64 writeData(const char* data, qint64 len);

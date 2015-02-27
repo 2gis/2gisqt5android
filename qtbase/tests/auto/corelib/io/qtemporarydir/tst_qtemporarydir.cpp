@@ -70,6 +70,8 @@ private slots:
     void QTBUG_4796_data();
     void QTBUG_4796();
 
+    void QTBUG43352_failedSetPermissions();
+
 public:
 };
 
@@ -237,7 +239,11 @@ void tst_QTemporaryDir::nonWritableCurrentDir()
     };
     ChdirOnReturn cor(QDir::currentPath());
 
+#if defined(Q_OS_ANDROID) && !defined(Q_OS_ANDROID_NO_SDK)
+    QDir::setCurrent("/data");
+#else
     QDir::setCurrent("/home");
+#endif
     // QTemporaryDir("tempXXXXXX") is probably a bad idea in any app
     // where the current dir could anything...
     QTemporaryDir dir("tempXXXXXX");
@@ -413,6 +419,18 @@ void tst_QTemporaryDir::QTBUG_4796() // unicode support
         QVERIFY2(!QDir(tempName).exists(), qPrintable(tempName));
 
     cleaner.reset();
+}
+
+void tst_QTemporaryDir::QTBUG43352_failedSetPermissions()
+{
+    QString path = QStandardPaths::writableLocation(QStandardPaths::DownloadLocation) + QStringLiteral("/");
+    int count = QDir(path).entryList().size();
+
+    {
+        QTemporaryDir dir(path);
+    }
+
+    QCOMPARE(QDir(path).entryList().size(), count);
 }
 
 QTEST_MAIN(tst_QTemporaryDir)

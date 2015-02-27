@@ -40,13 +40,13 @@
 
 //! [0]
 cd /tmp
-gunzip qt-everywhere-opensource-src-5.4.0.tar.gz        # uncompress the archive
-tar xvf qt-everywhere-opensource-src-5.4.0.tar          # unpack it
+gunzip qt-everywhere-opensource-src-5.4.1.tar.gz        # uncompress the archive
+tar xvf qt-everywhere-opensource-src-5.4.1.tar          # unpack it
 //! [0]
 
 
 //! [1]
-cd /tmp/qt-everywhere-opensource-src-5.4.0
+cd /tmp/qt-everywhere-opensource-src-5.4.1
 ./configure
 //! [1]
 
@@ -67,13 +67,13 @@ PATH               - to locate qmake, moc and other Qt tools
 
 
 //! [5]
-PATH=/usr/local/Qt-5.4.0/bin:$PATH
+PATH=/usr/local/Qt-5.4.1/bin:$PATH
 export PATH
 //! [5]
 
 
 //! [6]
-setenv PATH /usr/local/Qt-5.4.0/bin:$PATH
+setenv PATH /usr/local/Qt-5.4.1/bin:$PATH
 //! [6]
 
 
@@ -84,7 +84,7 @@ PATH               - to locate qmake, moc and other Qt tools
 
 //! [8]
 C:
-cd /D C:\Qt\5.4.0
+cd /D C:\Qt\5.4.1
 configure
 //! [8]
 
@@ -101,13 +101,13 @@ nmake
 
 //! [11]
 cd /tmp
-gunzip qt-everywhere-opensource-src-5.4.0.tar.gz        # uncompress the archive
-tar xvf qt-everywhere-opensource-src-5.4.0.tar          # unpack it
+gunzip qt-everywhere-opensource-src-5.4.1.tar.gz        # uncompress the archive
+tar xvf qt-everywhere-opensource-src-5.4.1.tar          # unpack it
 //! [11]
 
 
 //! [12]
-cd /tmp/qt-everywhere-opensource-src-5.4.0
+cd /tmp/qt-everywhere-opensource-src-5.4.1
 ./configure
 //! [12]
 
@@ -128,13 +128,13 @@ PATH               - to locate qmake, moc and other Qt tools
 
 
 //! [16]
-PATH=/usr/local/Qt-5.4.0/bin:$PATH
+PATH=/usr/local/Qt-5.4.1/bin:$PATH
 export PATH
 //! [16]
 
 
 //! [17]
-setenv PATH /usr/local/Qt-5.4.0/bin:$PATH
+setenv PATH /usr/local/Qt-5.4.1/bin:$PATH
 //! [17]
 
 
@@ -145,7 +145,7 @@ PATH               - to locate qmake, moc and other Qt tools
 
 //! [19]
 C:
-cd \Qt\5.4.0
+cd \Qt\5.4.1
 configure -platform -xplatform wincewm70customsdk-msvc2008
 //! [19]
 

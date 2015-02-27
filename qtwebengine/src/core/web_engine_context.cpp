@@ -41,6 +41,7 @@
 #include "base/base_switches.h"
 #include "base/command_line.h"
 #include "base/files/file_path.h"
+#include "base/message_loop/message_loop.h"
 #include "base/run_loop.h"
 #include "base/threading/thread_restrictions.h"
 #include "cc/base/switches.h"
@@ -93,6 +94,9 @@ void destroyContext()
 
 WebEngineContext::~WebEngineContext()
 {
+    base::MessagePump::Delegate *delegate = m_runLoop->loop_;
+    // Flush the UI message loop before quitting.
+    while (delegate->DoWork()) { }
     GLContextHelper::destroy();
     m_runLoop->AfterRun();
 }
@@ -192,6 +196,7 @@ WebEngineContext::WebEngineContext()
     content::GpuProcessHost::RegisterGpuMainThreadFactory(content::CreateInProcessGpuThread);
 
     content::ContentMainParams contentMainParams(m_mainDelegate.get());
+    contentMainParams.setup_signal_handlers = false;
 #if defined(OS_WIN)
     sandbox::SandboxInterfaceInfo sandbox_info = {0};
     content::InitializeSandboxInfo(&sandbox_info);

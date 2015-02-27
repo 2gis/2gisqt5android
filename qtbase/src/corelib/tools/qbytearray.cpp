@@ -43,6 +43,7 @@
 #include <qmath.h>
 
 #ifndef QT_NO_COMPRESS
+#include <zconf.h>
 #include <zlib.h>
 #endif
 #include <ctype.h>
@@ -63,7 +64,7 @@ int qFindByteArray(
 int qAllocMore(int alloc, int extra) Q_DECL_NOTHROW
 {
     Q_ASSERT(alloc >= 0 && extra >= 0);
-    Q_ASSERT_X(alloc < (1 << 30) - extra, "qAllocMore", "Requested size is too large!");
+    Q_ASSERT_X(uint(alloc) < QByteArray::MaxSize, "qAllocMore", "Requested size is too large!");
 
     unsigned nalloc = qNextPowerOfTwo(alloc + extra);
 
@@ -774,6 +775,15 @@ static inline char qToLower(char c)
     characters using Unicode.
 
     \sa QString, QBitArray
+*/
+
+/*!
+    \variable QByteArray::MaxSize
+    \internal
+    \since 5.4
+
+    The maximum size of a QByteArray, in bytes. Also applies to a the maximum
+    storage size of QString and QVector, though not the number of elements.
 */
 
 /*!
@@ -3571,7 +3581,7 @@ QByteArray QByteArray::toBase64(Base64Options options) const
     const char padchar = '=';
     int padlen = 0;
 
-    QByteArray tmp((d->size * 4) / 3 + 3, Qt::Uninitialized);
+    QByteArray tmp((d->size + 2) / 3 * 4, Qt::Uninitialized);
 
     int i = 0;
     char *out = tmp.data();
@@ -3609,8 +3619,9 @@ QByteArray QByteArray::toBase64(Base64Options options) const
             *out++ = alphabet[m];
         }
     }
-
-    tmp.truncate(out - tmp.data());
+    Q_ASSERT((options & OmitTrailingEquals) || (out == tmp.size() + tmp.data()));
+    if (options & OmitTrailingEquals)
+        tmp.truncate(out - tmp.data());
     return tmp;
 }
 

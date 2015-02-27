@@ -57,6 +57,7 @@
 #include "qdialogbuttonbox.h"
 #include "qscreen.h"
 #include "qcursor.h"
+#include "qtimer.h"
 
 #include <algorithm>
 
@@ -627,6 +628,7 @@ public:
     QColorPicker(QWidget* parent);
     ~QColorPicker();
 
+    void setCrossVisible(bool visible);
 public slots:
     void setCol(int h, int s);
 
@@ -650,6 +652,7 @@ private:
     void setCol(const QPoint &pt);
 
     QPixmap pix;
+    bool crossVisible;
 };
 
 static int pWidth = 220;
@@ -805,6 +808,7 @@ void QColorPicker::setCol(const QPoint &pt)
 
 QColorPicker::QColorPicker(QWidget* parent)
     : QFrame(parent)
+    , crossVisible(true)
 {
     hue = 0; sat = 0;
     setCol(150, 255);
@@ -815,6 +819,14 @@ QColorPicker::QColorPicker(QWidget* parent)
 
 QColorPicker::~QColorPicker()
 {
+}
+
+void QColorPicker::setCrossVisible(bool visible)
+{
+    if (crossVisible != visible) {
+        crossVisible = visible;
+        update();
+    }
 }
 
 QSize QColorPicker::sizeHint() const
@@ -858,12 +870,13 @@ void QColorPicker::paintEvent(QPaintEvent* )
     QRect r = contentsRect();
 
     p.drawPixmap(r.topLeft(), pix);
-    QPoint pt = colPt() + r.topLeft();
-    p.setPen(Qt::black);
 
-    p.fillRect(pt.x()-9, pt.y(), 20, 2, Qt::black);
-    p.fillRect(pt.x(), pt.y()-9, 2, 20, Qt::black);
-
+    if (crossVisible) {
+        QPoint pt = colPt() + r.topLeft();
+        p.setPen(Qt::black);
+        p.fillRect(pt.x()-9, pt.y(), 20, 2, Qt::black);
+        p.fillRect(pt.x(), pt.y()-9, 2, 20, Qt::black);
+    }
 }
 
 void QColorPicker::resizeEvent(QResizeEvent *ev)
@@ -960,6 +973,7 @@ private:
     QColorShowLabel *lab;
     bool rgbOriginal;
     QColorDialog *colorDialog;
+    QGridLayout *gl;
 
     friend class QColorDialog;
     friend class QColorDialogPrivate;
@@ -1087,7 +1101,7 @@ QColorShower::QColorShower(QColorDialog *parent)
     curCol = qRgb(255, 255, 255);
     curQColor = Qt::white;
 
-    QGridLayout *gl = new QGridLayout(this);
+    gl = new QGridLayout(this);
     gl->setMargin(gl->spacing());
     lab = new QColorShowLabel(this);
 
@@ -1265,10 +1279,16 @@ QColorShower::QColorShower(QColorDialog *parent)
 #else
     htEd->setReadOnly(true);
 #endif
+    htEd->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Fixed);
 
     lblHtml->setAlignment(Qt::AlignRight|Qt::AlignVCenter);
+#if defined(QT_SMALL_COLORDIALOG)
+    gl->addWidget(lblHtml, 5, 0);
+    gl->addWidget(htEd, 5, 1, 1, /*colspan=*/ 2);
+#else
     gl->addWidget(lblHtml, 5, 1);
-    gl->addWidget(htEd, 5, 2);
+    gl->addWidget(htEd, 5, 2, 1, /*colspan=*/ 3);
+#endif
 
     connect(hEd, SIGNAL(valueChanged(int)), this, SLOT(hsvEd()));
     connect(sEd, SIGNAL(valueChanged(int)), this, SLOT(hsvEd()));
@@ -1477,8 +1497,8 @@ bool QColorDialogPrivate::selectColor(const QColor &col)
         const QRgb *match = std::find(standardColors, standardColorsEnd, color);
         if (match != standardColorsEnd) {
             const int index = int(match - standardColors);
-            const int row = index / standardColorRows;
-            const int column = index % standardColorRows;
+            const int column = index / standardColorRows;
+            const int row = index % standardColorRows;
             _q_newStandard(row, column);
             standard->setCurrent(row, column);
             standard->setSelected(row, column);
@@ -1493,8 +1513,8 @@ bool QColorDialogPrivate::selectColor(const QColor &col)
         const QRgb *match = std::find(customColors, customColorsEnd, color);
         if (match != customColorsEnd) {
             const int index = int(match - customColors);
-            const int row = index / customColorRows;
-            const int column = index % customColorRows;
+            const int column = index / customColorRows;
+            const int row = index % customColorRows;
             _q_newCustom(row, column);
             custom->setCurrent(row, column);
             custom->setSelected(row, column);
@@ -1558,8 +1578,18 @@ void QColorDialogPrivate::_q_pickScreenColor()
 #else
     q->grabMouse();
 #endif
+
+#ifdef Q_OS_WIN32 // excludes WinCE and WinRT
+    // On Windows mouse tracking doesn't work over other processes's windows
+    updateTimer->start(30);
+
+    // HACK: Because mouse grabbing doesn't work across processes, we have to have a dummy,
+    // invisible window to catch the mouse click, otherwise we will click whatever we clicked
+    // and loose focus.
+    dummyTransparentWindow.show();
+#endif
     q->grabKeyboard();
-    /* With setMouseTracking(true) the desired color can be more precisedly picked up,
+    /* With setMouseTracking(true) the desired color can be more precisely picked up,
      * and continuously pushing the mouse button is not necessary.
      */
     q->setMouseTracking(true);
@@ -1578,8 +1608,13 @@ void QColorDialogPrivate::_q_pickScreenColor()
 void QColorDialogPrivate::releaseColorPicking()
 {
     Q_Q(QColorDialog);
+    cp->setCrossVisible(true);
     q->removeEventFilter(colorPickingEventFilter);
     q->releaseMouse();
+#ifdef Q_OS_WIN32
+    updateTimer->stop();
+    dummyTransparentWindow.setVisible(false);
+#endif
     q->releaseKeyboard();
     q->setMouseTracking(false);
     lblScreenColorInfo->setText(QLatin1String("\n"));
@@ -1605,6 +1640,10 @@ void QColorDialogPrivate::init(const QColor &initial)
 
 #ifdef Q_WS_MAC
     delegate = 0;
+#endif
+#ifdef Q_OS_WIN32
+    dummyTransparentWindow.resize(1, 1);
+    dummyTransparentWindow.setFlags(Qt::Tool | Qt::FramelessWindowHint);
 #endif
 
     q->setCurrentColor(initial);
@@ -1729,7 +1768,9 @@ void QColorDialogPrivate::initWidgets()
         lp->hide();
 #else
     lp->setFixedWidth(20);
+    pickLay->addSpacing(10);
     pickLay->addWidget(lp);
+    pickLay->addStretch();
 #endif
 
     QObject::connect(cp, SIGNAL(newCol(int,int)), lp, SLOT(setCol(int,int)));
@@ -1738,6 +1779,7 @@ void QColorDialogPrivate::initWidgets()
     rightLay->addStretch();
 
     cs = new QColorShower(q);
+    pickLay->setMargin(cs->gl->margin());
     QObject::connect(cs, SIGNAL(newCol(QRgb)), q, SLOT(_q_newColorTypedIn(QRgb)));
     QObject::connect(cs, SIGNAL(currentColorChanged(QColor)),
                      q, SIGNAL(currentColorChanged(QColor)));
@@ -1747,6 +1789,7 @@ void QColorDialogPrivate::initWidgets()
     topLay->addWidget(cs);
 #else
     rightLay->addWidget(cs);
+    leftLay->addSpacing(cs->gl->margin());
 #endif
 
     buttons = new QDialogButtonBox(q);
@@ -1758,6 +1801,10 @@ void QColorDialogPrivate::initWidgets()
     cancel = buttons->addButton(QDialogButtonBox::Cancel);
     QObject::connect(cancel, SIGNAL(clicked()), q, SLOT(reject()));
 
+#ifdef Q_OS_WIN32
+    updateTimer = new QTimer(q);
+    QObject::connect(updateTimer, SIGNAL(timeout()), q, SLOT(_q_updateColorPicking()));
+#endif
     retranslateStrings();
 }
 
@@ -2172,15 +2219,41 @@ void QColorDialog::changeEvent(QEvent *e)
     QDialog::changeEvent(e);
 }
 
-bool QColorDialogPrivate::handleColorPickingMouseMove(QMouseEvent *e)
+void QColorDialogPrivate::_q_updateColorPicking()
 {
-    const QPoint globalPos = e->globalPos();
+#ifndef QT_NO_CURSOR
+    Q_Q(QColorDialog);
+    static QPoint lastGlobalPos;
+    QPoint newGlobalPos = QCursor::pos();
+    if (lastGlobalPos == newGlobalPos)
+        return;
+    lastGlobalPos = newGlobalPos;
+
+    if (!q->rect().contains(q->mapFromGlobal(newGlobalPos))) { // Inside the dialog mouse tracking works, handleColorPickingMouseMove will be called
+        updateColorPicking(newGlobalPos);
+#ifdef Q_OS_WIN32
+        dummyTransparentWindow.setPosition(newGlobalPos);
+#endif
+    }
+#endif // ! QT_NO_CURSOR
+}
+
+void QColorDialogPrivate::updateColorPicking(const QPoint &globalPos)
+{
     const QColor color = grabScreenColor(globalPos);
     // QTBUG-39792, do not change standard, custom color selectors while moving as
     // otherwise it is not possible to pre-select a custom cell for assignment.
     setCurrentColor(color, ShowColor);
     lblScreenColorInfo->setText(QColorDialog::tr("Cursor at %1, %2, color: %3\nPress ESC to cancel")
                                 .arg(globalPos.x()).arg(globalPos.y()).arg(color.name()));
+}
+
+bool QColorDialogPrivate::handleColorPickingMouseMove(QMouseEvent *e)
+{
+    // If the cross is visible the grabbed color will be black most of the times
+    cp->setCrossVisible(!cp->geometry().contains(e->pos()));
+
+    updateColorPicking(e->globalPos());
     return true;
 }
 

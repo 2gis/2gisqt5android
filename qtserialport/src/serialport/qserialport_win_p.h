@@ -63,6 +63,7 @@ class QSerialPortPrivate : public QSerialPortPrivateData
 
 public:
     QSerialPortPrivate(QSerialPort *q);
+    ~QSerialPortPrivate();
 
     bool open(QIODevice::OpenMode mode);
     void close();
@@ -108,9 +109,6 @@ public:
     qint64 bytesToWrite() const;
     qint64 writeData(const char *data, qint64 maxSize);
 
-    static QString portNameToSystemLocation(const QString &port);
-    static QString portNameFromSystemLocation(const QString &location);
-
     static qint32 baudRateFromSetting(qint32 setting);
     static qint32 settingFromBaudRate(qint32 baudRate);
 
@@ -141,9 +139,9 @@ private:
     bool initialize(QIODevice::OpenMode mode);
     bool updateDcb();
     bool updateCommTimeouts();
-    qint64 handleOverlappedResult(int direction, OVERLAPPED &overlapped);
+    qint64 overlappedResult(OVERLAPPED &overlapped);
 
-    bool waitAnyEvent(int msecs, bool *timedOut, HANDLE *triggeredEvent);
+    bool waitAnyEvent(int msecs, HANDLE *triggeredEvent);
 
 };
 

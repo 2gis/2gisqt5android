@@ -796,10 +796,6 @@
         <translation>статичний додаток для модуля &quot;%1&quot; з назвою &quot;%2&quot; не має URI для метаданих</translation>
     </message>
     <message>
-        <source>module does not support the designer &quot;%1&quot;</source>
-        <translation>модуль не підтримує дизайнер інтерфейсів &quot;%1&quot;</translation>
-    </message>
-    <message>
         <source>plugin cannot be loaded for module &quot;%1&quot;: %2</source>
         <translation>неможливо завантажити додаток для модуля &quot;%1&quot;: %2</translation>
     </message>
@@ -1337,12 +1333,8 @@
         <translation>Неправильне присвоєння властивості: очікувався регулярний вираз, використовуйте синтаксис /pattern/</translation>
     </message>
     <message>
-        <source>Invalid property assignment: number or array of numbers expected</source>
-        <translation>Неправильне присвоєння властивості: очікувались число або масив чисел</translation>
-    </message>
-    <message>
         <source>Invalid property assignment: real or array of reals expected</source>
-        <translation type="vanished">Неправильне присвоєння властивості: очікувались дійсне число або масив дійсних чисел</translation>
+        <translation>Неправильне присвоєння властивості: очікувались дійсне число або масив дійсних чисел</translation>
     </message>
     <message>
         <source>Invalid property assignment: int or array of ints expected</source>
@@ -1745,13 +1737,6 @@
     </message>
 </context>
 <context>
-    <name>QQuickOpenGLInfo</name>
-    <message>
-        <source>OpenGLInfo is only available via attached properties</source>
-        <translation>OpenGLInfo доступна лише через прикріплені властивості</translation>
-    </message>
-</context>
-<context>
     <name>QQuickPaintedItem</name>
     <message>
         <source>Cannot create instance of abstract class PaintedItem</source>
@@ -2036,10 +2021,6 @@ Install a driver providing OpenGL 2.0 or higher, or, if this is not possible, ma
         <source>Failed to create %1 context for format %2</source>
         <extracomment>%1 Context type (Open GL, EGL), %2 format specification</extracomment>
         <translation>Збій створення контексту %1 для формату %2</translation>
-    </message>
-    <message>
-        <source>Window is available via attached properties</source>
-        <translation type="vanished">Window доступне лише через прикріплені властивості</translation>
     </message>
 </context>
 <context>

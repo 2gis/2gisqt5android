@@ -95,15 +95,18 @@ QMetaObjectPublisher::~QMetaObjectPublisher()
 
 void QMetaObjectPublisher::registerObject(const QString &id, QObject *object)
 {
-    if (propertyUpdatesInitialized) {
-        qWarning("Registered new object after initialization. This does not work!");
-        return;
-    }
     registeredObjects[id] = object;
     registeredObjectIds[object] = id;
+    if (propertyUpdatesInitialized) {
+        if (!webChannel->d_func()->transports.isEmpty()) {
+            qWarning("Registered new object after initialization, existing clients won't be notified!");
+            // TODO: send a message to clients that an object was added
+        }
+        initializePropertyUpdates(object, classInfoForObject(object));
+    }
 }
 
-QJsonObject QMetaObjectPublisher::classInfoForObject(const QObject *object) const
+QJsonObject QMetaObjectPublisher::classInfoForObject(const QObject *object)
 {
     QJsonObject data;
     if (!object) {
@@ -151,7 +154,7 @@ QJsonObject QMetaObjectPublisher::classInfoForObject(const QObject *object) cons
                      prop.name(), object->metaObject()->className());
         }
         propertyInfo.append(signalInfo);
-        propertyInfo.append(QJsonValue::fromVariant(prop.read(object)));
+        propertyInfo.append(wrapResult(prop.read(object)));
         qtProperties.append(propertyInfo);
     }
     for (int i = 0; i < metaObject->methodCount(); ++i) {
@@ -289,7 +292,7 @@ void QMetaObjectPublisher::sendPendingPropertyUpdates()
             foreach (const int propertyIndex, objectsSignalToPropertyMap.value(sigIt.key())) {
                 const QMetaProperty &property = metaObject->property(propertyIndex);
                 Q_ASSERT(property.isValid());
-                properties[QString::number(propertyIndex)] = QJsonValue::fromVariant(property.read(object));
+                properties[QString::number(propertyIndex)] = wrapResult(property.read(object));
             }
             sigs[QString::number(sigIt.key())] = QJsonArray::fromVariantList(sigIt.value());
         }
@@ -365,6 +368,8 @@ QJsonValue QMetaObjectPublisher::invokeMethod(QObject *const object, const int m
 void QMetaObjectPublisher::signalEmitted(const QObject *object, const int signalIndex, const QVariantList &arguments)
 {
     if (!webChannel || webChannel->d_func()->transports.isEmpty()) {
+        if (signalIndex == s_destroyedSignalIndex)
+            objectDestroyed(object);
         return;
     }
     if (!signalToPropertyMap.value(object).contains(signalIndex)) {
@@ -374,9 +379,7 @@ void QMetaObjectPublisher::signalEmitted(const QObject *object, const int signal
         message[KEY_OBJECT] = objectName;
         message[KEY_SIGNAL] = signalIndex;
         if (!arguments.isEmpty()) {
-            // TODO: wrap (new) objects on the fly
-            QJsonArray args = QJsonArray::fromVariantList(arguments);
-            message[KEY_ARGS] = args;
+            message[KEY_ARGS] = wrapList(arguments);
         }
         message[KEY_TYPE] = TypeSignal;
         broadcastMessage(message);
@@ -400,6 +403,7 @@ void QMetaObjectPublisher::objectDestroyed(const QObject *object)
     Q_ASSERT(removed);
     Q_UNUSED(removed);
 
+    signalHandler.remove(object);
     signalToPropertyMap.remove(object);
     pendingPropertyUpdates.remove(object);
     wrappedObjects.remove(object);
@@ -408,31 +412,47 @@ void QMetaObjectPublisher::objectDestroyed(const QObject *object)
 QJsonValue QMetaObjectPublisher::wrapResult(const QVariant &result)
 {
     if (QObject *object = result.value<QObject *>()) {
-        QJsonObject &objectInfo = wrappedObjects[object];
-        if (!objectInfo.isEmpty()) {
-            // already registered, use cached information
-            Q_ASSERT(registeredObjectIds.contains(object));
-            return objectInfo;
-        } // else the object is not yet wrapped, do it now
-
-        const QString &id = QUuid::createUuid().toString();
-        Q_ASSERT(!registeredObjectIds.contains(object));
-
-        QJsonObject info = classInfoForObject(object);
+        QJsonObject objectInfo;
         objectInfo[KEY_QOBJECT] = true;
+        QString id = registeredObjectIds.value(object);
+        if (id.isEmpty()) {
+            // neither registered, nor wrapped, do so now
+            id = QUuid::createUuid().toString();
+
+            registeredObjectIds[object] = id;
+            registeredObjects[id] = object;
+
+            QJsonObject info = classInfoForObject(object);
+            wrappedObjects[object] = info;
+            objectInfo[KEY_DATA] = info;
+            if (propertyUpdatesInitialized) {
+                // if other objects are initialized already, do the same here
+                initializePropertyUpdates(object, info);
+            }
+        } else if (wrappedObjects.contains(object)) {
+            // if this object was wrapped, send the full class info
+            // this is required for proper multi-client support
+            objectInfo[KEY_DATA] = wrappedObjects.value(object);
+        }
+
         objectInfo[KEY_ID] = id;
-        objectInfo[KEY_DATA] = info;
-
-        registeredObjectIds[object] = id;
-        registeredObjects[id] = object;
-        wrappedObjects.insert(object, objectInfo);
-
-        initializePropertyUpdates(object, info);
         return objectInfo;
+    } else if (result.canConvert<QVariantList>()) {
+        // recurse and potentially wrap contents of the array
+        return wrapList(result.toList());
     }
 
     // no need to wrap this
     return QJsonValue::fromVariant(result);
+}
+
+QJsonArray QMetaObjectPublisher::wrapList(const QVariantList &list)
+{
+    QJsonArray array;
+    foreach (const QVariant &arg, list) {
+        array.append(wrapResult(arg));
+    }
+    return array;
 }
 
 void QMetaObjectPublisher::deleteWrappedObject(QObject *object) const

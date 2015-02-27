@@ -116,6 +116,7 @@ private slots:
     void boundingRectForSetLineWidth();
     void glyphLessItems();
     void justifyTrailingSpaces();
+    void layoutWithCustomTabStops();
 
     // QTextLine stuff
     void setNumColumnsWrapAtWordBoundaryOrAnywhere();
@@ -1279,6 +1280,13 @@ void tst_QTextLayout::smallTextLengthWrapAtWordBoundaryOrAnywhere()
 void tst_QTextLayout::testDefaultTabs()
 {
     QTextLayout layout("Foo\tBar\ta slightly longer text\tend.", testFont);
+
+    QFont font = layout.font();
+    QFontPrivate *fd = QFontPrivate::get(font);
+    qreal dpiScale = qreal(fd->dpi) / qreal(qt_defaultDpiY());
+    if (!qFuzzyCompare(dpiScale, 1.0))
+        QSKIP("Test logic does not work when tabs are scaled by dpi");
+
     layout.setCacheEnabled(true);
     layout.beginLayout();
     QTextLine line = layout.createLine();
@@ -1321,6 +1329,13 @@ void tst_QTextLayout::testDefaultTabs()
 void tst_QTextLayout::testTabs()
 {
     QTextLayout layout("Foo\tBar.", testFont);
+
+    QFont font = layout.font();
+    QFontPrivate *fd = QFontPrivate::get(font);
+    qreal dpiScale = qreal(fd->dpi) / qreal(qt_defaultDpiY());
+    if (!qFuzzyCompare(dpiScale, 1.0))
+        QSKIP("Test logic does not work when tabs are scaled by dpi");
+
     layout.setCacheEnabled(true);
     QTextOption option = layout.textOption();
     option.setTabStop(150);
@@ -1338,6 +1353,13 @@ void tst_QTextLayout::testTabs()
 void tst_QTextLayout::testMultilineTab()
 {
     QTextLayout layout("Lorem ipsum dolor sit\tBar.", testFont);
+
+    QFont font = layout.font();
+    QFontPrivate *fd = QFontPrivate::get(font);
+    qreal dpiScale = qreal(fd->dpi) / qreal(qt_defaultDpiY());
+    if (!qFuzzyCompare(dpiScale, 1.0))
+        QSKIP("Test logic does not work when tabs are scaled by dpi");
+
     layout.setCacheEnabled(true);
     // test if this works on the second line.
     layout.beginLayout();
@@ -1347,12 +1369,20 @@ void tst_QTextLayout::testMultilineTab()
     line.setLineWidth(220.);
     layout.endLayout();
 
+
     QCOMPARE(line.cursorToX(22), 80.);
 }
 
 void tst_QTextLayout::testMultiTab()
 {
     QTextLayout layout("Foo\t\t\tBar.", testFont);
+
+    QFont font = layout.font();
+    QFontPrivate *fd = QFontPrivate::get(font);
+    qreal dpiScale = qreal(fd->dpi) / qreal(qt_defaultDpiY());
+    if (!qFuzzyCompare(dpiScale, 1.0))
+        QSKIP("Test logic does not work when tabs are scaled by dpi");
+
     layout.setCacheEnabled(true);
     layout.beginLayout();
     QTextLine line = layout.createLine();
@@ -1366,6 +1396,13 @@ void tst_QTextLayout::testTabsInAlignedParag()
 {
     QTextLayout layout("Foo\tsome more words", testFont);
     layout.setCacheEnabled(true);
+
+    QFont font = layout.font();
+    QFontPrivate *fd = QFontPrivate::get(font);
+    qreal dpiScale = qreal(fd->dpi) / qreal(qt_defaultDpiY());
+    if (!qFuzzyCompare(dpiScale, 1.0))
+        QSKIP("Test logic does not work when tabs are scaled by dpi");
+
     QTextOption option = layout.textOption();
     // right
     option.setAlignment(Qt::AlignRight);
@@ -1425,6 +1462,12 @@ void tst_QTextLayout::testRightTab()
     */
     layout.setCacheEnabled(true);
 
+    QFont font = layout.font();
+    QFontPrivate *fd = QFontPrivate::get(font);
+    qreal dpiScale = qreal(fd->dpi) / qreal(qt_defaultDpiY());
+    if (!qFuzzyCompare(dpiScale, 1.0))
+        QSKIP("Test logic does not work when tabs are scaled by dpi");
+
     QTextOption option = layout.textOption();
     QList<QTextOption::Tab> tabs;
     QTextOption::Tab tab;
@@ -1462,6 +1505,13 @@ void tst_QTextLayout::testRightTab()
 void tst_QTextLayout::testCenteredTab()
 {
     QTextLayout layout("Foo\tBar", testFont);
+
+    QFont font = layout.font();
+    QFontPrivate *fd = QFontPrivate::get(font);
+    qreal dpiScale = qreal(fd->dpi) / qreal(qt_defaultDpiY());
+    if (!qFuzzyCompare(dpiScale, 1.0))
+        QSKIP("Test logic does not work when tabs are scaled by dpi");
+
     layout.setCacheEnabled(true);
     // test if centering the tab works.  We expect the center of 'Bar.' to be at the tab point.
     QTextOption option = layout.textOption();
@@ -1483,6 +1533,13 @@ void tst_QTextLayout::testCenteredTab()
 void tst_QTextLayout::testDelimiterTab()
 {
     QTextLayout layout("Foo\tBar. Barrabas", testFont);
+
+    QFont font = layout.font();
+    QFontPrivate *fd = QFontPrivate::get(font);
+    qreal dpiScale = qreal(fd->dpi) / qreal(qt_defaultDpiY());
+    if (!qFuzzyCompare(dpiScale, 1.0))
+        QSKIP("Test logic does not work when tabs are scaled by dpi");
+
     layout.setCacheEnabled(true);
     // try the different delimiter characters to see if the alignment works there.
     QTextOption option = layout.textOption();
@@ -1535,6 +1592,12 @@ void tst_QTextLayout::tabsForRtl()
      d) center tab is still a centered tab.
     */
     layout.setCacheEnabled(true);
+
+    QFont font = layout.font();
+    QFontPrivate *fd = QFontPrivate::get(font);
+    qreal dpiScale = qreal(fd->dpi) / qreal(qt_defaultDpiY());
+    if (!qFuzzyCompare(dpiScale, 1.0))
+        QSKIP("Test logic does not work when tabs are scaled by dpi");
 
     QTextOption option = layout.textOption();
     QList<QTextOption::Tab> tabs;
@@ -2048,6 +2111,39 @@ void tst_QTextLayout::nbsp()
     }
 
     layout.endLayout();
+}
+
+void tst_QTextLayout::layoutWithCustomTabStops()
+{
+    QScopedPointer<QTextLayout> textLayout(new QTextLayout);
+    QList<QTextOption::Tab> tabStops;
+
+    const int tabWidth = 18;
+    const int maxTabPos = 2500;
+    for (int tabPos = tabWidth; tabPos < maxTabPos; tabPos += tabWidth)
+        tabStops << QTextOption::Tab(tabPos, QTextOption::LeftTab);
+
+    QTextOption textOption;
+    textOption.setTabs(tabStops);
+    textLayout->setTextOption(textOption);
+
+    textLayout->setText(QStringLiteral("\ta aa aa aa aa aa aa"));
+
+    textLayout->beginLayout();
+    textLayout->createLine();
+    textLayout->endLayout();
+
+    qreal shortWidth = textLayout->maximumWidth();
+
+    textLayout->setText(QStringLiteral("\ta aa aa aa aa aa aa aa aa aa aa aa aa a"));
+
+    textLayout->beginLayout();
+    textLayout->createLine();
+    textLayout->endLayout();
+
+    qreal longWidth = textLayout->maximumWidth();
+
+    QVERIFY(longWidth > shortWidth);
 }
 
 QTEST_MAIN(tst_QTextLayout)

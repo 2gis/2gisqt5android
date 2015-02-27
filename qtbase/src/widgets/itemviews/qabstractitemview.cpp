@@ -53,6 +53,7 @@
 #include <qstyleditemdelegate.h>
 #include <private/qabstractitemview_p.h>
 #include <private/qabstractitemmodel_p.h>
+#include <private/qguiapplication_p.h>
 #ifndef QT_NO_ACCESSIBILITY
 #include <qaccessible.h>
 #endif
@@ -891,6 +892,7 @@ void QAbstractItemView::setItemDelegateForRow(int row, QAbstractItemDelegate *de
             disconnect(rowDelegate, SIGNAL(closeEditor(QWidget*,QAbstractItemDelegate::EndEditHint)),
                        this, SLOT(closeEditor(QWidget*,QAbstractItemDelegate::EndEditHint)));
             disconnect(rowDelegate, SIGNAL(commitData(QWidget*)), this, SLOT(commitData(QWidget*)));
+            disconnect(rowDelegate, SIGNAL(sizeHintChanged(QModelIndex)), this, SLOT(doItemsLayout()));
         }
         d->rowDelegates.remove(row);
     }
@@ -899,10 +901,12 @@ void QAbstractItemView::setItemDelegateForRow(int row, QAbstractItemDelegate *de
             connect(delegate, SIGNAL(closeEditor(QWidget*,QAbstractItemDelegate::EndEditHint)),
                     this, SLOT(closeEditor(QWidget*,QAbstractItemDelegate::EndEditHint)));
             connect(delegate, SIGNAL(commitData(QWidget*)), this, SLOT(commitData(QWidget*)));
+            connect(delegate, SIGNAL(sizeHintChanged(QModelIndex)), this, SLOT(doItemsLayout()), Qt::QueuedConnection);
         }
         d->rowDelegates.insert(row, delegate);
     }
     viewport()->update();
+    d->doDelayedItemsLayout();
 }
 
 /*!
@@ -948,6 +952,7 @@ void QAbstractItemView::setItemDelegateForColumn(int column, QAbstractItemDelega
             disconnect(columnDelegate, SIGNAL(closeEditor(QWidget*,QAbstractItemDelegate::EndEditHint)),
                        this, SLOT(closeEditor(QWidget*,QAbstractItemDelegate::EndEditHint)));
             disconnect(columnDelegate, SIGNAL(commitData(QWidget*)), this, SLOT(commitData(QWidget*)));
+            disconnect(columnDelegate, SIGNAL(sizeHintChanged(QModelIndex)), this, SLOT(doItemsLayout()));
         }
         d->columnDelegates.remove(column);
     }
@@ -956,10 +961,12 @@ void QAbstractItemView::setItemDelegateForColumn(int column, QAbstractItemDelega
             connect(delegate, SIGNAL(closeEditor(QWidget*,QAbstractItemDelegate::EndEditHint)),
                     this, SLOT(closeEditor(QWidget*,QAbstractItemDelegate::EndEditHint)));
             connect(delegate, SIGNAL(commitData(QWidget*)), this, SLOT(commitData(QWidget*)));
+            connect(delegate, SIGNAL(sizeHintChanged(QModelIndex)), this, SLOT(doItemsLayout()), Qt::QueuedConnection);
         }
         d->columnDelegates.insert(column, delegate);
     }
     viewport()->update();
+    d->doDelayedItemsLayout();
 }
 
 /*!
@@ -1878,6 +1885,7 @@ void QAbstractItemView::mouseDoubleClickEvent(QMouseEvent *event)
         QMouseEvent me(QEvent::MouseButtonPress,
                        event->localPos(), event->windowPos(), event->screenPos(),
                        event->button(), event->buttons(), event->modifiers());
+        QGuiApplicationPrivate::setMouseEventSource(&me, event->source());
         mousePressEvent(&me);
         return;
     }
@@ -1904,7 +1912,7 @@ void QAbstractItemView::dragEnterEvent(QDragEnterEvent *event)
         && (event->source() != this|| !(event->possibleActions() & Qt::MoveAction)))
         return;
 
-    if (d_func()->canDecode(event)) {
+    if (d_func()->canDrop(event)) {
         event->accept();
         setState(DraggingState);
     } else {
@@ -1933,7 +1941,7 @@ void QAbstractItemView::dragMoveEvent(QDragMoveEvent *event)
     QModelIndex index = indexAt(event->pos());
     d->hover = index;
     if (!d->droppingOnItself(event, index)
-        && d->canDecode(event)) {
+        && d->canDrop(event)) {
 
         if (index.isValid() && d->showDropIndicator) {
             QRect rect = visualRect(index);
@@ -1978,7 +1986,7 @@ void QAbstractItemView::dragMoveEvent(QDragMoveEvent *event)
             }
         }
         d->viewport->update();
-    } // can decode
+    } // can drop
 
     if (d->shouldAutoScroll(event->pos()))
         startAutoScroll();

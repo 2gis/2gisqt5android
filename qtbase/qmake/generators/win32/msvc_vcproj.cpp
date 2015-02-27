@@ -1177,7 +1177,7 @@ void VcprojGenerator::initResourceTool()
     // to add it for the compiler) However, the resource tool does not do this.
     if(project->isActiveConfig("debug"))
         conf.resource.PreprocessorDefinitions += "_DEBUG";
-    if(project->isActiveConfig("staticlib"))
+    if (conf.CompilerVersion < NET2010 && project->isActiveConfig("staticlib"))
         conf.resource.ResourceOutputFileName = "$(OutDir)\\$(InputName).res";
 }
 
@@ -1688,7 +1688,6 @@ void VcprojGenerator::initOld()
             inc = QString("\"%1\"").arg(inc); // Quote all paths if not quoted already
         project->values("MSVCPROJ_INCPATH").append("-I" + inc);
     }
-    project->values("MSVCPROJ_INCPATH").append("-I" + specdir());
 
     QString dest = Option::fixPathToTargetOS(project->first("TARGET").toQString()) + project->first("TARGET_EXT");
     project->values("MSVCPROJ_TARGET") = ProStringList(dest);

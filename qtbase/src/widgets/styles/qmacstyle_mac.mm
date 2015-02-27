@@ -879,6 +879,10 @@ static QSize qt_aqua_get_known_size(QStyle::ContentsType ct, const QWidget *widg
             gbi.size = sz == QAquaSizeSmall ? kHIThemeGrowBoxSizeSmall : kHIThemeGrowBoxSizeNormal;
             if (HIThemeGetGrowBoxBounds(&p, &gbi, &r) == noErr) {
                 int width = 0;
+#ifndef QT_NO_MDIAREA
+            if (widg && qobject_cast<QMdiSubWindow *>(widg->parentWidget()))
+                width = r.size.width;
+#endif
                 ret = QSize(width, r.size.height);
             }
         }
@@ -1671,13 +1675,14 @@ void QMacStylePrivate::getSliderInfo(QStyle::ComplexControl cc, const QStyleOpti
         else
             tdi->max = 10 * slider->rect.height();
 
-        if (usePlainKnob || slider->orientation == Qt::Horizontal) {
+        int range = slider->maximum - slider->minimum;
+        if (range == 0) {
+            tdi->value = 0;
+        } else if (usePlainKnob || slider->orientation == Qt::Horizontal) {
             int endsCorrection = usePlainKnob ? 25 : 10;
-            tdi->value = (tdi->max + 2 * endsCorrection) * (slider->sliderPosition - slider->minimum)
-                    / (slider->maximum - slider->minimum) - endsCorrection;
+            tdi->value = (tdi->max + 2 * endsCorrection) * (slider->sliderPosition - slider->minimum) / range - endsCorrection;
         } else {
-            tdi->value = (tdi->max + 30) * (slider->sliderPosition - slider->minimum)
-                       / (slider->maximum - slider->minimum) - 20;
+            tdi->value = (tdi->max + 30) * (slider->sliderPosition - slider->minimum) / range - 20;
         }
     }
     tdi->attributes = kThemeTrackShowThumb;
@@ -5572,7 +5577,7 @@ void QMacStyle::drawComplexControl(ComplexControl cc, const QStyleOptionComplex 
                                                     CGContextTranslateCTM(ctx, 0, rect.size.height);
                                                     CGContextScaleCTM(ctx, 1, -1);
                                                 }
-                                                [sl.cell drawBarInside:tdi.bounds flipped:NO];
+                                                [sl.cell drawBarInside:NSRectFromCGRect(tdi.bounds) flipped:NO];
                                                 // No need to restore the CTM later, the context has been saved
                                                 // and will be restored at the end of drawNSViewInRect()
                                             });

@@ -1139,7 +1139,7 @@ bool QQmlEnumTypeResolver::tryQualifiedEnumAssignment(const QmlIR::Object *obj, 
     if (!prop->isWritable() && !(binding->flags & QV4::CompiledData::Binding::InitializerForReadOnlyDeclaration))
         COMPILE_EXCEPTION(binding, tr("Invalid property assignment: \"%1\" is a read-only property").arg(stringAt(binding->propertyNameIndex)));
 
-    Q_ASSERT(binding->type = QV4::CompiledData::Binding::Type_Script);
+    Q_ASSERT(binding->type == QV4::CompiledData::Binding::Type_Script);
     const QString string = compiler->bindingAsString(obj, binding->value.compiledScriptIndex);
     if (!string.constData()->isUpper())
         return true;
@@ -1389,7 +1389,7 @@ void QQmlComponentAndAliasResolver::findAndRegisterImplicitComponents(const QmlI
         if (!mo)
             continue;
 
-        static QQmlType *componentType = QQmlMetaType::qmlType(&QQmlComponent::staticMetaObject);
+        QQmlType *componentType = QQmlMetaType::qmlType(&QQmlComponent::staticMetaObject);
         Q_ASSERT(componentType);
 
         QmlIR::Object *syntheticComponent = pool->New<QmlIR::Object>();

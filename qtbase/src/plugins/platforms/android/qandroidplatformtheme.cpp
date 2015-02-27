@@ -176,7 +176,7 @@ static void setPaletteColor(const QVariantMap &object,
     }
 }
 
-static std::shared_ptr<AndroidStyle> loadAndroidStyle(QPalette *defaultPalette)
+QJsonObject AndroidStyle::loadStyleData()
 {
     QString stylePath(QLatin1String(qgetenv("MINISTRO_ANDROID_STYLE_PATH")));
     const QLatin1Char slashChar('/');
@@ -198,21 +198,29 @@ static std::shared_ptr<AndroidStyle> loadAndroidStyle(QPalette *defaultPalette)
 
     QFile f(stylePath + QLatin1String("style.json"));
     if (!f.open(QIODevice::ReadOnly))
-        return std::shared_ptr<AndroidStyle>();
+        return QJsonObject();
 
     QJsonParseError error;
     QJsonDocument document = QJsonDocument::fromJson(f.readAll(), &error);
     if (document.isNull()) {
         qCritical() << error.errorString();
-        return std::shared_ptr<AndroidStyle>();
+        return QJsonObject();
     }
 
     if (!document.isObject()) {
         qCritical() << "Style.json does not contain a valid style.";
-        return std::shared_ptr<AndroidStyle>();
+        return QJsonObject();
     }
+    return document.object();
+}
+
+static std::shared_ptr<AndroidStyle> loadAndroidStyle(QPalette *defaultPalette)
+{
     std::shared_ptr<AndroidStyle> style(new AndroidStyle);
-    style->m_styleData = document.object();
+    style->m_styleData = AndroidStyle::loadStyleData();
+    if (style->m_styleData.isEmpty())
+        return std::shared_ptr<AndroidStyle>();
+
     for (QJsonObject::const_iterator objectIterator = style->m_styleData.constBegin();
          objectIterator != style->m_styleData.constEnd();
          ++objectIterator) {
@@ -348,6 +356,9 @@ QAndroidPlatformTheme::QAndroidPlatformTheme(QAndroidPlatformNativeInterface *an
     m_androidStyleData = loadAndroidStyle(&m_defaultPalette);
     QGuiApplication::setPalette(m_defaultPalette);
     androidPlatformNativeInterface->m_androidStyle = m_androidStyleData;
+
+    // default in case the style has not set a font
+    m_systemFont = QFont(QLatin1String("Roboto"), 14.0 * 100 / 72); // keep default size the same after changing from 100 dpi to 72 dpi
 }
 
 QPlatformMenuBar *QAndroidPlatformTheme::createPlatformMenuBar() const
@@ -430,10 +441,8 @@ const QFont *QAndroidPlatformTheme::font(Font type) const
             return &(it.value());
     }
 
-    // default in case the style has not set a font
-    static QFont systemFont("Roboto", 14.0 * 100 / 72); // keep default size the same after changing from 100 dpi to 72 dpi
     if (type == QPlatformTheme::SystemFont)
-        return &systemFont;
+        return &m_systemFont;
     return 0;
 }
 

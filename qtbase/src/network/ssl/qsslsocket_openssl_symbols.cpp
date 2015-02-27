@@ -47,6 +47,7 @@
 **
 ****************************************************************************/
 
+#include "qssl_p.h"
 #include "qsslsocket_openssl_symbols_p.h"
 
 #ifdef Q_OS_WIN
@@ -62,6 +63,9 @@
 #endif
 #if defined(Q_OS_LINUX) && !defined(Q_OS_ANDROID)
 #include <link.h>
+#endif
+#ifdef Q_OS_DARWIN
+#include "private/qcore_mac_p.h"
 #endif
 
 #include <algorithm>
@@ -112,12 +116,12 @@ QT_BEGIN_NAMESPACE
 namespace {
 void qsslSocketUnresolvedSymbolWarning(const char *functionName)
 {
-    qWarning("QSslSocket: cannot call unresolved function %s", functionName);
+    qCWarning(lcSsl, "QSslSocket: cannot call unresolved function %s", functionName);
 }
 
 void qsslSocketCannotResolveSymbolWarning(const char *functionName)
 {
-    qWarning("QSslSocket: cannot resolve %s", functionName);
+    qCWarning(lcSsl, "QSslSocket: cannot resolve %s", functionName);
 }
 }
 
@@ -266,7 +270,9 @@ DEFINEFUNC(SSL_SESSION*, SSL_get_session, const SSL *ssl, ssl, return 0, return)
 #ifndef OPENSSL_NO_SSL2
 DEFINEFUNC(const SSL_METHOD *, SSLv2_client_method, DUMMYARG, DUMMYARG, return 0, return)
 #endif
+#ifndef OPENSSL_NO_SSL3_METHOD
 DEFINEFUNC(const SSL_METHOD *, SSLv3_client_method, DUMMYARG, DUMMYARG, return 0, return)
+#endif
 DEFINEFUNC(const SSL_METHOD *, SSLv23_client_method, DUMMYARG, DUMMYARG, return 0, return)
 DEFINEFUNC(const SSL_METHOD *, TLSv1_client_method, DUMMYARG, DUMMYARG, return 0, return)
 #if OPENSSL_VERSION_NUMBER >= 0x10001000L
@@ -276,7 +282,9 @@ DEFINEFUNC(const SSL_METHOD *, TLSv1_2_client_method, DUMMYARG, DUMMYARG, return
 #ifndef OPENSSL_NO_SSL2
 DEFINEFUNC(const SSL_METHOD *, SSLv2_server_method, DUMMYARG, DUMMYARG, return 0, return)
 #endif
+#ifndef OPENSSL_NO_SSL3_METHOD
 DEFINEFUNC(const SSL_METHOD *, SSLv3_server_method, DUMMYARG, DUMMYARG, return 0, return)
+#endif
 DEFINEFUNC(const SSL_METHOD *, SSLv23_server_method, DUMMYARG, DUMMYARG, return 0, return)
 DEFINEFUNC(const SSL_METHOD *, TLSv1_server_method, DUMMYARG, DUMMYARG, return 0, return)
 #if OPENSSL_VERSION_NUMBER >= 0x10001000L
@@ -285,11 +293,15 @@ DEFINEFUNC(const SSL_METHOD *, TLSv1_2_server_method, DUMMYARG, DUMMYARG, return
 #endif
 #else
 DEFINEFUNC(SSL_METHOD *, SSLv2_client_method, DUMMYARG, DUMMYARG, return 0, return)
+#ifndef OPENSSL_NO_SSL3_METHOD
 DEFINEFUNC(SSL_METHOD *, SSLv3_client_method, DUMMYARG, DUMMYARG, return 0, return)
+#endif
 DEFINEFUNC(SSL_METHOD *, SSLv23_client_method, DUMMYARG, DUMMYARG, return 0, return)
 DEFINEFUNC(SSL_METHOD *, TLSv1_client_method, DUMMYARG, DUMMYARG, return 0, return)
 DEFINEFUNC(SSL_METHOD *, SSLv2_server_method, DUMMYARG, DUMMYARG, return 0, return)
+#ifndef OPENSSL_NO_SSL3_METHOD
 DEFINEFUNC(SSL_METHOD *, SSLv3_server_method, DUMMYARG, DUMMYARG, return 0, return)
+#endif
 DEFINEFUNC(SSL_METHOD *, SSLv23_server_method, DUMMYARG, DUMMYARG, return 0, return)
 DEFINEFUNC(SSL_METHOD *, TLSv1_server_method, DUMMYARG, DUMMYARG, return 0, return)
 #endif
@@ -385,11 +397,11 @@ DEFINEFUNC(void, PKCS12_free, PKCS12 *pkcs12, pkcs12, return, DUMMYARG)
 #ifdef QT_NO_LIBRARY
 bool q_resolveOpenSslSymbols()
 {
-    qWarning("QSslSocket: unable to resolve symbols. "
-             "QT_NO_LIBRARY is defined which means runtime resolving of "
-             "libraries won't work.");
-    qWarning("Either compile Qt statically or with support for runtime resolving "
-             "of libraries.");
+    qCWarning(lcSsl, "QSslSocket: unable to resolve symbols. "
+                     "QT_NO_LIBRARY is defined which means runtime resolving of "
+                     "libraries won't work.");
+    qCWarning(lcSsl, "Either compile Qt statically or with support for runtime resolving "
+                     "of libraries.");
     return false;
 }
 #else
@@ -452,6 +464,15 @@ static QStringList libraryPathList()
 #  ifdef Q_OS_DARWIN
     paths = QString::fromLatin1(qgetenv("DYLD_LIBRARY_PATH"))
             .split(QLatin1Char(':'), QString::SkipEmptyParts);
+
+    // search in .app/Contents/Frameworks
+    UInt32 packageType;
+    CFBundleGetPackageInfo(CFBundleGetMainBundle(), &packageType, NULL);
+    if (packageType == FOUR_CHAR_CODE('APPL')) {
+        QUrl bundleUrl = QUrl::fromCFURL(QCFType<CFURLRef>(CFBundleCopyBundleURL(CFBundleGetMainBundle())));
+        QUrl frameworksUrl = QUrl::fromCFURL(QCFType<CFURLRef>(CFBundleCopyPrivateFrameworksURL(CFBundleGetMainBundle())));
+        paths << bundleUrl.resolved(frameworksUrl).path();
+    }
 #  else
     paths = QString::fromLatin1(qgetenv("LD_LIBRARY_PATH"))
             .split(QLatin1Char(':'), QString::SkipEmptyParts);
@@ -601,7 +622,13 @@ static QPair<QLibrary*, QLibrary*> loadOpenSsl()
     }
 #endif
 
+#ifndef Q_OS_DARWIN
     // second attempt: find the development files libssl.so and libcrypto.so
+    //
+    // disabled on OS X/iOS:
+    //  OS X's /usr/lib/libssl.dylib, /usr/lib/libcrypto.dylib will be picked up in the third
+    //    attempt, _after_ <bundle>/Contents/Frameworks has been searched.
+    //  iOS does not ship a system libssl.dylib, libcrypto.dylib in the first place.
     libssl->setFileNameAndVersion(QLatin1String("ssl"), -1);
     libcrypto->setFileNameAndVersion(QLatin1String("crypto"), -1);
     if (libcrypto->load() && libssl->load()) {
@@ -611,6 +638,7 @@ static QPair<QLibrary*, QLibrary*> loadOpenSsl()
         libssl->unload();
         libcrypto->unload();
     }
+#endif
 
     // third attempt: loop on the most common library paths and find libssl
     QStringList sslList = findAllLibSsl();
@@ -779,7 +807,9 @@ bool q_resolveOpenSslSymbols()
 #ifndef OPENSSL_NO_SSL2
     RESOLVEFUNC(SSLv2_client_method)
 #endif
+#ifndef OPENSSL_NO_SSL3_METHOD
     RESOLVEFUNC(SSLv3_client_method)
+#endif
     RESOLVEFUNC(SSLv23_client_method)
     RESOLVEFUNC(TLSv1_client_method)
 #if OPENSSL_VERSION_NUMBER >= 0x10001000L
@@ -789,7 +819,9 @@ bool q_resolveOpenSslSymbols()
 #ifndef OPENSSL_NO_SSL2
     RESOLVEFUNC(SSLv2_server_method)
 #endif
+#ifndef OPENSSL_NO_SSL3_METHOD
     RESOLVEFUNC(SSLv3_server_method)
+#endif
     RESOLVEFUNC(SSLv23_server_method)
     RESOLVEFUNC(TLSv1_server_method)
 #if OPENSSL_VERSION_NUMBER >= 0x10001000L
@@ -973,7 +1005,7 @@ QDateTime q_getTimeFromASN1(const ASN1_TIME *aTime)
         return result;
 
     } else {
-        qWarning("unsupported date format detected");
+        qCWarning(lcSsl, "unsupported date format detected");
         return QDateTime();
     }
 

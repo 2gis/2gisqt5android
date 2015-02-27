@@ -73,7 +73,7 @@ QT_BEGIN_NAMESPACE
   more \e items. Each toolbar item has an icon and a text label.
 
   The toolbar must be attached to a QWindow using the
-  \l{QWindow::attachToWindow}{attachToWindow} method in order to be visible.
+  \l{QMacToolBar::attachToWindow()}{attachToWindow()} method in order to be visible.
   The toolbar is attached to the native NSWindow and is displayed above the
   QWindow. QMacToolBar visibility follows window visibility.
 
