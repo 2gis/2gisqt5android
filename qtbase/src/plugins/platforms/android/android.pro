@@ -15,7 +15,7 @@ load(qt_plugin)
     LIBS += -ljnigraphics -landroid
 }
 
-QT += core-private gui-private platformsupport-private
+QT += core-private qml-private gui-private platformsupport-private
 
 CONFIG += qpa/genericunixfontdatabase
 
