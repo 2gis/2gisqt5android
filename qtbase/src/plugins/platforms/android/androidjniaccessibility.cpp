@@ -42,7 +42,6 @@
 #include "QtGui/qaccessible.h"
 #include <QtCore/qmath.h>
 #include <QtCore/private/qjnihelpers_p.h>
-#include <QtQml>
 
 #include "qdebug.h"
 
@@ -65,7 +64,6 @@ namespace QtAndroidAccessibility
     static jmethodID m_setScrollableMethodID = 0;
     static jmethodID m_setTextSelectionMethodID = 0;
     static jmethodID m_setVisibleToUserMethodID = 0;
-    static jmethodID m_setViewIdResourceNameMethodID = 0;
 
 
     static void setActive(JNIEnv */*env*/, jobject /*thiz*/, jboolean active)
@@ -215,34 +213,6 @@ if (!clazz) { \
         return descriptionForAccessibleObject_helper(env, iface);
     }
 
-    static jstring viewIdResourceForAccessibleObject_helper(JNIEnv *env, QAccessibleInterface *iface)
-    {
-        QString resourceId = "";
-        if (iface && iface->isValid()) {
-            QObject *object = iface->object();
-
-            resourceId = object->objectName();
-
-	    if (resourceId.isEmpty()) {
-	        QQmlEngine *engine = qmlEngine(object);
-	        if (engine) {
-                    QQmlContext *context = engine->contextForObject(object);
-		    if (context) {
-	                resourceId = context->nameForObject(object);
-		    }
-		}
-	    }
-        }
-        return env->NewString((jchar*) resourceId.constData(), (jsize) resourceId.size());
-    }
-
-
-    static jstring viewIdResourceForAccessibleObject(JNIEnv *env, jobject /*thiz*/, jint objectId)
-    {
-        QAccessibleInterface *iface = interfaceFromId(objectId);
-        return viewIdResourceForAccessibleObject_helper(env, iface);
-    }
-
     static bool populateNode(JNIEnv *env, jobject /*thiz*/, jint objectId, jobject node)
     {
         QAccessibleInterface *iface = interfaceFromId(objectId);
@@ -308,7 +278,6 @@ if (!clazz) { \
         {"clickAction", "(I)Z", (void*)clickAction},
         {"scrollForward", "(I)Z", (void*)scrollForward},
         {"scrollBackward", "(I)Z", (void*)scrollBackward},
-        {"viewIdResourceForAccessibleObject", "(I)Ljava/lang/String;", (jstring)viewIdResourceForAccessibleObject},
     };
 
 #define GET_AND_CHECK_STATIC_METHOD(VAR, CLASS, METHOD_NAME, METHOD_SIGNATURE) \
@@ -343,7 +312,6 @@ if (!clazz) { \
         GET_AND_CHECK_STATIC_METHOD(m_setFocusedMethodID, nodeInfoClass, "setFocused", "(Z)V");
         GET_AND_CHECK_STATIC_METHOD(m_setScrollableMethodID, nodeInfoClass, "setScrollable", "(Z)V");
         GET_AND_CHECK_STATIC_METHOD(m_setVisibleToUserMethodID, nodeInfoClass, "setVisibleToUser", "(Z)V");
-        GET_AND_CHECK_STATIC_METHOD(m_setViewIdResourceNameMethodID, nodeInfoClass, "setViewIdResourceName", "(Ljava/lang/String;)V");
 
         if (QtAndroidPrivate::androidSdkVersion() >= 18) {
             GET_AND_CHECK_STATIC_METHOD(m_setTextSelectionMethodID, nodeInfoClass, "setTextSelection", "(II)V");

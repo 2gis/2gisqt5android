@@ -55,7 +55,6 @@ class QtNativeAccessibility
     static native boolean clickAction(int objectId);
     static native boolean scrollForward(int objectId);
     static native boolean scrollBackward(int objectId);
-    static native String viewIdResourceForAccessibleObject(int objectId);
 
     static native boolean populateNode(int objectId, AccessibilityNodeInfo node);
 }
