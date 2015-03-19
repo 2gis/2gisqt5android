@@ -3425,6 +3425,18 @@ QQmlListProperty<QObject> QQuickItemPrivate::data()
                                              QQuickItemPrivate::data_clear);
 }
 
+QString QQuickItem::id() const
+{
+    QQuickItem *item = const_cast<QQuickItem *>(this);
+    QQmlEngine *engine = qmlEngine(item);
+    if (engine) {
+        QQmlContext *context = engine->contextForObject(item);
+        if (context)
+            return context->nameForObject(item);
+    }
+    return QString();
+}
+
 /*!
     \qmlpropertygroup QtQuick::Item::childrenRect
     \qmlproperty real QtQuick::Item::childrenRect.x
