@@ -225,13 +225,9 @@ QJNIEnvironmentPrivate::QJNIEnvironmentPrivate()
         JavaVMAttachArgs args = { JNI_VERSION_1_6, qJniThreadName, Q_NULLPTR };
         if (vm->AttachCurrentThread(&jniEnv, &args) != JNI_OK)
             return;
+        if (!jniEnvTLS->hasLocalData())
+            jniEnvTLS->setLocalData(new QJNIEnvironmentPrivateTLS);
     }
-
-    if (!jniEnv)
-        return;
-
-    if (!jniEnvTLS->hasLocalData())
-        jniEnvTLS->setLocalData(new QJNIEnvironmentPrivateTLS);
 }
 
 JNIEnv *QJNIEnvironmentPrivate::operator->()
