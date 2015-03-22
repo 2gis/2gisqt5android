@@ -64,7 +64,6 @@ namespace QtAndroidAccessibility
     static jmethodID m_setScrollableMethodID = 0;
     static jmethodID m_setTextSelectionMethodID = 0;
     static jmethodID m_setVisibleToUserMethodID = 0;
-    static jmethodID m_setViewIdResourceNameMethodID = 0;
 
 
     static void setActive(JNIEnv */*env*/, jobject /*thiz*/, jboolean active)
@@ -222,9 +221,9 @@ if (!clazz) { \
 
             resourceId = object->objectName();
 
-	    if (resourceId.isEmpty()) {
+            if (resourceId.isEmpty()) {
                 resourceId = object->property("id").toString();
-	    }
+            }
         }
         return env->NewString((jchar*) resourceId.constData(), (jsize) resourceId.size());
     }
@@ -335,7 +334,6 @@ if (!clazz) { \
         GET_AND_CHECK_STATIC_METHOD(m_setFocusedMethodID, nodeInfoClass, "setFocused", "(Z)V");
         GET_AND_CHECK_STATIC_METHOD(m_setScrollableMethodID, nodeInfoClass, "setScrollable", "(Z)V");
         GET_AND_CHECK_STATIC_METHOD(m_setVisibleToUserMethodID, nodeInfoClass, "setVisibleToUser", "(Z)V");
-        GET_AND_CHECK_STATIC_METHOD(m_setViewIdResourceNameMethodID, nodeInfoClass, "setViewIdResourceName", "(Ljava/lang/String;)V");
 
         if (QtAndroidPrivate::androidSdkVersion() >= 18) {
             GET_AND_CHECK_STATIC_METHOD(m_setTextSelectionMethodID, nodeInfoClass, "setTextSelection", "(II)V");
