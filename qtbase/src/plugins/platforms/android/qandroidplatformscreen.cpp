@@ -252,7 +252,7 @@ void QAndroidPlatformScreen::applicationStateChanged(Qt::ApplicationState state)
     foreach (QAndroidPlatformWindow *w, m_windowStack)
         w->applicationStateChanged(state);
 
-    if (state <=  Qt::ApplicationHidden && QtAndroid::blockEventLoopsWhenSuspended()) {
+    if (state <=  Qt::ApplicationHidden) {
         lockSurface();
         QtAndroid::destroySurface(m_id);
         m_id = -1;
