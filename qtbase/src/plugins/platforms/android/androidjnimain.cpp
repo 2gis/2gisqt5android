@@ -297,7 +297,7 @@ namespace QtAndroid
     int createSurface(AndroidSurfaceClient *client, const QRect &geometry, bool onTop, int imageDepth)
     {
         QJNIEnvironmentPrivate env;
-        if (!env)
+        if (!env || !m_activityActive)
             return -1;
 
         m_surfacesMutex.lock();

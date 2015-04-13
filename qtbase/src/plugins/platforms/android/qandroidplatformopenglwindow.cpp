@@ -127,6 +127,10 @@ EGLSurface QAndroidPlatformOpenGLWindow::eglSurface(EGLConfig config)
 
         const bool windowStaysOnTop = bool(window()->flags() & Qt::WindowStaysOnTopHint);
         m_nativeSurfaceId = QtAndroid::createSurface(this, geometry(), windowStaysOnTop, 32);
+
+        if (m_nativeSurfaceId < 0)
+            return EGL_NO_SURFACE;
+
         m_surfaceWaitCondition.wait(&m_surfaceMutex);
     }
 
