@@ -87,7 +87,9 @@ bool QAndroidPlatformOpenGLContext::needsFBOReadBackWorkaround()
 
 bool QAndroidPlatformOpenGLContext::makeCurrent(QPlatformSurface *surface)
 {
-    bool ret = QEGLPlatformContext::makeCurrent(surface);
+    if (!QEGLPlatformContext::makeCurrent(surface))
+        return false;
+
     QOpenGLContextPrivate *ctx_d = QOpenGLContextPrivate::get(context());
 
     const char *rendererString = reinterpret_cast<const char *>(glGetString(GL_RENDERER));
@@ -97,7 +99,7 @@ bool QAndroidPlatformOpenGLContext::makeCurrent(QPlatformSurface *surface)
     if (!ctx_d->workaround_brokenFBOReadBack && needsFBOReadBackWorkaround())
         ctx_d->workaround_brokenFBOReadBack = true;
 
-    return ret;
+    return true;
 }
 
 EGLSurface QAndroidPlatformOpenGLContext::eglSurfaceForPlatformSurface(QPlatformSurface *surface)
