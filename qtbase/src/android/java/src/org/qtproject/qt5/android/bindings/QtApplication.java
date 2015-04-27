@@ -65,6 +65,11 @@ public class QtApplication extends Application
     public static Method dispatchGenericMotionEvent = null;
     public static Method onGenericMotionEvent = null;
 
+    public static Object getQtActivityDelegate()
+    {
+        return QtApplication.m_delegateObject;
+    }
+
     public static void setQtActivityDelegate(Object listener)
     {
         QtApplication.m_delegateObject = listener;

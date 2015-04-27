@@ -396,17 +396,13 @@ public class QtActivityDelegate
         m_imm.updateSelection(m_editText, selStart, selEnd, candidatesStart, candidatesEnd);
     }
 
-    public boolean loadApplication(Activity activity, ClassLoader classLoader, Bundle loaderParams)
+    public boolean setActivity(Activity activity, ClassLoader classLoader, Bundle loaderParams)
     {
-        /// check parameters integrity
-        if (!loaderParams.containsKey(NATIVE_LIBRARIES_KEY)
-                || !loaderParams.containsKey(BUNDLED_LIBRARIES_KEY)
-                || !loaderParams.containsKey(ENVIRONMENT_VARIABLES_KEY)) {
-            return false;
-        }
+        if (m_activity == activity)
+            return true;
 
         m_activity = activity;
-        setActionBarVisibility(false);
+
         QtNative.setActivity(m_activity, this);
         QtNative.setClassLoader(classLoader);
         if (loaderParams.containsKey(STATIC_INIT_CLASSES_KEY)) {
@@ -425,18 +421,6 @@ public class QtActivityDelegate
                 }
             }
         }
-        QtNative.loadQtLibraries(loaderParams.getStringArrayList(NATIVE_LIBRARIES_KEY));
-        ArrayList<String> libraries = loaderParams.getStringArrayList(BUNDLED_LIBRARIES_KEY);
-        QtNative.loadBundledLibraries(libraries, QtNativeLibrariesDir.nativeLibrariesDir(m_activity));
-        m_mainLib = loaderParams.getString(MAIN_LIBRARY_KEY);
-        // older apps provide the main library as the last bundled library; look for this if the main library isn't provided
-        if (null == m_mainLib && libraries.size() > 0)
-            m_mainLib = libraries.get(libraries.size() - 1);
-
-        if (loaderParams.containsKey(EXTRACT_STYLE_KEY)) {
-            String path = loaderParams.getString(EXTRACT_STYLE_KEY);
-            new ExtractStyle(m_activity, path);
-        }
 
         try {
             m_super_dispatchKeyEvent = m_activity.getClass().getMethod("super_dispatchKeyEvent", KeyEvent.class);
@@ -450,6 +434,36 @@ public class QtActivityDelegate
         } catch (Exception e) {
             e.printStackTrace();
             return false;
+        }
+
+        return true;
+    }
+
+    public boolean loadApplication(Activity activity, ClassLoader classLoader, Bundle loaderParams)
+    {
+        /// check parameters integrity
+        if (!loaderParams.containsKey(NATIVE_LIBRARIES_KEY)
+                || !loaderParams.containsKey(BUNDLED_LIBRARIES_KEY)
+                || !loaderParams.containsKey(ENVIRONMENT_VARIABLES_KEY)) {
+            return false;
+        }
+
+        if (!setActivity(activity, classLoader, loaderParams))
+            return false;
+
+        setActionBarVisibility(false);
+
+        QtNative.loadQtLibraries(loaderParams.getStringArrayList(NATIVE_LIBRARIES_KEY));
+        ArrayList<String> libraries = loaderParams.getStringArrayList(BUNDLED_LIBRARIES_KEY);
+        QtNative.loadBundledLibraries(libraries, QtNativeLibrariesDir.nativeLibrariesDir(m_activity));
+        m_mainLib = loaderParams.getString(MAIN_LIBRARY_KEY);
+        // older apps provide the main library as the last bundled library; look for this if the main library isn't provided
+        if (null == m_mainLib && libraries.size() > 0)
+            m_mainLib = libraries.get(libraries.size() - 1);
+
+        if (loaderParams.containsKey(EXTRACT_STYLE_KEY)) {
+            String path = loaderParams.getString(EXTRACT_STYLE_KEY);
+            new ExtractStyle(m_activity, path);
         }
 
         int necessitasApiLevel = 1;
@@ -467,7 +481,7 @@ public class QtActivityDelegate
         else
             additionalEnvironmentVariables += "\tQT_ANDROID_FONTS=Roboto;Droid Sans;Droid Sans Fallback";
 
-        additionalEnvironmentVariables += getAppIconSize(activity);
+        additionalEnvironmentVariables += getAppIconSize(m_activity);
 
         if (m_environmentVariables != null && m_environmentVariables.length() > 0)
             m_environmentVariables = additionalEnvironmentVariables + "\t" + m_environmentVariables;
