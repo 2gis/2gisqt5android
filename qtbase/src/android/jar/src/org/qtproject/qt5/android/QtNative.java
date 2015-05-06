@@ -66,6 +66,7 @@ import javax.net.ssl.X509TrustManager;
 public class QtNative
 {
     private static Activity m_activity = null;
+    private static boolean m_activityPaused = false;
     private static QtActivityDelegate m_activityDelegate = null;
     public static Object m_mainActivityMutex = new Object(); // mutex used to synchronize runnable operations
 
@@ -180,14 +181,22 @@ public class QtNative
         m_lostActions.clear();
     }
 
+    static public void setActivityPaused(boolean paused)
+    {
+        synchronized (m_mainActivityMutex) {
+            m_activityPaused = paused;
+        }
+    }
+
     private static boolean runAction(Runnable action)
     {
         synchronized (m_mainActivityMutex) {
-            if (m_activity == null)
+            boolean lost = m_activity == null || m_activityPaused;
+            if (lost)
                 m_lostActions.add(action);
             else
                 m_activity.runOnUiThread(action);
-            return m_activity != null;
+            return !lost;
         }
     }
 
