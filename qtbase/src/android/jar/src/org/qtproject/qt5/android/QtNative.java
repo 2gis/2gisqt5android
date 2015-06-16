@@ -286,7 +286,17 @@ public class QtNative
 
     private static void quitApp()
     {
-        m_activity.finish();
+        final Activity activity = activity();
+
+        activity.finishAffinity();
+
+        if (m_activityPaused) {
+            // Workaround for correct exit.
+            Intent intent = new Intent(Intent.ACTION_MAIN);
+            intent.addCategory(Intent.CATEGORY_HOME);
+            intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            activity.startActivity(intent);
+        }
     }
 
     //@ANDROID-9
