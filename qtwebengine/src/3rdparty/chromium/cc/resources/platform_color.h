@@ -8,8 +8,6 @@
 #include "base/basictypes.h"
 #include "base/logging.h"
 #include "cc/resources/resource_format.h"
-#include "third_party/khronos/GLES2/gl2.h"
-#include "third_party/khronos/GLES2/gl2ext.h"
 #include "third_party/skia/include/core/SkTypes.h"
 
 namespace cc {
@@ -44,7 +42,7 @@ class PlatformColor {
       case SOURCE_FORMAT_RGBA8:
         return format == RGBA_8888 || format == RGBA_4444;
       case SOURCE_FORMAT_BGRA8:
-        return format == BGRA_8888;
+        return format == BGRA_8888 || format == RGBA_4444;
     }
     NOTREACHED();
     return false;

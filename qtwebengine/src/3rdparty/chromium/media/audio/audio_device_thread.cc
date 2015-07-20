@@ -10,6 +10,7 @@
 #include "base/logging.h"
 #include "base/memory/aligned_memory.h"
 #include "base/message_loop/message_loop.h"
+#include "base/numerics/safe_conversions.h"
 #include "base/threading/platform_thread.h"
 #include "base/threading/thread_restrictions.h"
 #include "media/base/audio_bus.h"
@@ -41,10 +42,10 @@ class AudioDeviceThread::Thread
 
  private:
   friend class base::RefCountedThreadSafe<AudioDeviceThread::Thread>;
-  virtual ~Thread();
+  ~Thread() override;
 
   // Overrides from PlatformThread::Delegate.
-  virtual void ThreadMain() OVERRIDE;
+  void ThreadMain() override;
 
   // Runs the loop that reads from the socket.
   void Run();
@@ -72,7 +73,7 @@ void AudioDeviceThread::Start(AudioDeviceThread::Callback* callback,
                               const char* thread_name,
                               bool synchronized_buffers) {
   base::AutoLock auto_lock(thread_lock_);
-  CHECK(!thread_);
+  CHECK(!thread_.get());
   thread_ = new AudioDeviceThread::Thread(
       callback, socket, thread_name, synchronized_buffers);
   thread_->Start();
@@ -88,7 +89,7 @@ void AudioDeviceThread::Stop(base::MessageLoop* loop_for_join) {
 
 bool AudioDeviceThread::IsStopped() {
   base::AutoLock auto_lock(thread_lock_);
-  return !thread_;
+  return !thread_.get();
 }
 
 // AudioDeviceThread::Thread implementation
@@ -164,14 +165,19 @@ void AudioDeviceThread::Thread::ThreadMain() {
 void AudioDeviceThread::Thread::Run() {
   uint32 buffer_index = 0;
   while (true) {
-    int pending_data = 0;
+    uint32 pending_data = 0;
     size_t bytes_read = socket_.Receive(&pending_data, sizeof(pending_data));
-    if (bytes_read != sizeof(pending_data)) {
-      DCHECK_EQ(bytes_read, 0U);
+    if (bytes_read != sizeof(pending_data))
       break;
-    }
 
-    {
+    // kuint32max is a special signal which is returned after the browser
+    // stops the output device in response to a renderer side request.
+    //
+    // Avoid running Process() for the paused signal, we still need to update
+    // the buffer index if |synchronized_buffers_| is true though.
+    //
+    // See comments in AudioOutputController::DoPause() for details on why.
+    if (pending_data != kuint32max) {
       base::AutoLock auto_lock(callback_lock_);
       if (callback_)
         callback_->Process(pending_data);

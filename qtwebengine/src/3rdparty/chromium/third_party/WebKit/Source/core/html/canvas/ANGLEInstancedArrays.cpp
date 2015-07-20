@@ -34,12 +34,11 @@
 
 #include "core/html/canvas/WebGLRenderingContextBase.h"
 
-namespace WebCore {
+namespace blink {
 
 ANGLEInstancedArrays::ANGLEInstancedArrays(WebGLRenderingContextBase* context)
     : WebGLExtension(context)
 {
-    ScriptWrappable::init(this);
     context->extensionsUtil()->ensureExtensionEnabled("GL_ANGLE_instanced_arrays");
 }
 
@@ -52,9 +51,9 @@ WebGLExtensionName ANGLEInstancedArrays::name() const
     return ANGLEInstancedArraysName;
 }
 
-PassRefPtr<ANGLEInstancedArrays> ANGLEInstancedArrays::create(WebGLRenderingContextBase* context)
+PassRefPtrWillBeRawPtr<ANGLEInstancedArrays> ANGLEInstancedArrays::create(WebGLRenderingContextBase* context)
 {
-    return adoptRef(new ANGLEInstancedArrays(context));
+    return adoptRefWillBeNoop(new ANGLEInstancedArrays(context));
 }
 
 bool ANGLEInstancedArrays::supported(WebGLRenderingContextBase* context)
@@ -69,26 +68,29 @@ const char* ANGLEInstancedArrays::extensionName()
 
 void ANGLEInstancedArrays::drawArraysInstancedANGLE(GLenum mode, GLint first, GLsizei count, GLsizei primcount)
 {
-    if (isLost())
+    WebGLExtensionScopedContext scoped(this);
+    if (scoped.isLost())
         return;
 
-    m_context->drawArraysInstancedANGLE(mode, first, count, primcount);
+    scoped.context()->drawArraysInstancedANGLE(mode, first, count, primcount);
 }
 
 void ANGLEInstancedArrays::drawElementsInstancedANGLE(GLenum mode, GLsizei count, GLenum type, long long offset, GLsizei primcount)
 {
-    if (isLost())
+    WebGLExtensionScopedContext scoped(this);
+    if (scoped.isLost())
         return;
 
-    m_context->drawElementsInstancedANGLE(mode, count, type, offset, primcount);
+    scoped.context()->drawElementsInstancedANGLE(mode, count, type, offset, primcount);
 }
 
 void ANGLEInstancedArrays::vertexAttribDivisorANGLE(GLuint index, GLuint divisor)
 {
-    if (isLost())
+    WebGLExtensionScopedContext scoped(this);
+    if (scoped.isLost())
         return;
 
-    m_context->vertexAttribDivisorANGLE(index, divisor);
+    scoped.context()->vertexAttribDivisorANGLE(index, divisor);
 }
 
-} // namespace WebCore
+} // namespace blink

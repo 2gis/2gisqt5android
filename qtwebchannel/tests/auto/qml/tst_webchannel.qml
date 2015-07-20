@@ -1,7 +1,7 @@
 /****************************************************************************
 **
 ** Copyright (C) 2014 Klarälvdalens Datakonsult AB, a KDAB Group company, info@kdab.com, author Milian Wolff <milian.wolff@kdab.com>
-** Contact: http://www.qt-project.org/legal
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtWebChannel module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -66,15 +66,15 @@ TestCase {
         property var bar: 1
         WebChannel.id: "myOtherObj"
     }
+    property var lastFactoryObj
     QtObject{ id: bar; objectName: "bar" }
     QtObject{ id: baz; objectName: "baz" }
     QtObject {
         id: myFactory
-        property var lastObj
         function create(id)
         {
-            lastObj = component.createObject(myFactory, {objectName: id});
-            return lastObj;
+            lastFactoryObj = component.createObject(myFactory, {objectName: id});
+            return lastFactoryObj;
         }
         property var objectInProperty: QtObject {
             objectName: "foo"
@@ -145,7 +145,6 @@ TestCase {
         compare(myObj.myProperty, 3);
 
         client.awaitIdle(); // init
-        client.awaitIdle(); // property update
 
         // change property, should be propagated to HTML client and a message be send there
         myObj.myProperty = 2;
@@ -242,12 +241,15 @@ TestCase {
             });
         });
         client.awaitInit();
+        client.awaitResponse();
 
+        // create testObj
         var msg = client.awaitMessage();
         compare(msg.type, JSClient.QWebChannelMessageTypes.invokeMethod);
         compare(msg.object, "myFactory");
-        verify(myFactory.lastObj);
-        compare(myFactory.lastObj.objectName, "testObj");
+        client.awaitResponse();
+        verify(lastFactoryObj);
+        compare(lastFactoryObj.objectName, "testObj");
         compare(channel.objects[testObjId].objectName, "testObj");
 
         // mySignal connection
@@ -255,20 +257,30 @@ TestCase {
         compare(msg.type, JSClient.QWebChannelMessageTypes.connectToSignal);
         compare(msg.object, testObjId);
 
+        // set myProperty
         msg = client.awaitMessage();
         compare(msg.type, JSClient.QWebChannelMessageTypes.setProperty);
         compare(msg.object, testObjId);
-        compare(myFactory.lastObj.myProperty, 42);
+        compare(lastFactoryObj.myProperty, 42);
 
+        // call myMethod
         msg = client.awaitMessage();
         compare(msg.type, JSClient.QWebChannelMessageTypes.invokeMethod);
         compare(msg.object, testObjId);
         compare(msg.args, ["foobar"]);
+        client.awaitResponse();
         compare(lastMethodArg, "foobar");
 
         client.awaitIdle();
 
-        myFactory.lastObj.mySignal("foobar", 42);
+        // the server should eventually notify the client about the property update
+        client.awaitPropertyUpdate();
+
+        client.awaitIdle();
+
+        // trigger a signal and ensure it gets transmitted
+        lastFactoryObj.mySignal("foobar", 42);
+        client.awaitSignal();
 
         // property should be wrapped
         compare(channel.objects.myFactory.objectInProperty.objectName, "foo");
@@ -283,10 +295,13 @@ TestCase {
         msg = client.awaitMessage();
         compare(msg.type, JSClient.QWebChannelMessageTypes.invokeMethod);
         compare(msg.object, testObjId);
+        client.awaitResponse();
 
+        // now the signalArgs should also be set
         compare(signalArgs, {"0": "foobar", "1": 42});
 
-        client.awaitIdle(); // destroyed signal
+        // and also a destroyed signal
+        client.awaitSignal();
 
         compare(JSON.stringify(testObjBeforeDeletion), JSON.stringify({}));
         compare(JSON.stringify(testObjAfterDeletion), JSON.stringify({}));
@@ -304,51 +319,61 @@ TestCase {
             });
         });
         client.awaitInit();
+        client.awaitResponse();
 
-        // ignore first message (call to myFactory.create())
-        client.awaitMessage();
+        // call to myFactory.create()
+        var msg = client.awaitMessage();
+        compare(msg.type, JSClient.QWebChannelMessageTypes.invokeMethod);
+        client.awaitResponse();
+
         client.awaitIdle();
 
         verify(testObj);
         var testObjId = testObj.__id__;
 
         testObj.deleteLater();
-        var msg = client.awaitMessage();
+        msg = client.awaitMessage();
         compare(msg.type, JSClient.QWebChannelMessageTypes.invokeMethod);
         compare(msg.object, testObjId);
+        client.awaitResponse();
+        // destroyed signal
+        client.awaitSignal();
 
-        // after receiving the destroyed signal the client deletes
-        // local objects and sends back a idle message
-        client.awaitIdle();
-
-        compare(myFactory.lastObj, null);
+        compare(lastFactoryObj, null);
         compare(typeof channel.objects[testObjId], "undefined");
     }
 
-    function test_wrapper_propertyUpdateOfWrappedObjects() {
+    function test_wrapper_propertyUpdateOfWrappedObjects()
+    {
         var testObj;
         var testObjId;
         var channel = client.createChannel(function(channel) {
             channel.objects.myFactory.create("testObj", function(obj) {
-                testObj = myFactory.lastObj;
+                testObj = lastFactoryObj;
                 testObjId = obj.__id__;
             });
         });
         client.awaitInit();
+        client.awaitResponse();
 
         // call to myFactory.create()
         var msg = client.awaitMessage();
         compare(msg.type, JSClient.QWebChannelMessageTypes.invokeMethod);
+        client.awaitResponse();
 
         client.awaitIdle();
 
         testObj.myProperty = 42;
+        client.awaitPropertyUpdate();
         client.awaitIdle();
         compare(channel.objects[testObjId].myProperty, 42);
 
         channel.objects[testObjId].deleteLater();
         msg = client.awaitMessage();
         compare(msg.type, JSClient.QWebChannelMessageTypes.invokeMethod);
+        client.awaitResponse();
+        // destroyed signal
+        client.awaitSignal();
     }
 
     function test_disconnect()

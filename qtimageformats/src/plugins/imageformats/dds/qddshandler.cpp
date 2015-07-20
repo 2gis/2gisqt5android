@@ -1,8 +1,8 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2015 The Qt Company Ltd.
 ** Copyright (C) 2013 Ivan Komissarov.
-** Contact: http://www.qt-project.org/legal
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the DDS plugin in the Qt ImageFormats module.
 **
@@ -11,9 +11,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -24,8 +24,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -35,11 +35,13 @@
 #include "qddshandler.h"
 
 #include <QtCore/qdebug.h>
-#include <QtCore/qmath.h>
-
 #include <QtGui/qimage.h>
 
+#include <cmath>
+
 #include "ddsheader.h"
+
+#include <cmath>
 
 #ifndef QT_NO_DATASTREAM
 
@@ -101,7 +103,7 @@ struct FormatInfo
 static const FormatInfo formatInfos[] = {
     { FormatA8R8G8B8,    DDSPixelFormat::FlagRGBA, 32, 0x00ff0000, 0x0000ff00, 0x000000ff, 0xff000000 },
     { FormatX8R8G8B8,    DDSPixelFormat::FlagRGB,  32, 0x00ff0000, 0x0000ff00, 0x000000ff, 0x00000000 },
-    { FormatA2B10G10R10, DDSPixelFormat::FlagRGBA, 32, 0x000003ff, 0x0000fc00, 0x3ff00000, 0xc0000000 },
+    { FormatA2B10G10R10, DDSPixelFormat::FlagRGBA, 32, 0x000003ff, 0x000ffc00, 0x3ff00000, 0xc0000000 },
     { FormatA8B8G8R8,    DDSPixelFormat::FlagRGBA, 32, 0x000000ff, 0x0000ff00, 0x00ff0000, 0xff000000 },
     { FormatX8B8G8R8,    DDSPixelFormat::FlagRGB,  32, 0x000000ff, 0x0000ff00, 0x00ff0000, 0x00000000 },
     { FormatG16R16,      DDSPixelFormat::FlagRGBA, 32, 0x0000ffff, 0xffff0000, 0x00000000, 0x00000000 },
@@ -323,7 +325,7 @@ static Format getFormat(const DDSHeader &dds)
             if ((format.flags & info.flags) == info.flags &&
                  format.rgbBitCount == info.bitCount &&
                  format.rBitMask == info.rBitMask &&
-                 format.bBitMask == info.bBitMask &&
+                 format.gBitMask == info.gBitMask &&
                  format.bBitMask == info.bBitMask &&
                  format.aBitMask == info.aBitMask) {
                 return info.format;
@@ -586,7 +588,7 @@ static QImage readATI2(QDataStream &s, quint32 width, quint32 height)
                     const double fx = nx / 127.5 - 1.0;
                     const double fy = ny / 127.5 - 1.0;
                     const double fxfy = 1.0 - fx * fx - fy * fy;
-                    const double fz = fxfy > 0 ? sqrt(fxfy) : -1.0;
+                    const double fz = fxfy > 0 ? std::sqrt(fxfy) : -1.0;
                     const quint8 nz = quint8((fz + 1.0) * 127.5);
 
                     line[j + l] = qRgb(nx, ny, nz);
@@ -664,9 +666,9 @@ static double readFloat16(QDataStream &s)
     quint16 fraction = value & 0x3FF;
 
     if (exp == 0)
-        return sign * qPow(2.0, -14.0) * fraction / 1024.0;
+        return sign * std::pow(2.0, -14.0) * fraction / 1024.0;
     else
-        return sign * qPow(2.0, exp - 15) * (1 + fraction / 1024.0);
+        return sign * std::pow(2.0, exp - 15) * (1 + fraction / 1024.0);
 }
 
 static inline float readFloat32(QDataStream &s)
@@ -812,7 +814,7 @@ static QImage readCxV8U8(QDataStream &s, const quint32 width, const quint32 heig
             const quint8 vn = v + 128, un = u + 128;
 
             const double vd = vn / 127.5 - 1.0, ud = un / 127.5 - 1.0;
-            const quint8 c = 255 * sqrt(1.0 - vd * vd - ud * ud);
+            const quint8 c = 255 * std::sqrt(1.0 - vd * vd - ud * ud);
             line[x] = qRgb(vn, un, c);
         }
     }

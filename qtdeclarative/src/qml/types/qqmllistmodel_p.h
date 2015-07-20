@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -44,7 +44,7 @@
 #include <QtCore/QVariant>
 #include <QtCore/qabstractitemmodel.h>
 
-#include <private/qv8engine_p.h>
+#include <private/qv4engine_p.h>
 #include <private/qpodvector_p.h>
 
 QT_BEGIN_NAMESPACE
@@ -102,14 +102,14 @@ private:
 
     // Constructs a flat list model for a worker agent
     QQmlListModel(QQmlListModel *orig, QQmlListModelWorkerAgent *agent);
-    QQmlListModel(const QQmlListModel *owner, ListModel *data, QV8Engine *eng, QObject *parent=0);
+    QQmlListModel(const QQmlListModel *owner, ListModel *data, QV4::ExecutionEngine *engine, QObject *parent=0);
 
-    QV8Engine *engine() const;
+    QV4::ExecutionEngine *engine() const;
 
     inline bool canMove(int from, int to, int n) const { return !(from+n > count() || to+n > count() || from < 0 || to < 0 || n < 0); }
 
     QQmlListModelWorkerAgent *m_agent;
-    mutable QV8Engine *m_engine;
+    mutable QV4::ExecutionEngine *m_engine;
     bool m_mainThread;
     bool m_primary;
 

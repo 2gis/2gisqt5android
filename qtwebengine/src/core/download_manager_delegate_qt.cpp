@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtWebEngine module of the Qt Toolkit.
 **
@@ -10,15 +10,15 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
 ** General Public License version 3 as published by the Free Software
 ** Foundation and appearing in the file LICENSE.LGPLv3 included in the
-** packaging of this file.  Please review the following information to
+** packaging of this file. Please review the following information to
 ** ensure the GNU Lesser General Public License version 3 requirements
 ** will be met: https://www.gnu.org/licenses/lgpl.html.
 **
@@ -26,7 +26,7 @@
 ** Alternatively, this file may be used under the terms of the GNU
 ** General Public License version 2.0 or later as published by the Free
 ** Software Foundation and appearing in the file LICENSE.GPL included in
-** the packaging of this file.  Please review the following information to
+** the packaging of this file. Please review the following information to
 ** ensure the GNU General Public License version 2.0 requirements will be
 ** met: http://www.gnu.org/licenses/gpl-2.0.html.
 **
@@ -36,6 +36,7 @@
 
 #include "download_manager_delegate_qt.h"
 
+#include "content/public/browser/download_manager.h"
 #include "content/public/browser/download_item.h"
 #include "content/public/browser/save_page_type.h"
 #include "content/public/browser/web_contents.h"
@@ -46,115 +47,28 @@
 #include <QMap>
 #include <QStandardPaths>
 
+#include "browser_context_adapter.h"
+#include "browser_context_adapter_client.h"
+#include "browser_context_qt.h"
 #include "type_conversion.h"
 #include "qtwebenginecoreglobal.h"
 
-// Helper class to track currently ongoing downloads to prevent file name
-// clashes / overwriting of files.
-class DownloadTargetHelper : public content::DownloadItem::Observer {
-public:
-    DownloadTargetHelper()
-        : m_defaultDownloadDirectory(QStandardPaths::writableLocation(QStandardPaths::DownloadLocation))
-    {
+namespace QtWebEngineCore {
 
-    }
-    virtual ~DownloadTargetHelper() {}
+ASSERT_ENUMS_MATCH(content::DownloadItem::IN_PROGRESS, BrowserContextAdapterClient::DownloadInProgress)
+ASSERT_ENUMS_MATCH(content::DownloadItem::COMPLETE, BrowserContextAdapterClient::DownloadCompleted)
+ASSERT_ENUMS_MATCH(content::DownloadItem::CANCELLED, BrowserContextAdapterClient::DownloadCancelled)
+ASSERT_ENUMS_MATCH(content::DownloadItem::INTERRUPTED, BrowserContextAdapterClient::DownloadInterrupted)
 
-    bool determineDownloadTarget(content::DownloadItem *item, const content::DownloadTargetCallback &callback);
-
-    virtual void OnDownloadUpdated(content::DownloadItem *download) Q_DECL_OVERRIDE;
-    virtual void OnDownloadDestroyed(content::DownloadItem *download) Q_DECL_OVERRIDE;
-private:
-    bool isPathAvailable(const QString& path);
-
-    QDir m_defaultDownloadDirectory;
-    QMap<content::DownloadItem*, QString> m_ongoingDownloads;
-};
-
-bool DownloadTargetHelper::isPathAvailable(const QString& path)
-{
-    return !m_ongoingDownloads.values().contains(path) && !QFile::exists(path);
-}
-
-bool DownloadTargetHelper::determineDownloadTarget(content::DownloadItem *item, const content::DownloadTargetCallback &callback)
-{
-    std::string suggestedFilename = item->GetSuggestedFilename();
-
-    if (suggestedFilename.empty())
-        suggestedFilename = item->GetTargetFilePath().AsUTF8Unsafe();
-
-    if (suggestedFilename.empty())
-        suggestedFilename = item->GetURL().ExtractFileName();
-
-    if (suggestedFilename.empty())
-        suggestedFilename = "qwe_download";
-
-    if (!m_defaultDownloadDirectory.exists() && !m_defaultDownloadDirectory.mkpath(m_defaultDownloadDirectory.absolutePath()))
-        return false;
-
-    QString suggestedFilePath = m_defaultDownloadDirectory.absoluteFilePath(QString::fromStdString(suggestedFilename));
-    if (!isPathAvailable(suggestedFilePath)) {
-        int i = 1;
-        for (; i < 99; i++) {
-            QFileInfo tmpFile(suggestedFilePath);
-            QString tmpFilePath = QString("%1%2%3(%4).%5").arg(tmpFile.absolutePath()).arg(QDir::separator()).arg(tmpFile.baseName()).arg(i).arg(tmpFile.completeSuffix());
-            if (isPathAvailable(tmpFilePath)) {
-                suggestedFilePath = tmpFilePath;
-                break;
-            }
-        }
-        if (i >= 99) {
-            callback.Run(base::FilePath(), content::DownloadItem::TARGET_DISPOSITION_PROMPT, content::DOWNLOAD_DANGER_TYPE_MAYBE_DANGEROUS_CONTENT, base::FilePath());
-            return false;
-        }
-    }
-
-    m_ongoingDownloads.insert(item, suggestedFilePath);
-    item->AddObserver(this);
-
-    base::FilePath filePathForCallback(toFilePathString(suggestedFilePath));
-    callback.Run(filePathForCallback, content::DownloadItem::TARGET_DISPOSITION_OVERWRITE,
-                 content::DOWNLOAD_DANGER_TYPE_MAYBE_DANGEROUS_CONTENT, filePathForCallback.AddExtension(toFilePathString("download")));
-    return true;
-}
-
-void DownloadTargetHelper::OnDownloadUpdated(content::DownloadItem *download)
-{
-    switch (download->GetState()) {
-    case content::DownloadItem::COMPLETE:
-    case content::DownloadItem::CANCELLED:
-    case content::DownloadItem::INTERRUPTED:
-        download->RemoveObserver(this);
-        m_ongoingDownloads.remove(download);
-        break;
-    case content::DownloadItem::IN_PROGRESS:
-    default:
-        break;
-    }
-}
-
-void DownloadTargetHelper::OnDownloadDestroyed(content::DownloadItem *download)
-{
-    download->RemoveObserver(this);
-    m_ongoingDownloads.remove(download);
-}
-
-DownloadManagerDelegateQt::DownloadManagerDelegateQt()
-    : m_targetHelper(new DownloadTargetHelper())
+DownloadManagerDelegateQt::DownloadManagerDelegateQt(BrowserContextAdapter *contextAdapter)
+    : m_contextAdapter(contextAdapter)
     , m_currentId(0)
 {
-
+    Q_ASSERT(m_contextAdapter);
 }
 
 DownloadManagerDelegateQt::~DownloadManagerDelegateQt()
 {
-    delete m_targetHelper;
-}
-
-
-void DownloadManagerDelegateQt::Shutdown()
-{
-    QT_NOT_YET_IMPLEMENTED
 }
 
 void DownloadManagerDelegateQt::GetNextId(const content::DownloadIdCallback& callback)
@@ -162,24 +76,17 @@ void DownloadManagerDelegateQt::GetNextId(const content::DownloadIdCallback& cal
     callback.Run(++m_currentId);
 }
 
-bool DownloadManagerDelegateQt::ShouldOpenFileBasedOnExtension(const base::FilePath& path)
+void DownloadManagerDelegateQt::cancelDownload(const content::DownloadTargetCallback& callback)
 {
-    QT_NOT_YET_IMPLEMENTED
-    return false;
+    callback.Run(base::FilePath(), content::DownloadItem::TARGET_DISPOSITION_PROMPT, content::DOWNLOAD_DANGER_TYPE_MAYBE_DANGEROUS_CONTENT, base::FilePath());
 }
 
-bool DownloadManagerDelegateQt::ShouldCompleteDownload(content::DownloadItem* item,
-                                                       const base::Closure& complete_callback)
+void DownloadManagerDelegateQt::cancelDownload(quint32 downloadId)
 {
-    QT_NOT_YET_IMPLEMENTED
-    return true;
-}
-
-bool DownloadManagerDelegateQt::ShouldOpenDownload(content::DownloadItem* item,
-                                                   const content::DownloadOpenDelayedCallback& callback)
-{
-    QT_NOT_YET_IMPLEMENTED
-    return false;
+    content::DownloadManager* dlm = content::BrowserContext::GetDownloadManager(m_contextAdapter->browserContext());
+    content::DownloadItem *download = dlm->GetDownload(downloadId);
+    if (download)
+        download->Cancel(/* user_cancel */ true);
 }
 
 bool DownloadManagerDelegateQt::DetermineDownloadTarget(content::DownloadItem* item,
@@ -194,41 +101,69 @@ bool DownloadManagerDelegateQt::DetermineDownloadTarget(content::DownloadItem* i
         return true;
     }
 
-    // Let the target helper determine the download target path.
-    return m_targetHelper->determineDownloadTarget(item, callback);
-}
+    std::string suggestedFilename = item->GetSuggestedFilename();
 
-bool DownloadManagerDelegateQt::GenerateFileHash()
-{
-    QT_NOT_YET_IMPLEMENTED
-    return false;
-}
+    if (suggestedFilename.empty())
+        suggestedFilename = item->GetTargetFilePath().AsUTF8Unsafe();
 
-void DownloadManagerDelegateQt::ChooseSavePath(
-        content::WebContents* web_contents,
-        const base::FilePath& suggested_path,
-        const base::FilePath::StringType& default_extension,
-        bool can_save_as_complete,
-        const content::SavePackagePathPickedCallback& callback)
-{
-    QT_NOT_YET_IMPLEMENTED
-}
+    if (suggestedFilename.empty())
+        suggestedFilename = item->GetURL().ExtractFileName();
 
-void DownloadManagerDelegateQt::OpenDownload(content::DownloadItem* download)
-{
-    QT_NOT_YET_IMPLEMENTED
-}
+    if (suggestedFilename.empty())
+        suggestedFilename = "qwe_download";
 
-void DownloadManagerDelegateQt::ShowDownloadInShell(content::DownloadItem* download)
-{
-    QT_NOT_YET_IMPLEMENTED
-}
+    QDir defaultDownloadDirectory = QStandardPaths::writableLocation(QStandardPaths::DownloadLocation);
 
-void DownloadManagerDelegateQt::CheckForFileExistence(
-        content::DownloadItem* download,
-        const content::CheckForFileExistenceCallback& callback)
-{
-    QT_NOT_YET_IMPLEMENTED
+    QFileInfo suggestedFile(defaultDownloadDirectory.absoluteFilePath(QString::fromStdString(suggestedFilename)));
+    QString suggestedFilePath = suggestedFile.absoluteFilePath();
+    QString tmpFileBase = QString("%1%2%3").arg(suggestedFile.absolutePath()).arg(QDir::separator()).arg(suggestedFile.baseName());
+
+    for (int i = 1; QFileInfo::exists(suggestedFilePath); ++i) {
+        suggestedFilePath = QString("%1(%2).%3").arg(tmpFileBase).arg(i).arg(suggestedFile.completeSuffix());
+        if (i >= 99) {
+            suggestedFilePath = suggestedFile.absoluteFilePath();
+            break;
+        }
+    }
+
+    item->AddObserver(this);
+    QList<BrowserContextAdapterClient*> clients = m_contextAdapter->clients();
+    if (!clients.isEmpty()) {
+        BrowserContextAdapterClient::DownloadItemInfo info = {
+            item->GetId(),
+            toQt(item->GetURL()),
+            item->GetState(),
+            item->GetTotalBytes(),
+            item->GetReceivedBytes(),
+            suggestedFilePath,
+            false /* accepted */
+        };
+
+        Q_FOREACH (BrowserContextAdapterClient *client, clients) {
+            client->downloadRequested(info);
+            if (info.accepted)
+                break;
+        }
+
+        suggestedFile.setFile(info.path);
+
+        if (info.accepted && !suggestedFile.absoluteDir().mkpath(suggestedFile.absolutePath())) {
+            qWarning("Creating download path failed, download cancelled: %s", suggestedFile.absolutePath().toUtf8().data());
+            info.accepted = false;
+        }
+
+        if (!info.accepted) {
+            cancelDownload(callback);
+            return true;
+        }
+
+        base::FilePath filePathForCallback(toFilePathString(suggestedFile.absoluteFilePath()));
+        callback.Run(filePathForCallback, content::DownloadItem::TARGET_DISPOSITION_OVERWRITE,
+                     content::DOWNLOAD_DANGER_TYPE_MAYBE_DANGEROUS_CONTENT, filePathForCallback.AddExtension(toFilePathString("download")));
+    } else
+        cancelDownload(callback);
+
+    return true;
 }
 
 void DownloadManagerDelegateQt::GetSaveDir(content::BrowserContext* browser_context,
@@ -242,4 +177,30 @@ void DownloadManagerDelegateQt::GetSaveDir(content::BrowserContext* browser_cont
     *skip_dir_check = true;
 }
 
+void DownloadManagerDelegateQt::OnDownloadUpdated(content::DownloadItem *download)
+{
+    QList<BrowserContextAdapterClient*> clients = m_contextAdapter->clients();
+    if (!clients.isEmpty()) {
+        BrowserContextAdapterClient::DownloadItemInfo info = {
+            download->GetId(),
+            toQt(download->GetURL()),
+            download->GetState(),
+            download->GetTotalBytes(),
+            download->GetReceivedBytes(),
+            QString(),
+            true /* accepted */
+        };
 
+        Q_FOREACH (BrowserContextAdapterClient *client, clients) {
+            client->downloadUpdated(info);
+        }
+    }
+}
+
+void DownloadManagerDelegateQt::OnDownloadDestroyed(content::DownloadItem *download)
+{
+    download->RemoveObserver(this);
+    download->Cancel(/* user_cancel */ false);
+}
+
+} // namespace QtWebEngineCore

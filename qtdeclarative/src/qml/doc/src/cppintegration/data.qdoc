@@ -1,7 +1,7 @@
 ﻿/****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
@@ -10,15 +10,15 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Free Documentation License Usage
 ** Alternatively, this file may be used under the terms of the GNU Free
 ** Documentation License version 1.3 as published by the Free Software
 ** Foundation and appearing in the file included in the packaging of
-** this file.  Please review the following information to ensure
+** this file. Please review the following information to ensure
 ** the GNU Free Documentation License version 1.3 requirements
 ** will be met: http://www.gnu.org/copyleft/fdl.html.
 ** $QT_END_LICENSE$
@@ -307,6 +307,33 @@ them with default constructed values, do not use the indexed delete operator
 ("delete sequence[i]") but instead use the \c {splice} function
 ("sequence.splice(startIndex, deleteCount)").
 
+\section2 Value types
+
+Some value types in Qt such as QPoint are represented in JavaScript as objects
+that have the same properties and functions like in the C++ API. The same
+representation is possible with custom C++ value types. To enable a custom
+value type with the QML engine, the class declaration needs to be annotated
+with \c{Q_GADGET}. Properties that are intended to be visible in the JavaScript
+representation need to be declared with \c Q_PROPERTY. Similarly functions need
+to be marked with \c Q_INVOKABLE. This is the same with QObject based C++ APIs.
+For example, the \c Actor class below is annotated as gadget and has
+properties:
+
+\code
+ class Actor
+ {
+     Q_GADGET
+     Q_PROPERTY(QString name READ name WRITE setName)
+ public:
+     QString name() const { return m_name; }
+     void setName(const QString &name) { m_name = name; }
+
+ private:
+     QString m_name;
+ }
+
+ Q_DECLARE_METATYPE(Actor)
+\endcode
 
 \section1 Enumeration Types
 

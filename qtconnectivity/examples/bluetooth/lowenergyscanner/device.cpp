@@ -1,8 +1,8 @@
 /***************************************************************************
 **
 ** Copyright (C) 2013 BlackBerry Limited. All rights reserved.
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtBluetooth module of the Qt Toolkit.
 **
@@ -18,8 +18,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -138,6 +138,7 @@ QString Device::getUpdate()
 void Device::scanServices(const QString &address)
 {
     // We need the current device for service discovery.
+
     for (int i = 0; i < devices.size(); i++) {
         if (((DeviceInfo*)devices.at(i))->getAddress() == address )
             currentDevice.setDevice(((DeviceInfo*)devices.at(i))->getDevice());
@@ -157,7 +158,7 @@ void Device::scanServices(const QString &address)
 
     setUpdate("Back\n(Connecting to device...)");
 
-    if (controller && controller->remoteAddress() != currentDevice.getDevice().address()) {
+    if (controller && m_previousAddress != currentDevice.getAddress()) {
         controller->disconnectFromDevice();
         delete controller;
         controller = 0;
@@ -166,7 +167,7 @@ void Device::scanServices(const QString &address)
     //! [les-controller-1]
     if (!controller) {
         // Connecting signals and slots for connecting to LE services.
-        controller = new QLowEnergyController(currentDevice.getDevice().address());
+        controller = new QLowEnergyController(currentDevice.getDevice());
         connect(controller, SIGNAL(connected()),
                 this, SLOT(deviceConnected()));
         connect(controller, SIGNAL(error(QLowEnergyController::Error)),
@@ -185,6 +186,8 @@ void Device::scanServices(const QString &address)
         controller->setRemoteAddressType(QLowEnergyController::PublicAddress);
     controller->connectToDevice();
     //! [les-controller-1]
+
+    m_previousAddress = currentDevice.getAddress();
 }
 
 void Device::addLowEnergyService(const QBluetoothUuid &serviceUuid)
@@ -291,12 +294,23 @@ void Device::deviceDisconnected()
 
 void Device::serviceDetailsDiscovered(QLowEnergyService::ServiceState newState)
 {
-    if (newState != QLowEnergyService::ServiceDiscovered)
+    if (newState != QLowEnergyService::ServiceDiscovered) {
+        // do not hang in "Scanning for characteristics" mode forever
+        // in case the service discovery failed
+        // We have to queue the signal up to give UI time to even enter
+        // the above mode
+        if (newState != QLowEnergyService::DiscoveringServices) {
+            QMetaObject::invokeMethod(this, "characteristicsUpdated",
+                                      Qt::QueuedConnection);
+        }
         return;
+    }
 
     QLowEnergyService *service = qobject_cast<QLowEnergyService *>(sender());
     if (!service)
         return;
+
+
 
     //! [les-chars]
     const QList<QLowEnergyCharacteristic> chars = service->characteristics();

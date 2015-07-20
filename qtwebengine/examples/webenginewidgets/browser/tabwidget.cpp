@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the demonstration applications of the Qt Toolkit.
 **
@@ -10,27 +10,27 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
 ** General Public License version 2.1 as published by the Free Software
 ** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
+** packaging of this file. Please review the following information to
 ** ensure the GNU Lesser General Public License version 2.1 requirements
 ** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
 ** General Public License version 3.0 as published by the Free Software
 ** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
+** packaging of this file. Please review the following information to
 ** ensure the GNU General Public License version 3.0 requirements will be
 ** met: http://www.gnu.org/copyleft/gpl.html.
 **
@@ -43,12 +43,15 @@
 
 #include "browserapplication.h"
 #include "browsermainwindow.h"
+#include "downloadmanager.h"
 #include "history.h"
 #include "urllineedit.h"
 #include "webview.h"
 
 #include <QtCore/QMimeData>
 #include <QtGui/QClipboard>
+#include <QtWebEngineWidgets/QWebEngineDownloadItem>
+#include <QtWebEngineWidgets/QWebEngineProfile>
 #include <QtWidgets/QCompleter>
 #include <QtWidgets/QListView>
 #include <QtWidgets/QMenu>
@@ -214,6 +217,7 @@ TabWidget::TabWidget(QWidget *parent)
     , m_lineEditCompleter(0)
     , m_lineEdits(0)
     , m_tabBar(new TabBar(this))
+    , m_profile(QWebEngineProfile::defaultProfile())
 {
     setElideMode(Qt::ElideRight);
 
@@ -314,6 +318,8 @@ void TabWidget::currentChanged(int index)
                 this, SIGNAL(linkHovered(const QString&)));
         disconnect(oldWebView, SIGNAL(loadProgress(int)),
                 this, SIGNAL(loadProgress(int)));
+        disconnect(oldWebView->page()->profile(), SIGNAL(downloadRequested(QWebEngineDownloadItem*)),
+                this, SLOT(downloadRequested(QWebEngineDownloadItem*)));
     }
 
 #if defined(QWEBENGINEVIEW_STATUSBARMESSAGE)
@@ -324,6 +330,8 @@ void TabWidget::currentChanged(int index)
             this, SIGNAL(linkHovered(const QString&)));
     connect(webView, SIGNAL(loadProgress(int)),
             this, SIGNAL(loadProgress(int)));
+    connect(webView->page()->profile(), SIGNAL(downloadRequested(QWebEngineDownloadItem*)),
+            this, SLOT(downloadRequested(QWebEngineDownloadItem*)));
 
     for (int i = 0; i < m_actions.count(); ++i) {
         WebActionMapper *mapper = m_actions[i];
@@ -449,6 +457,7 @@ WebView *TabWidget::newTab(bool makeCurrent)
 
     // webview
     WebView *webView = new WebView;
+    webView->setPage(new WebPage(m_profile, webView));
     urlLineEdit->setWebView(webView);
     connect(webView, SIGNAL(loadStarted()),
             this, SLOT(webViewLoadStarted()));
@@ -574,11 +583,7 @@ void TabWidget::closeTab(int index)
 #endif
         hasFocus = tab->hasFocus();
 
-#if defined(QTWEBENGINE_PRIVATEBROWSING)
-        QWebEngineSettings *globalSettings = QWebEngineSettings::globalSettings();
-        if (!globalSettings->testAttribute(QWebEngineSettings::PrivateBrowsingEnabled))
-#endif
-        {
+        if (m_profile == QWebEngineProfile::defaultProfile()) {
             m_recentlyClosedTabsAction->setEnabled(true);
             m_recentlyClosedTabs.prepend(tab->url());
             if (m_recentlyClosedTabs.size() >= TabWidget::m_recentlyClosedTabsSize)
@@ -596,6 +601,19 @@ void TabWidget::closeTab(int index)
         currentWebView()->setFocus();
     if (count() == 0)
         emit lastTabClosed();
+}
+
+void TabWidget::setProfile(QWebEngineProfile *profile)
+{
+    m_profile = profile;
+    for (int i = 0; i < count(); ++i) {
+        QWidget *tabWidget = widget(i);
+        if (WebView *tab = qobject_cast<WebView*>(tabWidget)) {
+            WebPage* webPage = new WebPage(m_profile, tab);
+            webPage->load(tab->page()->url());
+            tab->setPage(webPage);
+        }
+    }
 }
 
 void TabWidget::webViewLoadStarted()
@@ -770,6 +788,12 @@ bool TabWidget::restoreState(const QByteArray &state)
     setCurrentIndex(currentTab);
 
     return true;
+}
+
+void TabWidget::downloadRequested(QWebEngineDownloadItem *download)
+{
+    BrowserApplication::downloadManager()->download(download);
+    download->accept();
 }
 
 WebActionMapper::WebActionMapper(QAction *root, QWebEnginePage::WebAction webAction, QObject *parent)

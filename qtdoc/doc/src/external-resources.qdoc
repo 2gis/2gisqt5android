@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
@@ -10,15 +10,15 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Free Documentation License Usage
 ** Alternatively, this file may be used under the terms of the GNU Free
 ** Documentation License version 1.3 as published by the Free Software
 ** Foundation and appearing in the file included in the packaging of
-** this file.  Please review the following information to ensure
+** this file. Please review the following information to ensure
 ** the GNU Free Documentation License version 1.3 requirements
 ** will be met: http://www.gnu.org/copyleft/fdl.html.
 ** $QT_END_LICENSE$
@@ -26,13 +26,18 @@
 ****************************************************************************/
 
 /*!
-    \externalpage http://qt-project.org/wiki/Building_Qt_5_from_Git
+    \externalpage http://wiki.qt.io/Building_Qt_5_from_Git
     \title Building Qt 5 From Git
 */
 
 /*!
     \externalpage http://qt-project.org/contribute
     \title Contributing to Qt
+*/
+
+/*!
+    \externalpage http://www.chromium.org/Home
+    \title The Chromium Projects
 */
 
 /*!
@@ -76,7 +81,7 @@
 */
 
 /*!
-    \externalpage http://qt-project.org/wiki/Category:Add-ons
+    \externalpage http://wiki.qt.io/Category:Add-ons
     \title Qt Add-ons
 */
 
@@ -173,6 +178,12 @@
     \externalpage http://doc.qt.io/qtcreator/creator-configuring.html
     \title Configuring Qt Creator
 */
+
+/*!
+    \externalpage http://doc.qt.io/qtcreator/creator-deploying-android.html#specifying-settings-for-packages
+    \title Android APK
+*/
+
 /*!
     \externalpage http://doc.qt.io/qtcreator/creator-build-example-application.html
     \title Building and Running Example
@@ -182,15 +193,15 @@
     \title Creating a Mobile Application
 */
 /*!
-    \externalpage http://qt-project.org/wiki/Qt5ForAndroidBuilding
+    \externalpage http://wiki.qt.io/Qt5ForAndroidBuilding
     \title Building Qt 5 for Android
 */
 /*!
-    \externalpage http://qt-project.org/wiki/Qt5-on-BlackBerry-supported-modules
+    \externalpage http://wiki.qt.io/Qt5_Status_on_BlackBerry10
     \title BlackBerry supported modules
 */
 /*!
-    \externalpage http://qt-project.org/wiki/Qt-Creator-with-BlackBerry-10
+    \externalpage http://wiki.qt.io/Qt_Creator_with_BlackBerry_10
     \title Using Qt Creator for BlackBerry 10 Development
 */
 /*!
@@ -226,11 +237,6 @@
 /*!
     \externalpage http://doc.qt.io/QtDataVisualization
     \title Qt Data Visualization
-*/
-
-/*!
-    \externalpage http://doc.qt.io/QtQuickEnterpriseControls
-    \title Qt Quick Enterprise Controls
 */
 
 /*!
@@ -271,4 +277,24 @@
 /*!
     \externalpage http://doc.qt.io/qt-5/qtcanvas3d-index.html
     \title Qt Canvas 3D
+*/
+
+/*!
+    \externalpage http://doc.qt.io/QtSupportedPlatforms/index.html
+    \title Officially Supported Platforms
+*/
+
+/*!
+    \externalpage http://www.bluetooth.org
+    \title Bluetooth SIG
+*/
+
+/*!
+    \externalpage http://www.qt.io/qt-account/
+    \title Qt Account
+*/
+
+/*!
+    \externalpage http://doc.qt.io/vs-addin
+    \title Qt Visual Studio Add-in
 */

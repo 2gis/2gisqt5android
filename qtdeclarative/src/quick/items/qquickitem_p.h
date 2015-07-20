@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQuick module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -58,7 +58,7 @@
 
 #include <private/qpodvector_p.h>
 #include <QtQuick/private/qquickstate_p.h>
-#include <private/qqmlnullablevalue_p_p.h>
+#include <private/qqmlnullablevalue_p.h>
 #include <private/qqmlnotifier_p.h>
 #include <private/qqmlglobal_p.h>
 #include <private/qlazilyallocated_p.h>
@@ -92,10 +92,10 @@ public:
     void complete();
 
 protected:
-    void itemGeometryChanged(QQuickItem *item, const QRectF &newGeometry, const QRectF &oldGeometry);
-    void itemDestroyed(QQuickItem *item);
-    void itemChildAdded(QQuickItem *, QQuickItem *);
-    void itemChildRemoved(QQuickItem *, QQuickItem *);
+    void itemGeometryChanged(QQuickItem *item, const QRectF &newGeometry, const QRectF &oldGeometry) Q_DECL_OVERRIDE;
+    void itemDestroyed(QQuickItem *item) Q_DECL_OVERRIDE;
+    void itemChildAdded(QQuickItem *, QQuickItem *) Q_DECL_OVERRIDE;
+    void itemChildRemoved(QQuickItem *, QQuickItem *) Q_DECL_OVERRIDE;
     //void itemVisibilityChanged(QQuickItem *item)
 
 private:
@@ -178,11 +178,11 @@ public:
 
     QQuickShaderEffectSource *effectSource() const { return m_effectSource; }
 
-    void itemGeometryChanged(QQuickItem *, const QRectF &, const QRectF &);
-    void itemOpacityChanged(QQuickItem *);
-    void itemParentChanged(QQuickItem *, QQuickItem *);
-    void itemSiblingOrderChanged(QQuickItem *);
-    void itemVisibilityChanged(QQuickItem *);
+    void itemGeometryChanged(QQuickItem *, const QRectF &, const QRectF &) Q_DECL_OVERRIDE;
+    void itemOpacityChanged(QQuickItem *) Q_DECL_OVERRIDE;
+    void itemParentChanged(QQuickItem *, QQuickItem *) Q_DECL_OVERRIDE;
+    void itemSiblingOrderChanged(QQuickItem *) Q_DECL_OVERRIDE;
+    void itemVisibilityChanged(QQuickItem *) Q_DECL_OVERRIDE;
 
     void updateMatrix();
     void updateGeometry();
@@ -342,7 +342,6 @@ public:
         mutable QQuickItemLayer *layer;
 #ifndef QT_NO_CURSOR
         QCursor cursor;
-        int numItemsWithCursor;
 #endif
         QPointF userTransformOriginPoint;
 
@@ -352,7 +351,8 @@ public:
         QSGOpacityNode *opacityNode;
         QQuickDefaultClipNode *clipNode;
         QSGRootNode *rootNode;
-        QSGNode *beforePaintNode;
+
+        QObjectList resourcesList;
 
         // Although acceptedMouseButtons is inside ExtraData, we actually store
         // the LeftButton flag in the extra.flag() bit.  This is because it is
@@ -363,7 +363,7 @@ public:
         QQuickItem::TransformOrigin origin:5;
         uint transparentForPositioner : 1;
 
-        QObjectList resourcesList;
+        // 26 bits padding
     };
     QLazilyAllocated<ExtraData> extra;
 
@@ -415,6 +415,7 @@ public:
     bool culled:1;
     bool hasCursor:1;
     // Bit 32
+    bool hasCursorInChild:1;
     bool activeFocusOnTab:1;
     bool implicitAntialiasing:1;
     bool antialiasingValid:1;
@@ -491,7 +492,6 @@ public:
     static bool focusNextPrev(QQuickItem *item, bool forward);
     static QQuickItem *nextPrevItemInTabFocusChain(QQuickItem *item, bool forward);
 
-    static bool qt_tab_all_widgets(); //todo: move to QGuiApplication?
     static bool canAcceptTabFocus(QQuickItem *item);
 
     qreal x;
@@ -556,8 +556,7 @@ public:
          - itemNode
          - (opacityNode)
          - (clipNode)
-         - (effectNode)
-         - groupNode
+         - (rootNode) (shader effect source's root node)
      */
 
     QSGOpacityNode *opacityNode() const { return extra.isAllocated()?extra->opacityNode:0; }
@@ -565,7 +564,6 @@ public:
     QSGRootNode *rootNode() const { return extra.isAllocated()?extra->rootNode:0; }
 
     QSGTransformNode *itemNodeInstance;
-    QSGNode *groupNode;
     QSGNode *paintNode;
 
     virtual QSGTransformNode *createTransformNode();
@@ -579,7 +577,7 @@ public:
 
     virtual void mirrorChange() {}
 
-    void incrementCursorCount(int delta);
+    void setHasCursorInChild(bool hasCursor);
 
     // recursive helper to let a visual parent mark its visual children
     void markObjects(QV4::ExecutionEngine *e);
@@ -681,8 +679,8 @@ Q_SIGNALS:
     void priorityChanged();
 
 private:
-    virtual void keyPressed(QKeyEvent *event, bool post);
-    virtual void keyReleased(QKeyEvent *event, bool post);
+    void keyPressed(QKeyEvent *event, bool post) Q_DECL_OVERRIDE;
+    void keyReleased(QKeyEvent *event, bool post) Q_DECL_OVERRIDE;
     void setFocusNavigation(QQuickItem *currentItem, const char *dir,
                             Qt::FocusReason reason = Qt::OtherFocusReason);
 };
@@ -765,7 +763,7 @@ public:
         return QQmlListProperty<QQuickItem>(this, d->targets);
     }
 
-    virtual void componentComplete();
+    void componentComplete() Q_DECL_OVERRIDE;
 
     static QQuickKeysAttached *qmlAttachedProperties(QObject *);
 
@@ -816,11 +814,11 @@ Q_SIGNALS:
     void volumeDownPressed(QQuickKeyEvent *event);
 
 private:
-    virtual void keyPressed(QKeyEvent *event, bool post);
-    virtual void keyReleased(QKeyEvent *event, bool post);
+    void keyPressed(QKeyEvent *event, bool post) Q_DECL_OVERRIDE;
+    void keyReleased(QKeyEvent *event, bool post) Q_DECL_OVERRIDE;
 #ifndef QT_NO_IM
-    virtual void inputMethodEvent(QInputMethodEvent *, bool post);
-    virtual QVariant inputMethodQuery(Qt::InputMethodQuery query) const;
+    void inputMethodEvent(QInputMethodEvent *, bool post) Q_DECL_OVERRIDE;
+    QVariant inputMethodQuery(Qt::InputMethodQuery query) const Q_DECL_OVERRIDE;
 #endif
     const QByteArray keyToSignal(int key);
 
@@ -868,7 +866,7 @@ QSGTransformNode *QQuickItemPrivate::itemNode()
         itemNodeInstance->setFlag(QSGNode::OwnedByParent, false);
 #ifdef QSG_RUNTIME_DESCRIPTION
         Q_Q(QQuickItem);
-        qsgnode_set_description(itemNodeInstance, QString::fromLatin1("QQuickItem(%1)").arg(QString::fromLatin1(q->metaObject()->className())));
+        qsgnode_set_description(itemNodeInstance, QString::fromLatin1("QQuickItem(%1:%2)").arg(QString::fromLatin1(q->metaObject()->className())).arg(q->objectName()));
 #endif
     }
     return itemNodeInstance;
@@ -876,21 +874,14 @@ QSGTransformNode *QQuickItemPrivate::itemNode()
 
 QSGNode *QQuickItemPrivate::childContainerNode()
 {
-    if (!groupNode) {
-        groupNode = new QSGNode();
-        if (rootNode())
-            rootNode()->appendChildNode(groupNode);
-        else if (clipNode())
-            clipNode()->appendChildNode(groupNode);
-        else if (opacityNode())
-            opacityNode()->appendChildNode(groupNode);
-        else
-            itemNode()->appendChildNode(groupNode);
-#ifdef QSG_RUNTIME_DESCRIPTION
-        qsgnode_set_description(groupNode, QLatin1String("group"));
-#endif
-    }
-    return groupNode;
+    if (rootNode())
+        return rootNode();
+    else if (clipNode())
+        return clipNode();
+    else if (opacityNode())
+        return opacityNode();
+    else
+        return itemNode();
 }
 
 Q_DECLARE_OPERATORS_FOR_FLAGS(QQuickItemPrivate::ChangeTypes)

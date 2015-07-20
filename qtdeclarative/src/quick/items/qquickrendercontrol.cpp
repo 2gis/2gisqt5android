@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQuick module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -36,7 +36,7 @@
 
 #include <QtCore/QCoreApplication>
 #include <QtCore/QTime>
-#include <QtCore/private/qabstractanimation_p.h>
+#include <QtQuick/private/qquickanimatorcontroller_p.h>
 
 #include <QtGui/QOpenGLContext>
 #include <QtGui/private/qguiapplication_p.h>
@@ -167,6 +167,20 @@ void QQuickRenderControlPrivate::windowDestroyed()
         rc->invalidate();
         QCoreApplication::sendPostedEvents(0, QEvent::DeferredDelete);
     }
+}
+
+/*!
+  Prepares rendering the Qt Quick scene outside the gui thread.
+
+  \a targetThread specifies the thread on which synchronization and
+  rendering will happen. There is no need to call this function in a
+  single threaded scenario.
+ */
+void QQuickRenderControl::prepareThread(QThread *targetThread)
+{
+    Q_D(QQuickRenderControl);
+    d->rc->moveToThread(targetThread);
+    QQuickWindowPrivate::get(d->window)->animationController->moveToThread(targetThread);
 }
 
 /*!
@@ -353,6 +367,11 @@ void QQuickRenderControlPrivate::maybeUpdate()
 
   If \a offset in non-null, it is set to the offset of the control
   inside the window.
+
+  \note While not mandatory, reimplementing this function becomes essential for
+  supporting multiple screens with different device pixel ratios and properly positioning
+  popup windows opened from QML. Therefore providing it in subclasses is highly
+  recommended.
 */
 
 /*!

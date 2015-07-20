@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt SVG module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -156,20 +156,22 @@ public:
     {
     }
 
-    bool begin(QPaintDevice *device);
-    bool end();
+    bool begin(QPaintDevice *device) Q_DECL_OVERRIDE;
+    bool end() Q_DECL_OVERRIDE;
 
-    void updateState(const QPaintEngineState &state);
+    void updateState(const QPaintEngineState &state) Q_DECL_OVERRIDE;
     void popGroup();
 
-    void drawPath(const QPainterPath &path);
-    void drawPixmap(const QRectF &r, const QPixmap &pm, const QRectF &sr);
-    void drawPolygon(const QPointF *points, int pointCount, PolygonDrawMode mode);
-    void drawTextItem(const QPointF &pt, const QTextItem &item);
+    void drawEllipse(const QRectF &r) Q_DECL_OVERRIDE;
+    void drawPath(const QPainterPath &path) Q_DECL_OVERRIDE;
+    void drawPixmap(const QRectF &r, const QPixmap &pm, const QRectF &sr) Q_DECL_OVERRIDE;
+    void drawPolygon(const QPointF *points, int pointCount, PolygonDrawMode mode) Q_DECL_OVERRIDE;
+    void drawRects(const QRectF *rects, int rectCount) Q_DECL_OVERRIDE;
+    void drawTextItem(const QPointF &pt, const QTextItem &item) Q_DECL_OVERRIDE;
     void drawImage(const QRectF &r, const QImage &pm, const QRectF &sr,
-                   Qt::ImageConversionFlags flags = Qt::AutoColor);
+                   Qt::ImageConversionFlags flags = Qt::AutoColor) Q_DECL_OVERRIDE;
 
-    QPaintEngine::Type type() const { return QPaintEngine::SVG; }
+    QPaintEngine::Type type() const Q_DECL_OVERRIDE { return QPaintEngine::SVG; }
 
     QSize size() const { return d_func()->size; }
     void setSize(const QSize &size) {
@@ -255,17 +257,17 @@ public:
             if (!constantAlpha) {
                 const qreal spacing = qreal(0.02);
                 QGradientStops newStops;
-                QRgb fromColor = PREMUL(stops.at(0).second.rgba());
+                QRgb fromColor = qPremultiply(stops.at(0).second.rgba());
                 QRgb toColor;
                 for (int i = 0; i + 1 < stops.size(); ++i) {
                     int parts = qCeil((stops.at(i + 1).first - stops.at(i).first) / spacing);
                     newStops.append(stops.at(i));
-                    toColor = PREMUL(stops.at(i + 1).second.rgba());
+                    toColor = qPremultiply(stops.at(i + 1).second.rgba());
 
                     if (parts > 1) {
                         qreal step = (stops.at(i + 1).first - stops.at(i).first) / parts;
                         for (int j = 1; j < parts; ++j) {
-                            QRgb color = INV_PREMUL(INTERPOLATE_PIXEL_256(fromColor, 256 - 256 * j / parts, toColor, 256 * j / parts));
+                            QRgb color = qUnpremultiply(INTERPOLATE_PIXEL_256(fromColor, 256 - 256 * j / parts, toColor, 256 * j / parts));
                             newStops.append(QGradientStop(stops.at(i).first + j * step, QColor::fromRgba(color)));
                         }
                     }
@@ -967,6 +969,23 @@ void QSvgPaintEngine::updateState(const QPaintEngineState &state)
     d->afterFirstUpdate = true;
 }
 
+void QSvgPaintEngine::drawEllipse(const QRectF &r)
+{
+    Q_D(QSvgPaintEngine);
+
+    const bool isCircle = r.width() == r.height();
+    *d->stream << '<' << (isCircle ? "circle" : "ellipse");
+    if (state->pen().isCosmetic())
+        *d->stream << " vector-effect=\"non-scaling-stroke\"";
+    const QPointF c = r.center();
+    *d->stream << " cx=\"" << c.x() << "\" cy=\"" << c.y();
+    if (isCircle)
+        *d->stream << "\" r=\"" << r.width() / qreal(2.0);
+    else
+        *d->stream << "\" rx=\"" << r.width() / qreal(2.0) << "\" ry=\"" << r.height() / qreal(2.0);
+    *d->stream << "\"/>" << endl;
+}
+
 void QSvgPaintEngine::drawPath(const QPainterPath &p)
 {
     Q_D(QSvgPaintEngine);
@@ -1034,6 +1053,21 @@ void QSvgPaintEngine::drawPolygon(const QPointF *points, int pointCount,
     } else {
         path.closeSubpath();
         drawPath(path);
+    }
+}
+
+void QSvgPaintEngine::drawRects(const QRectF *rects, int rectCount)
+{
+    Q_D(QSvgPaintEngine);
+
+    for (int i=0; i < rectCount; ++i) {
+        const QRectF &rect = rects[i];
+        *d->stream << "<rect";
+        if (state->pen().isCosmetic())
+            *d->stream << " vector-effect=\"non-scaling-stroke\"";
+        *d->stream << " x=\"" << rect.x() << "\" y=\"" << rect.y()
+                   << "\" width=\"" << rect.width() << "\" height=\"" << rect.height()
+                   << "\"/>" << endl;
     }
 }
 

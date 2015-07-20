@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -38,7 +38,7 @@ import QtLocation 5.3
 Item {
 
     Plugin { id: unattachedPlugin }
-    Plugin { id: nokiaPlugin; name: "nokia"}
+    Plugin { id: herePlugin; name: "here"}
     Plugin { id: invalidPlugin; name: "invalid"; allowExperimental: true }
     Plugin { id: testPlugin;
             name: "qmlgeo.test.plugin"
@@ -83,11 +83,11 @@ Item {
                 verify(testPlugin.supportsRouting())
             }
 
-            if (invalidPlugin.availableServiceProviders.indexOf('nokia')) {
-                verify(nokiaPlugin.isAttached)
-                verify(nokiaPlugin.supportsMapping(Plugin.OnlineMappingFeature))
-                verify(nokiaPlugin.supportsGeocoding(Plugin.OnlineGeocodingFeature))
-                verify(nokiaPlugin.supportsRouting(Plugin.OnlineRoutingFeature))
+            if (invalidPlugin.availableServiceProviders.indexOf('here')) {
+                verify(herePlugin.isAttached)
+                verify(herePlugin.supportsMapping(Plugin.OnlineMappingFeature))
+                verify(herePlugin.supportsGeocoding(Plugin.OnlineGeocodingFeature))
+                verify(herePlugin.supportsRouting(Plugin.OnlineRoutingFeature))
             }
 
             verify(!unattachedPlugin.isAttached)
@@ -114,7 +114,7 @@ Item {
         }
 
         function test_required() {
-            // the required plugin should either get nokia or qmlgeo.test.plugin
+            // the required plugin should either get here or qmlgeo.test.plugin
             // either way the name will be non-empty and it'll meet the spec
             verify(requiredPlugin.name !== "")
             verify(requiredPlugin.supportsMapping(requiredPlugin.required.mapping))
@@ -130,19 +130,19 @@ Item {
         }
 
         function test_locale() {
-            compare(nokiaPlugin.locales, [Qt.locale().name]);
+            compare(herePlugin.locales, [Qt.locale().name]);
 
             //try assignment of a single locale
-            nokiaPlugin.locales = "fr_FR";
-            compare(nokiaPlugin.locales, ["fr_FR"]);
+            herePlugin.locales = "fr_FR";
+            compare(herePlugin.locales, ["fr_FR"]);
 
             //try assignment of multiple locales
-            nokiaPlugin.locales = ["fr_FR","en_US"];
-            compare(nokiaPlugin.locales, ["fr_FR","en_US"]);
+            herePlugin.locales = ["fr_FR","en_US"];
+            compare(herePlugin.locales, ["fr_FR","en_US"]);
 
             //check that assignment of empty locale list defaults to system locale
-            nokiaPlugin.locales = [];
-            compare(nokiaPlugin.locales, [Qt.locale().name]);
+            herePlugin.locales = [];
+            compare(herePlugin.locales, [Qt.locale().name]);
         }
     }
 }

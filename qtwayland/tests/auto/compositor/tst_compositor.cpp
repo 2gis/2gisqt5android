@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -45,6 +37,8 @@
 
 #include "QtCompositor/private/qwlkeyboard_p.h"
 #include "QtCompositor/private/qwlinputdevice_p.h"
+#include "QtCompositor/private/qwlcompositor_p.h"
+#include "testinputdevice.h"
 
 #include "qwaylandbufferref.h"
 
@@ -64,6 +58,8 @@ public:
 private slots:
     void inputDeviceCapabilities();
     void keyboardGrab();
+    void inputDeviceCreation();
+    void inputDeviceKeyboardFocus();
     void singleClient();
     void multipleClients();
     void geometry();
@@ -83,10 +79,11 @@ void tst_WaylandCompositor::singleClient()
     wl_surface *sb = client.createSurface();
     QTRY_COMPARE(compositor.surfaces.size(), 2);
 
-    WaylandClient *ca = compositor.surfaces.at(0)->client();
-    WaylandClient *cb = compositor.surfaces.at(1)->client();
+    QWaylandClient *ca = compositor.surfaces.at(0)->client();
+    QWaylandClient *cb = compositor.surfaces.at(1)->client();
 
     QCOMPARE(ca, cb);
+    QVERIFY(ca != 0);
 
     QList<QWaylandSurface *> surfaces = compositor.surfacesForClient(ca);
     QCOMPARE(surfaces.size(), 2);
@@ -114,13 +111,14 @@ void tst_WaylandCompositor::multipleClients()
 
     QTRY_COMPARE(compositor.surfaces.size(), 3);
 
-    WaylandClient *ca = compositor.surfaces.at(0)->client();
-    WaylandClient *cb = compositor.surfaces.at(1)->client();
-    WaylandClient *cc = compositor.surfaces.at(2)->client();
+    QWaylandClient *ca = compositor.surfaces.at(0)->client();
+    QWaylandClient *cb = compositor.surfaces.at(1)->client();
+    QWaylandClient *cc = compositor.surfaces.at(2)->client();
 
     QVERIFY(ca != cb);
     QVERIFY(ca != cc);
     QVERIFY(cb != cc);
+    QVERIFY(ca != 0);
 
     QCOMPARE(compositor.surfacesForClient(ca).size(), 1);
     QCOMPARE(compositor.surfacesForClient(ca).at(0), compositor.surfaces.at(0));
@@ -319,6 +317,75 @@ void tst_WaylandCompositor::inputDeviceCapabilities()
     QtWayland::Keyboard *k = dev.keyboardDevice();
     dev.setCapabilities(QWaylandInputDevice::Keyboard);
     QTRY_COMPARE(k, dev.keyboardDevice());
+}
+
+void tst_WaylandCompositor::inputDeviceCreation()
+{
+    TestCompositor compositor;
+    TestInputDevice dev1(&compositor, QWaylandInputDevice::Pointer | QWaylandInputDevice::Keyboard);
+    TestInputDevice dev2(&compositor, QWaylandInputDevice::Pointer | QWaylandInputDevice::Keyboard);
+
+    compositor.handle()->registerInputDevice(&dev1);
+    compositor.handle()->registerInputDevice(&dev2);
+
+    // The compositor will create the default input device
+    QTRY_COMPARE(compositor.handle()->inputDevices().count(), 3);
+    // Test the order
+    QTRY_COMPARE(compositor.handle()->inputDevices().at(0), &dev2);
+    QTRY_COMPARE(compositor.handle()->inputDevices().at(1), &dev1);
+    QTRY_COMPARE(compositor.handle()->inputDevices().at(2), compositor.defaultInputDevice());
+
+    QList<QMouseEvent *> allEvents;
+    allEvents += dev1.createMouseEvents(2);
+    allEvents += dev2.createMouseEvents(5);
+    foreach (QMouseEvent *me, allEvents) {
+        compositor.inputDeviceFor(me);
+    }
+
+    // The first input device will only get called exatly the number of times it has created
+    // the events
+    QTRY_COMPARE(dev1.queryCount(), 2);
+    // The second will get called the total number of times as it sits as the first item in
+    // the registered input devices list
+    QTRY_COMPARE(dev2.queryCount(), 7);
+}
+
+void tst_WaylandCompositor::inputDeviceKeyboardFocus()
+{
+    TestCompositor compositor;
+
+
+    TestInputDevice dev1(&compositor, QWaylandInputDevice::Keyboard);
+    TestInputDevice dev2(&compositor, QWaylandInputDevice::Keyboard);
+
+    compositor.handle()->registerInputDevice(&dev1);
+    compositor.handle()->registerInputDevice(&dev2);
+
+    // Create client after all the input devices have been set up as the mock client
+    // does not dynamically listen to new seats
+    MockClient client;
+    wl_surface *surface = client.createSurface();
+    QTRY_COMPARE(compositor.surfaces.size(), 1);
+
+    QWaylandSurface *waylandSurface = compositor.surfaces.at(0);
+    QList<QWaylandInputDevice *> devices = compositor.handle()->inputDevices();
+    foreach (QWaylandInputDevice *dev, devices) {
+        dev->setKeyboardFocus(waylandSurface);
+    }
+    QTRY_COMPARE(compositor.defaultInputDevice()->keyboardFocus(), waylandSurface);
+    QTRY_COMPARE(dev1.keyboardFocus(), waylandSurface);
+    QTRY_COMPARE(dev2.keyboardFocus(), waylandSurface);
+
+    wl_surface_destroy(surface);
+    QTRY_VERIFY(compositor.surfaces.size() == 0);
+    // This will normally be called for example in the quick compositor
+    // but here call it manually to get rid of the surface and have it reset
+    // the focus
+    compositor.handle()->cleanupGraphicsResources();
+
+   QTRY_VERIFY(!compositor.defaultInputDevice()->keyboardFocus());
+   QTRY_VERIFY(!dev1.keyboardFocus());
+   QTRY_VERIFY(!dev2.keyboardFocus());
 }
 
 #include <tst_compositor.moc>

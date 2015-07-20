@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -61,9 +61,6 @@
 #ifdef Q_OS_MAC
 #include <Carbon/Carbon.h>
 #endif
-
-#define SERVER_PORT 42332
-#define SERVER_ADDR "http://localhost:42332"
 
 Q_DECLARE_METATYPE(QQuickTextEdit::SelectionMode)
 Q_DECLARE_METATYPE(Qt::Key)
@@ -2598,12 +2595,12 @@ void tst_qquicktextedit::cursorDelegate()
 void tst_qquicktextedit::remoteCursorDelegate()
 {
     TestHTTPServer server;
-    QVERIFY2(server.listen(SERVER_PORT), qPrintable(server.errorString()));
+    QVERIFY2(server.listen(), qPrintable(server.errorString()));
     server.serveDirectory(dataDirectory(), TestHTTPServer::Delay);
 
     QQuickView view;
 
-    QQmlComponent component(view.engine(), QUrl(SERVER_ADDR "/RemoteCursor.qml"));
+    QQmlComponent component(view.engine(), server.url("/RemoteCursor.qml"));
 
     view.rootContext()->setContextProperty("contextDelegate", &component);
     view.setSource(testFileUrl("cursorTestRemote.qml"));
@@ -2726,8 +2723,8 @@ void tst_qquicktextedit::delegateLoading_data()
 
     // import installed
     QTest::newRow("pass") << "cursorHttpTestPass.qml" << "";
-    QTest::newRow("fail1") << "cursorHttpTestFail1.qml" << "http://localhost:42332/FailItem.qml: Remote host closed the connection";
-    QTest::newRow("fail2") << "cursorHttpTestFail2.qml" << "http://localhost:42332/ErrItem.qml:4:5: Fungus is not a type";
+    QTest::newRow("fail1") << "cursorHttpTestFail1.qml" << "{{ServerBaseUrl}}/FailItem.qml: Remote host closed the connection";
+    QTest::newRow("fail2") << "cursorHttpTestFail2.qml" << "{{ServerBaseUrl}}/ErrItem.qml:4:5: Fungus is not a type";
 }
 
 void tst_qquicktextedit::delegateLoading()
@@ -2736,12 +2733,14 @@ void tst_qquicktextedit::delegateLoading()
     QFETCH(QString, error);
 
     TestHTTPServer server;
-    QVERIFY2(server.listen(SERVER_PORT), qPrintable(server.errorString()));
+    QVERIFY2(server.listen(), qPrintable(server.errorString()));
     server.serveDirectory(testFile("httpfail"), TestHTTPServer::Disconnect);
     server.serveDirectory(testFile("httpslow"), TestHTTPServer::Delay);
     server.serveDirectory(testFile("http"));
 
-    QQuickView view(QUrl(QLatin1String(SERVER_ADDR "/") + qmlfile));
+    error.replace(QStringLiteral("{{ServerBaseUrl}}"), server.baseUrl().toString());
+
+    QQuickView view(server.url(qmlfile));
     view.show();
     view.requestActivate();
 
@@ -5221,8 +5220,8 @@ void tst_qquicktextedit::embeddedImages_data()
     QTest::newRow("local") << testFileUrl("embeddedImagesLocalRelative.qml") << "";
     QTest::newRow("remote") << testFileUrl("embeddedImagesRemote.qml") << "";
     QTest::newRow("remote-error") << testFileUrl("embeddedImagesRemoteError.qml")
-        << testFileUrl("embeddedImagesRemoteError.qml").toString()+":3:1: QML TextEdit: Error downloading http://127.0.0.1:42332/notexists.png - server replied: Not found";
-    QTest::newRow("remote") << testFileUrl("embeddedImagesRemoteRelative.qml") << "";
+        << testFileUrl("embeddedImagesRemoteError.qml").toString()+":3:1: QML TextEdit: Error downloading {{ServerBaseUrl}}/notexists.png - server replied: Not found";
+    QTest::newRow("remote-relative") << testFileUrl("embeddedImagesRemoteRelative.qml") << "";
 }
 
 void tst_qquicktextedit::embeddedImages()
@@ -5231,16 +5230,26 @@ void tst_qquicktextedit::embeddedImages()
     QFETCH(QString, error);
 
     TestHTTPServer server;
-    QVERIFY2(server.listen(SERVER_PORT), qPrintable(server.errorString()));
+    QVERIFY2(server.listen(), qPrintable(server.errorString()));
     server.serveDirectory(testFile("http"));
+
+    error.replace(QStringLiteral("{{ServerBaseUrl}}"), server.baseUrl().toString());
 
     if (!error.isEmpty())
         QTest::ignoreMessage(QtWarningMsg, error.toLatin1());
 
     QQmlComponent textComponent(&engine, qmlfile);
-    QQuickTextEdit *textObject = qobject_cast<QQuickTextEdit*>(textComponent.create());
-
+    QQuickTextEdit *textObject = qobject_cast<QQuickTextEdit*>(textComponent.beginCreate(engine.rootContext()));
     QVERIFY(textObject != 0);
+
+    const int baseUrlPropertyIndex = textObject->metaObject()->indexOfProperty("serverBaseUrl");
+    if (baseUrlPropertyIndex != -1) {
+        QMetaProperty prop = textObject->metaObject()->property(baseUrlPropertyIndex);
+        QVERIFY(prop.write(textObject, server.baseUrl().toString()));
+    }
+
+    textComponent.completeCreate();
+
     QTRY_COMPARE(QQuickTextEditPrivate::get(textObject)->document->resourcesLoading(), 0);
 
     QPixmap pm(testFile("http/exists.png"));

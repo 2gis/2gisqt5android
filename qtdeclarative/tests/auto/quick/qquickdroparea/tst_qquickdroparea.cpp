@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -78,6 +78,7 @@ private slots:
 //    void drop_external();
     void competingDrags();
     void simultaneousDrags();
+    void dropStuff();
 
 private:
     QQmlEngine engine;
@@ -1155,6 +1156,34 @@ void tst_QQuickDropArea::simultaneousDrags()
     QCOMPARE(evaluate<int>(dropArea2, "exitEvents"), 1);
 
     QWindowSystemInterface::handleDrop(&alternateWindow, &data, QPoint(50, 50), Qt::CopyAction);
+}
+
+void tst_QQuickDropArea::dropStuff()
+{
+    QQuickWindow window;
+    QQmlComponent component(&engine);
+    component.setData(
+            "import QtQuick 2.3\n"
+            "DropArea {\n"
+                "width: 100; height: 100\n"
+                "property var array\n"
+                "onDropped: { array = drop.getDataAsArrayBuffer('text/x-red'); }\n"
+            "}", QUrl());
+
+    QScopedPointer<QObject> object(component.create());
+    QQuickItem *dropArea = qobject_cast<QQuickItem *>(object.data());
+    QVERIFY(dropArea);
+    dropArea->setParentItem(window.contentItem());
+
+    QMimeData data;
+    data.setData("text/x-red", "red");
+
+    QCOMPARE(evaluate<QVariant>(dropArea, "array"), QVariant());
+
+    QWindowSystemInterface::handleDrag(&window, &data, QPoint(50, 50), Qt::CopyAction);
+    QWindowSystemInterface::handleDrop(&window, &data, QPoint(50, 50), Qt::CopyAction);
+    QCOMPARE(evaluate<int>(dropArea, "array.byteLength"), 3);
+    QCOMPARE(evaluate<QByteArray>(dropArea, "array"), QByteArray("red"));
 }
 
 QTEST_MAIN(tst_QQuickDropArea)

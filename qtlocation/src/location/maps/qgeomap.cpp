@@ -1,153 +1,215 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtLocation module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL21$
+** $QT_BEGIN_LICENSE:LGPL3$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 or version 3 as published by the Free
-** Software Foundation and appearing in the file LICENSE.LGPLv21 and
-** LICENSE.LGPLv3 included in the packaging of this file. Please review the
-** following information to ensure the GNU Lesser General Public License
-** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
-** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPLv3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** GNU General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU
+** General Public License version 2.0 or later as published by the Free
+** Software Foundation and appearing in the file LICENSE.GPL included in
+** the packaging of this file. Please review the following information to
+** ensure the GNU General Public License version 2.0 requirements will be
+** met: http://www.gnu.org/licenses/gpl-2.0.html.
 **
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
 
 #include "qgeomap_p.h"
-#include "qgeomapdata_p.h"
-
-#include "qgeotilecache_p.h"
-#include "qgeotilespec_p.h"
-
+#include "qgeomap_p_p.h"
 #include "qgeocameracapabilities_p.h"
 #include "qgeomapcontroller_p.h"
-
-#include <QtPositioning/private/qgeoprojection_p.h>
-#include <QtPositioning/private/qdoublevector3d_p.h>
-
-#include "qgeocameratiles_p.h"
-#include "qgeotilerequestmanager_p.h"
-#include "qgeomapscene_p.h"
-
-#include "qgeomappingmanager_p.h"
-
-#include <QMutex>
-#include <QMap>
-
-#include <qnumeric.h>
-
-#include <QtQuick/QSGNode>
-
-#include <cmath>
+#include "qgeomappingmanagerengine_p.h"
 
 QT_BEGIN_NAMESPACE
 
-QGeoMap::QGeoMap(QGeoMapData *mapData, QObject *parent)
-    : QObject(parent),
-      mapData_(mapData)
+QGeoMap::QGeoMap(QGeoMapPrivate &dd, QObject *parent)
+    : QObject(dd,parent)
 {
-    connect(mapData_, SIGNAL(cameraDataChanged(QGeoCameraData)), this, SIGNAL(cameraDataChanged(QGeoCameraData)));
-    connect(mapData_, SIGNAL(updateRequired()), this, SIGNAL(updateRequired()));
-    connect(mapData_, SIGNAL(activeMapTypeChanged()), this, SIGNAL(activeMapTypeChanged()));
-    connect(mapData_, SIGNAL(copyrightsChanged(QImage,QPoint)), this, SIGNAL(copyrightsChanged(QImage,QPoint)));
 }
 
 QGeoMap::~QGeoMap()
 {
-    delete mapData_;
 }
 
 QGeoMapController *QGeoMap::mapController()
 {
-    return mapData_->mapController();
-}
-
-QSGNode *QGeoMap::updateSceneGraph(QSGNode *oldNode, QQuickWindow *window)
-{
-    return mapData_->updateSceneGraph(oldNode, window);
+    Q_D(QGeoMap);
+    if (!d->m_controller)
+        d->m_controller = new QGeoMapController(this);
+    return d->m_controller;
 }
 
 void QGeoMap::resize(int width, int height)
 {
-    mapData_->resize(width, height);
+    Q_D(QGeoMap);
+    d->resize(width, height);
+    // always emit this signal to trigger items to redraw
+    emit cameraDataChanged(d->m_cameraData);
 }
 
 int QGeoMap::width() const
 {
-    return mapData_->width();
+    Q_D(const QGeoMap);
+    return d->m_width;
 }
 
 int QGeoMap::height() const
 {
-    return mapData_->height();
-}
-
-QGeoCameraCapabilities QGeoMap::cameraCapabilities() const
-{
-    return mapData_->cameraCapabilities();
+    Q_D(const QGeoMap);
+    return d->m_height;
 }
 
 void QGeoMap::setCameraData(const QGeoCameraData &cameraData)
 {
-    mapData_->setCameraData(cameraData);
-}
+    Q_D(QGeoMap);
+    if (cameraData == d->m_cameraData)
+        return;
 
-void QGeoMap::cameraStopped()
-{
-    mapData_->prefetchData();
+    d->setCameraData(cameraData);
+
+    update();
+
+    emit cameraDataChanged(d->m_cameraData);
 }
 
 QGeoCameraData QGeoMap::cameraData() const
 {
-    return mapData_->cameraData();
-}
-
-QGeoCoordinate QGeoMap::screenPositionToCoordinate(const QDoubleVector2D &pos, bool clipToViewport) const
-{
-    return mapData_->screenPositionToCoordinate(pos, clipToViewport);
-}
-
-QDoubleVector2D QGeoMap::coordinateToScreenPosition(const QGeoCoordinate &coordinate, bool clipToViewport) const
-{
-    return mapData_->coordinateToScreenPosition(coordinate, clipToViewport);
+    Q_D(const QGeoMap);
+    return d->m_cameraData;
 }
 
 void QGeoMap::update()
 {
-    emit mapData_->update();
+    emit updateRequired();
 }
 
 void QGeoMap::setActiveMapType(const QGeoMapType type)
 {
-    mapData_->setActiveMapType(type);
+    Q_D(QGeoMap);
+    d->m_activeMapType = type;
+    d->changeActiveMapType(type);
+    d->setCameraData(d->m_cameraData);
+    update();
 }
 
 const QGeoMapType QGeoMap::activeMapType() const
 {
-    return mapData_->activeMapType();
+    Q_D(const QGeoMap);
+    return d->m_activeMapType;
 }
 
 QString QGeoMap::pluginString()
 {
-    return mapData_->pluginString();
+    Q_D(const QGeoMap);
+    return d->m_pluginString;
+}
+
+QGeoCameraCapabilities QGeoMap::cameraCapabilities()
+{
+    Q_D(const QGeoMap);
+    if (!d->m_engine.isNull())
+        return d->m_engine->cameraCapabilities();
+    else
+        return QGeoCameraCapabilities();
+}
+
+int QGeoMap::mapVersion()
+{
+    return -1;
+}
+
+void QGeoMap::prefetchData()
+{
+
+}
+
+QGeoMapPrivate::QGeoMapPrivate(QGeoMappingManagerEngine *engine)
+    : QObjectPrivate(),
+      m_width(0),
+      m_height(0),
+      m_aspectRatio(0.0),
+      m_engine(engine),
+      m_controller(0),
+      m_activeMapType(QGeoMapType())
+{
+    if (!m_engine.isNull()) {
+        m_pluginString = m_engine->managerName() + QLatin1Char('_') + QString::number(m_engine->managerVersion());
+    }
+}
+
+QGeoMapPrivate::~QGeoMapPrivate()
+{
+    // controller_ is a child of map_, don't need to delete it here
+
+    // TODO map items are not deallocated!
+    // However: how to ensure this is done in rendering thread?
+}
+
+void QGeoMapPrivate::setCameraData(const QGeoCameraData &cameraData)
+{
+    QGeoCameraData oldCameraData = m_cameraData;
+    m_cameraData = cameraData;
+
+    if (!m_engine.isNull()) {
+        QGeoCameraCapabilities capabilities = m_engine->cameraCapabilities();
+        if (m_cameraData.zoomLevel() < capabilities.minimumZoomLevel())
+            m_cameraData.setZoomLevel(capabilities.minimumZoomLevel());
+
+        if (m_cameraData.zoomLevel() > capabilities.maximumZoomLevel())
+            m_cameraData.setZoomLevel(capabilities.maximumZoomLevel());
+
+        if (!capabilities.supportsBearing())
+            m_cameraData.setBearing(0.0);
+
+        if (capabilities.supportsTilting()) {
+            if (m_cameraData.tilt() < capabilities.minimumTilt())
+                m_cameraData.setTilt(capabilities.minimumTilt());
+
+            if (m_cameraData.tilt() > capabilities.maximumTilt())
+                m_cameraData.setTilt(capabilities.maximumTilt());
+        } else {
+            m_cameraData.setTilt(0.0);
+        }
+
+        if (!capabilities.supportsRolling())
+            m_cameraData.setRoll(0.0);
+    }
+
+    // Do not call this expensive function if the width is 0, since it will get called
+    // anyway when it is resized to a width > 0.
+    // this is mainly an optimization to the initialization of the geomap, which would otherwise
+    // call changeCameraData four or more times
+    if (m_width > 0)
+        changeCameraData(oldCameraData);
+}
+
+void QGeoMapPrivate::resize(int width, int height)
+{
+    m_width = width;
+    m_height = height;
+    m_aspectRatio = 1.0 * m_width / m_height;
+    mapResized(width, height);
+    setCameraData(m_cameraData);
 }
 
 QT_END_NAMESPACE

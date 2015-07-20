@@ -1,31 +1,34 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Quick Layouts module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL21$
+** $QT_BEGIN_LICENSE:LGPL3$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 or version 3 as published by the Free
-** Software Foundation and appearing in the file LICENSE.LGPLv21 and
-** LICENSE.LGPLv3 included in the packaging of this file. Please review the
-** following information to ensure the GNU Lesser General Public License
-** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
-** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPLv3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** GNU General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU
+** General Public License version 2.0 or later as published by the Free
+** Software Foundation and appearing in the file LICENSE.GPL included in
+** the packaging of this file. Please review the following information to
+** ensure the GNU General Public License version 2.0 requirements will be
+** met: http://www.gnu.org/licenses/gpl-2.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -45,7 +48,7 @@ class QQuickLayoutAttached;
 #if 0 && !defined(QT_NO_DEBUG) && !defined(QT_NO_DEBUG_OUTPUT)
 # define quickLayoutDebug QMessageLogger(__FILE__, __LINE__, Q_FUNC_INFO).debug
 #else
-# define quickLayoutDebug QT_NO_QWARNING_MACRO
+# define quickLayoutDebug QT_NO_QDEBUG_MACRO
 #endif
 
 class QQuickLayoutPrivate;
@@ -66,7 +69,7 @@ public:
     static QQuickLayoutAttached *qmlAttachedProperties(QObject *object);
 
 
-    void componentComplete();
+    void componentComplete() Q_DECL_OVERRIDE;
     virtual QSizeF sizeHint(Qt::SizeHint whichSizeHint) const = 0;
     virtual void setAlignment(QQuickItem *item, Qt::Alignment align) = 0;
     virtual void invalidate(QQuickItem * childItem = 0);
@@ -119,6 +122,12 @@ class QQuickLayoutAttached : public QObject
     Q_PROPERTY(int columnSpan READ columnSpan WRITE setColumnSpan NOTIFY columnSpanChanged)
     Q_PROPERTY(Qt::Alignment alignment READ alignment WRITE setAlignment NOTIFY alignmentChanged)
 
+    Q_PROPERTY(qreal margins READ margins WRITE setMargins NOTIFY marginsChanged)
+    Q_PROPERTY(qreal leftMargin READ leftMargin WRITE setLeftMargin RESET resetLeftMargin NOTIFY leftMarginChanged)
+    Q_PROPERTY(qreal topMargin READ topMargin WRITE setTopMargin RESET resetTopMargin NOTIFY topMarginChanged)
+    Q_PROPERTY(qreal rightMargin READ rightMargin WRITE setRightMargin RESET resetRightMargin NOTIFY rightMarginChanged)
+    Q_PROPERTY(qreal bottomMargin READ bottomMargin WRITE setBottomMargin RESET resetBottomMargin NOTIFY bottomMarginChanged)
+
 public:
     QQuickLayoutAttached(QObject *object);
 
@@ -166,6 +175,29 @@ public:
     Qt::Alignment alignment() const { return m_alignment; }
     void setAlignment(Qt::Alignment align);
 
+    qreal margins() const { return m_defaultMargins; }
+    void setMargins(qreal m);
+
+    qreal leftMargin() const { return m_isLeftMarginSet ? m_margins.left() : m_defaultMargins; }
+    void setLeftMargin(qreal m);
+    void resetLeftMargin();
+
+    qreal topMargin() const { return m_isTopMarginSet ? m_margins.top() : m_defaultMargins; }
+    void setTopMargin(qreal m);
+    void resetTopMargin();
+
+    qreal rightMargin() const { return m_isRightMarginSet ? m_margins.right() : m_defaultMargins; }
+    void setRightMargin(qreal m);
+    void resetRightMargin();
+
+    qreal bottomMargin() const { return m_isBottomMarginSet ? m_margins.bottom() : m_defaultMargins; }
+    void setBottomMargin(qreal m);
+    void resetBottomMargin();
+
+    QMarginsF qMargins() const {
+        return QMarginsF(leftMargin(), topMargin(), rightMargin(), bottomMargin());
+    }
+
     bool setChangesNotificationEnabled(bool enabled)
     {
         const bool old = m_changesNotificationEnabled;
@@ -200,6 +232,11 @@ signals:
     void maximumHeightChanged();
     void fillWidthChanged();
     void fillHeightChanged();
+    void leftMarginChanged();
+    void topMarginChanged();
+    void rightMarginChanged();
+    void bottomMarginChanged();
+    void marginsChanged();
     void rowChanged();
     void columnChanged();
     void rowSpanChanged();
@@ -219,6 +256,9 @@ private:
     qreal m_maximumWidth;
     qreal m_maximumHeight;
 
+    qreal m_defaultMargins;
+    QMarginsF m_margins;
+
     // GridLayout specific properties
     int m_row;
     int m_column;
@@ -236,6 +276,10 @@ private:
     unsigned m_isMaximumWidthSet : 1;
     unsigned m_isMaximumHeightSet : 1;
     unsigned m_changesNotificationEnabled : 1;
+    unsigned m_isLeftMarginSet : 1;
+    unsigned m_isTopMarginSet : 1;
+    unsigned m_isRightMarginSet : 1;
+    unsigned m_isBottomMarginSet : 1;
     Qt::Alignment m_alignment;
     friend class QQuickLayout;
 };

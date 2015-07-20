@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQuick module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -41,8 +41,9 @@
 #include <QtGui/qevent.h>
 #include <QtCore/qmath.h>
 #include <QtCore/qcoreapplication.h>
-#include <math.h>
 #include "qplatformdefs.h"
+
+#include <cmath>
 
 QT_BEGIN_NAMESPACE
 
@@ -115,7 +116,7 @@ public:
     void setPosition(qreal col, qreal row, bool immediate = false) {
         moveTo(pointForPosition(col, row), immediate);
     }
-    bool contains(qreal x, qreal y) const {
+    bool contains(qreal x, qreal y) const Q_DECL_OVERRIDE {
         return (x >= itemX() && x < itemX() + view->cellWidth() &&
                 y >= itemY() && y < itemY() + view->cellHeight());
     }
@@ -152,13 +153,13 @@ class QQuickGridViewPrivate : public QQuickItemViewPrivate
     Q_DECLARE_PUBLIC(QQuickGridView)
 
 public:
-    virtual Qt::Orientation layoutOrientation() const;
-    virtual bool isContentFlowReversed() const;
+    Qt::Orientation layoutOrientation() const Q_DECL_OVERRIDE;
+    bool isContentFlowReversed() const Q_DECL_OVERRIDE;
 
-    virtual qreal positionAt(int index) const;
-    virtual qreal endPositionAt(int index) const;
-    virtual qreal originPosition() const;
-    virtual qreal lastPosition() const;
+    qreal positionAt(int index) const Q_DECL_OVERRIDE;
+    qreal endPositionAt(int index) const Q_DECL_OVERRIDE;
+    qreal originPosition() const Q_DECL_OVERRIDE;
+    qreal lastPosition() const Q_DECL_OVERRIDE;
 
     qreal rowSize() const;
     qreal colSize() const;
@@ -172,41 +173,41 @@ public:
 
     void resetColumns();
 
-    virtual bool addVisibleItems(qreal fillFrom, qreal fillTo, qreal bufferFrom, qreal bufferTo, bool doBuffer);
-    virtual bool removeNonVisibleItems(qreal bufferFrom, qreal bufferTo);
+    bool addVisibleItems(qreal fillFrom, qreal fillTo, qreal bufferFrom, qreal bufferTo, bool doBuffer) Q_DECL_OVERRIDE;
+    bool removeNonVisibleItems(qreal bufferFrom, qreal bufferTo) Q_DECL_OVERRIDE;
 
-    virtual FxViewItem *newViewItem(int index, QQuickItem *item);
-    virtual void initializeViewItem(FxViewItem *item);
-    virtual void repositionItemAt(FxViewItem *item, int index, qreal sizeBuffer);
-    virtual void repositionPackageItemAt(QQuickItem *item, int index);
-    virtual void resetFirstItemPosition(qreal pos = 0.0);
-    virtual void adjustFirstItem(qreal forwards, qreal backwards, int changeBeforeVisible);
+    FxViewItem *newViewItem(int index, QQuickItem *item) Q_DECL_OVERRIDE;
+    void initializeViewItem(FxViewItem *item) Q_DECL_OVERRIDE;
+    void repositionItemAt(FxViewItem *item, int index, qreal sizeBuffer) Q_DECL_OVERRIDE;
+    void repositionPackageItemAt(QQuickItem *item, int index) Q_DECL_OVERRIDE;
+    void resetFirstItemPosition(qreal pos = 0.0) Q_DECL_OVERRIDE;
+    void adjustFirstItem(qreal forwards, qreal backwards, int changeBeforeVisible) Q_DECL_OVERRIDE;
 
-    virtual void createHighlight();
-    virtual void updateHighlight();
-    virtual void resetHighlightPosition();
+    void createHighlight() Q_DECL_OVERRIDE;
+    void updateHighlight() Q_DECL_OVERRIDE;
+    void resetHighlightPosition() Q_DECL_OVERRIDE;
 
-    virtual void setPosition(qreal pos);
-    virtual void layoutVisibleItems(int fromModelIndex = 0);
-    virtual bool applyInsertionChange(const QQmlChangeSet::Change &insert, ChangeResult *changeResult, QList<FxViewItem *> *addedItems, QList<MovedItem> *movingIntoView);
-    virtual void translateAndTransitionItemsAfter(int afterModelIndex, const ChangeResult &insertionResult, const ChangeResult &removalResult);
-    virtual bool needsRefillForAddedOrRemovedIndex(int index) const;
+    void setPosition(qreal pos) Q_DECL_OVERRIDE;
+    void layoutVisibleItems(int fromModelIndex = 0) Q_DECL_OVERRIDE;
+    bool applyInsertionChange(const QQmlChangeSet::Change &insert, ChangeResult *changeResult, QList<FxViewItem *> *addedItems, QList<MovedItem> *movingIntoView) Q_DECL_OVERRIDE;
+    void translateAndTransitionItemsAfter(int afterModelIndex, const ChangeResult &insertionResult, const ChangeResult &removalResult) Q_DECL_OVERRIDE;
+    bool needsRefillForAddedOrRemovedIndex(int index) const Q_DECL_OVERRIDE;
 
-    virtual qreal headerSize() const;
-    virtual qreal footerSize() const;
-    virtual bool showHeaderForIndex(int index) const;
-    virtual bool showFooterForIndex(int index) const;
-    virtual void updateHeader();
-    virtual void updateFooter();
+    qreal headerSize() const Q_DECL_OVERRIDE;
+    qreal footerSize() const Q_DECL_OVERRIDE;
+    bool showHeaderForIndex(int index) const Q_DECL_OVERRIDE;
+    bool showFooterForIndex(int index) const Q_DECL_OVERRIDE;
+    void updateHeader() Q_DECL_OVERRIDE;
+    void updateFooter() Q_DECL_OVERRIDE;
 
-    virtual void changedVisibleIndex(int newIndex);
-    virtual void initializeCurrentItem();
+    void changedVisibleIndex(int newIndex) Q_DECL_OVERRIDE;
+    void initializeCurrentItem() Q_DECL_OVERRIDE;
 
-    virtual void updateViewport();
-    virtual void fixupPosition();
-    virtual void fixup(AxisData &data, qreal minExtent, qreal maxExtent);
-    virtual bool flick(QQuickItemViewPrivate::AxisData &data, qreal minExtent, qreal maxExtent, qreal vSize,
-                        QQuickTimeLineCallback::Callback fixupCallback, qreal velocity);
+    void updateViewport() Q_DECL_OVERRIDE;
+    void fixupPosition() Q_DECL_OVERRIDE;
+    void fixup(AxisData &data, qreal minExtent, qreal maxExtent) Q_DECL_OVERRIDE;
+    bool flick(QQuickItemViewPrivate::AxisData &data, qreal minExtent, qreal maxExtent, qreal vSize,
+               QQuickTimeLineCallback::Callback fixupCallback, qreal velocity) Q_DECL_OVERRIDE;
 
     QQuickGridView::Flow flow;
     qreal cellWidth;
@@ -349,7 +350,7 @@ qreal QQuickGridViewPrivate::snapPosAt(qreal pos) const
         pos += highlightStart;
         pos += rowSize()/2;
         snapPos = static_cast<FxGridItemSG*>(visibleItems.first())->rowPos() - visibleIndex / columns * rowSize();
-        snapPos = pos - fmodf(pos - snapPos, qreal(rowSize()));
+        snapPos = pos - std::fmod(pos - snapPos, qreal(rowSize()));
         snapPos -= highlightStart;
         qreal maxExtent;
         qreal minExtent;
@@ -1036,7 +1037,7 @@ bool QQuickGridViewPrivate::flick(AxisData &data, qreal minExtent, qreal maxExte
         if (snapMode == QQuickGridView::NoSnap && highlightRange != QQuickGridView::StrictlyEnforceRange)
             data.flickTarget = maxExtent;
     }
-    bool overShoot = boundsBehavior == QQuickFlickable::DragAndOvershootBounds;
+    bool overShoot = boundsBehavior & QQuickFlickable::OvershootBounds;
     if (maxDistance > 0 || overShoot) {
         // This mode requires the grid to stop exactly on a row boundary.
         qreal v = velocity;

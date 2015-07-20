@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQuick module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -504,7 +504,7 @@ void QSGNode::insertChildNodeAfter(QSGNode *node, QSGNode *after)
 {
     //Q_ASSERT_X(!m_children.contains(node), "QSGNode::insertChildNodeAfter", "QSGNode is already a child!");
     Q_ASSERT_X(!node->m_parent, "QSGNode::insertChildNodeAfter", "QSGNode already has a parent");
-    Q_ASSERT_X(after && after->m_parent == this, "QSGNode::insertChildNodeBefore", "The parent of \'before\' is wrong");
+    Q_ASSERT_X(after && after->m_parent == this, "QSGNode::insertChildNodeAfter", "The parent of \'after\' is wrong");
 
 #ifndef QT_NO_DEBUG
     if (node->type() == QSGNode::GeometryNodeType) {
@@ -572,6 +572,19 @@ void QSGNode::removeAllChildNodes()
             m_lastChild = 0;
         node->markDirty(DirtyNodeRemoved);
         node->m_parent = 0;
+    }
+}
+
+/*!
+ * \internal
+ *
+ * Reparents all nodes of this node to \a newParent.
+ */
+void QSGNode::reparentChildNodesTo(QSGNode *newParent)
+{
+    for (QSGNode *c = firstChild(); c; c = firstChild()) {
+        removeChildNode(c);
+        newParent->appendChildNode(c);
     }
 }
 
@@ -774,7 +787,7 @@ QSGBasicGeometryNode::~QSGBasicGeometryNode()
 
 void QSGBasicGeometryNode::setGeometry(QSGGeometry *geometry)
 {
-    if (flags() & OwnsGeometry)
+    if ((flags() & OwnsGeometry) != 0 && m_geometry != geometry)
         delete m_geometry;
     m_geometry = geometry;
     markDirty(DirtyGeometry);
@@ -941,7 +954,7 @@ void QSGGeometryNode::setRenderOrder(int order)
  */
 void QSGGeometryNode::setMaterial(QSGMaterial *material)
 {
-    if (flags() & OwnsMaterial)
+    if ((flags() & OwnsMaterial) != 0 && m_material != material)
         delete m_material;
     m_material = material;
 #ifndef QT_NO_DEBUG
@@ -972,7 +985,7 @@ void QSGGeometryNode::setMaterial(QSGMaterial *material)
  */
 void QSGGeometryNode::setOpaqueMaterial(QSGMaterial *material)
 {
-    if (flags() & OwnsOpaqueMaterial)
+    if ((flags() & OwnsOpaqueMaterial) != 0 && m_opaque_material != m_material)
         delete m_opaque_material;
     m_opaque_material = material;
 #ifndef QT_NO_DEBUG
@@ -1444,7 +1457,7 @@ QDebug operator<<(QDebug d, const QSGGeometryNode *n)
         d << "Geometry(null)";
         return d;
     }
-    d << "GeometryNode(" << hex << (void *) n << dec;
+    d << "GeometryNode(" << hex << (const void *) n << dec;
 
     const QSGGeometry *g = n->geometry();
 
@@ -1495,7 +1508,7 @@ QDebug operator<<(QDebug d, const QSGClipNode *n)
         d << "ClipNode(null)";
         return d;
     }
-    d << "ClipNode(" << hex << (void *) n << dec;
+    d << "ClipNode(" << hex << (const void *) n << dec;
 
     if (n->childCount())
         d << "children=" << n->childCount();
@@ -1518,7 +1531,7 @@ QDebug operator<<(QDebug d, const QSGTransformNode *n)
     }
     const QMatrix4x4 m = n->matrix();
     d << "TransformNode(";
-    d << hex << (void *) n << dec;
+    d << hex << (const void *) n << dec;
     if (m.isIdentity())
         d << "identity";
     else if (m.determinant() == 1 && m(0, 0) == 1 && m(1, 1) == 1 && m(2, 2) == 1)
@@ -1540,7 +1553,7 @@ QDebug operator<<(QDebug d, const QSGOpacityNode *n)
         return d;
     }
     d << "OpacityNode(";
-    d << hex << (void *) n << dec;
+    d << hex << (const void *) n << dec;
     d << "opacity=" << n->opacity()
       << "combined=" << n->combinedOpacity()
       << (n->isSubtreeBlocked() ? "*BLOCKED*" : "");
@@ -1558,7 +1571,7 @@ QDebug operator<<(QDebug d, const QSGRootNode *n)
         d << "RootNode(null)";
         return d;
     }
-    d << "RootNode" << hex << (void *) n << (n->isSubtreeBlocked() ? "*BLOCKED*" : "");
+    d << "RootNode" << hex << (const void *) n << (n->isSubtreeBlocked() ? "*BLOCKED*" : "");
 #ifdef QSG_RUNTIME_DESCRIPTION
     d << QSGNodePrivate::description(n);
 #endif
@@ -1591,7 +1604,7 @@ QDebug operator<<(QDebug d, const QSGNode *n)
         d << static_cast<const QSGOpacityNode *>(n);
         break;
     case QSGNode::RenderNodeType:
-        d << "RenderNode(" << hex << (void *) n << dec
+        d << "RenderNode(" << hex << (const void *) n << dec
           << "flags=" << (int) n->flags() << dec
           << (n->isSubtreeBlocked() ? "*BLOCKED*" : "");
 #ifdef QSG_RUNTIME_DESCRIPTION
@@ -1600,7 +1613,7 @@ QDebug operator<<(QDebug d, const QSGNode *n)
         d << ')';
         break;
     default:
-        d << "Node(" << hex << (void *) n << dec
+        d << "Node(" << hex << (const void *) n << dec
           << "flags=" << (int) n->flags() << dec
           << (n->isSubtreeBlocked() ? "*BLOCKED*" : "");
 #ifdef QSG_RUNTIME_DESCRIPTION

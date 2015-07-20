@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -365,6 +365,7 @@ private slots:
 
     void testRenderJob();
 
+    void testHoverChildMouseEventFilter();
 private:
     QTouchDevice *touchDevice;
     QTouchDevice *touchDeviceWithVelocity;
@@ -1978,6 +1979,8 @@ void tst_qquickwindow::attachedProperty()
     QVERIFY(QTest::qWaitForWindowActive(&view));
     QVERIFY(view.rootObject()->property("windowActive").toBool());
     QCOMPARE(view.rootObject()->property("contentItem").value<QQuickItem*>(), view.contentItem());
+    QCOMPARE(view.rootObject()->property("windowWidth").toInt(), view.width());
+    QCOMPARE(view.rootObject()->property("windowHeight").toInt(), view.height());
 
     QQuickWindow *innerWindow = view.rootObject()->findChild<QQuickWindow*>("extraWindow");
     QVERIFY(innerWindow);
@@ -1988,6 +1991,8 @@ void tst_qquickwindow::attachedProperty()
     QVERIFY(text);
     QCOMPARE(text->text(), QLatin1String("active\nvisibility: 2"));
     QCOMPARE(text->property("contentItem").value<QQuickItem*>(), innerWindow->contentItem());
+    QCOMPARE(text->property("windowWidth").toInt(), innerWindow->width());
+    QCOMPARE(text->property("windowHeight").toInt(), innerWindow->height());
 }
 
 class RenderJob : public QRunnable
@@ -2040,6 +2045,113 @@ void tst_qquickwindow::testRenderJob()
     }
     QCOMPARE(completedJobs.size(), 0);
     QCOMPARE(RenderJob::deleted, 5);
+}
+
+class EventCounter : public QQuickRectangle
+{
+    Q_OBJECT
+public:
+    EventCounter(QQuickItem *parent = 0)
+        : QQuickRectangle(parent)
+    { }
+
+    void addFilterEvent(QEvent::Type type)
+    {
+        m_returnTrueForType.append(type);
+    }
+
+    int childMouseEventFilterEventCount(QEvent::Type type)
+    {
+        return m_childMouseEventFilterEventCount.value(type, 0);
+    }
+
+    int eventCount(QEvent::Type type)
+    {
+        return m_eventCount.value(type, 0);
+    }
+
+    void reset()
+    {
+        m_eventCount.clear();
+        m_childMouseEventFilterEventCount.clear();
+    }
+protected:
+    bool childMouseEventFilter(QQuickItem *, QEvent *event) Q_DECL_OVERRIDE
+    {
+        m_childMouseEventFilterEventCount[event->type()]++;
+        return m_returnTrueForType.contains(event->type());
+    }
+
+    bool event(QEvent *event) Q_DECL_OVERRIDE
+    {
+        m_eventCount[event->type()]++;
+        return QQuickRectangle::event(event);
+    }
+
+
+private:
+    QList<QEvent::Type> m_returnTrueForType;
+    QMap<QEvent::Type, int> m_childMouseEventFilterEventCount;
+    QMap<QEvent::Type, int> m_eventCount;
+};
+
+void tst_qquickwindow::testHoverChildMouseEventFilter()
+{
+    QQuickWindow window;
+
+    window.resize(250, 250);
+    window.setPosition(100, 100);
+    window.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&window));
+
+    EventCounter *bottomItem = new EventCounter(window.contentItem());
+    bottomItem->setObjectName("Bottom Item");
+    bottomItem->setSize(QSizeF(150, 150));
+    bottomItem->setAcceptHoverEvents(true);
+
+    EventCounter *middleItem = new EventCounter(bottomItem);
+    middleItem->setObjectName("Middle Item");
+    middleItem->setPosition(QPointF(50, 50));
+    middleItem->setSize(QSizeF(150, 150));
+    middleItem->setAcceptHoverEvents(true);
+
+    EventCounter *topItem = new EventCounter(middleItem);
+    topItem->setObjectName("Top Item");
+    topItem->setPosition(QPointF(50, 50));
+    topItem->setSize(QSizeF(150, 150));
+    topItem->setAcceptHoverEvents(true);
+
+    QPoint pos(10, 10);
+
+    QTest::mouseMove(&window, pos);
+
+    QTRY_VERIFY(bottomItem->eventCount(QEvent::HoverEnter) > 0);
+    QVERIFY(bottomItem->childMouseEventFilterEventCount(QEvent::HoverEnter) == 0);
+    QVERIFY(middleItem->eventCount(QEvent::HoverEnter) == 0);
+    QVERIFY(topItem->eventCount(QEvent::HoverEnter) == 0);
+    bottomItem->reset();
+
+    pos = QPoint(60, 60);
+    QTest::mouseMove(&window, pos);
+    QTRY_VERIFY(middleItem->eventCount(QEvent::HoverEnter) > 0);
+    QVERIFY(bottomItem->childMouseEventFilterEventCount(QEvent::HoverEnter) == 0);
+    middleItem->reset();
+
+    pos = QPoint(70,70);
+    bottomItem->setFiltersChildMouseEvents(true);
+    QTest::mouseMove(&window, pos);
+    QTRY_VERIFY(middleItem->eventCount(QEvent::HoverMove) > 0);
+    QVERIFY(bottomItem->childMouseEventFilterEventCount(QEvent::HoverMove) > 0);
+    QVERIFY(topItem->eventCount(QEvent::HoverEnter) == 0);
+    bottomItem->reset();
+    middleItem->reset();
+
+    pos = QPoint(110,110);
+    bottomItem->addFilterEvent(QEvent::HoverEnter);
+    QTest::mouseMove(&window, pos);
+    QTRY_VERIFY(bottomItem->childMouseEventFilterEventCount(QEvent::HoverEnter) > 0);
+    QVERIFY(topItem->eventCount(QEvent::HoverEnter) == 0);
+    QVERIFY(middleItem->eventCount(QEvent::HoverEnter) == 0);
 }
 
 QTEST_MAIN(tst_qquickwindow)

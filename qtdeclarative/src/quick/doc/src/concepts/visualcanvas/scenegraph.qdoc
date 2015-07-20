@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
@@ -10,15 +10,15 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Free Documentation License Usage
 ** Alternatively, this file may be used under the terms of the GNU Free
 ** Documentation License version 1.3 as published by the Free Software
 ** Foundation and appearing in the file included in the packaging of
-** this file.  Please review the following information to ensure
+** this file. Please review the following information to ensure
 ** the GNU Free Documentation License version 1.3 requirements
 ** will be met: http://www.gnu.org/copyleft/fdl.html.
 ** $QT_END_LICENSE$
@@ -173,8 +173,26 @@ defined by the render loop.
 For detailed description of how the scene graph renderer works, see
 \l {Qt Quick Scene Graph Renderer}.
 
+There are three render loop variants available: \c basic, \c windows,
+and \c threaded. Out of these, \c basic and \c windows are
+single-threaded, while \c threaded performs scene graph rendering on a
+dedicated thread. Qt attempts to choose a suitable loop based on the
+platform and possibly the graphics drivers in use. When this is not
+satisfactory, or for testing purposes, the environment variable
+\c QSG_RENDER_LOOP can be used to force the usage of a given loop. To
+verify which render loop is in use, launch the application with
+\c QSG_INFO set to \c 1.
 
-\section2 Threaded Render Loop
+\note The \c threaded and \c windows render loops rely on the OpenGL
+implementation for throttling by requesting a swap interval of 1. Some
+graphics drivers allow users to override this setting and turn it off,
+ignoring Qt's request. Without blocking in the swap buffers operation
+(or elsewhere), the render loop will run animations too fast and spin
+the CPU at 100%. If a system is known to be unable to provide
+vsync-based throttling, use the \c basic render loop instead by
+setting \c {QSG_RENDER_LOOP=basic} in the environment.
+
+\section2 Threaded Render Loop ("threaded")
 
 On many configurations, the scene graph rendering will happen on a
 dedicated render thread. This is done to increase parallelism of
@@ -244,18 +262,25 @@ animations, process events, etc.
 
 \endlist
 
-The threaded renderer is currently used by default on Linux with
-non-Mesa based drivers, OS X and EGLFS based QPA platforms, but this
-is subject to change. It is possible to force use of the threaded
-renderer by setting \c {QSG_RENDER_LOOP=threaded} in the
-environment.
+The threaded renderer is currently used by default on Windows with
+opengl32.dll, Linux with non-Mesa based drivers, OS X, mobile
+platforms, and Embedded Linux with EGLFS but this is subject to
+change. It is possible to force use of the threaded renderer by
+setting \c {QSG_RENDER_LOOP=threaded} in the environment.
 
-\section2 Non-threaded Render Loop
+\section2 Non-threaded Render Loops ("basic" and "windows")
 
 The non-threaded render loop is currently used by default on Windows
-and non-EGLFS based embedded platforms. This is mostly a precautionary
-measure, as not all combinations of OpenGL drivers and windowing
-systems have been tested.
+with ANGLE or a non-default opengl32 implementation and Linux with
+Mesa drivers. For the latter this is mostly a precautionary measure,
+as not all combinations of OpenGL drivers and windowing systems have
+been tested. At the same time implementations like ANGLE or Mesa
+llvmpipe are not able to function properly with threaded rendering at
+all so not using threaded rendering is essential for these.
+
+By default \c windows is used for non-threaded rendering on Windows
+with ANGLE, while \c basic is used for all other platforms when
+non-threaded rendering is needed.
 
 Even when using the non-threaded render loop, you should write your
 code as if you are using the threaded renderer, as failing to do so

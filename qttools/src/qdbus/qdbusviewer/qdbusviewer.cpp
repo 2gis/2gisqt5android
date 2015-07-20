@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the tools applications of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -40,6 +40,7 @@
 #include <QtCore/QStringListModel>
 #include <QtCore/QSortFilterProxyModel>
 #include <QtCore/QMetaProperty>
+#include <QtCore/QSettings>
 #include <QtWidgets/QLineEdit>
 #include <QtWidgets/QListView>
 #include <QtWidgets/QAction>
@@ -103,13 +104,13 @@ QDBusViewer::QDBusViewer(const QDBusConnection &connection, QWidget *parent)  :
     connect(refreshShortcut, SIGNAL(activated()), this, SLOT(refreshChildren()));
 
     QVBoxLayout *layout = new QVBoxLayout(this);
-    QSplitter *topSplitter = new QSplitter(Qt::Vertical, this);
+    topSplitter = new QSplitter(Qt::Vertical, this);
     layout->addWidget(topSplitter);
 
     log = new LogViewer;
     connect(log, SIGNAL(anchorClicked(QUrl)), this, SLOT(anchorClicked(QUrl)));
 
-    QSplitter *splitter = new QSplitter(topSplitter);
+    splitter = new QSplitter(topSplitter);
     splitter->addWidget(servicesView);
 
     QWidget *servicesWidget = new QWidget;
@@ -144,6 +145,21 @@ QDBusViewer::QDBusViewer(const QDBusConnection &connection, QWidget *parent)  :
 
     objectPathRegExp.setMinimal(true);
 
+}
+
+static inline QString topSplitterStateKey() { return QStringLiteral("topSplitterState"); }
+static inline QString splitterStateKey() { return QStringLiteral("splitterState"); }
+
+void QDBusViewer::saveState(QSettings *settings) const
+{
+    settings->setValue(topSplitterStateKey(), topSplitter->saveState());
+    settings->setValue(splitterStateKey(), splitter->saveState());
+}
+
+void QDBusViewer::restoreState(const QSettings *settings)
+{
+    topSplitter->restoreState(settings->value(topSplitterStateKey()).toByteArray());
+    splitter->restoreState(settings->value(splitterStateKey()).toByteArray());
 }
 
 void QDBusViewer::logMessage(const QString &msg)

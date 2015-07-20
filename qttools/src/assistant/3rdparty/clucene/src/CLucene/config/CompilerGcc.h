@@ -4,7 +4,7 @@
 * Distributable under the terms of either the Apache License (Version 2.0) or 
 * the GNU Lesser General Public License, as specified in the COPYING file.
 *
-* Changes are Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+* Changes are Copyright (C) 2015 The Qt Company Ltd.
 ------------------------------------------------------------------------------*/
 #if !defined(_lucene_COMPILER_GCC)
 #define _lucene_COMPILER_GCC
@@ -45,6 +45,8 @@
 
 #define CL_NS_HASHING(func) __gnu_cxx::func
 #define LUCENE_DISABLE_HASHING //we could enable this, but so far test show that the hashing is slower :(
+#define CL_HASH_MAP hash_map
+#define CL_HASH_SET hash_set
 
 //define the file functions
 #define fileSeek lseek

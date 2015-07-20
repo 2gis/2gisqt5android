@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Designer of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -55,30 +55,30 @@ public:
 
     QDesignerFormEditorInterface *core() const;
 
-    virtual int categoryCount() const;
-    virtual Category category(int cat_idx) const;
-    virtual void addCategory(const Category &cat);
-    virtual void removeCategory(int cat_idx);
+    int categoryCount() const Q_DECL_OVERRIDE;
+    Category category(int cat_idx) const Q_DECL_OVERRIDE;
+    void addCategory(const Category &cat) Q_DECL_OVERRIDE;
+    void removeCategory(int cat_idx) Q_DECL_OVERRIDE;
 
-    virtual int widgetCount(int cat_idx) const;
-    virtual Widget widget(int cat_idx, int wgt_idx) const;
-    virtual void addWidget(int cat_idx, const Widget &wgt);
-    virtual void removeWidget(int cat_idx, int wgt_idx);
+    int widgetCount(int cat_idx) const Q_DECL_OVERRIDE;
+    Widget widget(int cat_idx, int wgt_idx) const Q_DECL_OVERRIDE;
+    void addWidget(int cat_idx, const Widget &wgt) Q_DECL_OVERRIDE;
+    void removeWidget(int cat_idx, int wgt_idx) Q_DECL_OVERRIDE;
 
     void dropWidgets(const QList<QDesignerDnDItemInterface*> &item_list, const QPoint &global_mouse_pos);
 
-    virtual void setFileName(const QString &file_name);
-    virtual QString fileName() const;
+    void setFileName(const QString &file_name) Q_DECL_OVERRIDE;
+    QString fileName() const Q_DECL_OVERRIDE;
     virtual bool load();
     virtual bool save();
 
-    virtual bool loadContents(const QString &contents);
-    virtual QIcon iconForWidget(const QString &className, const QString &category = QString()) const;
+    bool loadContents(const QString &contents) Q_DECL_OVERRIDE;
+    QIcon iconForWidget(const QString &className, const QString &category = QString()) const Q_DECL_OVERRIDE;
 
 protected:
-    virtual void dragEnterEvent (QDragEnterEvent * event);
-    virtual void dragMoveEvent(QDragMoveEvent * event);
-    virtual void dropEvent (QDropEvent * event);
+    void dragEnterEvent (QDragEnterEvent * event) Q_DECL_OVERRIDE;
+    void dragMoveEvent(QDragMoveEvent * event) Q_DECL_OVERRIDE;
+    void dropEvent (QDropEvent * event) Q_DECL_OVERRIDE;
 
 private slots:
     void handleMousePress(const QString &name, const QString &xml, const QPoint &global_mouse_pos);

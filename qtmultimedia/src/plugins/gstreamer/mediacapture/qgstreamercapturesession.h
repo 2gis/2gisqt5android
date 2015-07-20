@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -41,8 +41,10 @@
 #include <QtCore/qurl.h>
 
 #include <gst/gst.h>
+#include <gst/video/video.h>
 
 #include <private/qgstreamerbushelper_p.h>
+#include <private/qgstreamerbufferprobe_p.h>
 
 QT_BEGIN_NAMESPACE
 
@@ -70,7 +72,10 @@ public:
     virtual QList<QSize> supportedResolutions(qreal frameRate = -1) const = 0;
 };
 
-class QGstreamerCaptureSession : public QObject, public QGstreamerBusMessageFilter
+class QGstreamerCaptureSession
+        : public QObject
+        , public QGstreamerBusMessageFilter
+        , private QGstreamerBufferProbe
 {
     Q_OBJECT
     Q_PROPERTY(qint64 duration READ duration NOTIFY durationChanged)
@@ -131,7 +136,6 @@ public:
 
     void addProbe(QGstreamerAudioProbeControl* probe);
     void removeProbe(QGstreamerAudioProbeControl* probe);
-    static gboolean padAudioBufferProbe(GstPad *pad, GstBuffer *buffer, gpointer user_data);
 
 signals:
     void stateChanged(QGstreamerCaptureSession::State state);
@@ -156,6 +160,9 @@ public slots:
     void setVolume(qreal volume);
 
 private:
+    void probeCaps(GstCaps *caps);
+    bool probeBuffer(GstBuffer *buffer);
+
     enum PipelineMode { EmptyPipeline, PreviewPipeline, RecordingPipeline, PreviewAndRecordingPipeline };
 
     GstElement *buildEncodeBin();
@@ -180,9 +187,7 @@ private:
     QGstreamerCaptureSession::CaptureMode m_captureMode;
     QMap<QByteArray, QVariant> m_metaData;
 
-    QList<QGstreamerAudioProbeControl*> m_audioProbes;
-    QMutex m_audioProbeMutex;
-    int m_audioBufferProbeId;
+    QGstreamerAudioProbeControl *m_audioProbe;
 
     QGstreamerElementFactory *m_audioInputFactory;
     QGstreamerElementFactory *m_audioPreviewFactory;
@@ -216,6 +221,10 @@ private:
     GstElement *m_imageCaptureBin;
 
     GstElement *m_encodeBin;
+
+#if GST_CHECK_VERSION(1,0,0)
+    GstVideoInfo m_previewInfo;
+#endif
 
 public:
     bool m_passImage;

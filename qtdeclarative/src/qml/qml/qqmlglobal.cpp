@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -33,6 +33,7 @@
 
 #include <private/qqmlglobal_p.h>
 
+#include <QtQml/qqmlengine.h>
 #include <QtCore/qvariant.h>
 #include <QtCore/qstringlist.h>
 #include <QtCore/qdebug.h>
@@ -50,14 +51,12 @@ QQmlValueTypeProvider::~QQmlValueTypeProvider()
     QQml_removeValueTypeProvider(this);
 }
 
-QQmlValueType *QQmlValueTypeProvider::createValueType(int type)
+const QMetaObject *QQmlValueTypeProvider::metaObjectForMetaType(int type)
 {
-    QQmlValueType *value = 0;
-
     QQmlValueTypeProvider *p = this;
     do {
-        if (p->create(type, value))
-            return value;
+        if (const QMetaObject *mo = p->getMetaObjectForMetaType(type))
+            return mo;
     } while ((p = p->next));
 
     return 0;
@@ -173,7 +172,7 @@ QVariant QQmlValueTypeProvider::createVariantFromString(int type, const QString 
     return QVariant();
 }
 
-QVariant QQmlValueTypeProvider::createVariantFromJsObject(int type, QQmlV4Handle obj, QV8Engine *e, bool *ok)
+QVariant QQmlValueTypeProvider::createVariantFromJsObject(int type, QQmlV4Handle obj, QV4::ExecutionEngine *e, bool *ok)
 {
     QVariant v;
 
@@ -245,7 +244,7 @@ bool QQmlValueTypeProvider::writeValueType(int type, const void *src, void *dst,
     return false;
 }
 
-bool QQmlValueTypeProvider::create(int, QQmlValueType *&) { return false; }
+const QMetaObject *QQmlValueTypeProvider::getMetaObjectForMetaType(int) { return 0; }
 bool QQmlValueTypeProvider::init(int, void *, size_t) { return false; }
 bool QQmlValueTypeProvider::destroy(int, void *, size_t) { return false; }
 bool QQmlValueTypeProvider::copy(int, const void *, void *, size_t) { return false; }
@@ -254,7 +253,7 @@ bool QQmlValueTypeProvider::createFromString(int, const QString &, void *, size_
 bool QQmlValueTypeProvider::createStringFrom(int, const void *, QString *) { return false; }
 bool QQmlValueTypeProvider::variantFromString(const QString &, QVariant *) { return false; }
 bool QQmlValueTypeProvider::variantFromString(int, const QString &, QVariant *) { return false; }
-bool QQmlValueTypeProvider::variantFromJsObject(int, QQmlV4Handle, QV8Engine *, QVariant *) { return false; }
+bool QQmlValueTypeProvider::variantFromJsObject(int, QQmlV4Handle, QV4::ExecutionEngine *, QVariant *) { return false; }
 bool QQmlValueTypeProvider::equal(int, const void *, const void *, size_t) { return false; }
 bool QQmlValueTypeProvider::store(int, const void *, void *, size_t) { return false; }
 bool QQmlValueTypeProvider::read(int, const void *, size_t, int, void *) { return false; }
@@ -318,6 +317,7 @@ QVariant QQmlColorProvider::colorFromString(const QString &, bool *ok) { if (ok)
 unsigned QQmlColorProvider::rgbaFromString(const QString &, bool *ok) { if (ok) *ok = false; return 0; }
 QVariant QQmlColorProvider::fromRgbF(double, double, double, double) { return QVariant(); }
 QVariant QQmlColorProvider::fromHslF(double, double, double, double) { return QVariant(); }
+QVariant QQmlColorProvider::fromHsvF(double, double, double, double) { return QVariant(); }
 QVariant QQmlColorProvider::lighter(const QVariant &, qreal) { return QVariant(); }
 QVariant QQmlColorProvider::darker(const QVariant &, qreal) { return QVariant(); }
 QVariant QQmlColorProvider::tint(const QVariant &, const QVariant &) { return QVariant(); }
@@ -360,9 +360,18 @@ QObject *QQmlGuiProvider::inputMethod()
     // We don't have any input method code by default
     QObject *o = new QObject();
     o->setObjectName(QString::fromLatin1("No inputMethod available"));
+    QQmlEngine::setObjectOwnership(o, QQmlEngine::JavaScriptOwnership);
     return o;
 }
 #endif
+
+QObject *QQmlGuiProvider::styleHints()
+{
+    QObject *o = new QObject();
+    o->setObjectName(QString::fromLatin1("No styleHints available"));
+    QQmlEngine::setObjectOwnership(o, QQmlEngine::JavaScriptOwnership);
+    return o;
+}
 
 static QQmlGuiProvider *guiProvider = 0;
 

@@ -1,49 +1,45 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtLocation module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL21$
+** $QT_BEGIN_LICENSE:LGPL3$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 or version 3 as published by the Free
-** Software Foundation and appearing in the file LICENSE.LGPLv21 and
-** LICENSE.LGPLv3 included in the packaging of this file. Please review the
-** following information to ensure the GNU Lesser General Public License
-** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
-** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPLv3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** GNU General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU
+** General Public License version 2.0 or later as published by the Free
+** Software Foundation and appearing in the file LICENSE.GPL included in
+** the packaging of this file. Please review the following information to
+** ensure the GNU General Public License version 2.0 requirements will be
+** met: http://www.gnu.org/licenses/gpl-2.0.html.
 **
 ** $QT_END_LICENSE$
-**
-** This file is part of the Nokia services plugin for the Maps and
-** Navigation API.  The use of these services, whether by use of the
-** plugin or by other means, is governed by the terms and conditions
-** described by the file NOKIA_TERMS_AND_CONDITIONS.txt in
-** this package, located in the directory containing the Nokia services
-** plugin source code.
 **
 ****************************************************************************/
 
 #include "qplacemanagerengine_nokiav2.h"
 
-#include "placesv2/qplacecategoriesreplyimpl.h"
+#include "placesv2/qplacecategoriesreplyhere.h"
 #include "placesv2/qplacecontentreplyimpl.h"
 #include "placesv2/qplacesearchsuggestionreplyimpl.h"
-#include "placesv2/qplacesearchreplyimpl.h"
+#include "placesv2/qplacesearchreplyhere.h"
 #include "placesv2/qplacedetailsreplyimpl.h"
 #include "placesv2/qplaceidreplyimpl.h"
 #include "qgeonetworkaccessmanager.h"
@@ -76,11 +72,20 @@ static const char FIXED_CATEGORIES_string[] =
     "leisure-outdoor\0"
     "administrative-areas-buildings\0"
     "natural-geographical\0"
+    "petrol-station\0"
+    "atm-bank-exchange\0"
+    "toilet-rest-area\0"
+    "hospital-health-care-facility\0"
+    "eat-drink|restaurant\0" // subcategories always start after relative parent category
+    "eat-drink|coffee-tea\0"
+    "eat-drink|snacks-fast-food\0"
+    "transport|airport"
     "\0";
 
 static const int FIXED_CATEGORIES_indices[] = {
        0,   10,   20,   35,   45,   59,   68,   84,
-     115,   -1
+     115,  136,  151,  169,  186,  216,  237,  258,
+     285,   -1
 };
 
 static const char * const NokiaIcon = "nokiaIcon";
@@ -195,15 +200,15 @@ QPlaceManagerEngineNokiaV2::QPlaceManagerEngineNokiaV2(
     QString *errorString)
     : QPlaceManagerEngine(parameters)
     , m_manager(networkManager)
-    , m_uriProvider(new QGeoUriProvider(this, parameters, "places.host", PLACES_HOST, PLACES_HOST_CN))
+    , m_uriProvider(new QGeoUriProvider(this, parameters, QStringLiteral("here.places.host"), PLACES_HOST, PLACES_HOST_CN))
 {
     Q_ASSERT(networkManager);
     m_manager->setParent(this);
 
     m_locales.append(QLocale());
 
-    m_appId = parameters.value(QStringLiteral("app_id")).toString();
-    m_appCode = parameters.value(QStringLiteral("token")).toString();
+    m_appId = parameters.value(QStringLiteral("here.app_id")).toString();
+    m_appCode = parameters.value(QStringLiteral("here.token")).toString();
 
     m_theme = parameters.value(IconThemeKey, QString()).toString();
 
@@ -216,7 +221,7 @@ QPlaceManagerEngineNokiaV2::QPlaceManagerEngineNokiaV2(
 
         if (!dataLocations.isEmpty() && !dataLocations.first().isEmpty()) {
             m_localDataPath = dataLocations.first()
-                                + QStringLiteral("/nokia/qtlocation/data");
+                                + QStringLiteral("/here/qtlocation/data");
         }
     }
 
@@ -329,27 +334,15 @@ QPlaceContentReply *QPlaceManagerEngineNokiaV2::getPlaceContent(const QPlaceCont
 static bool addAtForBoundingArea(const QGeoShape &area,
                                  QUrlQuery *queryItems)
 {
-    QGeoCoordinate center;
-    switch (area.type()) {
-    case QGeoShape::RectangleType:
-        center = QGeoRectangle(area).center();
-        break;
-    case QGeoShape::CircleType:
-        center = QGeoCircle(area).center();
-        break;
-    case QGeoShape::UnknownType:
-        break;
-    }
-
-    if (!center.isValid()) {
+    QGeoCoordinate center = area.center();
+    if (!center.isValid())
         return false;
-    } else {
-        queryItems->addQueryItem(QStringLiteral("at"),
-                                 QString::number(center.latitude()) +
-                                 QLatin1Char(',') +
-                                 QString::number(center.longitude()));
-        return true;
-    }
+
+    queryItems->addQueryItem(QStringLiteral("at"),
+                             QString::number(center.latitude()) +
+                             QLatin1Char(',') +
+                             QString::number(center.longitude()));
+    return true;
 }
 
 QPlaceSearchReply *QPlaceManagerEngineNokiaV2::search(const QPlaceSearchRequest &query)
@@ -368,7 +361,7 @@ QPlaceSearchReply *QPlaceManagerEngineNokiaV2::search(const QPlaceSearchRequest 
                        || query.searchArea().type() != QGeoShape::UnknownType);
 
     if (unsupported) {
-        QPlaceSearchReplyImpl *reply = new QPlaceSearchReplyImpl(query, 0, this);
+        QPlaceSearchReplyHere *reply = new QPlaceSearchReplyHere(query, 0, this);
         connect(reply, SIGNAL(finished()), this, SLOT(replyFinished()));
         connect(reply, SIGNAL(error(QPlaceReply::Error,QString)),
                 this, SLOT(replyError(QPlaceReply::Error,QString)));
@@ -384,7 +377,7 @@ QPlaceSearchReply *QPlaceManagerEngineNokiaV2::search(const QPlaceSearchRequest 
     // searches, which do not need search centers.
     if (query.recommendationId().isEmpty() && !query.searchContext().isValid()) {
         if (!addAtForBoundingArea(query.searchArea(), &queryItems)) {
-            QPlaceSearchReplyImpl *reply = new QPlaceSearchReplyImpl(query, 0, this);
+            QPlaceSearchReplyHere *reply = new QPlaceSearchReplyHere(query, 0, this);
             connect(reply, SIGNAL(finished()), this, SLOT(replyFinished()));
             connect(reply, SIGNAL(error(QPlaceReply::Error,QString)),
                     this, SLOT(replyError(QPlaceReply::Error,QString)));
@@ -430,7 +423,7 @@ QPlaceSearchReply *QPlaceManagerEngineNokiaV2::search(const QPlaceSearchRequest 
 
         QNetworkReply *networkReply = sendRequest(requestUrl);
 
-        QPlaceSearchReplyImpl *reply = new QPlaceSearchReplyImpl(query, networkReply, this);
+        QPlaceSearchReplyHere *reply = new QPlaceSearchReplyHere(query, networkReply, this);
         connect(reply, SIGNAL(finished()), this, SLOT(replyFinished()));
         connect(reply, SIGNAL(error(QPlaceReply::Error,QString)),
                 this, SLOT(replyError(QPlaceReply::Error,QString)));
@@ -474,7 +467,7 @@ QPlaceSearchReply *QPlaceManagerEngineNokiaV2::search(const QPlaceSearchRequest 
         networkReply = sendRequest(requestUrl);
     }
 
-    QPlaceSearchReplyImpl *reply = new QPlaceSearchReplyImpl(query, networkReply, this);
+    QPlaceSearchReplyHere *reply = new QPlaceSearchReplyHere(query, networkReply, this);
     connect(reply, SIGNAL(finished()), this, SLOT(replyFinished()));
     connect(reply, SIGNAL(error(QPlaceReply::Error,QString)),
             this, SLOT(replyError(QPlaceReply::Error,QString)));
@@ -604,11 +597,30 @@ QPlaceReply *QPlaceManagerEngineNokiaV2::initializeCategories()
             const QString id = QString::fromLatin1(FIXED_CATEGORIES_string +
                                                    FIXED_CATEGORIES_indices[i]);
 
-            PlaceCategoryNode node;
-            node.category.setCategoryId(id);
+            int subCatDivider = id.indexOf(QChar('|'));
+            if (subCatDivider >= 0) {
+                // found a sub category
+                const QString subCategoryId = id.mid(subCatDivider+1);
+                const QString parentCategoryId = id.left(subCatDivider);
 
-            m_tempTree.insert(id, node);
-            rootNode.childIds.append(id);
+                if (m_tempTree.contains(parentCategoryId)) {
+                    PlaceCategoryNode node;
+                    node.category.setCategoryId(subCategoryId);
+                    node.parentId = parentCategoryId;
+
+                    // find parent
+                    PlaceCategoryNode &parent = m_tempTree[parentCategoryId];
+                    parent.childIds.append(subCategoryId);
+                    m_tempTree.insert(subCategoryId, node);
+                }
+
+            } else {
+                PlaceCategoryNode node;
+                node.category.setCategoryId(id);
+
+                m_tempTree.insert(id, node);
+                rootNode.childIds.append(id);
+            }
         }
 
         m_tempTree.insert(QString(), rootNode);
@@ -629,7 +641,7 @@ QPlaceReply *QPlaceManagerEngineNokiaV2::initializeCategories()
         m_categoryRequests.insert(id, networkReply);
     }
 
-    QPlaceCategoriesReplyImpl *reply = new QPlaceCategoriesReplyImpl(this);
+    QPlaceCategoriesReplyHere *reply = new QPlaceCategoriesReplyHere(this);
     connect(reply, SIGNAL(finished()), this, SLOT(replyFinished()));
     connect(reply, SIGNAL(error(QPlaceReply::Error,QString)),
             this, SLOT(replyError(QPlaceReply::Error,QString)));

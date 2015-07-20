@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Designer of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -108,7 +108,7 @@ class DesignerZoomProxyWidget : public ZoomProxyWidget  {
 public:
     DesignerZoomProxyWidget(QGraphicsItem *parent = 0, Qt::WindowFlags wFlags = 0);
 protected:
-    virtual QSizeF sizeHint(Qt::SizeHint which, const QSizeF & constraint = QSizeF() ) const;
+    QSizeF sizeHint(Qt::SizeHint which, const QSizeF & constraint = QSizeF() ) const Q_DECL_OVERRIDE;
 };
 
 DesignerZoomProxyWidget::DesignerZoomProxyWidget(QGraphicsItem *parent, Qt::WindowFlags wFlags) :
@@ -129,7 +129,7 @@ class DesignerZoomWidget : public ZoomWidget {
 public:
     DesignerZoomWidget(QWidget *parent = 0);
 private:
-    virtual QGraphicsProxyWidget *createProxyWidget(QGraphicsItem *parent = 0, Qt::WindowFlags wFlags = 0) const;
+    QGraphicsProxyWidget *createProxyWidget(QGraphicsItem *parent = 0, Qt::WindowFlags wFlags = 0) const Q_DECL_OVERRIDE;
 };
 
 DesignerZoomWidget::DesignerZoomWidget(QWidget *parent) :
@@ -333,7 +333,7 @@ class ZoomablePreviewDeviceSkin : public PreviewDeviceSkin
     Q_OBJECT
 public:
     explicit ZoomablePreviewDeviceSkin(const DeviceSkinParameters &parameters, QWidget *parent);
-    virtual void setPreview(QWidget *w);
+    void setPreview(QWidget *w) Q_DECL_OVERRIDE;
 
     int zoomPercent() const; // Device Skins have a double 'zoom' property
 
@@ -344,9 +344,9 @@ signals:
     void zoomPercentChanged(int);
 
 protected:
-    virtual void populateContextMenu(QMenu *m);
-    virtual QMatrix skinTransform() const;
-    virtual void fitWidget(const QSize &size);
+    void populateContextMenu(QMenu *m) Q_DECL_OVERRIDE;
+    QMatrix skinTransform() const Q_DECL_OVERRIDE;
+    void fitWidget(const QSize &size) Q_DECL_OVERRIDE;
 
 private:
     ZoomMenu *m_zoomMenu;

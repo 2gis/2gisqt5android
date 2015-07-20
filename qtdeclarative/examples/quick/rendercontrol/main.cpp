@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the examples of the Qt Toolkit.
 **
@@ -17,8 +17,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -39,13 +39,24 @@
 ****************************************************************************/
 
 #include <QGuiApplication>
-#include "window.h"
+#include "window_singlethreaded.h"
+#include "window_multithreaded.h"
 
 int main(int argc, char **argv)
 {
     QGuiApplication app(argc, argv);
-    Window window;
-    window.resize(1024, 768);
-    window.show();
+
+    QScopedPointer<QWindow> window;
+    if (QCoreApplication::arguments().contains(QLatin1String("--threaded"))) {
+        qWarning("Using separate Qt Quick render thread");
+        window.reset(new WindowMultiThreaded);
+    } else {
+        qWarning("Using single-threaded rendering");
+        window.reset(new WindowSingleThreaded);
+    }
+
+    window->resize(1024, 768);
+    window->show();
+
     return app.exec();
 }

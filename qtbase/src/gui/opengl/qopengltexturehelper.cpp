@@ -1,7 +1,7 @@
 /****************************************************************************
 **
 ** Copyright (C) 2013 Klaralvdalens Datakonsult AB (KDAB).
-** Contact: http://www.qt-project.org/legal
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -40,8 +40,16 @@ QT_BEGIN_NAMESPACE
 
 QOpenGLTextureHelper::QOpenGLTextureHelper(QOpenGLContext *context)
 {
-    // Resolve EXT_direct_state_access entry points if present
-    if (!context->isOpenGLES()
+    // Resolve EXT_direct_state_access entry points if present.
+
+    // However, disable it on some systems where DSA is known to be unreliable.
+    bool allowDSA = true;
+    const char *renderer = reinterpret_cast<const char *>(context->functions()->glGetString(GL_RENDERER));
+    // QTBUG-40653, QTBUG-44988
+    if (renderer && strstr(renderer, "AMD Radeon HD"))
+        allowDSA = false;
+
+    if (allowDSA && !context->isOpenGLES()
         && context->hasExtension(QByteArrayLiteral("GL_EXT_direct_state_access"))) {
         TextureParameteriEXT = reinterpret_cast<void (QOPENGLF_APIENTRYP)(GLuint , GLenum , GLenum , GLint )>(context->getProcAddress(QByteArrayLiteral("glTextureParameteriEXT")));
         TextureParameterivEXT = reinterpret_cast<void (QOPENGLF_APIENTRYP)(GLuint , GLenum , GLenum , const GLint *)>(context->getProcAddress(QByteArrayLiteral("glTextureParameterivEXT")));
@@ -171,7 +179,7 @@ QOpenGLTextureHelper::QOpenGLTextureHelper(QOpenGLContext *context)
     GetTexParameteriv = ::glGetTexParameteriv;
     GetTexParameterfv = ::glGetTexParameterfv;
     GetTexImage = 0;
-    TexImage2D = ::glTexImage2D;
+    TexImage2D = reinterpret_cast<void (QOPENGLF_APIENTRYP)(GLenum , GLint , GLint , GLsizei , GLsizei , GLint , GLenum , GLenum , const GLvoid *)>(::glTexImage2D);
     TexImage1D = 0;
     TexParameteriv = ::glTexParameteriv;
     TexParameteri = ::glTexParameteri;
@@ -201,8 +209,16 @@ QOpenGLTextureHelper::QOpenGLTextureHelper(QOpenGLContext *context)
     TexImage2DMultisample = 0;
 
     // OpenGL 4.2
-    TexStorage3D = 0;
-    TexStorage2D = 0;
+    QOpenGLContext *ctx = QOpenGLContext::currentContext();
+    if (ctx->format().majorVersion() >= 3) {
+        // OpenGL ES 3.0+ has immutable storage for 2D and 3D at least.
+        QOpenGLES3Helper *es3 = static_cast<QOpenGLExtensions *>(ctx->functions())->gles3Helper();
+        TexStorage3D = es3->TexStorage3D;
+        TexStorage2D = es3->TexStorage2D;
+    } else {
+        TexStorage3D = 0;
+        TexStorage2D = 0;
+    }
     TexStorage1D = 0;
 
     // OpenGL 4.3

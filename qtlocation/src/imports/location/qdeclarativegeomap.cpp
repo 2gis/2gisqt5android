@@ -1,67 +1,55 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtLocation module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL21$
+** $QT_BEGIN_LICENSE:LGPL3$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 or version 3 as published by the Free
-** Software Foundation and appearing in the file LICENSE.LGPLv21 and
-** LICENSE.LGPLv3 included in the packaging of this file. Please review the
-** following information to ensure the GNU Lesser General Public License
-** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
-** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPLv3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** GNU General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU
+** General Public License version 2.0 or later as published by the Free
+** Software Foundation and appearing in the file LICENSE.GPL included in
+** the packaging of this file. Please review the following information to
+** ensure the GNU General Public License version 2.0 requirements will be
+** met: http://www.gnu.org/licenses/gpl-2.0.html.
 **
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
 
 #include "qdeclarativegeomap_p.h"
-#include "error_messages.h"
-
-#include "qdeclarativecirclemapitem_p.h"
 #include "qdeclarativegeomapquickitem_p.h"
+#include "qdeclarativegeomapcopyrightsnotice_p.h"
 #include "qdeclarativegeoserviceprovider_p.h"
-#include <QtCore/QCoreApplication>
-#include <QtCore/qnumeric.h>
-#include <QThread>
-
-#include "qgeotilecache_p.h"
-#include "qgeocameradata_p.h"
-#include "qgeocameracapabilities_p.h"
+#include "qdeclarativegeomaptype_p.h"
 #include "qgeomapcontroller_p.h"
-#include <cmath>
-
-#include <QtPositioning/QGeoCoordinate>
+#include "qgeomappingmanager_p.h"
+#include "qgeocameracapabilities_p.h"
+#include "qgeomap_p.h"
 #include <QtPositioning/QGeoCircle>
 #include <QtPositioning/QGeoRectangle>
-#include <QtLocation/QGeoServiceProvider>
-#include <QtLocation/private/qgeomappingmanager_p.h>
-#include "qdoublevector2d_p.h"
-
-#include <QPointF>
-#include <QtQml/QQmlContext>
-#include <QtQml/qqmlinfo.h>
-#include <QModelIndex>
 #include <QtQuick/QQuickWindow>
 #include <QtQuick/QSGSimpleRectNode>
-#include <QtGui/QGuiApplication>
-#include <QCoreApplication>
+#include <QtQuick/private/qquickwindow_p.h>
+#include <QtQml/qqmlinfo.h>
+#include <cmath>
 
 QT_BEGIN_NAMESPACE
 
@@ -102,7 +90,7 @@ QT_BEGIN_NAMESPACE
     When the map is displayed, each possible geographic coordinate that is
     visible will map to some pixel X and Y coordinate on the screen. To perform
     conversions between these two, Map provides the \l toCoordinate and
-    \l toScreenPosition functions, which are of general utility.
+    \l fromCoordinate functions, which are of general utility.
 
     \section2 Map Objects
 
@@ -173,44 +161,52 @@ QT_BEGIN_NAMESPACE
     \image api-map.png
 */
 
+/*!
+    \qmlsignal QtLocation::Map::copyrightLinkActivated(string link)
+
+    This signal is emitted when the user clicks on a \a link in the copyright notice. The
+    application should open the link in a browser or display its contents to the user.
+*/
+
 QDeclarativeGeoMap::QDeclarativeGeoMap(QQuickItem *parent)
         : QQuickItem(parent),
-        plugin_(0),
-        serviceProvider_(0),
-        mappingManager_(0),
-        zoomLevel_(8.0),
-        center_(51.5073,-0.1277), //London city center
-        activeMapType_(0),
-        componentCompleted_(false),
-        mappingManagerInitialized_(false),
-        touchTimer_(-1),
-        map_(0)
+        m_plugin(0),
+        m_serviceProvider(0),
+        m_mappingManager(0),
+        m_center(51.5073,-0.1277), //London city center
+        m_activeMapType(0),
+        m_gestureArea(0),
+        m_map(0),
+        m_error(QGeoServiceProvider::NoError),
+        m_zoomLevel(8.0),
+        m_componentCompleted(false),
+        m_mappingManagerInitialized(false),
+        m_pendingFitViewport(false)
 {
-    QLOC_TRACE0;
     setAcceptHoverEvents(false);
-    setAcceptedMouseButtons(Qt::LeftButton | Qt::MidButton | Qt::RightButton);
+    setAcceptedMouseButtons(Qt::LeftButton);
     setFlags(QQuickItem::ItemHasContents | QQuickItem::ItemClipsChildrenToShape);
     setFiltersChildMouseEvents(true);
 
     connect(this, SIGNAL(childrenChanged()), this, SLOT(onMapChildrenChanged()), Qt::QueuedConnection);
 
     // Create internal flickable and pinch area.
-    gestureArea_ = new QDeclarativeGeoMapGestureArea(this, this);
+    m_gestureArea = new QDeclarativeGeoMapGestureArea(this, this);
 }
 
 QDeclarativeGeoMap::~QDeclarativeGeoMap()
 {
-    if (!mapViews_.isEmpty())
-        qDeleteAll(mapViews_);
+    if (!m_mapViews.isEmpty())
+        qDeleteAll(m_mapViews);
     // remove any map items associations
-    for (int i = 0; i < mapItems_.count(); ++i) {
-        if (mapItems_.at(i))
-            mapItems_.at(i).data()->setMap(0,0);
+    for (int i = 0; i < m_mapItems.count(); ++i) {
+        if (m_mapItems.at(i))
+            m_mapItems.at(i).data()->setMap(0,0);
     }
-    mapItems_.clear();
+    m_mapItems.clear();
 
-    delete copyrightsWPtr_.data();
-    copyrightsWPtr_.clear();
+    delete m_copyrights.data();
+    m_copyrights.clear();
 }
 
 /*!
@@ -218,7 +214,7 @@ QDeclarativeGeoMap::~QDeclarativeGeoMap()
 */
 void QDeclarativeGeoMap::onMapChildrenChanged()
 {
-    if (!componentCompleted_)
+    if (!m_componentCompleted || !m_mappingManagerInitialized)
         return;
 
     int maxChildZ = 0;
@@ -238,18 +234,20 @@ void QDeclarativeGeoMap::onMapChildrenChanged()
         }
     }
 
-    QDeclarativeGeoMapCopyrightNotice *copyrights = copyrightsWPtr_.data();
+    QDeclarativeGeoMapCopyrightNotice *copyrights = m_copyrights.data();
     // if copyrights object not found within the map's children
     if (!foundCopyrights) {
         // if copyrights object was deleted!
         if (!copyrights) {
             // create a new one and set its parent, re-assign it to the weak pointer, then connect the copyrights-change signal
-            copyrightsWPtr_ = new QDeclarativeGeoMapCopyrightNotice(this);
-            copyrights = copyrightsWPtr_.data();
-            connect(map_,
-                    SIGNAL(copyrightsChanged(QImage,QPoint)),
-                    copyrights,
-                    SLOT(copyrightsChanged(QImage,QPoint)));
+            m_copyrights = new QDeclarativeGeoMapCopyrightNotice(this);
+            copyrights = m_copyrights.data();
+            connect(m_map, SIGNAL(copyrightsChanged(QImage)),
+                    copyrights, SLOT(copyrightsChanged(QImage)));
+            connect(m_map, SIGNAL(copyrightsChanged(QString)),
+                    copyrights, SLOT(copyrightsChanged(QString)));
+            connect(copyrights, SIGNAL(linkActivated(QString)),
+                    this, SIGNAL(copyrightLinkActivated(QString)));
         } else {
             // just re-set its parent.
             copyrights->setParent(this);
@@ -260,22 +258,34 @@ void QDeclarativeGeoMap::onMapChildrenChanged()
     copyrights->setCopyrightsZ(maxChildZ + 1);
 }
 
+
+void QDeclarativeGeoMap::setError(QGeoServiceProvider::Error error, const QString &errorString)
+{
+    if (m_error == error && m_errorString == errorString)
+        return;
+    m_error = error;
+    m_errorString = errorString;
+    emit errorChanged();
+}
+
 /*!
     \internal
 */
 void QDeclarativeGeoMap::pluginReady()
 {
-    serviceProvider_ = plugin_->sharedGeoServiceProvider();
-    mappingManager_ = serviceProvider_->mappingManager();
+    m_serviceProvider = m_plugin->sharedGeoServiceProvider();
+    m_mappingManager = m_serviceProvider->mappingManager();
 
-    if (!mappingManager_ || serviceProvider_->error() != QGeoServiceProvider::NoError) {
+    setError(m_serviceProvider->error(), m_serviceProvider->errorString());
+
+    if (!m_mappingManager || m_serviceProvider->error() != QGeoServiceProvider::NoError) {
         qmlInfo(this) << QStringLiteral("Error: Plugin does not support mapping.\nError message:")
-                      << serviceProvider_->errorString();
+                      << m_serviceProvider->errorString();
         return;
     }
 
-    if (!mappingManager_->isInitialized())
-        connect(mappingManager_, SIGNAL(initialized()), this, SLOT(mappingManagerInitialized()));
+    if (!m_mappingManager->isInitialized())
+        connect(m_mappingManager, SIGNAL(initialized()), this, SLOT(mappingManagerInitialized()));
     else
         mappingManagerInitialized();
 
@@ -288,9 +298,7 @@ void QDeclarativeGeoMap::pluginReady()
 */
 void QDeclarativeGeoMap::componentComplete()
 {
-    QLOC_TRACE0;
-
-    componentCompleted_ = true;
+    m_componentCompleted = true;
     populateMap();
     QQuickItem::componentComplete();
 }
@@ -300,8 +308,10 @@ void QDeclarativeGeoMap::componentComplete()
 */
 void QDeclarativeGeoMap::mousePressEvent(QMouseEvent *event)
 {
-    if (!mouseEvent(event))
-        event->ignore();
+    if (isInteractive())
+        m_gestureArea->handleMousePressEvent(event);
+    else
+        QQuickItem::mousePressEvent(event);
 }
 
 /*!
@@ -309,8 +319,10 @@ void QDeclarativeGeoMap::mousePressEvent(QMouseEvent *event)
 */
 void QDeclarativeGeoMap::mouseMoveEvent(QMouseEvent *event)
 {
-    if (!mouseEvent(event))
-        event->ignore();
+    if (isInteractive())
+        m_gestureArea->handleMouseMoveEvent(event);
+    else
+        QQuickItem::mouseMoveEvent(event);
 }
 
 /*!
@@ -318,30 +330,32 @@ void QDeclarativeGeoMap::mouseMoveEvent(QMouseEvent *event)
 */
 void QDeclarativeGeoMap::mouseReleaseEvent(QMouseEvent *event)
 {
-    if (!mouseEvent(event))
-        event->ignore();
+    if (isInteractive()) {
+        m_gestureArea->handleMouseReleaseEvent(event);
+        ungrabMouse();
+    } else {
+        QQuickItem::mouseReleaseEvent(event);
+    }
 }
 
 /*!
     \internal
-    returns whether flickable used the event
 */
-bool QDeclarativeGeoMap::mouseEvent(QMouseEvent *event)
+void QDeclarativeGeoMap::mouseUngrabEvent()
 {
-    if (!mappingManagerInitialized_)
-        return false;
-    switch (event->type()) {
-    case QEvent::MouseButtonPress:
-        return gestureArea_->mousePressEvent(event);
-    case QEvent::MouseButtonRelease:
-        return gestureArea_->mouseReleaseEvent(event);
-    case QEvent::MouseMove:
-        return gestureArea_->mouseMoveEvent(event);
-    default:
-        return false;
-    }
+    if (isInteractive())
+        m_gestureArea->handleMouseUngrabEvent();
+    else
+        QQuickItem::mouseUngrabEvent();
 }
 
+void QDeclarativeGeoMap::touchUngrabEvent()
+{
+    if (isInteractive())
+        m_gestureArea->handleTouchUngrabEvent();
+    else
+        QQuickItem::touchUngrabEvent();
+}
 
 /*!
     \qmlproperty MapGestureArea QtLocation::Map::gesture
@@ -353,7 +367,7 @@ bool QDeclarativeGeoMap::mouseEvent(QMouseEvent *event)
 
 QDeclarativeGeoMapGestureArea *QDeclarativeGeoMap::gesture()
 {
-    return gestureArea_;
+    return m_gestureArea;
 }
 
 /*!
@@ -366,7 +380,7 @@ void QDeclarativeGeoMap::populateMap()
         // dispatch items appropriately
         QDeclarativeGeoMapItemView *mapView = qobject_cast<QDeclarativeGeoMapItemView *>(kids.at(i));
         if (mapView) {
-            mapViews_.append(mapView);
+            m_mapViews.append(mapView);
             setupMapView(mapView);
             continue;
         }
@@ -383,7 +397,7 @@ void QDeclarativeGeoMap::populateMap()
 void QDeclarativeGeoMap::setupMapView(QDeclarativeGeoMapItemView *view)
 {
     Q_UNUSED(view)
-    view->setMapData(this);
+    view->setMap(this);
     view->repopulate();
 }
 
@@ -392,7 +406,7 @@ void QDeclarativeGeoMap::setupMapView(QDeclarativeGeoMapItemView *view)
  */
 QSGNode *QDeclarativeGeoMap::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData *)
 {
-    if (!map_) {
+    if (!m_map) {
         delete oldNode;
         return 0;
     }
@@ -404,7 +418,7 @@ QSGNode *QDeclarativeGeoMap::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeDa
         root->setRect(boundingRect());
 
     QSGNode *content = root->childCount() ? root->firstChild() : 0;
-    content = map_->updateSceneGraph(content, window());
+    content = m_map->updateSceneGraph(content, window());
     if (content && root->childCount() == 0)
         root->appendChildNode(content);
 
@@ -423,17 +437,17 @@ QSGNode *QDeclarativeGeoMap::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeDa
 
 void QDeclarativeGeoMap::setPlugin(QDeclarativeGeoServiceProvider *plugin)
 {
-    if (plugin_) {
+    if (m_plugin) {
         qmlInfo(this) << QStringLiteral("Plugin is a write-once property, and cannot be set again.");
         return;
     }
-    plugin_ = plugin;
-    emit pluginChanged(plugin_);
+    m_plugin = plugin;
+    emit pluginChanged(m_plugin);
 
-    if (plugin_->isAttached()) {
+    if (m_plugin->isAttached()) {
         pluginReady();
     } else {
-        connect(plugin_, SIGNAL(attached()),
+        connect(m_plugin, SIGNAL(attached()),
                 this, SLOT(pluginReady()));
     }
 }
@@ -444,61 +458,66 @@ void QDeclarativeGeoMap::setPlugin(QDeclarativeGeoServiceProvider *plugin)
 */
 void QDeclarativeGeoMap::mappingManagerInitialized()
 {
-    mappingManagerInitialized_ = true;
+    m_mappingManagerInitialized = true;
 
-    map_ = mappingManager_->createMap(this);
-    gestureArea_->setMap(map_);
+    m_map = m_mappingManager->createMap(this);
+    m_gestureArea->setMap(m_map);
+
+    // once mappingManagerInitilized_ is set zoomLevel() returns the default initialised
+    // zoom level of the map controller. Overwrite it here to whatever the user chose.
+    m_map->mapController()->setZoom(m_zoomLevel);
 
     //The zoom level limits are only restricted by the plugins values, if the user has set a more
     //strict zoom level limit before initialization nothing is done here.
-    if (mappingManager_->cameraCapabilities().minimumZoomLevel() > gestureArea_->minimumZoomLevel())
-        setMinimumZoomLevel(mappingManager_->cameraCapabilities().minimumZoomLevel());
+    if (m_mappingManager->cameraCapabilities().minimumZoomLevel() > m_gestureArea->minimumZoomLevel())
+        setMinimumZoomLevel(m_mappingManager->cameraCapabilities().minimumZoomLevel());
 
-    if (gestureArea_->maximumZoomLevel() < 0
-            || mappingManager_->cameraCapabilities().maximumZoomLevel() < gestureArea_->maximumZoomLevel())
-        setMaximumZoomLevel(mappingManager_->cameraCapabilities().maximumZoomLevel());
+    if (m_gestureArea->maximumZoomLevel() < 0
+            || m_mappingManager->cameraCapabilities().maximumZoomLevel() < m_gestureArea->maximumZoomLevel())
+        setMaximumZoomLevel(m_mappingManager->cameraCapabilities().maximumZoomLevel());
 
-    map_->setActiveMapType(QGeoMapType());
+    m_map->setActiveMapType(QGeoMapType());
 
-    copyrightsWPtr_ = new QDeclarativeGeoMapCopyrightNotice(this);
-    connect(map_,
-            SIGNAL(copyrightsChanged(QImage,QPoint)),
-            copyrightsWPtr_.data(),
-            SLOT(copyrightsChanged(QImage,QPoint)));
+    m_copyrights = new QDeclarativeGeoMapCopyrightNotice(this);
+    connect(m_map, SIGNAL(copyrightsChanged(QImage)),
+            m_copyrights.data(), SLOT(copyrightsChanged(QImage)));
+    connect(m_map, SIGNAL(copyrightsChanged(QString)),
+            m_copyrights.data(), SLOT(copyrightsChanged(QString)));
+    connect(m_copyrights.data(), SIGNAL(linkActivated(QString)),
+            this, SIGNAL(copyrightLinkActivated(QString)));
 
-    connect(map_,
+    connect(m_map,
             SIGNAL(updateRequired()),
             this,
             SLOT(update()));
-    connect(map_->mapController(),
+    connect(m_map->mapController(),
             SIGNAL(centerChanged(QGeoCoordinate)),
             this,
             SIGNAL(centerChanged(QGeoCoordinate)));
-    connect(map_->mapController(),
+    connect(m_map->mapController(),
             SIGNAL(zoomChanged(qreal)),
             this,
             SLOT(mapZoomLevelChanged(qreal)));
 
-    map_->mapController()->setCenter(center_);
-    map_->mapController()->setZoom(zoomLevel_);
+    m_map->mapController()->setCenter(m_center);
 
-    QList<QGeoMapType> types = mappingManager_->supportedMapTypes();
+    QList<QGeoMapType> types = m_mappingManager->supportedMapTypes();
     for (int i = 0; i < types.size(); ++i) {
         QDeclarativeGeoMapType *type = new QDeclarativeGeoMapType(types[i], this);
-        supportedMapTypes_.append(type);
+        m_supportedMapTypes.append(type);
     }
 
-    if (!supportedMapTypes_.isEmpty()) {
-        QDeclarativeGeoMapType *type = supportedMapTypes_.at(0);
-        activeMapType_ = type;
-        map_->setActiveMapType(type->mapType());
+    if (!m_supportedMapTypes.isEmpty()) {
+        QDeclarativeGeoMapType *type = m_supportedMapTypes.at(0);
+        m_activeMapType = type;
+        m_map->setActiveMapType(type->mapType());
     }
 
     // Map tiles are built in this call
-    map_->resize(width(), height());
+    m_map->resize(width(), height());
     // This prefetches a buffer around the map
-    map_->cameraStopped();
-    map_->update();
+    m_map->prefetchData();
+    m_map->update();
 
     emit minimumZoomLevelChanged();
     emit maximumZoomLevelChanged();
@@ -507,9 +526,9 @@ void QDeclarativeGeoMap::mappingManagerInitialized()
 
     // Any map items that were added before the plugin was ready
     // need to have setMap called again
-    foreach (const QPointer<QDeclarativeGeoMapItemBase> &item, mapItems_) {
+    foreach (const QPointer<QDeclarativeGeoMapItemBase> &item, m_mapItems) {
         if (item)
-            item.data()->setMap(this, map_);
+            item.data()->setMap(this, m_map);
     }
 }
 
@@ -528,7 +547,7 @@ void QDeclarativeGeoMap::updateMapDisplay(const QRectF &target)
 */
 QDeclarativeGeoServiceProvider *QDeclarativeGeoMap::plugin() const
 {
-    return plugin_;
+    return m_plugin;
 }
 
 /*!
@@ -538,13 +557,16 @@ QDeclarativeGeoServiceProvider *QDeclarativeGeoMap::plugin() const
 */
 void QDeclarativeGeoMap::setMinimumZoomLevel(qreal minimumZoomLevel)
 {
-    if (gestureArea_ && minimumZoomLevel >= 0) {
-        if (mappingManagerInitialized_
-                && minimumZoomLevel < mappingManager_->cameraCapabilities().minimumZoomLevel()) {
-            minimumZoomLevel = mappingManager_->cameraCapabilities().minimumZoomLevel();
+    if (m_gestureArea && minimumZoomLevel >= 0) {
+        qreal oldMinimumZoomLevel = this->minimumZoomLevel();
+        if (m_mappingManagerInitialized
+                && minimumZoomLevel < m_mappingManager->cameraCapabilities().minimumZoomLevel()) {
+            minimumZoomLevel = m_mappingManager->cameraCapabilities().minimumZoomLevel();
         }
-        gestureArea_->setMinimumZoomLevel(minimumZoomLevel);
+        m_gestureArea->setMinimumZoomLevel(minimumZoomLevel);
         setZoomLevel(qBound<qreal>(minimumZoomLevel, zoomLevel(), maximumZoomLevel()));
+        if (oldMinimumZoomLevel != minimumZoomLevel)
+            emit minimumZoomLevelChanged();
     }
 }
 
@@ -559,10 +581,10 @@ void QDeclarativeGeoMap::setMinimumZoomLevel(qreal minimumZoomLevel)
 
 qreal QDeclarativeGeoMap::minimumZoomLevel() const
 {
-    if (gestureArea_->minimumZoomLevel() != -1)
-        return gestureArea_->minimumZoomLevel();
-    else if (mappingManager_ && mappingManagerInitialized_)
-        return mappingManager_->cameraCapabilities().minimumZoomLevel();
+    if (m_gestureArea->minimumZoomLevel() != -1)
+        return m_gestureArea->minimumZoomLevel();
+    else if (m_mappingManager && m_mappingManagerInitialized)
+        return m_mappingManager->cameraCapabilities().minimumZoomLevel();
     else
         return -1.0;
 }
@@ -574,13 +596,16 @@ qreal QDeclarativeGeoMap::minimumZoomLevel() const
 */
 void QDeclarativeGeoMap::setMaximumZoomLevel(qreal maximumZoomLevel)
 {
-    if (gestureArea_ && maximumZoomLevel >= 0) {
-        if (mappingManagerInitialized_
-                && maximumZoomLevel > mappingManager_->cameraCapabilities().maximumZoomLevel()) {
-            maximumZoomLevel = mappingManager_->cameraCapabilities().maximumZoomLevel();
+    if (m_gestureArea && maximumZoomLevel >= 0) {
+        qreal oldMaximumZoomLevel = this->maximumZoomLevel();
+        if (m_mappingManagerInitialized
+                && maximumZoomLevel > m_mappingManager->cameraCapabilities().maximumZoomLevel()) {
+            maximumZoomLevel = m_mappingManager->cameraCapabilities().maximumZoomLevel();
         }
-        gestureArea_->setMaximumZoomLevel(maximumZoomLevel);
+        m_gestureArea->setMaximumZoomLevel(maximumZoomLevel);
         setZoomLevel(qBound<qreal>(minimumZoomLevel(), zoomLevel(), maximumZoomLevel));
+        if (oldMaximumZoomLevel != maximumZoomLevel)
+            emit maximumZoomLevelChanged();
     }
 }
 
@@ -595,10 +620,10 @@ void QDeclarativeGeoMap::setMaximumZoomLevel(qreal maximumZoomLevel)
 
 qreal QDeclarativeGeoMap::maximumZoomLevel() const
 {
-    if (gestureArea_->maximumZoomLevel() != -1)
-        return gestureArea_->maximumZoomLevel();
-    else if (mappingManager_ && mappingManagerInitialized_)
-        return mappingManager_->cameraCapabilities().maximumZoomLevel();
+    if (m_gestureArea->maximumZoomLevel() != -1)
+        return m_gestureArea->maximumZoomLevel();
+    else if (m_mappingManager && m_mappingManagerInitialized)
+        return m_mappingManager->cameraCapabilities().maximumZoomLevel();
     else
         return -1.0;
 }
@@ -613,25 +638,25 @@ qreal QDeclarativeGeoMap::maximumZoomLevel() const
 */
 void QDeclarativeGeoMap::setZoomLevel(qreal zoomLevel)
 {
-    if (zoomLevel_ == zoomLevel || zoomLevel < 0)
+    if (m_zoomLevel == zoomLevel || zoomLevel < 0)
         return;
 
     if ((zoomLevel < minimumZoomLevel()
          || (maximumZoomLevel() >= 0 && zoomLevel > maximumZoomLevel())))
         return;
 
-    zoomLevel_ = zoomLevel;
-    if (mappingManagerInitialized_)
-        map_->mapController()->setZoom(zoomLevel_);
+    m_zoomLevel = zoomLevel;
+    if (m_mappingManagerInitialized)
+        m_map->mapController()->setZoom(m_zoomLevel);
     emit zoomLevelChanged(zoomLevel);
 }
 
 qreal QDeclarativeGeoMap::zoomLevel() const
 {
-    if (mappingManagerInitialized_)
-        return map_->mapController()->zoom();
+    if (m_mappingManagerInitialized)
+        return m_map->mapController()->zoom();
     else
-        return zoomLevel_;
+        return m_zoomLevel;
 }
 
 /*!
@@ -644,352 +669,92 @@ qreal QDeclarativeGeoMap::zoomLevel() const
 */
 void QDeclarativeGeoMap::setCenter(const QGeoCoordinate &center)
 {
-    if (!mappingManagerInitialized_ && center == center_)
+    if (!m_mappingManagerInitialized && center == m_center)
         return;
 
     if (!center.isValid())
         return;
 
-    center_ = center;
+    m_center = center;
 
-    if (center_.isValid() && mappingManagerInitialized_) {
-        map_->mapController()->setCenter(center_);
+    if (m_center.isValid() && m_mappingManagerInitialized) {
+        m_map->mapController()->setCenter(m_center);
         update();
     } else {
-        emit centerChanged(center_);
+        emit centerChanged(m_center);
     }
 }
 
 QGeoCoordinate QDeclarativeGeoMap::center() const
 {
-    if (mappingManagerInitialized_)
-        return map_->mapController()->center();
+    if (m_mappingManagerInitialized)
+        return m_map->mapController()->center();
     else
-        return center_;
+        return m_center;
 }
 
+
 /*!
-    \internal
+    \qmlproperty geoshape QtLocation::Map::visibleRegion
+
+    This property holds the region which occupies the viewport of
+    the map. The camera is positioned in the center of the shape, and
+    at the largest integral zoom level possible which allows the
+    whole shape to be visible on the screen. This implies that
+    reading this property back shortly after having been set the
+    returned area is equal or larger than the set area.
+
+    Setting this property implicitly changes the \l center and
+    \l zoomLevel of the map. Any previously set value to those
+    properties will be overridden.
+
+    This property does not provide any change notifications.
+
+    \since 5.5
 */
-void QDeclarativeGeoMap::mapZoomLevelChanged(qreal zoom)
+void QDeclarativeGeoMap::setVisibleRegion(const QGeoShape &shape)
 {
-    if (zoom == zoomLevel_)
+    if (shape == m_region)
         return;
-    zoomLevel_ = zoom;
-    emit zoomLevelChanged(zoomLevel_);
-}
 
-/*!
-    \qmlproperty list<MapType> QtLocation::Map::supportedMapTypes
-
-    This read-only property holds the set of \l{MapType}{map types} supported by this map.
-
-    \sa activeMapType
-*/
-QQmlListProperty<QDeclarativeGeoMapType> QDeclarativeGeoMap::supportedMapTypes()
-{
-    return QQmlListProperty<QDeclarativeGeoMapType>(this, supportedMapTypes_);
-}
-
-/*!
-    \qmlmethod QtLocation::Map::toCoordinate(QPointF screenPosition)
-
-    Returns the coordinate which corresponds to the screen position
-    \a screenPosition.
-
-    Returns an invalid coordinate if \a screenPosition is not within
-    the current viewport.
-*/
-
-QGeoCoordinate QDeclarativeGeoMap::toCoordinate(const QPointF &screenPosition) const
-{
-    if (map_)
-        return map_->screenPositionToCoordinate(QDoubleVector2D(screenPosition));
-    else
-        return QGeoCoordinate();
-}
-
-/*!
-\qmlmethod QtLocation::Map::toScreenPosition(coordinate coordinate)
-
-    Returns the screen position which corresponds to the coordinate
-    \a coordinate.
-
-    Returns an invalid QPointF if \a coordinate is not within the
-    current viewport.
-*/
-
-QPointF QDeclarativeGeoMap::toScreenPosition(const QGeoCoordinate &coordinate) const
-{
-    if (map_)
-        return map_->coordinateToScreenPosition(coordinate).toPointF();
-    else
-        return QPointF(qQNaN(), qQNaN());
-}
-
-/*!
-    \qmlmethod void QtLocation::Map::pan(int dx, int dy)
-
-    Starts panning the map by \a dx pixels along the x-axis and
-    by \a dy pixels along the y-axis.
-
-    Positive values for \a dx move the map right, negative values left.
-    Positive values for \a dy move the map down, negative values up.
-
-    During panning the \l center, and \l zoomLevel may change.
-*/
-void QDeclarativeGeoMap::pan(int dx, int dy)
-{
-    if (!mappingManagerInitialized_)
-        return;
-    map_->mapController()->pan(dx, dy);
-}
-
-
-/*!
-    \qmlmethod void QtLocation::Map::cameraStopped()
-
-    Optional hint that allows the map to prefetch during this idle period
-*/
-void QDeclarativeGeoMap::cameraStopped()
-{
-    if (!mappingManagerInitialized_)
-        return;
-    map_->cameraStopped();
-}
-
-/*!
-    \internal
-*/
-void QDeclarativeGeoMap::touchEvent(QTouchEvent *event)
-{
-    if (!mappingManagerInitialized_) {
-        event->ignore();
+    m_region = shape;
+    if (!shape.isValid()) {
+        // shape invalidated -> nothing to fit anymore
+        m_pendingFitViewport = false;
         return;
     }
-    QLOC_TRACE0;
-    event->accept();
-    gestureArea_->touchEvent(event);
-}
 
-/*!
-    \internal
-*/
-void QDeclarativeGeoMap::wheelEvent(QWheelEvent *event)
-{
-    QLOC_TRACE0;
-    event->accept();
-    gestureArea_->wheelEvent(event);
-    emit wheelAngleChanged(event->angleDelta());
-}
-
-/*!
-    \internal
-*/
-bool QDeclarativeGeoMap::childMouseEventFilter(QQuickItem *item, QEvent *event)
-{
-    Q_UNUSED(item)
-    QLOC_TRACE0;
-    switch (event->type()) {
-    case QEvent::MouseButtonPress:
-    case QEvent::MouseButtonRelease:
-    case QEvent::MouseMove:
-        if (item->keepMouseGrab())
-            return false;
-        if (!gestureArea_->filterMapChildMouseEvent(static_cast<QMouseEvent *>(event)))
-            return false;
-        grabMouse();
-        return true;
-    case QEvent::UngrabMouse:
-        return gestureArea_->filterMapChildMouseEvent(static_cast<QMouseEvent *>(event));
-    case QEvent::TouchBegin:
-    case QEvent::TouchUpdate:
-    case QEvent::TouchEnd:
-        if (item->keepMouseGrab())
-            return false;
-        if (!gestureArea_->filterMapChildTouchEvent(static_cast<QTouchEvent *>(event)))
-            return false;
-        grabMouse();
-        return true;
-    case QEvent::Wheel:
-        return gestureArea_->wheelEvent(static_cast<QWheelEvent *>(event));
-    default:
-        return false;
+    if (!width() || !height()) {
+        m_pendingFitViewport = true;
+        return;
     }
+
+    fitViewportToGeoShape();
 }
 
-/*!
-    \qmlmethod QtLocation::Map::addMapItem(MapItem item)
-
-    Adds the given \a item to the Map (for example MapQuickItem, MapCircle). If the object
-    already is on the Map, it will not be added again.
-
-    As an example, consider the case where you have a MapCircle representing your current position:
-
-    \snippet declarative/maps.qml QtQuick import
-    \snippet declarative/maps.qml QtLocation import
-    \codeline
-    \snippet declarative/maps.qml Map addMapItem MapCircle at current position
-
-    \note MapItemViews cannot be added with this method.
-
-    \sa mapItems, removeMapItem, clearMapItems
-*/
-
-void QDeclarativeGeoMap::addMapItem(QDeclarativeGeoMapItemBase *item)
+QGeoShape QDeclarativeGeoMap::visibleRegion() const
 {
-    QLOC_TRACE0;
-    if (!item || item->quickMap())
-        return;
-    updateMutex_.lock();
-    item->setParentItem(this);
-    if (map_)
-        item->setMap(this, map_);
-    mapItems_.append(item);
-    emit mapItemsChanged();
-    updateMutex_.unlock();
+    if (!width() || !height())
+        return QGeoShape();
+
+    QGeoCoordinate tl = m_map->itemPositionToCoordinate(QDoubleVector2D(0, 0));
+    QGeoCoordinate br = m_map->itemPositionToCoordinate(QDoubleVector2D(width(), height()));
+
+    return QGeoRectangle(tl, br);
 }
 
-/*!
-    \qmlproperty list<MapItem> QtLocation::Map::mapItems
-
-    Returns the list of all map items in no particular order.
-    These items include items that were declared statically as part of
-    the type declaration, as well as dynamical items (\l addMapItem,
-    \l MapItemView).
-
-    \sa addMapItem, removeMapItem, clearMapItems
-*/
-
-QList<QObject *> QDeclarativeGeoMap::mapItems()
+void QDeclarativeGeoMap::fitViewportToGeoShape()
 {
-    QList<QObject *> ret;
-    foreach (const QPointer<QDeclarativeGeoMapItemBase> &ptr, mapItems_) {
-        if (ptr)
-            ret << ptr.data();
-    }
-    return ret;
-}
-
-/*!
-    \qmlmethod void QtLocation::Map::removeMapItem(MapItem item)
-
-    Removes the given \a item from the Map (for example MapQuickItem, MapCircle). If
-    the MapItem does not exist or was not previously added to the map, the
-    method does nothing.
-
-    \sa mapItems, addMapItem, clearMapItems
-*/
-void QDeclarativeGeoMap::removeMapItem(QDeclarativeGeoMapItemBase *ptr)
-{
-    QLOC_TRACE0;
-    if (!ptr || !map_)
-        return;
-    QPointer<QDeclarativeGeoMapItemBase> item(ptr);
-    if (!mapItems_.contains(item))
-        return;
-    updateMutex_.lock();
-    item.data()->setParentItem(0);
-    item.data()->setMap(0, 0);
-    // these can be optimized for perf, as we already check the 'contains' above
-    mapItems_.removeOne(item);
-    emit mapItemsChanged();
-    updateMutex_.unlock();
-}
-
-/*!
-    \qmlmethod void QtLocation::Map::clearMapItems()
-
-    Removes all items from the map.
-
-    \sa mapItems, addMapItem, removeMapItem
-*/
-void QDeclarativeGeoMap::clearMapItems()
-{
-    QLOC_TRACE0;
-    if (mapItems_.isEmpty())
-        return;
-    updateMutex_.lock();
-    for (int i = 0; i < mapItems_.count(); ++i) {
-        if (mapItems_.at(i)) {
-            mapItems_.at(i).data()->setParentItem(0);
-            mapItems_.at(i).data()->setMap(0, 0);
-        }
-    }
-    mapItems_.clear();
-    emit mapItemsChanged();
-    updateMutex_.unlock();
-}
-
-/*!
-    \qmlproperty MapType QtLocation::Map::activeMapType
-
-    \brief Access to the currently active \l{MapType}{map type}.
-
-    This property can be set to change the active \l{MapType}{map type}.
-    See the \l{Map::supportedMapTypes}{supportedMapTypes} property for possible values.
-
-    \sa MapType
-*/
-void QDeclarativeGeoMap::setActiveMapType(QDeclarativeGeoMapType *mapType)
-{
-    activeMapType_ = mapType;
-    map_->setActiveMapType(mapType->mapType());
-    emit activeMapTypeChanged();
-}
-
-QDeclarativeGeoMapType * QDeclarativeGeoMap::activeMapType() const
-{
-    return activeMapType_;
-}
-
-/*!
-    \internal
-*/
-void QDeclarativeGeoMap::geometryChanged(const QRectF &newGeometry, const QRectF &oldGeometry)
-{
-    if (!mappingManagerInitialized_)
-        return;
-
-    map_->resize(newGeometry.width(), newGeometry.height());
-    QQuickItem::geometryChanged(newGeometry, oldGeometry);
-}
-
-/*!
-    \qmlmethod QtLocation::Map::fitViewportToGeoShape(QGeoShape shape)
-
-    Fits the current viewport to the boundary of the shape. The camera is positioned
-    in the center of the shape, and at the largest integral zoom level possible which
-    allows the whole shape to be visible on screen
-
-*/
-void QDeclarativeGeoMap::fitViewportToGeoShape(const QVariant &variantShape)
-{
-    if (!map_ || !mappingManagerInitialized_)
-        return;
-
-    QGeoShape shape;
-
-    if (variantShape.userType() == qMetaTypeId<QGeoRectangle>())
-        shape = variantShape.value<QGeoRectangle>();
-    else if (variantShape.userType() == qMetaTypeId<QGeoCircle>())
-        shape = variantShape.value<QGeoCircle>();
-    else if (variantShape.userType() == qMetaTypeId<QGeoShape>())
-        shape = variantShape.value<QGeoShape>();
-
-    if (!shape.isValid())
-        return;
-
     double bboxWidth;
     double bboxHeight;
     QGeoCoordinate centerCoordinate;
 
-    switch (shape.type()) {
+    switch (m_region.type()) {
     case QGeoShape::RectangleType:
     {
-        QGeoRectangle rect = shape;
-        QDoubleVector2D topLeftPoint = map_->coordinateToScreenPosition(rect.topLeft(), false);
-        QDoubleVector2D botRightPoint = map_->coordinateToScreenPosition(rect.bottomRight(), false);
+        QGeoRectangle rect = m_region;
+        QDoubleVector2D topLeftPoint = m_map->coordinateToItemPosition(rect.topLeft(), false);
+        QDoubleVector2D botRightPoint = m_map->coordinateToItemPosition(rect.bottomRight(), false);
         bboxWidth = qAbs(topLeftPoint.x() - botRightPoint.x());
         bboxHeight = qAbs(topLeftPoint.y() - botRightPoint.y());
         centerCoordinate = rect.center();
@@ -997,11 +762,11 @@ void QDeclarativeGeoMap::fitViewportToGeoShape(const QVariant &variantShape)
     }
     case QGeoShape::CircleType:
     {
-        QGeoCircle circle = shape;
+        QGeoCircle circle = m_region;
         centerCoordinate = circle.center();
         QGeoCoordinate edge = centerCoordinate.atDistanceAndAzimuth(circle.radius(), 90);
-        QDoubleVector2D centerPoint = map_->coordinateToScreenPosition(centerCoordinate, false);
-        QDoubleVector2D edgePoint = map_->coordinateToScreenPosition(edge, false);
+        QDoubleVector2D centerPoint = m_map->coordinateToItemPosition(centerCoordinate, false);
+        QDoubleVector2D edgePoint = m_map->coordinateToItemPosition(edge, false);
         bboxWidth = qAbs(centerPoint.x() - edgePoint.x()) * 2;
         bboxHeight = bboxWidth;
         break;
@@ -1029,13 +794,456 @@ void QDeclarativeGeoMap::fitViewportToGeoShape(const QVariant &variantShape)
     else
         zoomRatio = bboxHeight / height();
 
-    qreal newZoom = log10(zoomRatio) / log10(0.5);
-    newZoom = floor(qMax(minimumZoomLevel(), (map_->mapController()->zoom() + newZoom)));
+    qreal newZoom = std::log10(zoomRatio) / std::log10(0.5);
+
+    newZoom = std::floor(qMax(minimumZoomLevel(), (m_map->mapController()->zoom() + newZoom)));
     setProperty("zoomLevel", QVariant::fromValue(newZoom));
 }
 
 /*!
-    \qmlmethod QtLocation::Map::fitViewportToMapItems()
+    \internal
+*/
+void QDeclarativeGeoMap::mapZoomLevelChanged(qreal zoom)
+{
+    if (zoom == m_zoomLevel)
+        return;
+    m_zoomLevel = zoom;
+    emit zoomLevelChanged(m_zoomLevel);
+}
+
+/*!
+    \qmlproperty list<MapType> QtLocation::Map::supportedMapTypes
+
+    This read-only property holds the set of \l{MapType}{map types} supported by this map.
+
+    \sa activeMapType
+*/
+QQmlListProperty<QDeclarativeGeoMapType> QDeclarativeGeoMap::supportedMapTypes()
+{
+    return QQmlListProperty<QDeclarativeGeoMapType>(this, m_supportedMapTypes);
+}
+
+/*!
+    \qmlmethod coordinate QtLocation::Map::toCoordinate(QPointF position)
+
+    Returns the coordinate which corresponds to the \a position relative to the map item.
+
+    Returns an invalid coordinate if \a position is not within the current viewport.
+*/
+QGeoCoordinate QDeclarativeGeoMap::toCoordinate(const QPointF &position) const
+{
+    if (m_map)
+        return m_map->itemPositionToCoordinate(QDoubleVector2D(position));
+    else
+        return QGeoCoordinate();
+}
+
+/*!
+    \qmlmethod point QtLocation::Map::fromCoordinate(coordinate coordinate)
+
+    Returns the position relative to the map item which corresponds to the \a coordinate.
+
+    Returns an invalid QPointF if \a coordinate is not within the current viewport.
+*/
+QPointF QDeclarativeGeoMap::fromCoordinate(const QGeoCoordinate &coordinate) const
+{
+    if (m_map)
+        return m_map->coordinateToItemPosition(coordinate).toPointF();
+    else
+        return QPointF(qQNaN(), qQNaN());
+}
+
+/*!
+    \qmlmethod QtLocation::Map::toScreenPosition(coordinate coordinate)
+    \obsolete
+
+    This function is missed named and is equilavent to \l {fromCoordinate}, which should be used
+    instead.
+*/
+QPointF QDeclarativeGeoMap::toScreenPosition(const QGeoCoordinate &coordinate) const
+{
+    return fromCoordinate(coordinate);
+}
+
+/*!
+    \qmlmethod void QtLocation::Map::pan(int dx, int dy)
+
+    Starts panning the map by \a dx pixels along the x-axis and
+    by \a dy pixels along the y-axis.
+
+    Positive values for \a dx move the map right, negative values left.
+    Positive values for \a dy move the map down, negative values up.
+
+    During panning the \l center, and \l zoomLevel may change.
+*/
+void QDeclarativeGeoMap::pan(int dx, int dy)
+{
+    if (!m_mappingManagerInitialized)
+        return;
+    m_map->mapController()->pan(dx, dy);
+}
+
+
+/*!
+    \qmlmethod void QtLocation::Map::prefetchData()
+
+    Optional hint that allows the map to prefetch during this idle period
+*/
+void QDeclarativeGeoMap::prefetchData()
+{
+    if (!m_mappingManagerInitialized)
+        return;
+    m_map->prefetchData();
+}
+
+/*!
+    \qmlproperty string QtLocation::Map::errorString
+
+    This read-only property holds the textual presentation of the latest mapping provider error.
+    If no error has occurred, an empty string is returned.
+
+    An empty string may also be returned if an error occurred which has no associated
+    textual representation.
+
+    \sa QGeoServiceProvider::errorString()
+*/
+
+QString QDeclarativeGeoMap::errorString() const
+{
+    return m_errorString;
+}
+
+/*!
+    \qmlproperty enumeration QtLocation::Map::error
+
+    This read-only property holds the last occurred mapping service provider error.
+
+    \list
+    \li Map.NoError - No error has occurred.
+    \li Map.NotSupportedError -The plugin does not support mapping functionality.
+    \li Map.UnknownParameterError -The plugin did not recognize one of the parameters it was given.
+    \li Map.MissingRequiredParameterError - The plugin did not find one of the parameters it was expecting.
+    \li Map.ConnectionError - The plugin could not connect to its backend service or database.
+    \endlist
+
+    \sa QGeoServiceProvider::Error
+*/
+
+QGeoServiceProvider::Error QDeclarativeGeoMap::error() const
+{
+    return m_error;
+}
+
+/*!
+    \internal
+*/
+void QDeclarativeGeoMap::touchEvent(QTouchEvent *event)
+{
+    if (isInteractive()) {
+        m_gestureArea->handleTouchEvent(event);
+        if ( event->type() == QEvent::TouchEnd ||
+             event->type() == QEvent::TouchCancel) {
+            ungrabTouchPoints();
+        }
+    }
+    //this will always ignore event so sythesized event is generated;
+    QQuickItem::touchEvent(event);
+}
+
+/*!
+    \internal
+*/
+void QDeclarativeGeoMap::wheelEvent(QWheelEvent *event)
+{
+    if (isInteractive())
+        m_gestureArea->handleWheelEvent(event);
+    else
+        QQuickItem::wheelEvent(event);
+
+}
+
+bool QDeclarativeGeoMap::isInteractive()
+{
+    return (m_gestureArea->enabled() && m_gestureArea->activeGestures()) || m_gestureArea->isActive();
+}
+
+/*!
+    \internal
+*/
+bool QDeclarativeGeoMap::childMouseEventFilter(QQuickItem *item, QEvent *event)
+{
+    Q_UNUSED(item)
+    if (!isVisible() || !isEnabled() || !isInteractive())
+        return QQuickItem::childMouseEventFilter(item, event);
+
+    switch (event->type()) {
+    case QEvent::MouseButtonPress:
+    case QEvent::MouseMove:
+    case QEvent::MouseButtonRelease:
+        return sendMouseEvent(static_cast<QMouseEvent *>(event));
+    case QEvent::UngrabMouse: {
+        QQuickWindow *win = window();
+        if (!win) break;
+        if (!win->mouseGrabberItem() ||
+                (win->mouseGrabberItem() &&
+                 win->mouseGrabberItem() != this)) {
+            // child lost grab, we could even lost
+            // some events if grab already belongs for example
+            // in item in diffrent window , clear up states
+            mouseUngrabEvent();
+        }
+        break;
+    }
+    case QEvent::TouchBegin:
+    case QEvent::TouchUpdate:
+    case QEvent::TouchEnd:
+    case QEvent::TouchCancel:
+        if (static_cast<QTouchEvent *>(event)->touchPoints().count() >= 2) {
+            // 1 touch point = handle with MouseEvent (event is always synthesized)
+            // let the synthesized mouse event grab the mouse,
+            // note there is no mouse grabber at this point since
+            // touch event comes first (see Qt::AA_SynthesizeMouseForUnhandledTouchEvents)
+            return sendTouchEvent(static_cast<QTouchEvent *>(event));
+        }
+    default:
+        break;
+    }
+    return QQuickItem::childMouseEventFilter(item, event);
+}
+
+/*!
+    \qmlmethod void QtLocation::Map::addMapItem(MapItem item)
+
+    Adds the given \a item to the Map (for example MapQuickItem, MapCircle). If the object
+    already is on the Map, it will not be added again.
+
+    As an example, consider the case where you have a MapCircle representing your current position:
+
+    \snippet declarative/maps.qml QtQuick import
+    \snippet declarative/maps.qml QtLocation import
+    \codeline
+    \snippet declarative/maps.qml Map addMapItem MapCircle at current position
+
+    \note MapItemViews cannot be added with this method.
+
+    \sa mapItems, removeMapItem, clearMapItems
+*/
+
+void QDeclarativeGeoMap::addMapItem(QDeclarativeGeoMapItemBase *item)
+{
+    if (!item || item->quickMap())
+        return;
+    m_updateMutex.lock();
+    item->setParentItem(this);
+    if (m_map)
+        item->setMap(this, m_map);
+    m_mapItems.append(item);
+    emit mapItemsChanged();
+    m_updateMutex.unlock();
+}
+
+/*!
+    \qmlproperty list<MapItem> QtLocation::Map::mapItems
+
+    Returns the list of all map items in no particular order.
+    These items include items that were declared statically as part of
+    the type declaration, as well as dynamical items (\l addMapItem,
+    \l MapItemView).
+
+    \sa addMapItem, removeMapItem, clearMapItems
+*/
+
+QList<QObject *> QDeclarativeGeoMap::mapItems()
+{
+    QList<QObject *> ret;
+    foreach (const QPointer<QDeclarativeGeoMapItemBase> &ptr, m_mapItems) {
+        if (ptr)
+            ret << ptr.data();
+    }
+    return ret;
+}
+
+/*!
+    \qmlmethod void QtLocation::Map::removeMapItem(MapItem item)
+
+    Removes the given \a item from the Map (for example MapQuickItem, MapCircle). If
+    the MapItem does not exist or was not previously added to the map, the
+    method does nothing.
+
+    \sa mapItems, addMapItem, clearMapItems
+*/
+void QDeclarativeGeoMap::removeMapItem(QDeclarativeGeoMapItemBase *ptr)
+{
+    if (!ptr || !m_map)
+        return;
+    QPointer<QDeclarativeGeoMapItemBase> item(ptr);
+    if (!m_mapItems.contains(item))
+        return;
+    m_updateMutex.lock();
+    item.data()->setParentItem(0);
+    item.data()->setMap(0, 0);
+    // these can be optimized for perf, as we already check the 'contains' above
+    m_mapItems.removeOne(item);
+    emit mapItemsChanged();
+    m_updateMutex.unlock();
+}
+
+/*!
+    \qmlmethod void QtLocation::Map::clearMapItems()
+
+    Removes all items from the map.
+
+    \sa mapItems, addMapItem, removeMapItem
+*/
+void QDeclarativeGeoMap::clearMapItems()
+{
+    if (m_mapItems.isEmpty())
+        return;
+    m_updateMutex.lock();
+    for (int i = 0; i < m_mapItems.count(); ++i) {
+        if (m_mapItems.at(i)) {
+            m_mapItems.at(i).data()->setParentItem(0);
+            m_mapItems.at(i).data()->setMap(0, 0);
+        }
+    }
+    m_mapItems.clear();
+    emit mapItemsChanged();
+    m_updateMutex.unlock();
+}
+
+/*!
+    \qmlproperty MapType QtLocation::Map::activeMapType
+
+    \brief Access to the currently active \l{MapType}{map type}.
+
+    This property can be set to change the active \l{MapType}{map type}.
+    See the \l{Map::supportedMapTypes}{supportedMapTypes} property for possible values.
+
+    \sa MapType
+*/
+void QDeclarativeGeoMap::setActiveMapType(QDeclarativeGeoMapType *mapType)
+{
+    m_activeMapType = mapType;
+    m_map->setActiveMapType(mapType->mapType());
+    emit activeMapTypeChanged();
+}
+
+QDeclarativeGeoMapType * QDeclarativeGeoMap::activeMapType() const
+{
+    return m_activeMapType;
+}
+
+/*!
+    \internal
+*/
+void QDeclarativeGeoMap::geometryChanged(const QRectF &newGeometry, const QRectF &oldGeometry)
+{
+    if (!m_mappingManagerInitialized)
+        return;
+
+    m_map->resize(newGeometry.width(), newGeometry.height());
+    QQuickItem::geometryChanged(newGeometry, oldGeometry);
+
+    /*!
+        The fitViewportTo*() functions depend on a valid map geometry.
+        If they were called prior to the first resize they cause
+        the zoomlevel to jump to 0 (showing the world). Therefore the
+        calls were queued up until now.
+
+        Multiple fitViewportTo*() calls replace each other.
+     */
+    if (m_pendingFitViewport && width() && height()) {
+        fitViewportToGeoShape();
+        m_pendingFitViewport = false;
+    }
+
+}
+
+// TODO Remove this function -> BC break
+/*!
+    \qmlmethod void QtLocation::Map::fitViewportToGeoShape(QGeoShape shape)
+
+    \internal
+
+    Fits the current viewport to the boundary of the shape. The camera is positioned
+    in the center of the shape, and at the largest integral zoom level possible which
+    allows the whole shape to be visible on screen
+
+*/
+void QDeclarativeGeoMap::fitViewportToGeoShape(const QVariant &variantShape)
+{
+    if (!m_map || !m_mappingManagerInitialized)
+        return;
+
+    QGeoShape shape;
+
+    if (variantShape.userType() == qMetaTypeId<QGeoRectangle>())
+        shape = variantShape.value<QGeoRectangle>();
+    else if (variantShape.userType() == qMetaTypeId<QGeoCircle>())
+        shape = variantShape.value<QGeoCircle>();
+    else if (variantShape.userType() == qMetaTypeId<QGeoShape>())
+        shape = variantShape.value<QGeoShape>();
+
+    if (!shape.isValid())
+        return;
+
+    double bboxWidth;
+    double bboxHeight;
+    QGeoCoordinate centerCoordinate;
+
+    switch (shape.type()) {
+    case QGeoShape::RectangleType:
+    {
+        QGeoRectangle rect = shape;
+        QDoubleVector2D topLeftPoint = m_map->coordinateToItemPosition(rect.topLeft(), false);
+        QDoubleVector2D botRightPoint = m_map->coordinateToItemPosition(rect.bottomRight(), false);
+        bboxWidth = qAbs(topLeftPoint.x() - botRightPoint.x());
+        bboxHeight = qAbs(topLeftPoint.y() - botRightPoint.y());
+        centerCoordinate = rect.center();
+        break;
+    }
+    case QGeoShape::CircleType:
+    {
+        QGeoCircle circle = shape;
+        centerCoordinate = circle.center();
+        QGeoCoordinate edge = centerCoordinate.atDistanceAndAzimuth(circle.radius(), 90);
+        QDoubleVector2D centerPoint = m_map->coordinateToItemPosition(centerCoordinate, false);
+        QDoubleVector2D edgePoint = m_map->coordinateToItemPosition(edge, false);
+        bboxWidth = qAbs(centerPoint.x() - edgePoint.x()) * 2;
+        bboxHeight = bboxWidth;
+        break;
+    }
+    case QGeoShape::UnknownType:
+        //Fallthrough to default
+    default:
+        return;
+    }
+
+    // position camera to the center of bounding box
+    setProperty("center", QVariant::fromValue(centerCoordinate));
+
+    //If the shape is empty we just change centerposition, not zoom
+    if (bboxHeight == 0 && bboxWidth == 0)
+        return;
+
+    // adjust zoom
+    double bboxWidthRatio = bboxWidth / (bboxWidth + bboxHeight);
+    double mapWidthRatio = width() / (width() + height());
+    double zoomRatio;
+
+    if (bboxWidthRatio > mapWidthRatio)
+        zoomRatio = bboxWidth / width();
+    else
+        zoomRatio = bboxHeight / height();
+
+    qreal newZoom = std::log10(zoomRatio) / std::log10(0.5);
+
+    newZoom = std::floor(qMax(minimumZoomLevel(), (m_map->mapController()->zoom() + newZoom)));
+    setProperty("zoomLevel", QVariant::fromValue(newZoom));
+}
+
+/*!
+    \qmlmethod void QtLocation::Map::fitViewportToMapItems()
 
     Fits the current viewport to the boundary of all map items. The camera is positioned
     in the center of the map items, and at the largest integral zoom level possible which
@@ -1044,7 +1252,7 @@ void QDeclarativeGeoMap::fitViewportToGeoShape(const QVariant &variantShape)
 */
 void QDeclarativeGeoMap::fitViewportToMapItems()
 {
-    if (!mappingManagerInitialized_)
+    if (!m_mappingManagerInitialized)
         return;
     fitViewportToMapItemsRefine(true);
 }
@@ -1054,7 +1262,7 @@ void QDeclarativeGeoMap::fitViewportToMapItems()
 */
 void QDeclarativeGeoMap::fitViewportToMapItemsRefine(bool refine)
 {
-    if (mapItems_.size() == 0)
+    if (m_mapItems.size() == 0)
         return;
 
     double minX = 0;
@@ -1069,10 +1277,10 @@ void QDeclarativeGeoMap::fitViewportToMapItemsRefine(bool refine)
 
     // find bounds of all map items
     int itemCount = 0;
-    for (int i = 0; i < mapItems_.count(); ++i) {
-        if (!mapItems_.at(i))
+    for (int i = 0; i < m_mapItems.count(); ++i) {
+        if (!m_mapItems.at(i))
             continue;
-        QDeclarativeGeoMapItemBase *item = mapItems_.at(i).data();
+        QDeclarativeGeoMapItemBase *item = m_mapItems.at(i).data();
         if (!item)
             continue;
 
@@ -1117,7 +1325,7 @@ void QDeclarativeGeoMap::fitViewportToMapItemsRefine(bool refine)
 
     // position camera to the center of bounding box
     QGeoCoordinate coordinate;
-    coordinate = map_->screenPositionToCoordinate(QDoubleVector2D(bboxCenterX, bboxCenterY), false);
+    coordinate = m_map->itemPositionToCoordinate(QDoubleVector2D(bboxCenterX, bboxCenterY), false);
     setProperty("center", QVariant::fromValue(coordinate));
 
     // adjust zoom
@@ -1130,14 +1338,107 @@ void QDeclarativeGeoMap::fitViewportToMapItemsRefine(bool refine)
     else
         zoomRatio = bboxHeight / height();
 
-    qreal newZoom = log10(zoomRatio) / log10(0.5);
-    newZoom = floor(qMax(minimumZoomLevel(), (map_->mapController()->zoom() + newZoom)));
+    qreal newZoom = std::log10(zoomRatio) / std::log10(0.5);
+    newZoom = std::floor(qMax(minimumZoomLevel(), (m_map->mapController()->zoom() + newZoom)));
     setProperty("zoomLevel", QVariant::fromValue(newZoom));
 
     // as map quick items retain the same screen size after the camera zooms in/out
     // we refine the viewport again to achieve better results
     if (refine)
         fitViewportToMapItemsRefine(false);
+}
+
+bool QDeclarativeGeoMap::sendMouseEvent(QMouseEvent *event)
+{
+    QPointF localPos = mapFromScene(event->windowPos());
+    QQuickWindow *win = window();
+    QQuickItem *grabber = win ? win->mouseGrabberItem() : 0;
+    bool stealEvent = m_gestureArea->isActive();
+
+    if ((stealEvent || contains(localPos)) && (!grabber || !grabber->keepMouseGrab())) {
+        QScopedPointer<QMouseEvent> mouseEvent(QQuickWindowPrivate::cloneMouseEvent(event, &localPos));
+        mouseEvent->setAccepted(false);
+
+        switch (mouseEvent->type()) {
+        case QEvent::MouseMove:
+            m_gestureArea->handleMouseMoveEvent(mouseEvent.data());
+            break;
+        case QEvent::MouseButtonPress:
+            m_gestureArea->handleMousePressEvent(mouseEvent.data());
+            break;
+        case QEvent::MouseButtonRelease:
+            m_gestureArea->handleMouseReleaseEvent(mouseEvent.data());
+            break;
+        default:
+            break;
+        }
+
+        stealEvent = m_gestureArea->isActive();
+        grabber = win ? win->mouseGrabberItem() : 0;
+
+        if (grabber && stealEvent && !grabber->keepMouseGrab() && grabber != this)
+            grabMouse();
+
+        if (stealEvent) {
+            //do not deliver
+            event->setAccepted(true);
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    if (event->type() == QEvent::MouseButtonRelease) {
+        if (win && win->mouseGrabberItem() == this)
+            ungrabMouse();
+    }
+
+    return false;
+}
+
+bool QDeclarativeGeoMap::sendTouchEvent(QTouchEvent *event)
+{
+    QQuickWindowPrivate *win = window() ? QQuickWindowPrivate::get(window()) : 0;
+    const QTouchEvent::TouchPoint &point = event->touchPoints().first();
+    QQuickItem *grabber = win ? win->itemForTouchPointId.value(point.id()) : 0;
+
+    bool stealEvent = m_gestureArea->isActive();
+    bool containsPoint = contains(mapFromScene(point.scenePos()));
+
+    if ((stealEvent || containsPoint) && (!grabber || !grabber->keepTouchGrab())) {
+        QScopedPointer<QTouchEvent> touchEvent(new QTouchEvent(event->type(), event->device(), event->modifiers(), event->touchPointStates(), event->touchPoints()));
+        touchEvent->setTimestamp(event->timestamp());
+        touchEvent->setAccepted(false);
+
+        m_gestureArea->handleTouchEvent(touchEvent.data());
+        stealEvent = m_gestureArea->isActive();
+        grabber = win ? win->itemForTouchPointId.value(point.id()) : 0;
+
+        if (grabber && stealEvent && !grabber->keepTouchGrab() && grabber != this) {
+            QVector<int> ids;
+            foreach (const QTouchEvent::TouchPoint &tp, event->touchPoints()) {
+                if (!(tp.state() & Qt::TouchPointReleased)) {
+                    ids.append(tp.id());
+                }
+            }
+            grabTouchPoints(ids);
+        }
+
+        if (stealEvent) {
+            //do not deliver
+            event->setAccepted(true);
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    if (event->type() == QEvent::TouchEnd) {
+        if (win && win->itemForTouchPointId.value(point.id()) == this) {
+            ungrabTouchPoints();
+        }
+    }
+    return false;
 }
 
 #include "moc_qdeclarativegeomap_p.cpp"

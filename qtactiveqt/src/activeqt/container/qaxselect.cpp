@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the ActiveQt framework of the Qt Toolkit.
 **
@@ -17,8 +17,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -298,20 +298,20 @@ QAxSelect::QAxSelect(QWidget *parent, Qt::WindowFlags flags)
     d->filterModel->setSourceModel(new ControlList(this));
     d->selectUi.ActiveXList->setModel(d->filterModel);
 
-    connect(d->selectUi.ActiveXList->selectionModel(), SIGNAL(currentChanged(QModelIndex,QModelIndex)),
-            this, SLOT(onActiveXListCurrentChanged(QModelIndex)));
-    connect(d->selectUi.ActiveXList, SIGNAL(activated(QModelIndex)),
-            this, SLOT(onActiveXListActivated()));
+    connect(d->selectUi.ActiveXList->selectionModel(), &QItemSelectionModel::currentChanged,
+            this, &QAxSelect::onActiveXListCurrentChanged);
+    connect(d->selectUi.ActiveXList, &QAbstractItemView::activated,
+            this, &QAxSelect::onActiveXListActivated);
 
 #ifndef QT_NO_CURSOR
     QApplication::restoreOverrideCursor();
 #endif
     d->selectUi.ActiveXList->setFocus();
 
-    connect(d->selectUi.buttonBox, SIGNAL(accepted()), this, SLOT(accept()));
-    connect(d->selectUi.buttonBox, SIGNAL(rejected()), this, SLOT(reject()));
-    connect(d->selectUi.filterLineEdit, SIGNAL(textChanged(QString)),
-            this, SLOT(onFilterLineEditChanged(QString)));
+    connect(d->selectUi.buttonBox, &QDialogButtonBox::accepted, this, &QDialog::accept);
+    connect(d->selectUi.buttonBox, &QDialogButtonBox::rejected, this, &QDialog::reject);
+    connect(d->selectUi.filterLineEdit, &QLineEdit::textChanged,
+            this, &QAxSelect::onFilterLineEditChanged);
 }
 
 /*!

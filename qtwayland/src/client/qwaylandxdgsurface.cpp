@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the config.tests of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -48,9 +40,10 @@
 #include "qwaylandscreen_p.h"
 #include "qwaylandextendedsurface_p.h"
 
-#include <QtCore/QDebug>
 
 QT_BEGIN_NAMESPACE
+
+namespace QtWaylandClient {
 
 QWaylandXdgSurface::QWaylandXdgSurface(struct ::xdg_surface *xdg_surface, QWaylandWindow *window)
     : QtWayland::xdg_surface(xdg_surface)
@@ -94,36 +87,32 @@ void QWaylandXdgSurface::move(QWaylandInputDevice *inputDevice)
 void QWaylandXdgSurface::setMaximized()
 {
     if (!m_maximized)
-        request_change_state(XDG_SURFACE_STATE_MAXIMIZED, true, 0);
+        set_maximized();
 }
 
 void QWaylandXdgSurface::setFullscreen()
 {
     if (!m_fullscreen)
-        request_change_state(XDG_SURFACE_STATE_FULLSCREEN, true, 0);
+        set_fullscreen(Q_NULLPTR);
 }
 
 void QWaylandXdgSurface::setNormal()
 {
     if (m_fullscreen || m_maximized  || m_minimized) {
         if (m_maximized) {
-            request_change_state(XDG_SURFACE_STATE_MAXIMIZED, false, 0);
+            unset_maximized();
         }
         if (m_fullscreen) {
-            request_change_state(XDG_SURFACE_STATE_FULLSCREEN, false, 0);
+            unset_fullscreen();
         }
 
         m_fullscreen = m_maximized = m_minimized = false;
-        setTopLevel();
-        QMargins m = m_window->frameMargins();
-        m_window->configure(0, m_size.width() + m.left() + m.right(), m_size.height() + m.top() + m.bottom());
     }
 }
 
 void QWaylandXdgSurface::setMinimized()
 {
     m_minimized = true;
-    m_size = m_window->window()->geometry().size();
     set_minimized();
 }
 
@@ -138,22 +127,7 @@ void QWaylandXdgSurface::updateTransientParent(QWindow *parent)
     if (!parent_wayland_window)
         return;
 
-    // set_transient expects a position relative to the parent
-    QPoint transientPos = m_window->geometry().topLeft(); // this is absolute
-    QWindow *parentWin = m_window->window()->transientParent();
-    transientPos -= parentWin->geometry().topLeft();
-    if (parent_wayland_window->decoration()) {
-        transientPos.setX(transientPos.x() + parent_wayland_window->decoration()->margins().left());
-        transientPos.setY(transientPos.y() + parent_wayland_window->decoration()->margins().top());
-    }
-
-    uint32_t flags = 0;
-    Qt::WindowFlags wf = m_window->window()->flags();
-    if (wf.testFlag(Qt::ToolTip)
-            || wf.testFlag(Qt::WindowTransparentForInput))
-        flags |= XDG_SURFACE_SET_TRANSIENT_FOR;
-
-    set_transient_for(parent_wayland_window->object());
+    set_parent(parent_wayland_window->object());
 }
 
 void QWaylandXdgSurface::setTitle(const QString & title)
@@ -196,48 +170,70 @@ void QWaylandXdgSurface::sendProperty(const QString &name, const QVariant &value
         m_extendedWindow->updateGenericProperty(name, value);
 }
 
-void QWaylandXdgSurface::xdg_surface_configure(int32_t width, int32_t height)
+void QWaylandXdgSurface::xdg_surface_configure(int32_t width, int32_t height, struct wl_array *states,uint32_t serial)
 {
-    m_window->configure(0 , width, height);
-}
+    uint32_t *state = 0;
+    bool aboutToMaximize = false;
+    bool aboutToFullScreen = false;
 
-void QWaylandXdgSurface::xdg_surface_change_state(uint32_t state,
-                                                  uint32_t value,
-                                                  uint32_t serial)
-{
+    state = (uint32_t*) states->data;
 
-    if (state == XDG_SURFACE_STATE_MAXIMIZED
-            || state == XDG_SURFACE_STATE_FULLSCREEN) {
-        if (value) {
-            m_size = m_window->window()->geometry().size();
-        } else {
-            QMargins m = m_window->frameMargins();
-            m_window->configure(0, m_size.width() + m.left() + m.right(), m_size.height() + m.top() + m.bottom());
+    for (uint32_t i=0; i < states->size; i++)
+    {
+        switch (*(state+i)) {
+        case XDG_SURFACE_STATE_MAXIMIZED:
+            aboutToMaximize = true;
+            break;
+        case XDG_SURFACE_STATE_FULLSCREEN:
+            aboutToFullScreen = true;
+            break;
+        case XDG_SURFACE_STATE_RESIZING:
+            m_margins = m_window->frameMargins();
+            width -= m_margins.left() + m_margins.right();
+            height -= m_margins.top() + m_margins.bottom();
+            m_size = QSize(width,height);
+            break;
+        case XDG_SURFACE_STATE_ACTIVATED:
+            // TODO: here about the missing window activation
+            break;
+        default:
+            break;
         }
     }
 
-    switch (state) {
-    case XDG_SURFACE_STATE_MAXIMIZED:
-        m_maximized = value;
-        break;
-    case XDG_SURFACE_STATE_FULLSCREEN:
-        m_fullscreen = value;
-        break;
+    if (!m_fullscreen && aboutToFullScreen) {
+        m_fullscreen = true;
+        m_size = m_window->window()->geometry().size();
+        m_window->window()->showFullScreen();
+    } else if (m_fullscreen && !aboutToFullScreen) {
+        m_fullscreen = false;
+        m_window->window()->showNormal();
+    } else if (!m_maximized && aboutToMaximize) {
+        m_maximized = true;
+        m_size = m_window->window()->geometry().size();
+        m_window->window()->showMaximized();
+    } else if (m_maximized && !aboutToMaximize) {
+        m_maximized = false;
+        m_window->window()->showNormal();
     }
 
-    xdg_surface_ack_change_state(object(), state, value, serial);
-}
+    if (width == 0 && height == 0) {
+        width = m_size.width();
+        height = m_size.height();
+    }
 
-void QWaylandXdgSurface::xdg_surface_activated()
-{
-}
+    if (width > 0 && height > 0) {
+        m_margins = m_window->frameMargins();
+        m_window->configure(0, width + m_margins.left() + m_margins.right(), height + m_margins.top() + m_margins.bottom());
+    }
 
-void QWaylandXdgSurface::xdg_surface_deactivated()
-{
+    xdg_surface_ack_configure(object(), serial);
 }
 
 void QWaylandXdgSurface::xdg_surface_close()
 {
+}
+
 }
 
 QT_END_NAMESPACE

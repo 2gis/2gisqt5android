@@ -1,46 +1,42 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtLocation module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL21$
+** $QT_BEGIN_LICENSE:LGPL3$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 or version 3 as published by the Free
-** Software Foundation and appearing in the file LICENSE.LGPLv21 and
-** LICENSE.LGPLv3 included in the packaging of this file. Please review the
-** following information to ensure the GNU Lesser General Public License
-** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
-** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPLv3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** GNU General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU
+** General Public License version 2.0 or later as published by the Free
+** Software Foundation and appearing in the file LICENSE.GPL included in
+** the packaging of this file. Please review the following information to
+** ensure the GNU General Public License version 2.0 requirements will be
+** met: http://www.gnu.org/licenses/gpl-2.0.html.
 **
 ** $QT_END_LICENSE$
-**
-** This file is part of the Nokia services plugin for the Maps and
-** Navigation API.  The use of these services, whether by use of the
-** plugin or by other means, is governed by the terms and conditions
-** described by the file NOKIA_TERMS_AND_CONDITIONS.txt in
-** this package, located in the directory containing the Nokia services
-** plugin source code.
 **
 ****************************************************************************/
 
 #include "qgeocameracapabilities_p.h"
 #include "qgeotiledmappingmanagerengine_nokia.h"
-#include "qgeotiledmapdata_nokia.h"
+#include "qgeotiledmap_nokia.h"
 #include "qgeotilefetcher_nokia.h"
 #include "qgeotilespec_p.h"
 #include "qgeotilecache_p.h"
@@ -52,6 +48,7 @@
 #include <QtCore/QJsonObject>
 #include <QtCore/QJsonDocument>
 #include <QtCore/qmath.h>
+#include <QtCore/qstandardpaths.h>
 
 QT_BEGIN_NAMESPACE
 
@@ -72,7 +69,7 @@ QGeoTiledMappingManagerEngineNokia::QGeoTiledMappingManagerEngineNokia(
 
     setCameraCapabilities(capabilities);
 
-    setTileSize(QSize(512, 512));
+    setTileSize(QSize(256, 256));
 
     QList<QGeoMapType> types;
     types << QGeoMapType(QGeoMapType::StreetMap, tr("Street Map"), tr("Normal map view in daylight mode"), false, false, 1);
@@ -102,31 +99,36 @@ QGeoTiledMappingManagerEngineNokia::QGeoTiledMappingManagerEngineNokia(
     setTileFetcher(fetcher);
 
     // TODO: do this in a plugin-neutral way so that other tiled map plugins
-    //       don't need this boilerplate
+    //       don't need this boilerplate or hardcode plugin name
 
     QString cacheDir;
-    if (parameters.contains(QStringLiteral("mapping.cache.directory")))
-        cacheDir = parameters.value(QStringLiteral("mapping.cache.directory")).toString();
+    if (parameters.contains(QStringLiteral("here.mapping.cache.directory"))) {
+        cacheDir = parameters.value(QStringLiteral("here.mapping.cache.directory")).toString();
+    } else {
+        // managerName() is not yet set, we have to hardcode the plugin name below
+        cacheDir = QStandardPaths::writableLocation(QStandardPaths::GenericCacheLocation)
+                + QLatin1String("/QtLocation/here");
+    }
 
     QGeoTileCache *tileCache = createTileCacheWithDir(cacheDir);
 
-    if (parameters.contains(QStringLiteral("mapping.cache.disk.size"))) {
+    if (parameters.contains(QStringLiteral("here.mapping.cache.disk.size"))) {
       bool ok = false;
-      int cacheSize = parameters.value(QStringLiteral("mapping.cache.disk.size")).toString().toInt(&ok);
+      int cacheSize = parameters.value(QStringLiteral("here.mapping.cache.disk.size")).toString().toInt(&ok);
       if (ok)
           tileCache->setMaxDiskUsage(cacheSize);
     }
 
-    if (parameters.contains(QStringLiteral("mapping.cache.memory.size"))) {
+    if (parameters.contains(QStringLiteral("here.mapping.cache.memory.size"))) {
       bool ok = false;
-      int cacheSize = parameters.value(QStringLiteral("mapping.cache.memory.size")).toString().toInt(&ok);
+      int cacheSize = parameters.value(QStringLiteral("here.mapping.cache.memory.size")).toString().toInt(&ok);
       if (ok)
           tileCache->setMaxMemoryUsage(cacheSize);
     }
 
-    if (parameters.contains(QStringLiteral("mapping.cache.texture.size"))) {
+    if (parameters.contains(QStringLiteral("here.mapping.cache.texture.size"))) {
       bool ok = false;
-      int cacheSize = parameters.value(QStringLiteral("mapping.cache.texture.size")).toString().toInt(&ok);
+      int cacheSize = parameters.value(QStringLiteral("here.mapping.cache.texture.size")).toString().toInt(&ok);
       if (ok)
           tileCache->setExtraTextureUsage(cacheSize);
     }
@@ -264,10 +266,10 @@ void QGeoTiledMappingManagerEngineNokia::updateVersion(const QJsonObject &newVer
 void QGeoTiledMappingManagerEngineNokia::saveMapVersion()
 {
     QDir saveDir(tileCache()->directory());
-    QFile saveFile(saveDir.filePath(QStringLiteral("nokia_version")));
+    QFile saveFile(saveDir.filePath(QStringLiteral("here_version")));
 
     if (!saveFile.open(QIODevice::WriteOnly)) {
-        qWarning("Failed to write nokia map version.");
+        qWarning("Failed to write here/nokia map version.");
         return;
     }
 
@@ -279,10 +281,10 @@ void QGeoTiledMappingManagerEngineNokia::loadMapVersion()
 {
 
     QDir saveDir(tileCache()->directory());
-    QFile loadFile(saveDir.filePath(QStringLiteral("nokia_version")));
+    QFile loadFile(saveDir.filePath(QStringLiteral("here_version")));
 
     if (!loadFile.open(QIODevice::ReadOnly)) {
-        qWarning("Failed to read nokia map version.");
+        qWarning("Failed to read here/nokia map version.");
         return;
     }
 
@@ -376,9 +378,9 @@ QString QGeoTiledMappingManagerEngineNokia::evaluateCopyrightsText(const QGeoMap
     return copyrightsText;
 }
 
-QGeoMapData *QGeoTiledMappingManagerEngineNokia::createMapData()
+QGeoMap *QGeoTiledMappingManagerEngineNokia::createMap()
 {
-    return new QGeoTiledMapDataNokia(this);
+    return new QGeoTiledMapNokia(this);
 }
 
 QT_END_NAMESPACE

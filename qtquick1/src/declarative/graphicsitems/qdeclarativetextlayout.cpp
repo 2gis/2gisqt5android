@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtDeclarative module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -54,7 +54,6 @@ public:
     QVector<QStaticTextItem> items;
     QVector<QFixedPoint> positions;
     QVector<glyph_t> glyphs;
-    QVector<QChar> chars;
 };
 
 namespace {
@@ -80,7 +79,6 @@ class DrawTextItemRecorder: public QPaintEngine
         {
             int glyphOffset = m_inertText->glyphs.size(); // Store offset into glyph pool
             int positionOffset = m_inertText->glyphs.size(); // Offset into position pool
-            int charOffset = m_inertText->chars.size();
 
             const QTextItemInt &ti = static_cast<const QTextItemInt &>(textItem);
 
@@ -91,9 +89,6 @@ class DrawTextItemRecorder: public QPaintEngine
                 if (last.fontEngine() == ti.fontEngine && last.font == ti.font() &&
                     (!m_dirtyPen || last.color == state->pen().color())) {
                     needFreshCurrentItem = false;
-
-                    last.numChars += ti.num_chars;
-
                 }
             }
 
@@ -102,8 +97,6 @@ class DrawTextItemRecorder: public QPaintEngine
 
                 currentItem.setFontEngine(ti.fontEngine);
                 currentItem.font = ti.font();
-                currentItem.charOffset = charOffset;
-                currentItem.numChars = ti.num_chars;
                 currentItem.numGlyphs = 0;
                 currentItem.glyphOffset = glyphOffset;
                 currentItem.positionOffset = positionOffset;
@@ -129,17 +122,12 @@ class DrawTextItemRecorder: public QPaintEngine
 
             m_inertText->glyphs.resize(m_inertText->glyphs.size() + size);
             m_inertText->positions.resize(m_inertText->glyphs.size());
-            m_inertText->chars.resize(m_inertText->chars.size() + ti.num_chars);
 
             glyph_t *glyphsDestination = m_inertText->glyphs.data() + glyphOffset;
             memcpy(glyphsDestination, glyphs.constData(), sizeof(glyph_t) * size);
 
             QFixedPoint *positionsDestination = m_inertText->positions.data() + positionOffset;
             memcpy(positionsDestination, positions.constData(), sizeof(QFixedPoint) * size);
-
-            QChar *charsDestination = m_inertText->chars.data() + charOffset;
-            memcpy(charsDestination, ti.chars, sizeof(QChar) * ti.num_chars);
-
         }
 
         virtual void drawPolygon(const QPointF *, int , PolygonDrawMode )
@@ -278,7 +266,6 @@ void QDeclarativeTextLayout::beginLayout()
         d->items.clear();
         d->positions.clear();
         d->glyphs.clear();
-        d->chars.clear();
         d->position = QPointF();
     }
     QTextLayout::beginLayout();
@@ -291,7 +278,6 @@ void QDeclarativeTextLayout::clearLayout()
         d->items.clear();
         d->positions.clear();
         d->glyphs.clear();
-        d->chars.clear();
         d->position = QPointF();
     }
     QTextLayout::clearLayout();
@@ -310,14 +296,12 @@ void QDeclarativeTextLayout::prepare()
 
         glyph_t *glyphPool = d->glyphs.data();
         QFixedPoint *positionPool = d->positions.data();
-        QChar *charPool = d->chars.data();
 
         int itemCount = d->items.count();
         for (int ii = 0; ii < itemCount; ++ii) {
             QStaticTextItem &item = d->items[ii];
             item.glyphs = glyphPool + item.glyphOffset;
             item.glyphPositions = positionPool + item.positionOffset;
-            item.chars = charPool + item.charOffset;
         }
 
         d->cached = true;

@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQuick module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -50,7 +50,7 @@ QT_BEGIN_NAMESPACE
 DEFINE_BOOL_CONFIG_OPTION(qmlVisualTouchDebugging, QML_VISUAL_TOUCH_DEBUGGING)
 
 QQuickMouseAreaPrivate::QQuickMouseAreaPrivate()
-: enabled(true), hovered(false), longPress(false),
+: enabled(true), scrollGestureEnabled(true), hovered(false), longPress(false),
   moved(false), stealMouse(false), doubleClick(false), preventStealing(false),
   propagateComposedEvents(false), pressed(0)
 #ifndef QT_NO_DRAGANDDROP
@@ -497,6 +497,37 @@ void QQuickMouseArea::setEnabled(bool a)
 }
 
 /*!
+    \qmlproperty bool QtQuick::MouseArea::scrollGestureEnabled
+    \since 5.5
+
+    This property controls whether this MouseArea responds to scroll gestures
+    from non-mouse devices, such as the 2-finger flick gesture on a trackpad.
+    If set to false, the \l wheel signal be emitted only when the wheel event
+    comes from an actual mouse with a wheel, while scroll gesture events will
+    pass through to any other Item that will handle them. For example, the user
+    might perform a flick gesture while the cursor is over an item containing a
+    MouseArea, intending to interact with a Flickable which is underneath.
+    Setting this property to false will allow the PinchArea to handle the mouse
+    wheel or the pinch gesture, while the Flickable handles the flick gesture.
+
+    By default, this property is true.
+*/
+bool QQuickMouseArea::isScrollGestureEnabled() const
+{
+    Q_D(const QQuickMouseArea);
+    return d->scrollGestureEnabled;
+}
+
+void QQuickMouseArea::setScrollGestureEnabled(bool e)
+{
+    Q_D(QQuickMouseArea);
+    if (e != d->scrollGestureEnabled) {
+        d->scrollGestureEnabled = e;
+        emit scrollGestureEnabledChanged();
+    }
+}
+
+/*!
     \qmlproperty bool QtQuick::MouseArea::preventStealing
     This property holds whether the mouse events may be stolen from this
     MouseArea.
@@ -646,7 +677,7 @@ void QQuickMouseArea::mousePressEvent(QMouseEvent *event)
 #endif
         setHovered(true);
         d->startScene = event->windowPos();
-        d->pressAndHoldTimer.start(qApp->styleHints()->mousePressAndHoldInterval(), this);
+        d->pressAndHoldTimer.start(QGuiApplication::styleHints()->mousePressAndHoldInterval(), this);
         setKeepMouseGrab(d->stealMouse);
         event->setAccepted(setPressed(event->button(), true));
     }
@@ -821,7 +852,7 @@ void QQuickMouseArea::hoverLeaveEvent(QHoverEvent *event)
 void QQuickMouseArea::wheelEvent(QWheelEvent *event)
 {
     Q_D(QQuickMouseArea);
-    if (!d->enabled) {
+    if (!d->enabled || (!isScrollGestureEnabled() && event->source() != Qt::MouseEventNotSynthesized)) {
         QQuickItem::wheelEvent(event);
         return;
     }
@@ -1274,6 +1305,8 @@ void QQuickMouseArea::setCursorShape(Qt::CursorShape shape)
     If \c drag.smoothed is \c true, the target will be moved only after the drag operation has
     started. If set to \c false, the target will be moved straight to the current mouse position.
     By default, this property is \c true. This property was added in Qt Quick 2.4
+
+    See the \l Drag attached property and \l DropArea if you want to make a drop.
 
     \snippet qml/mousearea/mouseareadragfilter.qml dragfilter
 

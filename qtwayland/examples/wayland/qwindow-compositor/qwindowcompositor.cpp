@@ -1,7 +1,8 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2014 Pier Luigi Fiorini <pierluigi.fiorini@gmail.com>
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Compositor.
 **
@@ -17,8 +18,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -55,6 +56,7 @@
 #include <QtCompositor/qwaylandinput.h>
 #include <QtCompositor/qwaylandbufferref.h>
 #include <QtCompositor/qwaylandsurfaceview.h>
+#include <QtCompositor/qwaylandoutput.h>
 
 QT_BEGIN_NAMESPACE
 
@@ -88,6 +90,7 @@ public:
         if (bufferRef) {
             if (bufferRef.isShm()) {
                 shmTex = new QOpenGLTexture(bufferRef.image(), QOpenGLTexture::DontGenerateMipMaps);
+                shmTex->setWrapMode(QOpenGLTexture::ClampToEdge);
                 texture = shmTex->textureId();
             } else {
                 texture = bufferRef.createTexture();
@@ -108,7 +111,7 @@ public:
 };
 
 QWindowCompositor::QWindowCompositor(CompositorWindow *window)
-    : QWaylandCompositor(window, 0, DefaultExtensions | SubSurfaceExtension)
+    : QWaylandCompositor(0, DefaultExtensions | SubSurfaceExtension)
     , m_window(window)
     , m_backgroundTexture(0)
     , m_textureBlitter(0)
@@ -134,8 +137,7 @@ QWindowCompositor::QWindowCompositor(CompositorWindow *window)
 
     setRetainedSelectionEnabled(true);
 
-    setOutputGeometry(QRect(QPoint(0, 0), window->size()));
-    setOutputRefreshRate(qRound(qGuiApp->primaryScreen()->refreshRate() * 1000.0));
+    createOutput(window, "", "");
     addDefaultShell();
 }
 
@@ -321,7 +323,7 @@ void QWindowCompositor::render()
     // Draw the background image texture
     m_textureBlitter->drawTexture(m_backgroundTexture->textureId(),
                                   QRect(QPoint(0, 0), m_backgroundImage.size()),
-                                  window()->size(),
+                                  m_window->size(),
                                   0, false, true);
 
     foreach (QWaylandSurface *surface, m_surfaces) {

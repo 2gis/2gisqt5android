@@ -8,4 +8,5 @@ qtHaveModule(websockets) {
 }
 
 SUBDIRS += nodejs \
+           qwclient \
            chatclient-html

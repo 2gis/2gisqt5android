@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtWebEngine module of the Qt Toolkit.
 **
@@ -10,15 +10,15 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
 ** General Public License version 3 as published by the Free Software
 ** Foundation and appearing in the file LICENSE.LGPLv3 included in the
-** packaging of this file.  Please review the following information to
+** packaging of this file. Please review the following information to
 ** ensure the GNU Lesser General Public License version 3 requirements
 ** will be met: https://www.gnu.org/licenses/lgpl.html.
 **
@@ -26,7 +26,7 @@
 ** Alternatively, this file may be used under the terms of the GNU
 ** General Public License version 2.0 or later as published by the Free
 ** Software Foundation and appearing in the file LICENSE.GPL included in
-** the packaging of this file.  Please review the following information to
+** the packaging of this file. Please review the following information to
 ** ensure the GNU General Public License version 2.0 requirements will be
 ** met: http://www.gnu.org/licenses/gpl-2.0.html.
 **
@@ -40,53 +40,50 @@
 #include "content/public/browser/render_view_host.h"
 #include "content/public/browser/resource_request_details.h"
 #include "content/public/browser/resource_request_info.h"
-#include "content/public/common/page_transition_types.h"
+#include "ui/base/page_transition_types.h"
 #include "net/base/load_flags.h"
 #include "net/url_request/url_request.h"
 #include "type_conversion.h"
 #include "web_contents_adapter_client.h"
 #include "web_contents_view_qt.h"
 
-namespace {
+namespace QtWebEngineCore {
 
-int pageTransitionToNavigationType(content::PageTransition transition)
+int pageTransitionToNavigationType(ui::PageTransition transition)
 {
-    int32 qualifier = content::PageTransitionGetQualifier(transition);
+    int32 qualifier = ui::PageTransitionGetQualifier(transition);
 
-    if (qualifier & content::PAGE_TRANSITION_FORWARD_BACK)
+    if (qualifier & ui::PAGE_TRANSITION_FORWARD_BACK)
         return WebContentsAdapterClient::BackForwardNavigation;
 
-    content::PageTransition stippedTransition = content::PageTransitionStripQualifier(transition);
+    ui::PageTransition stippedTransition = ui::PageTransitionStripQualifier(transition);
 
     switch (stippedTransition) {
-    case content::PAGE_TRANSITION_LINK:
+    case ui::PAGE_TRANSITION_LINK:
         return WebContentsAdapterClient::LinkClickedNavigation;
-    case content::PAGE_TRANSITION_TYPED:
+    case ui::PAGE_TRANSITION_TYPED:
         return WebContentsAdapterClient::TypedNavigation;
-    case content::PAGE_TRANSITION_FORM_SUBMIT:
+    case ui::PAGE_TRANSITION_FORM_SUBMIT:
         return WebContentsAdapterClient::FormSubmittedNavigation;
-    case content::PAGE_TRANSITION_RELOAD:
+    case ui::PAGE_TRANSITION_RELOAD:
         return WebContentsAdapterClient::ReloadNavigation;
     default:
         return WebContentsAdapterClient::OtherNavigation;
     }
 }
 
-}
-
 int NetworkDelegateQt::OnBeforeURLRequest(net::URLRequest *request, const net::CompletionCallback &callback, GURL *)
 {
     Q_ASSERT(content::BrowserThread::CurrentlyOn(content::BrowserThread::IO));
     const content::ResourceRequestInfo *info = content::ResourceRequestInfo::ForRequest(request);
+    if (!info)
+        return net::OK;
+
+    content::ResourceType resourceType = info->GetResourceType();
     int renderProcessId;
     int renderFrameId;
-    if (!info || !info->GetRenderFrameForRequest(request, &renderProcessId, &renderFrameId))
-        // Abort the request if it has no associated render info / render view.
-        return net::ERR_ABORTED;
-
-    ResourceType::Type resourceType = info->GetResourceType();
-    // Only intercept MAIN_FRAME and SUB_FRAME.
-    if (!ResourceType::IsFrame(resourceType))
+    // Only intercept MAIN_FRAME and SUB_FRAME with an associated render frame.
+    if (!content::IsResourceTypeFrame(resourceType) || !info->GetRenderFrameForRequest(request, &renderProcessId, &renderFrameId))
         return net::OK;
 
     // Track active requests since |callback| and |new_url| are valid
@@ -97,7 +94,7 @@ int NetworkDelegateQt::OnBeforeURLRequest(net::URLRequest *request, const net::C
 
     RequestParams params = {
         toQt(request->url()),
-        resourceType == ResourceType::MAIN_FRAME,
+        info->IsMainFrame(),
         navigationType,
         renderProcessId,
         renderFrameId
@@ -174,3 +171,5 @@ void NetworkDelegateQt::NotifyNavigationRequestedOnUIThread(net::URLRequest *req
                            callback)
                 );
 }
+
+} // namespace QtWebEngineCore

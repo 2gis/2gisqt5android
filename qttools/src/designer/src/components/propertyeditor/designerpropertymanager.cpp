@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Designer of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -40,6 +40,11 @@
 #include "qtpropertybrowserutils_p.h"
 
 #include <formwindowbase_p.h>
+#include <formwindowmanager.h>
+#include <formwindow.h>
+#include <propertysheet.h>
+#include <qextensionmanager.h>
+#include <formwindowcursor.h>
 #include <textpropertyeditor_p.h>
 #include <stylesheeteditor_p.h>
 #include <richtexteditor_p.h>
@@ -2181,7 +2186,7 @@ bool DesignerPropertyManager::resetIconSubProperty(QtProperty *property)
 // -------- DesignerEditorFactory
 DesignerEditorFactory::DesignerEditorFactory(QDesignerFormEditorInterface *core, QObject *parent) :
     QtVariantEditorFactory(parent),
-    m_resetDecorator(new ResetDecorator(this)),
+    m_resetDecorator(new ResetDecorator(core, this)),
     m_changingPropertyValue(false),
     m_core(core),
     m_spacing(-1)
@@ -2718,6 +2723,13 @@ void DesignerEditorFactory::slotStringListChanged(const QStringList &value)
     }
 }
 
+ResetDecorator::ResetDecorator(const QDesignerFormEditorInterface *core, QObject *parent)
+    : QObject(parent)
+    , m_spacing(-1)
+    , m_core(core)
+{
+}
+
 ResetDecorator::~ResetDecorator()
 {
     QList<ResetWidget *> editors = m_resetWidgetToProperty.keys();
@@ -2743,6 +2755,27 @@ void ResetDecorator::setSpacing(int spacing)
     m_spacing = spacing;
 }
 
+static inline bool isModifiedInMultiSelection(const QDesignerFormEditorInterface *core,
+                                              const QString &propertyName)
+{
+    const QDesignerFormWindowInterface *form = core->formWindowManager()->activeFormWindow();
+    if (!form)
+        return false;
+    const QDesignerFormWindowCursorInterface *cursor = form->cursor();
+    const int selectionSize = cursor->selectedWidgetCount();
+    if (selectionSize < 2)
+        return false;
+    for (int i = 0; i < selectionSize; ++i) {
+        const QDesignerPropertySheetExtension *sheet =
+            qt_extension<QDesignerPropertySheetExtension*>(core->extensionManager(),
+                                                           cursor->selectedWidget(i));
+        const int index = sheet->indexOf(propertyName);
+        if (index >= 0 && sheet->isChanged(index))
+            return true;
+    }
+    return false;
+}
+
 QWidget *ResetDecorator::editor(QWidget *subEditor, bool resettable, QtAbstractPropertyManager *manager, QtProperty *property,
             QWidget *parent)
 {
@@ -2752,7 +2785,7 @@ QWidget *ResetDecorator::editor(QWidget *subEditor, bool resettable, QtAbstractP
     if (resettable) {
         resetWidget = new ResetWidget(property, parent);
         resetWidget->setSpacing(m_spacing);
-        resetWidget->setResetEnabled(property->isModified());
+        resetWidget->setResetEnabled(property->isModified() || isModifiedInMultiSelection(m_core, property->propertyName()));
         resetWidget->setValueText(property->valueText());
         resetWidget->setValueIcon(property->valueIcon());
         resetWidget->setAutoFillBackground(true);
@@ -2782,7 +2815,7 @@ void ResetDecorator::slotPropertyChanged(QtProperty *property)
     const QList<ResetWidget *>::ConstIterator cend = editors.constEnd();
     for (QList<ResetWidget *>::ConstIterator itEditor = editors.constBegin(); itEditor != cend; ++itEditor) {
         ResetWidget *widget = *itEditor;
-        widget->setResetEnabled(property->isModified());
+        widget->setResetEnabled(property->isModified() || isModifiedInMultiSelection(m_core, property->propertyName()));
         widget->setValueText(property->valueText());
         widget->setValueIcon(property->valueIcon());
     }

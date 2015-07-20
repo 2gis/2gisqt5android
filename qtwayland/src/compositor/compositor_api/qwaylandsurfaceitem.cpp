@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Compositor.
 **
@@ -17,8 +17,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -144,7 +144,12 @@ void QWaylandSurfaceItem::mousePressEvent(QMouseEvent *event)
     if (!surface())
         return;
 
-    QWaylandInputDevice *inputDevice = compositor()->defaultInputDevice();
+    if (!surface()->inputRegionContains(event->pos())) {
+        event->ignore();
+        return;
+    }
+
+    QWaylandInputDevice *inputDevice = compositor()->inputDeviceFor(event);
     if (inputDevice->mouseFocus() != this)
         inputDevice->setMouseFocus(this, event->localPos(), event->windowPos());
     inputDevice->sendMousePressEvent(event->button(), event->localPos(), event->windowPos());
@@ -153,7 +158,7 @@ void QWaylandSurfaceItem::mousePressEvent(QMouseEvent *event)
 void QWaylandSurfaceItem::mouseMoveEvent(QMouseEvent *event)
 {
     if (surface()) {
-        QWaylandInputDevice *inputDevice = compositor()->defaultInputDevice();
+        QWaylandInputDevice *inputDevice = compositor()->inputDeviceFor(event);
         inputDevice->sendMouseMoveEvent(this, event->localPos(), event->windowPos());
     }
 }
@@ -161,7 +166,7 @@ void QWaylandSurfaceItem::mouseMoveEvent(QMouseEvent *event)
 void QWaylandSurfaceItem::mouseReleaseEvent(QMouseEvent *event)
 {
     if (surface()) {
-        QWaylandInputDevice *inputDevice = compositor()->defaultInputDevice();
+        QWaylandInputDevice *inputDevice = compositor()->inputDeviceFor(event);
         inputDevice->sendMouseReleaseEvent(event->button(), event->localPos(), event->windowPos());
     }
 }
@@ -169,7 +174,11 @@ void QWaylandSurfaceItem::mouseReleaseEvent(QMouseEvent *event)
 void QWaylandSurfaceItem::hoverEnterEvent(QHoverEvent *event)
 {
     if (surface()) {
-        QWaylandInputDevice *inputDevice = compositor()->defaultInputDevice();
+        if (!surface()->inputRegionContains(event->pos())) {
+            event->ignore();
+            return;
+        }
+        QWaylandInputDevice *inputDevice = compositor()->inputDeviceFor(event);
         inputDevice->sendMouseMoveEvent(this, event->pos());
     }
 }
@@ -177,15 +186,11 @@ void QWaylandSurfaceItem::hoverEnterEvent(QHoverEvent *event)
 void QWaylandSurfaceItem::hoverMoveEvent(QHoverEvent *event)
 {
     if (surface()) {
-        QWaylandInputDevice *inputDevice = compositor()->defaultInputDevice();
-        inputDevice->sendMouseMoveEvent(this, event->pos());
-    }
-}
-
-void QWaylandSurfaceItem::hoverLeaveEvent(QHoverEvent *event)
-{
-    if (surface()) {
-        QWaylandInputDevice *inputDevice = compositor()->defaultInputDevice();
+        if (!surface()->inputRegionContains(event->pos())) {
+            event->ignore();
+            return;
+        }
+        QWaylandInputDevice *inputDevice = compositor()->inputDeviceFor(event);
         inputDevice->sendMouseMoveEvent(this, event->pos());
     }
 }
@@ -193,7 +198,12 @@ void QWaylandSurfaceItem::hoverLeaveEvent(QHoverEvent *event)
 void QWaylandSurfaceItem::wheelEvent(QWheelEvent *event)
 {
     if (surface()) {
-        QWaylandInputDevice *inputDevice = compositor()->defaultInputDevice();
+        if (!surface()->inputRegionContains(event->pos())) {
+            event->ignore();
+            return;
+        }
+
+        QWaylandInputDevice *inputDevice = compositor()->inputDeviceFor(event);
         inputDevice->sendMouseWheelEvent(event->orientation(), event->delta());
     }
 }
@@ -201,7 +211,7 @@ void QWaylandSurfaceItem::wheelEvent(QWheelEvent *event)
 void QWaylandSurfaceItem::keyPressEvent(QKeyEvent *event)
 {
     if (surface()) {
-        QWaylandInputDevice *inputDevice = compositor()->defaultInputDevice();
+        QWaylandInputDevice *inputDevice = compositor()->inputDeviceFor(event);
         inputDevice->sendFullKeyEvent(event);
     }
 }
@@ -209,7 +219,7 @@ void QWaylandSurfaceItem::keyPressEvent(QKeyEvent *event)
 void QWaylandSurfaceItem::keyReleaseEvent(QKeyEvent *event)
 {
     if (surface() && hasFocus()) {
-        QWaylandInputDevice *inputDevice = compositor()->defaultInputDevice();
+        QWaylandInputDevice *inputDevice = compositor()->inputDeviceFor(event);
         inputDevice->sendFullKeyEvent(event);
     }
 }
@@ -217,13 +227,26 @@ void QWaylandSurfaceItem::keyReleaseEvent(QKeyEvent *event)
 void QWaylandSurfaceItem::touchEvent(QTouchEvent *event)
 {
     if (m_touchEventsEnabled) {
-        QWaylandInputDevice *inputDevice = compositor()->defaultInputDevice();
+        QWaylandInputDevice *inputDevice = compositor()->inputDeviceFor(event);
+
+        if (event->type() == QEvent::TouchBegin) {
+            QQuickItem *grabber = window()->mouseGrabberItem();
+            if (grabber != this)
+                grabMouse();
+        }
+
+        QPoint pointPos;
+        const QList<QTouchEvent::TouchPoint> &points = event->touchPoints();
+        if (!points.isEmpty())
+            pointPos = points.at(0).pos().toPoint();
+
+        if (event->type() == QEvent::TouchBegin && !surface()->inputRegionContains(pointPos)) {
+            event->ignore();
+            return;
+        }
+
         event->accept();
         if (inputDevice->mouseFocus() != this) {
-            QPoint pointPos;
-            QList<QTouchEvent::TouchPoint> points = event->touchPoints();
-            if (!points.isEmpty())
-                pointPos = points.at(0).pos().toPoint();
             inputDevice->setMouseFocus(this, pointPos, pointPos);
         }
         inputDevice->sendFullTouchEvent(event);
@@ -232,15 +255,26 @@ void QWaylandSurfaceItem::touchEvent(QTouchEvent *event)
     }
 }
 
-void QWaylandSurfaceItem::takeFocus()
+void QWaylandSurfaceItem::mouseUngrabEvent()
+{
+    if (surface()) {
+        QTouchEvent e(QEvent::TouchCancel);
+        touchEvent(&e);
+    }
+}
+
+void QWaylandSurfaceItem::takeFocus(QWaylandInputDevice *device)
 {
     setFocus(true);
 
     if (!surface())
         return;
 
-    QWaylandInputDevice *inputDevice = compositor()->defaultInputDevice();
-    inputDevice->setKeyboardFocus(surface());
+    QWaylandInputDevice *target = device;
+    if (!target) {
+        target = compositor()->defaultInputDevice();
+    }
+    target->setKeyboardFocus(surface());
 }
 
 void QWaylandSurfaceItem::surfaceMapped()
@@ -338,7 +372,7 @@ QSGNode *QWaylandSurfaceItem::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeD
 {
     bool mapped = surface() && surface()->isMapped();
 
-    if (!mapped || !m_provider->t || !m_paintEnabled) {
+    if (!mapped || !m_provider || !m_provider->t || !m_paintEnabled) {
         delete oldNode;
         return 0;
     }

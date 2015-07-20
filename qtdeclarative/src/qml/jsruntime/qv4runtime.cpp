@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -35,11 +35,11 @@
 #include "qv4runtime_p.h"
 #ifndef V4_BOOTSTRAP
 #include "qv4object_p.h"
-#include "qv4jsir_p.h"
 #include "qv4objectproto_p.h"
 #include "qv4globalobject_p.h"
 #include "qv4stringobject_p.h"
 #include "qv4argumentsobject_p.h"
+#include "qv4objectiterator_p.h"
 #include "qv4lookup_p.h"
 #include "qv4function_p.h"
 #include "private/qlocale_tools_p.h"
@@ -50,15 +50,19 @@
 #include <private/qv8engine_p.h>
 #endif
 
-#include <QtCore/qmath.h>
-#include <QtCore/qnumeric.h>
 #include <QtCore/QDebug>
-#include <cstdio>
 #include <cassert>
-#include <typeinfo>
+#include <cstdio>
 #include <stdlib.h>
 
+#include <wtf/MathExtras.h>
+
 #include "../../3rdparty/double-conversion/double-conversion.h"
+
+#ifdef QV4_COUNT_RUNTIME_FUNCTIONS
+#  include <QtCore/QBuffer>
+#  include <QtCore/QDebug>
+#endif // QV4_COUNT_RUNTIME_FUNCTIONS
 
 QT_BEGIN_NAMESPACE
 
@@ -144,7 +148,9 @@ struct RuntimeCounters::Data {
     };
 
     void dump() const {
-        QTextStream outs(stderr, QIODevice::WriteOnly);
+        QBuffer buf;
+        buf.open(QIODevice::WriteOnly);
+        QTextStream outs(&buf);
         QList<Line> lines;
         foreach (const char *func, counters.keys()) {
             const Counters &fCount = counters[func];
@@ -159,7 +165,7 @@ struct RuntimeCounters::Data {
                 lines.append(line);
             }
         }
-        qSort(lines.begin(), lines.end(), Line::less);
+        std::sort(lines.begin(), lines.end(), Line::less);
         outs << lines.size() << " counters:" << endl;
         foreach (const Line &line, lines)
             outs << qSetFieldWidth(10) << line.count << qSetFieldWidth(0)
@@ -167,6 +173,7 @@ struct RuntimeCounters::Data {
                  << " | " << pretty(line.tag1)
                  << " | " << pretty(line.tag2)
                  << endl;
+        qDebug("%s", buf.data().constData());
     }
 };
 
@@ -256,84 +263,92 @@ void RuntimeHelpers::numberToString(QString *result, double num, int radix)
         result->prepend(QLatin1Char('-'));
 }
 
-ReturnedValue Runtime::closure(ExecutionContext *ctx, int functionId)
+ReturnedValue Runtime::closure(ExecutionEngine *engine, int functionId)
 {
-    QV4::Function *clos = ctx->d()->compilationUnit->runtimeFunctions[functionId];
+    QV4::Function *clos = engine->currentContext()->compilationUnit->runtimeFunctions[functionId];
     Q_ASSERT(clos);
-    return FunctionObject::createScriptFunction(ctx, clos)->asReturnedValue();
+    Scope scope(engine);
+    return FunctionObject::createScriptFunction(ScopedContext(scope, engine->currentContext()), clos)->asReturnedValue();
 }
 
-ReturnedValue Runtime::deleteElement(ExecutionContext *ctx, const ValueRef base, const ValueRef index)
+ReturnedValue Runtime::deleteElement(ExecutionEngine *engine, const Value &base, const Value &index)
 {
-    Scope scope(ctx);
+    Scope scope(engine);
     ScopedObject o(scope, base);
     if (o) {
-        uint n = index->asArrayIndex();
+        uint n = index.asArrayIndex();
         if (n < UINT_MAX) {
             return Encode((bool)o->deleteIndexedProperty(n));
         }
     }
 
-    ScopedString name(scope, index->toString(ctx));
-    return Runtime::deleteMember(ctx, base, name.getPointer());
+    ScopedString name(scope, index.toString(engine));
+    return Runtime::deleteMemberString(engine, base, name);
 }
 
-ReturnedValue Runtime::deleteMember(ExecutionContext *ctx, const ValueRef base, String *name)
+ReturnedValue Runtime::deleteMember(ExecutionEngine *engine, const Value &base, int nameIndex)
 {
-    Scope scope(ctx);
-    ScopedObject obj(scope, base->toObject(ctx));
+    Scope scope(engine);
+    ScopedString name(scope, engine->currentContext()->compilationUnit->runtimeStrings[nameIndex]);
+    return deleteMemberString(engine, base, name);
+}
+
+ReturnedValue Runtime::deleteMemberString(ExecutionEngine *engine, const Value &base, String *name)
+{
+    Scope scope(engine);
+    ScopedObject obj(scope, base.toObject(engine));
     if (scope.engine->hasException)
         return Encode::undefined();
     return Encode(obj->deleteProperty(name));
 }
 
-ReturnedValue Runtime::deleteName(ExecutionContext *ctx, String *name)
+ReturnedValue Runtime::deleteName(ExecutionEngine *engine, int nameIndex)
 {
-    Scope scope(ctx);
+    Scope scope(engine);
+    ScopedString name(scope, engine->currentContext()->compilationUnit->runtimeStrings[nameIndex]);
+    ScopedContext ctx(scope, engine->currentContext());
     return Encode(ctx->deleteProperty(name));
 }
 
-QV4::ReturnedValue Runtime::instanceof(ExecutionContext *ctx, const ValueRef left, const ValueRef right)
+QV4::ReturnedValue Runtime::instanceof(ExecutionEngine *engine, const Value &left, const Value &right)
 {
-    // As nothing in this method can call into the memory manager, avoid using a Scope
-    // for performance reasons
-
-    FunctionObject *f = right->asFunctionObject();
+    Scope scope(engine);
+    ScopedFunctionObject f(scope, right.asFunctionObject());
     if (!f)
-        return ctx->throwTypeError();
+        return engine->throwTypeError();
 
-    if (f->subtype() == FunctionObject::BoundFunction)
-        f = static_cast<BoundFunction *>(f)->target();
+    if (f->isBoundFunction())
+        f = static_cast<BoundFunction *>(f.getPointer())->target();
 
-    Object *v = left->asObject();
+    ScopedObject v(scope, left.asObject());
     if (!v)
         return Encode(false);
 
-    Object *o = QV4::Value::fromReturnedValue(f->protoProperty()).asObject();
+    ScopedObject o(scope, f->protoProperty());
     if (!o)
-        return ctx->throwTypeError();
+        return engine->throwTypeError();
 
     while (v) {
         v = v->prototype();
 
         if (!v)
             break;
-        else if (o == v)
+        else if (o->d() == v->d())
             return Encode(true);
     }
 
     return Encode(false);
 }
 
-QV4::ReturnedValue Runtime::in(ExecutionContext *ctx, const ValueRef left, const ValueRef right)
+QV4::ReturnedValue Runtime::in(ExecutionEngine *engine, const Value &left, const Value &right)
 {
-    if (!right->isObject())
-        return ctx->throwTypeError();
-    Scope scope(ctx);
-    ScopedString s(scope, left->toString(ctx));
+    if (!right.isObject())
+        return engine->throwTypeError();
+    Scope scope(engine);
+    ScopedString s(scope, left.toString(engine));
     if (scope.hasException())
         return Encode::undefined();
-    bool r = right->objectValue()->hasProperty(s.getPointer());
+    bool r = right.objectValue()->hasProperty(s);
     return Encode(r);
 }
 
@@ -358,11 +373,11 @@ double RuntimeHelpers::stringToNumber(const QString &string)
     return d;
 }
 
-Returned<String> *RuntimeHelpers::stringFromNumber(ExecutionContext *ctx, double number)
+Heap::String *RuntimeHelpers::stringFromNumber(ExecutionEngine *engine, double number)
 {
     QString qstr;
     RuntimeHelpers::numberToString(&qstr, number, 10);
-    return ctx->engine()->newString(qstr);
+    return engine->newString(qstr);
 }
 
 ReturnedValue RuntimeHelpers::objectDefaultValue(Object *object, int typeHint)
@@ -384,8 +399,7 @@ ReturnedValue RuntimeHelpers::objectDefaultValue(Object *object, int typeHint)
     if (typeHint == NUMBER_HINT)
         qSwap(meth1, meth2);
 
-    ExecutionContext *ctx = engine->currentContext();
-    Scope scope(ctx);
+    Scope scope(engine);
     ScopedCallData callData(scope, 0);
     callData->thisObject = object;
 
@@ -406,161 +420,162 @@ ReturnedValue RuntimeHelpers::objectDefaultValue(Object *object, int typeHint)
             return r->asReturnedValue();
     }
 
-    return ctx->throwTypeError();
+    return engine->throwTypeError();
 }
 
 
 
-Returned<Object> *RuntimeHelpers::convertToObject(ExecutionContext *ctx, const ValueRef value)
+Heap::Object *RuntimeHelpers::convertToObject(ExecutionEngine *engine, const Value &value)
 {
-    assert(!value->isObject());
-    switch (value->type()) {
+    Q_ASSERT(!value.isObject());
+    switch (value.type()) {
     case Value::Undefined_Type:
     case Value::Null_Type:
-        ctx->throwTypeError();
+        engine->throwTypeError();
         return 0;
     case Value::Boolean_Type:
-        return ctx->engine()->newBooleanObject(value);
+        return engine->newBooleanObject(value.booleanValue());
     case Value::Managed_Type:
-        Q_ASSERT(value->isString());
-        return ctx->engine()->newStringObject(value);
+        Q_ASSERT(value.isString());
+        return engine->newStringObject(value);
     case Value::Integer_Type:
     default: // double
-        return ctx->engine()->newNumberObject(value);
+        return engine->newNumberObject(value.asDouble());
     }
 }
 
-Returned<String> *RuntimeHelpers::convertToString(ExecutionContext *ctx, const ValueRef value)
+Heap::String *RuntimeHelpers::convertToString(ExecutionEngine *engine, const Value &value)
 {
-    switch (value->type()) {
+    switch (value.type()) {
     case Value::Empty_Type:
         Q_ASSERT(!"empty Value encountered");
     case Value::Undefined_Type:
-        return ctx->engine()->id_undefined.ret();
+        return engine->id_undefined->d();
     case Value::Null_Type:
-        return ctx->engine()->id_null.ret();
+        return engine->id_null->d();
     case Value::Boolean_Type:
-        if (value->booleanValue())
-            return ctx->engine()->id_true.ret();
+        if (value.booleanValue())
+            return engine->id_true->d();
         else
-            return ctx->engine()->id_false.ret();
+            return engine->id_false->d();
     case Value::Managed_Type:
-        if (value->isString())
-            return value->stringValue()->asReturned<String>();
+        if (value.isString())
+            return value.stringValue()->d();
         {
-            Scope scope(ctx);
+            Scope scope(engine);
             ScopedValue prim(scope, RuntimeHelpers::toPrimitive(value, STRING_HINT));
-            return RuntimeHelpers::convertToString(ctx, prim);
+            return RuntimeHelpers::convertToString(engine, prim);
         }
     case Value::Integer_Type:
-        return RuntimeHelpers::stringFromNumber(ctx, value->int_32);
+        return RuntimeHelpers::stringFromNumber(engine, value.int_32);
     default: // double
-        return RuntimeHelpers::stringFromNumber(ctx, value->doubleValue());
+        return RuntimeHelpers::stringFromNumber(engine, value.doubleValue());
     } // switch
 }
 
 // This is slightly different from the method above, as
 // the + operator requires a slightly different conversion
-static Returned<String> *convert_to_string_add(ExecutionContext *ctx, const ValueRef value)
+static Heap::String *convert_to_string_add(ExecutionEngine *engine, const Value &value)
 {
-    switch (value->type()) {
+    switch (value.type()) {
     case Value::Empty_Type:
         Q_ASSERT(!"empty Value encountered");
     case Value::Undefined_Type:
-        return ctx->engine()->id_undefined.ret();
+        return engine->id_undefined->d();
     case Value::Null_Type:
-        return ctx->engine()->id_null.ret();
+        return engine->id_null->d();
     case Value::Boolean_Type:
-        if (value->booleanValue())
-            return ctx->engine()->id_true.ret();
+        if (value.booleanValue())
+            return engine->id_true->d();
         else
-            return ctx->engine()->id_false.ret();
+            return engine->id_false->d();
     case Value::Managed_Type:
-        if (value->isString())
-            return value->stringValue()->asReturned<String>();
+        if (value.isString())
+            return value.stringValue()->d();
         {
-            Scope scope(ctx);
+            Scope scope(engine);
             ScopedValue prim(scope, RuntimeHelpers::toPrimitive(value, PREFERREDTYPE_HINT));
-            return RuntimeHelpers::convertToString(ctx, prim);
+            return RuntimeHelpers::convertToString(engine, prim);
         }
     case Value::Integer_Type:
-        return RuntimeHelpers::stringFromNumber(ctx, value->int_32);
+        return RuntimeHelpers::stringFromNumber(engine, value.int_32);
     default: // double
-        return RuntimeHelpers::stringFromNumber(ctx, value->doubleValue());
+        return RuntimeHelpers::stringFromNumber(engine, value.doubleValue());
     } // switch
 }
 
-QV4::ReturnedValue RuntimeHelpers::addHelper(ExecutionContext *ctx, const ValueRef left, const ValueRef right)
+QV4::ReturnedValue RuntimeHelpers::addHelper(ExecutionEngine *engine, const Value &left, const Value &right)
 {
-    Scope scope(ctx);
+    Scope scope(engine);
 
     ScopedValue pleft(scope, RuntimeHelpers::toPrimitive(left, PREFERREDTYPE_HINT));
     ScopedValue pright(scope, RuntimeHelpers::toPrimitive(right, PREFERREDTYPE_HINT));
     if (pleft->isString() || pright->isString()) {
         if (!pleft->isString())
-            pleft = convert_to_string_add(ctx, pleft);
+            pleft = convert_to_string_add(engine, pleft);
         if (!pright->isString())
-            pright = convert_to_string_add(ctx, pright);
+            pright = convert_to_string_add(engine, pright);
         if (scope.engine->hasException)
             return Encode::undefined();
         if (!pleft->stringValue()->d()->length())
             return pright->asReturnedValue();
         if (!pright->stringValue()->d()->length())
             return pleft->asReturnedValue();
-        return (ctx->engine()->memoryManager->alloc<String>(ctx->d()->engine, pleft->stringValue(), pright->stringValue()))->asReturnedValue();
+        return (engine->memoryManager->alloc<String>(pleft->stringValue()->d(), pright->stringValue()->d()))->asReturnedValue();
     }
     double x = RuntimeHelpers::toNumber(pleft);
     double y = RuntimeHelpers::toNumber(pright);
     return Encode(x + y);
 }
 
-QV4::ReturnedValue Runtime::addString(QV4::ExecutionContext *ctx, const QV4::ValueRef left, const QV4::ValueRef right)
+QV4::ReturnedValue Runtime::addString(ExecutionEngine *engine, const Value &left, const Value &right)
 {
-    Q_ASSERT(left->isString() || right->isString());
+    Q_ASSERT(left.isString() || right.isString());
 
-    if (left->isString() && right->isString()) {
-        if (!left->stringValue()->d()->length())
-            return right->asReturnedValue();
-        if (!right->stringValue()->d()->length())
-            return left->asReturnedValue();
-        return (ctx->engine()->memoryManager->alloc<String>(ctx->d()->engine, left->stringValue(), right->stringValue()))->asReturnedValue();
+    if (left.isString() && right.isString()) {
+        if (!left.stringValue()->d()->length())
+            return right.asReturnedValue();
+        if (!right.stringValue()->d()->length())
+            return left.asReturnedValue();
+        return (engine->memoryManager->alloc<String>(left.stringValue()->d(), right.stringValue()->d()))->asReturnedValue();
     }
 
-    Scope scope(ctx);
-    ScopedValue pleft(scope, *left);
-    ScopedValue pright(scope, *right);
+    Scope scope(engine);
+    ScopedValue pleft(scope, left);
+    ScopedValue pright(scope, right);
 
     if (!pleft->isString())
-        pleft = convert_to_string_add(ctx, left);
+        pleft = convert_to_string_add(engine, left);
     if (!pright->isString())
-        pright = convert_to_string_add(ctx, right);
+        pright = convert_to_string_add(engine, right);
     if (scope.engine->hasException)
         return Encode::undefined();
     if (!pleft->stringValue()->d()->length())
         return pright->asReturnedValue();
     if (!pright->stringValue()->d()->length())
         return pleft->asReturnedValue();
-    return (ctx->engine()->memoryManager->alloc<String>(ctx->d()->engine, pleft->stringValue(), pright->stringValue()))->asReturnedValue();
+    return (engine->memoryManager->alloc<String>(pleft->stringValue()->d(), pright->stringValue()->d()))->asReturnedValue();
 }
 
-void Runtime::setProperty(ExecutionContext *ctx, const ValueRef object, String *name, const ValueRef value)
+void Runtime::setProperty(ExecutionEngine *engine, const Value &object, int nameIndex, const Value &value)
 {
-    Scope scope(ctx);
-    ScopedObject o(scope, object->toObject(ctx));
+    Scope scope(engine);
+    ScopedString name(scope, engine->currentContext()->compilationUnit->runtimeStrings[nameIndex]);
+    ScopedObject o(scope, object.toObject(engine));
     if (!o)
         return;
     o->put(name, value);
 }
 
-ReturnedValue Runtime::getElement(ExecutionContext *ctx, const ValueRef object, const ValueRef index)
+ReturnedValue Runtime::getElement(ExecutionEngine *engine, const Value &object, const Value &index)
 {
-    Scope scope(ctx);
-    uint idx = index->asArrayIndex();
+    Scope scope(engine);
+    uint idx = index.asArrayIndex();
 
-    Scoped<Object> o(scope, object);
+    ScopedObject o(scope, object);
     if (!o) {
         if (idx < UINT_MAX) {
-            if (String *str = object->asString()) {
+            if (String *str = object.asString()) {
                 if (idx >= (uint)str->toQString().length()) {
                     return Encode::undefined();
                 }
@@ -569,18 +584,18 @@ ReturnedValue Runtime::getElement(ExecutionContext *ctx, const ValueRef object, 
             }
         }
 
-        if (object->isNullOrUndefined()) {
-            QString message = QStringLiteral("Cannot read property '%1' of %2").arg(index->toQStringNoThrow()).arg(object->toQStringNoThrow());
-            return ctx->throwTypeError(message);
+        if (object.isNullOrUndefined()) {
+            QString message = QStringLiteral("Cannot read property '%1' of %2").arg(index.toQStringNoThrow()).arg(object.toQStringNoThrow());
+            return engine->throwTypeError(message);
         }
 
-        o = RuntimeHelpers::convertToObject(ctx, object);
+        o = RuntimeHelpers::convertToObject(scope.engine, object);
         if (!o) // type error
             return Encode::undefined();
     }
 
     if (idx < UINT_MAX) {
-        if (o->arrayData() && !o->arrayData()->hasAttributes()) {
+        if (o->arrayData() && !o->arrayData()->attrs) {
             ScopedValue v(scope, o->arrayData()->get(idx));
             if (!v->isEmpty())
                 return v->asReturnedValue();
@@ -589,24 +604,24 @@ ReturnedValue Runtime::getElement(ExecutionContext *ctx, const ValueRef object, 
         return o->getIndexed(idx);
     }
 
-    ScopedString name(scope, index->toString(ctx));
+    ScopedString name(scope, index.toString(engine));
     if (scope.hasException())
         return Encode::undefined();
-    return o->get(name.getPointer());
+    return o->get(name);
 }
 
-void Runtime::setElement(ExecutionContext *ctx, const ValueRef object, const ValueRef index, const ValueRef value)
+void Runtime::setElement(ExecutionEngine *engine, const Value &object, const Value &index, const Value &value)
 {
-    Scope scope(ctx);
-    ScopedObject o(scope, object->toObject(ctx));
+    Scope scope(engine);
+    ScopedObject o(scope, object.toObject(engine));
     if (scope.engine->hasException)
         return;
 
-    uint idx = index->asArrayIndex();
+    uint idx = index.asArrayIndex();
     if (idx < UINT_MAX) {
-        if (o->arrayType() == ArrayData::Simple) {
-            SimpleArrayData *s = static_cast<SimpleArrayData *>(o->arrayData());
-            if (s && idx < s->len() && !s->data(idx).isEmpty()) {
+        if (o->arrayType() == Heap::ArrayData::Simple) {
+            Heap::SimpleArrayData *s = static_cast<Heap::SimpleArrayData *>(o->arrayData());
+            if (s && idx < s->len && !s->data(idx).isEmpty()) {
                 s->data(idx) = value;
                 return;
             }
@@ -615,92 +630,98 @@ void Runtime::setElement(ExecutionContext *ctx, const ValueRef object, const Val
         return;
     }
 
-    ScopedString name(scope, index->toString(ctx));
-    o->put(name.getPointer(), value);
+    ScopedString name(scope, index.toString(engine));
+    o->put(name, value);
 }
 
-ReturnedValue Runtime::foreachIterator(ExecutionContext *ctx, const ValueRef in)
+ReturnedValue Runtime::foreachIterator(ExecutionEngine *engine, const Value &in)
 {
-    Scope scope(ctx);
-    Scoped<Object> o(scope, (Object *)0);
-    if (!in->isNullOrUndefined())
-        o = in->toObject(ctx);
-    Scoped<Object> it(scope, ctx->engine()->newForEachIteratorObject(ctx, o));
-    return it.asReturnedValue();
+    Scope scope(engine);
+    ScopedObject o(scope, (Object *)0);
+    if (!in.isNullOrUndefined())
+        o = in.toObject(engine);
+    return engine->newForEachIteratorObject(o)->asReturnedValue();
 }
 
-ReturnedValue Runtime::foreachNextPropertyName(const ValueRef foreach_iterator)
+ReturnedValue Runtime::foreachNextPropertyName(const Value &foreach_iterator)
 {
-    Q_ASSERT(foreach_iterator->isObject());
+    Q_ASSERT(foreach_iterator.isObject());
 
-    ForEachIteratorObject *it = static_cast<ForEachIteratorObject *>(foreach_iterator->objectValue());
+    ForEachIteratorObject *it = static_cast<ForEachIteratorObject *>(foreach_iterator.objectValue());
     Q_ASSERT(it->as<ForEachIteratorObject>());
 
     return it->nextPropertyName();
 }
 
 
-void Runtime::setActivationProperty(ExecutionContext *ctx, String *name, const ValueRef value)
+void Runtime::setActivationProperty(ExecutionEngine *engine, int nameIndex, const Value &value)
 {
+    Scope scope(engine);
+    ScopedString name(scope, engine->currentContext()->compilationUnit->runtimeStrings[nameIndex]);
+    ScopedContext ctx(scope, engine->currentContext());
     ctx->setProperty(name, value);
 }
 
-ReturnedValue Runtime::getProperty(ExecutionContext *ctx, const ValueRef object, String *name)
+ReturnedValue Runtime::getProperty(ExecutionEngine *engine, const Value &object, int nameIndex)
 {
-    Scope scope(ctx);
+    Scope scope(engine);
+    ScopedString name(scope, engine->currentContext()->compilationUnit->runtimeStrings[nameIndex]);
 
-    Scoped<Object> o(scope, object);
+    ScopedObject o(scope, object);
     if (o)
         return o->get(name);
 
-    if (object->isNullOrUndefined()) {
-        QString message = QStringLiteral("Cannot read property '%1' of %2").arg(name->toQString()).arg(object->toQStringNoThrow());
-        return ctx->throwTypeError(message);
+    if (object.isNullOrUndefined()) {
+        QString message = QStringLiteral("Cannot read property '%1' of %2").arg(name->toQString()).arg(object.toQStringNoThrow());
+        return engine->throwTypeError(message);
     }
 
-    o = RuntimeHelpers::convertToObject(ctx, object);
+    o = RuntimeHelpers::convertToObject(scope.engine, object);
     if (!o) // type error
         return Encode::undefined();
     return o->get(name);
 }
 
-ReturnedValue Runtime::getActivationProperty(ExecutionContext *ctx, String *name)
+ReturnedValue Runtime::getActivationProperty(ExecutionEngine *engine, int nameIndex)
 {
+    Scope scope(engine);
+    ScopedString name(scope, engine->currentContext()->compilationUnit->runtimeStrings[nameIndex]);
+    ScopedContext ctx(scope, engine->currentContext());
     return ctx->getProperty(name);
 }
 
 #endif // V4_BOOTSTRAP
 
-uint RuntimeHelpers::equalHelper(const ValueRef x, const ValueRef y)
+uint RuntimeHelpers::equalHelper(const Value &x, const Value &y)
 {
-    Q_ASSERT(x->type() != y->type() || (x->isManaged() && (x->isString() != y->isString())));
+    Q_ASSERT(x.type() != y.type() || (x.isManaged() && (x.isString() != y.isString())));
 
-    if (x->isNumber() && y->isNumber())
-        return x->asDouble() == y->asDouble();
-    if (x->isNull() && y->isUndefined()) {
+    if (x.isNumber() && y.isNumber())
+        return x.asDouble() == y.asDouble();
+    if (x.isNull() && y.isUndefined()) {
         return true;
-    } else if (x->isUndefined() && y->isNull()) {
+    } else if (x.isUndefined() && y.isNull()) {
         return true;
-    } else if (x->isNumber() && y->isString()) {
+    } else if (x.isNumber() && y.isString()) {
         double dy = RuntimeHelpers::toNumber(y);
-        return x->asDouble() == dy;
-    } else if (x->isString() && y->isNumber()) {
+        return x.asDouble() == dy;
+    } else if (x.isString() && y.isNumber()) {
         double dx = RuntimeHelpers::toNumber(x);
-        return dx == y->asDouble();
-    } else if (x->isBoolean()) {
-        return Runtime::compareEqual(Primitive::fromDouble((double) x->booleanValue()), y);
-    } else if (y->isBoolean()) {
-        return Runtime::compareEqual(x, Primitive::fromDouble((double) y->booleanValue()));
+        return dx == y.asDouble();
+    } else if (x.isBoolean()) {
+        return Runtime::compareEqual(Primitive::fromDouble((double) x.booleanValue()), y);
+    } else if (y.isBoolean()) {
+        return Runtime::compareEqual(x, Primitive::fromDouble((double) y.booleanValue()));
     } else {
 #ifdef V4_BOOTSTRAP
         Q_UNIMPLEMENTED();
 #else
-        if ((x->isNumber() || x->isString()) && y->isObject()) {
-            Scope scope(y->objectValue()->engine());
+        if ((x.isNumber() || x.isString()) && y.isObject()) {
+            Scope scope(y.objectValue()->engine());
             ScopedValue py(scope, RuntimeHelpers::toPrimitive(y, PREFERREDTYPE_HINT));
             return Runtime::compareEqual(x, py);
-        } else if (x->isObject() && (y->isNumber() || y->isString())) {
-            Scope scope(x->objectValue()->engine());
+        } else if (x.isObject() && (y.isNumber() || y.isString())) {
+            Scope scope(x.objectValue()->engine());
             ScopedValue px(scope, RuntimeHelpers::toPrimitive(x, PREFERREDTYPE_HINT));
             return Runtime::compareEqual(px, y);
         }
@@ -710,42 +731,42 @@ uint RuntimeHelpers::equalHelper(const ValueRef x, const ValueRef y)
     return false;
 }
 
-Bool RuntimeHelpers::strictEqual(const ValueRef x, const ValueRef y)
+Bool RuntimeHelpers::strictEqual(const Value &x, const Value &y)
 {
     TRACE2(x, y);
 
-    if (x->rawValue() == y->rawValue())
+    if (x.rawValue() == y.rawValue())
         // NaN != NaN
-        return !x->isNaN();
+        return !x.isNaN();
 
-    if (x->isNumber())
-        return y->isNumber() && x->asDouble() == y->asDouble();
-    if (x->isManaged())
-        return y->isManaged() && x->managed()->isEqualTo(y->managed());
+    if (x.isNumber())
+        return y.isNumber() && x.asDouble() == y.asDouble();
+    if (x.isManaged())
+        return y.isManaged() && x.cast<Managed>()->isEqualTo(y.cast<Managed>());
     return false;
 }
 
-QV4::Bool Runtime::compareGreaterThan(const QV4::ValueRef l, const QV4::ValueRef r)
+QV4::Bool Runtime::compareGreaterThan(const Value &l, const Value &r)
 {
     TRACE2(l, r);
-    if (l->isInteger() && r->isInteger())
-        return l->integerValue() > r->integerValue();
-    if (l->isNumber() && r->isNumber())
-        return l->asDouble() > r->asDouble();
-    if (l->isString() && r->isString()) {
+    if (l.isInteger() && r.isInteger())
+        return l.integerValue() > r.integerValue();
+    if (l.isNumber() && r.isNumber())
+        return l.asDouble() > r.asDouble();
+    if (l.isString() && r.isString()) {
 #ifdef V4_BOOTSTRAP
         Q_UNIMPLEMENTED();
         return false;
 #else
-        return r->stringValue()->compare(l->stringValue());
+        return r.stringValue()->compare(l.stringValue());
 #endif
     }
 
-    if (l->isObject() || r->isObject()) {
+    if (l.isObject() || r.isObject()) {
 #ifdef V4_BOOTSTRAP
         Q_UNIMPLEMENTED();
 #else
-        QV4::ExecutionEngine *e = (l->isObject() ? l->objectValue() : r->objectValue())->engine();
+        QV4::ExecutionEngine *e = (l.isObject() ? l.objectValue() : r.objectValue())->engine();
         QV4::Scope scope(e);
         QV4::ScopedValue pl(scope, RuntimeHelpers::toPrimitive(l, QV4::NUMBER_HINT));
         QV4::ScopedValue pr(scope, RuntimeHelpers::toPrimitive(r, QV4::NUMBER_HINT));
@@ -758,27 +779,27 @@ QV4::Bool Runtime::compareGreaterThan(const QV4::ValueRef l, const QV4::ValueRef
     return dl > dr;
 }
 
-QV4::Bool Runtime::compareLessThan(const QV4::ValueRef l, const QV4::ValueRef r)
+QV4::Bool Runtime::compareLessThan(const Value &l, const Value &r)
 {
     TRACE2(l, r);
-    if (l->isInteger() && r->isInteger())
-        return l->integerValue() < r->integerValue();
-    if (l->isNumber() && r->isNumber())
-        return l->asDouble() < r->asDouble();
-    if (l->isString() && r->isString()) {
+    if (l.isInteger() && r.isInteger())
+        return l.integerValue() < r.integerValue();
+    if (l.isNumber() && r.isNumber())
+        return l.asDouble() < r.asDouble();
+    if (l.isString() && r.isString()) {
 #ifdef V4_BOOTSTRAP
         Q_UNIMPLEMENTED();
         return false;
 #else
-        return l->stringValue()->compare(r->stringValue());
+        return l.stringValue()->compare(r.stringValue());
 #endif
     }
 
-    if (l->isObject() || r->isObject()) {
+    if (l.isObject() || r.isObject()) {
 #ifdef V4_BOOTSTRAP
         Q_UNIMPLEMENTED();
 #else
-        QV4::ExecutionEngine *e = (l->isObject() ? l->objectValue() : r->objectValue())->engine();
+        QV4::ExecutionEngine *e = (l.isObject() ? l.objectValue() : r.objectValue())->engine();
         QV4::Scope scope(e);
         QV4::ScopedValue pl(scope, RuntimeHelpers::toPrimitive(l, QV4::NUMBER_HINT));
         QV4::ScopedValue pr(scope, RuntimeHelpers::toPrimitive(r, QV4::NUMBER_HINT));
@@ -791,27 +812,27 @@ QV4::Bool Runtime::compareLessThan(const QV4::ValueRef l, const QV4::ValueRef r)
     return dl < dr;
 }
 
-QV4::Bool Runtime::compareGreaterEqual(const QV4::ValueRef l, const QV4::ValueRef r)
+QV4::Bool Runtime::compareGreaterEqual(const Value &l, const Value &r)
 {
     TRACE2(l, r);
-    if (l->isInteger() && r->isInteger())
-        return l->integerValue() >= r->integerValue();
-    if (l->isNumber() && r->isNumber())
-        return l->asDouble() >= r->asDouble();
-    if (l->isString() && r->isString()) {
+    if (l.isInteger() && r.isInteger())
+        return l.integerValue() >= r.integerValue();
+    if (l.isNumber() && r.isNumber())
+        return l.asDouble() >= r.asDouble();
+    if (l.isString() && r.isString()) {
 #ifdef V4_BOOTSTRAP
         Q_UNIMPLEMENTED();
         return false;
 #else
-        return !l->stringValue()->compare(r->stringValue());
+        return !l.stringValue()->compare(r.stringValue());
 #endif
     }
 
-    if (l->isObject() || r->isObject()) {
+    if (l.isObject() || r.isObject()) {
 #ifdef V4_BOOTSTRAP
         Q_UNIMPLEMENTED();
 #else
-        QV4::ExecutionEngine *e = (l->isObject() ? l->objectValue() : r->objectValue())->engine();
+        QV4::ExecutionEngine *e = (l.isObject() ? l.objectValue() : r.objectValue())->engine();
         QV4::Scope scope(e);
         QV4::ScopedValue pl(scope, RuntimeHelpers::toPrimitive(l, QV4::NUMBER_HINT));
         QV4::ScopedValue pr(scope, RuntimeHelpers::toPrimitive(r, QV4::NUMBER_HINT));
@@ -824,27 +845,27 @@ QV4::Bool Runtime::compareGreaterEqual(const QV4::ValueRef l, const QV4::ValueRe
     return dl >= dr;
 }
 
-QV4::Bool Runtime::compareLessEqual(const QV4::ValueRef l, const QV4::ValueRef r)
+QV4::Bool Runtime::compareLessEqual(const Value &l, const Value &r)
 {
     TRACE2(l, r);
-    if (l->isInteger() && r->isInteger())
-        return l->integerValue() <= r->integerValue();
-    if (l->isNumber() && r->isNumber())
-        return l->asDouble() <= r->asDouble();
-    if (l->isString() && r->isString()) {
+    if (l.isInteger() && r.isInteger())
+        return l.integerValue() <= r.integerValue();
+    if (l.isNumber() && r.isNumber())
+        return l.asDouble() <= r.asDouble();
+    if (l.isString() && r.isString()) {
 #ifdef V4_BOOTSTRAP
         Q_UNIMPLEMENTED();
         return false;
 #else
-        return !r->stringValue()->compare(l->stringValue());
+        return !r.stringValue()->compare(l.stringValue());
 #endif
     }
 
-    if (l->isObject() || r->isObject()) {
+    if (l.isObject() || r.isObject()) {
 #ifdef V4_BOOTSTRAP
         Q_UNIMPLEMENTED();
 #else
-        QV4::ExecutionEngine *e = (l->isObject() ? l->objectValue() : r->objectValue())->engine();
+        QV4::ExecutionEngine *e = (l.isObject() ? l.objectValue() : r.objectValue())->engine();
         QV4::Scope scope(e);
         QV4::ScopedValue pl(scope, RuntimeHelpers::toPrimitive(l, QV4::NUMBER_HINT));
         QV4::ScopedValue pr(scope, RuntimeHelpers::toPrimitive(r, QV4::NUMBER_HINT));
@@ -858,30 +879,52 @@ QV4::Bool Runtime::compareLessEqual(const QV4::ValueRef l, const QV4::ValueRef r
 }
 
 #ifndef V4_BOOTSTRAP
-ReturnedValue Runtime::callGlobalLookup(ExecutionContext *context, uint index, CallData *callData)
+Bool Runtime::compareInstanceof(ExecutionEngine *engine, const Value &left, const Value &right)
 {
-    Scope scope(context);
+    TRACE2(left, right);
+
+    Scope scope(engine);
+    ScopedValue v(scope, Runtime::instanceof(engine, left, right));
+    return v->booleanValue();
+}
+
+uint Runtime::compareIn(ExecutionEngine *engine, const Value &left, const Value &right)
+{
+    TRACE2(left, right);
+
+    Scope scope(engine);
+    ScopedValue v(scope, Runtime::in(engine, left, right));
+    return v->booleanValue();
+}
+
+
+ReturnedValue Runtime::callGlobalLookup(ExecutionEngine *engine, uint index, CallData *callData)
+{
+    Scope scope(engine);
     Q_ASSERT(callData->thisObject.isUndefined());
 
-    Lookup *l = context->d()->lookups + index;
-    Scoped<FunctionObject> o(scope, l->globalGetter(l, context));
+    Lookup *l = engine->currentContext()->lookups + index;
+    ScopedFunctionObject o(scope, l->globalGetter(l, engine));
     if (!o)
-        return context->throwTypeError();
+        return engine->throwTypeError();
 
-    if (o.getPointer() == scope.engine->evalFunction && l->name->equals(scope.engine->id_eval))
+    ScopedString name(scope, engine->currentContext()->compilationUnit->runtimeStrings[l->nameIndex]);
+    if (o->d() == scope.engine->evalFunction && name->equals(scope.engine->id_eval))
         return static_cast<EvalFunction *>(o.getPointer())->evalCall(callData, true);
 
     return o->call(callData);
 }
 
 
-ReturnedValue Runtime::callActivationProperty(ExecutionContext *context, String *name, CallData *callData)
+ReturnedValue Runtime::callActivationProperty(ExecutionEngine *engine, int nameIndex, CallData *callData)
 {
     Q_ASSERT(callData->thisObject.isUndefined());
-    Scope scope(context);
+    Scope scope(engine);
+    ScopedString name(scope, engine->currentContext()->compilationUnit->runtimeStrings[nameIndex]);
 
     ScopedObject base(scope);
-    ScopedValue func(scope, context->getPropertyAndBase(name, base.ptr->o));
+    ScopedContext ctx(scope, engine->currentContext());
+    ScopedValue func(scope, ctx->getPropertyAndBase(name, base.getRef()));
     if (scope.engine->hasException)
         return Encode::undefined();
 
@@ -894,242 +937,255 @@ ReturnedValue Runtime::callActivationProperty(ExecutionContext *context, String 
         if (base)
             objectAsString = ScopedValue(scope, base.asReturnedValue())->toQStringNoThrow();
         QString msg = QStringLiteral("Property '%1' of object %2 is not a function").arg(name->toQString()).arg(objectAsString);
-        return context->throwTypeError(msg);
+        return engine->throwTypeError(msg);
     }
 
-    if (o == scope.engine->evalFunction && name->equals(scope.engine->id_eval)) {
+    if (o->d() == scope.engine->evalFunction && name->equals(scope.engine->id_eval)) {
         return static_cast<EvalFunction *>(o)->evalCall(callData, true);
     }
 
     return o->call(callData);
 }
 
-ReturnedValue Runtime::callProperty(ExecutionContext *context, String *name, CallData *callData)
+ReturnedValue Runtime::callProperty(ExecutionEngine *engine, int nameIndex, CallData *callData)
 {
-    Scope scope(context);
-    Scoped<Object> baseObject(scope, callData->thisObject);
+    Scope scope(engine);
+    ScopedString name(scope, engine->currentContext()->compilationUnit->runtimeStrings[nameIndex]);
+    ScopedObject baseObject(scope, callData->thisObject);
     if (!baseObject) {
         Q_ASSERT(!callData->thisObject.isEmpty());
         if (callData->thisObject.isNullOrUndefined()) {
             QString message = QStringLiteral("Cannot call method '%1' of %2").arg(name->toQString()).arg(callData->thisObject.toQStringNoThrow());
-            return context->throwTypeError(message);
+            return engine->throwTypeError(message);
         }
 
-        baseObject = RuntimeHelpers::convertToObject(context, ValueRef(&callData->thisObject));
+        baseObject = RuntimeHelpers::convertToObject(scope.engine, callData->thisObject);
         if (!baseObject) // type error
             return Encode::undefined();
         callData->thisObject = baseObject.asReturnedValue();
     }
 
-    Scoped<FunctionObject> o(scope, baseObject->get(name));
+    ScopedFunctionObject o(scope, baseObject->get(name));
     if (!o) {
         QString error = QStringLiteral("Property '%1' of object %2 is not a function").arg(name->toQString(), callData->thisObject.toQStringNoThrow());
-        return context->throwTypeError(error);
+        return engine->throwTypeError(error);
     }
 
     return o->call(callData);
 }
 
-ReturnedValue Runtime::callPropertyLookup(ExecutionContext *context, uint index, CallData *callData)
+ReturnedValue Runtime::callPropertyLookup(ExecutionEngine *engine, uint index, CallData *callData)
 {
-    Lookup *l = context->d()->lookups + index;
+    Lookup *l = engine->currentContext()->lookups + index;
     Value v;
-    v = l->getter(l, callData->thisObject);
+    v = l->getter(l, engine, callData->thisObject);
     if (!v.isObject())
-        return context->throwTypeError();
+        return engine->throwTypeError();
 
     return v.objectValue()->call(callData);
 }
 
-ReturnedValue Runtime::callElement(ExecutionContext *context, const ValueRef index, CallData *callData)
+ReturnedValue Runtime::callElement(ExecutionEngine *engine, const Value &index, CallData *callData)
 {
-    Scope scope(context);
-    ScopedObject baseObject(scope, callData->thisObject.toObject(context));
-    ScopedString s(scope, index->toString(context));
+    Scope scope(engine);
+    ScopedObject baseObject(scope, callData->thisObject.toObject(engine));
+    ScopedString s(scope, index.toString(engine));
 
     if (scope.engine->hasException)
         return Encode::undefined();
     callData->thisObject = baseObject;
 
-    ScopedObject o(scope, baseObject->get(s.getPointer()));
+    ScopedObject o(scope, baseObject->get(s));
     if (!o)
-        return context->throwTypeError();
+        return engine->throwTypeError();
 
     return o->call(callData);
 }
 
-ReturnedValue Runtime::callValue(ExecutionContext *context, const ValueRef func, CallData *callData)
+ReturnedValue Runtime::callValue(ExecutionEngine *engine, const Value &func, CallData *callData)
 {
-    if (!func->isObject())
-        return context->throwTypeError(QStringLiteral("%1 is not a function").arg(func->toQStringNoThrow()));
+    if (!func.isObject())
+        return engine->throwTypeError(QStringLiteral("%1 is not a function").arg(func.toQStringNoThrow()));
 
-    return func->objectValue()->call(callData);
+    return func.objectValue()->call(callData);
 }
 
 
-ReturnedValue Runtime::constructGlobalLookup(ExecutionContext *context, uint index, CallData *callData)
+ReturnedValue Runtime::constructGlobalLookup(ExecutionEngine *engine, uint index, CallData *callData)
 {
-    Scope scope(context);
+    Scope scope(engine);
     Q_ASSERT(callData->thisObject.isUndefined());
 
-    Lookup *l = context->d()->lookups + index;
-    Scoped<Object> f(scope, l->globalGetter(l, context));
+    Lookup *l = engine->currentContext()->lookups + index;
+    ScopedObject f(scope, l->globalGetter(l, engine));
     if (!f)
-        return context->throwTypeError();
+        return engine->throwTypeError();
 
     return f->construct(callData);
 }
 
 
-ReturnedValue Runtime::constructActivationProperty(ExecutionContext *context, String *name, CallData *callData)
+ReturnedValue Runtime::constructActivationProperty(ExecutionEngine *engine, int nameIndex, CallData *callData)
 {
-    Scope scope(context);
-    ScopedValue func(scope, context->getProperty(name));
+    Scope scope(engine);
+    ScopedContext ctx(scope, engine->currentContext());
+    ScopedString name(scope, engine->currentContext()->compilationUnit->runtimeStrings[nameIndex]);
+    ScopedValue func(scope, ctx->getProperty(name));
     if (scope.engine->hasException)
         return Encode::undefined();
 
     Object *f = func->asObject();
     if (!f)
-        return context->throwTypeError();
+        return engine->throwTypeError();
 
     return f->construct(callData);
 }
 
-ReturnedValue Runtime::constructValue(ExecutionContext *context, const ValueRef func, CallData *callData)
+ReturnedValue Runtime::constructValue(ExecutionEngine *engine, const Value &func, CallData *callData)
 {
-    Object *f = func->asObject();
+    Object *f = func.asObject();
     if (!f)
-        return context->throwTypeError();
+        return engine->throwTypeError();
 
     return f->construct(callData);
 }
 
-ReturnedValue Runtime::constructProperty(ExecutionContext *context, String *name, CallData *callData)
+ReturnedValue Runtime::constructProperty(ExecutionEngine *engine, int nameIndex, CallData *callData)
 {
-    Scope scope(context);
-    ScopedObject thisObject(scope, callData->thisObject.toObject(context));
+    Scope scope(engine);
+    ScopedObject thisObject(scope, callData->thisObject.toObject(engine));
+    ScopedString name(scope, engine->currentContext()->compilationUnit->runtimeStrings[nameIndex]);
     if (scope.engine->hasException)
         return Encode::undefined();
 
-    Scoped<Object> f(scope, thisObject->get(name));
+    ScopedObject f(scope, thisObject->get(name));
     if (!f)
-        return context->throwTypeError();
+        return engine->throwTypeError();
 
     return f->construct(callData);
 }
 
-ReturnedValue Runtime::constructPropertyLookup(ExecutionContext *context, uint index, CallData *callData)
+ReturnedValue Runtime::constructPropertyLookup(ExecutionEngine *engine, uint index, CallData *callData)
 {
-    Lookup *l = context->d()->lookups + index;
+    Lookup *l = engine->currentContext()->lookups + index;
     Value v;
-    v = l->getter(l, callData->thisObject);
+    v = l->getter(l, engine, callData->thisObject);
     if (!v.isObject())
-        return context->throwTypeError();
+        return engine->throwTypeError();
 
     return v.objectValue()->construct(callData);
 }
 
 
-void Runtime::throwException(ExecutionContext *context, const ValueRef value)
+void Runtime::throwException(ExecutionEngine *engine, const Value &value)
 {
-    if (!value->isEmpty())
-        context->throwError(value);
+    if (!value.isEmpty())
+        engine->throwError(value);
 }
 
-ReturnedValue Runtime::typeofValue(ExecutionContext *ctx, const ValueRef value)
+ReturnedValue Runtime::typeofValue(ExecutionEngine *engine, const Value &value)
 {
-    Scope scope(ctx);
+    Scope scope(engine);
     ScopedString res(scope);
-    switch (value->type()) {
+    switch (value.type()) {
     case Value::Undefined_Type:
-        res = ctx->engine()->id_undefined;
+        res = engine->id_undefined;
         break;
     case Value::Null_Type:
-        res = ctx->engine()->id_object;
+        res = engine->id_object;
         break;
     case Value::Boolean_Type:
-        res = ctx->engine()->id_boolean;
+        res = engine->id_boolean;
         break;
     case Value::Managed_Type:
-        if (value->isString())
-            res = ctx->engine()->id_string;
-        else if (value->objectValue()->asFunctionObject())
-            res = ctx->engine()->id_function;
+        if (value.isString())
+            res = engine->id_string;
+        else if (value.objectValue()->asFunctionObject())
+            res = engine->id_function;
         else
-            res = ctx->engine()->id_object; // ### implementation-defined
+            res = engine->id_object; // ### implementation-defined
         break;
     default:
-        res = ctx->engine()->id_number;
+        res = engine->id_number;
         break;
     }
     return res.asReturnedValue();
 }
 
-QV4::ReturnedValue Runtime::typeofName(ExecutionContext *context, String *name)
+QV4::ReturnedValue Runtime::typeofName(ExecutionEngine *engine, int nameIndex)
 {
-    Scope scope(context);
-    ScopedValue prop(scope, context->getProperty(name));
+    Scope scope(engine);
+    ScopedString name(scope, engine->currentContext()->compilationUnit->runtimeStrings[nameIndex]);
+    ScopedContext ctx(scope, engine->currentContext());
+    ScopedValue prop(scope, ctx->getProperty(name));
     // typeof doesn't throw. clear any possible exception
     scope.engine->hasException = false;
-    return Runtime::typeofValue(context, prop);
+    return Runtime::typeofValue(engine, prop);
 }
 
-QV4::ReturnedValue Runtime::typeofMember(ExecutionContext *context, const ValueRef base, String *name)
+QV4::ReturnedValue Runtime::typeofMember(ExecutionEngine *engine, const Value &base, int nameIndex)
 {
-    Scope scope(context);
-    ScopedObject obj(scope, base->toObject(context));
+    Scope scope(engine);
+    ScopedString name(scope, engine->currentContext()->compilationUnit->runtimeStrings[nameIndex]);
+    ScopedObject obj(scope, base.toObject(engine));
     if (scope.engine->hasException)
         return Encode::undefined();
     ScopedValue prop(scope, obj->get(name));
-    return Runtime::typeofValue(context, prop);
+    return Runtime::typeofValue(engine, prop);
 }
 
-QV4::ReturnedValue Runtime::typeofElement(ExecutionContext *context, const ValueRef base, const ValueRef index)
+QV4::ReturnedValue Runtime::typeofElement(ExecutionEngine *engine, const Value &base, const Value &index)
 {
-    Scope scope(context);
-    ScopedString name(scope, index->toString(context));
-    ScopedObject obj(scope, base->toObject(context));
+    Scope scope(engine);
+    ScopedString name(scope, index.toString(engine));
+    ScopedObject obj(scope, base.toObject(engine));
     if (scope.engine->hasException)
         return Encode::undefined();
-    ScopedValue prop(scope, obj->get(name.getPointer()));
-    return Runtime::typeofValue(context, prop);
+    ScopedValue prop(scope, obj->get(name));
+    return Runtime::typeofValue(engine, prop);
 }
 
-ExecutionContext *Runtime::pushWithScope(const ValueRef o, ExecutionContext *ctx)
+void Runtime::pushWithScope(const Value &o, ExecutionEngine *engine)
 {
-    Scope scope(ctx);
-    ScopedObject obj(scope, o->toObject(ctx));
-    return reinterpret_cast<ExecutionContext *>(ctx->newWithContext(obj));
+    Scope scope(engine);
+    ScopedObject obj(scope, o.toObject(engine));
+    ScopedContext ctx(scope, engine->currentContext());
+    ctx->newWithContext(obj);
 }
 
-ReturnedValue Runtime::unwindException(ExecutionContext *ctx)
+ReturnedValue Runtime::unwindException(ExecutionEngine *engine)
 {
-    if (!ctx->engine()->hasException)
+    if (!engine->hasException)
         return Primitive::emptyValue().asReturnedValue();
-    return ctx->engine()->catchException(ctx, 0);
+    return engine->catchException(0);
 }
 
-ExecutionContext *Runtime::pushCatchScope(ExecutionContext *ctx, String *exceptionVarName)
+void Runtime::pushCatchScope(NoThrowEngine *engine, int exceptionVarNameIndex)
 {
-    Scope scope(ctx);
-    ScopedValue v(scope, ctx->engine()->catchException(ctx, 0));
-    return reinterpret_cast<ExecutionContext *>(ctx->newCatchContext(exceptionVarName, v));
+    Scope scope(engine);
+    ScopedValue v(scope, engine->catchException(0));
+    ScopedString exceptionVarName(scope, engine->currentContext()->compilationUnit->runtimeStrings[exceptionVarNameIndex]);
+    ScopedContext ctx(scope, engine->currentContext());
+    ctx->newCatchContext(exceptionVarName, v);
 }
 
-ExecutionContext *Runtime::popScope(ExecutionContext *ctx)
+void Runtime::popScope(ExecutionEngine *engine)
 {
-    return ctx->engine()->popContext();
+    engine->popContext();
 }
 
-void Runtime::declareVar(ExecutionContext *ctx, bool deletable, String *name)
+void Runtime::declareVar(ExecutionEngine *engine, bool deletable, int nameIndex)
 {
+    Scope scope(engine);
+    ScopedString name(scope, engine->currentContext()->compilationUnit->runtimeStrings[nameIndex]);
+    ScopedContext ctx(scope, engine->currentContext());
     ctx->createMutableBinding(name, deletable);
 }
 
-ReturnedValue Runtime::arrayLiteral(ExecutionContext *ctx, Value *values, uint length)
+ReturnedValue Runtime::arrayLiteral(ExecutionEngine *engine, Value *values, uint length)
 {
-    Scope scope(ctx);
-    Scoped<ArrayObject> a(scope, ctx->engine()->newArrayObject());
+    Scope scope(engine);
+    ScopedArrayObject a(scope, engine->newArrayObject());
 
     if (length) {
         a->arrayReserve(length);
@@ -1139,11 +1195,11 @@ ReturnedValue Runtime::arrayLiteral(ExecutionContext *ctx, Value *values, uint l
     return a.asReturnedValue();
 }
 
-ReturnedValue Runtime::objectLiteral(QV4::ExecutionContext *ctx, const QV4::Value *args, int classId, int arrayValueCount, int arrayGetterSetterCountAndFlags)
+ReturnedValue Runtime::objectLiteral(ExecutionEngine *engine, const QV4::Value *args, int classId, int arrayValueCount, int arrayGetterSetterCountAndFlags)
 {
-    Scope scope(ctx);
-    QV4::InternalClass *klass = ctx->d()->compilationUnit->runtimeClasses[classId];
-    Scoped<Object> o(scope, ctx->engine()->newObject(klass));
+    Scope scope(engine);
+    QV4::InternalClass *klass = engine->currentContext()->compilationUnit->runtimeClasses[classId];
+    ScopedObject o(scope, engine->newObject(klass, engine->objectPrototype.asObject()));
 
     {
         bool needSparseArray = arrayGetterSetterCountAndFlags >> 30;
@@ -1152,7 +1208,7 @@ ReturnedValue Runtime::objectLiteral(QV4::ExecutionContext *ctx, const QV4::Valu
     }
 
     for (uint i = 0; i < klass->size; ++i)
-        o->memberData()[i] = *args++;
+        o->memberData()->data[i] = *args++;
 
     if (arrayValueCount > 0) {
         ScopedValue entry(scope);
@@ -1181,54 +1237,55 @@ ReturnedValue Runtime::objectLiteral(QV4::ExecutionContext *ctx, const QV4::Valu
     return o.asReturnedValue();
 }
 
-QV4::ReturnedValue Runtime::setupArgumentsObject(ExecutionContext *ctx)
+QV4::ReturnedValue Runtime::setupArgumentsObject(ExecutionEngine *engine)
 {
-    Q_ASSERT(ctx->d()->type >= ExecutionContext::Type_CallContext);
-    CallContext *c = static_cast<CallContext *>(ctx);
-    return (c->engine()->memoryManager->alloc<ArgumentsObject>(c))->asReturnedValue();
+    Q_ASSERT(engine->currentContext()->type >= Heap::ExecutionContext::Type_CallContext);
+    Scope scope(engine);
+    Scoped<CallContext> c(scope, static_cast<Heap::CallContext *>(engine->currentContext()));
+    return (engine->memoryManager->alloc<ArgumentsObject>(c))->asReturnedValue();
 }
 
 #endif // V4_BOOTSTRAP
 
-QV4::ReturnedValue Runtime::increment(const QV4::ValueRef value)
+QV4::ReturnedValue Runtime::increment(const Value &value)
 {
     TRACE1(value);
 
-    if (value->isInteger() && value->integerValue() < INT_MAX)
-        return Encode(value->integerValue() + 1);
+    if (value.isInteger() && value.integerValue() < INT_MAX)
+        return Encode(value.integerValue() + 1);
     else {
-        double d = value->toNumber();
+        double d = value.toNumber();
         return Encode(d + 1.);
     }
 }
 
-QV4::ReturnedValue Runtime::decrement(const QV4::ValueRef value)
+QV4::ReturnedValue Runtime::decrement(const Value &value)
 {
     TRACE1(value);
 
-    if (value->isInteger() && value->integerValue() > INT_MIN)
-        return Encode(value->integerValue() - 1);
+    if (value.isInteger() && value.integerValue() > INT_MIN)
+        return Encode(value.integerValue() - 1);
     else {
-        double d = value->toNumber();
+        double d = value.toNumber();
         return Encode(d - 1.);
     }
 }
 
 #ifndef V4_BOOTSTRAP
 
-QV4::ReturnedValue RuntimeHelpers::toString(QV4::ExecutionContext *ctx, const QV4::ValueRef value)
+QV4::ReturnedValue RuntimeHelpers::toString(ExecutionEngine *engine, const Value &value)
 {
-    if (value->isString())
+    if (value.isString())
         return value.asReturnedValue();
-    return RuntimeHelpers::convertToString(ctx, value)->asReturnedValue();
+    return RuntimeHelpers::convertToString(engine, value)->asReturnedValue();
 }
 
-QV4::ReturnedValue RuntimeHelpers::toObject(QV4::ExecutionContext *ctx, const QV4::ValueRef value)
+QV4::ReturnedValue RuntimeHelpers::toObject(ExecutionEngine *engine, const Value &value)
 {
-    if (value->isObject())
+    if (value.isObject())
         return value.asReturnedValue();
 
-    Returned<Object> *o = RuntimeHelpers::convertToObject(ctx, value);
+    Heap::Object *o = RuntimeHelpers::convertToObject(engine, value);
     if (!o) // type error
         return Encode::undefined();
 
@@ -1237,16 +1294,16 @@ QV4::ReturnedValue RuntimeHelpers::toObject(QV4::ExecutionContext *ctx, const QV
 
 #endif // V4_BOOTSTRAP
 
-ReturnedValue Runtime::toDouble(const ValueRef value)
+ReturnedValue Runtime::toDouble(const Value &value)
 {
     TRACE1(value);
-    return Encode(value->toNumber());
+    return Encode(value.toNumber());
 }
 
-int Runtime::toInt(const ValueRef value)
+int Runtime::toInt(const Value &value)
 {
     TRACE1(value);
-    return value->toInt32();
+    return value.toInt32();
 }
 
 int Runtime::doubleToInt(const double &d)
@@ -1255,10 +1312,10 @@ int Runtime::doubleToInt(const double &d)
     return Primitive::toInt32(d);
 }
 
-unsigned Runtime::toUInt(const ValueRef value)
+unsigned Runtime::toUInt(const Value &value)
 {
     TRACE1(value);
-    return value->toUInt32();
+    return value.toUInt32();
 }
 
 unsigned Runtime::doubleToUInt(const double &d)
@@ -1269,99 +1326,108 @@ unsigned Runtime::doubleToUInt(const double &d)
 
 #ifndef V4_BOOTSTRAP
 
-ReturnedValue Runtime::regexpLiteral(ExecutionContext *ctx, int id)
+ReturnedValue Runtime::regexpLiteral(ExecutionEngine *engine, int id)
 {
-    return ctx->d()->compilationUnit->runtimeRegularExpressions[id].asReturnedValue();
+    return engine->currentContext()->compilationUnit->runtimeRegularExpressions[id].asReturnedValue();
 }
 
-ReturnedValue Runtime::getQmlIdArray(NoThrowContext *ctx)
+ReturnedValue Runtime::getQmlIdArray(NoThrowEngine *engine)
 {
-    Q_ASSERT(ctx->engine()->qmlContextObject()->getPointer()->as<QmlContextWrapper>());
-    return static_cast<QmlContextWrapper *>(ctx->engine()->qmlContextObject()->getPointer())->idObjectsArray();
+    Q_ASSERT(engine->qmlContextObject());
+    Scope scope(engine);
+    Scoped<QmlContextWrapper> wrapper(scope, engine->qmlContextObject());
+    return wrapper->idObjectsArray();
 }
 
-ReturnedValue Runtime::getQmlContextObject(NoThrowContext *ctx)
+ReturnedValue Runtime::getQmlContextObject(NoThrowEngine *engine)
 {
-    QQmlContextData *context = QmlContextWrapper::callingContext(ctx->engine());
+    QQmlContextData *context = QmlContextWrapper::callingContext(engine);
     if (!context)
         return Encode::undefined();
-    return QObjectWrapper::wrap(ctx->d()->engine, context->contextObject);
+    return QObjectWrapper::wrap(engine, context->contextObject);
 }
 
-ReturnedValue Runtime::getQmlScopeObject(NoThrowContext *ctx)
+ReturnedValue Runtime::getQmlScopeObject(NoThrowEngine *engine)
 {
-    Scope scope(ctx);
-    QV4::Scoped<QmlContextWrapper> c(scope, ctx->engine()->qmlContextObject(), Scoped<QmlContextWrapper>::Cast);
-    return QObjectWrapper::wrap(ctx->d()->engine, c->getScopeObject());
+    Scope scope(engine);
+    QV4::Scoped<QmlContextWrapper> c(scope, engine->qmlContextObject());
+    return QObjectWrapper::wrap(engine, c->getScopeObject());
 }
 
-ReturnedValue Runtime::getQmlQObjectProperty(ExecutionContext *ctx, const ValueRef object, int propertyIndex, bool captureRequired)
+ReturnedValue Runtime::getQmlQObjectProperty(ExecutionEngine *engine, const Value &object, int propertyIndex, bool captureRequired)
 {
-    Scope scope(ctx);
+    Scope scope(engine);
     QV4::Scoped<QObjectWrapper> wrapper(scope, object);
     if (!wrapper) {
-        ctx->throwTypeError(QStringLiteral("Cannot read property of null"));
+        engine->throwTypeError(QStringLiteral("Cannot read property of null"));
         return Encode::undefined();
     }
+    ScopedContext ctx(scope, engine->currentContext());
     return QV4::QObjectWrapper::getProperty(wrapper->object(), ctx, propertyIndex, captureRequired);
 }
 
-QV4::ReturnedValue Runtime::getQmlAttachedProperty(ExecutionContext *ctx, int attachedPropertiesId, int propertyIndex)
+QV4::ReturnedValue Runtime::getQmlAttachedProperty(ExecutionEngine *engine, int attachedPropertiesId, int propertyIndex)
 {
-    Scope scope(ctx);
-    QV4::Scoped<QmlContextWrapper> c(scope, ctx->engine()->qmlContextObject(), Scoped<QmlContextWrapper>::Cast);
+    Scope scope(engine);
+    QV4::Scoped<QmlContextWrapper> c(scope, engine->qmlContextObject());
     QObject *scopeObject = c->getScopeObject();
     QObject *attachedObject = qmlAttachedPropertiesObjectById(attachedPropertiesId, scopeObject);
 
-    QQmlEngine *qmlEngine = ctx->engine()->v8Engine->engine();
-    QQmlData::ensurePropertyCache(qmlEngine, attachedObject);
+    QJSEngine *jsEngine = engine->jsEngine();
+    QQmlData::ensurePropertyCache(jsEngine, attachedObject);
+    ScopedContext ctx(scope, engine->currentContext());
     return QV4::QObjectWrapper::getProperty(attachedObject, ctx, propertyIndex, /*captureRequired*/true);
 }
 
-ReturnedValue Runtime::getQmlSingletonQObjectProperty(ExecutionContext *ctx, const ValueRef object, int propertyIndex, bool captureRequired)
+ReturnedValue Runtime::getQmlSingletonQObjectProperty(ExecutionEngine *engine, const Value &object, int propertyIndex, bool captureRequired)
 {
-    Scope scope(ctx);
+    Scope scope(engine);
     QV4::Scoped<QmlTypeWrapper> wrapper(scope, object);
     if (!wrapper) {
-        ctx->throwTypeError(QStringLiteral("Cannot read property of null"));
+        scope.engine->throwTypeError(QStringLiteral("Cannot read property of null"));
         return Encode::undefined();
     }
+    ScopedContext ctx(scope, engine->currentContext());
     return QV4::QObjectWrapper::getProperty(wrapper->singletonObject(), ctx, propertyIndex, captureRequired);
 }
 
-void Runtime::setQmlQObjectProperty(ExecutionContext *ctx, const ValueRef object, int propertyIndex, const ValueRef value)
+void Runtime::setQmlQObjectProperty(ExecutionEngine *engine, const Value &object, int propertyIndex, const Value &value)
 {
-    Scope scope(ctx);
+    Scope scope(engine);
     QV4::Scoped<QObjectWrapper> wrapper(scope, object);
     if (!wrapper) {
-        ctx->throwTypeError(QStringLiteral("Cannot write property of null"));
+        engine->throwTypeError(QStringLiteral("Cannot write property of null"));
         return;
     }
+    ScopedContext ctx(scope, engine->currentContext());
     wrapper->setProperty(ctx, propertyIndex, value);
 }
 
-ReturnedValue Runtime::getQmlImportedScripts(NoThrowContext *ctx)
+ReturnedValue Runtime::getQmlImportedScripts(NoThrowEngine *engine)
 {
-    QQmlContextData *context = QmlContextWrapper::callingContext(ctx->engine());
+    QQmlContextData *context = QmlContextWrapper::callingContext(engine);
     if (!context)
         return Encode::undefined();
     return context->importedScripts.value();
 }
 
-QV4::ReturnedValue Runtime::getQmlSingleton(QV4::NoThrowContext *ctx, String *name)
+QV4::ReturnedValue Runtime::getQmlSingleton(QV4::NoThrowEngine *engine, int nameIndex)
 {
-    return static_cast<QmlContextWrapper *>(ctx->engine()->qmlContextObject()->getPointer())->qmlSingletonWrapper(ctx->engine()->v8Engine, name);
+    Scope scope(engine);
+    ScopedString name(scope, engine->currentContext()->compilationUnit->runtimeStrings[nameIndex]);
+    Scoped<QmlContextWrapper> wrapper(scope, engine->qmlContextObject());
+    return wrapper->qmlSingletonWrapper(engine, name);
 }
 
-void Runtime::convertThisToObject(ExecutionContext *ctx)
+void Runtime::convertThisToObject(ExecutionEngine *engine)
 {
-    Value *t = &ctx->d()->callData->thisObject;
+    Value *t = &engine->currentContext()->callData->thisObject;
     if (t->isObject())
         return;
     if (t->isNullOrUndefined()) {
-        *t = ctx->engine()->globalObject->asReturnedValue();
+        *t = engine->globalObject()->asReturnedValue();
     } else {
-        *t = t->toObject(ctx)->asReturnedValue();
+        *t = t->toObject(engine)->asReturnedValue();
     }
 }
 

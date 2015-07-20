@@ -63,7 +63,20 @@ HEADERS += $$PWD/disassembler/ARMv7/ARMv7DOpcode.h
 SOURCES += $$PWD/yarr/*.cpp
 HEADERS += $$PWD/yarr/*.h
 
-retgen.output = RegExpJitTables.h
+#
+# Generate RegExpJitTables.h
+#
+GENERATEDDIR = .generated
+debug_and_release {
+    CONFIG(debug, debug|release) {
+        GENERATEDDIR = $$GENERATEDDIR/debug
+    } else {
+        GENERATEDDIR = $$GENERATEDDIR/release
+    }
+}
+INCLUDEPATH += $$GENERATEDDIR
+
+retgen.output = $$GENERATEDDIR/RegExpJitTables.h
 retgen.script = $$PWD/create_regex_tables
 retgen.input = retgen.script
 retgen.CONFIG += no_link
@@ -71,18 +84,16 @@ retgen.commands = python $$retgen.script > ${QMAKE_FILE_OUT}
 QMAKE_EXTRA_COMPILERS += retgen
 
 # Taken from WebKit/Tools/qmake/mkspecs/features/unix/default_post.prf
-linux-g++* {
-    greaterThan(QT_GCC_MAJOR_VERSION, 3):greaterThan(QT_GCC_MINOR_VERSION, 5) {
-        !contains(QMAKE_CXXFLAGS, -std=(c|gnu)\\+\\+(0x|11)) {
+!c++11:!intel_icc {
+    # Don't warn about OVERRIDE and FINAL, since they are feature-checked anyways
+    clang {
+        QMAKE_CXXFLAGS += -Wno-c++11-extensions -Wno-c++0x-extensions
+        QMAKE_OBJECTIVE_CFLAGS += -Wno-c++11-extensions -Wno-c++0x-extensions
+    } else: gcc {
+        greaterThan(QT_GCC_MAJOR_VERSION, 4)|greaterThan(QT_GCC_MINOR_VERSION, 5) {
             # We need to deactivate those warnings because some names conflicts with upcoming c++0x types (e.g.nullptr).
             QMAKE_CXXFLAGS_WARN_ON += -Wno-c++0x-compat
             QMAKE_CXXFLAGS += -Wno-c++0x-compat
         }
     }
-}
-
-# Don't warn about OVERRIDE and FINAL, since they are feature-checked anyways
-*clang:!contains(QMAKE_CXXFLAGS, -std=c++11) {
-    QMAKE_CXXFLAGS += -Wno-c++11-extensions
-    QMAKE_OBJECTIVE_CFLAGS += -Wno-c++11-extensions
 }

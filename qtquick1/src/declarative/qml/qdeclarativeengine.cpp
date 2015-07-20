@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtDeclarative module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -2084,14 +2084,14 @@ QScriptValue QDeclarativeEnginePrivate::scriptValueFromVariant(const QVariant &v
 {
     if (val.userType() == qMetaTypeId<QDeclarativeListReference>()) {
         QDeclarativeListReferencePrivate *p =
-            QDeclarativeListReferencePrivate::get((QDeclarativeListReference*)val.constData());
+            QDeclarativeListReferencePrivate::get((QDeclarativeListReference*)const_cast<void *>(val.constData()));
         if (p->object) {
             return listClass->newList(p->property, p->propertyType);
         } else {
             return scriptEngine.nullValue();
         }
     } else if (val.userType() == qMetaTypeId<QList<QObject *> >()) {
-        const QList<QObject *> &list = *(QList<QObject *>*)val.constData();
+        const QList<QObject *> &list = *(const QList<QObject *>*)val.constData();
         QScriptValue rv = scriptEngine.newArray(list.count());
         for (int ii = 0; ii < list.count(); ++ii) {
             QObject *object = list.at(ii);
@@ -2297,21 +2297,6 @@ QString QDeclarativeEngine::offlineStoragePath() const
     return d->scriptEngine.offlineStoragePath;
 }
 
-static void voidptr_destructor(void *v)
-{
-    void **ptr = (void **)v;
-    delete ptr;
-}
-
-static void *voidptr_constructor(const void *v)
-{
-    if (!v) {
-        return new void*;
-    } else {
-        return new void*(*(void **)v);
-    }
-}
-
 QDeclarativePropertyCache *QDeclarativeEnginePrivate::createCache(const QMetaObject *mo)
 {
     Q_Q(QDeclarativeEngine);
@@ -2438,10 +2423,19 @@ void QDeclarativeEnginePrivate::registerCompositeType(QDeclarativeCompiledData *
     QByteArray ptr = name + '*';
     QByteArray lst = "QDeclarativeListProperty<" + name + '>';
 
-    int ptr_type = QMetaType::registerType(ptr.constData(), voidptr_destructor,
-                                           voidptr_constructor);
-    int lst_type = QMetaType::registerType(lst.constData(), voidptr_destructor,
-                                           voidptr_constructor);
+    int ptr_type = QMetaType::registerNormalizedType(ptr,
+                                                     QtMetaTypePrivate::QMetaTypeFunctionHelper<QObject*>::Destruct,
+                                                     QtMetaTypePrivate::QMetaTypeFunctionHelper<QObject*>::Construct,
+                                                     sizeof(QObject*),
+                                                     static_cast<QFlags<QMetaType::TypeFlag> >(QtPrivate::QMetaTypeTypeFlags<QObject*>::Flags),
+                                                     data->root);
+    int lst_type = QMetaType::registerNormalizedType(lst,
+                                                     QtMetaTypePrivate::QMetaTypeFunctionHelper<QDeclarativeListProperty<QObject> >::Destruct,
+                                                     QtMetaTypePrivate::QMetaTypeFunctionHelper<QDeclarativeListProperty<QObject> >::Construct,
+                                                     sizeof(QDeclarativeListProperty<QObject>),
+                                                     static_cast<QFlags<QMetaType::TypeFlag> >(QtPrivate::QMetaTypeTypeFlags<QDeclarativeListProperty<QObject> >::Flags),
+                                                     static_cast<QMetaObject*>(0));
+
 
     m_qmlLists.insert(lst_type, ptr_type);
     m_compositeTypes.insert(ptr_type, data);
@@ -2472,7 +2466,7 @@ QObject *QDeclarativeEnginePrivate::toQObject(const QVariant &v, bool *ok) const
     int t = v.userType();
     if (t == QMetaType::QObjectStar || m_compositeTypes.contains(t)) {
         if (ok) *ok = true;
-        return *(QObject **)(v.constData());
+        return *(QObject *const *)(v.constData());
     } else {
         return QDeclarativeMetaType::toQObject(v, ok);
     }

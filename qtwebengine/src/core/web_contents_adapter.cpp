@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtWebEngine module of the Qt Toolkit.
 **
@@ -10,15 +10,15 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
 ** General Public License version 3 as published by the Free Software
 ** Foundation and appearing in the file LICENSE.LGPLv3 included in the
-** packaging of this file.  Please review the following information to
+** packaging of this file. Please review the following information to
 ** ensure the GNU Lesser General Public License version 3 requirements
 ** will be met: https://www.gnu.org/licenses/lgpl.html.
 **
@@ -26,7 +26,7 @@
 ** Alternatively, this file may be used under the terms of the GNU
 ** General Public License version 2.0 or later as published by the Free
 ** Software Foundation and appearing in the file LICENSE.GPL included in
-** the packaging of this file.  Please review the following information to
+** the packaging of this file. Please review the following information to
 ** ensure the GNU General Public License version 2.0 requirements will be
 ** met: http://www.gnu.org/licenses/gpl-2.0.html.
 **
@@ -41,17 +41,17 @@
 #include "web_contents_adapter.h"
 #include "web_contents_adapter_p.h"
 
+#include "browser_accessibility_qt.h"
+#include "browser_context_adapter.h"
 #include "browser_context_qt.h"
-#include "content_browser_client_qt.h"
-#include "javascript_dialog_manager_qt.h"
 #include "media_capture_devices_dispatcher.h"
 #include "qt_render_view_observer_host.h"
 #include "type_conversion.h"
+#include "web_channel_ipc_transport_host.h"
 #include "web_contents_adapter_client.h"
 #include "web_contents_view_qt.h"
 #include "web_engine_context.h"
 #include "web_engine_settings.h"
-#include "web_engine_visited_links_manager.h"
 
 #include "base/values.h"
 #include "content/browser/renderer_host/render_view_host_impl.h"
@@ -65,9 +65,9 @@
 #include "content/public/common/page_zoom.h"
 #include "content/public/common/renderer_preferences.h"
 #include "content/public/common/url_constants.h"
+#include "content/public/common/web_preferences.h"
 #include "ui/shell_dialogs/selected_file_info.h"
 #include "third_party/WebKit/public/web/WebFindOptions.h"
-#include "webkit/common/webpreferences.h"
 
 #include <QDir>
 #include <QGuiApplication>
@@ -75,6 +75,9 @@
 #include <QStyleHints>
 #include <QVariant>
 #include <QtGui/qaccessible.h>
+#include <QtWebChannel/QWebChannel>
+
+namespace QtWebEngineCore {
 
 static const int kTestWindowWidth = 800;
 static const int kTestWindowHeight = 600;
@@ -175,9 +178,8 @@ static QStringList listRecursively(const QDir& dir) {
     return ret;
 }
 
-static content::WebContents *createBlankWebContents(WebContentsAdapterClient *adapterClient)
+static content::WebContents *createBlankWebContents(WebContentsAdapterClient *adapterClient, content::BrowserContext *browserContext)
 {
-    content::BrowserContext* browserContext = ContentBrowserClientQt::Get()->browser_context();
     content::WebContents::CreateParams create_params(browserContext, NULL);
     create_params.routing_id = MSG_ROUTING_NONE;
     create_params.initial_size = gfx::Size(kTestWindowWidth, kTestWindowHeight);
@@ -222,7 +224,7 @@ static void serializeNavigationHistory(const content::NavigationController &cont
     }
 }
 
-void deserializeNavigationHistory(QDataStream &input, int *currentIndex, std::vector<content::NavigationEntry*> *entries)
+static void deserializeNavigationHistory(QDataStream &input, int *currentIndex, std::vector<content::NavigationEntry*> *entries, content::BrowserContext *browserContext)
 {
     int version;
     input >> version;
@@ -274,11 +276,11 @@ void deserializeNavigationHistory(QDataStream &input, int *currentIndex, std::ve
             content::Referrer(toGurl(referrerUrl), static_cast<blink::WebReferrerPolicy>(referrerPolicy)),
             // Use a transition type of reload so that we don't incorrectly
             // increase the typed count.
-            content::PAGE_TRANSITION_RELOAD,
+            ui::PAGE_TRANSITION_RELOAD,
             false,
             // The extra headers are not sync'ed across sessions.
             std::string(),
-            ContentBrowserClientQt::Get()->browser_context());
+            browserContext);
 
         entry->SetTitle(toString16(title));
         entry->SetPageState(content::PageState::CreateFromEncodedData(std::string(pageState.data(), pageState.size())));
@@ -292,9 +294,35 @@ void deserializeNavigationHistory(QDataStream &input, int *currentIndex, std::ve
     }
 }
 
+namespace {
+static QList<WebContentsAdapter *> recursive_guard_loading_adapters;
+
+class LoadRecursionGuard {
+    public:
+    static bool isGuarded(WebContentsAdapter *adapter)
+    {
+        return recursive_guard_loading_adapters.contains(adapter);
+    }
+    LoadRecursionGuard(WebContentsAdapter *adapter)
+        : m_adapter(adapter)
+    {
+        recursive_guard_loading_adapters.append(adapter);
+    }
+
+    ~LoadRecursionGuard() {
+        recursive_guard_loading_adapters.removeOne(m_adapter);
+    }
+
+    private:
+        WebContentsAdapter *m_adapter;
+};
+} // Anonymous namespace
+
 WebContentsAdapterPrivate::WebContentsAdapterPrivate()
     // This has to be the first thing we create, and the last we destroy.
     : engineContext(WebEngineContext::current())
+    , webChannel(0)
+    , adapterClient(0)
     , nextRequestId(1)
     , lastFindRequestId(0)
 {
@@ -308,13 +336,13 @@ QExplicitlySharedDataPointer<WebContentsAdapter> WebContentsAdapter::createFromS
 {
     int currentIndex;
     std::vector<content::NavigationEntry*> entries;
-    deserializeNavigationHistory(input, &currentIndex, &entries);
+    deserializeNavigationHistory(input, &currentIndex, &entries, adapterClient->browserContextAdapter()->browserContext());
 
     if (currentIndex == -1)
         return QExplicitlySharedDataPointer<WebContentsAdapter>();
 
     // Unlike WebCore, Chromium only supports Restoring to a new WebContents instance.
-    content::WebContents* newWebContents = createBlankWebContents(adapterClient);
+    content::WebContents* newWebContents = createBlankWebContents(adapterClient, adapterClient->browserContextAdapter()->browserContext());
     content::NavigationController &controller = newWebContents->GetController();
     controller.Restore(currentIndex, content::NavigationController::RESTORE_LAST_SESSION_EXITED_CLEANLY, &entries);
 
@@ -347,10 +375,13 @@ void WebContentsAdapter::initialize(WebContentsAdapterClient *adapterClient)
 {
     Q_D(WebContentsAdapter);
     d->adapterClient = adapterClient;
+    // We keep a reference to browserContextAdapter to keep it alive as long as we use it.
+    // This is needed in case the QML WebEngineProfile is garbage collected before the WebEnginePage.
+    d->browserContextAdapter = adapterClient->browserContextAdapter();
 
     // Create our own if a WebContents wasn't provided at construction.
     if (!d->webContents)
-        d->webContents.reset(createBlankWebContents(adapterClient));
+        d->webContents.reset(createBlankWebContents(adapterClient, d->browserContextAdapter->browserContext()));
 
     // This might replace any adapter that has been initialized with this WebEngineSettings.
     adapterClient->webEngineSettings()->setWebContentsAdapter(this);
@@ -360,6 +391,7 @@ void WebContentsAdapter::initialize(WebContentsAdapterClient *adapterClient)
     // Qt returns a flash time (the whole cycle) in ms, chromium expects just the interval in seconds
     const int qtCursorFlashTime = QGuiApplication::styleHints()->cursorFlashTime();
     rendererPrefs->caret_blink_interval = 0.5 * static_cast<double>(qtCursorFlashTime) / 1000;
+    rendererPrefs->user_agent_override = d->browserContextAdapter->httpUserAgent().toStdString();
     d->webContents->GetRenderViewHost()->SyncRendererPrefs();
 
     // Create and attach observers to the WebContents.
@@ -419,11 +451,32 @@ void WebContentsAdapter::reload()
     d->webContents->Focus();
 }
 
-void WebContentsAdapter::load(const QUrl &url)
+void WebContentsAdapter::reloadAndBypassCache()
 {
     Q_D(WebContentsAdapter);
+    d->webContents->GetController().ReloadIgnoringCache(/*checkRepost = */false);
+    d->webContents->Focus();
+}
+
+void WebContentsAdapter::load(const QUrl &url)
+{
+    // The situation can occur when relying on the editingFinished signal in QML to set the url
+    // of the WebView.
+    // When enter is pressed, onEditingFinished fires and the url of the webview is set, which
+    // calls into this and focuses the webview, taking the focus from the TextField/TextInput,
+    // which in turn leads to editingFinished firing again. This scenario would cause a crash
+    // down the line when unwinding as the first RenderWidgetHostViewQtDelegateQuick instance is
+    // a dangling pointer by that time.
+
+    if (LoadRecursionGuard::isGuarded(this))
+        return;
+    LoadRecursionGuard guard(this);
+    Q_UNUSED(guard);
+
+    Q_D(WebContentsAdapter);
     content::NavigationController::LoadURLParams params(toGurl(url));
-    params.transition_type = content::PageTransitionFromInt(content::PAGE_TRANSITION_TYPED | content::PAGE_TRANSITION_FROM_ADDRESS_BAR);
+    params.transition_type = ui::PageTransitionFromInt(ui::PAGE_TRANSITION_TYPED | ui::PAGE_TRANSITION_FROM_ADDRESS_BAR);
+    params.override_user_agent = content::NavigationController::UA_OVERRIDE_TRUE;
     d->webContents->GetController().LoadURLWithParams(params);
     d->webContents->Focus();
 }
@@ -606,7 +659,7 @@ void WebContentsAdapter::clearNavigationHistory()
 void WebContentsAdapter::serializeNavigationHistory(QDataStream &output)
 {
     Q_D(WebContentsAdapter);
-    ::serializeNavigationHistory(d->webContents->GetController(), output);
+    QtWebEngineCore::serializeNavigationHistory(d->webContents->GetController(), output);
 }
 
 void WebContentsAdapter::setZoomFactor(qreal factor)
@@ -623,17 +676,30 @@ qreal WebContentsAdapter::currentZoomFactor() const
     return content::ZoomLevelToZoomFactor(content::HostZoomMap::GetZoomLevel(d->webContents.get()));
 }
 
-void WebContentsAdapter::enableInspector(bool enable)
+BrowserContextQt* WebContentsAdapter::browserContext()
 {
-    ContentBrowserClientQt::Get()->enableInspector(enable);
+    Q_D(WebContentsAdapter);
+    return d->browserContextAdapter ? d->browserContextAdapter->browserContext() : d->webContents ? static_cast<BrowserContextQt*>(d->webContents->GetBrowserContext()) : 0;
 }
 
+BrowserContextAdapter* WebContentsAdapter::browserContextAdapter()
+{
+    Q_D(WebContentsAdapter);
+    return d->browserContextAdapter ? d->browserContextAdapter.data() : d->webContents ? static_cast<BrowserContextQt*>(d->webContents->GetBrowserContext())->adapter() : 0;
+}
+
+#ifndef QT_NO_ACCESSIBILITY
 QAccessibleInterface *WebContentsAdapter::browserAccessible()
 {
     Q_D(const WebContentsAdapter);
-    RenderWidgetHostViewQt *rwhv = static_cast<RenderWidgetHostViewQt*>(d->webContents->GetRenderWidgetHostView());
-    return rwhv ? rwhv->GetQtAccessible() : Q_NULLPTR;
+    content::RenderViewHost *rvh = d->webContents->GetRenderViewHost();
+    Q_ASSERT(rvh);
+    content::BrowserAccessibilityManager *manager = static_cast<content::RenderFrameHostImpl*>(rvh->GetMainFrame())->GetOrCreateBrowserAccessibilityManager();
+    content::BrowserAccessibility *acc = manager->GetRoot();
+    content::BrowserAccessibilityQt *accQt = static_cast<content::BrowserAccessibilityQt*>(acc);
+    return accQt;
 }
+#endif // QT_NO_ACCESSIBILITY
 
 void WebContentsAdapter::runJavaScript(const QString &javaScript)
 {
@@ -700,7 +766,7 @@ void WebContentsAdapter::stopFinding()
     d->webContents->StopFinding(content::STOP_FIND_ACTION_KEEP_SELECTION);
 }
 
-void WebContentsAdapter::updateWebPreferences(const WebPreferences & webPreferences)
+void WebContentsAdapter::updateWebPreferences(const content::WebPreferences & webPreferences)
 {
     Q_D(WebContentsAdapter);
     d->webContents->GetRenderViewHost()->UpdateWebkitPreferences(webPreferences);
@@ -724,6 +790,26 @@ void WebContentsAdapter::grantMediaAccessPermission(const QUrl &securityOrigin, 
     MediaCaptureDevicesDispatcher::GetInstance()->handleMediaAccessPermissionResponse(d->webContents.get(), securityOrigin, flags);
 }
 
+void WebContentsAdapter::runGeolocationRequestCallback(const QUrl &securityOrigin, bool allowed)
+{
+    Q_D(WebContentsAdapter);
+    d->webContentsDelegate->geolocationPermissionReply(securityOrigin, allowed);
+}
+
+void WebContentsAdapter::grantMouseLockPermission(bool granted)
+{
+    Q_D(WebContentsAdapter);
+
+    if (granted) {
+        if (RenderWidgetHostViewQt *rwhv = static_cast<RenderWidgetHostViewQt *>(d->webContents->GetRenderWidgetHostView()))
+            rwhv->Focus();
+        else
+            granted = false;
+    }
+
+    d->webContents->GotResponseToLockMouseRequest(granted);
+}
+
 void WebContentsAdapter::dpiScaleChanged()
 {
     Q_D(WebContentsAdapter);
@@ -734,6 +820,11 @@ void WebContentsAdapter::dpiScaleChanged()
         impl->NotifyScreenInfoChanged();
 }
 
+ASSERT_ENUMS_MATCH(WebContentsAdapterClient::Open, content::FileChooserParams::Open)
+ASSERT_ENUMS_MATCH(WebContentsAdapterClient::OpenMultiple, content::FileChooserParams::OpenMultiple)
+ASSERT_ENUMS_MATCH(WebContentsAdapterClient::UploadFolder, content::FileChooserParams::UploadFolder)
+ASSERT_ENUMS_MATCH(WebContentsAdapterClient::Save, content::FileChooserParams::Save)
+
 void WebContentsAdapter::filesSelectedInChooser(const QStringList &fileList, WebContentsAdapterClient::FileChooserMode mode)
 {
     Q_D(WebContentsAdapter);
@@ -743,5 +834,37 @@ void WebContentsAdapter::filesSelectedInChooser(const QStringList &fileList, Web
     if (mode == WebContentsAdapterClient::UploadFolder && !fileList.isEmpty()
             && QFileInfo(fileList.first()).isDir()) // Enumerate the directory
         files = listRecursively(QDir(fileList.first()));
-    rvh->FilesSelectedInChooser(toVector<ui::SelectedFileInfo>(files), static_cast<content::FileChooserParams::Mode>(mode));
+    rvh->FilesSelectedInChooser(toVector<content::FileChooserFileInfo>(files), static_cast<content::FileChooserParams::Mode>(mode));
 }
+
+content::WebContents *WebContentsAdapter::webContents() const
+{
+    Q_D(const WebContentsAdapter);
+    return d->webContents.get();
+}
+
+QWebChannel *WebContentsAdapter::webChannel() const
+{
+    Q_D(const WebContentsAdapter);
+    return d->webChannel;
+}
+
+void WebContentsAdapter::setWebChannel(QWebChannel *channel)
+{
+    Q_D(WebContentsAdapter);
+    if (d->webChannel == channel)
+        return;
+    if (!d->webChannelTransport.get())
+        d->webChannelTransport.reset(new WebChannelIPCTransportHost(d->webContents.get()));
+    else
+        d->webChannel->disconnectFrom(d->webChannelTransport.get());
+
+    d->webChannel = channel;
+    if (!channel) {
+        d->webChannelTransport.reset();
+        return;
+    }
+    channel->connectTo(d->webChannelTransport.get());
+}
+
+} // namespace QtWebEngineCore

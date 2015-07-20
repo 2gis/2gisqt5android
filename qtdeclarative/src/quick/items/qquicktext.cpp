@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQuick module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -144,10 +144,10 @@ QSizeF QQuickTextDocumentWithImageResources::intrinsicSize(
     if (format.isImageFormat()) {
         QTextImageFormat imageFormat = format.toImageFormat();
 
-        const bool hasWidth = imageFormat.hasProperty(QTextFormat::ImageWidth);
         const int width = qRound(imageFormat.width());
-        const bool hasHeight = imageFormat.hasProperty(QTextFormat::ImageHeight);
+        const bool hasWidth = imageFormat.hasProperty(QTextFormat::ImageWidth) && width > 0;
         const int height = qRound(imageFormat.height());
+        const bool hasHeight = imageFormat.hasProperty(QTextFormat::ImageHeight) && height > 0;
 
         QSizeF size(width, height);
         if (!hasWidth || !hasHeight) {
@@ -254,8 +254,11 @@ QQuickTextPrivate::~QQuickTextPrivate()
 {
     delete elideLayout;
     delete textLine; textLine = 0;
-    qDeleteAll(imgTags);
-    imgTags.clear();
+
+    if (extra.isAllocated()) {
+        qDeleteAll(extra->imgTags);
+        extra->imgTags.clear();
+    }
 }
 
 qreal QQuickTextPrivate::getImplicitWidth() const
@@ -305,8 +308,8 @@ void QQuickTextPrivate::updateLayout()
     updateOnComponentComplete = false;
     layoutTextElided = false;
 
-    if (!visibleImgTags.isEmpty())
-        visibleImgTags.clear();
+    if (extra.isAllocated())
+        extra->visibleImgTags.clear();
     needToUpdateLayout = false;
 
     // Setup instance of QTextLayout for all cases other than richtext
@@ -316,7 +319,10 @@ void QQuickTextPrivate::updateLayout()
                 layout.setFont(font);
                 // needs temporary bool because formatModifiesFontSize is in a bit-field
                 bool fontSizeModified = false;
-                QQuickStyledText::parse(text, layout, imgTags, q->baseUrl(), qmlContext(q), !maximumLineCountValid, &fontSizeModified);
+                QList<QQuickStyledTextImgTag*> someImgTags = extra.isAllocated() ? extra->imgTags : QList<QQuickStyledTextImgTag*>();
+                QQuickStyledText::parse(text, layout, someImgTags, q->baseUrl(), qmlContext(q), !maximumLineCountValid, &fontSizeModified);
+                if (someImgTags.size() || extra.isAllocated())
+                    extra.value().imgTags = someImgTags;
                 formatModifiesFontSize = fontSizeModified;
                 multilengthEos = -1;
             } else {
@@ -373,7 +379,7 @@ void QQuickText::imageDownloadFinished()
 
     if (d->extra.isAllocated() && d->extra->nbActiveDownloads == 0) {
         bool needToUpdateLayout = false;
-        foreach (QQuickStyledTextImgTag *img, d->visibleImgTags) {
+        foreach (QQuickStyledTextImgTag *img, d->extra->visibleImgTags) {
             if (!img->size.isValid()) {
                 img->size = img->pix->implicitSize();
                 needToUpdateLayout = true;
@@ -705,8 +711,8 @@ QRectF QQuickTextPrivate::setupTextLayout(qreal *const baseline)
     }
 
     bool shouldUseDesignMetrics = renderType != QQuickText::NativeRendering;
-    if (!visibleImgTags.isEmpty())
-        visibleImgTags.clear();
+    if (extra.isAllocated())
+        extra->visibleImgTags.clear();
     layout.setCacheEnabled(true);
     QTextOption textOption = layout.textOption();
     if (textOption.alignment() != q->effectiveHAlign()
@@ -743,6 +749,7 @@ QRectF QQuickTextPrivate::setupTextLayout(qreal *const baseline)
             : largeFont;
     int scaledFontSize = largeFont;
 
+    bool widthChanged = false;
     widthExceeded = q->width() <= 0 && (singlelineElide || canWrap || horizontalFit);
     heightExceeded = q->height() <= 0 && (multilineElide || verticalFit);
 
@@ -812,8 +819,8 @@ QRectF QQuickTextPrivate::setupTextLayout(qreal *const baseline)
 
                 QTextLine previousLine = layout.lineAt(visibleCount - 1);
                 elideText = layoutText.at(line.textStart() - 1) != QChar::LineSeparator
-                        ? elidedText(lineWidth, previousLine, &line)
-                        : elidedText(lineWidth, previousLine);
+                        ? elidedText(line.width(), previousLine, &line)
+                        : elidedText(line.width(), previousLine);
                 elideStart = previousLine.textStart();
                 // elideEnd isn't required for right eliding.
 
@@ -824,7 +831,7 @@ QRectF QQuickTextPrivate::setupTextLayout(qreal *const baseline)
             const QTextLine previousLine = line;
             line = layout.createLine();
             if (!line.isValid()) {
-                if (singlelineElide && visibleCount == 1 && previousLine.naturalTextWidth() > lineWidth) {
+                if (singlelineElide && visibleCount == 1 && previousLine.naturalTextWidth() > previousLine.width()) {
                     // Elide a single previousLine of  text if its width exceeds the element width.
                     elide = true;
                     widthExceeded = true;
@@ -834,7 +841,7 @@ QRectF QQuickTextPrivate::setupTextLayout(qreal *const baseline)
                     truncated = true;
                     elideText = layout.engine()->elidedText(
                             Qt::TextElideMode(elideMode),
-                            QFixed::fromReal(lineWidth),
+                            QFixed::fromReal(previousLine.width()),
                             0,
                             previousLine.textStart(),
                             previousLine.textLength());
@@ -863,8 +870,8 @@ QRectF QQuickTextPrivate::setupTextLayout(qreal *const baseline)
                         if (eos != -1)  // There's an abbreviated string available
                             break;
                         elideText = wrappedLine
-                                ? elidedText(lineWidth, previousLine, &line)
-                                : elidedText(lineWidth, previousLine);
+                                ? elidedText(previousLine.width(), previousLine, &line)
+                                : elidedText(previousLine.width(), previousLine);
                         elideStart = previousLine.textStart();
                         // elideEnd isn't required for right eliding.
                     } else {
@@ -939,6 +946,7 @@ QRectF QQuickTextPrivate::setupTextLayout(qreal *const baseline)
             if ((lineWidth < qMin(oldWidth, naturalWidth) || (widthExceeded && lineWidth > oldWidth))
                     && (singlelineElide || multilineElide || canWrap || horizontalFit
                         || q->effectiveHAlign() != QQuickText::AlignLeft)) {
+                widthChanged = true;
                 widthExceeded = false;
                 heightExceeded = false;
                 continue;
@@ -955,7 +963,40 @@ QRectF QQuickTextPrivate::setupTextLayout(qreal *const baseline)
 
             // If the horizontal alignment is not left and the width was not valid we need to relayout
             // now that we know the maximum line width.
-            if (!implicitWidthValid && unwrappedLineCount > 1 && q->effectiveHAlign() != QQuickText::AlignLeft) {
+            if (!q->widthValid() && !implicitWidthValid && unwrappedLineCount > 1 && q->effectiveHAlign() != QQuickText::AlignLeft) {
+                widthExceeded = false;
+                heightExceeded = false;
+                continue;
+            }
+        } else if (widthChanged) {
+            widthChanged = false;
+            if (line.isValid()) {
+                for (int lineCount = layout.lineCount(); lineCount < maxLineCount; ++lineCount) {
+                    line = layout.createLine();
+                    if (!line.isValid())
+                        break;
+                    setLineGeometry(line, lineWidth, naturalHeight);
+                }
+            }
+            layout.endLayout();
+
+            bool wasInLayout = internalWidthUpdate;
+            internalWidthUpdate = true;
+            q->setImplicitHeight(naturalHeight);
+            internalWidthUpdate = wasInLayout;
+
+            multilineElide = elideMode == QQuickText::ElideRight
+                    && q->widthValid()
+                    && (q->heightValid() || maximumLineCountValid);
+            verticalFit = fontSizeMode() & QQuickText::VerticalFit
+                    && (q->heightValid() || (maximumLineCountValid && canWrap));
+
+            const qreal oldHeight = maxHeight;
+            maxHeight = q->heightValid() ? q->height() : FLT_MAX;
+            // If the height of the item has changed and it's possible the result of eliding,
+            // line count truncation or scaling has changed, do another layout.
+            if ((maxHeight < qMin(oldHeight, naturalHeight) || (heightExceeded && maxHeight > oldHeight))
+                    && (multilineElide || (canWrap && maximumLineCountValid))) {
                 widthExceeded = false;
                 heightExceeded = false;
                 continue;
@@ -1106,7 +1147,7 @@ void QQuickTextPrivate::setLineGeometry(QTextLine &line, qreal lineWidth, qreal 
     Q_Q(QQuickText);
     line.setLineWidth(lineWidth);
 
-    if (imgTags.isEmpty()) {
+    if (extra.isAllocated() && extra->imgTags.isEmpty()) {
         line.setPosition(QPointF(line.position().x(), height));
         height += (lineHeightMode() == QQuickText::FixedHeight) ? lineHeight() : line.height() * lineHeight();
         return;
@@ -1118,39 +1159,41 @@ void QQuickTextPrivate::setLineGeometry(QTextLine &line, qreal lineWidth, qreal 
 
     QList<QQuickStyledTextImgTag *> imagesInLine;
 
-    foreach (QQuickStyledTextImgTag *image, imgTags) {
-        if (image->position >= line.textStart() &&
-            image->position < line.textStart() + line.textLength()) {
+    if (extra.isAllocated()) {
+        foreach (QQuickStyledTextImgTag *image, extra->imgTags) {
+            if (image->position >= line.textStart() &&
+                image->position < line.textStart() + line.textLength()) {
 
-            if (!image->pix) {
-                QUrl url = q->baseUrl().resolved(image->url);
-                image->pix = new QQuickPixmap(qmlEngine(q), url, image->size);
-                if (image->pix->isLoading()) {
-                    image->pix->connectFinished(q, SLOT(imageDownloadFinished()));
-                    if (!extra.isAllocated() || !extra->nbActiveDownloads)
-                        extra.value().nbActiveDownloads = 0;
-                    extra->nbActiveDownloads++;
-                } else if (image->pix->isReady()) {
-                    if (!image->size.isValid()) {
-                        image->size = image->pix->implicitSize();
-                        // if the size of the image was not explicitly set, we need to
-                        // call updateLayout() once again.
-                        needToUpdateLayout = true;
+                if (!image->pix) {
+                    QUrl url = q->baseUrl().resolved(image->url);
+                    image->pix = new QQuickPixmap(qmlEngine(q), url, image->size);
+                    if (image->pix->isLoading()) {
+                        image->pix->connectFinished(q, SLOT(imageDownloadFinished()));
+                        if (!extra.isAllocated() || !extra->nbActiveDownloads)
+                            extra.value().nbActiveDownloads = 0;
+                        extra->nbActiveDownloads++;
+                    } else if (image->pix->isReady()) {
+                        if (!image->size.isValid()) {
+                            image->size = image->pix->implicitSize();
+                            // if the size of the image was not explicitly set, we need to
+                            // call updateLayout() once again.
+                            needToUpdateLayout = true;
+                        }
+                    } else if (image->pix->isError()) {
+                        qmlInfo(q) << image->pix->error();
                     }
-                } else if (image->pix->isError()) {
-                    qmlInfo(q) << image->pix->error();
                 }
-            }
 
-            qreal ih = qreal(image->size.height());
-            if (image->align == QQuickStyledTextImgTag::Top)
-                image->pos.setY(0);
-            else if (image->align == QQuickStyledTextImgTag::Middle)
-                image->pos.setY((textHeight / 2.0) - (ih / 2.0));
-            else
-                image->pos.setY(textHeight - ih);
-            imagesInLine << image;
-            textTop = qMax(textTop, qAbs(image->pos.y()));
+                qreal ih = qreal(image->size.height());
+                if (image->align == QQuickStyledTextImgTag::Top)
+                    image->pos.setY(0);
+                else if (image->align == QQuickStyledTextImgTag::Middle)
+                    image->pos.setY((textHeight / 2.0) - (ih / 2.0));
+                else
+                    image->pos.setY(textHeight - ih);
+                imagesInLine << image;
+                textTop = qMax(textTop, qAbs(image->pos.y()));
+            }
         }
     }
 
@@ -1158,7 +1201,7 @@ void QQuickTextPrivate::setLineGeometry(QTextLine &line, qreal lineWidth, qreal 
         totalLineHeight = qMax(totalLineHeight, textTop + image->pos.y() + image->size.height());
         image->pos.setX(line.cursorToX(image->position));
         image->pos.setY(image->pos.y() + height + textTop);
-        visibleImgTags << image;
+        extra->visibleImgTags << image;
     }
 
     line.setPosition(QPointF(line.position().x(), height + textTop));
@@ -1329,10 +1372,14 @@ QQuickText::~QQuickText()
 
     The weight can be one of:
     \list
+    \li Font.Thin
     \li Font.Light
+    \li Font.ExtraLight
     \li Font.Normal - the default
+    \li Font.Medium
     \li Font.DemiBold
     \li Font.Bold
+    \li Font.ExtraBold
     \li Font.Black
     \endlist
 
@@ -1500,8 +1547,11 @@ void QQuickText::setText(const QString &n)
     d->textHasChanged = true;
     d->implicitWidthValid = false;
     d->implicitHeightValid = false;
-    qDeleteAll(d->imgTags);
-    d->imgTags.clear();
+
+    if (d->extra.isAllocated()) {
+        qDeleteAll(d->extra->imgTags);
+        d->extra->imgTags.clear();
+    }
     d->updateLayout();
     setAcceptHoverEvents(d->richText || d->styledText);
     emit textChanged(d->text);
@@ -1573,7 +1623,10 @@ void QQuickText::setLinkColor(const QColor &color)
         return;
 
     d->linkColor = rgb;
-    update();
+    if (isComponentComplete()) {
+        d->updateType = QQuickTextPrivate::UpdatePaintNode;
+        update();
+    }
     emit linkColorChanged();
 }
 
@@ -1742,7 +1795,7 @@ bool QQuickTextPrivate::determineHorizontalAlignment()
 {
     if (hAlignImplicit) {
 #ifndef QT_NO_IM
-        bool alignToRight = text.isEmpty() ? qApp->inputMethod()->inputDirection() == Qt::RightToLeft : rightToLeftText;
+        bool alignToRight = text.isEmpty() ? QGuiApplication::inputMethod()->inputDirection() == Qt::RightToLeft : rightToLeftText;
 #else
         bool alignToRight = rightToLeftText;
 #endif
@@ -2059,18 +2112,21 @@ void QQuickText::setElideMode(QQuickText::TextElideMode mode)
 QUrl QQuickText::baseUrl() const
 {
     Q_D(const QQuickText);
-    if (d->baseUrl.isEmpty()) {
+    if (!d->extra.isAllocated() || d->extra->baseUrl.isEmpty()) {
         if (QQmlContext *context = qmlContext(this))
-            const_cast<QQuickTextPrivate *>(d)->baseUrl = context->baseUrl();
+            return context->baseUrl();
+        else
+            return QUrl();
+    } else {
+        return d->extra->baseUrl;
     }
-    return d->baseUrl;
 }
 
 void QQuickText::setBaseUrl(const QUrl &url)
 {
     Q_D(QQuickText);
     if (baseUrl() != url) {
-        d->baseUrl = url;
+        d->extra.value().baseUrl = url;
 
         if (d->richText) {
             d->ensureDoc();
@@ -2078,8 +2134,10 @@ void QQuickText::setBaseUrl(const QUrl &url)
         }
         if (d->styledText) {
             d->textHasChanged = true;
-            qDeleteAll(d->imgTags);
-            d->imgTags.clear();
+            if (d->extra.isAllocated()) {
+                qDeleteAll(d->extra->imgTags);
+                d->extra->imgTags.clear();
+            }
             d->updateLayout();
         }
         emit baseUrlChanged();
@@ -2256,10 +2314,12 @@ QSGNode *QQuickText::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData *data
         if (d->elideLayout)
             node->addTextLayout(QPointF(dx, dy), d->elideLayout, color, d->style, styleColor, linkColor);
 
-        foreach (QQuickStyledTextImgTag *img, d->visibleImgTags) {
-            QQuickPixmap *pix = img->pix;
-            if (pix && pix->isReady())
-                node->addImage(QRectF(img->pos.x() + dx, img->pos.y() + dy, pix->width(), pix->height()), pix->image());
+        if (d->extra.isAllocated()) {
+            foreach (QQuickStyledTextImgTag *img, d->extra->visibleImgTags) {
+                QQuickPixmap *pix = img->pix;
+                if (pix && pix->isReady())
+                    node->addImage(QRectF(img->pos.x() + dx, img->pos.y() + dy, pix->width(), pix->height()), pix->image());
+            }
         }
     }
 

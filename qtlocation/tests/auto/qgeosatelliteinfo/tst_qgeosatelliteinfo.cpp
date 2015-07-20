@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -33,7 +33,7 @@
 
 //TESTED_COMPONENT=src/location
 
-#include <qgeosatelliteinfo.h>
+#include <QtPositioning/qgeosatelliteinfo.h>
 
 #include <QMetaType>
 #include <QObject>
@@ -353,10 +353,11 @@ private slots:
     void debug()
     {
         QFETCH(QGeoSatelliteInfo, info);
+        QFETCH(int, nextValue);
         QFETCH(QByteArray, debugString);
 
         qInstallMessageHandler(tst_qgeosatelliteinfo_messageHandler);
-        qDebug() << info;
+        qDebug() << info << nextValue;
         qInstallMessageHandler(0);
         QCOMPARE(QString(tst_qgeosatelliteinfo_debug), QString(debugString));
     }
@@ -364,42 +365,43 @@ private slots:
     void debug_data()
     {
         QTest::addColumn<QGeoSatelliteInfo>("info");
+        QTest::addColumn<int>("nextValue");
         QTest::addColumn<QByteArray>("debugString");
 
         QGeoSatelliteInfo info;
 
-        QTest::newRow("uninitialized") << info
-                << QByteArray("QGeoSatelliteInfo(system=0, satId=-1, signal-strength=-1)");
+        QTest::newRow("uninitialized") << info << 45
+                << QByteArray("QGeoSatelliteInfo(system=0, satId=-1, signal-strength=-1) 45");
 
         info = QGeoSatelliteInfo();
         info.setSignalStrength(1);
-        QTest::newRow("with SignalStrength") << info
-                << QByteArray("QGeoSatelliteInfo(system=0, satId=-1, signal-strength=1)");
+        QTest::newRow("with SignalStrength") << info << 60
+                << QByteArray("QGeoSatelliteInfo(system=0, satId=-1, signal-strength=1) 60");
 
         info = QGeoSatelliteInfo();
         info.setSatelliteIdentifier(1);
-        QTest::newRow("with SatelliteIdentifier") << info
-                << QByteArray("QGeoSatelliteInfo(system=0, satId=1, signal-strength=-1)");
+        QTest::newRow("with SatelliteIdentifier") << info << -1
+                << QByteArray("QGeoSatelliteInfo(system=0, satId=1, signal-strength=-1) -1");
 
         info = QGeoSatelliteInfo();
         info.setSatelliteSystem(QGeoSatelliteInfo::GPS);
-        QTest::newRow("with System GPS") << info
-                << QByteArray("QGeoSatelliteInfo(system=1, satId=-1, signal-strength=-1)");
+        QTest::newRow("with System GPS") << info << 1
+                << QByteArray("QGeoSatelliteInfo(system=1, satId=-1, signal-strength=-1) 1");
 
         info = QGeoSatelliteInfo();
         info.setSatelliteSystem(QGeoSatelliteInfo::GLONASS);
-        QTest::newRow("with System GLONASS") << info
-                << QByteArray("QGeoSatelliteInfo(system=2, satId=-1, signal-strength=-1)");
+        QTest::newRow("with System GLONASS") << info << 56
+                << QByteArray("QGeoSatelliteInfo(system=2, satId=-1, signal-strength=-1) 56");
 
         info = QGeoSatelliteInfo();
         info.setAttribute(QGeoSatelliteInfo::Elevation, 1.1);
-        QTest::newRow("with Elevation") << info
-                << QByteArray("QGeoSatelliteInfo(system=0, satId=-1, signal-strength=-1, Elevation=1.1)");
+        QTest::newRow("with Elevation") << info << 0
+                << QByteArray("QGeoSatelliteInfo(system=0, satId=-1, signal-strength=-1, Elevation=1.1) 0");
 
         info = QGeoSatelliteInfo();
         info.setAttribute(QGeoSatelliteInfo::Azimuth, 1.1);
-        QTest::newRow("with Azimuth") << info
-                << QByteArray("QGeoSatelliteInfo(system=0, satId=-1, signal-strength=-1, Azimuth=1.1)");
+        QTest::newRow("with Azimuth") << info << 45
+                << QByteArray("QGeoSatelliteInfo(system=0, satId=-1, signal-strength=-1, Azimuth=1.1) 45");
     }
 };
 

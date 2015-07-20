@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
@@ -10,15 +10,15 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Free Documentation License Usage
 ** Alternatively, this file may be used under the terms of the GNU Free
 ** Documentation License version 1.3 as published by the Free Software
 ** Foundation and appearing in the file included in the packaging of
-** this file.  Please review the following information to ensure
+** this file. Please review the following information to ensure
 ** the GNU Free Documentation License version 1.3 requirements
 ** will be met: http://www.gnu.org/copyleft/fdl.html.
 ** $QT_END_LICENSE$
@@ -58,7 +58,7 @@
     Qt documentation is licensed under the terms of the \l{GNU Free Documentation
     License (FDL)} version 1.3, as published by the Free Software Foundation.
     Alternatively, you may use the documentation in accordance with the terms
-    contained in a written agreement between you and Digia.
+    contained in a written agreement between you and The Qt Company.
 
     See \l{http://qt.io/licensing/} for an overview of Qt licensing, and
     \l{http://www.qt.io/download/} for details on what is included in each license
@@ -68,7 +68,7 @@
 
     To purchase a Qt license, visit \l{http://www.qt.io/download/}.
 
-    For further information and assistance about Qt licensing,
+   For further information and assistance about Qt licensing,
     please contact our sales via one of the following channels:
 
     \table
@@ -93,7 +93,7 @@
     \table
     \header \li Qt Module/Tool \li Component \li Description \li License Type \li Notes
 
-    \row \li {1,26} Qt Core
+    \row \li {1,30} Qt Core
 
     \row \li \l{QCrashHandler class}{QCrashHandler}
          \li Parts of implementation of QCrashHandler class. \li BSD-style \li
@@ -134,6 +134,10 @@
 
     \row \li \l{Android GNU C++ Run-time Licensing}{Android C++ Run-time}
          \li GNU C++ run-time library (libstdc++) for Android. \li GPLv3 with exception \li \l{Qt for Android}
+    \row \li \l{forkfd}
+         \li A tool to facilitate spawning sub-processes. \li MIT \li Unix systems
+    \row \li \l{FreeBSD strtoll and strtoull}
+         \li Functions for converting a string to long long integer. \li BSD \li
     \row \li \l {MD4 (md4.cpp and md4.h)}{MD4}
          \li implements the MD4 message-digest algorithm. \li BSD \li
     \row \li \l{MD5 (md5.cpp and md5.h)}{MD5}
@@ -146,6 +150,9 @@
          \li implements the SHA-3 encryption algorithm. \li BSD \li
     \row \li \l{Data Compression Library (zlib) version 1.2.5}{zlib}
          \li zlib is a general purpose data compression library. \li BSD-style \li
+    \row \li \l{The Public Suffix List}
+         \li A list of all known public Internet suffixes. \li Mozilla Public License \li
+    \row \li \li \li \li
 
     \row \li {1,12} Qt Gui
     \row \li \l{QKeyMapper class on X11 platforms}{QKeyMapper}
@@ -157,7 +164,7 @@
     \row \li \l{HarfBuzz (harfbuzz)}{HarfBuzz} \li OpenType layout engine. \li BSD-style \li
     \row \li \l{FreeType 2 (freetype) version 2.3.12}{FreeType 2}
          \li Parts of FreeType project used in font rendering. \li GPLv2, FreeType Project License \li
-    \row \li \l{PNG Reference Library (libpng) version 1.5.10}{PNG Reference Library}
+    \row \li \l{PNG Reference Library (libpng) version 1.6.17}{PNG Reference Library}
          \li A library for reducing the time and effort it takes to support the PNG format. \li BSD-style \li
     \row \li \l{Pixman (pixman) version 0.17.11}{Pixman}
          \li Pixman is a library that provides low-level pixel manipulation features such as image compositing and trapezoid rasterization. \li BSD-style \li
@@ -175,18 +182,22 @@
          \li Poly2Tri is a sweepline constrained Delaunay Polygon Triangulation Library. \li BSD-style \li
     \row \li \li \li \li
 
-    \row \li {1,4} Qt Network
-
-    \row \li {4,1} \b{Third-party Licenses}
-    \row \li \l{The Public Suffix List}
-         \li A list of all known public Internet suffixes. \li Mozilla Public License \li
-    \row \li \li \li \li
-
     \row \li {1,4} Qt Multimedia
 
     \row \li {4,1} \b{Third-party Licenses}
     \row \li \l{FFTReal version 2.11}{FFTReal}
          \li Fast Fourier transform of real-valued arrays. \li LGPL \li (Used in example code).
+    \row \li \li \li \li
+
+    \row \li {1,6} Qt Canvas 3D
+    \row \li \l{GNU Lesser General Public License (LGPL)} version 3 \li \li LGPL v3 \li
+    \row \li {4,1} \b{Third-party Licenses}
+    \row \li \l{Three.js Loader}
+         \li A parser for loading 3D models from JSON data structures.
+         \li MIT \li (Used in example code).
+    \row \li \l{gl-matrix.js version 2.2.2}{gl-matrix.js}
+         \li High performance matrix and vector operations
+         \li MIT \li (Used in example code).
     \row \li \li \li \li
 
     \row \li {1,4} Qt SVG
@@ -291,7 +302,7 @@
          \li libtiff is a set of C functions (a library) that support the manipulation of TIFF image files. \li BSD \li
     \row \li \l{MNG Library (libmng) version 1.0.10}{MNG}
          \li Support decoding and displaying of MNG format image files. \li BSD-style \li
-    \row \li \l{WebP (libwebp) version 0.4.0}{WebP}
+    \row \li \l{WebP (libwebp) version 0.4.3}{WebP}
          \li Support decoding and displaying of WebP format image files. \li BSD-style \li
     \row \li \li \li \li
     \row \li \li \li \li
@@ -468,7 +479,7 @@
         notice, this list of conditions and the following disclaimer in the
         documentation and/or other materials provided with the distribution.\br
       * Neither the name of Research In Motion Limited nor the
-        names of its contributors may be used to endorse or promote products
+        contributors may be used to endorse or promote products derived
         derived from this software without specific prior written permission.
 
     THIS SOFTWARE IS PROVIDED BY Research In Motion Limited ''AS IS'' AND ANY

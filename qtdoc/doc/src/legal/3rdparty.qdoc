@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
@@ -10,15 +10,15 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Free Documentation License Usage
 ** Alternatively, this file may be used under the terms of the GNU Free
 ** Documentation License version 1.3 as published by the Free Software
 ** Foundation and appearing in the file included in the packaging of
-** this file.  Please review the following information to ensure
+** this file. Please review the following information to ensure
 ** the GNU Free Documentation License version 1.3 requirements
 ** will be met: http://www.gnu.org/copyleft/fdl.html.
 ** $QT_END_LICENSE$
@@ -50,6 +50,77 @@
     corresponding files in the public Qt repository.
 
     \tableofcontents
+
+    \section1 forkfd
+
+    \e{forkfd} is a tool to facilitate spawning sub-processes on Unix systems.
+
+    \badcode
+    Copyright (C) 2014 Intel Corporation
+    Copyright (C) 2015 Klarälvdalens Datakonsult AB, a KDAB Group company, info@kdab.com
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+    THE SOFTWARE.
+    \endcode
+
+    See \c {qtbase/src/3rdparty/forkfd/forkfd.c}.
+
+    \section1 FreeBSD strtoll and strtoull
+
+    \e {strtoll()} and \e{strtoull()} are functions for converting a string to
+    (unsigned) long long integer.
+
+    \badcode
+    Copyright (c) 1992, 1993
+    The Regents of the University of California.  All rights reserved.
+
+    Copyright (c) 2011 The FreeBSD Foundation
+    All rights reserved.
+    Portions of this software were developed by David Chisnall
+    under sponsorship from the FreeBSD Foundation.
+
+    Redistribution and use in source and binary forms, with or without
+    modification, are permitted provided that the following conditions
+    are met:
+    1. Redistributions of source code must retain the above copyright
+       notice, this list of conditions and the following disclaimer.
+    2. Redistributions in binary form must reproduce the above copyright
+       notice, this list of conditions and the following disclaimer in the
+       documentation and/or other materials provided with the distribution.
+    3. Neither the name of the University nor the names of its contributors
+       may be used to endorse or promote products derived from this software
+       without specific prior written permission.
+
+    THIS SOFTWARE IS PROVIDED BY THE REGENTS AND CONTRIBUTORS ``AS IS'' AND
+    ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+    IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+    ARE DISCLAIMED.  IN NO EVENT SHALL THE REGENTS OR CONTRIBUTORS BE LIABLE
+    FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+    DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+    OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+    HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+    LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+    OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+    SUCH DAMAGE.
+    \endcode
+
+    See \c {qtbase/src/3rdparty/freebsd/strtoll.c} and
+    \c {qtbase/src/3rdparty/freebsd/strtoull.c}
 
     \section1 FreeType 2 (freetype) version 2.3.12
 
@@ -351,17 +422,27 @@
 
     See \c qtimageformats/src/3rdparty/libmng/LICENSE for license details.
 
-    \section1 PNG Reference Library (libpng) version 1.5.10
+    \section1 PNG Reference Library (libpng) version 1.6.17
 
     \e{Libpng was written as a companion to the PNG specification, as a way
     of reducing the amount of time and effort it takes to support the PNG
     file format in application programs.} -- quoted from \c
     qtbase/src/3rdparty/libpng/libpng-manual.txt.
 
-    \hr
+    \badcode
+    This copy of the libpng notices is provided for your convenience.  In case of
+    any discrepancy between this copy and the notices in the file png.h that is
+    included in the libpng distribution, the latter shall prevail.
 
-    libpng versions 1.2.6, August 15, 2004, through 1.5.1, February 3, 2011, are
-    Copyright (c) 2004, 2006-2011 Glenn Randers-Pehrson, and are
+    COPYRIGHT NOTICE, DISCLAIMER, and LICENSE:
+
+    If you modify libpng you may insert additional notices immediately following
+    this sentence.
+
+    This code is released under the libpng license.
+
+    libpng versions 1.2.6, August 15, 2004, through 1.6.17, March 26, 2015, are
+    Copyright (c) 2004, 2006-2015 Glenn Randers-Pehrson, and are
     distributed according to the same disclaimer and license as libpng-1.2.5
     with the following individual added to the list of Contributing Authors
 
@@ -372,8 +453,8 @@
     distributed according to the same disclaimer and license as libpng-1.0.6
     with the following individuals added to the list of Contributing Authors
 
-       Simon-Pierre Cadieux\br
-       Eric S. Raymond\br
+       Simon-Pierre Cadieux
+       Eric S. Raymond
        Gilles Vollant
 
     and with the following additions to the disclaimer:
@@ -390,8 +471,8 @@
     distributed according to the same disclaimer and license as libpng-0.96,
     with the following individuals added to the list of Contributing Authors:
 
-       Tom Lane\br
-       Glenn Randers-Pehrson\br
+       Tom Lane
+       Glenn Randers-Pehrson
        Willem van Schaik
 
     libpng versions 0.89, June 1996, through 0.96, May 1997, are
@@ -399,11 +480,11 @@
     Distributed according to the same disclaimer and license as libpng-0.88,
     with the following individuals added to the list of Contributing Authors:
 
-       John Bowler\br
-       Kevin Bracey\br
-       Sam Bushell\br
-       Magnus Holmgren\br
-       Greg Roelofs\br
+       John Bowler
+       Kevin Bracey
+       Sam Bushell
+       Magnus Holmgren
+       Greg Roelofs
        Tom Tanner
 
     libpng versions 0.5, May 1995, through 0.88, January 1996, are
@@ -412,10 +493,10 @@
     For the purposes of this copyright and license, "Contributing Authors"
     is defined as the following set of individuals:
 
-       Andreas Dilger\br
-       Dave Martindale\br
-       Guy Eric Schalnat\br
-       Paul Schmidt\br
+       Andreas Dilger
+       Dave Martindale
+       Guy Eric Schalnat
+       Paul Schmidt
        Tim Wegner
 
     The PNG Reference Library is supplied "AS IS".  The Contributing Authors
@@ -444,7 +525,22 @@
     source code in a product, acknowledgment is not required but would be
     appreciated.
 
-    \hr
+
+    A "png_get_copyright" function is available, for convenient use in "about"
+    boxes and the like:
+
+       printf("%s",png_get_copyright(NULL));
+
+    Also, the PNG logo (in PNG format, of course) is supplied in the
+    files "pngbar.png" and "pngbar.jpg (88x31) and "pngnow.png" (98x31).
+
+    Libpng is OSI Certified Open Source Software.  OSI Certified Open Source is a
+    certification mark of the Open Source Initiative.
+
+    Glenn Randers-Pehrson
+    glennrp at users.sourceforge.net
+    March 26, 2015
+    \endcode
 
     See \c qtbase/src/3rdparty/libpng/LICENSE for license details.
 
@@ -600,6 +696,83 @@
 
     See \c qtimageformats/src/3rdparty/libtiff/README for license details.
 
+    \section1 Three.js Loader
+
+    A parser for loading 3D models from JSON data structures.
+
+    \badcode
+    The MIT License
+    Copyright (c) 2010-2014 three.js authors
+    Copyright (c) 2014 Digia Plc and/or its subsidiary(-ies).
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+    THE SOFTWARE.
+    \endcode
+    -- quoted from \c qtcanvas3d/3rdparty/ThreeJSLoader.js
+
+    \section1 gl-matrix.js version 2.2.2
+
+    High performance matrix and vector operations.
+
+    \badcode
+    Copyright (c) 2015, Brandon Jones, Colin MacKenzie IV.
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+    THE SOFTWARE.
+    \endcode
+
+    \badcode
+    Copyright (c) 2013, Brandon Jones, Colin MacKenzie IV. All rights reserved.
+
+    Redistribution and use in source and binary forms, with or without modification,
+    are permitted provided that the following conditions are met:
+
+      * Redistributions of source code must retain the above copyright notice, this
+        list of conditions and the following disclaimer.
+      * Redistributions in binary form must reproduce the above copyright notice,
+        this list of conditions and the following disclaimer in the documentation
+        and/or other materials provided with the distribution.
+
+    THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+    ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+    WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+    DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+    ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+    (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+    LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON
+    ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+    (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+    \endcode
+
+    --quoted from \c qtcanvas3d/3rdparty/gl-matrix.js
     \section1 Wintab API (wintab)
 
     Wintab is a de facto API for pointing devices on Windows. The
@@ -951,8 +1124,8 @@
     mentioned above being set in the cookie jar supported by Qt (by the
     QNetworkCookieJar class).
 
-    See \c qtbase/src/network/access/qnetworkcookiejartlds_p.h.INFO for more
-    information about how the list is used.
+    See \c qtbase/src/corelib/io/qurltlds_p.h.INFO for more information about
+    how the list is used.
 
 
     \section1 IAccessible2 IDL Specification
@@ -1872,7 +2045,7 @@
         \li From \c {qtwayland/src/3rdparty/protocol/wayland.xml}
     \endlist
 
-    \section1 WebP (libwebp) version 0.4.0
+    \section1 WebP (libwebp) version 0.4.3
 
     \e {WebP is a new image format that provides lossless and lossy
     compression for images on the web.}

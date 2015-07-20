@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -74,10 +74,10 @@ class Q_QML_PRIVATE_EXPORT QQmlData : public QAbstractDeclarativeData
 public:
     QQmlData()
         : ownedByQml1(false), ownMemory(true), ownContext(false), indestructible(true), explicitIndestructibleSet(false),
-          hasTaintedV8Object(false), isQueuedForDeletion(false), rootObjectInCreation(false),
-          hasVMEMetaObject(false), parentFrozen(false), notifyList(0), context(0), outerContext(0),
-          bindings(0), signalHandlers(0), nextContextObject(0), prevContextObject(0), bindingBitsSize(0), bindingBits(0),
-          lineNumber(0), columnNumber(0), compiledData(0), deferredData(0), jsEngineId(0),
+          hasTaintedV4Object(false), isQueuedForDeletion(false), rootObjectInCreation(false),
+          hasVMEMetaObject(false), parentFrozen(false), bindingBitsSize(0), bindingBits(0), notifyList(0), context(0), outerContext(0),
+          bindings(0), signalHandlers(0), nextContextObject(0), prevContextObject(0),
+          lineNumber(0), columnNumber(0), jsEngineId(0), compiledData(0), deferredData(0),
           propertyCache(0), guards(0), extendedData(0) {
         init();
     }
@@ -112,7 +112,7 @@ public:
     quint32 ownContext:1;
     quint32 indestructible:1;
     quint32 explicitIndestructibleSet:1;
-    quint32 hasTaintedV8Object:1;
+    quint32 hasTaintedV4Object:1;
     quint32 isQueuedForDeletion:1;
     /*
      * rootObjectInCreation should be true only when creating top level CPP and QML objects,
@@ -122,6 +122,15 @@ public:
     quint32 hasVMEMetaObject:1;
     quint32 parentFrozen:1;
     quint32 dummy:22;
+
+    // When bindingBitsSize < 32, we store the binding bit flags inside
+    // bindingBitsValue. When we need more than 32 bits, we allocated
+    // sufficient space and use bindingBits to point to it.
+    int bindingBitsSize;
+    union {
+        quint32 *bindingBits;
+        quint32 bindingBitsValue;
+    };
 
     struct NotifyList {
         quint64 connectionMask;
@@ -155,9 +164,6 @@ public:
     QQmlData *nextContextObject;
     QQmlData**prevContextObject;
 
-    int bindingBitsSize;
-    quint32 *bindingBits;
-
     inline bool hasBindingBit(int) const;
     void clearBindingBit(int);
     void setBindingBit(QObject *obj, int);
@@ -169,6 +175,8 @@ public:
     quint16 lineNumber;
     quint16 columnNumber;
 
+    quint32 jsEngineId; // id of the engine that created the jsWrapper
+
     struct DeferredData {
         unsigned int deferredIdx;
         QQmlCompiledData *compiledData;//Not always the same as the other compiledData
@@ -177,7 +185,6 @@ public:
     QQmlCompiledData *compiledData;
     DeferredData *deferredData;
 
-    quint32 jsEngineId; // id of the engine that cerated the jsWrapper
     QV4::WeakValue jsWrapper;
 
     QQmlPropertyCache *propertyCache;
@@ -216,7 +223,7 @@ public:
 
     static inline void flushPendingBinding(QObject *, int coreIndex);
 
-    static void ensurePropertyCache(QQmlEngine *engine, QObject *object);
+    static void ensurePropertyCache(QJSEngine *engine, QObject *object);
 
 private:
     // For attachedProperties
@@ -260,19 +267,19 @@ QQmlNotifierEndpoint *QQmlData::notify(int index)
 bool QQmlData::hasBindingBit(int coreIndex) const
 {
     int bit = coreIndex * 2;
-    if (bindingBitsSize > bit)
-        return bindingBits[bit / 32] & (1 << (bit % 32));
-    else
-        return false;
+
+    return bindingBitsSize > bit &&
+           ((bindingBitsSize == 32) ? (bindingBitsValue & (1 << bit)) :
+                                      (bindingBits[bit / 32] & (1 << (bit % 32))));
 }
 
 bool QQmlData::hasPendingBindingBit(int coreIndex) const
 {
     int bit = coreIndex * 2 + 1;
-    if (bindingBitsSize > bit)
-        return bindingBits[bit / 32] & (1 << (bit % 32));
-    else
-        return false;
+
+    return bindingBitsSize > bit &&
+           ((bindingBitsSize == 32) ? (bindingBitsValue & (1 << bit)) :
+                                      (bindingBits[bit / 32] & (1 << (bit % 32))));
 }
 
 void QQmlData::flushPendingBinding(QObject *o, int coreIndex)

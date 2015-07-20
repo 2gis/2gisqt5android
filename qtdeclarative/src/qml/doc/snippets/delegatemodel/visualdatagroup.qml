@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
@@ -17,8 +17,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -39,11 +39,12 @@
 ****************************************************************************/
 //![0]
 import QtQuick 2.0
+import QtQml.Models 2.2
 
 Rectangle {
     width: 200; height: 100
 
-    VisualDataModel {
+    DelegateModel {
         id: visualModel
         model: ListModel {
             ListElement { name: "Apple" }
@@ -51,7 +52,7 @@ Rectangle {
         }
 
         groups: [
-            VisualDataGroup { name: "selected" }
+            DelegateModelGroup { name: "selected" }
         ]
 
         delegate: Rectangle {
@@ -61,14 +62,14 @@ Rectangle {
             Text {
                 text: {
                     var text = "Name: " + name
-                    if (item.VisualDataModel.inSelected)
-                        text += " (" + item.VisualDataModel.selectedIndex + ")"
+                    if (item.DelegateModel.inSelected)
+                        text += " (" + item.DelegateModel.selectedIndex + ")"
                     return text;
                 }
             }
             MouseArea {
                 anchors.fill: parent
-                onClicked: item.VisualDataModel.inSelected = !item.VisualDataModel.inSelected
+                onClicked: item.DelegateModel.inSelected = !item.DelegateModel.inSelected
             }
         }
     }

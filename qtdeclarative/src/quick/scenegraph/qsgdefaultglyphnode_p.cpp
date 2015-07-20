@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQuick module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -51,6 +51,10 @@ QT_BEGIN_NAMESPACE
 
 #ifndef GL_FRAMEBUFFER_SRGB
 #define GL_FRAMEBUFFER_SRGB 0x8DB9
+#endif
+
+#ifndef GL_FRAMEBUFFER_SRGB_CAPABLE
+#define GL_FRAMEBUFFER_SRGB_CAPABLE 0x8DBA
 #endif
 
 static inline QVector4D qsg_premultiply(const QVector4D &c, float globalOpacity)
@@ -88,6 +92,7 @@ protected:
     int m_matrix_id;
     int m_color_id;
     int m_textureScale_id;
+    float m_devicePixelRatio;
 
     QFontEngine::GlyphFormat m_glyphFormat;
 };
@@ -117,7 +122,8 @@ void QSGTextMaskShader::initialize()
     m_matrix_id = program()->uniformLocation("matrix");
     m_color_id = program()->uniformLocation("color");
     m_textureScale_id = program()->uniformLocation("textureScale");
-    program()->setUniformValue("dpr", (float) qsg_device_pixel_ratio(QOpenGLContext::currentContext()));
+    m_devicePixelRatio = (float) qsg_device_pixel_ratio(QOpenGLContext::currentContext());
+    program()->setUniformValue("dpr", m_devicePixelRatio);
 }
 
 void QSGTextMaskShader::updateState(const RenderState &state, QSGMaterial *newEffect, QSGMaterial *oldEffect)
@@ -143,6 +149,12 @@ void QSGTextMaskShader::updateState(const RenderState &state, QSGMaterial *newEf
             funcs->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
             funcs->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
         }
+    }
+
+    float devicePixelRatio = (float) qsg_device_pixel_ratio(QOpenGLContext::currentContext());
+    if (m_devicePixelRatio != devicePixelRatio) {
+        m_devicePixelRatio = devicePixelRatio;
+        program()->setUniformValue("dpr", m_devicePixelRatio);
     }
 
     if (state.isMatrixDirty())
@@ -199,7 +211,11 @@ void QSG24BitTextMaskShader::initialize()
     if (QOpenGLContext::currentContext()->hasExtension(QByteArrayLiteral("GL_ARB_framebuffer_sRGB"))
             && m_glyphFormat == QFontEngine::Format_A32
             && qAbs(fontSmoothingGamma() - 2.2) < 0.25) {
-        m_useSRGB = true;
+        QOpenGLFunctions *funcs = QOpenGLContext::currentContext()->functions();
+        GLint srgbCapable = 0;
+        funcs->glGetIntegerv(GL_FRAMEBUFFER_SRGB_CAPABLE, &srgbCapable);
+        if (srgbCapable)
+            m_useSRGB = true;
     }
 }
 

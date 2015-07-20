@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtPositioning module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -41,8 +41,6 @@
 #include <qnumeric.h>
 
 #include <math.h>
-
-#include <QDebug>
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -100,6 +98,9 @@ QGeoCoordinatePrivate::~QGeoCoordinatePrivate()
     including WGS84.
 
     Azimuth in this context is equivalent to a compass bearing based on true north.
+
+    This class is a \l Q_GADGET since Qt 5.5. It can be
+    \l{Cpp_value_integration_positioning}{directly used from C++ and QML}.
 */
 
 /*!
@@ -125,6 +126,66 @@ QGeoCoordinatePrivate::~QGeoCoordinatePrivate()
     \sa toString()
 */
 
+/*!
+    \property QGeoCoordinate::latitude
+    \brief This property holds the latitude in decimal degrees.
+
+    The property is undefined (\l {qQNaN()}) if the latitude has not been set.
+    A positive latitude indicates the Northern Hemisphere, and a negative
+    latitude indicates the Southern Hemisphere. When setting the latitude the
+    new value should be in the
+    \l {http://en.wikipedia.org/wiki/World_Geodetic_System}{WGS84} datum format.
+
+    To be valid, the latitude must be between -90 to 90 inclusive.
+
+    While this property is introduced in Qt 5.5, the related accessor functions
+    exist since the first version of this class.
+
+    \since 5.5
+*/
+
+/*!
+    \property QGeoCoordinate::longitude
+    \brief This property holds the longitude in decimal degrees.
+
+    The property is undefined (\l {qQNaN()}) if the longitude has not been set.
+    A positive longitude indicates the Eastern Hemisphere, and a negative
+    longitude indicates the Western Hemisphere. When setting the longitude the
+    new value should be in the
+    \l {http://en.wikipedia.org/wiki/World_Geodetic_System}{WGS84} datum format.
+
+    To be valid, the longitude must be between -180 to 180 inclusive.
+
+    While this property is introduced in Qt 5.5, the related accessor functions
+    exist since the first version of this class.
+
+    \since 5.5
+*/
+
+/*!
+    \property QGeoCoordinate::altitude
+    \brief This property holds the altitude in meters above sea level.
+
+    The property is undefined (\l {qQNaN()}) if the altitude has not been set.
+
+    While this property is introduced in Qt 5.5, the related accessor functions
+    exist since the first version of this class.
+
+    \since 5.5
+*/
+
+/*!
+    \property QGeoCoordinate::isValid
+    \brief This property holds the validity of this geo coordinate.
+
+    The geo coordinate is valid if the \l [CPP]{longitude} and \l [CPP]{latitude}
+    properties have been set to valid values.
+
+    While this property is introduced in Qt 5.5, the related accessor functions
+    exist since the first version of this class.
+
+    \since 5.5
+*/
 
 /*!
     Constructs a coordinate. The coordinate will be invalid until
@@ -230,7 +291,7 @@ bool QGeoCoordinate::operator==(const QGeoCoordinate &other) const
 */
 
 /*!
-    Returns true if the type() is Coordinate2D or Coordinate3D.
+    Returns true if the \l longitude and \l latitude are valid.
 */
 bool QGeoCoordinate::isValid() const
 {
@@ -608,24 +669,25 @@ QString QGeoCoordinate::toString(CoordinateFormat format) const
 #ifndef QT_NO_DEBUG_STREAM
 QDebug operator<<(QDebug dbg, const QGeoCoordinate &coord)
 {
+    QDebugStateSaver saver(dbg);
     double lat = coord.latitude();
     double lng = coord.longitude();
 
     dbg.nospace() << "QGeoCoordinate(";
     if (qIsNaN(lat))
-        dbg.nospace() << '?';
+        dbg << '?';
     else
-        dbg.nospace() << lat;
-    dbg.nospace() << ", ";
+        dbg << lat;
+    dbg << ", ";
     if (qIsNaN(lng))
-        dbg.nospace() << '?';
+        dbg << '?';
     else
-        dbg.nospace() << lng;
+        dbg << lng;
     if (coord.type() == QGeoCoordinate::Coordinate3D) {
-        dbg.nospace() << ", ";
-        dbg.nospace() << coord.altitude();
+        dbg << ", ";
+        dbg << coord.altitude();
     }
-    dbg.nospace() << ')';
+    dbg << ')';
     return dbg;
 }
 #endif

@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -43,39 +43,45 @@ class QDateTime;
 
 namespace QV4 {
 
+namespace Heap {
+
+struct DateObject : Object {
+    DateObject(InternalClass *ic, QV4::Object *prototype)
+        : Object(ic, prototype)
+    {
+        value = Encode(qSNaN());
+    }
+
+    DateObject(QV4::ExecutionEngine *engine, const Value &date)
+        : Object(engine->emptyClass, engine->datePrototype.asObject())
+    {
+        value = date;
+    }
+    DateObject(QV4::ExecutionEngine *engine, const QDateTime &date);
+    Value value;
+};
+
+struct DateCtor : FunctionObject {
+    DateCtor(QV4::ExecutionContext *scope);
+};
+
+}
+
 struct DateObject: Object {
-    struct Data : Object::Data {
-        Data(ExecutionEngine *engine, const ValueRef date)
-            : Object::Data(engine->dateClass)
-        {
-            value = date;
-        }
-        Data(ExecutionEngine *engine, const QDateTime &date);
-        Data(InternalClass *ic)
-            : Object::Data(ic)
-        {
-            Q_ASSERT(internalClass->vtable == staticVTable());
-            value = Primitive::fromDouble(qSNaN());
-        }
-        Value value;
-    };
-    V4_OBJECT(Object)
+    V4_OBJECT2(DateObject, Object)
     Q_MANAGED_TYPE(DateObject)
 
 
     Value date() const { return d()->value; }
     Value &date() { return d()->value; }
-    void setDate(const ValueRef date) { d()->value = date; }
+    void setDate(const Value &date) { d()->value = date; }
 
     QDateTime toQDateTime() const;
 };
 
 struct DateCtor: FunctionObject
 {
-    struct Data : FunctionObject::Data {
-        Data(ExecutionContext *scope);
-    };
-    V4_OBJECT(FunctionObject)
+    V4_OBJECT2(DateCtor, FunctionObject)
 
     static ReturnedValue construct(Managed *, CallData *callData);
     static ReturnedValue call(Managed *that, CallData *);

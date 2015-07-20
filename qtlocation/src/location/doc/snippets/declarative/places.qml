@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
@@ -17,8 +17,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -41,12 +41,11 @@
 //! [QtQuick import]
 import QtQuick 2.0
 //! [QtQuick import]
-//! [QtLocation import]
-import QtPositioning 5.2
-import QtLocation 5.3
-//! [QtLocation import]
+import QtPositioning 5.5
+import QtLocation 5.5
 
 Item {
+    width: 400; height: 400;
     Plugin {
         id: myPlugin
     }
@@ -137,7 +136,7 @@ Item {
         plugin: myPlugin
 
         // Brisbane
-        searchArea: QtLocation.circle(QtLocation.coordinate(-27.46778, 153.02778))
+        searchArea: QtPositioning.circle(QtPositioning.coordinate(-27.46778, 153.02778))
 
         onSearchTermChanged: update()
     }
@@ -328,24 +327,6 @@ Item {
     }
     //! [Place savePlace def]
 
-
-    //! [Search MapItemView]
-    MapItemView {
-        model: searchModel
-        delegate: MapQuickItem {
-            coordinate: place.location.coordinate
-
-            anchorPoint.x: image.width * 0.5
-            anchorPoint.y: image.height
-
-            sourceItem: Image {
-                id: image
-                source: "marker.png"
-            }
-        }
-    }
-    //! [Search MapItemView]
-
     function fetchDetails() {
         //! [Place fetchDetails]
         if (!place.detailsFetched)
@@ -380,7 +361,7 @@ Item {
 
     function saveToNewPlugin() {
         //! [Place save to different plugin]
-        place = Qt.createQmlObject('import QtLocation 5.3; Place { }', parent);
+        var place = Qt.createQmlObject('import QtLocation 5.3; Place { }', parent);
         place.plugin = destinationPlugin;
         place.copyFrom(originalPlace);
         place.save();
@@ -423,7 +404,7 @@ Item {
     //! [Place favorite]
 
     function saveFavorite() {
-        var place;
+        var place = Qt.createQmlObject('import QtLocation 5.3; Place { }', parent);
         var destinationPlugin
         //! [Place saveFavorite]
         place.initializeFavorite(destinationPlugin);

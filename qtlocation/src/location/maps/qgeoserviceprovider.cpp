@@ -1,31 +1,34 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtLocation module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL21$
+** $QT_BEGIN_LICENSE:LGPL3$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 or version 3 as published by the Free
-** Software Foundation and appearing in the file LICENSE.LGPLv21 and
-** LICENSE.LGPLv3 included in the packaging of this file. Please review the
-** following information to ensure the GNU Lesser General Public License
-** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
-** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPLv3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** GNU General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU
+** General Public License version 2.0 or later as published by the Free
+** Software Foundation and appearing in the file LICENSE.GPL included in
+** the packaging of this file. Please review the following information to
+** ensure the GNU General Public License version 2.0 requirements will be
+** met: http://www.gnu.org/licenses/gpl-2.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -58,7 +61,6 @@
 #include <QMetaEnum>
 #include <QProcess>
 #include <QEventLoop>
-#include <QString>
 #include <QtCore/private/qfactoryloader_p.h>
 
 QT_BEGIN_NAMESPACE
@@ -73,7 +75,7 @@ Q_GLOBAL_STATIC_WITH_ARGS(QFactoryLoader, loader,
     \class QGeoServiceProvider
     \inmodule QtLocation
     \ingroup QtLocation-common
-    \since Qt Location 5.0
+    \since 5.5
 
     \brief The QGeoServiceProvider class aggregates access to services which provide
     geographical information.
@@ -99,31 +101,38 @@ Q_GLOBAL_STATIC_WITH_ARGS(QFactoryLoader, loader,
     accessible using their provider names:
 
     \list
-        \li "osm" -> \l {Qt Location Open Street Map Plugin}{OpenStreetMap}
-        \li "nokia" -> \l {Qt Location Nokia Plugin}{Nokia Services}
+        \li "mapbox" -> \l {Qt Location Mapbox Plugin}{Mapbox service}
+        \li "here" -> \l {Qt Location HERE Plugin}{HERE Services}
+        \li "osm" -> \l {Qt Location Open Street Map Plugin}{OpenStreetMap Services}
     \endlist
+
+    Each service provider must follow a naming convention for their service specific
+    parameter names/keys. They use the provider name as prefix for all their
+    parameter names. For example, the \l {Qt Location HERE Plugin}{HERE} service provider
+    requires the \c here.app_id parameter. When a provider is loaded only those parameters are
+    passed on whose parameter names start with the provider name. This avoids the sharing
+    sensitive parameters such as confidential \c token or \c app_id parameters with other
+    plugins.
+
+    Please check the GeoServices plugin specific documentation to
+    obtain a complete list of the available parameter names/keys and values.
 */
 
 /*!
-\enum QGeoServiceProvider::Error
+    \enum QGeoServiceProvider::Error
 
-Describes an error related to the loading and setup of a service provider
-plugin.
+    Describes an error related to the loading and setup of a service provider plugin.
 
-\value NoError
-No error has occurred.
-
-\value NotSupportedError
-The plugin does not support this functionality.
-
-\value UnknownParameterError
-The plugin did not recognize one of the parameters it was given.
-
-\value MissingRequiredParameterError
-The plugin did not find one of the parameters it was expecting.
-
-\value ConnectionError
-The plugin could not connect to its backend service or database.
+    \value NoError
+        No error has occurred.
+    \value NotSupportedError
+        The plugin does not support this functionality.
+    \value UnknownParameterError
+        The plugin did not recognize one of the parameters it was given.
+    \value MissingRequiredParameterError
+        The plugin did not find one of the parameters it was expecting.
+    \value ConnectionError
+        The plugin could not connect to its backend service or database.
 */
 
 /*!
@@ -217,6 +226,11 @@ QStringList QGeoServiceProvider::availableServiceProviders()
 
     If no plugin matching \a providerName was able to be loaded then error()
     and errorString() will provide details about why this is the case.
+
+    \note Before the list of \a parameters is passed on to the to-be-loaded
+    provider plugin, the list is filtered to avoid the sharing of plugin specific
+    parameters with unrelated provider plugins. Plugin specific parameter
+    keys must be prefixed with the provider name (e.g. \c here.app_id).
 */
 QGeoServiceProvider::QGeoServiceProvider(const QString &providerName,
                                          const QVariantMap &parameters,
@@ -225,7 +239,11 @@ QGeoServiceProvider::QGeoServiceProvider(const QString &providerName,
 {
     d_ptr->experimental = allowExperimental;
     d_ptr->parameterMap = parameters;
-    d_ptr->providerName = providerName;
+    // TODO Qt 6 Remove silent nokia rename
+    if (providerName == QStringLiteral("nokia"))
+        d_ptr->providerName = QStringLiteral("here");
+    else
+        d_ptr->providerName = providerName;
     d_ptr->loadMeta();
 }
 
@@ -306,19 +324,19 @@ Engine *createEngine(QGeoServiceProviderPrivate *)
 }
 template <> QGeoCodingManagerEngine *createEngine<QGeoCodingManagerEngine>(QGeoServiceProviderPrivate *d_ptr)
 {
-    return d_ptr->factory->createGeocodingManagerEngine(d_ptr->parameterMap, &(d_ptr->geocodeError), &(d_ptr->geocodeErrorString));
+    return d_ptr->factory->createGeocodingManagerEngine(d_ptr->cleanedParameterMap, &(d_ptr->geocodeError), &(d_ptr->geocodeErrorString));
 }
 template <> QGeoRoutingManagerEngine *createEngine<QGeoRoutingManagerEngine>(QGeoServiceProviderPrivate *d_ptr)
 {
-    return d_ptr->factory->createRoutingManagerEngine(d_ptr->parameterMap, &(d_ptr->routingError), &(d_ptr->routingErrorString));
+    return d_ptr->factory->createRoutingManagerEngine(d_ptr->cleanedParameterMap, &(d_ptr->routingError), &(d_ptr->routingErrorString));
 }
 template <> QGeoMappingManagerEngine *createEngine<QGeoMappingManagerEngine>(QGeoServiceProviderPrivate *d_ptr)
 {
-    return d_ptr->factory->createMappingManagerEngine(d_ptr->parameterMap, &(d_ptr->mappingError), &(d_ptr->mappingErrorString));
+    return d_ptr->factory->createMappingManagerEngine(d_ptr->cleanedParameterMap, &(d_ptr->mappingError), &(d_ptr->mappingErrorString));
 }
 template <> QPlaceManagerEngine *createEngine<QPlaceManagerEngine>(QGeoServiceProviderPrivate *d_ptr)
 {
-    return d_ptr->factory->createPlaceManagerEngine(d_ptr->parameterMap, &(d_ptr->placeError), &(d_ptr->placeErrorString));
+    return d_ptr->factory->createPlaceManagerEngine(d_ptr->cleanedParameterMap, &(d_ptr->placeError), &(d_ptr->placeErrorString));
 }
 
 /* Template for generating the code for each of the geocodingManager(),
@@ -332,8 +350,10 @@ Manager *QGeoServiceProviderPrivate::manager(QGeoServiceProvider::Error *_error,
     QString &errorString = *_errorString;
     Manager *&manager = *_manager;
 
-    if (!this->factory)
+    if (!this->factory) {
+        this->filterParameterMap();
         this->loadPlugin(this->parameterMap);
+    }
 
     if (!this->factory || error != QGeoServiceProvider::NoError)
         return 0;
@@ -517,6 +537,11 @@ void QGeoServiceProvider::setAllowExperimental(bool allow)
     Sets the parameters used to construct individual manager classes for
     this service provider to \a parameters.
 
+    Before the list of \a parameters is passed on to the to-be-loaded
+    service provider, the list is filtered to avoid the sharing of provider specific
+    parameters with unrelated service providers. Provider specific parameter
+    keys must be prefixed with the provider name (e.g. \c here.app_id).
+
     \b {Important:} this will destroy any existing managers held by this
     service provider instance. You should be sure not to attempt to use any
     pointers that you have previously retrieved after calling this method.
@@ -595,6 +620,28 @@ void QGeoServiceProviderPrivate::unload()
     errorString = QLatin1String("");
     metaData = QJsonObject();
     metaData.insert(QStringLiteral("index"), -1);
+}
+
+/* Filter out any parameter that doesn't match any plugin */
+void QGeoServiceProviderPrivate::filterParameterMap()
+{
+    const QList<QString> availablePlugins =
+            QGeoServiceProviderPrivate::plugins().keys();
+
+    cleanedParameterMap = parameterMap;
+    foreach (const QString& name, availablePlugins) {
+        if (name == providerName) // don't remove parameters for current provider
+            continue;
+
+        QVariantMap::iterator i = cleanedParameterMap.begin();
+        while (i != cleanedParameterMap.end()) {
+            // remove every parameter meant for other plugins
+            if (i.key().startsWith(QString(name + QLatin1Char('.'))))
+                i = cleanedParameterMap.erase(i);
+            else
+                i++;
+        }
+    }
 }
 
 void QGeoServiceProviderPrivate::loadMeta()

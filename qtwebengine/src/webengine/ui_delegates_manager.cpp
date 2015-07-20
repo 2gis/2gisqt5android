@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtWebEngine module of the Qt Toolkit.
 **
@@ -10,15 +10,15 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
 ** General Public License version 3 as published by the Free Software
 ** Foundation and appearing in the file LICENSE.LGPLv3 included in the
-** packaging of this file.  Please review the following information to
+** packaging of this file. Please review the following information to
 ** ensure the GNU Lesser General Public License version 3 requirements
 ** will be met: https://www.gnu.org/licenses/lgpl.html.
 **
@@ -26,7 +26,7 @@
 ** Alternatively, this file may be used under the terms of the GNU
 ** General Public License version 2.0 or later as published by the Free
 ** Software Foundation and appearing in the file LICENSE.GPL included in
-** the packaging of this file.  Please review the following information to
+** the packaging of this file. Please review the following information to
 ** ensure the GNU General Public License version 2.0 requirements will be
 ** met: http://www.gnu.org/licenses/gpl-2.0.html.
 **
@@ -50,6 +50,8 @@
 
 // Uncomment for QML debugging
 //#define UI_DELEGATES_DEBUG
+
+namespace QtWebEngineCore {
 
 #define NO_SEPARATOR
 #if defined(Q_OS_WIN)
@@ -136,6 +138,7 @@ void NavigateMenuItem::onTriggered()
 
 UIDelegatesManager::UIDelegatesManager(QQuickWebEngineView *view)
     : m_view(view)
+    , m_messageBubbleItem(0)
     FOR_EACH_COMPONENT_TYPE(COMPONENT_MEMBER_INIT, NO_SEPARATOR)
 {
 }
@@ -345,7 +348,7 @@ public:
     FilePickerController(WebContentsAdapterClient::FileChooserMode, const QExplicitlySharedDataPointer<WebContentsAdapter> &, QObject * = 0);
 
 public Q_SLOTS:
-    void accepted(const QJSValue &files);
+    void accepted(const QVariant &files);
     void rejected();
 
 private:
@@ -362,14 +365,11 @@ FilePickerController::FilePickerController(WebContentsAdapterClient::FileChooser
 {
 }
 
-void FilePickerController::accepted(const QJSValue &filesValue)
+void FilePickerController::accepted(const QVariant &files)
 {
     QStringList stringList;
-    int length = filesValue.property(QStringLiteral("length")).toInt();
-    for (int i = 0; i < length; i++) {
-        stringList.append(QUrl(filesValue.property(i).toString()).toLocalFile());
-    }
-
+    Q_FOREACH (const QUrl &url, files.value<QList<QUrl> >())
+        stringList.append(url.toLocalFile());
     m_adapter->filesSelectedInChooser(stringList, m_mode);
 }
 
@@ -418,7 +418,7 @@ void UIDelegatesManager::showFilePicker(WebContentsAdapterClient::FileChooserMod
     CHECK_QML_SIGNAL_PROPERTY(filesPickedSignal, filePickerComponent->url());
     QQmlProperty rejectSignal(filePicker, QStringLiteral("onRejected"));
     CHECK_QML_SIGNAL_PROPERTY(rejectSignal, filePickerComponent->url());
-    static int acceptedIndex = controller->metaObject()->indexOfSlot("accepted(QJSValue)");
+    static int acceptedIndex = controller->metaObject()->indexOfSlot("accepted(QVariant)");
     QObject::connect(filePicker, filesPickedSignal.method(), controller, controller->metaObject()->method(acceptedIndex));
     static int rejectedIndex = controller->metaObject()->indexOfSlot("rejected()");
     QObject::connect(filePicker, rejectSignal.method(), controller, controller->metaObject()->method(rejectedIndex));
@@ -430,5 +430,39 @@ void UIDelegatesManager::showFilePicker(WebContentsAdapterClient::FileChooserMod
 
     QMetaObject::invokeMethod(filePicker, "open");
 }
+
+void UIDelegatesManager::showMessageBubble(const QRect &anchor, const QString &mainText, const QString &subText)
+{
+    if (!ensureComponentLoaded(MessageBubble))
+        return;
+
+    Q_ASSERT(m_messageBubbleItem.isNull());
+
+    QQmlContext *context = qmlContext(m_view);
+    m_messageBubbleItem.reset(qobject_cast<QQuickItem *>(messageBubbleComponent->beginCreate(context)));
+    m_messageBubbleItem->setParentItem(m_view);
+    messageBubbleComponent->completeCreate();
+
+    QQmlProperty(m_messageBubbleItem.data(), QStringLiteral("maxWidth")).write(anchor.size().width());
+    QQmlProperty(m_messageBubbleItem.data(), QStringLiteral("mainText")).write(mainText);
+    QQmlProperty(m_messageBubbleItem.data(), QStringLiteral("subText")).write(subText);
+    QQmlProperty(m_messageBubbleItem.data(), QStringLiteral("x")).write(anchor.x());
+    QQmlProperty(m_messageBubbleItem.data(), QStringLiteral("y")).write(anchor.y() + anchor.size().height());
+}
+
+void UIDelegatesManager::hideMessageBubble()
+{
+    m_messageBubbleItem.reset();
+}
+
+void UIDelegatesManager::moveMessageBubble(const QRect &anchor)
+{
+    Q_ASSERT(!m_messageBubbleItem.isNull());
+
+    QQmlProperty(m_messageBubbleItem.data(), QStringLiteral("x")).write(anchor.x());
+    QQmlProperty(m_messageBubbleItem.data(), QStringLiteral("y")).write(anchor.y() + anchor.size().height());
+}
+
+} // namespace QtWebEngineCore
 
 #include "ui_delegates_manager.moc"

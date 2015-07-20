@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -54,7 +54,6 @@ QT_BEGIN_NAMESPACE
 
 QGstreamerPlayerControl::QGstreamerPlayerControl(QGstreamerPlayerSession *session, QObject *parent)
     : QMediaPlayerControl(parent)
-    , m_ownStream(false)
     , m_session(session)
     , m_userRequestedState(QMediaPlayer::StoppedState)
     , m_currentState(QMediaPlayer::StoppedState)
@@ -370,31 +369,6 @@ void QGstreamerPlayerControl::setMedia(const QMediaContent &content, QIODevice *
         emit bufferStatusChanged(0);
     }
 
-    if (m_stream && m_stream != stream) {
-        if (m_ownStream)
-            delete m_stream;
-        m_stream = 0;
-        m_ownStream = false;
-    }
-
-    // If the canonical URL refers to a Qt resource, open with QFile and use
-    // the stream playback capability to play.
-    if (stream == 0 && content.canonicalUrl().scheme() == QLatin1String("qrc")) {
-        stream = new QFile(QLatin1Char(':') + content.canonicalUrl().path(), this);
-        if (!stream->open(QIODevice::ReadOnly)) {
-            delete stream;
-            m_mediaStatus = QMediaPlayer::InvalidMedia;
-            m_currentResource = content;
-            emit mediaChanged(m_currentResource);
-            emit error(QMediaPlayer::FormatError, tr("Attempting to play invalid Qt resource"));
-            if (m_currentState != QMediaPlayer::PlayingState)
-                m_resources->release();
-            popAndNotifyState();
-            return;
-        }
-        m_ownStream = true;
-    }
-
     m_currentResource = content;
     m_stream = stream;
 
@@ -424,7 +398,6 @@ void QGstreamerPlayerControl::setMedia(const QMediaContent &content, QIODevice *
     } else
         m_session->loadFromUri(request);
 #endif
-
 
 #if defined(HAVE_GST_APPSRC)
     if (!request.url().isEmpty() || userStreamValid) {

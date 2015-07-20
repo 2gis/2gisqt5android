@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the plugins of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -153,27 +153,6 @@ Camera {
     \endqml
 */
 
-namespace QDeclarativeMultimedia {
-
-#define FREEZE_SOURCE "(function deepFreeze(o) { "\
-                      "    var prop, propKey;" \
-                      "    Object.freeze(o);" \
-                      "    for (propKey in o) {" \
-                      "        prop = o[propKey];" \
-                      "        if (!o.hasOwnProperty(propKey) || !(typeof prop === \"object\") || " \
-                      "            Object.isFrozen(prop)) {" \
-                      "            continue;" \
-                      "        }" \
-                      "        deepFreeze(prop);" \
-                      "    }" \
-                      "})"
-
-static void deepFreeze(QJSEngine *jsEngine, const QJSValue &obj)
-{
-    QJSValue freezeFunc = jsEngine->evaluate(QString::fromUtf8(FREEZE_SOURCE));
-    freezeFunc.call(QJSValueList() << obj);
-}
-
 static QJSValue cameraInfoToJSValue(QJSEngine *jsEngine, const QCameraInfo &camera)
 {
     QJSValue o = jsEngine->newObject();
@@ -184,29 +163,24 @@ static QJSValue cameraInfoToJSValue(QJSEngine *jsEngine, const QCameraInfo &came
     return o;
 }
 
-QJSValue initGlobalObject(QQmlEngine *qmlEngine, QJSEngine *jsEngine)
+QDeclarativeMultimediaGlobal::QDeclarativeMultimediaGlobal(QJSEngine *engine, QObject *parent)
+    : QObject(parent)
+    , m_engine(engine)
 {
-    Q_UNUSED(qmlEngine)
-
-    QJSValue globalObject = jsEngine->newObject();
-
-    // property object defaultCamera
-    globalObject.setProperty(QStringLiteral("defaultCamera"),
-                             cameraInfoToJSValue(jsEngine, QCameraInfo::defaultCamera()));
-
-    // property list<object> availableCameras
-    QList<QCameraInfo> cameras = QCameraInfo::availableCameras();
-    QJSValue availableCameras = jsEngine->newArray(cameras.count());
-    for (int i = 0; i < cameras.count(); ++i)
-        availableCameras.setProperty(i, cameraInfoToJSValue(jsEngine, cameras.at(i)));
-    globalObject.setProperty(QStringLiteral("availableCameras"), availableCameras);
-
-    // freeze global object to prevent properties to be modified from QML
-    deepFreeze(jsEngine, globalObject);
-
-    return globalObject;
 }
 
+QJSValue QDeclarativeMultimediaGlobal::defaultCamera() const
+{
+    return cameraInfoToJSValue(m_engine, QCameraInfo::defaultCamera());
+}
+
+QJSValue QDeclarativeMultimediaGlobal::availableCameras() const
+{
+    QList<QCameraInfo> cameras = QCameraInfo::availableCameras();
+    QJSValue availableCameras = m_engine->newArray(cameras.count());
+    for (int i = 0; i < cameras.count(); ++i)
+        availableCameras.setProperty(i, cameraInfoToJSValue(m_engine, cameras.at(i)));
+    return availableCameras;
 }
 
 QT_END_NAMESPACE

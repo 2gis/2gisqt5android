@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -61,6 +61,7 @@ QT_BEGIN_NAMESPACE
 class QV8Engine;
 class QMetaProperty;
 class QQmlEngine;
+class QJSEngine;
 class QQmlPropertyData;
 class QQmlAccessors;
 class QMetaObjectBuilder;
@@ -160,8 +161,14 @@ public:
     inline int getValueTypeCoreIndex() const;
 
     // Returns the "encoded" index for use with bindings.  Encoding is:
-    //     coreIndex | (valueTypeCoreIndex << 16)
+    //     coreIndex | ((valueTypeCoreIndex + 1) << 16)
     inline int encodedIndex() const;
+    static int encodeValueTypePropertyIndex(int coreIndex, int valueTypeCoreIndex)
+    { return coreIndex | ((valueTypeCoreIndex + 1) << 16); }
+    static int decodeValueTypePropertyIndex(int index, int *coreIndex = 0) {
+        if (coreIndex) *coreIndex = index & 0xffff;
+        return (index >> 16) - 1;
+    }
 
     union {
         int propType;             // When !NotFullyResolved
@@ -227,7 +234,7 @@ public:
 
 private:
     friend class QQmlPropertyCache;
-    void lazyLoad(const QMetaProperty &, QQmlEngine *engine = 0);
+    void lazyLoad(const QMetaProperty &);
     void lazyLoad(const QMetaMethod &);
     bool notFullyResolved() const { return flags & NotFullyResolved; }
 };
@@ -236,25 +243,27 @@ class QQmlPropertyCacheMethodArguments;
 class Q_QML_PRIVATE_EXPORT QQmlPropertyCache : public QQmlRefCount, public QQmlCleanup
 {
 public:
-    QQmlPropertyCache(QQmlEngine *);
-    QQmlPropertyCache(QQmlEngine *, const QMetaObject *);
+    QQmlPropertyCache(QJSEngine *);
+    QQmlPropertyCache(QJSEngine *, const QMetaObject *);
     virtual ~QQmlPropertyCache();
 
-    void update(QQmlEngine *, const QMetaObject *);
-    void invalidate(QQmlEngine *, const QMetaObject *);
+    void update(const QMetaObject *);
+    void invalidate(const QMetaObject *);
+    // Used by qmlpuppet. Remove as soon Creator requires Qt 5.5.
+    void invalidate(void *, const QMetaObject *mo) { invalidate(mo); }
 
     QQmlPropertyCache *copy();
 
-    QQmlPropertyCache *copyAndAppend(QQmlEngine *, const QMetaObject *,
+    QQmlPropertyCache *copyAndAppend(const QMetaObject *,
                 QQmlPropertyData::Flag propertyFlags = QQmlPropertyData::NoFlags,
                 QQmlPropertyData::Flag methodFlags = QQmlPropertyData::NoFlags,
                 QQmlPropertyData::Flag signalFlags = QQmlPropertyData::NoFlags);
-    QQmlPropertyCache *copyAndAppend(QQmlEngine *, const QMetaObject *, int revision,
+    QQmlPropertyCache *copyAndAppend(const QMetaObject *, int revision,
                 QQmlPropertyData::Flag propertyFlags = QQmlPropertyData::NoFlags,
                 QQmlPropertyData::Flag methodFlags = QQmlPropertyData::NoFlags,
                 QQmlPropertyData::Flag signalFlags = QQmlPropertyData::NoFlags);
 
-    QQmlPropertyCache *copyAndReserve(QQmlEngine *, int propertyCount,
+    QQmlPropertyCache *copyAndReserve(int propertyCount,
                                       int methodCount, int signalCount);
     void appendProperty(const QString &,
                         quint32 flags, int coreIndex, int propType, int notifyIndex);
@@ -294,15 +303,10 @@ public:
     inline QQmlPropertyData *overrideData(QQmlPropertyData *) const;
     inline bool isAllowedInRevision(QQmlPropertyData *) const;
 
-    inline QQmlEngine *qmlEngine() const;
-    static QQmlPropertyData *property(QQmlEngine *, QObject *, const QString &,
+    static QQmlPropertyData *property(QJSEngine *, QObject *, const QString &,
                                               QQmlContextData *, QQmlPropertyData &);
-    static QQmlPropertyData *property(QQmlEngine *, QObject *, const QV4::String *,
+    static QQmlPropertyData *property(QJSEngine *, QObject *, const QV4::String *,
                                               QQmlContextData *, QQmlPropertyData &);
-    static int *methodParameterTypes(QObject *, int index, QVarLengthArray<int, 9> &dummy,
-                                     QByteArray *unknownTypeError);
-    static int methodReturnType(QObject *, const QQmlPropertyData &data,
-                                QByteArray *unknownTypeError);
 
     //see QMetaObjectPrivate::originalClone
     int originalClone(int index);
@@ -310,7 +314,7 @@ public:
 
     QList<QByteArray> signalParameterNames(int index) const;
     QString signalParameterStringForJS(int index, QString *errorString = 0);
-    static QString signalParameterStringForJS(QQmlEngine *engine, const QList<QByteArray> &parameterNameList, QString *errorString = 0);
+    static QString signalParameterStringForJS(QV4::ExecutionEngine *engine, const QList<QByteArray> &parameterNameList, QString *errorString = 0);
 
     const char *className() const;
 
@@ -334,10 +338,11 @@ private:
     friend class QQmlCompiler;
     friend class QQmlPropertyCacheCreator;
     friend class QQmlComponentAndAliasResolver;
+    friend class QQmlMetaObject;
 
     inline QQmlPropertyCache *copy(int reserve);
 
-    void append(QQmlEngine *, const QMetaObject *, int revision,
+    void append(const QMetaObject *, int revision,
                 QQmlPropertyData::Flag propertyFlags = QQmlPropertyData::NoFlags,
                 QQmlPropertyData::Flag methodFlags = QQmlPropertyData::NoFlags,
                 QQmlPropertyData::Flag signalFlags = QQmlPropertyData::NoFlags);
@@ -356,7 +361,7 @@ private:
     QQmlPropertyData *ensureResolved(QQmlPropertyData*) const;
 
     void resolve(QQmlPropertyData *) const;
-    void updateRecur(QQmlEngine *, const QMetaObject *);
+    void updateRecur(const QMetaObject *);
 
     template<typename K>
     QQmlPropertyData *findNamedProperty(const K &key)
@@ -372,7 +377,7 @@ private:
         _hasPropertyOverrides |= isOverride;
     }
 
-    QQmlEngine *engine;
+    QJSEngine *engine;
 
     QQmlPropertyCache *_parent;
     int propertyIndexCacheStart;
@@ -422,10 +427,35 @@ public:
 
     QQmlPropertyCache *propertyCache(QQmlEnginePrivate *) const;
 
+    int methodReturnType(const QQmlPropertyData &data, QByteArray *unknownTypeError) const;
+    int *methodParameterTypes(int index, QVarLengthArray<int, 9> &dummy, QByteArray *unknownTypeError) const;
+
     static bool canConvert(const QQmlMetaObject &from, const QQmlMetaObject &to);
 
-private:
+    // static_metacall (on Gadgets) doesn't call the base implementation and therefore
+    // we need a helper to find the correct meta object and property/method index.
+    static void resolveGadgetMethodOrPropertyIndex(QMetaObject::Call type, const QMetaObject **metaObject, int *index);
+
+protected:
     QBiPointer<QQmlPropertyCache, const QMetaObject> _m;
+};
+
+class QQmlObjectOrGadget: public QQmlMetaObject
+{
+public:
+    QQmlObjectOrGadget(QObject *obj)
+        : QQmlMetaObject(obj),
+          ptr(obj)
+    {}
+    QQmlObjectOrGadget(QQmlPropertyCache *propertyCache, void *gadget)
+        : QQmlMetaObject(propertyCache)
+        , ptr(gadget)
+    {}
+
+    void metacall(QMetaObject::Call type, int index, void **argv) const;
+
+private:
+    QBiPointer<QObject, void> ptr;
 };
 
 QQmlPropertyData::QQmlPropertyData()
@@ -464,7 +494,7 @@ int QQmlPropertyRawData::getValueTypeCoreIndex() const
 
 int QQmlPropertyRawData::encodedIndex() const
 {
-    return isValueTypeVirtual()?(coreIndex | (valueTypeCoreIndex << 16)):coreIndex;
+    return isValueTypeVirtual()?QQmlPropertyData::encodeValueTypePropertyIndex(coreIndex, valueTypeCoreIndex):coreIndex;
 }
 
 QQmlPropertyData *
@@ -483,11 +513,6 @@ bool QQmlPropertyCache::isAllowedInRevision(QQmlPropertyData *data) const
 {
     return (data->hasAccessors() || (data->metaObjectOffset == -1 && data->revision == 0)) ||
            (allowedRevisionCache[data->metaObjectOffset] >= data->revision);
-}
-
-QQmlEngine *QQmlPropertyCache::qmlEngine() const
-{
-    return engine;
 }
 
 int QQmlPropertyCache::propertyCount() const

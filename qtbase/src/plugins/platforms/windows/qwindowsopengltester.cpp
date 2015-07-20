@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2015 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the plugins of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -38,44 +38,23 @@
 #include <QtCore/QDebug>
 #include <QtCore/QTextStream>
 #include <QtCore/QCoreApplication>
+#include <QtCore/QFile>
+#include <QtCore/QFileInfo>
+#include <QtCore/QStandardPaths>
+#include <QtCore/QLibraryInfo>
+#include <QtCore/QHash>
+
+#ifndef QT_NO_OPENGL
+#include <private/qopengl_p.h>
+#endif
 
 #ifndef Q_OS_WINCE
 #  include <QtCore/qt_windows.h>
 #  include <private/qsystemlibrary_p.h>
 #  include <d3d9.h>
-#  include <GL/gl.h>
 #endif
 
 QT_BEGIN_NAMESPACE
-
-QString GpuDriverVersion::toString() const
-{
-    return QString::number(product)
-        + QLatin1Char('.') + QString::number(version)
-        + QLatin1Char('.') + QString::number(subVersion)
-        + QLatin1Char('.') + QString::number(build);
-}
-
-int GpuDriverVersion::compare(const GpuDriverVersion &rhs) const
-{
-    if (product < rhs.product)
-        return -1;
-    if (product > rhs.product)
-        return 1;
-    if (version < rhs.version)
-        return -1;
-    if (version > rhs.version)
-        return 1;
-    if (subVersion < rhs.subVersion)
-        return -1;
-    if (subVersion > rhs.subVersion)
-        return 1;
-    if (build < rhs.build)
-        return -1;
-    if (build > rhs.build)
-        return 1;
-    return 0;
-}
 
 GpuDescription GpuDescription::detect()
 {
@@ -100,30 +79,23 @@ GpuDescription GpuDescription::detect()
         result.deviceId = int(adapterIdentifier.DeviceId);
         result.revision = int(adapterIdentifier.Revision);
         result.subSysId = int(adapterIdentifier.SubSysId);
-        result.driverVersion.product = HIWORD(adapterIdentifier.DriverVersion.HighPart);
-        result.driverVersion.version = LOWORD(adapterIdentifier.DriverVersion.HighPart);
-        result.driverVersion.subVersion = HIWORD(adapterIdentifier.DriverVersion.LowPart);
-        result.driverVersion.build = LOWORD(adapterIdentifier.DriverVersion.LowPart);
+        QVector<int> version(4, 0);
+        version[0] = HIWORD(adapterIdentifier.DriverVersion.HighPart); // Product
+        version[1] = LOWORD(adapterIdentifier.DriverVersion.HighPart); // Version
+        version[2] = HIWORD(adapterIdentifier.DriverVersion.LowPart); // Sub version
+        version[3] = LOWORD(adapterIdentifier.DriverVersion.LowPart); // build
+        result.driverVersion = QVersionNumber(version);
         result.driverName = adapterIdentifier.Driver;
         result.description = adapterIdentifier.Description;
     }
     return result;
 #else // !Q_OS_WINCE
     GpuDescription result;
-    result.vendorId = result.deviceId = result.revision
-        = result.driverVersion.product = result.driverVersion.version
-        = result.driverVersion.build = 1;
+    result.vendorId = result.deviceId = result.revision =1;
+    result.driverVersion = QVersionNumber(1, 1, 1);
     result.driverName = result.description = QByteArrayLiteral("Generic");
     return result;
 #endif
-}
-
-QDebug operator<<(QDebug d, const GpuDriverVersion &v)
-{
-    QDebugStateSaver s(d);
-    d.nospace();
-    d << v.product << '.' << v.version << '.' << v.subVersion << '.' << v.build;
-    return d;
 }
 
 QDebug operator<<(QDebug d, const GpuDescription &gd)
@@ -163,10 +135,10 @@ QVariant GpuDescription::toVariant() const
     result.insert(QStringLiteral("subSysId"),QVariant(subSysId));
     result.insert(QStringLiteral("revision"), QVariant(revision));
     result.insert(QStringLiteral("driver"), QVariant(QLatin1String(driverName)));
-    result.insert(QStringLiteral("driverProduct"), QVariant(driverVersion.product));
-    result.insert(QStringLiteral("driverVersion"), QVariant(driverVersion.version));
-    result.insert(QStringLiteral("driverSubVersion"), QVariant(driverVersion.subVersion));
-    result.insert(QStringLiteral("driverBuild"), QVariant(driverVersion.build));
+    result.insert(QStringLiteral("driverProduct"), QVariant(driverVersion.segmentAt(0)));
+    result.insert(QStringLiteral("driverVersion"), QVariant(driverVersion.segmentAt(1)));
+    result.insert(QStringLiteral("driverSubVersion"), QVariant(driverVersion.segmentAt(2)));
+    result.insert(QStringLiteral("driverBuild"), QVariant(driverVersion.segmentAt(3)));
     result.insert(QStringLiteral("driverVersionString"), driverVersion.toString());
     result.insert(QStringLiteral("description"), QVariant(QLatin1String(description)));
     result.insert(QStringLiteral("printable"), QVariant(toString()));
@@ -219,23 +191,85 @@ QWindowsOpenGLTester::Renderer QWindowsOpenGLTester::requestedRenderer()
     return QWindowsOpenGLTester::InvalidRenderer;
 }
 
-static inline QWindowsOpenGLTester::Renderers
-    detectSupportedRenderers(const GpuDescription &gpu, bool glesOnly)
+#ifndef Q_OS_WINCE
+
+static inline QString resolveBugListFile(const QString &fileName)
+{
+    if (QFileInfo(fileName).isAbsolute())
+        return fileName;
+    // Try QLibraryInfo::SettingsPath which is typically empty unless specified in qt.conf,
+    // then resolve via QStandardPaths::ConfigLocation.
+    const QString settingsPath = QLibraryInfo::location(QLibraryInfo::SettingsPath);
+    if (!settingsPath.isEmpty()) { // SettingsPath is empty unless specified in qt.conf.
+        const QFileInfo fi(settingsPath + QLatin1Char('/') + fileName);
+        if (fi.isFile())
+            return fi.absoluteFilePath();
+    }
+    return QStandardPaths::locate(QStandardPaths::ConfigLocation, fileName);
+}
+
+#  ifndef QT_NO_OPENGL
+typedef QHash<QOpenGLConfig::Gpu, QWindowsOpenGLTester::Renderers> SupportedRenderersCache;
+Q_GLOBAL_STATIC(SupportedRenderersCache, supportedRenderersCache)
+#  endif
+
+#endif // !Q_OS_WINCE
+
+QWindowsOpenGLTester::Renderers QWindowsOpenGLTester::detectSupportedRenderers(const GpuDescription &gpu, bool glesOnly)
 {
     Q_UNUSED(gpu)
-#ifndef Q_OS_WINCE
-    // Add checks for card types with known issues here.
+    Q_UNUSED(glesOnly)
+#if defined(QT_NO_OPENGL)
+    return 0;
+#elif defined(Q_OS_WINCE)
+    return QWindowsOpenGLTester::Gles;
+#else
+    QOpenGLConfig::Gpu qgpu = QOpenGLConfig::Gpu::fromDevice(gpu.deviceId, gpu.vendorId, gpu.driverVersion);
+    SupportedRenderersCache *srCache = supportedRenderersCache();
+    SupportedRenderersCache::const_iterator it = srCache->find(qgpu);
+    if (it != srCache->cend())
+        return *it;
+
     QWindowsOpenGLTester::Renderers result(QWindowsOpenGLTester::AngleRendererD3d11
         | QWindowsOpenGLTester::AngleRendererD3d9
         | QWindowsOpenGLTester::AngleRendererD3d11Warp
         | QWindowsOpenGLTester::SoftwareRasterizer);
 
-    if (!glesOnly && QWindowsOpenGLTester::testDesktopGL())
+    if (!glesOnly && testDesktopGL())
         result |= QWindowsOpenGLTester::DesktopGl;
+
+    QSet<QString> features;
+    const char bugListFileVar[] = "QT_OPENGL_BUGLIST";
+    if (qEnvironmentVariableIsSet(bugListFileVar)) {
+        const QString fileName = resolveBugListFile(QFile::decodeName(qgetenv(bugListFileVar)));
+        if (!fileName.isEmpty())
+            features = QOpenGLConfig::gpuFeatures(qgpu, fileName);
+    } else {
+        features = QOpenGLConfig::gpuFeatures(qgpu, QStringLiteral(":/qt-project.org/windows/openglblacklists/default.json"));
+    }
+    qCDebug(lcQpaGl) << "GPU features:" << features;
+
+    if (features.contains(QStringLiteral("disable_desktopgl"))) { // Qt-specific
+        qCWarning(lcQpaGl) << "Disabling Desktop GL: " << gpu;
+        result &= ~QWindowsOpenGLTester::DesktopGl;
+    }
+    if (features.contains(QStringLiteral("disable_angle"))) { // Qt-specific keyword
+        qCWarning(lcQpaGl) << "Disabling ANGLE: " << gpu;
+        result &= ~QWindowsOpenGLTester::GlesMask;
+    } else {
+        if (features.contains(QStringLiteral("disable_d3d11"))) { // standard keyword
+            qCWarning(lcQpaGl) << "Disabling D3D11: " << gpu;
+            result &= ~QWindowsOpenGLTester::AngleRendererD3d11;
+        }
+        if (features.contains(QStringLiteral("disable_d3d9"))) { // Qt-specific
+            qCWarning(lcQpaGl) << "Disabling D3D9: " << gpu;
+            result &= ~QWindowsOpenGLTester::AngleRendererD3d9;
+        }
+    }
+
+    srCache->insert(qgpu, result);
     return result;
-#else // !Q_OS_WINCE
-    return QWindowsOpenGLTester::Gles;
-#endif
+#endif // !Q_OS_WINCE && !QT_NO_OPENGL
 }
 
 QWindowsOpenGLTester::Renderers QWindowsOpenGLTester::supportedGlesRenderers()
@@ -256,7 +290,7 @@ QWindowsOpenGLTester::Renderers QWindowsOpenGLTester::supportedRenderers()
 
 bool QWindowsOpenGLTester::testDesktopGL()
 {
-#ifndef Q_OS_WINCE
+#if !defined(QT_NO_OPENGL) && !defined(Q_OS_WINCE)
     HMODULE lib = 0;
     HWND wnd = 0;
     HDC dc = 0;
@@ -382,9 +416,9 @@ cleanup:
     // No FreeLibrary. Some implementations, Mesa in particular, deadlock when trying to unload.
 
     return result;
-#else // !Q_OS_WINCE
+#else
     return false;
-#endif
+#endif // !QT_NO_OPENGL && !Q_OS_WINCE
 }
 
 QT_END_NAMESPACE

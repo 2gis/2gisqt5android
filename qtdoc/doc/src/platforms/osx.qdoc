@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
@@ -10,15 +10,15 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Free Documentation License Usage
 ** Alternatively, this file may be used under the terms of the GNU Free
 ** Documentation License version 1.3 as published by the Free Software
 ** Foundation and appearing in the file included in the packaging of
-** this file.  Please review the following information to ensure
+** this file. Please review the following information to ensure
 ** the GNU Free Documentation License version 1.3 requirements
 ** will be met: http://www.gnu.org/copyleft/fdl.html.
 ** $QT_END_LICENSE$
@@ -174,7 +174,8 @@
     Qt for OS X is tested and compatible with several versions of GCC (GNU
     Compiler Collection) and Clang (as available from Xcode). For a list of
     tested configurations, refer to the \e{Reference Configuration} section of
-    the \l{Supported Platforms} page.
+    the \l{Community Supported Platforms#Reference Configurations}{supported platforms}
+    page.
 
     \section2 OS X on PowerPC hardware
 
@@ -210,12 +211,12 @@
         For the open source version you do not need a license file.
 
         Unpack the archive if you have not done so already. For example,
-        if you have the \c{qt-everywhere-opensource-src-5.4.1.tar.gz}
+        if you have the \c{qt-everywhere-opensource-src-5.5.0.tar.gz}
         package, type the following commands at a command line prompt:
 
     \snippet snippets/code/doc_src_installation.qdoc 11
 
-        This creates the directory \c{/tmp/qt-everywhere-opensource-src-5.4.1}
+        This creates the directory \c{/tmp/qt-everywhere-opensource-src-5.5.0}
         containing the files from the archive.
 
     \section1 Step 2: Build the Qt Library
@@ -224,7 +225,7 @@
         \c{./configure} script in the package directory.
 
         By default, Qt is configured for installation in the
-        \c{/usr/local/Qt-5.4.1} directory, but this can be
+        \c{/usr/local/Qt-5.5.0} directory, but this can be
         changed by using the \c{-prefix} option.
 
     \snippet snippets/code/doc_src_installation.qdoc 12

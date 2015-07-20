@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -46,6 +46,13 @@
 #include <QtQuick/qsgsimplerectnode.h>
 #include <QtQuick/qsgsimpletexturenode.h>
 #include <QtQuick/private/qsgtexture_p.h>
+
+QT_BEGIN_NAMESPACE
+inline bool operator==(const QSGGeometry::TexturedPoint2D& l, const QSGGeometry::TexturedPoint2D& r)
+{
+    return l.x == r.x && l.y == r.y && l.tx == r.tx && l.ty == r.ty;
+}
+QT_END_NAMESPACE
 
 class NodesTest : public QObject
 {
@@ -69,6 +76,7 @@ private Q_SLOTS:
     void isBlockedCheck();
 
     void textureNodeTextureOwnership();
+    void textureNodeRect();
 
 private:
     QOffscreenSurface *surface;
@@ -82,19 +90,24 @@ void NodesTest::initTestCase()
 
     surface = new QOffscreenSurface;
     surface->create();
+    QVERIFY(surface->isValid());
 
     context = new QOpenGLContext();
-    context->create();
-    context->makeCurrent(surface);
+    QVERIFY(context->create());
+    QVERIFY(context->makeCurrent(surface));
 
     renderContext = renderLoop->createRenderContext(renderLoop->sceneGraphContext());
+    QVERIFY(renderContext);
     renderContext->initialize(context);
+    QVERIFY(renderContext->isValid());
 }
 
 void NodesTest::cleanupTestCase()
 {
-    renderContext->invalidate();
-    context->doneCurrent();
+    if (renderContext)
+        renderContext->invalidate();
+    if (context)
+        context->doneCurrent();
     delete context;
     delete surface;
 }
@@ -133,9 +146,11 @@ public:
 int DummyRenderer::globalRendereringOrder;
 
 NodesTest::NodesTest()
+    : surface(Q_NULLPTR)
+    , context(Q_NULLPTR)
+    , renderContext(Q_NULLPTR)
 {
 }
-
 
 void NodesTest::propegate()
 {
@@ -279,6 +294,56 @@ void NodesTest::textureNodeTextureOwnership()
         delete tn;
         QVERIFY(texture.isNull());
     }
+}
+
+void NodesTest::textureNodeRect()
+{
+    QSGPlainTexture texture;
+    texture.setTextureSize(QSize(400, 400));
+    QSGSimpleTextureNode tn;
+    tn.setTexture(&texture);
+    QSGGeometry::TexturedPoint2D *vertices = tn.geometry()->vertexDataAsTexturedPoint2D();
+
+    QSGGeometry::TexturedPoint2D topLeft, bottomLeft, topRight, bottomRight;
+    topLeft.set(0, 0, 0, 0);
+    bottomLeft.set(0, 0, 0, 1);
+    topRight.set(0, 0, 1, 0);
+    bottomRight.set(0, 0, 1, 1);
+    QCOMPARE(vertices[0], topLeft);
+    QCOMPARE(vertices[1], bottomLeft);
+    QCOMPARE(vertices[2], topRight);
+    QCOMPARE(vertices[3], bottomRight);
+
+    tn.setRect(1, 2, 100, 100);
+    topLeft.set(1, 2, 0, 0);
+    bottomLeft.set(1, 102, 0, 1);
+    topRight.set(101, 2, 1, 0);
+    bottomRight.set(101, 102, 1, 1);
+    QCOMPARE(vertices[0], topLeft);
+    QCOMPARE(vertices[1], bottomLeft);
+    QCOMPARE(vertices[2], topRight);
+    QCOMPARE(vertices[3], bottomRight);
+
+    tn.setRect(0, 0, 100, 100);
+    tn.setSourceRect(100, 100, 200, 200);
+    topLeft.set(0, 0, 0.25, 0.25);
+    bottomLeft.set(0, 100, 0.25, 0.75);
+    topRight.set(100, 0, 0.75, 0.25);
+    bottomRight.set(100, 100, 0.75, 0.75);
+    QCOMPARE(vertices[0], topLeft);
+    QCOMPARE(vertices[1], bottomLeft);
+    QCOMPARE(vertices[2], topRight);
+    QCOMPARE(vertices[3], bottomRight);
+
+    tn.setSourceRect(300, 300, -200, -200);
+    topLeft.set(0, 0, 0.75, 0.75);
+    bottomLeft.set(0, 100, 0.75, 0.25);
+    topRight.set(100, 0, 0.25, 0.75);
+    bottomRight.set(100, 100, 0.25, 0.25);
+    QCOMPARE(vertices[0], topLeft);
+    QCOMPARE(vertices[1], bottomLeft);
+    QCOMPARE(vertices[2], topRight);
+    QCOMPARE(vertices[3], bottomRight);
 }
 
 QTEST_MAIN(NodesTest);

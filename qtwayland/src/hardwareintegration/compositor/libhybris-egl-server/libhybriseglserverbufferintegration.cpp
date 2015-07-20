@@ -1,7 +1,7 @@
 /****************************************************************************
 **
 ** Copyright (C) 2014 Jolla Ltd, author: <giulio.camuffo@jollamobile.com>
-** Contact: http://www.qt-project.org/legal
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Compositor.
 **
@@ -17,8 +17,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -131,10 +131,9 @@ LibHybrisEglServerBufferIntegration::~LibHybrisEglServerBufferIntegration()
 
 void LibHybrisEglServerBufferIntegration::initializeHardware(QWaylandCompositor *compositor)
 {
-    QWindow *window = compositor->window();
     Q_ASSERT(QGuiApplication::platformNativeInterface());
 
-    m_egl_display = static_cast<EGLDisplay>(QGuiApplication::platformNativeInterface()->nativeResourceForWindow("egldisplay", window));
+    m_egl_display = static_cast<EGLDisplay>(QGuiApplication::platformNativeInterface()->nativeResourceForIntegration("egldisplay"));
     if (!m_egl_display) {
         qWarning("Cant initialize libhybris egl server buffer integration. Missing egl display from platformplugin");
         return;

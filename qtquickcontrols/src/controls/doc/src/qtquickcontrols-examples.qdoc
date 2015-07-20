@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
@@ -10,15 +10,15 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Free Documentation License Usage
 ** Alternatively, this file may be used under the terms of the GNU Free
 ** Documentation License version 1.3 as published by the Free Software
 ** Foundation and appearing in the file included in the packaging of
-** this file.  Please review the following information to ensure
+** this file. Please review the following information to ensure
 ** the GNU Free Documentation License version 1.3 requirements
 ** will be met: http://www.gnu.org/copyleft/fdl.html.
 ** $QT_END_LICENSE$
@@ -59,6 +59,67 @@
 
     This example project demonstrates the various UI components provided by
     \l{Qt Quick Controls}.
+
+    \include examples-run.qdocinc
+*/
+
+/*!
+    \example uiforms
+    \title Qt Quick Controls - UI Forms
+    \ingroup qtquickcontrols_examples
+    \brief Demonstrates how to separate the application logic from the UI.
+
+    \image qtquickcontrols-example-uiforms.png
+
+    \e{UI Forms} demonstrates how to separate the application logic
+    from the UI using \e ui.qml files. The example is a simple interface to a customer
+    database, purely written in QML and JavaScript.
+
+    UI Forms are rigorously split into \e .qml and \e .js files that contain the business logic, and \e .ui.qml
+    files that only contain the purely declarative description of the UI.
+    The \e .ui.qml files act as forms and they should be only edited in the Design mode of Qt Creator.
+
+    \section1 Exporting Items from Forms
+
+    In all forms, items that are supposed to interact with the application logic are exported:
+
+    \qml
+    property alias cancel: cancel
+    property alias save: save
+    property alias textArea: textArea
+    \endqml
+
+    This is the way the items are exported in \e NotesForm.ui.qml, so they can be used in
+    \e Notes.ui.qml to implement the logic as follows:
+
+    \qml
+    function readData() {
+        CustomerModel.selection.forEach(function (rowIndex) {
+            form.textArea.text = CustomerModel.model.get(rowIndex).notes
+        })
+
+        save.enabled = true
+        cancel.enabled = true
+        form.textArea.enabled = true
+    }
+
+    function writeData() {
+        CustomerModel.selection.forEach(function (rowIndex) {
+            var data = CustomerModel.model.get(rowIndex)
+            data.notes = form.textArea.text
+            CustomerModel.model.set(rowIndex, data)
+        })
+    }
+
+    cancel.onClicked: readData()
+    save.onClicked: writeData()
+    \endqml
+
+    \section1 Implementing the Backend in a Singleton
+
+    Because the ListModel is accessed from several different \e .qml files, we access the
+    ListModel through a singleton defined in \e CustomerModel.qml and registered in \e main.ccp.
+    This way we do not have to rely on the QML context scoping rules to access the ListModel.
 
     \include examples-run.qdocinc
 */
@@ -106,9 +167,9 @@
 
     QML namespace import:
 
-    \qml
+    \code
     import org.qtproject.example 1.0
-    \endqml
+    \endcode
 
     For more information about registering C++ classses as QML types, see
     \l {Defining QML Types from C++}.
@@ -147,9 +208,9 @@
 
     QML namespace import:
 
-    \qml
+    \code
     import org.qtproject.example 1.0
-    \endqml
+    \endcode
 
     For more information about registering C++ classses as QML types, see
     \l {Defining QML Types from C++}.
@@ -249,7 +310,7 @@
     The stack is used by invoking its navigation methods. To load the first item
     in the stack view, we assign it to \c initialItem:
 
-    \printuntil \printuntil /^\}/
+    \printuntil /^\}/
 
     We use a ListView type to display a list of the items provided by
     \c pageModel. The \c AndroidDelegate custom type defines each item
@@ -443,7 +504,7 @@
     \skipto SqlEventModel::SqlEventModel()
     \printto QList
     \skipto void SqlEventModel
-    \printuntil /\^}
+    \printuntil /^\}/
 
     In \e main.qml, the SqlEventModel custom type is used to get the list of
     events to mark the dates on the calendar.
@@ -501,4 +562,18 @@
     This example shows how to create custom styles for \l{Qt Quick Controls}.
 
     \include examples-run.qdocinc
+*/
+
+/*!
+    \example filesystembrowser
+    \title Qt Quick Controls - File System Browser Example
+    \ingroup qtquickcontrols_examples
+    \brief An example for the TreeView control.
+    \image qtquickcontrols-example-filesystembrowser.png
+
+    This example project demonstrates the usage of \l {TreeView} from
+    \l{Qt Quick Controls} - a control to display a tree representation of items
+    from a model derived from the QAbstractItemModel class.
+
+    The example displays the home path data given by the QFileSystemModel model.
 */

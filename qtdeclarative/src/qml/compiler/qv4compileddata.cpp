@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -40,6 +40,7 @@
 #include <private/qv4objectproto_p.h>
 #include <private/qv4lookup_p.h>
 #include <private/qv4regexpobject_p.h>
+#include <private/qqmlpropertycache_p.h>
 #endif
 #include <private/qqmlirbuilder_p.h>
 #include <QCoreApplication>
@@ -53,6 +54,15 @@ namespace QV4 {
 namespace CompiledData {
 
 #ifndef V4_BOOTSTRAP
+CompilationUnit::CompilationUnit()
+    : data(0)
+    , engine(0)
+    , runtimeStrings(0)
+    , runtimeLookups(0)
+    , runtimeRegularExpressions(0)
+    , runtimeClasses(0)
+{}
+
 CompilationUnit::~CompilationUnit()
 {
     unlink();
@@ -65,9 +75,9 @@ QV4::Function *CompilationUnit::linkToEngine(ExecutionEngine *engine)
 
     Q_ASSERT(!runtimeStrings);
     Q_ASSERT(data);
-    runtimeStrings = (QV4::StringValue *)malloc(data->stringTableSize * sizeof(QV4::StringValue));
+    runtimeStrings = (QV4::Heap::String **)malloc(data->stringTableSize * sizeof(QV4::Heap::String*));
     // memset the strings to 0 in case a GC run happens while we're within the loop below
-    memset(runtimeStrings, 0, data->stringTableSize * sizeof(QV4::StringValue));
+    memset(runtimeStrings, 0, data->stringTableSize * sizeof(QV4::Heap::String*));
     for (uint i = 0; i < data->stringTableSize; ++i)
         runtimeStrings[i] = engine->newIdentifier(data->stringAt(i));
 
@@ -109,7 +119,7 @@ QV4::Function *CompilationUnit::linkToEngine(ExecutionEngine *engine)
                 l->classList[j] = 0;
             l->level = -1;
             l->index = UINT_MAX;
-            l->name = runtimeStrings[compiledLookups[i].nameIndex].asString();
+            l->nameIndex = compiledLookups[i].nameIndex;
             if (type == CompiledData::Lookup::Type_IndexedGetter || type == CompiledData::Lookup::Type_IndexedSetter)
                 l->engine = engine;
         }
@@ -117,13 +127,12 @@ QV4::Function *CompilationUnit::linkToEngine(ExecutionEngine *engine)
 
     if (data->jsClassTableSize) {
         runtimeClasses = (QV4::InternalClass**)malloc(data->jsClassTableSize * sizeof(QV4::InternalClass*));
-
         for (uint i = 0; i < data->jsClassTableSize; ++i) {
             int memberCount = 0;
             const CompiledData::JSClassMember *member = data->jsClassAt(i, &memberCount);
-            QV4::InternalClass *klass = engine->objectClass;
+            QV4::InternalClass *klass = engine->emptyClass;
             for (int j = 0; j < memberCount; ++j, ++member)
-                klass = klass->addMember(runtimeStrings[member->nameOffset].asString(), member->isAccessor ? QV4::Attr_Accessor : QV4::Attr_Data);
+                klass = klass->addMember(runtimeStrings[member->nameOffset]->identifier, member->isAccessor ? QV4::Attr_Accessor : QV4::Attr_Data);
 
             runtimeClasses[i] = klass;
         }
@@ -166,14 +175,11 @@ void CompilationUnit::unlink()
 void CompilationUnit::markObjects(QV4::ExecutionEngine *e)
 {
     for (uint i = 0; i < data->stringTableSize; ++i)
-        runtimeStrings[i].mark(e);
+        if (runtimeStrings[i])
+            runtimeStrings[i]->mark(e);
     if (runtimeRegularExpressions) {
         for (uint i = 0; i < data->regexpTableSize; ++i)
             runtimeRegularExpressions[i].mark(e);
-    }
-    if (runtimeLookups) {
-        for (uint i = 0; i < data->lookupTableSize; ++i)
-            runtimeLookups[i].name->mark(e);
     }
 }
 

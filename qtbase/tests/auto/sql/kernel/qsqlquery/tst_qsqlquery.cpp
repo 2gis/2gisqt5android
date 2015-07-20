@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -33,6 +33,8 @@
 
 #include <QtTest/QtTest>
 #include <QtSql/QtSql>
+
+#include <numeric>
 
 #include "../qsqldatabase/tst_databases.h"
 
@@ -159,6 +161,8 @@ private slots:
     void bindBool();
     void psql_bindWithDoubleColonCastOperator_data() { generic_data("QPSQL"); }
     void psql_bindWithDoubleColonCastOperator();
+    void psql_specialFloatValues_data() { generic_data("QPSQL"); }
+    void psql_specialFloatValues();
     void queryOnInvalidDatabase_data() { generic_data(); }
     void queryOnInvalidDatabase();
     void createQueryOnClosedDatabase_data() { generic_data(); }
@@ -2437,6 +2441,38 @@ void tst_QSqlQuery::psql_bindWithDoubleColonCastOperator()
         QCOMPARE( q.executedQuery(), QString( "select sum((fld1 - fld2)::int) from " + tablename + " where id1 = 1 and id2 =2 and id3=3" ) );
 }
 
+void tst_QSqlQuery::psql_specialFloatValues()
+{
+    if (!std::numeric_limits<float>::has_quiet_NaN)
+        QSKIP("Platform does not have quiet_NaN");
+    if (!std::numeric_limits<float>::has_infinity)
+        QSKIP("Platform does not have infinity");
+
+    QFETCH( QString, dbName );
+    QSqlDatabase db = QSqlDatabase::database( dbName );
+
+    CHECK_DATABASE( db );
+    QSqlQuery query(db);
+    const QString tableName = qTableName("floattest", __FILE__, db);
+    QVERIFY_SQL( query, exec("create table " + tableName + " (value float)" ) );
+    QVERIFY_SQL(query, prepare("insert into " + tableName + " values(:value)") );
+
+    QVariantList data;
+    data << QVariant(double(42.42))
+         << QVariant(std::numeric_limits<double>::quiet_NaN())
+         << QVariant(std::numeric_limits<double>::infinity())
+         << QVariant(float(42.42))
+         << QVariant(std::numeric_limits<float>::quiet_NaN())
+         << QVariant(std::numeric_limits<float>::infinity());
+
+    foreach (const QVariant &v, data) {
+        query.bindValue(":value", v);
+        QVERIFY_SQL( query, exec() );
+    }
+
+    QVERIFY_SQL( query, exec("drop table " + tableName) );
+}
+
 /* For task 157397: Using QSqlQuery with an invalid QSqlDatabase
    does not set the last error of the query.
    This test function will output some warnings, that's ok.
@@ -3793,7 +3829,7 @@ void tst_QSqlQuery::aggregateFunctionTypes()
     QVariant::Type intType = QVariant::Int;
     // QPSQL uses LongLong for manipulation of integers
     const QSqlDriver::DbmsType dbType = tst_Databases::getDatabaseType(db);
-    if (dbType == QSqlDriver::MySqlServer || dbType == QSqlDriver::PostgreSQL)
+    if (dbType == QSqlDriver::PostgreSQL)
         intType = QVariant::LongLong;
     else if (dbType == QSqlDriver::Oracle)
         intType = QVariant::Double;
@@ -3839,7 +3875,7 @@ void tst_QSqlQuery::aggregateFunctionTypes()
         QVERIFY_SQL(q, exec("SELECT COUNT(id) FROM " + tableName));
         QVERIFY(q.next());
         QCOMPARE(q.value(0).toInt(), 2);
-        QCOMPARE(q.record().field(0).type(), intType);
+        QCOMPARE(q.record().field(0).type(), dbType != QSqlDriver::MySqlServer ? intType : QVariant::LongLong);
 
         QVERIFY_SQL(q, exec("SELECT MIN(id) FROM " + tableName));
         QVERIFY(q.next());
@@ -3882,7 +3918,7 @@ void tst_QSqlQuery::aggregateFunctionTypes()
         QVERIFY_SQL(q, exec("SELECT COUNT(id) FROM " + tableName));
         QVERIFY(q.next());
         QCOMPARE(q.value(0).toInt(), 2);
-        QCOMPARE(q.record().field(0).type(), intType);
+        QCOMPARE(q.record().field(0).type(), dbType != QSqlDriver::MySqlServer ? intType : QVariant::LongLong);
 
         QVERIFY_SQL(q, exec("SELECT MIN(id) FROM " + tableName));
         QVERIFY(q.next());

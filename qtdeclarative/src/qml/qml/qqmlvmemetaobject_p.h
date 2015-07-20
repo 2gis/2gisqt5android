@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -90,19 +90,21 @@ struct QQmlVMEMetaData
             return propertyIdx == -1;
         }
         bool isPropertyAlias() const {
-            return !isObjectAlias() && !(propertyIdx & 0xFFFF0000);
+            return !isObjectAlias() && valueTypeIndex() == -1;
         }
         bool isValueTypeAlias() const {
-            return !isObjectAlias() && (propertyIdx & 0xFFFF0000);
+            return !isObjectAlias() && valueTypeIndex() != -1;
         }
         int propertyIndex() const {
-            return propertyIdx & 0x0000FFFF;
+            int index;
+            QQmlPropertyData::decodeValueTypePropertyIndex(propertyIdx, &index);
+            return index;
         }
         int valueTypeIndex() const {
-            return (propertyIdx & 0xFFFF0000) >> 16;
+            return QQmlPropertyData::decodeValueTypePropertyIndex(propertyIdx);
         }
         int valueType() const {
-            return (propertyIdx & 0xFFFF0000) ? propType : 0;
+            return (valueTypeIndex() != -1) ? propType : 0;
         }
     };
 
@@ -158,9 +160,9 @@ public:
     void registerInterceptor(int index, int valueIndex, QQmlPropertyValueInterceptor *interceptor);
     QV4::ReturnedValue vmeMethod(int index);
     quint16 vmeMethodLineNumber(int index);
-    void setVmeMethod(int index, QV4::ValueRef function);
+    void setVmeMethod(int index, const QV4::Value &function);
     QV4::ReturnedValue vmeProperty(int index);
-    void setVMEProperty(int index, const QV4::ValueRef v);
+    void setVMEProperty(int index, const QV4::Value &v);
 
     void connectAliasSignal(int index, bool indexInSignalRange);
 
@@ -215,7 +217,7 @@ public:
     QV4::ReturnedValue method(int);
 
     QV4::ReturnedValue readVarProperty(int);
-    void writeVarProperty(int, const QV4::ValueRef);
+    void writeVarProperty(int, const QV4::Value &);
     QVariant readPropertyAsVariant(int);
     void writeProperty(int, const QVariant &);
 

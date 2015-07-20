@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -148,14 +148,19 @@ QT_BEGIN_NAMESPACE
         \li Signature
     \row
         \li jobject
-        \li {1, 3} L\e<fully-qualified-name>;
+        \li Ljava/lang/Object;
     \row
         \li jclass
+        \li Ljava/lang/Class;
     \row
         \li jstring
+        \li Ljava/lang/String;
+    \row
+        \li jthrowable
+        \li Ljava/lang/Throwable;
     \row
         \li jobjectArray
-        \li [L\e<fully-qualified-name>;
+        \li [Ljava/lang/Object;
     \row
         \li jarray
         \li [\e<type>
@@ -225,6 +230,9 @@ QT_BEGIN_NAMESPACE
     \row
         \li void
         \li V
+    \row
+        \li \e{Custom type}
+        \li L\e<fully-qualified-name>;
     \endtable
 
     For more information about JNI see: \l http://docs.oracle.com/javase/7/docs/technotes/guides/jni/spec/jniTOC.html
@@ -676,40 +684,10 @@ QT_BEGIN_NAMESPACE
 */
 
 /*!
-    \fn bool operator==(const QAndroidJniObject &o1, T o2)
-    \relates QAndroidJniObject
-
-    Returns true if both objects, \a o1 and \a o2, are referencing the same Java object, or if both
-    are NULL. In any other cases false will be returned.
-*/
-
-/*!
-    \fn bool operator==(T o1, const QAndroidJniObject &o2)
-    \relates QAndroidJniObject
-
-    Returns true if both objects, \a o1 and \a o2, are referencing the same Java object, or if both
-    are NULL. In any other cases false will be returned.
-*/
-
-/*!
     \fn bool operator!=(const QAndroidJniObject &o1, const QAndroidJniObject &o2)
     \relates QAndroidJniObject
 
     Returns true if \a o1 holds a reference to a different object then \a o2.
-*/
-
-/*!
-    \fn bool operator!=(const QAndroidJniObject &o1, T o2)
-    \relates QAndroidJniObject
-
-    Returns true if \a o1 holds a reference to a different object then \a o2.
-*/
-
-/*!
-    \fn bool operator!=(T o1, const QAndroidJniObject &o2)
-    \relates QAndroidJniObject
-
-    Returns true if \a o1 is referencing a different object then \a o2.
 */
 
 
@@ -909,9 +887,27 @@ jdouble QAndroidJniObject::callMethod<jdouble>(const char *methodName) const
 }
 
 template <>
+QAndroidJniObject QAndroidJniObject::callObjectMethod<jobject>(const char *methodName) const
+{
+    return d->callObjectMethod(methodName, "()Ljava/lang/Object;");
+}
+
+template <>
+QAndroidJniObject QAndroidJniObject::callObjectMethod<jclass>(const char *methodName) const
+{
+    return d->callObjectMethod(methodName, "()Ljava/lang/Class;");
+}
+
+template <>
 QAndroidJniObject QAndroidJniObject::callObjectMethod<jstring>(const char *methodName) const
 {
     return d->callObjectMethod(methodName, "()Ljava/lang/String;");
+}
+
+template <>
+QAndroidJniObject QAndroidJniObject::callObjectMethod<jobjectArray>(const char *methodName) const
+{
+    return d->callObjectMethod(methodName, "()[Ljava/lang/Object;");
 }
 
 template <>
@@ -924,6 +920,12 @@ template <>
 QAndroidJniObject QAndroidJniObject::callObjectMethod<jbyteArray>(const char *methodName) const
 {
     return d->callObjectMethod(methodName, "()[B");
+}
+
+template <>
+QAndroidJniObject QAndroidJniObject::callObjectMethod<jcharArray>(const char *methodName) const
+{
+    return d->callObjectMethod(methodName, "()[C");
 }
 
 template <>
@@ -954,6 +956,12 @@ template <>
 QAndroidJniObject QAndroidJniObject::callObjectMethod<jdoubleArray>(const char *methodName) const
 {
     return d->callObjectMethod(methodName, "()[D");
+}
+
+template <>
+QAndroidJniObject QAndroidJniObject::callObjectMethod<jthrowable>(const char *methodName) const
+{
+    return d->callObjectMethod(methodName, "()Ljava/lang/Throwable;");
 }
 
 template <>
@@ -1325,6 +1333,34 @@ jdouble QAndroidJniObject::callStaticMethod<jdouble>(jclass clazz, const char *m
 }
 
 template <>
+QAndroidJniObject QAndroidJniObject::callStaticObjectMethod<jobject>(const char *className,
+                                                                     const char *methodName)
+{
+    return callStaticObjectMethod(className, methodName, "()Ljava/lang/Object;");
+}
+
+template <>
+QAndroidJniObject QAndroidJniObject::callStaticObjectMethod<jobject>(jclass clazz,
+                                                                     const char *methodName)
+{
+    return callStaticObjectMethod(clazz, methodName, "()Ljava/lang/Object;");
+}
+
+template <>
+QAndroidJniObject QAndroidJniObject::callStaticObjectMethod<jclass>(const char *className,
+                                                                    const char *methodName)
+{
+    return callStaticObjectMethod(className, methodName, "()Ljava/lang/Class;");
+}
+
+template <>
+QAndroidJniObject QAndroidJniObject::callStaticObjectMethod<jclass>(jclass clazz,
+                                                                    const char *methodName)
+{
+    return callStaticObjectMethod(clazz, methodName, "()Ljava/lang/Class;");
+}
+
+template <>
 QAndroidJniObject QAndroidJniObject::callStaticObjectMethod<jstring>(const char *className,
                                                        const char *methodName)
 {
@@ -1336,6 +1372,20 @@ QAndroidJniObject QAndroidJniObject::callStaticObjectMethod<jstring>(jclass claz
                                                        const char *methodName)
 {
     return callStaticObjectMethod(clazz, methodName, "()Ljava/lang/String;");
+}
+
+template <>
+QAndroidJniObject QAndroidJniObject::callStaticObjectMethod<jobjectArray>(const char *className,
+                                                                          const char *methodName)
+{
+    return callStaticObjectMethod(className, methodName, "()[Ljava/lang/Object;");
+}
+
+template <>
+QAndroidJniObject QAndroidJniObject::callStaticObjectMethod<jobjectArray>(jclass clazz,
+                                                                          const char *methodName)
+{
+    return callStaticObjectMethod(clazz, methodName, "()[Ljava/lang/Object;");
 }
 
 template <>
@@ -1451,6 +1501,20 @@ QAndroidJniObject QAndroidJniObject::callStaticObjectMethod<jdoubleArray>(jclass
 }
 
 template <>
+QAndroidJniObject QAndroidJniObject::callStaticObjectMethod<jthrowable>(const char *className,
+                                                                        const char *methodName)
+{
+    return callStaticObjectMethod(className, methodName, "()Ljava/lang/Throwable;");
+}
+
+template <>
+QAndroidJniObject QAndroidJniObject::callStaticObjectMethod<jthrowable>(jclass clazz,
+                                                                        const char *methodName)
+{
+    return callStaticObjectMethod(clazz, methodName, "()Ljava/lang/Throwable;");
+}
+
+template <>
 jboolean QAndroidJniObject::getField<jboolean>(const char *fieldName) const
 {
     return d->getField<jboolean>(fieldName);
@@ -1510,6 +1574,18 @@ QAndroidJniObject QAndroidJniObject::getObjectField<jobject>(const char *fieldNa
 }
 
 template <>
+QAndroidJniObject QAndroidJniObject::getObjectField<jobject>(const char *fieldName) const
+{
+    return d->getObjectField(fieldName, "Ljava/lang/Object;");
+}
+
+template <>
+QAndroidJniObject QAndroidJniObject::getObjectField<jclass>(const char *fieldName) const
+{
+    return d->getObjectField(fieldName, "Ljava/lang/Class;");
+}
+
+template <>
 QAndroidJniObject QAndroidJniObject::getObjectField<jbooleanArray>(const char *fieldName) const
 {
     return d->getObjectField(fieldName, "[Z");
@@ -1561,6 +1637,12 @@ template <>
 QAndroidJniObject QAndroidJniObject::getObjectField<jstring>(const char *fieldName) const
 {
     return d->getObjectField(fieldName, "Ljava/lang/String;");
+}
+
+template <>
+QAndroidJniObject QAndroidJniObject::getObjectField<jthrowable>(const char *fieldName) const
+{
+    return d->getObjectField(fieldName, "Ljava/lang/Throwable;");
 }
 
 template <>
@@ -1619,6 +1701,42 @@ void QAndroidJniObject::setField<jdouble>(const char *fieldName, jdouble value)
 }
 
 template <>
+void QAndroidJniObject::setField<jobject>(const char *fieldName,
+                                          const char *sig,
+                                          jobject value)
+{
+    d->setField<jobject>(fieldName, sig, value);
+}
+
+template <>
+void QAndroidJniObject::setField<jobjectArray>(const char *fieldName,
+                                        const char *sig,
+                                        jobjectArray value)
+{
+    d->setField<jobjectArray>(fieldName, sig, value);
+}
+
+template <>
+void QAndroidJniObject::setField<jobject>(const char *fieldName,
+                                          jobject value)
+{
+    setField<jobject>(fieldName, "Ljava/lang/Object;", value);
+}
+
+template <>
+void QAndroidJniObject::setField<jclass>(const char *fieldName,
+                                         jclass value)
+{
+    setField<jobject>(fieldName, "Ljava/lang/Class;", value);
+}
+
+template <>
+void QAndroidJniObject::setField<jstring>(const char *fieldName, jstring value)
+{
+    d->setField<jstring>(fieldName, value);
+}
+
+template <>
 void QAndroidJniObject::setField<jbooleanArray>(const char *fieldName, jbooleanArray value)
 {
     d->setField<jbooleanArray>(fieldName, value);
@@ -1667,25 +1785,9 @@ void QAndroidJniObject::setField<jdoubleArray>(const char *fieldName, jdoubleArr
 }
 
 template <>
-void QAndroidJniObject::setField<jstring>(const char *fieldName, jstring value)
+void QAndroidJniObject::setField<jthrowable>(const char *fieldName, jthrowable value)
 {
-    d->setField<jstring>(fieldName, value);
-}
-
-template <>
-void QAndroidJniObject::setField<jobject>(const char *fieldName,
-                                   const char *sig,
-                                   jobject value)
-{
-    d->setField<jobject>(fieldName, sig, value);
-}
-
-template <>
-void QAndroidJniObject::setField<jobjectArray>(const char *fieldName,
-                                        const char *sig,
-                                        jobjectArray value)
-{
-    d->setField<jobjectArray>(fieldName, sig, value);
+    d->setField<jobject>(fieldName, "Ljava/lang/Throwable;", value);
 }
 
 template <>
@@ -1784,13 +1886,6 @@ jdouble QAndroidJniObject::getStaticField<jdouble>(const char *className, const 
     return QJNIObjectPrivate::getStaticField<jdouble>(className, fieldName);
 }
 
-QAndroidJniObject QAndroidJniObject::getStaticObjectField(jclass clazz,
-                                                          const char *fieldName,
-                                                          const char *sig)
-{
-    return QJNIObjectPrivate::getStaticObjectField(clazz, fieldName, sig);
-}
-
 template <>
 QAndroidJniObject QAndroidJniObject::getStaticObjectField<jobject>(jclass clazz,
                                                      const char *fieldName,
@@ -1799,12 +1894,70 @@ QAndroidJniObject QAndroidJniObject::getStaticObjectField<jobject>(jclass clazz,
     return QJNIObjectPrivate::getStaticObjectField(clazz, fieldName, sig);
 }
 
+QAndroidJniObject QAndroidJniObject::getStaticObjectField(jclass clazz,
+                                                          const char *fieldName,
+                                                          const char *sig)
+{
+    return QJNIObjectPrivate::getStaticObjectField(clazz, fieldName, sig);
+}
+
+QAndroidJniObject QAndroidJniObject::getStaticObjectField(const char *className,
+                                                          const char *fieldName,
+                                                          const char *sig)
+{
+    return QJNIObjectPrivate::getStaticObjectField(className, fieldName, sig);
+}
+
 template <>
 QAndroidJniObject QAndroidJniObject::getStaticObjectField<jobject>(const char *className,
                                                      const char *fieldName,
                                                      const char *sig)
 {
     return QJNIObjectPrivate::getStaticObjectField(className, fieldName, sig);
+}
+
+template <>
+QAndroidJniObject QAndroidJniObject::getStaticObjectField<jobjectArray>(jclass clazz,
+                                                          const char *fieldName,
+                                                          const char *sig)
+{
+    return QJNIObjectPrivate::getStaticObjectField(clazz, fieldName, sig);
+}
+
+template <>
+QAndroidJniObject QAndroidJniObject::getStaticObjectField<jobjectArray>(const char *className,
+                                                          const char *fieldName,
+                                                          const char *sig)
+{
+    return QJNIObjectPrivate::getStaticObjectField(className, fieldName, sig);
+}
+
+template <>
+QAndroidJniObject QAndroidJniObject::getStaticObjectField<jobject>(jclass clazz,
+                                                                   const char *fieldName)
+{
+    return QJNIObjectPrivate::getStaticObjectField(clazz, fieldName, "Ljava/lang/Object;");
+}
+
+template <>
+QAndroidJniObject QAndroidJniObject::getStaticObjectField<jobject>(const char *className,
+                                                                   const char *fieldName)
+{
+    return QJNIObjectPrivate::getStaticObjectField(className, fieldName, "Ljava/lang/Object;");
+}
+
+template <>
+QAndroidJniObject QAndroidJniObject::getStaticObjectField<jclass>(jclass clazz,
+                                                                   const char *fieldName)
+{
+    return QJNIObjectPrivate::getStaticObjectField(clazz, fieldName, "Ljava/lang/Class;");
+}
+
+template <>
+QAndroidJniObject QAndroidJniObject::getStaticObjectField<jclass>(const char *className,
+                                                                  const char *fieldName)
+{
+    return QJNIObjectPrivate::getStaticObjectField(className, fieldName, "Ljava/lang/Class;");
 }
 
 template <>
@@ -1819,6 +1972,20 @@ QAndroidJniObject QAndroidJniObject::getStaticObjectField<jstring>(const char *c
                                                      const char *fieldName)
 {
     return QJNIObjectPrivate::getStaticObjectField(className, fieldName, "Ljava/lang/String;");
+}
+
+template <>
+QAndroidJniObject QAndroidJniObject::getStaticObjectField<jobjectArray>(jclass clazz,
+                                                                        const char *fieldName)
+{
+    return QJNIObjectPrivate::getStaticObjectField(clazz, fieldName, "[Ljava/lang/Object;");
+}
+
+template <>
+QAndroidJniObject QAndroidJniObject::getStaticObjectField<jobjectArray>(const char *className,
+                                                                        const char *fieldName)
+{
+    return QJNIObjectPrivate::getStaticObjectField(className, fieldName, "[Ljava/lang/Object;");
 }
 
 template <>
@@ -1933,27 +2100,18 @@ QAndroidJniObject QAndroidJniObject::getStaticObjectField<jdoubleArray>(const ch
     return QJNIObjectPrivate::getStaticObjectField(className, fieldName, "[D");
 }
 
-QAndroidJniObject QAndroidJniObject::getStaticObjectField(const char *className,
-                                                          const char *fieldName,
-                                                          const char *sig)
+template <>
+QAndroidJniObject QAndroidJniObject::getStaticObjectField<jthrowable>(jclass clazz,
+                                                                      const char *fieldName)
 {
-    return QJNIObjectPrivate::getStaticObjectField(className, fieldName, sig);
+    return QJNIObjectPrivate::getStaticObjectField(clazz, fieldName, "Ljava/lang/Throwable;");
 }
 
 template <>
-QAndroidJniObject QAndroidJniObject::getStaticObjectField<jobjectArray>(jclass clazz,
-                                                          const char *fieldName,
-                                                          const char *sig)
+QAndroidJniObject QAndroidJniObject::getStaticObjectField<jthrowable>(const char *className,
+                                                                      const char *fieldName)
 {
-    return QJNIObjectPrivate::getStaticObjectField(clazz, fieldName, sig);
-}
-
-template <>
-QAndroidJniObject QAndroidJniObject::getStaticObjectField<jobjectArray>(const char *className,
-                                                          const char *fieldName,
-                                                          const char *sig)
-{
-    return QJNIObjectPrivate::getStaticObjectField(className, fieldName, sig);
+    return QJNIObjectPrivate::getStaticObjectField(className, fieldName, "Ljava/lang/Throwable;");
 }
 
 template <>
@@ -2085,6 +2243,20 @@ void QAndroidJniObject::setStaticField<jobject>(const char *className,
 }
 
 template <>
+void QAndroidJniObject::setStaticField<jclass>(const char *className,
+                                               const char *fieldName,
+                                               jclass value)
+{
+    QJNIObjectPrivate::setStaticField<jobject>(className, fieldName, "Ljava/lang/Class;", value);
+}
+
+template <>
+void QAndroidJniObject::setStaticField<jclass>(jclass clazz, const char *fieldName, jclass value)
+{
+    QJNIObjectPrivate::setStaticField<jobject>(clazz, fieldName, "Ljava/lang/Class;", value);
+}
+
+template <>
 void QAndroidJniObject::setStaticField<jstring>(const char *className,
                                          const char *fieldName,
                                          jstring value)
@@ -2096,6 +2268,22 @@ template <>
 void QAndroidJniObject::setStaticField<jstring>(jclass clazz, const char *fieldName, jstring value)
 {
     QJNIObjectPrivate::setStaticField<jobject>(clazz, fieldName, "Ljava/lang/String;", value);
+}
+
+template <>
+void QAndroidJniObject::setStaticField<jobjectArray>(const char *className,
+                                                     const char *fieldName,
+                                                     jobjectArray value)
+{
+    QJNIObjectPrivate::setStaticField<jobject>(className, fieldName, "[Ljava/lang/Object;", value);
+}
+
+template <>
+void QAndroidJniObject::setStaticField<jobjectArray>(jclass clazz,
+                                                     const char *fieldName,
+                                                     jobjectArray value)
+{
+    QJNIObjectPrivate::setStaticField<jobject>(clazz, fieldName, "[Ljava/lang/Object;", value);
 }
 
 template <>
@@ -2224,6 +2412,22 @@ void QAndroidJniObject::setStaticField<jdoubleArray>(jclass clazz,
                                               jdoubleArray value)
 {
     QJNIObjectPrivate::setStaticField<jobject>(clazz, fieldName, "[D", value);
+}
+
+template <>
+void QAndroidJniObject::setStaticField<jthrowable>(const char *className,
+                                                   const char *fieldName,
+                                                   jthrowable value)
+{
+    QJNIObjectPrivate::setStaticField<jobject>(className, fieldName, "Ljava/lang/Throwable;", value);
+}
+
+template <>
+void QAndroidJniObject::setStaticField<jthrowable>(jclass clazz,
+                                                   const char *fieldName,
+                                                   jthrowable value)
+{
+    QJNIObjectPrivate::setStaticField<jobject>(clazz, fieldName, "Ljava/lang/Throwable;", value);
 }
 
 QAndroidJniObject QAndroidJniObject::fromString(const QString &string)

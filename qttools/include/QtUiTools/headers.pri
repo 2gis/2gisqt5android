@@ -2,4 +2,5 @@ SYNCQT.HEADER_FILES = quiloader.h ../../../../include/QtUiTools/qtuitoolsversion
 SYNCQT.HEADER_CLASSES = ../../../../include/QtUiTools/QUiLoader ../../../../include/QtUiTools/QtUiToolsVersion 
 SYNCQT.PRIVATE_HEADER_FILES = quiloader_p.h 
 SYNCQT.QPA_HEADER_FILES = 
+SYNCQT.CLEAN_HEADER_FILES = quiloader.h 
 SYNCQT.INJECTIONS = 

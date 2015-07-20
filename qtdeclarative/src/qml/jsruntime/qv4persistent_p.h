@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -39,115 +39,125 @@ QT_BEGIN_NAMESPACE
 
 namespace QV4 {
 
-struct Q_QML_PRIVATE_EXPORT PersistentValuePrivate
+struct Q_QML_EXPORT PersistentValueStorage
 {
-    PersistentValuePrivate(ReturnedValue v, ExecutionEngine *engine = 0, bool weak = false);
-    virtual ~PersistentValuePrivate();
-    Value value;
-    uint refcount;
-    bool weak;
-    QV4::ExecutionEngine *engine;
-    PersistentValuePrivate **prev;
-    PersistentValuePrivate *next;
+    PersistentValueStorage(ExecutionEngine *engine);
+    ~PersistentValueStorage();
 
-    void init();
-    void removeFromList();
-    void ref() { ++refcount; }
-    void deref();
-    PersistentValuePrivate *detach(const ReturnedValue value, bool weak = false);
+    Value *allocate();
+    static void free(Value *e);
 
-    bool checkEngine(QV4::ExecutionEngine *otherEngine) {
-        if (!engine) {
-            Q_ASSERT(!value.isObject());
-            engine = otherEngine;
+    void mark(ExecutionEngine *e);
+
+    struct Iterator {
+        Q_DECL_CONSTEXPR Iterator(void *p, int idx)
+            : p(p), index(idx) {}
+        void *p;
+        int index;
+        Iterator &operator++();
+        bool operator !=(const Iterator &other) {
+            return p != other.p || index != other.index;
         }
-        return (engine == otherEngine);
-    }
+        Value &operator *();
+    };
+    Iterator begin() { return Iterator(firstPage, 0); }
+    Iterator end() { return Iterator(0, 0); }
+
+    static ExecutionEngine *getEngine(Value *v);
+
+    ExecutionEngine *engine;
+    void *firstPage;
 };
 
 class Q_QML_EXPORT PersistentValue
 {
 public:
-    PersistentValue() : d(0) {}
+    PersistentValue() : val(0) {}
     PersistentValue(const PersistentValue &other);
     PersistentValue &operator=(const PersistentValue &other);
-
-    PersistentValue(const ValueRef val);
-    PersistentValue(ReturnedValue val);
-    template<typename T>
-    PersistentValue(Returned<T> *obj);
-    PersistentValue &operator=(const ValueRef other);
-    PersistentValue &operator=(const ScopedValue &other);
-    PersistentValue &operator =(ReturnedValue other);
-    template<typename T>
-    PersistentValue &operator=(Returned<T> *obj);
+    PersistentValue &operator=(const WeakValue &other);
+    PersistentValue &operator=(Object *object);
     ~PersistentValue();
 
+    PersistentValue(ExecutionEngine *engine, const Value &value);
+    PersistentValue(ExecutionEngine *engine, ReturnedValue value);
+    PersistentValue(ExecutionEngine *engine, Object *object);
+
+    void set(ExecutionEngine *engine, const Value &value);
+    void set(ExecutionEngine *engine, ReturnedValue value);
+    void set(ExecutionEngine *engine, Heap::Base *obj);
+
     ReturnedValue value() const {
-        return (d ? d->value.asReturnedValue() : Primitive::undefinedValue().asReturnedValue());
+        return (val ? val->asReturnedValue() : Encode::undefined());
     }
-
-    ExecutionEngine *engine() {
-        if (!d)
+    Value *valueRef() const {
+        return val;
+    }
+    Managed *asManaged() const {
+        if (!val)
             return 0;
-        if (d->engine)
-            return d->engine;
-        Managed *m = d->value.asManaged();
-        return m ? m->engine() : 0;
+        return val->asManaged();
     }
 
-    bool isUndefined() const { return !d || d->value.isUndefined(); }
-    bool isNullOrUndefined() const { return !d || d->value.isNullOrUndefined(); }
-    void clear() {
-        *this = PersistentValue();
+    ExecutionEngine *engine() const {
+        if (!val)
+            return 0;
+        return PersistentValueStorage::getEngine(val);
     }
+
+    bool isUndefined() const { return !val || val->isUndefined(); }
+    bool isNullOrUndefined() const { return !val || val->isNullOrUndefined(); }
+    void clear() {
+        PersistentValueStorage::free(val);
+        val = 0;
+    }
+    bool isEmpty() { return !val; }
 
 private:
-    friend struct ValueRef;
-    PersistentValuePrivate *d;
+    Value *val;
 };
 
 class Q_QML_EXPORT WeakValue
 {
 public:
-    WeakValue() : d(0) {}
-    WeakValue(const ValueRef val);
+    WeakValue() : val(0) {}
     WeakValue(const WeakValue &other);
-    WeakValue(ReturnedValue val);
-    template<typename T>
-    WeakValue(Returned<T> *obj);
     WeakValue &operator=(const WeakValue &other);
-    WeakValue &operator=(const ValueRef other);
-    WeakValue &operator =(const ReturnedValue &other);
-    template<typename T>
-    WeakValue &operator=(Returned<T> *obj);
-
     ~WeakValue();
 
+    void set(ExecutionEngine *engine, const Value &value);
+    void set(ExecutionEngine *engine, ReturnedValue value);
+    void set(ExecutionEngine *engine, Heap::Base *obj);
+
     ReturnedValue value() const {
-        return (d ? d->value.asReturnedValue() : Primitive::undefinedValue().asReturnedValue());
+        return (val ? val->asReturnedValue() : Encode::undefined());
     }
-
-    ExecutionEngine *engine() {
-        if (!d)
+    Value *valueRef() const {
+        return val;
+    }
+    Managed *asManaged() const {
+        if (!val)
             return 0;
-        if (d->engine)
-            return d->engine;
-        Managed *m = d->value.asManaged();
-        return m ? m->engine() : 0;
+        return val->asManaged();
     }
 
-    bool isUndefined() const { return !d || d->value.isUndefined(); }
-    bool isNullOrUndefined() const { return !d || d->value.isNullOrUndefined(); }
+    ExecutionEngine *engine() const {
+        if (!val)
+            return 0;
+        return PersistentValueStorage::getEngine(val);
+    }
+
+    bool isUndefined() const { return !val || val->isUndefined(); }
+    bool isNullOrUndefined() const { return !val || val->isNullOrUndefined(); }
     void clear() {
-        *this = WeakValue();
+        PersistentValueStorage::free(val);
+        val = 0;
     }
 
     void markOnce(ExecutionEngine *e);
 
 private:
-    friend struct ValueRef;
-    PersistentValuePrivate *d;
+    Value *val;
 };
 
 } // namespace QV4

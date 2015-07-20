@@ -1,7 +1,7 @@
 /****************************************************************************
 **
 ** Copyright (C) 2013 Research In Motion
-** Contact: http://www.qt-project.org/legal
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -126,30 +126,6 @@ void WindowGrabber::start()
         return;
 
     int result = 0;
-
-#ifdef Q_OS_BLACKBERRY_TABLET
-
-    // HACK: On the Playbook, screen_read_window() will fail for invisible windows.
-    //       To workaround this, make the window visible again, but set a global
-    //       alpha of less than 255. The global alpha makes the window completely invisible
-    //       (due to a bug?), but screen_read_window() will work again.
-
-    errno = 0;
-    int val = 200; // anything less than 255
-    result = screen_set_window_property_iv(m_window, SCREEN_PROPERTY_GLOBAL_ALPHA, &val);
-    if (result != 0) {
-        qWarning() << "WindowGrabber: unable to set global alpha:" << strerror(errno);
-        return;
-    }
-
-    errno = 0;
-    val = 1;
-    result = screen_set_window_property_iv(m_window, SCREEN_PROPERTY_VISIBLE, &val);
-    if (result != 0) {
-        qWarning() << "WindowGrabber: unable to make window visible:" << strerror(errno);
-        return;
-    }
-#endif
 
     result = screen_create_context(&m_screenContext, SCREEN_APPLICATION_CONTEXT);
     if (result != 0) {

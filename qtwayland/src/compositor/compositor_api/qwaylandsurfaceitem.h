@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Compositor.
 **
@@ -17,8 +17,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -57,6 +57,7 @@ QT_BEGIN_NAMESPACE
 
 class QWaylandSurfaceTextureProvider;
 class QMutex;
+class QWaylandInputDevice;
 
 class Q_COMPOSITOR_EXPORT QWaylandSurfaceItem : public QQuickItem, public QWaylandSurfaceView
 {
@@ -93,19 +94,19 @@ protected:
     void mouseReleaseEvent(QMouseEvent *event);
     void hoverEnterEvent(QHoverEvent *event);
     void hoverMoveEvent(QHoverEvent *event);
-    void hoverLeaveEvent(QHoverEvent *event);
     void wheelEvent(QWheelEvent *event);
 
     void keyPressEvent(QKeyEvent *event);
     void keyReleaseEvent(QKeyEvent *event);
 
     void touchEvent(QTouchEvent *event);
+    void mouseUngrabEvent() Q_DECL_OVERRIDE;
 
-public slots:
-    void takeFocus();
+public Q_SLOTS:
+    virtual void takeFocus(QWaylandInputDevice *device = 0);
     void setPaintEnabled(bool paintEnabled);
 
-private slots:
+private Q_SLOTS:
     void surfaceMapped();
     void surfaceUnmapped();
     void parentChanged(QWaylandSurface *newParent, QWaylandSurface *oldParent);

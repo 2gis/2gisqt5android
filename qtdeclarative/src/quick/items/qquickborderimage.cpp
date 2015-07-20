@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQuick module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -40,6 +40,7 @@
 #include <QtNetwork/qnetworkreply.h>
 #include <QtCore/qfile.h>
 #include <QtCore/qmath.h>
+#include <QtGui/qguiapplication.h>
 
 #include <private/qqmlglobal_p.h>
 
@@ -321,7 +322,13 @@ void QQuickBorderImage::load()
             if (d->cache)
                 options |= QQuickPixmap::Cache;
             d->pix.clear(this);
-            d->pix.load(qmlEngine(this), d->url, options);
+
+            const qreal targetDevicePixelRatio = (window() ? window()->effectiveDevicePixelRatio() : qGuiApp->devicePixelRatio());
+            d->devicePixelRatio = 1.0;
+
+            QUrl loadUrl = d->url;
+            resolve2xLocalFile(d->url, targetDevicePixelRatio, &loadUrl, &d->devicePixelRatio);
+            d->pix.load(qmlEngine(this), loadUrl, d->sourcesize * d->devicePixelRatio, options);
 
             if (d->pix.isLoading()) {
                 if (d->progress != 0.0) {
@@ -329,8 +336,19 @@ void QQuickBorderImage::load()
                     emit progressChanged(d->progress);
                 }
                 d->status = Loading;
-                d->pix.connectFinished(this, SLOT(requestFinished()));
-                d->pix.connectDownloadProgress(this, SLOT(requestProgress(qint64,qint64)));
+
+                static int thisRequestProgress = -1;
+                static int thisRequestFinished = -1;
+                if (thisRequestProgress == -1) {
+                    thisRequestProgress =
+                        QQuickImageBase::staticMetaObject.indexOfSlot("requestProgress(qint64,qint64)");
+                    thisRequestFinished =
+                        QQuickImageBase::staticMetaObject.indexOfSlot("requestFinished()");
+                }
+                d->pix.connectFinished(this, thisRequestFinished);
+                d->pix.connectDownloadProgress(this, thisRequestProgress);
+
+                update(); //pixmap may have invalidated texture, updatePaintNode needs to be called before the next repaint
             } else {
                 requestFinished();
                 return;
@@ -495,7 +513,7 @@ void QQuickBorderImage::requestFinished()
         }
     }
 
-    setImplicitSize(impsize.width(), impsize.height());
+    setImplicitSize(impsize.width() / d->devicePixelRatio, impsize.height() / d->devicePixelRatio);
     emit statusChanged(d->status);
     if (sourceSize() != d->oldSourceSize) {
         d->oldSourceSize = sourceSize();
@@ -569,40 +587,29 @@ QSGNode *QQuickBorderImage::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeDat
     QRectF innerTargetRect = targetRect;
     if (d->border) {
         const QQuickScaleGrid *border = d->getScaleGrid();
-        innerSourceRect = QRectF(border->left() / qreal(d->pix.width()),
-                                 border->top() / qreal(d->pix.height()),
-                                 qMax<qreal>(0, d->pix.width() - border->right() - border->left()) / d->pix.width(),
-                                 qMax<qreal>(0, d->pix.height() - border->bottom() - border->top()) / d->pix.height());
+        innerSourceRect = QRectF(border->left() * d->devicePixelRatio / qreal(d->pix.width()),
+                                 border->top() * d->devicePixelRatio / qreal(d->pix.height()),
+                                 qMax<qreal>(0, d->pix.width() - (border->right() + border->left()) * d->devicePixelRatio) / d->pix.width(),
+                                 qMax<qreal>(0, d->pix.height() - (border->bottom() + border->top()) * d->devicePixelRatio) / d->pix.height());
         innerTargetRect = QRectF(border->left(),
                                  border->top(),
-                                 qMax<qreal>(0, width() - border->right() - border->left()),
-                                 qMax<qreal>(0, height() - border->bottom() - border->top()));
+                                 qMax<qreal>(0, width() - (border->right() + border->left())),
+                                 qMax<qreal>(0, height() - (border->bottom() + border->top())));
     }
     qreal hTiles = 1;
     qreal vTiles = 1;
-    if (innerSourceRect.width() != 0) {
-        switch (d->horizontalTileMode) {
-        case QQuickBorderImage::Repeat:
-            hTiles = innerTargetRect.width() / qreal(innerSourceRect.width() * d->pix.width());
-            break;
-        case QQuickBorderImage::Round:
-            hTiles = qCeil(innerTargetRect.width() / qreal(innerSourceRect.width() * d->pix.width()));
-            break;
-        default:
-            break;
-        }
+    const QSizeF innerTargetSize = innerTargetRect.size() * d->devicePixelRatio;
+    if (innerSourceRect.width() != 0
+        && d->horizontalTileMode != QQuickBorderImage::Stretch) {
+        hTiles = innerTargetSize.width() / qreal(innerSourceRect.width() * d->pix.width());
+        if (d->horizontalTileMode == QQuickBorderImage::Round)
+            hTiles = qCeil(hTiles);
     }
-    if (innerSourceRect.height() != 0) {
-        switch (d->verticalTileMode) {
-        case QQuickBorderImage::Repeat:
-            vTiles = innerTargetRect.height() / qreal(innerSourceRect.height() * d->pix.height());
-            break;
-        case QQuickBorderImage::Round:
-            vTiles = qCeil(innerTargetRect.height() / qreal(innerSourceRect.height() * d->pix.height()));
-            break;
-        default:
-            break;
-        }
+    if (innerSourceRect.height() != 0
+        && d->verticalTileMode != QQuickBorderImage::Stretch) {
+        vTiles = innerTargetSize.height() / qreal(innerSourceRect.height() * d->pix.height());
+        if (d->verticalTileMode == QQuickBorderImage::Round)
+            vTiles = qCeil(vTiles);
     }
 
     node->setTargetRect(targetRect);

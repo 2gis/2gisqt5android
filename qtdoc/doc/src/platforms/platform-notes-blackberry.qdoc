@@ -1,7 +1,7 @@
 /****************************************************************************
 **
 ** Copyright (C) 2014 BlackBerry Limited. All rights reserved.
-** Contact: http://www.qt-project.org/legal
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
@@ -10,15 +10,15 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Free Documentation License Usage
 ** Alternatively, this file may be used under the terms of the GNU Free
 ** Documentation License version 1.3 as published by the Free Software
 ** Foundation and appearing in the file included in the packaging of
-** this file.  Please review the following information to ensure
+** this file. Please review the following information to ensure
 ** the GNU Free Documentation License version 1.3 requirements
 ** will be met: http://www.gnu.org/copyleft/fdl.html.
 ** $QT_END_LICENSE$
@@ -103,6 +103,51 @@
     Note that Cascades uses its own backend to render on the screen and uses only non-UI
     parts of Qt. It is not possible to mix Qt and Cascades APIs to access the screen in
     one application.
+
+    \section1 Qt Widgets Style
+
+    If the UI of your application is based on \l[QtWidgets]{Qt Widgets}, you should consider
+    using the BlackBerry 10 specific Qt widget style. This style matches the system-wide UI
+    appearance and improves usability. The BlackBerry 10 style is implemented as proxy style
+    in C++ and is loaded as a style plug-in on demand. The style is available only on Qt
+    builds for BlackBerry 10 and is not available in builds for other platforms.
+
+    There are two variants of the style fitting the dark and bright themes on the
+    BlackBerry 10.1.x and 10.2.x releases:
+
+    \table 50%
+    \header
+        \li Style key \c{bb10bright}
+        \li Style key \c{bb10dark}
+    \row
+        \li \image bb10bright-style.png
+        \li \image bb10dark-style.png
+    \endtable
+
+
+    You can activate one of the styles with \l{ QApplication::setStyle() }, e.g.
+
+    \code
+    QApplication::setStyle(QStringLiteral("bb10dark"));
+    \endcode
+
+    The BlackBerry 10 style only covers those \l[QtWidgets]{Qt Widgets} which fit well on
+    small screens and can be controlled with touch input in a comfortable way:
+
+    \list
+        \li \l{QCheckBox}
+        \li \l{QComboBox}
+        \li \l{QLineEdit}
+        \li \l{QPushButton}
+        \li \l{QProgressBar}
+        \li \l{QRadioButton}
+        \li \l{QSlider}
+        \li \l{QScrollBar}
+        \li \l{QTextEdit}
+        \li item view widgets
+    \endlist
+
+    Consider using \l{Qt Quick} for more complex UIs.
 
     \section1 References
 

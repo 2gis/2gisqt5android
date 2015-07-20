@@ -45,16 +45,16 @@ class GpuChildThread : public ChildThread {
   // For single-process mode.
   explicit GpuChildThread(const std::string& channel_id);
 
-  virtual ~GpuChildThread();
+  ~GpuChildThread() override;
 
-  virtual void Shutdown() OVERRIDE;
+  void Shutdown() override;
 
   void Init(const base::Time& process_start_time);
   void StopWatchdog();
 
   // ChildThread overrides.
-  virtual bool Send(IPC::Message* msg) OVERRIDE;
-  virtual bool OnControlMessageReceived(const IPC::Message& msg) OVERRIDE;
+  bool Send(IPC::Message* msg) override;
+  bool OnControlMessageReceived(const IPC::Message& msg) override;
 
   GpuChannelManager* ChannelManager() const { return gpu_channel_manager_.get(); }
 
@@ -71,6 +71,7 @@ class GpuChildThread : public ChildThread {
   void OnCrash();
   void OnHang();
   void OnDisableWatchdog();
+  void OnGpuSwitched();
 
 #if defined(USE_TCMALLOC)
   void OnGetGpuTcmalloc();

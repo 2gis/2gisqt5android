@@ -1,9 +1,9 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
-** This file is part of the Qt Quick Controls module of the Qt Toolkit.
+** This file is part of the test suite of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:BSD$
 ** You may use this file under the terms of the BSD license as follows:
@@ -17,8 +17,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -37,6 +37,7 @@
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
+
 import QtQuick 2.1
 import QtQuick.Layouts 1.1
 import QtQuick.Controls 1.1
@@ -99,7 +100,6 @@ ApplicationWindow {
 
         TextField {
             id: field
-            z: 1
             text: loremIpsum
             Layout.fillWidth: true
             selectByMouse: selectBox.checked
@@ -112,7 +112,6 @@ ApplicationWindow {
 
         SpinBox {
             id: spinbox
-            z: 1
             decimals: 2
             value: 500000
             maximumValue: 1000000
@@ -128,7 +127,6 @@ ApplicationWindow {
 
         ComboBox {
             id: combobox
-            z: 1
             editable: true
             currentIndex: 1
             Layout.fillWidth: true

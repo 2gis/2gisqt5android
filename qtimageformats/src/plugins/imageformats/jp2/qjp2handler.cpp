@@ -1,8 +1,8 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2015 The Qt Company Ltd.
 ** Copyright (C) 2014 Petroules Corporation.
-** Contact: http://www.qt-project.org/legal
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the JP2 plugins in the Qt ImageFormats module.
 **
@@ -11,9 +11,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -24,8 +24,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -38,9 +38,6 @@
 #include "qvariant.h"
 #include "qcolor.h"
 
-#ifdef Q_CC_MSVC
-#define JAS_WIN_MSVC_BUILD
-#endif
 #include <jasper/jasper.h>
 
 QT_BEGIN_NAMESPACE
@@ -586,10 +583,7 @@ bool Jpeg2000JasperReader::read(QImage *pImage)
         if (hasAlpha) {
             qtImage = QImage(qtWidth, qtHeight, QImage::Format_ARGB32);
         } else {
-            qtImage = QImage(qtWidth, qtHeight, QImage::Format_Indexed8);
-            qtImage.setColorCount(256);
-            for (int c = 0; c < 256; ++c)
-                qtImage.setColor(c, qRgb(c,c,c));
+            qtImage = QImage(qtWidth, qtHeight, QImage::Format_Grayscale8);
         }
     }
 
@@ -1176,11 +1170,11 @@ void Jpeg2000JasperReader::printMetadata(jas_image_t *image)
 {
 #ifndef QT_NO_DEBUG
     // jas_image_cmptparm_t param
-    qDebug("Image width: %d", jas_image_width(image));
-    qDebug("Image height: %d", jas_image_height(image));
-    qDebug("Coordinates on reference grid: (%d,%d) (%d,%d)",
-           jas_image_tlx(image), jas_image_tly(image),
-           jas_image_brx(image), jas_image_bry(image));
+    qDebug("Image width: %ld", long(jas_image_width(image)));
+    qDebug("Image height: %ld", long(jas_image_height(image)));
+    qDebug("Coordinates on reference grid: (%ld,%ld) (%ld,%ld)",
+           long(jas_image_tlx(image)), long(jas_image_tly(image)),
+           long(jas_image_brx(image)), long(jas_image_bry(image)));
     qDebug("Number of image components: %d", jas_image_numcmpts(image));
 
     QString colorspaceFamily;
@@ -1193,16 +1187,16 @@ void Jpeg2000JasperReader::printMetadata(jas_image_t *image)
 
     for (int c = 0; c < jas_image_numcmpts(image); ++c) {
         qDebug("Component %d:", c);
-        qDebug("    Component type: %d", jas_image_cmpttype(image, c));
-        qDebug("    Width: %d", jas_image_cmptwidth(image, c));
-        qDebug("    Height: %d", jas_image_cmptheight(image, c));
+        qDebug("    Component type: %ld", long(jas_image_cmpttype(image, c)));
+        qDebug("    Width: %ld", long(jas_image_cmptwidth(image, c)));
+        qDebug("    Height: %ld", long(jas_image_cmptheight(image, c)));
         qDebug("    Signedness: %d", jas_image_cmptsgnd(image, c));
         qDebug("    Precision: %d", jas_image_cmptprec(image, c));
-        qDebug("    Horizontal subsampling factor: %d",jas_image_cmpthstep(image, c));
-        qDebug("    Vertical subsampling factor: %d",  jas_image_cmptvstep(image, c));
-        qDebug("    Coordinates on reference grid: (%d,%d) (%d,%d)",
-               jas_image_cmpttlx(image, c), jas_image_cmpttly(image, c),
-               jas_image_cmptbrx(image, c), jas_image_cmptbry(image, c));
+        qDebug("    Horizontal subsampling factor: %ld",long(jas_image_cmpthstep(image, c)));
+        qDebug("    Vertical subsampling factor: %ld",  long(jas_image_cmptvstep(image, c)));
+        qDebug("    Coordinates on reference grid: (%ld,%ld) (%ld,%ld)",
+               long(jas_image_cmpttlx(image, c)), long(jas_image_cmpttly(image, c)),
+               long(jas_image_cmptbrx(image, c)), long(jas_image_cmptbry(image, c)));
     }
 #else
     Q_UNUSED(image);

@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -36,6 +36,10 @@
 #include <gst/interfaces/photography.h>
 
 #include <QDebug>
+
+#if !GST_CHECK_VERSION(1,0,0)
+typedef GstSceneMode GstPhotographySceneMode;
+#endif
 
 QT_BEGIN_NAMESPACE
 
@@ -119,25 +123,49 @@ QVariant CameraBinExposure::actualValue(ExposureParameter parameter) const
     }
     case QCameraExposureControl::ExposureMode:
     {
-        GstSceneMode sceneMode;
+        GstPhotographySceneMode sceneMode;
         gst_photography_get_scene_mode(m_session->photography(), &sceneMode);
 
         switch (sceneMode) {
         case GST_PHOTOGRAPHY_SCENE_MODE_PORTRAIT:
-            return QCameraExposure::ExposurePortrait;
+            return QVariant::fromValue(QCameraExposure::ExposurePortrait);
         case GST_PHOTOGRAPHY_SCENE_MODE_SPORT:
-            return QCameraExposure::ExposureSports;
+            return QVariant::fromValue(QCameraExposure::ExposureSports);
         case GST_PHOTOGRAPHY_SCENE_MODE_NIGHT:
-            return QCameraExposure::ExposureNight;
+            return QVariant::fromValue(QCameraExposure::ExposureNight);
         case GST_PHOTOGRAPHY_SCENE_MODE_MANUAL:
-            return QCameraExposure::ExposureManual;
-        case GST_PHOTOGRAPHY_SCENE_MODE_CLOSEUP:
-            //no direct mapping available so mapping to auto mode
+            return QVariant::fromValue(QCameraExposure::ExposureManual);
         case GST_PHOTOGRAPHY_SCENE_MODE_LANDSCAPE:
-            //no direct mapping available so mapping to auto mode
+            return QVariant::fromValue(QCameraExposure::ExposureLandscape);
+#if GST_CHECK_VERSION(1, 2, 0)
+        case GST_PHOTOGRAPHY_SCENE_MODE_SNOW:
+            return QVariant::fromValue(QCameraExposure::ExposureSnow);
+        case GST_PHOTOGRAPHY_SCENE_MODE_BEACH:
+            return QVariant::fromValue(QCameraExposure::ExposureBeach);
+        case GST_PHOTOGRAPHY_SCENE_MODE_ACTION:
+            return QVariant::fromValue(QCameraExposure::ExposureAction);
+        case GST_PHOTOGRAPHY_SCENE_MODE_NIGHT_PORTRAIT:
+            return QVariant::fromValue(QCameraExposure::ExposureNightPortrait);
+        case GST_PHOTOGRAPHY_SCENE_MODE_THEATRE:
+            return QVariant::fromValue(QCameraExposure::ExposureTheatre);
+        case GST_PHOTOGRAPHY_SCENE_MODE_SUNSET:
+            return QVariant::fromValue(QCameraExposure::ExposureSunset);
+        case GST_PHOTOGRAPHY_SCENE_MODE_STEADY_PHOTO:
+            return QVariant::fromValue(QCameraExposure::ExposureSteadyPhoto);
+        case GST_PHOTOGRAPHY_SCENE_MODE_FIREWORKS:
+            return QVariant::fromValue(QCameraExposure::ExposureFireworks);
+        case GST_PHOTOGRAPHY_SCENE_MODE_PARTY:
+            return QVariant::fromValue(QCameraExposure::ExposureParty);
+        case GST_PHOTOGRAPHY_SCENE_MODE_CANDLELIGHT:
+            return QVariant::fromValue(QCameraExposure::ExposureCandlelight);
+        case GST_PHOTOGRAPHY_SCENE_MODE_BARCODE:
+            return QVariant::fromValue(QCameraExposure::ExposureBarcode);
+#endif
+        //no direct mapping available so mapping to auto mode
+        case GST_PHOTOGRAPHY_SCENE_MODE_CLOSEUP:
         case GST_PHOTOGRAPHY_SCENE_MODE_AUTO:
         default:
-            return QCameraExposure::ExposureAuto;
+            return QVariant::fromValue(QCameraExposure::ExposureAuto);
         }
     }
     case QCameraExposureControl::MeteringMode:
@@ -166,8 +194,9 @@ bool CameraBinExposure::setValue(ExposureParameter parameter, const QVariant& va
         break;
     case QCameraExposureControl::ExposureMode:
     {
-        QCameraExposure::ExposureMode mode = QCameraExposure::ExposureMode(value.toInt());
-        GstSceneMode sceneMode;
+        QCameraExposure::ExposureMode mode = value.value<QCameraExposure::ExposureMode>();
+        GstPhotographySceneMode sceneMode;
+
         gst_photography_get_scene_mode(m_session->photography(), &sceneMode);
 
         switch (mode) {
@@ -186,6 +215,44 @@ bool CameraBinExposure::setValue(ExposureParameter parameter, const QVariant& va
         case QCameraExposure::ExposureAuto:
             sceneMode = GST_PHOTOGRAPHY_SCENE_MODE_AUTO;
             break;
+        case QCameraExposure::ExposureLandscape:
+            sceneMode = GST_PHOTOGRAPHY_SCENE_MODE_LANDSCAPE;
+            break;
+#if GST_CHECK_VERSION(1, 2, 0)
+        case QCameraExposure::ExposureSnow:
+            sceneMode = GST_PHOTOGRAPHY_SCENE_MODE_SNOW;
+            break;
+        case QCameraExposure::ExposureBeach:
+            sceneMode = GST_PHOTOGRAPHY_SCENE_MODE_BEACH;
+            break;
+        case QCameraExposure::ExposureAction:
+            sceneMode = GST_PHOTOGRAPHY_SCENE_MODE_ACTION;
+            break;
+        case QCameraExposure::ExposureNightPortrait:
+            sceneMode = GST_PHOTOGRAPHY_SCENE_MODE_NIGHT_PORTRAIT;
+            break;
+        case QCameraExposure::ExposureTheatre:
+            sceneMode = GST_PHOTOGRAPHY_SCENE_MODE_THEATRE;
+            break;
+        case QCameraExposure::ExposureSunset:
+            sceneMode = GST_PHOTOGRAPHY_SCENE_MODE_SUNSET;
+            break;
+        case QCameraExposure::ExposureSteadyPhoto:
+            sceneMode = GST_PHOTOGRAPHY_SCENE_MODE_STEADY_PHOTO;
+            break;
+        case QCameraExposure::ExposureFireworks:
+            sceneMode = GST_PHOTOGRAPHY_SCENE_MODE_FIREWORKS;
+            break;
+        case QCameraExposure::ExposureParty:
+            sceneMode = GST_PHOTOGRAPHY_SCENE_MODE_PARTY;
+            break;
+        case QCameraExposure::ExposureCandlelight:
+            sceneMode = GST_PHOTOGRAPHY_SCENE_MODE_CANDLELIGHT;
+            break;
+        case QCameraExposure::ExposureBarcode:
+            sceneMode = GST_PHOTOGRAPHY_SCENE_MODE_BARCODE;
+            break;
+#endif
         default:
             break;
         }

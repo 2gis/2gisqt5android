@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the V4VM module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,18 +23,24 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
 
+#include <QtCore/QBuffer>
+#include <QtCore/QDebug>
 #include "qv4regalloc_p.h"
+#include "qv4alloca_p.h"
 #include <private/qv4value_inl_p.h>
 
 #include <algorithm>
+#if defined(Q_CC_MINGW)
+#  include <malloc.h>
+#endif
 
 namespace {
 enum { DebugRegAlloc = 0 };
@@ -123,6 +129,10 @@ protected:
 
 class RegAllocInfo: public IRDecoder
 {
+public:
+    typedef QVarLengthArray<Temp, 4> Hints;
+
+private:
     struct Def {
         unsigned valid : 1;
         unsigned canHaveReg : 1;
@@ -143,7 +153,7 @@ class RegAllocInfo: public IRDecoder
     std::vector<Def> _defs;
     std::vector<std::vector<Use> > _uses;
     std::vector<int> _calls;
-    std::vector<QList<Temp> > _hints;
+    std::vector<Hints> _hints;
 
     int usePosition(Stmt *s) const
     {
@@ -175,21 +185,7 @@ public:
 
     const std::vector<Use> &uses(const Temp &t) const
     {
-        return _uses[t.index];
-    }
-
-    bool useMustHaveReg(const Temp &t, int position) {
-        foreach (const Use &use, uses(t))
-            if (use.pos == position)
-                return use.mustHaveRegister();
-        return false;
-    }
-
-    bool isUsedAt(const Temp &t, int position) {
-        foreach (const Use &use, uses(t))
-            if (use.pos == position)
-                return true;
-        return false;
+        return _uses.at(t.index);
     }
 
     bool canHaveRegister(const Temp &t) const {
@@ -202,15 +198,15 @@ public:
     }
 
     const std::vector<int> &calls() const { return _calls; }
-    const QList<Temp> &hints(const Temp &t) const { return _hints[t.index]; }
+    const Hints &hints(const Temp &t) const { return _hints[t.index]; }
     void addHint(const Temp &t, int physicalRegister)
     { addHint(t, Temp::PhysicalRegister, physicalRegister); }
 
     void addHint(const Temp &t, Temp::Kind kind, int hintedIndex)
     {
-        QList<Temp> &hints = _hints[t.index];
-        foreach (const Temp &hint, hints)
-            if (hint.index == hintedIndex)
+        Hints &hints = _hints[t.index];
+        for (Hints::iterator i = hints.begin(), ei = hints.end(); i != ei; ++i)
+            if (i->index == hintedIndex)
                 return;
 
         Temp hint;
@@ -223,7 +219,9 @@ public:
         if (!DebugRegAlloc)
             return;
 
-        QTextStream qout(stdout, QIODevice::WriteOnly);
+        QBuffer buf;
+        buf.open(QIODevice::WriteOnly);
+        QTextStream qout(&buf);
         IRPrinterWithPositions printer(&qout, _lifeTimeIntervals);
 
         qout << "RegAllocInfo:" << endl << "Defs/uses:" << endl;
@@ -257,13 +255,14 @@ public:
             if (_uses[t].empty())
                 continue;
             qout << "\t%" << t << ": ";
-            QList<Temp> hints = _hints[t];
+            const Hints &hints = _hints[t];
             for (int i = 0; i < hints.size(); ++i) {
                 if (i > 0) qout << ", ";
                 printer.print(hints[i]);
             }
             qout << endl;
         }
+        qDebug("%s", buf.data().constData());
     }
 
 protected: // IRDecoder
@@ -686,9 +685,13 @@ protected: // IRDecoder
     virtual void visitPhi(IR::Phi *s)
     {
         addDef(s->targetTemp, true);
-        foreach (Expr *e, s->d->incoming) {
+        for (int i = 0, ei = s->d->incoming.size(); i < ei; ++i) {
+            Expr *e = s->d->incoming.at(i);
             if (Temp *t = e->asTemp()) {
-                addUses(t, Use::CouldHaveRegister);
+                // The actual use of an incoming value in a phi node is right before the terminator
+                // of the other side of the incoming edge.
+                const int usePos = _lifeTimeIntervals->positionForStatement(_currentBB->in.at(i)->terminator()) - 1;
+                addUses(t, Use::CouldHaveRegister, usePos);
                 addHint(s->targetTemp, t);
                 addHint(t, s->targetTemp);
             }
@@ -734,6 +737,11 @@ private:
     void addUses(Expr *e, Use::RegisterFlag flag)
     {
         const int usePos = usePosition(_currentStmt);
+        addUses(e, flag, usePos);
+    }
+
+    void addUses(Expr *e, Use::RegisterFlag flag, int usePos)
+    {
         Q_ASSERT(usePos > 0);
         if (!e)
             return;
@@ -823,8 +831,11 @@ public:
     void run() {
         renumber();
         if (DebugRegAlloc) {
-            QTextStream qout(stdout, QIODevice::WriteOnly);
+            QBuffer buf;
+            buf.open(QIODevice::WriteOnly);
+            QTextStream qout(&buf);
             IRPrinterWithPositions(&qout, _intervals).print(_function);
+            qDebug("%s", buf.data().constData());
         }
         resolve();
     }
@@ -842,12 +853,14 @@ private:
 
     void renumber()
     {
+        QVector<Stmt *> newStatements;
+
         foreach (BasicBlock *bb, _function->basicBlocks()) {
             _currentStmt = 0;
 
             QVector<Stmt *> statements = bb->statements();
-            QVector<Stmt *> newStatements;
             newStatements.reserve(bb->statements().size() + 7);
+            newStatements.erase(newStatements.begin(), newStatements.end());
 
             cleanOldIntervals(_intervals->startPosition(bb));
             addNewIntervals(_intervals->startPosition(bb));
@@ -876,7 +889,9 @@ private:
             _liveAtEnd[bb] = _intervalForTemp.values();
 
             if (DebugRegAlloc) {
-                QTextStream os(stdout, QIODevice::WriteOnly);
+                QBuffer buf;
+                buf.open(QIODevice::WriteOnly);
+                QTextStream os(&buf);
                 os << "Intervals live at the start of L" << bb->index() << ":" << endl;
                 if (_liveAtStart[bb].isEmpty())
                     os << "\t(none)" << endl;
@@ -893,6 +908,7 @@ private:
                     i->dump(os);
                     os << endl;
                 }
+                qDebug("%s", buf.data().constData());
             }
 
             bb->setStatements(newStatements);
@@ -967,11 +983,13 @@ private:
     {
         if (DebugRegAlloc) {
             qDebug() << "Resolving edge" << predecessor->index() << "->" << successor->index();
-            QTextStream qout(stdout, QIODevice::WriteOnly);
+            QBuffer buf;
+            buf.open(QIODevice::WriteOnly);
+            QTextStream qout(&buf);
             IRPrinterWithPositions printer(&qout, _intervals);
             printer.print(predecessor);
             printer.print(successor);
-            qout.flush();
+            qDebug("%s", buf.data().constData());
         }
 
         MoveMapping mapping;
@@ -1088,11 +1106,13 @@ private:
 
         if (DebugRegAlloc) {
             qDebug() << ".. done, result:";
-            QTextStream qout(stdout, QIODevice::WriteOnly);
+            QBuffer buf;
+            buf.open(QIODevice::WriteOnly);
+            QTextStream qout(&buf);
             IRPrinterWithPositions printer(&qout, _intervals);
             printer.print(predecessor);
             printer.print(successor);
-            qout.flush();
+            qDebug("%s", buf.data().constData());
         }
     }
 
@@ -1260,7 +1280,9 @@ void RegisterAllocator::run(IR::Function *function, const Optimizer &opt)
     _info->collect(function, _lifeTimeIntervals);
 
     if (DebugRegAlloc) {
-        QTextStream qout(stdout, QIODevice::WriteOnly);
+        QBuffer buf;
+        buf.open(QIODevice::WriteOnly);
+        QTextStream qout(&buf);
         qout << "Ranges:" << endl;
         QVector<LifeTimeInterval *> intervals = _unhandled;
         std::reverse(intervals.begin(), intervals.end());
@@ -1268,13 +1290,13 @@ void RegisterAllocator::run(IR::Function *function, const Optimizer &opt)
             r->dump(qout);
             qout << endl;
         }
+        qDebug("%s", buf.data().constData());
         _info->dump();
-    }
 
-    if (DebugRegAlloc) {
         qDebug() << "*** Before register allocation:";
-        QTextStream qout(stdout, QIODevice::WriteOnly);
+        buf.setData(QByteArray());
         IRPrinterWithPositions(&qout, _lifeTimeIntervals).print(function);
+        qDebug("%s", buf.data().constData());
     }
     prepareRanges();
 
@@ -1293,8 +1315,11 @@ void RegisterAllocator::run(IR::Function *function, const Optimizer &opt)
 
     static bool showCode = !qgetenv("QV4_SHOW_IR").isNull();
     if (showCode) {
-        QTextStream qout(stdout, QIODevice::WriteOnly);
+        QBuffer buf;
+        buf.open(QIODevice::WriteOnly);
+        QTextStream qout(&buf);
         IRPrinterWithRegisters(&qout, _lifeTimeIntervals, _registerInformation).print(function);
+        qDebug("%s", buf.data().constData());
     }
 }
 
@@ -1355,7 +1380,7 @@ LifeTimeInterval *RegisterAllocator::cloneFixedInterval(int reg, bool isFP, cons
 // saved registers.
 void RegisterAllocator::prepareRanges()
 {
-    LifeTimeInterval ltiWithCalls = createFixedInterval(_info->calls().size());
+    LifeTimeInterval ltiWithCalls = createFixedInterval(int(_info->calls().size()));
     foreach (int callPosition, _info->calls())
         ltiWithCalls.addRange(callPosition, callPosition);
 
@@ -1550,7 +1575,9 @@ void RegisterAllocator::tryAllocateFreeReg(LifeTimeInterval &current)
     int reg = LifeTimeInterval::InvalidRegister;
     int freeUntilPos_reg = 0;
 
-    foreach (const Temp &hint, _info->hints(current.temp())) {
+    const RegAllocInfo::Hints &hints = _info->hints(current.temp());
+    for (RegAllocInfo::Hints::const_iterator i = hints.begin(), ei = hints.end(); i != ei; ++i) {
+        const Temp &hint = *i;
         int candidate;
         if (hint.kind == Temp::PhysicalRegister)
             candidate = hint.index;
@@ -1577,7 +1604,7 @@ void RegisterAllocator::tryAllocateFreeReg(LifeTimeInterval &current)
     if (freeUntilPos_reg == 0) {
         // no register available without spilling
         if (DebugRegAlloc)
-            qDebug() << "*** no register available for %" << current.temp().index;
+            qDebug("*** no register available for %u", current.temp().index);
         return;
     } else if (current.end() < freeUntilPos_reg) {
         // register available for the whole interval
@@ -1675,10 +1702,12 @@ void RegisterAllocator::allocateBlockedReg(LifeTimeInterval &current)
 
     // spill interval that currently block reg
     if (DebugRegAlloc) {
-        QTextStream out(stderr, QIODevice::WriteOnly);
+        QBuffer buf;
+        buf.open(QIODevice::WriteOnly);
+        QTextStream out(&buf);
         out << "*** spilling intervals that block reg " <<reg<< " for interval ";
         current.dump(out);
-        out << endl;
+        qDebug("%s", buf.data().constData());
     }
     current.setReg(reg);
     _lastAssignedRegister[current.temp().index] = reg;
@@ -1686,7 +1715,7 @@ void RegisterAllocator::allocateBlockedReg(LifeTimeInterval &current)
     Q_ASSERT(nextUse);
     Q_ASSERT(!nextUse->isFixedInterval());
 
-    split(*nextUse, position);
+    split(*nextUse, position, /*skipOptionalRegisterUses =*/ true);
 
     // We might have chosen a register that is used by a range that has a hole in its life time.
     // If that's the case, check if the current interval completely fits in the hole. Or rephrased:
@@ -1701,8 +1730,7 @@ void RegisterAllocator::allocateBlockedReg(LifeTimeInterval &current)
         int ni = nextIntersection(current, *fixedRegRange);
         if (ni != -1) {
             if (DebugRegAlloc) {
-                QTextStream out(stderr, QIODevice::WriteOnly);
-                out << "***-- current range intersects with a fixed reg use at " << ni << ", so splitting it." << endl;
+                qDebug("***-- current range intersects with a fixed reg use at %d, so splitting it.", ni);
             }
             // current does overlap with a fixed interval, so split current before that intersection.
             split(current, ni, true);
@@ -1737,13 +1765,21 @@ int RegisterAllocator::nextIntersection(const LifeTimeInterval &current,
 }
 
 /// Find the first use after the start position for the given temp.
+///
+/// This is only called when all registers are in use, and when one of them has to be spilled to the
+/// stack. So, uses where a register is optional can be ignored.
 int RegisterAllocator::nextUse(const Temp &t, int startPosition) const
 {
+    typedef std::vector<Use>::const_iterator ConstIt;
+
     const std::vector<Use> &usePositions = _info->uses(t);
-    for (int i = 0, ei = usePositions.size(); i != ei; ++i) { //### FIXME: use an iterator
-        const int usePos = usePositions.at(i).pos;
-        if (usePos >= startPosition)
-            return usePos;
+    const ConstIt cend = usePositions.end();
+    for (ConstIt it = usePositions.begin(); it != cend; ++it) {
+        if (it->mustHaveRegister()) {
+            const int usePos = it->pos;
+            if (usePos >= startPosition)
+                return usePos;
+        }
     }
 
     return -1;
@@ -1767,8 +1803,14 @@ void RegisterAllocator::split(LifeTimeInterval &current, int beforePosition,
     Q_ASSERT(!current.isFixedInterval());
 
     if (DebugRegAlloc) {
-        QTextStream out(stderr, QIODevice::WriteOnly);
-        out << "***** split request for range ";current.dump(out);out<<" before position "<<beforePosition<<" and skipOptionalRegisterUses = "<<skipOptionalRegisterUses<<endl;
+        QBuffer buf;
+        buf.open(QIODevice::WriteOnly);
+        QTextStream out(&buf);
+        out << "***** split request for range ";
+        current.dump(out);
+        out << " before position " << beforePosition
+            << " and skipOptionalRegisterUses = " << skipOptionalRegisterUses << endl;
+        qDebug("%s", buf.data().constData());
     }
 
     assignSpillSlot(current.temp(), current.start(), current.end());
@@ -1779,7 +1821,7 @@ void RegisterAllocator::split(LifeTimeInterval &current, int beforePosition,
     int lastUse = firstPosition;
     int nextUse = -1;
     const std::vector<Use> &usePositions = _info->uses(current.temp());
-    for (int i = 0, ei = usePositions.size(); i != ei; ++i) {
+    for (size_t i = 0, ei = usePositions.size(); i != ei; ++i) {
         const Use &usePosition = usePositions.at(i);
         const int usePos = usePosition.pos;
         if (lastUse < usePos && usePos < beforePosition) {
@@ -1796,10 +1838,17 @@ void RegisterAllocator::split(LifeTimeInterval &current, int beforePosition,
 
     LifeTimeInterval newInterval = current.split(lastUse, nextUse);
     if (DebugRegAlloc) {
-        QTextStream out(stderr, QIODevice::WriteOnly);
-        out << "***** last use = "<<lastUse<<", nextUse = " << nextUse<<endl;
-        out << "***** new interval: "; newInterval.dump(out); out << endl;
-        out << "***** preceding interval: "; current.dump(out); out << endl;
+        QBuffer buf;
+        buf.open(QIODevice::WriteOnly);
+        QTextStream out(&buf);
+        out << "***** last use = " << lastUse << ", nextUse = " << nextUse << endl;
+        out << "***** new interval: ";
+        newInterval.dump(out);
+        out << endl;
+        out << "***** preceding interval: ";
+        current.dump(out);
+        out << endl;
+        qDebug("%s", buf.data().constData());
     }
     if (newInterval.isValid()) {
         if (current.reg() != LifeTimeInterval::InvalidRegister)
@@ -1848,7 +1897,9 @@ void RegisterAllocator::assignSpillSlot(const Temp &t, int startPos, int endPos)
 
 void RegisterAllocator::dump(IR::Function *function) const
 {
-    QTextStream qout(stdout, QIODevice::WriteOnly);
+    QBuffer buf;
+    buf.open(QIODevice::WriteOnly);
+    QTextStream qout(&buf);
     IRPrinterWithPositions printer(&qout, _lifeTimeIntervals);
 
     qout << "Ranges:" << endl;
@@ -1865,6 +1916,7 @@ void RegisterAllocator::dump(IR::Function *function) const
             qout << "\t%" << i << " -> " << _assignedSpillSlots[i] << endl;
 
     printer.print(function);
+    qDebug("%s", buf.data().constData());
 }
 
 // References:

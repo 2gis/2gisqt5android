@@ -86,11 +86,17 @@ public:
     // control warning when a client tries to use operator bool exposed above via "using PageBlock::operator bool".
     operator bool() const { return PageBlock::operator bool(); }
 #endif
+    bool operator<(const PageAllocation &b) { return base() < b.base(); }
 
-    static PageAllocation allocate(size_t size, OSAllocator::Usage usage = OSAllocator::UnknownUsage, bool writable = true, bool executable = false)
+    static PageAllocation allocate(size_t size,
+                                   OSAllocator::Usage usage = OSAllocator::UnknownUsage,
+                                   bool writable = true, bool executable = false,
+                                   bool includesGuardPages = false)
     {
         ASSERT(isPageAligned(size));
-        return PageAllocation(OSAllocator::reserveAndCommit(size, usage, writable, executable), size);
+        return PageAllocation(OSAllocator::reserveAndCommit(size, usage, writable, executable,
+                                                            includesGuardPages), size,
+                                                            includesGuardPages);
     }
 
     void deallocate()
@@ -103,12 +109,12 @@ public:
         ASSERT(tmp);
         ASSERT(!*this);
 
-        OSAllocator::decommitAndRelease(tmp.base(), tmp.size());
+        OSAllocator::decommitAndRelease(tmp.realBase(), tmp.realSize());
     }
 
 private:
-    PageAllocation(void* base, size_t size)
-        : PageBlock(base, size, false)
+    PageAllocation(void* base, size_t size, bool includesGuardPages = false)
+        : PageBlock(base, size, includesGuardPages)
     {
     }
 };

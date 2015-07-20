@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtWebEngine module of the Qt Toolkit.
 **
@@ -10,15 +10,15 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
 ** General Public License version 3 as published by the Free Software
 ** Foundation and appearing in the file LICENSE.LGPLv3 included in the
-** packaging of this file.  Please review the following information to
+** packaging of this file. Please review the following information to
 ** ensure the GNU Lesser General Public License version 3 requirements
 ** will be met: https://www.gnu.org/licenses/lgpl.html.
 **
@@ -26,7 +26,7 @@
 ** Alternatively, this file may be used under the terms of the GNU
 ** General Public License version 2.0 or later as published by the Free
 ** Software Foundation and appearing in the file LICENSE.GPL included in
-** the packaging of this file.  Please review the following information to
+** the packaging of this file. Please review the following information to
 ** ensure the GNU General Public License version 2.0 requirements will be
 ** met: http://www.gnu.org/licenses/gpl-2.0.html.
 **
@@ -47,11 +47,19 @@
 
 namespace content {
 class WebContents;
-}
-class WebContentsAdapterPrivate;
 struct WebPreferences;
+}
 
-QT_FORWARD_DECLARE_CLASS(QAccessibleInterface);
+QT_BEGIN_NAMESPACE
+class QAccessibleInterface;
+class QWebChannel;
+QT_END_NAMESPACE
+
+namespace QtWebEngineCore {
+
+class BrowserContextQt;
+class MessagePassingInterface;
+class WebContentsAdapterPrivate;
 
 class QWEBENGINE_EXPORT WebContentsAdapter : public QSharedData {
 public:
@@ -66,6 +74,7 @@ public:
     bool canGoForward() const;
     void stop();
     void reload();
+    void reloadAndBypassCache();
     void load(const QUrl&);
     void setContent(const QByteArray &data, const QString &mimeType, const QUrl &baseUrl);
     QUrl activeUrl() const;
@@ -95,7 +104,6 @@ public:
     void serializeNavigationHistory(QDataStream &output);
     void setZoomFactor(qreal);
     qreal currentZoomFactor() const;
-    void enableInspector(bool);
     void filesSelectedInChooser(const QStringList &fileList, WebContentsAdapterClient::FileChooserMode);
     void runJavaScript(const QString &javaScript);
     quint64 runJavaScriptCallbackResult(const QString &javaScript);
@@ -103,19 +111,31 @@ public:
     quint64 fetchDocumentInnerText();
     quint64 findText(const QString &subString, bool caseSensitively, bool findBackward);
     void stopFinding();
-    void updateWebPreferences(const WebPreferences &webPreferences);
+    void updateWebPreferences(const content::WebPreferences &webPreferences);
 
     void wasShown();
     void wasHidden();
     void grantMediaAccessPermission(const QUrl &securityOrigin, WebContentsAdapterClient::MediaRequestFlags flags);
+    void runGeolocationRequestCallback(const QUrl &securityOrigin, bool allowed);
+    void grantMouseLockPermission(bool granted);
 
     void dpiScaleChanged();
     QAccessibleInterface *browserAccessible();
+    BrowserContextQt* browserContext();
+    BrowserContextAdapter* browserContextAdapter();
+    QWebChannel *webChannel() const;
+    void setWebChannel(QWebChannel *);
+
+    // meant to be used within WebEngineCore only
+    content::WebContents *webContents() const;
 
 private:
-    Q_DISABLE_COPY(WebContentsAdapter);
-    Q_DECLARE_PRIVATE(WebContentsAdapter);
+    Q_DISABLE_COPY(WebContentsAdapter)
+    Q_DECLARE_PRIVATE(WebContentsAdapter)
     QScopedPointer<WebContentsAdapterPrivate> d_ptr;
-    friend class WebContentsDelegateQt;
+
 };
+
+} // namespace QtWebEngineCore
+
 #endif // WEB_CONTENTS_ADAPTER_H

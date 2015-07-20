@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the plugins of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -123,9 +123,8 @@ QDeclarativeCameraCapture::~QDeclarativeCameraCapture()
     This property holds a bool value indicating whether the camera
     is ready to capture photos or not.
 
-   If camera is not ready to capture image immediately,
-   the capture request is queued with all the related camera settings,
-   and the request will be executed as soon as possible.
+    Calling capture() while \e ready is \c false is not permitted and
+    results in an error.
 */
 
 /*!
@@ -134,11 +133,8 @@ QDeclarativeCameraCapture::~QDeclarativeCameraCapture()
     This property holds a bool value indicating whether the camera
     is ready to capture photos or not.
 
-   It's permissible to call capture() while the camera is active
-   regardless of the \e ready property value.
-   If camera is not ready to capture image immediately,
-   the capture request is queued with all the related camera settings,
-   and the request will be executed as soon as possible.
+    Calling capture() while \e ready is \c false is not permitted and
+    results in an error.
 */
 bool QDeclarativeCameraCapture::isReadyForCapture() const
 {
@@ -157,11 +153,13 @@ bool QDeclarativeCameraCapture::isReadyForCapture() const
     for video.
 
     Camera saves all the capture parameters like exposure settings or
-    image processing parameters, so changes to camera paramaters after
+    image processing parameters, so changes to camera parameters after
     capture() is called do not affect previous capture requests.
 
-    CameraCapture::capture returns the capture requestId parameter, used with
+    capture() returns the capture requestId parameter, used with
     imageExposed(), imageCaptured(), imageMetadataAvailable() and imageSaved() signals.
+
+    \sa ready
 */
 int QDeclarativeCameraCapture::capture()
 {

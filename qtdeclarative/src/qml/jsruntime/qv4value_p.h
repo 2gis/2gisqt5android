@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -44,27 +44,61 @@ namespace QV4 {
 
 typedef uint Bool;
 
-template <typename T>
-struct Returned : private T
-{
-    static Returned<T> *create(T *t) { return static_cast<Returned<T> *>(t); }
-    T *getPointer() { return this; }
-    template<typename X>
-    static T *getPointer(Returned<X> *x) { return x->getPointer(); }
-    template<typename X>
-    Returned<X> *as() { return Returned<X>::create(Returned<X>::getPointer(this)); }
-    using T::asReturnedValue;
+namespace Heap {
+
+struct Q_QML_EXPORT Base {
+    union {
+        const ManagedVTable *vtable;
+        quintptr mm_data;
+    };
+
+    inline ReturnedValue asReturnedValue() const;
+    inline void mark(QV4::ExecutionEngine *engine);
+
+    enum {
+        MarkBit = 0x1,
+        NotInUse = 0x2,
+        PointerMask = ~0x3
+    };
+
+    ManagedVTable *gcGetVtable() const {
+        return reinterpret_cast<ManagedVTable *>(mm_data & PointerMask);
+    }
+    inline bool isMarked() const {
+        return mm_data & MarkBit;
+    }
+    inline void setMarkBit() {
+        mm_data |= MarkBit;
+    }
+    inline void clearMarkBit() {
+        mm_data &= ~MarkBit;
+    }
+
+    inline bool inUse() const {
+        return !(mm_data & NotInUse);
+    }
+
+    Base *nextFree() {
+        return reinterpret_cast<Base *>(mm_data & PointerMask);
+    }
+    void setNextFree(Base *m) {
+        mm_data = (reinterpret_cast<quintptr>(m) | NotInUse);
+    }
+
+    void *operator new(size_t, Managed *m) { return m; }
+    void *operator new(size_t, Heap::Base *m) { return m; }
+    void operator delete(void *, Heap::Base *) {}
 };
 
-struct HeapObject {};
+}
 
 struct Q_QML_PRIVATE_EXPORT Value
 {
     /*
         We use two different ways of encoding JS values. One for 32bit and one for 64bit systems.
 
-        In both cases, we 8 bytes for a value and different variant of NaN boxing. A Double NaN (actually -qNaN)
-        is indicated by a number that has the top 13 bits set. THe other values are usually set to 0 by the
+        In both cases, we use 8 bytes for a value and a different variant of NaN boxing. A Double NaN (actually -qNaN)
+        is indicated by a number that has the top 13 bits set. The other values are usually set to 0 by the
         processor, and are thus free for us to store other data. We keep pointers in there for managed objects,
         and encode the other types using the free space given to use by the unused bits for NaN values. This also
         works for pointers on 64 bit systems, as they all currently only have 48 bits of addressable memory.
@@ -72,7 +106,7 @@ struct Q_QML_PRIVATE_EXPORT Value
         On 32bit, we store doubles as doubles. All other values, have the high 32bits set to a value that
         will make the number a NaN. The Masks below are used for encoding the other types.
 
-        On 64 bit, we xor Doubles with (0xffff8000 << 32). Thas has the effect that no doubles will get encoded
+        On 64 bit, we xor Doubles with (0xffff8000 << 32). That has the effect that no doubles will get encoded
         with the 13 highest bits all 0. We are now using special values for bits 14-17 to encode our values. These
         can be used, as the highest valid pointer on a 64 bit system is 2^48-1.
 
@@ -86,9 +120,7 @@ struct Q_QML_PRIVATE_EXPORT Value
     union {
         quint64 val;
 #if QT_POINTER_SIZE == 8
-        Managed *m;
-        Object *o;
-        String *s;
+        Heap::Base *m;
 #else
         double dbl;
 #endif
@@ -100,9 +132,7 @@ struct Q_QML_PRIVATE_EXPORT Value
                 uint uint_32;
                 int int_32;
 #if QT_POINTER_SIZE == 4
-                Managed *m;
-                Object *o;
-                String *s;
+                Heap::Base *m;
 #endif
             };
 #if Q_BYTE_ORDER == Q_LITTLE_ENDIAN
@@ -222,7 +252,7 @@ struct Q_QML_PRIVATE_EXPORT Value
         val = v.i ^ NaNEncodeMask;
         Q_ASSERT(isDouble());
     }
-    bool isNaN() const { return (tag & 0x7fff8000) == 0x00078000; }
+    inline bool isNaN() const { return (tag & 0x7fff8000) == 0x00078000; }
 #else
     inline bool isInteger() const { return tag == _Integer_Type; }
     inline bool isDouble() const { return (tag & NotDouble_Mask) != NotDouble_Mask; }
@@ -238,7 +268,7 @@ struct Q_QML_PRIVATE_EXPORT Value
     }
     double doubleValue() const { Q_ASSERT(isDouble()); return dbl; }
     void setDouble(double d) { dbl = d; Q_ASSERT(isDouble()); }
-    bool isNaN() const { return (tag & QV4::Value::NotDouble_Mask) == QV4::Value::NaN_Mask; }
+    inline bool isNaN() const { return (tag & QV4::Value::NotDouble_Mask) == QV4::Value::NaN_Mask; }
 #endif
     inline bool isString() const;
     inline bool isObject() const;
@@ -270,12 +300,15 @@ struct Q_QML_PRIVATE_EXPORT Value
     }
 
     String *stringValue() const {
-        return s;
+        return m ? reinterpret_cast<String*>(const_cast<Value *>(this)) : 0;
     }
     Object *objectValue() const {
-        return o;
+        return m ? reinterpret_cast<Object*>(const_cast<Value *>(this)) : 0;
     }
     Managed *managed() const {
+        return m ? reinterpret_cast<Managed*>(const_cast<Value *>(this)) : 0;
+    }
+    Heap::Base *heapObject() const {
         return m;
     }
 
@@ -283,7 +316,17 @@ struct Q_QML_PRIVATE_EXPORT Value
         return val;
     }
 
-    static inline Value fromManaged(Managed *o);
+    static inline Value fromHeapObject(Heap::Base *m)
+    {
+        Value v;
+        v.m = m;
+#if QT_POINTER_SIZE == 4
+        v.tag = Managed_Type;
+#endif
+        return v;
+    }
+
+    static inline Value fromManaged(Managed *m);
 
     int toUInt16() const;
     inline int toInt32() const;
@@ -295,9 +338,8 @@ struct Q_QML_PRIVATE_EXPORT Value
     double toNumberImpl() const;
     QString toQStringNoThrow() const;
     QString toQString() const;
-    String *toString(ExecutionEngine *e) const;
-    String *toString(ExecutionContext *ctx) const;
-    Object *toObject(ExecutionContext *ctx) const;
+    Heap::String *toString(ExecutionEngine *e) const;
+    Heap::Object *toObject(ExecutionEngine *e) const;
 
     inline bool isPrimitive() const;
     inline bool tryIntegerConversion() {
@@ -318,11 +360,15 @@ struct Q_QML_PRIVATE_EXPORT Value
     inline ErrorObject *asErrorObject() const;
 
     template<typename T> inline T *as() const;
+    template<typename T> inline T *cast() {
+        return static_cast<T *>(managed());
+    }
+    template<typename T> inline const T *cast() const {
+        return static_cast<const T *>(managed());
+    }
 
     inline uint asArrayIndex() const;
     inline uint asArrayLength(bool *ok) const;
-
-    inline ExecutionEngine *engine() const;
 
     ReturnedValue asReturnedValue() const { return val; }
     static Value fromReturnedValue(ReturnedValue val) { Value v; v.val = val; return v; }
@@ -334,40 +380,30 @@ struct Q_QML_PRIVATE_EXPORT Value
 
     Value &operator =(const ScopedValue &v);
     Value &operator=(ReturnedValue v) { val = v; return *this; }
-    template<typename T>
-    Value &operator=(Returned<T> *t);
-    template<typename T>
-    Value &operator=(T *t) {
-        val = Value::fromManaged(t).val;
+    Value &operator=(Managed *m) {
+        val = Value::fromManaged(m).val;
         return *this;
     }
-    Value &operator=(HeapObject *o) {
-        m = reinterpret_cast<Managed *>(o);
+    Value &operator=(Heap::Base *o) {
+        m = o;
+#if QT_POINTER_SIZE == 4
+        tag = Managed_Type;
+#endif
         return *this;
     }
 
     template<typename T>
     Value &operator=(const Scoped<T> &t);
-    Value &operator=(const ValueRef v);
     Value &operator=(const Value &v) {
         val = v.val;
         return *this;
     }
-    template<typename T>
-    inline Returned<T> *as();
 };
 
 inline Managed *Value::asManaged() const
 {
     if (isManaged())
         return managed();
-    return 0;
-}
-
-inline String *Value::asString() const
-{
-    if (isString())
-        return stringValue();
     return 0;
 }
 
@@ -381,12 +417,12 @@ struct Q_QML_PRIVATE_EXPORT Primitive : public Value
     static inline Primitive fromDouble(double d);
     static inline Primitive fromUInt32(uint i);
 
+    using Value::toInt32;
+    using Value::toUInt32;
+
     static double toInteger(double fromNumber);
     static int toInt32(double value);
     static unsigned int toUInt32(double value);
-
-    inline operator ValueRef();
-    Value asValue() const { return *this; }
 };
 
 inline Primitive Primitive::undefinedValue()
@@ -409,20 +445,6 @@ inline Primitive Primitive::emptyValue()
     return v;
 }
 
-inline Value Value::fromManaged(Managed *m)
-{
-    if (!m)
-        return QV4::Primitive::undefinedValue();
-    Value v;
-#if QT_POINTER_SIZE == 8
-    v.m = m;
-#else
-    v.tag = Managed_Type;
-    v.m = m;
-#endif
-    return v;
-}
-
 template <typename T>
 struct TypedValue : public Value
 {
@@ -432,11 +454,11 @@ struct TypedValue : public Value
 #if QT_POINTER_SIZE == 4
         tag = Managed_Type;
 #endif
+        return *this;
     }
     TypedValue &operator =(T *t);
     TypedValue &operator =(const Scoped<T> &v);
 //    TypedValue &operator =(const ManagedRef<T> &v);
-    TypedValue &operator =(Returned<T> *t);
 
     TypedValue &operator =(const TypedValue<T> &t);
 
@@ -446,7 +468,6 @@ struct TypedValue : public Value
     T *operator->() { return static_cast<T *>(managed()); }
     const T *operator->() const { return static_cast<T *>(managed()); }
     T *getPointer() const { return static_cast<T *>(managed()); }
-    Returned<T> *ret() const;
 
     void mark(ExecutionEngine *e) { if (managed()) managed()->mark(e); }
 };
@@ -485,9 +506,9 @@ struct Encode {
         val = v;
     }
 
-    template<typename T>
-    Encode(Returned<T> *t) {
-        val = t->getPointer()->asReturnedValue();
+    Encode(Heap::Base *o) {
+        Q_ASSERT(o);
+        val = Value::fromHeapObject(o).asReturnedValue();
     }
 
     operator ReturnedValue() const {
@@ -498,58 +519,11 @@ private:
     Encode(void *);
 };
 
-struct ValueRef {
-    ValueRef(const ScopedValue &v);
-    template <typename T>
-    ValueRef(const Scoped<T> &v);
-    ValueRef(const PersistentValue &v);
-    ValueRef(PersistentValuePrivate *p);
-    ValueRef(Value &v) { ptr = &v; }
-    // Important: Do NOT add a copy constructor to this class
-    // adding a copy constructor actually changes the calling convention, ie.
-    // is not even binary compatible. Adding it would break assumptions made
-    // in the jit'ed code.
-    ValueRef &operator=(const ScopedValue &o);
-    ValueRef &operator=(const Value &v)
-    { *ptr = v; return *this; }
-    ValueRef &operator=(const ReturnedValue &v) {
-        ptr->val = v;
-        return *this;
-    }
-    template <typename T>
-    ValueRef &operator=(Returned<T> *v) {
-        ptr->val = v->asReturnedValue();
-        return *this;
-    }
-
-    operator const Value *() const {
-        return ptr;
-    }
-    const Value *operator->() const {
-        return ptr;
-    }
-
-    operator Value *() {
-        return ptr;
-    }
-    Value *operator->() {
-        return ptr;
-    }
-
-    static ValueRef fromRawValue(Value *v) {
-        return ValueRef(v);
-    }
-    static const ValueRef fromRawValue(const Value *v) {
-        return ValueRef(const_cast<Value *>(v));
-    }
-
-    ReturnedValue asReturnedValue() const { return ptr->val; }
-
-    // ### get rid of this one!
-    ValueRef(Value *v) { ptr = reinterpret_cast<Value *>(v); }
-private:
-    Value *ptr;
-};
+inline
+ReturnedValue Heap::Base::asReturnedValue() const
+{
+    return Value::fromHeapObject(const_cast<Heap::Base *>(this)).asReturnedValue();
+}
 
 
 template<typename T>
@@ -560,8 +534,6 @@ T *value_cast(const Value &v)
 
 template<typename T>
 ReturnedValue value_convert(ExecutionEngine *e, const Value &v);
-
-
 
 }
 

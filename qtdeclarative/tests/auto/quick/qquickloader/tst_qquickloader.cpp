@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -40,9 +40,6 @@
 #include <private/qquickloader_p.h>
 #include "testhttpserver.h"
 #include "../../shared/util.h"
-
-#define SERVER_PORT 14458
-#define SERVER_ADDR "http://localhost:14458"
 
 class SlowComponent : public QQmlComponent
 {
@@ -439,11 +436,12 @@ void tst_QQuickLoader::noResize()
 void tst_QQuickLoader::networkRequestUrl()
 {
     TestHTTPServer server;
-    QVERIFY2(server.listen(SERVER_PORT), qPrintable(server.errorString()));
+    QVERIFY2(server.listen(), qPrintable(server.errorString()));
     server.serveDirectory(dataDirectory());
 
     QQmlComponent component(&engine);
-    component.setData(QByteArray("import QtQuick 2.0\nLoader { property int signalCount : 0; source: \"" SERVER_ADDR "/Rect120x60.qml\"; onLoaded: signalCount += 1 }"), testFileUrl("../dummy.qml"));
+    const QString qml = "import QtQuick 2.0\nLoader { property int signalCount : 0; source: \"" + server.baseUrl().toString() + "/Rect120x60.qml\"; onLoaded: signalCount += 1 }";
+    component.setData(qml.toUtf8(), testFileUrl("../dummy.qml"));
     if (component.isError())
         qDebug() << component.errors();
     QQuickLoader *loader = qobject_cast<QQuickLoader*>(component.create());
@@ -463,17 +461,16 @@ void tst_QQuickLoader::networkRequestUrl()
 void tst_QQuickLoader::networkComponent()
 {
     TestHTTPServer server;
-    QVERIFY2(server.listen(SERVER_PORT), qPrintable(server.errorString()));
+    QVERIFY2(server.listen(), qPrintable(server.errorString()));
     server.serveDirectory(dataDirectory(), TestHTTPServer::Delay);
 
     QQmlComponent component(&engine);
-    component.setData(QByteArray(
-                "import QtQuick 2.0\n"
-                "import \"" SERVER_ADDR "/\" as NW\n"
-                "Item {\n"
-                " Component { id: comp; NW.Rect120x60 {} }\n"
-                " Loader { sourceComponent: comp } }")
-            , dataDirectory());
+    const QString qml = "import QtQuick 2.0\n"
+                        "import \"" + server.baseUrl().toString() + "/\" as NW\n"
+                        "Item {\n"
+                        " Component { id: comp; NW.Rect120x60 {} }\n"
+                        " Loader { sourceComponent: comp } }";
+    component.setData(qml.toUtf8(), dataDirectory());
     QCOMPARE(component.status(), QQmlComponent::Loading);
     server.sendDelayedItem();
     QTRY_COMPARE(component.status(), QQmlComponent::Ready);
@@ -496,13 +493,14 @@ void tst_QQuickLoader::networkComponent()
 void tst_QQuickLoader::failNetworkRequest()
 {
     TestHTTPServer server;
-    QVERIFY2(server.listen(SERVER_PORT), qPrintable(server.errorString()));
+    QVERIFY2(server.listen(), qPrintable(server.errorString()));
     server.serveDirectory(dataDirectory());
 
-    QTest::ignoreMessage(QtWarningMsg, SERVER_ADDR "/IDontExist.qml: File not found");
+    QTest::ignoreMessage(QtWarningMsg, QString(server.baseUrl().toString() + "/IDontExist.qml: File not found").toUtf8());
 
     QQmlComponent component(&engine);
-    component.setData(QByteArray("import QtQuick 2.0\nLoader { property int did_load: 123; source: \"" SERVER_ADDR "/IDontExist.qml\"; onLoaded: did_load=456 }"), QUrl(QString(SERVER_ADDR "/dummy.qml")));
+    const QString qml = "import QtQuick 2.0\nLoader { property int did_load: 123; source: \"" + server.baseUrl().toString() + "/IDontExist.qml\"; onLoaded: did_load=456 }";
+    component.setData(qml.toUtf8(), server.url("/dummy.qml"));
     QTRY_COMPARE(component.status(), QQmlComponent::Ready);
     QQuickLoader *loader = qobject_cast<QQuickLoader*>(component.create());
     QVERIFY(loader != 0);
@@ -711,15 +709,23 @@ void tst_QQuickLoader::initialPropertyValues()
     QFETCH(QVariantList, propertyValues);
 
     TestHTTPServer server;
-    QVERIFY2(server.listen(SERVER_PORT), qPrintable(server.errorString()));
+    QVERIFY2(server.listen(), qPrintable(server.errorString()));
     server.serveDirectory(dataDirectory());
 
     foreach (const QString &warning, expectedWarnings)
         QTest::ignoreMessage(QtWarningMsg, warning.toLatin1().constData());
 
     QQmlComponent component(&engine, qmlFile);
-    QObject *object = component.create();
+    QObject *object = component.beginCreate(engine.rootContext());
     QVERIFY(object != 0);
+
+    const int serverBaseUrlPropertyIndex = object->metaObject()->indexOfProperty("serverBaseUrl");
+    if (serverBaseUrlPropertyIndex != -1) {
+        QMetaProperty prop = object->metaObject()->property(serverBaseUrlPropertyIndex);
+        QVERIFY(prop.write(object, server.baseUrl().toString()));
+    }
+
+    component.completeCreate();
     if (expectedWarnings.isEmpty()) {
         QQuickLoader *loader = object->findChild<QQuickLoader*>("loader");
         QTRY_VERIFY(loader->item());

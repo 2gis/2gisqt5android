@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the plugins of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -103,6 +95,8 @@
 
 QT_BEGIN_NAMESPACE
 
+namespace QtWaylandClient {
+
 class DecorationsBlitter : public QOpenGLFunctions
 {
 public:
@@ -143,7 +137,8 @@ public:
         QOpenGLTextureCache *cache = QOpenGLTextureCache::cacheForContext(m_context->context());
 
         QRect windowRect = window->window()->frameGeometry();
-        glViewport(0, 0, windowRect.width(), windowRect.height());
+        int scale = window->scale() ;
+        glViewport(0, 0, windowRect.width() * scale, windowRect.height() * scale);
 
         glDisable(GL_DEPTH_TEST);
         glDisable(GL_BLEND);
@@ -205,7 +200,7 @@ public:
         m_blitProgram->setAttributeArray(0, squareVertices, 2);
         glBindTexture(GL_TEXTURE_2D, window->contentTexture());
         QRect r = window->contentsRect();
-        glViewport(r.x(), r.y(), r.width(), r.height());
+        glViewport(r.x(), r.y(), r.width() * scale, r.height() * scale);
         glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 
         //Cleanup
@@ -265,21 +260,22 @@ QWaylandGLContext::QWaylandGLContext(EGLDisplay eglDisplay, QWaylandDisplay *dis
 
     switch (m_format.renderableType()) {
     case QSurfaceFormat::OpenVG:
-        eglBindAPI(EGL_OPENVG_API);
+        m_api = EGL_OPENVG_API;
         break;
 #ifdef EGL_VERSION_1_4
 #  if !defined(QT_OPENGL_ES_2)
     case QSurfaceFormat::DefaultRenderableType:
 #  endif
     case QSurfaceFormat::OpenGL:
-        eglBindAPI(EGL_OPENGL_API);
+        m_api = EGL_OPENGL_API;
         break;
 #endif
     case QSurfaceFormat::OpenGLES:
     default:
-        eglBindAPI(EGL_OPENGL_ES_API);
+        m_api = EGL_OPENGL_ES_API;
         break;
     }
+    eglBindAPI(m_api);
 
     m_context = eglCreateContext(m_eglDisplay, m_config, m_shareEGLContext, eglContextAttrs.constData());
 
@@ -363,6 +359,15 @@ QWaylandGLContext::~QWaylandGLContext()
 
 bool QWaylandGLContext::makeCurrent(QPlatformSurface *surface)
 {
+    // in QWaylandGLContext() we called eglBindAPI with the correct value. However,
+    // eglBindAPI's documentation says:
+    // "eglBindAPI defines the current rendering API for EGL in the thread it is called from"
+    // Since makeCurrent() can be called from a different thread than the one we created the
+    // context in make sure to call eglBindAPI in the correct thread.
+    if (eglQueryAPI() != m_api) {
+        eglBindAPI(m_api);
+    }
+
     QWaylandEglWindow *window = static_cast<QWaylandEglWindow *>(surface);
     EGLSurface eglSurface = window->eglSurface();
 
@@ -544,6 +549,8 @@ void (*QWaylandGLContext::getProcAddress(const QByteArray &procName)) ()
 EGLConfig QWaylandGLContext::eglConfig() const
 {
     return m_config;
+}
+
 }
 
 QT_END_NAMESPACE

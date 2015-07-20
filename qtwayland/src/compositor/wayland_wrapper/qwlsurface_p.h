@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Compositor.
 **
@@ -17,8 +17,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -44,6 +44,7 @@
 #include <QtCompositor/qwaylandexport.h>
 
 #include <private/qwlsurfacebuffer_p.h>
+#include <private/qwloutput_p.h>
 #include <QtCompositor/qwaylandsurface.h>
 #include <QtCompositor/qwaylandbufferref.h>
 
@@ -112,6 +113,14 @@ public:
 
     Compositor *compositor() const;
 
+    Output *mainOutput() const;
+    void setMainOutput(Output *output);
+
+    QList<Output *> outputs() const;
+
+    void addToOutput(Output *output);
+    void removeFromOutput(Output *output);
+
     QString className() const { return m_className; }
     void setClassName(const QString &className);
 
@@ -159,6 +168,8 @@ protected:
 
     Compositor *m_compositor;
     QWaylandSurface *m_waylandSurface;
+    Output *m_mainOutput;
+    QList<Output *> m_outputs;
 
     QRegion m_damage;
     SurfaceBuffer *m_buffer;
@@ -171,6 +182,7 @@ protected:
         QRegion damage;
         QPoint offset;
         bool newlyAttached;
+        QRegion inputRegion;
     } m_pending;
 
     QPoint m_lastLocalMousePos;

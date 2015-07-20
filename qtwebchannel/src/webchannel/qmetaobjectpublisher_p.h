@@ -1,7 +1,7 @@
 /****************************************************************************
 **
 ** Copyright (C) 2014 Klarälvdalens Datakonsult AB, a KDAB Group company, info@kdab.com, author Milian Wolff <milian.wolff@kdab.com>
-** Contact: http://www.qt-project.org/legal
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtWebChannel module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -40,6 +40,8 @@
 #include <QStringList>
 #include <QMetaObject>
 #include <QBasicTimer>
+#include <QPointer>
+#include <QJsonObject>
 
 #include "qwebchannelglobal.h"
 
@@ -70,7 +72,6 @@ class QWebChannelAbstractTransport;
 class Q_WEBCHANNEL_EXPORT QMetaObjectPublisher : public QObject
 {
     Q_OBJECT
-
 public:
     explicit QMetaObjectPublisher(QWebChannel *webChannel);
     virtual ~QMetaObjectPublisher();
@@ -94,7 +95,7 @@ public:
     /**
      * Serialize the QMetaObject of @p object and return it in JSON form.
      */
-    QJsonObject classInfoForObject(const QObject *object);
+    QJsonObject classInfoForObject(const QObject *object, QWebChannelAbstractTransport *transport);
 
     /**
      * Set the client to idle or busy, based on the value of @p isIdle.
@@ -108,7 +109,7 @@ public:
      *
      * Furthermore, if that was not done already, connect to their property notify signals.
      */
-    void initializeClients();
+    QJsonObject initializeClient(QWebChannelAbstractTransport *transport);
 
     /**
      * Go through all properties of the given object and connect to their notify signal.
@@ -135,7 +136,7 @@ public:
      * The return value of the method invocation is then serialized and a response message
      * is returned.
      */
-    QJsonValue invokeMethod(QObject *const object, const int methodIndex, const QJsonArray &args);
+    QVariant invokeMethod(QObject *const object, const int methodIndex, const QJsonArray &args);
 
     /**
      * Callback of the signalHandler which forwards the signal invocation to the webchannel clients.
@@ -155,14 +156,16 @@ public:
      *
      * All other input types are returned as-is.
      */
-    QJsonValue wrapResult(const QVariant &result);
+    QJsonValue wrapResult(const QVariant &result, QWebChannelAbstractTransport *transport,
+                          const QString &parentObjectId = QString());
 
     /**
      * Convert a list of variant values for consumption by the client.
      *
      * This properly handles QML values and also wraps the result if required.
      */
-    QJsonArray wrapList(const QVariantList &list);
+    QJsonArray wrapList(const QVariantList &list, QWebChannelAbstractTransport *transport,
+                          const QString &parentObjectId = QString());
 
     /**
      * Invoke delete later on @p object.
@@ -200,10 +203,6 @@ private:
     // true when no property updates should be sent, false otherwise
     bool blockUpdates;
 
-    // true when at least one client needs to be initialized,
-    // i.e. when a Qt.init came in which was not handled yet.
-    bool pendingInit;
-
     // true when at least one client was initialized and thus
     // the property updates have been initialized and the
     // object info map set.
@@ -215,6 +214,24 @@ private:
     // Map the registered objects to their id.
     QHash<const QObject *, QString> registeredObjectIds;
 
+    // Groups individually wrapped objects with their class information and the transports that have access to it.
+    struct ObjectInfo
+    {
+        ObjectInfo()
+            : object(Q_NULLPTR)
+        {}
+        ObjectInfo(QObject *o, const QJsonObject &i)
+            : object(o)
+            , classinfo(i)
+        {}
+        QObject *object;
+        QJsonObject classinfo;
+        QVector<QWebChannelAbstractTransport*> transports;
+    };
+
+    // Map of objects wrapped from invocation returns
+    QHash<QString, ObjectInfo> wrappedObjects;
+
     // Map of objects to maps of signal indices to a set of all their property indices.
     // The last value is a set as a signal can be the notify signal of multiple properties.
     typedef QHash<int, QSet<int> > SignalToPropertyNameMap;
@@ -225,9 +242,6 @@ private:
     typedef QHash<int, QVariantList> SignalToArgumentsMap;
     typedef QHash<const QObject *, SignalToArgumentsMap> PendingPropertyUpdates;
     PendingPropertyUpdates pendingPropertyUpdates;
-
-    // Maps wrapped object to class info
-    QHash<const QObject *, QJsonObject> wrappedObjects;
 
     // Aggregate property updates since we get multiple Qt.idle message when we have multiple
     // clients. They all share the same QWebProcess though so we must take special care to

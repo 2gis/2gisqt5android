@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the examples of the Qt Toolkit.
 **
@@ -17,8 +17,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -168,21 +168,18 @@ Item {
                 onClicked: fileDialog.open()
             }
             Button {
-                text: "Close"
+                text: "Pictures"
+                tooltip: "go to my Pictures directory"
                 anchors.verticalCenter: parent.verticalCenter
-                onClicked: fileDialog.close()
+                enabled: fileDialog.shortcuts.hasOwnProperty("pictures")
+                onClicked: fileDialog.folder = fileDialog.shortcuts.pictures
             }
             Button {
-                text: "go to /tmp"
+                text: "Home"
+                tooltip: "go to my home directory"
                 anchors.verticalCenter: parent.verticalCenter
-                // TODO: QTBUG-29814 This isn't portable, but we don't expose QDir::tempPath to QML yet.
-                onClicked: fileDialog.folder = "/tmp" // file:///tmp would also be OK
-            }
-            Button {
-                text: "home dir"
-                anchors.verticalCenter: parent.verticalCenter
-                // TODO: QTBUG-29814 This isn't portable, but we don't expose QDir::tempPath to QML yet.
-                onClicked: fileDialog.folder = "~"
+                enabled: fileDialog.shortcuts.hasOwnProperty("home")
+                onClicked: fileDialog.folder = fileDialog.shortcuts.home
             }
         }
     }

@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -43,8 +43,6 @@
 #include <qcolor.h>
 #include "../../shared/util.h"
 #include "testhttpserver.h"
-
-#define SERVER_PORT 14450
 
 class MyIC : public QObject, public QQmlIncubationController
 {
@@ -105,7 +103,8 @@ private slots:
     void null();
     void loadEmptyUrl();
     void qmlCreateWindow();
-    void qmlCreateObject();
+    void qmlCreateObjectAutoParent_data();
+    void qmlCreateObjectAutoParent();
     void qmlCreateObjectWithProperties();
     void qmlIncubateObject();
     void qmlCreateParentReference();
@@ -172,21 +171,73 @@ void tst_qqmlcomponent::qmlCreateWindow()
     QVERIFY(window);
 }
 
-void tst_qqmlcomponent::qmlCreateObject()
+void tst_qqmlcomponent::qmlCreateObjectAutoParent_data()
 {
+    QTest::addColumn<QString>("testFile");
+
+    QTest::newRow("createObject") << QStringLiteral("createObject.qml");
+    QTest::newRow("createQmlObject") <<  QStringLiteral("createQmlObject.qml");
+}
+
+
+void tst_qqmlcomponent::qmlCreateObjectAutoParent()
+{
+    QFETCH(QString, testFile);
+
     QQmlEngine engine;
-    QQmlComponent component(&engine, testFileUrl("createObject.qml"));
-    QObject *object = component.create();
-    QVERIFY(object != 0);
+    QQmlComponent component(&engine, testFileUrl(testFile));
+    QQuickItem *root = qobject_cast<QQuickItem *>(component.create());
+    QVERIFY(root);
+    QObject *qtobjectParent = root->property("qtobjectParent").value<QObject*>();
+    QQuickItem *itemParent = qobject_cast<QQuickItem *>(root->property("itemParent").value<QObject*>());
+    QQuickWindow *windowParent = qobject_cast<QQuickWindow *>(root->property("windowParent").value<QObject*>());
+    QVERIFY(qtobjectParent);
+    QVERIFY(itemParent);
+    QVERIFY(windowParent);
 
-    QObject *testObject1 = object->property("qobject").value<QObject*>();
-    QVERIFY(testObject1);
-    QVERIFY(testObject1->parent() == object);
+    QObject *qtobject_qtobject = root->property("qtobject_qtobject").value<QObject*>();
+    QObject *qtobject_item = root->property("qtobject_item").value<QObject*>();
+    QObject *qtobject_window = root->property("qtobject_window").value<QObject*>();
+    QObject *item_qtobject = root->property("item_qtobject").value<QObject*>();
+    QObject *item_item = root->property("item_item").value<QObject*>();
+    QObject *item_window = root->property("item_window").value<QObject*>();
+    QObject *window_qtobject = root->property("window_qtobject").value<QObject*>();
+    QObject *window_item = root->property("window_item").value<QObject*>();
+    QObject *window_window = root->property("window_window").value<QObject*>();
 
-    QObject *testObject2 = object->property("declarativeitem").value<QObject*>();
-    QVERIFY(testObject2);
-    QVERIFY(testObject2->parent() == object);
-    QCOMPARE(testObject2->metaObject()->className(), "QQuickItem");
+    QVERIFY(qtobject_qtobject);
+    QVERIFY(qtobject_item);
+    QVERIFY(qtobject_window);
+    QVERIFY(item_qtobject);
+    QVERIFY(item_item);
+    QVERIFY(item_window);
+    QVERIFY(window_qtobject);
+    QVERIFY(window_item);
+    QVERIFY(window_window);
+
+    QCOMPARE(qtobject_item->metaObject()->className(), "QQuickItem");
+    QCOMPARE(qtobject_window->metaObject()->className(), "QQuickWindow");
+    QCOMPARE(item_item->metaObject()->className(), "QQuickItem");
+    QCOMPARE(item_window->metaObject()->className(), "QQuickWindow");
+    QCOMPARE(window_item->metaObject()->className(), "QQuickItem");
+    QCOMPARE(window_window->metaObject()->className(), "QQuickWindow");
+
+    QCOMPARE(qtobject_qtobject->parent(), qtobjectParent);
+    QCOMPARE(qtobject_item->parent(), qtobjectParent);
+    QCOMPARE(qtobject_window->parent(), qtobjectParent);
+    QCOMPARE(item_qtobject->parent(), itemParent);
+    QCOMPARE(item_item->parent(), itemParent);
+    QCOMPARE(item_window->parent(), itemParent);
+    QCOMPARE(window_qtobject->parent(), windowParent);
+    QCOMPARE(window_item->parent(), windowParent);
+    QCOMPARE(window_window->parent(), windowParent);
+
+    QCOMPARE(qobject_cast<QQuickItem *>(qtobject_item)->parentItem(), (QQuickItem *)0);
+    QCOMPARE(qobject_cast<QQuickWindow *>(qtobject_window)->transientParent(), (QQuickWindow *)0);
+    QCOMPARE(qobject_cast<QQuickItem *>(item_item)->parentItem(), itemParent);
+    QCOMPARE(qobject_cast<QQuickWindow *>(item_window)->transientParent(), itemParent->window());
+    QCOMPARE(qobject_cast<QQuickItem *>(window_item)->parentItem(), windowParent->contentItem());
+    QCOMPARE(qobject_cast<QQuickWindow *>(window_window)->transientParent(), windowParent);
 }
 
 void tst_qqmlcomponent::qmlCreateObjectWithProperties()
@@ -260,12 +311,12 @@ void tst_qqmlcomponent::qmlCreateParentReference()
 void tst_qqmlcomponent::async()
 {
     TestHTTPServer server;
-    QVERIFY2(server.listen(SERVER_PORT), qPrintable(server.errorString()));
+    QVERIFY2(server.listen(), qPrintable(server.errorString()));
     server.serveDirectory(dataDirectory());
 
     QQmlComponent component(&engine);
     ComponentWatcher watcher(&component);
-    component.loadUrl(QUrl("http://127.0.0.1:14450/TestComponent.qml"), QQmlComponent::Asynchronous);
+    component.loadUrl(server.url("/TestComponent.qml"), QQmlComponent::Asynchronous);
     QCOMPARE(watcher.loading, 1);
     QTRY_VERIFY(component.isReady());
     QCOMPARE(watcher.ready, 1);
@@ -280,13 +331,13 @@ void tst_qqmlcomponent::async()
 void tst_qqmlcomponent::asyncHierarchy()
 {
     TestHTTPServer server;
-    QVERIFY2(server.listen(SERVER_PORT), qPrintable(server.errorString()));
+    QVERIFY2(server.listen(), qPrintable(server.errorString()));
     server.serveDirectory(dataDirectory());
 
     // ensure that the item hierarchy is compiled correctly.
     QQmlComponent component(&engine);
     ComponentWatcher watcher(&component);
-    component.loadUrl(QUrl("http://127.0.0.1:14450/TestComponent.2.qml"), QQmlComponent::Asynchronous);
+    component.loadUrl(server.url("/TestComponent.2.qml"), QQmlComponent::Asynchronous);
     QCOMPARE(watcher.loading, 1);
     QTRY_VERIFY(component.isReady());
     QCOMPARE(watcher.ready, 1);

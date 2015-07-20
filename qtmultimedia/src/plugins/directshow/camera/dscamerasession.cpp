@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -32,7 +32,6 @@
 ****************************************************************************/
 
 #include <QtCore/qdebug.h>
-#include <QWidget>
 #include <QFile>
 #include <QtConcurrent/QtConcurrentRun>
 #include <QtMultimedia/qabstractvideobuffer.h>
@@ -77,9 +76,6 @@ void _FreeMediaType(AM_MEDIA_TYPE& mt)
     }
 }
 } // end namespace
-
-typedef QList<QSize> SizeList;
-Q_GLOBAL_STATIC(SizeList, commonPreviewResolutions)
 
 static HRESULT getPin(IBaseFilter *filter, PIN_DIRECTION pinDir, IPin **pin);
 
@@ -148,6 +144,42 @@ private:
     DSCameraSession *m_session;
 };
 
+QVideoFrame::PixelFormat pixelFormatFromMediaSubtype(GUID uid)
+{
+    if (uid == MEDIASUBTYPE_ARGB32)
+        return QVideoFrame::Format_ARGB32;
+    else if (uid == MEDIASUBTYPE_RGB32)
+        return QVideoFrame::Format_RGB32;
+    else if (uid == MEDIASUBTYPE_RGB24)
+        return QVideoFrame::Format_RGB24;
+    else if (uid == MEDIASUBTYPE_RGB565)
+        return QVideoFrame::Format_RGB565;
+    else if (uid == MEDIASUBTYPE_RGB555)
+        return QVideoFrame::Format_RGB555;
+    else if (uid == MEDIASUBTYPE_AYUV)
+        return QVideoFrame::Format_AYUV444;
+    else if (uid == MEDIASUBTYPE_I420 || uid == MEDIASUBTYPE_IYUV)
+        return QVideoFrame::Format_YUV420P;
+    else if (uid == MEDIASUBTYPE_YV12)
+        return QVideoFrame::Format_YV12;
+    else if (uid == MEDIASUBTYPE_UYVY)
+        return QVideoFrame::Format_UYVY;
+    else if (uid == MEDIASUBTYPE_YUYV || uid == MEDIASUBTYPE_YUY2)
+        return QVideoFrame::Format_YUYV;
+    else if (uid == MEDIASUBTYPE_NV12)
+        return QVideoFrame::Format_NV12;
+    else if (uid == MEDIASUBTYPE_IMC1)
+        return QVideoFrame::Format_IMC1;
+    else if (uid == MEDIASUBTYPE_IMC2)
+        return QVideoFrame::Format_IMC2;
+    else if (uid == MEDIASUBTYPE_IMC3)
+        return QVideoFrame::Format_IMC3;
+    else if (uid == MEDIASUBTYPE_IMC4)
+        return QVideoFrame::Format_IMC4;
+    else
+        return QVideoFrame::Format_Invalid;
+}
+
 
 DSCameraSession::DSCameraSession(QObject *parent)
     : QObject(parent)
@@ -167,7 +199,7 @@ DSCameraSession::DSCameraSession(QObject *parent)
     , m_currentImageId(-1)
     , m_status(QCamera::UnloadedStatus)
 {
-    ZeroMemory(&m_sourcePreferredFormat, sizeof(m_sourcePreferredFormat));
+    ZeroMemory(&m_sourceFormat, sizeof(m_sourceFormat));
 
     connect(this, SIGNAL(statusChanged(QCamera::Status)),
             this, SLOT(updateReadyForCapture()));
@@ -186,6 +218,16 @@ void DSCameraSession::setSurface(QAbstractVideoSurface* surface)
 void DSCameraSession::setDevice(const QString &device)
 {
     m_sourceDeviceName = device;
+}
+
+QCameraViewfinderSettings DSCameraSession::viewfinderSettings() const
+{
+    return m_status == QCamera::ActiveStatus ? m_actualViewfinderSettings : m_viewfinderSettings;
+}
+
+void DSCameraSession::setViewfinderSettings(const QCameraViewfinderSettings &settings)
+{
+    m_viewfinderSettings = settings;
 }
 
 bool DSCameraSession::load()
@@ -214,9 +256,10 @@ bool DSCameraSession::unload()
     setStatus(QCamera::UnloadingStatus);
 
     m_needsHorizontalMirroring = false;
-    m_sourcePreferredResolution = QSize();
-    _FreeMediaType(m_sourcePreferredFormat);
-    ZeroMemory(&m_sourcePreferredFormat, sizeof(m_sourcePreferredFormat));
+    m_supportedViewfinderSettings.clear();
+    Q_FOREACH (AM_MEDIA_TYPE f, m_supportedFormats)
+        _FreeMediaType(f);
+    m_supportedFormats.clear();
     SAFE_RELEASE(m_sourceFilter);
     SAFE_RELEASE(m_previewSampleGrabber);
     SAFE_RELEASE(m_previewFilter);
@@ -301,6 +344,9 @@ bool DSCameraSession::stopPreview()
     }
 
     disconnectGraph();
+
+    _FreeMediaType(m_sourceFormat);
+    ZeroMemory(&m_sourceFormat, sizeof(m_sourceFormat));
 
     m_previewStarted = false;
     setStatus(QCamera::LoadedStatus);
@@ -581,9 +627,6 @@ bool DSCameraSession::createFilterGraph()
 
 failed:
     m_needsHorizontalMirroring = false;
-    m_sourcePreferredResolution = QSize();
-    _FreeMediaType(m_sourcePreferredFormat);
-    ZeroMemory(&m_sourcePreferredFormat, sizeof(m_sourcePreferredFormat));
     SAFE_RELEASE(m_sourceFilter);
     SAFE_RELEASE(m_previewSampleGrabber);
     SAFE_RELEASE(m_previewFilter);
@@ -596,6 +639,34 @@ failed:
 
 bool DSCameraSession::configurePreviewFormat()
 {
+    // Resolve viewfinder settings
+    int settingsIndex = 0;
+    QCameraViewfinderSettings resolvedViewfinderSettings;
+    Q_FOREACH (const QCameraViewfinderSettings &s, m_supportedViewfinderSettings) {
+        if ((m_viewfinderSettings.resolution().isEmpty() || m_viewfinderSettings.resolution() == s.resolution())
+                && (qFuzzyIsNull(m_viewfinderSettings.minimumFrameRate()) || qFuzzyCompare((float)m_viewfinderSettings.minimumFrameRate(), (float)s.minimumFrameRate()))
+                && (qFuzzyIsNull(m_viewfinderSettings.maximumFrameRate()) || qFuzzyCompare((float)m_viewfinderSettings.maximumFrameRate(), (float)s.maximumFrameRate()))
+                && (m_viewfinderSettings.pixelFormat() == QVideoFrame::Format_Invalid || m_viewfinderSettings.pixelFormat() == s.pixelFormat())) {
+            resolvedViewfinderSettings = s;
+            break;
+        }
+        ++settingsIndex;
+    }
+
+    if (resolvedViewfinderSettings.isNull()) {
+        qWarning("Invalid viewfinder settings");
+        return false;
+    }
+
+    m_actualViewfinderSettings = resolvedViewfinderSettings;
+
+    _CopyMediaType(&m_sourceFormat, &m_supportedFormats[settingsIndex]);
+    // Set frame rate.
+    // We don't care about the minimumFrameRate, DirectShow only allows to set an
+    // average frame rate, so set that to the maximumFrameRate.
+    VIDEOINFOHEADER *videoInfo = reinterpret_cast<VIDEOINFOHEADER*>(m_sourceFormat.pbFormat);
+    videoInfo->AvgTimePerFrame = 10000000 / resolvedViewfinderSettings.maximumFrameRate();
+
     // We only support RGB32, if the capture source doesn't support
     // that format, the graph builder will automatically insert a
     // converter.
@@ -607,7 +678,7 @@ bool DSCameraSession::configurePreviewFormat()
     }
 
     m_previewPixelFormat = QVideoFrame::Format_RGB32;
-    m_previewSize = m_sourcePreferredResolution;
+    m_previewSize = resolvedViewfinderSettings.resolution();
     m_previewSurfaceFormat = QVideoSurfaceFormat(m_previewSize,
                                                  m_previewPixelFormat,
                                                  QAbstractVideoBuffer::NoHandle);
@@ -624,7 +695,7 @@ bool DSCameraSession::configurePreviewFormat()
         return false;
     }
 
-    hr = pConfig->SetFormat(&m_sourcePreferredFormat);
+    hr = pConfig->SetFormat(&m_sourceFormat);
 
     pConfig->Release();
 
@@ -716,6 +787,11 @@ void DSCameraSession::disconnectGraph()
     m_filterGraph->RemoveFilter(m_sourceFilter);
 }
 
+static bool qt_frameRateRangeGreaterThan(const QCamera::FrameRateRange &r1, const QCamera::FrameRateRange &r2)
+{
+    return r1.maximumFrameRate > r2.maximumFrameRate;
+}
+
 void DSCameraSession::updateSourceCapabilities()
 {
     HRESULT hr;
@@ -724,10 +800,11 @@ void DSCameraSession::updateSourceCapabilities()
     VIDEO_STREAM_CONFIG_CAPS scc;
     IAMStreamConfig* pConfig = 0;
 
+    m_supportedViewfinderSettings.clear();
     m_needsHorizontalMirroring = false;
-    m_sourcePreferredResolution = QSize();
-    _FreeMediaType(m_sourcePreferredFormat);
-    ZeroMemory(&m_sourcePreferredFormat, sizeof(m_sourcePreferredFormat));
+    Q_FOREACH (AM_MEDIA_TYPE f, m_supportedFormats)
+        _FreeMediaType(f);
+    m_supportedFormats.clear();
 
     IAMVideoControl *pVideoControl = 0;
     hr = m_graphBuilder->FindInterface(&PIN_CATEGORY_CAPTURE, &MEDIATYPE_Video,
@@ -774,53 +851,68 @@ void DSCameraSession::updateSourceCapabilities()
         return;
     }
 
-    // Use preferred pixel format (first in the list)
-    // Then, pick the highest available resolution among the typical resolutions
-    // used for camera preview.
-    if (commonPreviewResolutions->isEmpty())
-        populateCommonResolutions();
-
-    long maxPixelCount = 0;
     for (int iIndex = 0; iIndex < iCount; ++iIndex) {
         hr = pConfig->GetStreamCaps(iIndex, &pmt, reinterpret_cast<BYTE*>(&scc));
         if (hr == S_OK) {
-            if ((pmt->majortype == MEDIATYPE_Video) &&
-                    (pmt->formattype == FORMAT_VideoInfo) &&
-                    (!m_sourcePreferredFormat.cbFormat ||
-                     m_sourcePreferredFormat.subtype == pmt->subtype)) {
+            QVideoFrame::PixelFormat pixelFormat = pixelFormatFromMediaSubtype(pmt->subtype);
+
+            if (pmt->majortype == MEDIATYPE_Video
+                    && pmt->formattype == FORMAT_VideoInfo
+                    && pixelFormat != QVideoFrame::Format_Invalid) {
 
                 pvi = reinterpret_cast<VIDEOINFOHEADER*>(pmt->pbFormat);
-
                 QSize resolution(pvi->bmiHeader.biWidth, pvi->bmiHeader.biHeight);
-                long pixelCount = resolution.width() * resolution.height();
 
-                if (!m_sourcePreferredFormat.cbFormat ||
-                        (pixelCount > maxPixelCount && commonPreviewResolutions->contains(resolution))) {
-                    _FreeMediaType(m_sourcePreferredFormat);
-                    _CopyMediaType(&m_sourcePreferredFormat, pmt);
-                    m_sourcePreferredResolution = resolution;
-                    maxPixelCount = pixelCount;
+                QList<QCamera::FrameRateRange> frameRateRanges;
+
+                if (pVideoControl) {
+                    IPin *pPin = 0;
+                    hr = getPin(m_sourceFilter, PINDIR_OUTPUT, &pPin);
+                    if (FAILED(hr)) {
+                        qWarning() << "Failed to get the pin for the video control";
+                    } else {
+                        long listSize = 0;
+                        LONGLONG *frameRates = 0;
+                        SIZE size = { resolution.width(), resolution.height() };
+                        if (SUCCEEDED(pVideoControl->GetFrameRateList(pPin, iIndex, size,
+                                                                      &listSize, &frameRates))) {
+                            for (long i = 0; i < listSize; ++i) {
+                                qreal fr = qreal(10000000) / frameRates[i];
+                                frameRateRanges.append(QCamera::FrameRateRange(fr, fr));
+                            }
+
+                            // Make sure higher frame rates come first
+                            std::sort(frameRateRanges.begin(), frameRateRanges.end(), qt_frameRateRangeGreaterThan);
+                        }
+                        pPin->Release();
+                    }
                 }
+
+                if (frameRateRanges.isEmpty()) {
+                    frameRateRanges.append(QCamera::FrameRateRange(qreal(10000000) / scc.MaxFrameInterval,
+                                                                   qreal(10000000) / scc.MinFrameInterval));
+                }
+
+                Q_FOREACH (const QCamera::FrameRateRange &frameRateRange, frameRateRanges) {
+                    QCameraViewfinderSettings settings;
+                    settings.setResolution(resolution);
+                    settings.setMinimumFrameRate(frameRateRange.minimumFrameRate);
+                    settings.setMaximumFrameRate(frameRateRange.maximumFrameRate);
+                    settings.setPixelFormat(pixelFormat);
+                    m_supportedViewfinderSettings.append(settings);
+
+                    AM_MEDIA_TYPE format;
+                    _CopyMediaType(&format, pmt);
+                    m_supportedFormats.append(format);
+                }
+
+
             }
             _FreeMediaType(*pmt);
         }
     }
 
     pConfig->Release();
-
-    if (!m_sourcePreferredResolution.isValid())
-       m_sourcePreferredResolution = QSize(640, 480);
-}
-
-void DSCameraSession::populateCommonResolutions()
-{
-    commonPreviewResolutions->append(QSize(1920, 1080)); // 1080p
-    commonPreviewResolutions->append(QSize(1280, 720)); // 720p
-    commonPreviewResolutions->append(QSize(1024, 576)); // WSVGA
-    commonPreviewResolutions->append(QSize(720, 480)); // 480p (16:9)
-    commonPreviewResolutions->append(QSize(640, 480)); // 480p (4:3)
-    commonPreviewResolutions->append(QSize(352, 288)); // CIF
-    commonPreviewResolutions->append(QSize(320, 240)); // QVGA
 }
 
 HRESULT getPin(IBaseFilter *pFilter, PIN_DIRECTION PinDir, IPin **ppPin)

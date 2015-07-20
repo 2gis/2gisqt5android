@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -36,6 +36,11 @@
 #include "qv4engine_p.h"
 #include "qv4value_p.h"
 #include "qv4persistent_p.h"
+#include "qv4property_p.h"
+
+#ifdef V4_USE_VALGRIND
+#include <valgrind/memcheck.h>
+#endif
 
 QT_BEGIN_NAMESPACE
 
@@ -47,7 +52,15 @@ namespace QV4 {
 struct ScopedValue;
 
 struct Scope {
-    inline explicit Scope(ExecutionContext *ctx);
+    inline Scope(ExecutionContext *ctx)
+        : engine(ctx->d()->engine)
+#ifndef QT_NO_DEBUG
+        , size(0)
+#endif
+    {
+        mark = engine->jsStackTop;
+    }
+
     explicit Scope(ExecutionEngine *e)
         : engine(e)
 #ifndef QT_NO_DEBUG
@@ -62,15 +75,19 @@ struct Scope {
         Q_ASSERT(engine->jsStackTop >= mark);
         memset(mark, 0, (engine->jsStackTop - mark)*sizeof(Value));
 #endif
+#ifdef V4_USE_VALGRIND
+        VALGRIND_MAKE_MEM_UNDEFINED(mark, engine->jsStackLimit - mark);
+#endif
         engine->jsStackTop = mark;
     }
 
     Value *alloc(int nValues) {
-        Value *ptr = engine->jsStackTop;
-        engine->jsStackTop += nValues;
 #ifndef QT_NO_DEBUG
         size += nValues;
 #endif
+        Value *ptr = engine->jsStackTop;
+        engine->jsStackTop = ptr + nValues;
+        memset(ptr, 0, nValues*sizeof(Value));
         return ptr;
     }
 
@@ -88,13 +105,12 @@ private:
     Q_DISABLE_COPY(Scope)
 };
 
-struct ValueRef;
-
 struct ScopedValue
 {
     ScopedValue(const Scope &scope)
     {
         ptr = scope.engine->jsStackTop++;
+        ptr->val = 0;
 #ifndef QT_NO_DEBUG
         ++scope.size;
 #endif
@@ -109,10 +125,10 @@ struct ScopedValue
 #endif
     }
 
-    ScopedValue(const Scope &scope, HeapObject *o)
+    ScopedValue(const Scope &scope, Heap::Base *o)
     {
         ptr = scope.engine->jsStackTop++;
-        ptr->m = reinterpret_cast<Managed *>(o);
+        ptr->m = o;
 #if QT_POINTER_SIZE == 4
         ptr->tag = QV4::Value::Managed_Type;
 #endif
@@ -139,23 +155,13 @@ struct ScopedValue
 #endif
     }
 
-    template<typename T>
-    ScopedValue(const Scope &scope, Returned<T> *t)
-    {
-        ptr = scope.engine->jsStackTop++;
-        *ptr = t->getPointer() ? Value::fromManaged(t->getPointer()) : Primitive::undefinedValue();
-#ifndef QT_NO_DEBUG
-        ++scope.size;
-#endif
-    }
-
     ScopedValue &operator=(const Value &v) {
         *ptr = v;
         return *this;
     }
 
-    ScopedValue &operator=(HeapObject *o) {
-        ptr->m = reinterpret_cast<Managed *>(o);
+    ScopedValue &operator=(Heap::Base *o) {
+        ptr->m = o;
 #if QT_POINTER_SIZE == 4
         ptr->tag = QV4::Value::Managed_Type;
 #endif
@@ -163,18 +169,12 @@ struct ScopedValue
     }
 
     ScopedValue &operator=(Managed *m) {
-        ptr->val = m->asReturnedValue();
+        *ptr = *m;
         return *this;
     }
 
     ScopedValue &operator=(const ReturnedValue &v) {
         ptr->val = v;
-        return *this;
-    }
-
-    template<typename T>
-    ScopedValue &operator=(Returned<T> *t) {
-        *ptr = t->getPointer() ? Value::fromManaged(t->getPointer()) : Primitive::undefinedValue();
         return *this;
     }
 
@@ -191,7 +191,8 @@ struct ScopedValue
         return ptr;
     }
 
-    ReturnedValue asReturnedValue() const { return ptr->val; }
+    operator Value *() { return ptr; }
+    operator const Value &() const { return *ptr; }
 
     Value *ptr;
 };
@@ -200,19 +201,21 @@ template<typename T>
 struct Scoped
 {
     enum _Convert { Convert };
-    enum _Cast { Cast };
 
     inline void setPointer(Managed *p) {
-#if QT_POINTER_SIZE == 8
-        ptr->val = (quint64)p;
-#else
-        *ptr = p ? QV4::Value::fromManaged(p) : QV4::Primitive::undefinedValue();
+        ptr->m = p ? p->m : 0;
+#if QT_POINTER_SIZE == 4
+        ptr->tag = QV4::Value::Managed_Type;
 #endif
     }
 
     Scoped(const Scope &scope)
     {
         ptr = scope.engine->jsStackTop++;
+        ptr->m = 0;
+#if QT_POINTER_SIZE == 4
+        ptr->tag = QV4::Value::Managed_Type;
+#endif
 #ifndef QT_NO_DEBUG
         ++scope.size;
 #endif
@@ -227,13 +230,10 @@ struct Scoped
         ++scope.size;
 #endif
     }
-    Scoped(const Scope &scope, HeapObject *o)
+    Scoped(const Scope &scope, Heap::Base *o)
     {
         Value v;
-        v.m = reinterpret_cast<Managed *>(o);
-#if QT_POINTER_SIZE == 4
-        v.tag = QV4::Value::Managed_Type;
-#endif
+        v = o;
         ptr = scope.engine->jsStackTop++;
         setPointer(value_cast<T>(v));
 #ifndef QT_NO_DEBUG
@@ -258,7 +258,14 @@ struct Scoped
 #endif
     }
 
-    Scoped(const Scope &scope, const ValueRef &v);
+    Scoped(const Scope &scope, const Value *v)
+    {
+        ptr = scope.engine->jsStackTop++;
+        setPointer(v ? value_cast<T>(*v) : 0);
+#ifndef QT_NO_DEBUG
+        ++scope.size;
+#endif
+    }
 
     Scoped(const Scope &scope, T *t)
     {
@@ -268,31 +275,10 @@ struct Scoped
         ++scope.size;
 #endif
     }
-    template<typename X>
-    Scoped(const Scope &scope, X *t, _Cast)
+    Scoped(const Scope &scope, typename T::Data *t)
     {
         ptr = scope.engine->jsStackTop++;
-        setPointer(managed_cast<T>(t));
-#ifndef QT_NO_DEBUG
-        ++scope.size;
-#endif
-    }
-
-    template<typename X>
-    Scoped(const Scope &scope, Returned<X> *x)
-    {
-        ptr = scope.engine->jsStackTop++;
-        setPointer(Returned<T>::getPointer(x));
-#ifndef QT_NO_DEBUG
-        ++scope.size;
-#endif
-    }
-
-    template<typename X>
-    Scoped(const Scope &scope, Returned<X> *x, _Cast)
-    {
-        ptr = scope.engine->jsStackTop++;
-        setPointer(managed_cast<T>(x->getPointer()));
+        *ptr = t;
 #ifndef QT_NO_DEBUG
         ++scope.size;
 #endif
@@ -315,21 +301,24 @@ struct Scoped
 #endif
     }
 
-    Scoped<T> &operator=(HeapObject *o) {
+    Scoped<T> &operator=(Heap::Base *o) {
         Value v;
-        v.m = reinterpret_cast<Managed *>(o);
-#if QT_POINTER_SIZE == 4
-        v.tag = QV4::Value::Managed_Type;
-#endif
+        v = o;
         setPointer(value_cast<T>(v));
+        return *this;
+    }
+    Scoped<T> &operator=(typename T::Data *t) {
+        *ptr = t;
         return *this;
     }
     Scoped<T> &operator=(const Value &v) {
         setPointer(value_cast<T>(v));
         return *this;
     }
-
-    Scoped<T> &operator=(const ValueRef &v);
+    Scoped<T> &operator=(Value *v) {
+        setPointer(v ? value_cast<T>(*v) : 0);
+        return *this;
+    }
 
     Scoped<T> &operator=(const ReturnedValue &v) {
         setPointer(value_cast<T>(QV4::Value::fromReturnedValue(v)));
@@ -346,72 +335,45 @@ struct Scoped
         return *this;
     }
 
-    template<typename X>
-    Scoped<T> &operator=(Returned<X> *x) {
-        setPointer(Returned<T>::getPointer(x));
-        return *this;
-    }
-
     operator T *() {
         return static_cast<T *>(ptr->managed());
     }
+    operator const Value &() const {
+        return *ptr;
+    }
 
     T *operator->() {
-        return static_cast<T *>(ptr->managed());
+        return ptr->cast<T>();
     }
 
     bool operator!() const {
-        return !ptr->managed();
+        return !ptr->m;
     }
     operator void *() const {
-        return ptr->managed();
+        return ptr->m;
     }
 
     T *getPointer() {
-        return static_cast<T *>(ptr->managed());
+        return ptr->cast<T>();
+    }
+    typename T::Data **getRef() {
+        return reinterpret_cast<typename T::Data **>(&ptr->m);
     }
 
     ReturnedValue asReturnedValue() const {
-#if QT_POINTER_SIZE == 8
-        return ptr->val ? ptr->val : Primitive::undefinedValue().asReturnedValue();
-#else
-        return ptr->val;
-#endif
+        return ptr->m ? ptr->val : Encode::undefined();
     }
 
     Value *ptr;
 };
 
-struct CallData
-{
-    // below is to be compatible with Value. Initialize tag to 0
-#if Q_BYTE_ORDER != Q_LITTLE_ENDIAN
-    uint tag;
-#endif
-    int argc;
-#if Q_BYTE_ORDER == Q_LITTLE_ENDIAN
-    uint tag;
-#endif
-    inline ReturnedValue argument(int i) {
-        return i < argc ? args[i].asReturnedValue() : Primitive::undefinedValue().asReturnedValue();
-    }
-
-    Value thisObject;
-    Value args[1];
-};
-
 struct ScopedCallData {
-    ScopedCallData(Scope &scope, int argc)
+    ScopedCallData(Scope &scope, int argc = 0)
     {
         int size = qMax(argc, (int)QV4::Global::ReservedArgumentCount) + qOffsetOf(QV4::CallData, args)/sizeof(QV4::Value);
-        ptr = reinterpret_cast<CallData *>(scope.engine->stackPush(size));
+        ptr = reinterpret_cast<CallData *>(scope.alloc(size));
         ptr->tag = QV4::Value::Integer_Type;
         ptr->argc = argc;
-#ifndef QT_NO_DEBUG
-        scope.size += size;
-        for (int ii = 0; ii < qMax(argc, (int)QV4::Global::ReservedArgumentCount); ++ii)
-            ptr->args[ii] = QV4::Primitive::undefinedValue();
-#endif
     }
 
     CallData *operator->() {
@@ -426,30 +388,6 @@ struct ScopedCallData {
 };
 
 
-template<typename T>
-inline Scoped<T>::Scoped(const Scope &scope, const ValueRef &v)
-{
-    ptr = scope.engine->jsStackTop++;
-    setPointer(value_cast<T>(*v.operator ->()));
-#ifndef QT_NO_DEBUG
-    ++scope.size;
-#endif
-}
-
-template<typename T>
-inline Scoped<T> &Scoped<T>::operator=(const ValueRef &v)
-{
-    setPointer(value_cast<T>(*v.operator ->()));
-    return *this;
-}
-
-template <typename T>
-inline Value &Value::operator=(Returned<T> *t)
-{
-    val = t->getPointer()->asReturnedValue();
-    return *this;
-}
-
 inline Value &Value::operator =(const ScopedValue &v)
 {
     val = v.ptr->val;
@@ -463,22 +401,10 @@ inline Value &Value::operator=(const Scoped<T> &t)
     return *this;
 }
 
-inline Value &Value::operator=(const ValueRef v)
-{
-    val = v.asReturnedValue();
-    return *this;
-}
-
-template<typename T>
-inline Returned<T> *Value::as()
-{
-    return Returned<T>::create(value_cast<T>(*this));
-}
-
 template<typename T>
 inline TypedValue<T> &TypedValue<T>::operator =(T *t)
 {
-    m = t;
+    m = t ? t->m : 0;
 #if QT_POINTER_SIZE == 4
     tag = Managed_Type;
 #endif
@@ -488,26 +414,12 @@ inline TypedValue<T> &TypedValue<T>::operator =(T *t)
 template<typename T>
 inline TypedValue<T> &TypedValue<T>::operator =(const Scoped<T> &v)
 {
-    m = v.ptr->managed();
+    m = v.ptr->m;
 #if QT_POINTER_SIZE == 4
     tag = Managed_Type;
 #endif
     return *this;
 }
-
-template<typename T>
-inline TypedValue<T> &TypedValue<T>::operator=(Returned<T> *t)
-{
-    val = t->getPointer()->asReturnedValue();
-    return *this;
-}
-
-//template<typename T>
-//inline TypedValue<T> &TypedValue<T>::operator =(const ManagedRef<T> &v)
-//{
-//    val = v.asReturnedValue();
-//    return *this;
-//}
 
 template<typename T>
 inline TypedValue<T> &TypedValue<T>::operator=(const TypedValue<T> &t)
@@ -516,82 +428,51 @@ inline TypedValue<T> &TypedValue<T>::operator=(const TypedValue<T> &t)
     return *this;
 }
 
-template<typename T>
-inline Returned<T> * TypedValue<T>::ret() const
-{
-    return Returned<T>::create(static_cast<T *>(managed()));
-}
-
-inline Primitive::operator ValueRef()
-{
-    return ValueRef(this);
-}
-
-
-template<typename T>
-PersistentValue::PersistentValue(Returned<T> *obj)
-    : d(new PersistentValuePrivate(QV4::Value::fromManaged(obj->getPointer())))
-{
-}
-
-template<typename T>
-inline PersistentValue &PersistentValue::operator=(Returned<T> *obj)
-{
-    return operator=(QV4::Value::fromManaged(obj->getPointer()).asReturnedValue());
-}
-
-inline PersistentValue &PersistentValue::operator=(const ScopedValue &other)
-{
-    return operator=(other.asReturnedValue());
-}
-
-template<typename T>
-inline WeakValue::WeakValue(Returned<T> *obj)
-    : d(new PersistentValuePrivate(QV4::Value::fromManaged(obj->getPointer()), /*engine*/0, /*weak*/true))
-{
-}
-
-template<typename T>
-inline WeakValue &WeakValue::operator=(Returned<T> *obj)
-{
-    return operator=(QV4::Value::fromManaged(obj->getPointer()).asReturnedValue());
-}
-
-inline ValueRef::ValueRef(const ScopedValue &v)
-    : ptr(v.ptr)
-{}
-
-template <typename T>
-inline ValueRef::ValueRef(const Scoped<T> &v)
-    : ptr(v.ptr)
-{}
-
-inline ValueRef::ValueRef(const PersistentValue &v)
-    : ptr(&v.d->value)
-{}
-
-inline ValueRef::ValueRef(PersistentValuePrivate *p)
-    : ptr(&p->value)
-{}
-
-inline ValueRef &ValueRef::operator=(const ScopedValue &o)
-{
-    *ptr = *o.ptr;
-    return *this;
-}
-
 struct ScopedProperty
 {
     ScopedProperty(Scope &scope)
     {
         property = reinterpret_cast<Property*>(scope.alloc(sizeof(Property) / sizeof(Value)));
+        property->value = Encode::undefined();
+        property->set = Encode::undefined();
     }
 
     Property *operator->() { return property; }
-    operator const Property &() { return *property; }
+    operator const Property *() const { return property; }
+    operator Property *() { return property; }
 
     Property *property;
 };
+
+struct ExecutionContextSaver
+{
+    ExecutionEngine *engine;
+    Value *savedContext;
+
+    ExecutionContextSaver(Scope &scope, ExecutionContext *context)
+        : engine(context->d()->engine)
+        , savedContext(scope.alloc(1))
+    {
+        savedContext->m = context->d();
+#if QT_POINTER_SIZE == 4
+        savedContext->tag = QV4::Value::Managed_Type;
+#endif
+    }
+    ExecutionContextSaver(Scope &scope, Heap::ExecutionContext *context)
+        : engine(context->engine)
+        , savedContext(scope.alloc(1))
+    {
+        savedContext->m = context;
+#if QT_POINTER_SIZE == 4
+        savedContext->tag = QV4::Value::Managed_Type;
+#endif
+    }
+    ~ExecutionContextSaver()
+    {
+        engine->current = static_cast<Heap::ExecutionContext *>(savedContext->heapObject());
+    }
+};
+
 
 }
 

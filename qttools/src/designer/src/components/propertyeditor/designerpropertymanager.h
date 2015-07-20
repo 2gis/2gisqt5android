@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Designer of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -71,7 +71,7 @@ class ResetDecorator : public QObject
 {
     Q_OBJECT
 public:
-    ResetDecorator(QObject *parent = 0) : QObject(parent), m_spacing(-1) {}
+    explicit ResetDecorator(const QDesignerFormEditorInterface *core, QObject *parent = Q_NULLPTR);
     ~ResetDecorator();
 
     void connectPropertyManager(QtAbstractPropertyManager *manager);
@@ -88,6 +88,7 @@ private:
     QMap<QtProperty *, QList<ResetWidget *> > m_createdResetWidgets;
     QMap<ResetWidget *, QtProperty *> m_resetWidgetToProperty;
     int m_spacing;
+    const QDesignerFormEditorInterface *m_core;
 };
 
 // Helper for handling sub-properties of properties inheriting PropertySheetTranslatableData
@@ -127,15 +128,15 @@ public:
     explicit DesignerPropertyManager(QDesignerFormEditorInterface *core, QObject *parent = 0);
     ~DesignerPropertyManager();
 
-    virtual QStringList attributes(int propertyType) const;
-    virtual int attributeType(int propertyType, const QString &attribute) const;
+    QStringList attributes(int propertyType) const Q_DECL_OVERRIDE;
+    int attributeType(int propertyType, const QString &attribute) const Q_DECL_OVERRIDE;
 
-    virtual QVariant attributeValue(const QtProperty *property, const QString &attribute) const;
-    virtual bool isPropertyTypeSupported(int propertyType) const;
-    virtual QVariant value(const QtProperty *property) const;
-    virtual int valueType(int propertyType) const;
-    virtual QString valueText(const QtProperty *property) const;
-    virtual QIcon valueIcon(const QtProperty *property) const;
+    QVariant attributeValue(const QtProperty *property, const QString &attribute) const Q_DECL_OVERRIDE;
+    bool isPropertyTypeSupported(int propertyType) const Q_DECL_OVERRIDE;
+    QVariant value(const QtProperty *property) const Q_DECL_OVERRIDE;
+    int valueType(int propertyType) const Q_DECL_OVERRIDE;
+    QString valueText(const QtProperty *property) const Q_DECL_OVERRIDE;
+    QIcon valueIcon(const QtProperty *property) const Q_DECL_OVERRIDE;
 
     bool resetFontSubProperty(QtProperty *property);
     bool resetIconSubProperty(QtProperty *subProperty);
@@ -156,14 +157,14 @@ public:
 public Q_SLOTS:
     virtual void setAttribute(QtProperty *property,
                 const QString &attribute, const QVariant &value);
-    virtual void setValue(QtProperty *property, const QVariant &value);
+    void setValue(QtProperty *property, const QVariant &value) Q_DECL_OVERRIDE;
 Q_SIGNALS:
     // sourceOfChange - a subproperty (or just property) which caused a change
     //void valueChanged(QtProperty *property, const QVariant &value, QtProperty *sourceOfChange);
     void valueChanged(QtProperty *property, const QVariant &value, bool enableSubPropertyHandling);
 protected:
-    virtual void initializeProperty(QtProperty *property);
-    virtual void uninitializeProperty(QtProperty *property);
+    void initializeProperty(QtProperty *property) Q_DECL_OVERRIDE;
+    void uninitializeProperty(QtProperty *property) Q_DECL_OVERRIDE;
 private Q_SLOTS:
     void slotValueChanged(QtProperty *property, const QVariant &value);
     void slotPropertyDestroyed(QtProperty *property);

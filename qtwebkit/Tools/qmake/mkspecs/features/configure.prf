@@ -106,8 +106,13 @@ defineTest(finalizeConfigure) {
         WEBKIT_CONFIG -= build_webkit2 build_minibrowser build_wtr
     }
 
+    production_build:qnx {
+        CONFIGURE_WARNINGS += "QtWebKitQml will not be build. It is not supported on QNX."
+        WEBKIT_CONFIG -= build_webkit2 build_minibrowser build_wtr
+    }
+
     # Sanitize clashing options
-    santizeFeatures()
+    sanitizeFeatures()
 
     print_defaults {
         log(DEFINES: $$configDefines()$${EOL})
@@ -118,8 +123,8 @@ defineTest(finalizeConfigure) {
     !android:!mac:!config_icu {
        addReasonForSkippingBuild("ICU is required.")
     }
-    production_build:blackberry|qnx {
-        addReasonForSkippingBuild("Build not supported on BB10/QNX yet.")
+    production_build:blackberry {
+        addReasonForSkippingBuild("Build not supported on BB10 yet.")
     }
     !gnu_thin_archives:!win32-msvc2013:!mingw:contains(QT_CONFIG, static) {
         addReasonForSkippingBuild("QtWebKit cannot be built as a static library on this platform. Check your configuration in qtbase/config.summary.")

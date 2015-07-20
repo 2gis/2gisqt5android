@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQuick module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -35,6 +35,7 @@
 #include <qopenglfunctions.h>
 #include <QtQuick/private/qsgcontext_p.h>
 #include <qthread.h>
+#include <qmath.h>
 #include <private/qquickprofiler_p.h>
 #include <private/qqmlglobal_p.h>
 #include <QtGui/qguiapplication.h>
@@ -75,13 +76,11 @@ static bool qsg_leak_check = !qgetenv("QML_LEAK_CHECK").isEmpty();
 
 QT_BEGIN_NAMESPACE
 
-#ifndef QT_NO_DEBUG
 inline static bool isPowerOfTwo(int x)
 {
     // Assumption: x >= 1
     return x == (x & -x);
 }
-#endif
 
 QSGTexturePrivate::QSGTexturePrivate()
     : wrapChanged(false)
@@ -633,10 +632,12 @@ void QSGPlainTexture::bind()
 
     m_dirty_texture = false;
 
-    bool profileFrames = QSG_LOG_TIME_TEXTURE().isDebugEnabled() ||
-            QQuickProfiler::profilingSceneGraph();
+    bool profileFrames = QSG_LOG_TIME_TEXTURE().isDebugEnabled();
     if (profileFrames)
         qsg_renderer_timer.start();
+    Q_QUICK_SG_PROFILE_START_SYNCHRONIZED(QQuickProfiler::SceneGraphTexturePrepare,
+                                          QQuickProfiler::SceneGraphTextureDeletion);
+
 
     if (m_image.isNull()) {
         if (m_texture_id && m_owns_texture) {
@@ -645,8 +646,7 @@ void QSGPlainTexture::bind()
                     (int) qsg_renderer_timer.elapsed(),
                     m_texture_size.width(),
                     m_texture_size.height());
-            Q_QUICK_SG_PROFILE(QQuickProfiler::SceneGraphTextureDeletion, (
-                    qsg_renderer_timer.nsecsElapsed()));
+            Q_QUICK_SG_PROFILE_END(QQuickProfiler::SceneGraphTextureDeletion);
         }
         m_texture_id = 0;
         m_texture_size = QSize();
@@ -662,6 +662,7 @@ void QSGPlainTexture::bind()
     qint64 bindTime = 0;
     if (profileFrames)
         bindTime = qsg_renderer_timer.nsecsElapsed();
+    Q_QUICK_SG_PROFILE_RECORD(QQuickProfiler::SceneGraphTexturePrepare);
 
     // ### TODO: check for out-of-memory situations...
 
@@ -686,12 +687,23 @@ void QSGPlainTexture::bind()
         m_texture_size = tmp.size();
     }
 
+    // Scale to a power of two size if mipmapping is requested and the
+    // texture is npot and npot textures are not properly supported.
+    if (mipmapFiltering() != QSGTexture::None
+        && (!isPowerOfTwo(m_texture_size.width()) || !isPowerOfTwo(m_texture_size.height()))
+        && !funcs->hasOpenGLFeature(QOpenGLFunctions::NPOTTextures)) {
+        tmp = tmp.scaled(qNextPowerOfTwo(m_texture_size.width()), qNextPowerOfTwo(m_texture_size.height()),
+                         Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+        m_texture_size = tmp.size();
+    }
+
     if (tmp.width() * 4 != tmp.bytesPerLine())
         tmp = tmp.copy();
 
     qint64 convertTime = 0;
     if (profileFrames)
         convertTime = qsg_renderer_timer.nsecsElapsed();
+    Q_QUICK_SG_PROFILE_RECORD(QQuickProfiler::SceneGraphTexturePrepare);
 
     updateBindOptions(m_dirty_bind_options);
 
@@ -734,12 +746,14 @@ void QSGPlainTexture::bind()
     qint64 swizzleTime = 0;
     if (profileFrames)
         swizzleTime = qsg_renderer_timer.nsecsElapsed();
+    Q_QUICK_SG_PROFILE_RECORD(QQuickProfiler::SceneGraphTexturePrepare);
 
     funcs->glTexImage2D(GL_TEXTURE_2D, 0, internalFormat, m_texture_size.width(), m_texture_size.height(), 0, externalFormat, GL_UNSIGNED_BYTE, tmp.constBits());
 
     qint64 uploadTime = 0;
     if (profileFrames)
         uploadTime = qsg_renderer_timer.nsecsElapsed();
+    Q_QUICK_SG_PROFILE_RECORD(QQuickProfiler::SceneGraphTexturePrepare);
 
     if (mipmapFiltering() != QSGTexture::None) {
         funcs->glGenerateMipmap(GL_TEXTURE_2D);
@@ -762,13 +776,7 @@ void QSGPlainTexture::bind()
                 int((mipmapTime - uploadTime)/1000000),
                 m_texture_size != m_image.size() ? " (scaled to GL_MAX_TEXTURE_SIZE)" : "");
     }
-
-    Q_QUICK_SG_PROFILE(QQuickProfiler::SceneGraphTexturePrepare, (
-            bindTime,
-            convertTime - bindTime,
-            swizzleTime - convertTime,
-            uploadTime - swizzleTime,
-            qsg_renderer_timer.nsecsElapsed() - uploadTime));
+    Q_QUICK_SG_PROFILE_END(QQuickProfiler::SceneGraphTexturePrepare);
 
     m_texture_rect = QRectF(0, 0, 1, 1);
 

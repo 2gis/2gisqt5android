@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -43,51 +43,18 @@ using namespace QV4;
 
 DEFINE_OBJECT_VTABLE(VariantObject);
 
-VariantObject::Data::Data(InternalClass *ic)
-    : Object::Data(ic)
-{
-}
-
-VariantObject::Data::Data(ExecutionEngine *engine, const QVariant &value)
-    : Object::Data(engine->variantClass)
+Heap::VariantObject::VariantObject(QV4::ExecutionEngine *engine, const QVariant &value)
+    : Heap::Object(engine->emptyClass, engine->variantPrototype.asObject())
 {
     data = value;
     if (isScarce())
         engine->scarceResources.insert(this);
 }
 
-QVariant VariantObject::toVariant(const QV4::ValueRef v)
-{
-    if (v->asObject())
-        return v->engine()->v8Engine->toVariant(v, /*typeHint*/ -1, /*createJSValueForObjects*/ false);
-
-    if (v->isString())
-        return QVariant(v->stringValue()->toQString());
-    if (v->isBoolean())
-        return QVariant(v->booleanValue());
-    if (v->isNumber()) {
-        QV4::Value val;
-        val = v;
-        if (val.isInt32())
-            return QVariant(val.integerValue());
-        return QVariant(v->asDouble());
-    }
-    if (v->isNull())
-        return QVariant(QMetaType::VoidStar, 0);
-    Q_ASSERT(v->isUndefined());
-    return QVariant();
-}
-
 bool VariantObject::Data::isScarce() const
 {
     QVariant::Type t = data.type();
     return t == QVariant::Pixmap || t == QVariant::Image;
-}
-
-void VariantObject::destroy(Managed *that)
-{
-    VariantObject *v = static_cast<VariantObject *>(that);
-    v->d()->~Data();
 }
 
 bool VariantObject::isEqualTo(Managed *m, Managed *other)
@@ -98,7 +65,7 @@ bool VariantObject::isEqualTo(Managed *m, Managed *other)
     if (QV4::VariantObject *rv = other->as<QV4::VariantObject>())
         return lv->d()->data == rv->d()->data;
 
-    if (QV4::QmlValueTypeWrapper *v = other->as<QmlValueTypeWrapper>())
+    if (QV4::QQmlValueTypeWrapper *v = other->as<QQmlValueTypeWrapper>())
         return v->isEqual(lv->d()->data);
 
     return false;
@@ -136,7 +103,7 @@ void VariantPrototype::init()
 QV4::ReturnedValue VariantPrototype::method_preserve(CallContext *ctx)
 {
     Scope scope(ctx);
-    Scoped<VariantObject> o(scope, ctx->d()->callData->thisObject.as<QV4::VariantObject>());
+    Scoped<VariantObject> o(scope, ctx->thisObject().as<QV4::VariantObject>());
     if (o && o->d()->isScarce())
         o->d()->node.remove();
     return Encode::undefined();
@@ -145,7 +112,7 @@ QV4::ReturnedValue VariantPrototype::method_preserve(CallContext *ctx)
 QV4::ReturnedValue VariantPrototype::method_destroy(CallContext *ctx)
 {
     Scope scope(ctx);
-    Scoped<VariantObject> o(scope, ctx->d()->callData->thisObject.as<QV4::VariantObject>());
+    Scoped<VariantObject> o(scope, ctx->thisObject().as<QV4::VariantObject>());
     if (o) {
         if (o->d()->isScarce())
             o->d()->node.remove();
@@ -157,7 +124,7 @@ QV4::ReturnedValue VariantPrototype::method_destroy(CallContext *ctx)
 QV4::ReturnedValue VariantPrototype::method_toString(CallContext *ctx)
 {
     Scope scope(ctx);
-    Scoped<VariantObject> o(scope, ctx->d()->callData->thisObject.as<QV4::VariantObject>());
+    Scoped<VariantObject> o(scope, ctx->thisObject().as<QV4::VariantObject>());
     if (!o)
         return Encode::undefined();
     QString result = o->d()->data.toString();
@@ -169,7 +136,7 @@ QV4::ReturnedValue VariantPrototype::method_toString(CallContext *ctx)
 QV4::ReturnedValue VariantPrototype::method_valueOf(CallContext *ctx)
 {
     Scope scope(ctx);
-    Scoped<VariantObject> o(scope, ctx->d()->callData->thisObject.as<QV4::VariantObject>());
+    Scoped<VariantObject> o(scope, ctx->thisObject().as<QV4::VariantObject>());
     if (o) {
         QVariant v = o->d()->data;
         switch (v.type()) {
@@ -185,10 +152,12 @@ QV4::ReturnedValue VariantPrototype::method_valueOf(CallContext *ctx)
         case QVariant::Bool:
             return Encode(v.toBool());
         default:
+            if (QMetaType::typeFlags(v.userType()) & QMetaType::IsEnumeration)
+                return Encode(v.toInt());
             break;
         }
     }
-    return ctx->d()->callData->thisObject.asReturnedValue();
+    return ctx->thisObject().asReturnedValue();
 }
 
 QT_END_NAMESPACE

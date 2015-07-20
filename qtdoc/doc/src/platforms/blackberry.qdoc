@@ -1,7 +1,7 @@
 /****************************************************************************
 **
 ** Copyright (C) 2014 BlackBerry Limited. All rights reserved.
-** Contact: http://www.qt-project.org/legal
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
@@ -10,15 +10,15 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Free Documentation License Usage
 ** Alternatively, this file may be used under the terms of the GNU Free
 ** Documentation License version 1.3 as published by the Free Software
 ** Foundation and appearing in the file included in the packaging of
-** this file.  Please review the following information to ensure
+** this file. Please review the following information to ensure
 ** the GNU Free Documentation License version 1.3 requirements
 ** will be met: http://www.gnu.org/copyleft/fdl.html.
 ** $QT_END_LICENSE$
@@ -119,7 +119,7 @@
 
     \section2 In Qt Creator
     See the
-    \l{http://qt-project.org/wiki/Qt-Creator-with-BlackBerry-10}{article}
+    \l{http://wiki.qt.io/Qt_Creator_with_BlackBerry_10}{article}
     Qt Creator with BlackBerry 10. Qt Creator 2.7 and later contain a plug-in which integrates
     the BlackBerry 10 NDK and its tools into the development process as it is know to Qt
     Creator users.
@@ -236,7 +236,7 @@
 
     This matches all essential modules, plus several add-on modules. QtWebKit is currently not
     a part of the regular builds. Still, it is possible to build it, see
-    \l{http://qt-project.org/wiki/Building-QtWebKit-for-Blackberry}
+    \l{http://wiki.qt.io/Building_QtWebKit_for_Blackberry}
       {Building QtWebKit for Blackberry}
 
     Other repositories known to build:
@@ -507,7 +507,7 @@
     In some cases, it might be needed to inspect the actual content of the folders directly on
     the device. You can do this in an SSH shell in the File Inspector in the Momentics IDE.
     The article
-    \l{http://qt-project.org/wiki/BlackBerry_Hints_n_Tips}{BlackBerry Hints and Tips}
+    \l{http://wiki.qt.io/BlackBerry_Hints_n_Tips}{BlackBerry Hints and Tips}
     shows how to use SSH with BlackBerry 10 along with
     a few other hints and tips.
 

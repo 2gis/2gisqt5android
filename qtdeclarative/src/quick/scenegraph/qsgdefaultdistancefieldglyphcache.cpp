@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQuick module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -38,6 +38,7 @@
 #include <QtQml/private/qqmlglobal_p.h>
 #include <QtQuick/private/qsgdistancefieldutil_p.h>
 #include <qopenglfunctions.h>
+#include <qopenglframebufferobject.h>
 #include <qmath.h>
 
 #if !defined(QT_OPENGL_ES_2)
@@ -47,6 +48,7 @@
 QT_BEGIN_NAMESPACE
 
 DEFINE_BOOL_CONFIG_OPTION(qmlUseGlyphCacheWorkaround, QML_USE_GLYPHCACHE_WORKAROUND)
+DEFINE_BOOL_CONFIG_OPTION(qsgPreferFullSizeGlyphCacheTextures, QSG_PREFER_FULLSIZE_GLYPHCACHE_TEXTURES)
 
 #if !defined(QSG_DEFAULT_DISTANCEFIELD_GLYPH_CACHE_PADDING)
 #  define QSG_DEFAULT_DISTANCEFIELD_GLYPH_CACHE_PADDING 2
@@ -145,7 +147,10 @@ void QSGDefaultDistanceFieldGlyphCache::requestGlyphs(const QSet<glyph_t> &glyph
 
 void QSGDefaultDistanceFieldGlyphCache::storeGlyphs(const QList<QDistanceField> &glyphs)
 {
-    QHash<TextureInfo *, QVector<glyph_t> > glyphTextures;
+    typedef QHash<TextureInfo *, QVector<glyph_t> > GlyphTextureHash;
+    typedef GlyphTextureHash::const_iterator GlyphTextureHashConstIt;
+
+    GlyphTextureHash glyphTextures;
 
     GLint alignment = 4; // default value
     m_funcs->glGetIntegerv(GL_UNPACK_ALIGNMENT, &alignment);
@@ -202,8 +207,7 @@ void QSGDefaultDistanceFieldGlyphCache::storeGlyphs(const QList<QDistanceField> 
     // restore to previous alignment
     m_funcs->glPixelStorei(GL_UNPACK_ALIGNMENT, alignment);
 
-    QHash<TextureInfo *, QVector<glyph_t> >::const_iterator i;
-    for (i = glyphTextures.constBegin(); i != glyphTextures.constEnd(); ++i) {
+    for (GlyphTextureHashConstIt i = glyphTextures.constBegin(), cend = glyphTextures.constEnd(); i != cend; ++i) {
         Texture t;
         t.textureId = i.key()->texture;
         t.size = i.key()->size;
@@ -321,7 +325,7 @@ void QSGDefaultDistanceFieldGlyphCache::resizeTexture(TextureInfo *texInfo, int 
                                    GL_COLOR_BUFFER_BIT, GL_NEAREST);
 
         // Reset the default framebuffer
-        m_coreFuncs->glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        QOpenGLFramebufferObject::bindDefault();
 
         return;
     } else if (useTextureResizeWorkaround()) {
@@ -446,7 +450,7 @@ void QSGDefaultDistanceFieldGlyphCache::resizeTexture(TextureInfo *texInfo, int 
     m_funcs->glDeleteTextures(1, &tmp_texture);
     m_funcs->glDeleteTextures(1, &oldTexture);
 
-    m_funcs->glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    QOpenGLFramebufferObject::bindDefault();
 
     // restore render states
     if (stencilTestEnabled)
@@ -489,6 +493,11 @@ bool QSGDefaultDistanceFieldGlyphCache::useTextureUploadWorkaround() const
         set = true;
     }
     return useWorkaround;
+}
+
+bool QSGDefaultDistanceFieldGlyphCache::createFullSizeTextures() const
+{
+    return qsgPreferFullSizeGlyphCacheTextures() && glyphCount() > QT_DISTANCEFIELD_HIGHGLYPHCOUNT;
 }
 
 int QSGDefaultDistanceFieldGlyphCache::maxTextureSize() const

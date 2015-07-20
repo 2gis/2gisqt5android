@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -119,11 +119,9 @@ public:
 
     void addProbe(QGstreamerVideoProbeControl* probe);
     void removeProbe(QGstreamerVideoProbeControl* probe);
-    static gboolean padVideoBufferProbe(GstPad *pad, GstBuffer *buffer, gpointer user_data);
 
     void addProbe(QGstreamerAudioProbeControl* probe);
     void removeProbe(QGstreamerAudioProbeControl* probe);
-    static gboolean padAudioBufferProbe(GstPad *pad, GstBuffer *buffer, gpointer user_data);
 
     void endOfMediaReset();
 
@@ -172,7 +170,9 @@ private:
     static void playbinNotifySource(GObject *o, GParamSpec *p, gpointer d);
     static void handleVolumeChange(GObject *o, GParamSpec *p, gpointer d);
     static void handleMutedChange(GObject *o, GParamSpec *p, gpointer d);
+#if !GST_CHECK_VERSION(1,0,0)
     static void insertColorSpaceElement(GstElement *element, gpointer data);
+#endif
     static void handleElementAdded(GstBin *bin, GstElement *element, QGstreamerPlayerSession *session);
     static void handleStreamsChange(GstBin *bin, gpointer user_data);
     static GstAutoplugSelectResult handleAutoplugSelect(GstBin *bin, GstPad *pad, GstCaps *caps, GstElementFactory *factory, QGstreamerPlayerSession *session);
@@ -194,11 +194,14 @@ private:
     QGstreamerBusHelper* m_busHelper;
     GstElement* m_playbin;
 
+    GstElement* m_videoSink;
+
     GstElement* m_videoOutputBin;
     GstElement* m_videoIdentity;
+#if !GST_CHECK_VERSION(1,0,0)
     GstElement* m_colorSpace;
     bool m_usingColorspaceElement;
-    GstElement* m_videoSink;
+#endif
     GstElement* m_pendingVideoSink;
     GstElement* m_nullVideoSink;
 
@@ -218,13 +221,8 @@ private:
     QList<QMediaStreamsControl::StreamType> m_streamTypes;
     QMap<QMediaStreamsControl::StreamType, int> m_playbin2StreamOffset;
 
-    QList<QGstreamerVideoProbeControl*> m_videoProbes;
-    QMutex m_videoProbeMutex;
-    int m_videoBufferProbeId;
-
-    QList<QGstreamerAudioProbeControl*> m_audioProbes;
-    QMutex m_audioProbeMutex;
-    int m_audioBufferProbeId;
+    QGstreamerVideoProbeControl *m_videoProbe;
+    QGstreamerAudioProbeControl *m_audioProbe;
 
     int m_volume;
     qreal m_playbackRate;
@@ -252,6 +250,7 @@ private:
     bool m_isLiveSource;
 
     bool m_isPlaylist;
+    gulong pad_probe_id;
 };
 
 QT_END_NAMESPACE

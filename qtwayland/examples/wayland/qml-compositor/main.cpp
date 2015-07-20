@@ -1,7 +1,8 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2014 Pier Luigi Fiorini <pierluigi.fiorini@gmail.com>
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the examples of the Qt Toolkit.
 **
@@ -17,8 +18,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -42,6 +43,7 @@
 #include "qwaylandquicksurface.h"
 
 #include <QtCompositor/qwaylandsurfaceitem.h>
+#include <QtCompositor/qwaylandoutput.h>
 
 #include <QGuiApplication>
 #include <QTimer>
@@ -60,7 +62,7 @@ class QmlCompositor : public QQuickView, public QWaylandQuickCompositor
 
 public:
     QmlCompositor()
-        : QWaylandQuickCompositor(this, 0, DefaultExtensions | SubSurfaceExtension)
+        : QWaylandQuickCompositor(0, DefaultExtensions | SubSurfaceExtension)
         , m_fullscreenSurface(0)
     {
         setSource(QUrl("main.qml"));
@@ -68,6 +70,7 @@ public:
         setColor(Qt::black);
         winId();
         addDefaultShell();
+        createOutput(this, "", "");
 
         connect(this, SIGNAL(afterRendering()), this, SLOT(sendCallbacks()));
     }
@@ -84,7 +87,6 @@ public:
 
 signals:
     void windowAdded(QVariant window);
-    void windowDestroyed(QVariant window);
     void windowResized(QVariant window);
     void fullscreenSurfaceChanged();
 
@@ -109,14 +111,12 @@ private slots:
         QWaylandQuickSurface *surface = qobject_cast<QWaylandQuickSurface *>(sender());
         if (surface == m_fullscreenSurface)
             m_fullscreenSurface = 0;
-        emit windowDestroyed(QVariant::fromValue(surface));
     }
 
-    void surfaceDestroyed(QObject *object) {
-        QWaylandQuickSurface *surface = static_cast<QWaylandQuickSurface *>(object);
+    void surfaceDestroyed() {
+        QWaylandQuickSurface *surface = static_cast<QWaylandQuickSurface *>(sender());
         if (surface == m_fullscreenSurface)
             m_fullscreenSurface = 0;
-        emit windowDestroyed(QVariant::fromValue(surface));
     }
 
     void sendCallbacks() {
@@ -134,7 +134,7 @@ protected:
     }
 
     void surfaceCreated(QWaylandSurface *surface) {
-        connect(surface, SIGNAL(destroyed(QObject *)), this, SLOT(surfaceDestroyed(QObject *)));
+        connect(surface, SIGNAL(surfaceDestroyed()), this, SLOT(surfaceDestroyed()));
         connect(surface, SIGNAL(mapped()), this, SLOT(surfaceMapped()));
         connect(surface,SIGNAL(unmapped()), this,SLOT(surfaceUnmapped()));
     }

@@ -1,7 +1,7 @@
 /****************************************************************************
 **
 ** Copyright (C) 2013 Klarälvdalens Datakonsult AB (KDAB).
-** Contact: http://www.qt-project.org/legal
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Compositor.
 **
@@ -17,8 +17,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -56,6 +56,10 @@
 #include <qpa/qwindowsysteminterface.h>
 
 #include <QDebug>
+
+QT_BEGIN_NAMESPACE
+
+namespace QtWaylandClient {
 
 QWaylandDataDevice::QWaylandDataDevice(QWaylandDataDeviceManager *manager, QWaylandInputDevice *inputDevice)
     : QtWayland::wl_data_device(manager->get_data_device(inputDevice->wl_seat()))
@@ -249,3 +253,7 @@ void QWaylandDataDevice::dragSourceTargetChanged(const QString &mimeType)
 {
     static_cast<QWaylandDrag *>(QGuiApplicationPrivate::platformIntegration()->drag())->updateTarget(mimeType);
 }
+
+}
+
+QT_END_NAMESPACE

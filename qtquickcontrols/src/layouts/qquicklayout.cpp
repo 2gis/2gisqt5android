@@ -1,31 +1,34 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Quick Layouts module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL21$
+** $QT_BEGIN_LICENSE:LGPL3$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 or version 3 as published by the Free
-** Software Foundation and appearing in the file LICENSE.LGPLv21 and
-** LICENSE.LGPLv3 included in the packaging of this file. Please review the
-** following information to ensure the GNU Lesser General Public License
-** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
-** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPLv3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** GNU General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU
+** General Public License version 2.0 or later as published by the Free
+** Software Foundation and appearing in the file LICENSE.GPL included in
+** the packaging of this file. Please review the following information to
+** ensure the GNU General Public License version 2.0 requirements will be
+** met: http://www.gnu.org/licenses/gpl-2.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -86,6 +89,7 @@ QQuickLayoutAttached::QQuickLayoutAttached(QObject *parent)
       m_preferredHeight(-1),
       m_maximumWidth(std::numeric_limits<qreal>::infinity()),
       m_maximumHeight(std::numeric_limits<qreal>::infinity()),
+      m_defaultMargins(0),
       m_row(-1),
       m_column(-1),
       m_rowSpan(1),
@@ -99,6 +103,10 @@ QQuickLayoutAttached::QQuickLayoutAttached(QObject *parent)
       m_isMaximumWidthSet(false),
       m_isMaximumHeightSet(false),
       m_changesNotificationEnabled(true),
+      m_isLeftMarginSet(false),
+      m_isTopMarginSet(false),
+      m_isRightMarginSet(false),
+      m_isBottomMarginSet(false),
       m_alignment(0)
 {
 
@@ -414,6 +422,177 @@ void QQuickLayoutAttached::setAlignment(Qt::Alignment align)
             invalidateItem();
         }
         emit alignmentChanged();
+    }
+}
+
+/*!
+    \qmlattachedproperty real Layout::margins
+
+    Sets the margins outside of an item to all have the same value. The item
+    itself does not evaluate its own margins. It is the parents responsibility
+    to decide if it wants to evaluate the margins.
+
+    Specifically, margins are only evaluated by ColumnLayout, RowLayout,
+    GridLayout, and other layout-like containers, such as SplitView, where the
+    effective cell size of an item will be increased as the margins are
+    increased.
+
+    Therefore, if an item with margins is a child of another \c Item, its
+    position, size and implicit size will remain unchanged.
+
+    Combining margins with alignment will align the item *including* its
+    margins. For instance, a vertically-centered Item with top margin 1 and
+    bottom margin 9 will cause the Items effective alignment within the cell to
+    be 4 pixels above the center.
+
+    The default value is 0
+
+    \sa leftMargin
+    \sa topMargin
+    \sa rightMargin
+    \sa bottomMargin
+
+    \since QtQuick.Layouts 1.2
+*/
+void QQuickLayoutAttached::setMargins(qreal m)
+{
+    if (m == m_defaultMargins)
+        return;
+
+    m_defaultMargins = m;
+    invalidateItem();
+    if (!m_isLeftMarginSet && m_margins.left() != m)
+        emit leftMarginChanged();
+    if (!m_isTopMarginSet && m_margins.top() != m)
+        emit topMarginChanged();
+    if (!m_isRightMarginSet && m_margins.right() != m)
+        emit rightMarginChanged();
+    if (!m_isBottomMarginSet && m_margins.bottom() != m)
+        emit bottomMarginChanged();
+    emit marginsChanged();
+}
+
+/*!
+    \qmlattachedproperty real Layout::leftMargin
+
+    Specifies the left margin outside of an item.
+    If the value is not set, it will use the value from \l margins.
+
+    \sa margins
+
+    \since QtQuick.Layouts 1.2
+*/
+void QQuickLayoutAttached::setLeftMargin(qreal m)
+{
+    const bool changed = leftMargin() != m;
+    m_margins.setLeft(m);
+    m_isLeftMarginSet = true;
+    if (changed) {
+        invalidateItem();
+        emit leftMarginChanged();
+    }
+}
+
+void QQuickLayoutAttached::resetLeftMargin()
+{
+    const bool changed = m_isLeftMarginSet && (m_defaultMargins != m_margins.left());
+    m_isLeftMarginSet = false;
+    if (changed) {
+        invalidateItem();
+        emit leftMarginChanged();
+    }
+}
+
+/*!
+    \qmlattachedproperty real Layout::topMargin
+
+    Specifies the top margin outside of an item.
+    If the value is not set, it will use the value from \l margins.
+
+    \sa margins
+
+    \since QtQuick.Layouts 1.2
+*/
+void QQuickLayoutAttached::setTopMargin(qreal m)
+{
+    const bool changed = topMargin() != m;
+    m_margins.setTop(m);
+    m_isTopMarginSet = true;
+    if (changed) {
+        invalidateItem();
+        emit topMarginChanged();
+    }
+}
+
+void QQuickLayoutAttached::resetTopMargin()
+{
+    const bool changed = m_isTopMarginSet && (m_defaultMargins != m_margins.top());
+    m_isTopMarginSet = false;
+    if (changed) {
+        invalidateItem();
+        emit topMarginChanged();
+    }
+}
+
+/*!
+    \qmlattachedproperty real Layout::rightMargin
+
+    Specifies the right margin outside of an item.
+    If the value is not set, it will use the value from \l margins.
+
+    \sa margins
+
+    \since QtQuick.Layouts 1.2
+*/
+void QQuickLayoutAttached::setRightMargin(qreal m)
+{
+    const bool changed = rightMargin() != m;
+    m_margins.setRight(m);
+    m_isRightMarginSet = true;
+    if (changed) {
+        invalidateItem();
+        emit rightMarginChanged();
+    }
+}
+
+void QQuickLayoutAttached::resetRightMargin()
+{
+    const bool changed = m_isRightMarginSet && (m_defaultMargins != m_margins.right());
+    m_isRightMarginSet = false;
+    if (changed) {
+        invalidateItem();
+        emit rightMarginChanged();
+    }
+}
+
+/*!
+    \qmlattachedproperty real Layout::bottomMargin
+
+    Specifies the bottom margin outside of an item.
+    If the value is not set, it will use the value from \l margins.
+
+    \sa margins
+
+    \since QtQuick.Layouts 1.2
+*/
+void QQuickLayoutAttached::setBottomMargin(qreal m)
+{
+    const bool changed = bottomMargin() != m;
+    m_margins.setBottom(m);
+    m_isBottomMarginSet = true;
+    if (changed) {
+        invalidateItem();
+        emit bottomMarginChanged();
+    }
+}
+
+void QQuickLayoutAttached::resetBottomMargin()
+{
+    const bool changed = m_isBottomMarginSet && (m_defaultMargins != m_margins.bottom());
+    m_isBottomMarginSet = false;
+    if (changed) {
+        invalidateItem();
+        emit bottomMarginChanged();
     }
 }
 

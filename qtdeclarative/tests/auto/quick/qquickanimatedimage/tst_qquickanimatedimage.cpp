@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -70,6 +70,7 @@ private slots:
     void qtbug_16520();
     void progressAndStatusChanges();
     void playingAndPausedChanges();
+    void noCaching();
 };
 
 void tst_qquickanimatedimage::cleanup()
@@ -252,11 +253,11 @@ void tst_qquickanimatedimage::remote()
     QFETCH(bool, paused);
 
     TestHTTPServer server;
-    QVERIFY2(server.listen(14449), qPrintable(server.errorString()));
+    QVERIFY2(server.listen(), qPrintable(server.errorString()));
     server.serveDirectory(dataDirectory());
 
     QQmlEngine engine;
-    QQmlComponent component(&engine, QUrl("http://127.0.0.1:14449/" + fileName));
+    QQmlComponent component(&engine, server.url(fileName));
     QTRY_VERIFY(component.isReady());
 
     QQuickAnimatedImage *anim = qobject_cast<QQuickAnimatedImage *>(component.create());
@@ -317,7 +318,7 @@ void tst_qquickanimatedimage::invalidSource()
 void tst_qquickanimatedimage::sourceSizeChanges()
 {
     TestHTTPServer server;
-    QVERIFY2(server.listen(14449), qPrintable(server.errorString()));
+    QVERIFY2(server.listen(), qPrintable(server.errorString()));
     server.serveDirectory(dataDirectory());
 
     QQmlEngine engine;
@@ -357,19 +358,19 @@ void tst_qquickanimatedimage::sourceSizeChanges()
     QTRY_VERIFY(sourceSizeSpy.count() == 3);
 
     // Remote
-    ctxt->setContextProperty("srcImage", QUrl("http://127.0.0.1:14449/hearts.gif"));
+    ctxt->setContextProperty("srcImage", server.url("/hearts.gif"));
     QTRY_COMPARE(anim->status(), QQuickAnimatedImage::Ready);
     QTRY_VERIFY(sourceSizeSpy.count() == 4);
 
-    ctxt->setContextProperty("srcImage", QUrl("http://127.0.0.1:14449/hearts.gif"));
+    ctxt->setContextProperty("srcImage", server.url("/hearts.gif"));
     QTRY_COMPARE(anim->status(), QQuickAnimatedImage::Ready);
     QTRY_VERIFY(sourceSizeSpy.count() == 4);
 
-    ctxt->setContextProperty("srcImage", QUrl("http://127.0.0.1:14449/hearts_copy.gif"));
+    ctxt->setContextProperty("srcImage", server.url("/hearts_copy.gif"));
     QTRY_COMPARE(anim->status(), QQuickAnimatedImage::Ready);
     QTRY_VERIFY(sourceSizeSpy.count() == 4);
 
-    ctxt->setContextProperty("srcImage", QUrl("http://127.0.0.1:14449/colors.gif"));
+    ctxt->setContextProperty("srcImage", server.url("/colors.gif"));
     QTRY_COMPARE(anim->status(), QQuickAnimatedImage::Ready);
     QTRY_VERIFY(sourceSizeSpy.count() == 5);
 
@@ -383,7 +384,7 @@ void tst_qquickanimatedimage::sourceSizeChanges()
 void tst_qquickanimatedimage::qtbug_16520()
 {
     TestHTTPServer server;
-    QVERIFY2(server.listen(14449), qPrintable(server.errorString()));
+    QVERIFY2(server.listen(), qPrintable(server.errorString()));
     server.serveDirectory(dataDirectory());
 
     QQmlEngine engine;
@@ -395,7 +396,7 @@ void tst_qquickanimatedimage::qtbug_16520()
     QQuickAnimatedImage *anim = root->findChild<QQuickAnimatedImage*>("anim");
     QVERIFY(anim != 0);
 
-    anim->setProperty("source", "http://127.0.0.1:14449/stickman.gif");
+    anim->setProperty("source", server.urlString("/stickman.gif"));
     QTRY_VERIFY(anim->opacity() == 0);
     QTRY_VERIFY(anim->opacity() == 1);
 
@@ -406,7 +407,7 @@ void tst_qquickanimatedimage::qtbug_16520()
 void tst_qquickanimatedimage::progressAndStatusChanges()
 {
     TestHTTPServer server;
-    QVERIFY2(server.listen(14449), qPrintable(server.errorString()));
+    QVERIFY2(server.listen(), qPrintable(server.errorString()));
     server.serveDirectory(dataDirectory());
 
     QQmlEngine engine;
@@ -442,7 +443,7 @@ void tst_qquickanimatedimage::progressAndStatusChanges()
     QTRY_COMPARE(statusSpy.count(), 1);
 
     // Loading remote file
-    ctxt->setContextProperty("srcImage", "http://127.0.0.1:14449/stickman.gif");
+    ctxt->setContextProperty("srcImage", server.url("/stickman.gif"));
     QTRY_VERIFY(obj->status() == QQuickImage::Loading);
     QTRY_VERIFY(obj->progress() == 0.0);
     QTRY_VERIFY(obj->status() == QQuickImage::Ready);
@@ -528,6 +529,39 @@ void tst_qquickanimatedimage::playingAndPausedChanges()
 
     delete obj;
 }
+
+void tst_qquickanimatedimage::noCaching()
+{
+    QQuickView window, window_nocache;
+    window.setSource(testFileUrl("colors.qml"));
+    window_nocache.setSource(testFileUrl("colors_nocache.qml"));
+    window.show();
+    window_nocache.show();
+    QTest::qWaitForWindowExposed(&window);
+    QTest::qWaitForWindowExposed(&window_nocache);
+
+    QQuickAnimatedImage *anim = qobject_cast<QQuickAnimatedImage *>(window.rootObject());
+    QVERIFY(anim);
+
+    QQuickAnimatedImage *anim_nocache = qobject_cast<QQuickAnimatedImage *>(window_nocache.rootObject());
+    QVERIFY(anim_nocache);
+
+    QCOMPARE(anim->frameCount(), anim_nocache->frameCount());
+
+    // colors.gif only has 3 frames so this should be fast
+    for (int loops = 0; loops <= 2; ++loops) {
+        for (int frame = 0; frame < anim->frameCount(); ++frame) {
+            anim->setCurrentFrame(frame);
+            anim_nocache->setCurrentFrame(frame);
+
+            QImage image_cache = window.grabWindow();
+            QImage image_nocache = window_nocache.grabWindow();
+
+            QCOMPARE(image_cache, image_nocache);
+        }
+    }
+}
+
 QTEST_MAIN(tst_qquickanimatedimage)
 
 #include "tst_qquickanimatedimage.moc"

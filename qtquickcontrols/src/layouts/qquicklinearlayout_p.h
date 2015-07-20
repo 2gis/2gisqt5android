@@ -1,31 +1,34 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Quick Layouts module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL21$
+** $QT_BEGIN_LICENSE:LGPL3$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 or version 3 as published by the Free
-** Software Foundation and appearing in the file LICENSE.LGPLv21 and
-** LICENSE.LGPLv3 included in the packaging of this file. Please review the
-** following information to ensure the GNU Lesser General Public License
-** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
-** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPLv3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** GNU General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU
+** General Public License version 2.0 or later as published by the Free
+** Software Foundation and appearing in the file LICENSE.GPL included in
+** the packaging of this file. Please review the following information to
+** ensure the GNU General Public License version 2.0 requirements will be
+** met: http://www.gnu.org/licenses/gpl-2.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -62,8 +65,8 @@ public:
                                   QQuickItem *parent = 0);
 
     ~QQuickGridLayoutBase();
-    void componentComplete();
-    void invalidate(QQuickItem *childItem = 0);
+    void componentComplete() Q_DECL_OVERRIDE;
+    void invalidate(QQuickItem *childItem = 0) Q_DECL_OVERRIDE;
     Qt::Orientation orientation() const;
     void setOrientation(Qt::Orientation orientation);
     QSizeF sizeHint(Qt::SizeHint whichSizeHint) const Q_DECL_OVERRIDE;
@@ -77,11 +80,10 @@ protected:
     QQuickItem *itemAt(int index) const Q_DECL_OVERRIDE;
     int itemCount() const Q_DECL_OVERRIDE;
 
-    void rearrange(const QSizeF &size);
+    void rearrange(const QSizeF &size) Q_DECL_OVERRIDE;
     virtual void insertLayoutItems() {}
-    void removeLayoutItem(QQuickItem *item);
-    void itemChange(ItemChange change, const ItemChangeData &data);
-    void geometryChanged(const QRectF &newGeometry, const QRectF &oldGeometry);
+    void itemChange(ItemChange change, const ItemChangeData &data) Q_DECL_OVERRIDE;
+    void geometryChanged(const QRectF &newGeometry, const QRectF &oldGeometry) Q_DECL_OVERRIDE;
     bool shouldIgnoreItem(QQuickItem *child, QQuickLayoutAttached *&info, QSizeF *sizeHints);
 
 signals:
@@ -107,6 +109,8 @@ class QQuickGridLayoutBasePrivate : public QQuickLayoutPrivate
 public:
     QQuickGridLayoutBasePrivate() : m_disableRearrange(true)
                                     , m_isReady(false)
+                                    , m_rearranging(false)
+                                    , m_updateAfterRearrange(false)
                                     , m_layoutDirection(Qt::LeftToRight)
                                     {}
 
@@ -120,6 +124,9 @@ public:
     Qt::Orientation orientation;
     unsigned m_disableRearrange : 1;
     unsigned m_isReady : 1;
+    unsigned m_rearranging : 1;
+    unsigned m_updateAfterRearrange : 1;
+    QVector<QQuickItem *> m_invalidateAfterRearrange;
     Qt::LayoutDirection m_layoutDirection : 2;
 
     QSet<QQuickItem *> m_ignoredItems;

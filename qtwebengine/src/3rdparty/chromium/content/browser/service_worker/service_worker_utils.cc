@@ -6,59 +6,84 @@
 
 #include <string>
 
-#include "base/command_line.h"
 #include "base/logging.h"
-#include "content/public/common/content_switches.h"
-#include "url/gurl.h"
+#include "base/strings/string_util.h"
 
 namespace content {
 
-// static
-bool ServiceWorkerUtils::IsFeatureEnabled() {
-  static bool enabled = CommandLine::ForCurrentProcess()->HasSwitch(
-      switches::kEnableServiceWorker);
-  return enabled;
+namespace {
+
+const char kDisallowedCharacterErrorMessage[] =
+    "The scope/script URL includes disallowed escaped character.";
+const char kPathRestrictionErrorMessage[] =
+    "The scope must be under the directory of the script URL.";
+
+bool ContainsDisallowedCharacter(const GURL& url) {
+  std::string path = url.path();
+  DCHECK(base::IsStringUTF8(path));
+
+  // We should avoid these escaped characters in the path component because
+  // these can be handled differently depending on server implementation.
+  if (path.find("%2f") != std::string::npos ||
+      path.find("%2F") != std::string::npos) {
+    return true;
+  }
+  if (path.find("%5c") != std::string::npos ||
+      path.find("%5C") != std::string::npos) {
+    return true;
+  }
+  return false;
 }
+
+std::string GetDirectoryPath(const GURL& url) {
+  std::string path = url.path();
+  std::string directory_path =
+      path.substr(0, path.size() - url.ExtractFileName().size());
+  DCHECK(EndsWith(directory_path, "/", true));
+  return directory_path;
+}
+
+}  // namespace
 
 // static
 bool ServiceWorkerUtils::ScopeMatches(const GURL& scope, const GURL& url) {
   DCHECK(!scope.has_ref());
   DCHECK(!url.has_ref());
-  const std::string& scope_spec = scope.spec();
-  const std::string& url_spec = url.spec();
+  return StartsWithASCII(url.spec(), scope.spec(), true);
+}
 
-  size_t len = scope_spec.size();
-  if (len > 0 && scope_spec[len - 1] == '*')
-    return scope_spec.compare(0, len - 1, url_spec, 0, len - 1) == 0;
-  return scope_spec == url_spec;
+// static
+bool ServiceWorkerUtils::IsPathRestrictionSatisfied(
+    const GURL& scope,
+    const GURL& script_url,
+    std::string* error_message) {
+  DCHECK(scope.is_valid());
+  DCHECK(!scope.has_ref());
+  DCHECK(script_url.is_valid());
+  DCHECK(!script_url.has_ref());
+  DCHECK(error_message);
+
+  if (ContainsDisallowedCharacter(scope) ||
+      ContainsDisallowedCharacter(script_url)) {
+    *error_message = kDisallowedCharacterErrorMessage;
+    return false;
+  }
+
+  // |scope|'s path should be under the |script_url|'s directory.
+  if (!StartsWithASCII(scope.path(), GetDirectoryPath(script_url), true)) {
+    *error_message = kPathRestrictionErrorMessage;
+    return false;
+  }
+  return true;
 }
 
 bool LongestScopeMatcher::MatchLongest(const GURL& scope) {
   if (!ServiceWorkerUtils::ScopeMatches(scope, url_))
     return false;
-  if (match_.is_empty()) {
+  if (match_.is_empty() || match_.spec().size() < scope.spec().size()) {
     match_ = scope;
     return true;
   }
-
-  const std::string match_spec = match_.spec();
-  const std::string scope_spec = scope.spec();
-  if (match_spec.size() < scope_spec.size()) {
-    match_ = scope;
-    return true;
-  }
-
-  // If |scope| has the same length with |match_|, they are compared as strings.
-  // For example:
-  //   1) for a document "/foo", "/foo" is prioritized over "/fo*".
-  //   2) for a document "/f(1)", "/f(1*" is prioritized over "/f(1)".
-  // TODO(nhiroki): This isn't in the spec.
-  // (https://github.com/slightlyoff/ServiceWorker/issues/287)
-  if (match_spec.size() == scope_spec.size() && match_spec < scope_spec) {
-    match_ = scope;
-    return true;
-  }
-
   return false;
 }
 

@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQuick module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -54,9 +54,9 @@ class QQuickAnimatedSpriteMaterial : public QSGMaterial
 public:
     QQuickAnimatedSpriteMaterial();
     ~QQuickAnimatedSpriteMaterial();
-    virtual QSGMaterialType *type() const { static QSGMaterialType type; return &type; }
-    virtual QSGMaterialShader *createShader() const;
-    virtual int compare(const QSGMaterial *other) const
+    QSGMaterialType *type() const Q_DECL_OVERRIDE { static QSGMaterialType type; return &type; }
+    QSGMaterialShader *createShader() const Q_DECL_OVERRIDE;
+    int compare(const QSGMaterial *other) const Q_DECL_OVERRIDE
     {
         return this - static_cast<const QQuickAnimatedSpriteMaterial *>(other);
     }
@@ -100,7 +100,7 @@ public:
         setShaderSourceFile(QOpenGLShader::Fragment, QStringLiteral(":/items/shaders/sprite.frag"));
     }
 
-    virtual void updateState(const RenderState &state, QSGMaterial *newEffect, QSGMaterial *)
+    void updateState(const RenderState &state, QSGMaterial *newEffect, QSGMaterial *) Q_DECL_OVERRIDE
     {
         QQuickAnimatedSpriteMaterial *m = static_cast<QQuickAnimatedSpriteMaterial *>(newEffect);
         m->texture->bind();
@@ -113,14 +113,14 @@ public:
             program()->setUniformValue(m_matrix_id, state.combinedMatrix());
     }
 
-    virtual void initialize() {
+    void initialize() Q_DECL_OVERRIDE {
         m_matrix_id = program()->uniformLocation("qt_Matrix");
         m_opacity_id = program()->uniformLocation("qt_Opacity");
         m_animData_id = program()->uniformLocation("animData");
         m_animPos_id = program()->uniformLocation("animPos");
     }
 
-    virtual char const *const *attributeNames() const {
+    char const *const *attributeNames() const Q_DECL_OVERRIDE {
         static const char *attr[] = {
            "vPos",
            "vTex",
@@ -388,8 +388,8 @@ void QQuickAnimatedSprite::advance(int frames)
     //TODO-C: May not work when running - only when paused
     m_curFrame += frames;
     while (m_curFrame < 0)
-        m_curFrame += m_sprite->frames();
-    m_curFrame = m_curFrame % m_sprite->frames();
+        m_curFrame += m_spriteEngine->maxFrames();
+    m_curFrame = m_curFrame % m_spriteEngine->maxFrames();
     emit currentFrameChanged(m_curFrame);
 }
 
@@ -529,7 +529,6 @@ QSGGeometryNode* QQuickAnimatedSprite::buildNode()
     indices[5] = 2;
 
 
-    m_timestamp.start();
     m_node = new QSGGeometryNode();
     m_node->setGeometry(g);
     m_node->setMaterial(m_material);
@@ -574,43 +573,47 @@ void QQuickAnimatedSprite::prepareNextFrame()
     int timeInt = m_timestamp.elapsed() + m_pauseOffset;
     qreal time =  timeInt / 1000.;
 
-    double frameAt; //double just for modf
+    int frameAt;
     qreal progress = 0.0;
     int lastFrame = m_curFrame;
-    if (!m_paused) {
+    if (m_running && !m_paused) {
+        const int nColumns = int(m_sheetSize.width()) / m_spriteEngine->spriteWidth();
         //Advance State (keeps time for psuedostates)
         m_spriteEngine->updateSprites(timeInt);
 
         //Advance AnimatedSprite
         qreal animT = m_spriteEngine->spriteStart()/1000.0;
-        qreal frameCount = m_spriteEngine->spriteFrames();
-        qreal frameDuration = m_spriteEngine->spriteDuration()/frameCount;
+        const int frameCountInRow = m_spriteEngine->spriteFrames();
+        const qreal frameDuration = m_spriteEngine->spriteDuration()/frameCountInRow;
         if (frameDuration > 0) {
             qreal frame = (time - animT)/(frameDuration / 1000.0);
             bool lastLoop = m_loops > 0 && m_curLoop == m_loops-1;
             //don't visually interpolate for the last frame of the last loop
-            qreal max = lastLoop ? frameCount - qreal(1.0) : frameCount;
-            frame = qBound(qreal(0.0), frame, max);
-            progress = modf(frame,&frameAt);
-            if (m_curFrame > frameAt) //went around
+            const int max = lastLoop ? frameCountInRow - 1 : frameCountInRow;
+            frame = qBound(qreal(0.0), frame, qreal(max));
+            double intpart;
+            progress = std::modf(frame,&intpart);
+            frameAt = (int)intpart;
+            const int rowIndex = m_spriteEngine->spriteY()/frameHeight();
+            const int newFrame = rowIndex * nColumns + frameAt;
+            if (m_curFrame > newFrame) //went around
                 m_curLoop++;
-            m_curFrame = frameAt;
+            m_curFrame = newFrame;
         } else {
             m_curFrame++;
-            if (m_curFrame >= frameCount){
+            if (m_curFrame >= m_spriteEngine->maxFrames()) {    // maxFrames: total number of frames including all rows
                 m_curFrame = 0;
                 m_curLoop++;
-                m_spriteEngine->advance();
             }
-            frameAt = m_curFrame;
+            frameAt = m_curFrame % nColumns;
+            if (frameAt == 0)
+                m_spriteEngine->advance();
             progress = 0;
         }
         if (m_loops > 0 && m_curLoop >= m_loops) {
             frameAt = 0;
-            if (m_running) {
-                m_running = false;
-                emit runningChanged(false);
-            }
+            m_running = false;
+            emit runningChanged(false);
         }
     } else {
         frameAt = m_curFrame;

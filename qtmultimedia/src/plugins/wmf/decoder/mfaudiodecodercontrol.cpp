@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -41,7 +41,11 @@ MFAudioDecoderControl::MFAudioDecoderControl(QObject *parent)
     , m_resampler(0)
     , m_state(QAudioDecoder::StoppedState)
     , m_device(0)
+    , m_mfInputStreamID(0)
+    , m_mfOutputStreamID(0)
     , m_bufferReady(false)
+    , m_duration(0)
+    , m_position(0)
     , m_loadingSource(false)
     , m_mfOutputType(0)
     , m_convertSample(0)
@@ -53,8 +57,6 @@ MFAudioDecoderControl::MFAudioDecoderControl(QObject *parent)
         qCritical("MFAudioDecoderControl: Failed to create resampler(CLSID_CResamplerMediaObject)!");
         return;
     }
-    m_mfInputStreamID = 0;
-    m_mfOutputStreamID = 0;
     m_resampler->AddInputStreams(1, &m_mfInputStreamID);
 
     connect(m_sourceResolver, SIGNAL(mediaSourceReady()), this, SLOT(handleMediaSourceReady()));
@@ -193,17 +195,6 @@ void MFAudioDecoderControl::handleMediaSourceReady()
     if (mediaType) {
         m_sourceOutputFormat = m_audioFormat;
         QAudioFormat af = m_audioFormat;
-        GUID subType;
-        if (SUCCEEDED(mediaType->GetGUID(MF_MT_SUBTYPE, &subType))) {
-            if (subType == MFAudioFormat_Float) {
-                m_sourceOutputFormat.setSampleType(QAudioFormat::Float);
-            } else {
-                m_sourceOutputFormat.setSampleType(QAudioFormat::SignedInt);
-            }
-        }
-        if (m_sourceOutputFormat.sampleType() != QAudioFormat::Float) {
-            m_sourceOutputFormat.setByteOrder(QAudioFormat::LittleEndian);
-        }
 
         UINT32 val = 0;
         if (SUCCEEDED(mediaType->GetUINT32(MF_MT_AUDIO_NUM_CHANNELS, &val))) {
@@ -214,6 +205,20 @@ void MFAudioDecoderControl::handleMediaSourceReady()
         }
         if (SUCCEEDED(mediaType->GetUINT32(MF_MT_AUDIO_BITS_PER_SAMPLE, &val))) {
             m_sourceOutputFormat.setSampleSize(int(val));
+        }
+
+        GUID subType;
+        if (SUCCEEDED(mediaType->GetGUID(MF_MT_SUBTYPE, &subType))) {
+            if (subType == MFAudioFormat_Float) {
+                m_sourceOutputFormat.setSampleType(QAudioFormat::Float);
+            } else if (m_sourceOutputFormat.sampleSize() == 8) {
+                m_sourceOutputFormat.setSampleType(QAudioFormat::UnSignedInt);
+            } else {
+                m_sourceOutputFormat.setSampleType(QAudioFormat::SignedInt);
+            }
+        }
+        if (m_sourceOutputFormat.sampleType() != QAudioFormat::Float) {
+            m_sourceOutputFormat.setByteOrder(QAudioFormat::LittleEndian);
         }
 
         if (m_audioFormat.sampleType() != QAudioFormat::Float
@@ -384,7 +389,8 @@ void MFAudioDecoderControl::handleSampleAdded()
             s->Release();
         }
     }
-    m_cachedAudioBuffer = QAudioBuffer(abuf, m_audioFormat, qint64(sampleStartTime / 10000));
+    // WMF uses 100-nanosecond units, QAudioDecoder uses milliseconds, QAudioBuffer uses microseconds...
+    m_cachedAudioBuffer = QAudioBuffer(abuf, m_audioFormat, qint64(sampleStartTime / 10));
     m_bufferReady = true;
     emit positionChanged(m_position);
     emit bufferAvailableChanged(m_bufferReady);

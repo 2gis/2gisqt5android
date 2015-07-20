@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQuick module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -466,7 +466,7 @@ void QQuickLoader::setSourceComponent(QQmlComponent *comp)
     d->component = comp;
     if (comp) {
         if (QQmlData *ddata = QQmlData::get(comp))
-            d->componentStrongReference = ddata->jsWrapper.value();
+            d->componentStrongReference = ddata->jsWrapper;
     }
     d->loadingFromSource = false;
 
@@ -574,8 +574,8 @@ void QQuickLoader::setSource(QQmlV4Function *args)
     QUrl sourceUrl = d->resolveSourceUrl(args);
     if (!ipv->isUndefined()) {
         d->disposeInitialPropertyValues();
-        d->initialPropertyValues = ipv.asReturnedValue();
-        d->qmlGlobalForIpv = args->qmlGlobal();
+        d->initialPropertyValues.set(args->v4engine(), ipv);
+        d->qmlGlobalForIpv.set(args->v4engine(), args->qmlGlobal());
     }
 
     setSource(sourceUrl, false); // already cleared and set ipv above.
@@ -645,7 +645,7 @@ void QQuickLoaderPrivate::setInitialState(QObject *obj)
     Q_ASSERT(v4);
     QV4::Scope scope(v4);
     QV4::ScopedValue ipv(scope, initialPropertyValues.value());
-    d->initializeObjectWithInitialProperties(qmlGlobalForIpv, ipv, obj);
+    d->initializeObjectWithInitialProperties(*qmlGlobalForIpv.valueRef(), ipv, obj);
 }
 
 void QQuickLoaderIncubator::statusChanged(Status status)
@@ -951,7 +951,7 @@ QV4::ReturnedValue QQuickLoaderPrivate::extractInitialPropertyValues(QQmlV4Funct
         }
     }
 
-    return valuemap.asReturnedValue();
+    return valuemap->asReturnedValue();
 }
 
 #include <moc_qquickloader_p.cpp>

@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -44,6 +44,8 @@
 
 
 #include "qwindowsaudioinput.h"
+
+#include <QtCore/QDataStream>
 
 QT_BEGIN_NAMESPACE
 
@@ -296,18 +298,9 @@ bool QWindowsAudioInput::open()
 
     period_size = 0;
 
-    if (!settings.isValid()) {
+    if (!qt_convertFormat(settings, &wfx)) {
         qWarning("QAudioInput: open error, invalid format.");
-    } else if (settings.channelCount() <= 0) {
-        qWarning("QAudioInput: open error, invalid number of channels (%d).",
-                 settings.channelCount());
-    } else if (settings.sampleSize() <= 0) {
-        qWarning("QAudioInput: open error, invalid sample size (%d).",
-                 settings.sampleSize());
-    } else if (settings.sampleRate() < 8000 || settings.sampleRate() > 96000) {
-        qWarning("QAudioInput: open error, sample rate out of range (%d).", settings.sampleRate());
     } else if (buffer_size == 0) {
-
         buffer_size
                 = (settings.sampleRate()
                 * settings.channelCount()
@@ -327,20 +320,12 @@ bool QWindowsAudioInput::open()
 
     timeStamp.restart();
     elapsedTimeOffset = 0;
-    wfx.nSamplesPerSec = settings.sampleRate();
-    wfx.wBitsPerSample = settings.sampleSize();
-    wfx.nChannels = settings.channelCount();
-    wfx.cbSize = 0;
-
-    wfx.wFormatTag = WAVE_FORMAT_PCM;
-    wfx.nBlockAlign = (wfx.wBitsPerSample >> 3) * wfx.nChannels;
-    wfx.nAvgBytesPerSec = wfx.nBlockAlign * wfx.nSamplesPerSec;
 
     QDataStream ds(&m_device, QIODevice::ReadOnly);
     quint32 deviceId;
     ds >> deviceId;
 
-    if (waveInOpen(&hWaveIn, UINT_PTR(deviceId), &wfx,
+    if (waveInOpen(&hWaveIn, UINT_PTR(deviceId), &wfx.Format,
                 (DWORD_PTR)&waveInProc,
                 (DWORD_PTR) this,
                 CALLBACK_FUNCTION) != MMSYSERR_NOERROR) {
@@ -428,7 +413,7 @@ void QWindowsAudioInput::initMixer()
         return;
     mixerID = (HMIXEROBJ)mixerIntID;
 
-    // Get the Destination (Recording) Line Infomation
+    // Get the Destination (Recording) Line Information
     MIXERLINE mixerLine;
     mixerLine.cbStruct = sizeof(MIXERLINE);
     mixerLine.dwComponentType = MIXERLINE_COMPONENTTYPE_DST_WAVEIN;

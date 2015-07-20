@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Linguist of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -100,9 +100,6 @@ static const uchar arabicRules[] =
 static const uchar tagalogRules[] =
     { Q_LEQ, 1, Q_NEWRULE,
       Q_MOD_10 | Q_EQ, 4, Q_OR, Q_MOD_10 | Q_EQ, 6, Q_OR, Q_MOD_10 | Q_EQ, 9 };
-static const uchar catalanRules[] =
-    { Q_EQ, 1, Q_NEWRULE,
-      Q_LEAD_1000 | Q_EQ, 11 };
 
 static const char * const japaneseStyleForms[] = { "Universal Form", 0 };
 static const char * const englishStyleForms[] = { "Singular", "Plural", 0 };
@@ -128,7 +125,6 @@ static const char * const arabicForms[] =
     { "Nullar", "Singular", "Dual", "Minority Plural", "Plural", "Plural (100-102, ...)", 0 };
 static const char * const tagalogForms[] =
     { "Singular", "Plural (consonant-ended)", "Plural (vowel-ended)", 0 };
-static const char * const catalanForms[] = { "Singular", "Undecal (11)", "Plural", 0 };
 
 #define EOL QLocale::C
 
@@ -173,6 +169,7 @@ static const QLocale::Language englishStyleLanguages[] = {
     QLocale::Bengali,
     QLocale::Bihari,
     QLocale::Bulgarian,
+    QLocale::Catalan,
     QLocale::Cornish,
     QLocale::Corsican,
     QLocale::Danish,
@@ -301,7 +298,6 @@ static const QLocale::Language malteseLanguage[] = { QLocale::Maltese, EOL };
 static const QLocale::Language welshLanguage[] = { QLocale::Welsh, EOL };
 static const QLocale::Language arabicLanguage[] = { QLocale::Arabic, EOL };
 static const QLocale::Language tagalogLanguage[] = { QLocale::Tagalog, EOL };
-static const QLocale::Language catalanLanguage[] = { QLocale::Catalan, EOL };
 
 static const QLocale::Country frenchStyleCountries[] = {
     // keep synchronized with frenchStyleLanguages
@@ -357,8 +353,6 @@ static const NumerusTableEntry numerusTable[] = {
       "nplurals=6; plural=(n==0 ? 0 : n==1 ? 1 : n==2 ? 2 : (n%100>=3 && n%100<=10) ? 3 : n%100>=11 ? 4 : 5);" },
     { tagalogRules, sizeof(tagalogRules), tagalogForms, tagalogLanguage, 0,
       "nplurals=3; plural=(n==1 ? 0 : (n%10==4 || n%10==6 || n%10== 9) ? 1 : 2);" },
-    { catalanRules, sizeof(catalanRules), catalanForms, catalanLanguage, 0,
-      "nplurals=3; plural=(n==1 ? 0 : (n==11 || n/1000==11 || n/1000000==11 || n/1000000000==11) ? 1 : 2);" },
 };
 
 static const int NumerusTableSize = sizeof(numerusTable) / sizeof(numerusTable[0]);

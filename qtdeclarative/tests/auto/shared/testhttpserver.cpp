@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -87,9 +87,28 @@ TestHTTPServer::TestHTTPServer()
 
 }
 
-bool TestHTTPServer::listen(quint16 port)
+bool TestHTTPServer::listen()
 {
-    return server.listen(QHostAddress::LocalHost, port);
+    return server.listen(QHostAddress::LocalHost, 0);
+}
+
+QUrl TestHTTPServer::baseUrl() const
+{
+    QUrl url;
+    url.setScheme(QStringLiteral("http"));
+    url.setHost(QStringLiteral("127.0.0.1"));
+    url.setPort(server.serverPort());
+    return url;
+}
+
+QUrl TestHTTPServer::url(const QString &documentPath) const
+{
+    return baseUrl().resolved(documentPath);
+}
+
+QString TestHTTPServer::urlString(const QString &documentPath) const
+{
+    return url(documentPath).toString();
 }
 
 QString TestHTTPServer::errorString() const
@@ -117,6 +136,11 @@ void TestHTTPServer::addRedirect(const QString &filename, const QString &redirec
     redirects.insert(filename, redirectName);
 }
 
+void TestHTTPServer::registerFileNameForContentSubstitution(const QString &fileName)
+{
+    contentSubstitutedFileNames.insert(fileName);
+}
+
 bool TestHTTPServer::wait(const QUrl &expect, const QUrl &reply, const QUrl &body)
 {
     m_state = AwaitingHeader;
@@ -135,6 +159,8 @@ bool TestHTTPServer::wait(const QUrl &expect, const QUrl &reply, const QUrl &bod
         bodyData = bodyFile.readAll();
     }
 
+    const QByteArray serverHostUrl = QByteArrayLiteral("127.0.0.1:") + QByteArray::number(server.serverPort());
+
     QByteArray line;
     bool headers_done = false;
     while (!(line = expectFile.readLine()).isEmpty()) {
@@ -143,10 +169,12 @@ bool TestHTTPServer::wait(const QUrl &expect, const QUrl &reply, const QUrl &bod
             headers_done = true;
             continue;
         }
-        if (headers_done)
+        if (headers_done) {
             waitData.body.append(line);
-        else
+        } else {
+            line.replace("{{ServerHostUrl}}", serverHostUrl);
             waitData.headers.append(line);
+        }
     }
     /*
     while (waitData.endsWith('\n'))
@@ -277,6 +305,9 @@ bool TestHTTPServer::reply(QTcpSocket *socket, const QByteArray &fileName)
                 return true;
 
             QByteArray data = file.readAll();
+            if (contentSubstitutedFileNames.contains("/" + fileName)) {
+                data.replace(QByteArrayLiteral("{{ServerBaseUrl}}"), baseUrl().toString().toUtf8());
+            }
 
             QByteArray response = "HTTP/1.0 200 OK\r\nContent-type: text/html; charset=UTF-8\r\nContent-length: ";
             response += QByteArray::number(data.count());

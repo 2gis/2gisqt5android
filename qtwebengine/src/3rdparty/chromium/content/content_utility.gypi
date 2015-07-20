@@ -5,7 +5,7 @@
 {
   'dependencies': [
     '../base/base.gyp:base',
-    '../mojo/mojo.gyp:mojo_service_provider_bindings',
+    '../mojo/public/mojo_public.gyp:mojo_application_bindings',
   ],
   'sources': [
     'public/utility/content_utility_client.cc',

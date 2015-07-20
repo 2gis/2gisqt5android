@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQuick module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -75,7 +75,7 @@ QT_BEGIN_NAMESPACE
     }
     \endqml
     The \l role is set to \c Button to indicate the type of control.
-    \l Accessible.name is the most important information and bound to the text on the button.
+    \l {Accessible::}{name} is the most important information and bound to the text on the button.
     The name is a short and consise description of the control and should reflect the visual label.
     In this case it is not clear what the button does with the name only, so \l description contains
     an explanation.
@@ -123,7 +123,7 @@ QT_BEGIN_NAMESPACE
         \li All interactive elements
         \li \l focusable and \l focused
         \li All elements that the user can interact with should have focusable set to \c true and
-            set \l focus to \c true when they have the focus. This is important even for applications
+            set \c focus to \c true when they have the focus. This is important even for applications
             that run on touch-only devices since screen readers often implement a virtual focus that
             can be moved from item to item.
     \row
@@ -291,11 +291,59 @@ QT_BEGIN_NAMESPACE
 
     The corresponding handler is \c onDecreaseAction.
 */
+/*!
+    \qmlsignal QtQuick::Accessible::scrollUpAction()
+
+    This signal is emitted when a scroll up action is received from an assistive tool such as a screen-reader.
+
+    The corresponding handler is \c onScrollUpAction.
+*/
+/*!
+    \qmlsignal QtQuick::Accessible::scrollDownAction()
+
+    This signal is emitted when a scroll down action is received from an assistive tool such as a screen-reader.
+
+    The corresponding handler is \c onScrollDownAction.
+*/
+/*!
+    \qmlsignal QtQuick::Accessible::scrollLeftAction()
+
+    This signal is emitted when a scroll left action is received from an assistive tool such as a screen-reader.
+
+    The corresponding handler is \c onScrollLeftAction.
+*/
+/*!
+    \qmlsignal QtQuick::Accessible::scrollRightAction()
+
+    This signal is emitted when a scroll right action is received from an assistive tool such as a screen-reader.
+
+    The corresponding handler is \c onScrollRightAction.
+*/
+/*!
+    \qmlsignal QtQuick::Accessible::previousPageAction()
+
+    This signal is emitted when a previous page action is received from an assistive tool such as a screen-reader.
+
+    The corresponding handler is \c onPreviousPageAction.
+*/
+/*!
+    \qmlsignal QtQuick::Accessible::nextPageAction()
+
+    This signal is emitted when a next page action is received from an assistive tool such as a screen-reader.
+
+    The corresponding handler is \c onNextPageAction.
+*/
 
 QMetaMethod QQuickAccessibleAttached::sigPress;
 QMetaMethod QQuickAccessibleAttached::sigToggle;
 QMetaMethod QQuickAccessibleAttached::sigIncrease;
 QMetaMethod QQuickAccessibleAttached::sigDecrease;
+QMetaMethod QQuickAccessibleAttached::sigScrollUp;
+QMetaMethod QQuickAccessibleAttached::sigScrollDown;
+QMetaMethod QQuickAccessibleAttached::sigScrollLeft;
+QMetaMethod QQuickAccessibleAttached::sigScrollRight;
+QMetaMethod QQuickAccessibleAttached::sigPreviousPage;
+QMetaMethod QQuickAccessibleAttached::sigNextPage;
 
 QQuickAccessibleAttached::QQuickAccessibleAttached(QObject *parent)
     : QObject(parent), m_role(QAccessible::NoRole)
@@ -323,6 +371,12 @@ QQuickAccessibleAttached::QQuickAccessibleAttached(QObject *parent)
         sigToggle = QMetaMethod::fromSignal(&QQuickAccessibleAttached::toggleAction);
         sigIncrease = QMetaMethod::fromSignal(&QQuickAccessibleAttached::increaseAction);
         sigDecrease = QMetaMethod::fromSignal(&QQuickAccessibleAttached::decreaseAction);
+        sigScrollUp = QMetaMethod::fromSignal(&QQuickAccessibleAttached::scrollUpAction);
+        sigScrollDown = QMetaMethod::fromSignal(&QQuickAccessibleAttached::scrollDownAction);
+        sigScrollLeft = QMetaMethod::fromSignal(&QQuickAccessibleAttached::scrollLeftAction);
+        sigScrollRight = QMetaMethod::fromSignal(&QQuickAccessibleAttached::scrollRightAction);
+        sigPreviousPage = QMetaMethod::fromSignal(&QQuickAccessibleAttached::previousPageAction);
+        sigNextPage= QMetaMethod::fromSignal(&QQuickAccessibleAttached::nextPageAction);
     }
 }
 
@@ -359,7 +413,18 @@ bool QQuickAccessibleAttached::doAction(const QString &actionName)
         sig = &sigIncrease;
     else if (actionName == QAccessibleActionInterface::decreaseAction())
         sig = &sigDecrease;
-
+    else if (actionName == QAccessibleActionInterface::scrollUpAction())
+        sig = &sigScrollUp;
+    else if (actionName == QAccessibleActionInterface::scrollDownAction())
+        sig = &sigScrollDown;
+    else if (actionName == QAccessibleActionInterface::scrollLeftAction())
+        sig = &sigScrollLeft;
+    else if (actionName == QAccessibleActionInterface::scrollRightAction())
+        sig = &sigScrollRight;
+    else if (actionName == QAccessibleActionInterface::previousPageAction())
+        sig = &sigPreviousPage;
+    else if (actionName == QAccessibleActionInterface::nextPageAction())
+        sig = &sigNextPage;
     if (sig && isSignalConnected(*sig))
         return sig->invoke(this);
     return false;
@@ -375,6 +440,18 @@ void QQuickAccessibleAttached::availableActions(QStringList *actions) const
         actions->append(QAccessibleActionInterface::increaseAction());
     if (isSignalConnected(sigDecrease))
         actions->append(QAccessibleActionInterface::decreaseAction());
+    if (isSignalConnected(sigScrollUp))
+        actions->append(QAccessibleActionInterface::scrollUpAction());
+    if (isSignalConnected(sigScrollDown))
+        actions->append(QAccessibleActionInterface::scrollDownAction());
+    if (isSignalConnected(sigScrollLeft))
+        actions->append(QAccessibleActionInterface::scrollLeftAction());
+    if (isSignalConnected(sigScrollRight))
+        actions->append(QAccessibleActionInterface::scrollRightAction());
+    if (isSignalConnected(sigPreviousPage))
+        actions->append(QAccessibleActionInterface::previousPageAction());
+    if (isSignalConnected(sigNextPage))
+        actions->append(QAccessibleActionInterface::nextPageAction());
 }
 
 QT_END_NAMESPACE

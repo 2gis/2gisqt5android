@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -35,6 +35,7 @@
 #include <private/qv8engine_p.h>
 #include <private/qqmllist_p.h>
 #include <private/qv4objectproto_p.h>
+#include <qv4objectiterator_p.h>
 
 #include <private/qv4functionobject_p.h>
 
@@ -44,30 +45,26 @@ using namespace QV4;
 
 DEFINE_OBJECT_VTABLE(QmlListWrapper);
 
-QmlListWrapper::Data::Data(QV8Engine *engine)
-    : Object::Data(QV8Engine::getV4(engine))
-    , v8(engine)
+Heap::QmlListWrapper::QmlListWrapper(ExecutionEngine *engine)
+    : Heap::Object(engine)
 {
-    setVTable(staticVTable());
-
-    QV4::Scope scope(QV8Engine::getV4(engine));
+    QV4::Scope scope(engine);
     QV4::ScopedObject o(scope, this);
-    o->setArrayType(ArrayData::Custom);
+    o->setArrayType(Heap::ArrayData::Custom);
 }
 
-QmlListWrapper::Data::~Data()
+Heap::QmlListWrapper::~QmlListWrapper()
 {
 }
 
-ReturnedValue QmlListWrapper::create(QV8Engine *v8, QObject *object, int propId, int propType)
+ReturnedValue QmlListWrapper::create(ExecutionEngine *engine, QObject *object, int propId, int propType)
 {
     if (!object || propId == -1)
         return Encode::null();
 
-    ExecutionEngine *v4 = QV8Engine::getV4(v8);
-    Scope scope(v4);
+    Scope scope(engine);
 
-    Scoped<QmlListWrapper> r(scope, v4->memoryManager->alloc<QmlListWrapper>(v8));
+    Scoped<QmlListWrapper> r(scope, engine->memoryManager->alloc<QmlListWrapper>(engine));
     r->d()->object = object;
     r->d()->propertyType = propType;
     void *args[] = { &r->d()->property, 0 };
@@ -75,12 +72,11 @@ ReturnedValue QmlListWrapper::create(QV8Engine *v8, QObject *object, int propId,
     return r.asReturnedValue();
 }
 
-ReturnedValue QmlListWrapper::create(QV8Engine *v8, const QQmlListProperty<QObject> &prop, int propType)
+ReturnedValue QmlListWrapper::create(ExecutionEngine *engine, const QQmlListProperty<QObject> &prop, int propType)
 {
-    ExecutionEngine *v4 = QV8Engine::getV4(v8);
-    Scope scope(v4);
+    Scope scope(engine);
 
-    Scoped<QmlListWrapper> r(scope, v4->memoryManager->alloc<QmlListWrapper>(v8));
+    Scoped<QmlListWrapper> r(scope, engine->memoryManager->alloc<QmlListWrapper>(engine));
     r->d()->object = prop.object;
     r->d()->property = prop;
     r->d()->propertyType = propType;
@@ -92,15 +88,15 @@ QVariant QmlListWrapper::toVariant() const
     if (!d()->object)
         return QVariant();
 
-    return QVariant::fromValue(QQmlListReferencePrivate::init(d()->property, d()->propertyType, d()->v8->engine()));
+    return QVariant::fromValue(QQmlListReferencePrivate::init(d()->property, d()->propertyType, engine()->qmlEngine()));
 }
 
 
 ReturnedValue QmlListWrapper::get(Managed *m, String *name, bool *hasProperty)
 {
     Q_ASSERT(m->as<QmlListWrapper>());
-    QV4::ExecutionEngine *v4 = m->engine();
     QmlListWrapper *w = static_cast<QmlListWrapper *>(m);
+    QV4::ExecutionEngine *v4 = w->engine();
 
     if (name->equals(v4->id_length) && !w->d()->object.isNull()) {
         quint32 count = w->d()->property.count ? w->d()->property.count(&w->d()->property) : 0;
@@ -119,8 +115,8 @@ ReturnedValue QmlListWrapper::getIndexed(Managed *m, uint index, bool *hasProper
     Q_UNUSED(hasProperty);
 
     Q_ASSERT(m->as<QmlListWrapper>());
-    QV4::ExecutionEngine *v4 = m->engine();
     QmlListWrapper *w = static_cast<QmlListWrapper *>(m);
+    QV4::ExecutionEngine *v4 = w->engine();
 
     quint32 count = w->d()->property.count ? w->d()->property.count(&w->d()->property) : 0;
     if (index < count && w->d()->property.at) {
@@ -134,7 +130,7 @@ ReturnedValue QmlListWrapper::getIndexed(Managed *m, uint index, bool *hasProper
     return Primitive::undefinedValue().asReturnedValue();
 }
 
-void QmlListWrapper::put(Managed *m, String *name, const ValueRef value)
+void QmlListWrapper::put(Managed *m, String *name, const Value &value)
 {
     // doesn't do anything. Should we throw?
     Q_UNUSED(m);
@@ -142,15 +138,9 @@ void QmlListWrapper::put(Managed *m, String *name, const ValueRef value)
     Q_UNUSED(value);
 }
 
-void QmlListWrapper::destroy(Managed *that)
+void QmlListWrapper::advanceIterator(Managed *m, ObjectIterator *it, Heap::String **name, uint *index, Property *p, PropertyAttributes *attrs)
 {
-    Q_ASSERT(that->as<QmlListWrapper>());
-    static_cast<QmlListWrapper *>(that)->d()->~Data();
-}
-
-void QmlListWrapper::advanceIterator(Managed *m, ObjectIterator *it, String *&name, uint *index, Property *p, PropertyAttributes *attrs)
-{
-    name = (String *)0;
+    *name = (Heap::String *)0;
     *index = UINT_MAX;
     Q_ASSERT(m->as<QmlListWrapper>());
     QmlListWrapper *w = static_cast<QmlListWrapper *>(m);

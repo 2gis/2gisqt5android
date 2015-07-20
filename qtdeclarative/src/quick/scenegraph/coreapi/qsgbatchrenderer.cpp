@@ -1,8 +1,8 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2015 The Qt Company Ltd.
 ** Copyright (C) 2014 Jolla Ltd, author: <gunnar.sletta@jollamobile.com>
-** Contact: http://www.qt-project.org/legal
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQuick module of the Qt Toolkit.
 **
@@ -11,9 +11,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -24,8 +24,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -46,6 +46,7 @@
 #include <QtGui/QOpenGLFramebufferObject>
 #include <QtGui/QOpenGLVertexArrayObject>
 #include <QtGui/QOpenGLFunctions_1_0>
+#include <QtGui/QOpenGLFunctions_3_2_Core>
 
 #include <private/qquickprofiler_p.h>
 #include "qsgmaterialshader_p.h"
@@ -128,8 +129,9 @@ ShaderManager::Shader *ShaderManager::prepareMaterial(QSGMaterial *material)
     if (shader)
         return shader;
 
-    if (QSG_LOG_TIME_COMPILATION().isDebugEnabled() || QQuickProfiler::profilingSceneGraph())
+    if (QSG_LOG_TIME_COMPILATION().isDebugEnabled())
         qsg_renderer_timer.start();
+    Q_QUICK_SG_PROFILE_START(QQuickProfiler::SceneGraphContextFrame);
 
     QSGMaterialShader *s = material->createShader();
     QOpenGLContext *ctx = QOpenGLContext::currentContext();
@@ -159,8 +161,7 @@ ShaderManager::Shader *ShaderManager::prepareMaterial(QSGMaterial *material)
 
     qCDebug(QSG_LOG_TIME_COMPILATION, "shader compiled in %dms", (int) qsg_renderer_timer.elapsed());
 
-    Q_QUICK_SG_PROFILE(QQuickProfiler::SceneGraphContextFrame, (
-            qsg_renderer_timer.nsecsElapsed()));
+    Q_QUICK_SG_PROFILE_END(QQuickProfiler::SceneGraphContextFrame);
 
     rewrittenShaders[type] = shader;
     return shader;
@@ -173,8 +174,9 @@ ShaderManager::Shader *ShaderManager::prepareMaterialNoRewrite(QSGMaterial *mate
     if (shader)
         return shader;
 
-    if (QSG_LOG_TIME_COMPILATION().isDebugEnabled() || QQuickProfiler::profilingSceneGraph())
+    if (QSG_LOG_TIME_COMPILATION().isDebugEnabled())
         qsg_renderer_timer.start();
+    Q_QUICK_SG_PROFILE_START(QQuickProfiler::SceneGraphContextFrame);
 
     QSGMaterialShader *s = static_cast<QSGMaterialShader *>(material->createShader());
     context->compile(s, material);
@@ -190,8 +192,7 @@ ShaderManager::Shader *ShaderManager::prepareMaterialNoRewrite(QSGMaterial *mate
 
     qCDebug(QSG_LOG_TIME_COMPILATION, "shader compiled in %dms (no rewrite)", (int) qsg_renderer_timer.elapsed());
 
-    Q_QUICK_SG_PROFILE(QQuickProfiler::SceneGraphContextFrame, (
-            qsg_renderer_timer.nsecsElapsed()));
+    Q_QUICK_SG_PROFILE_END(QQuickProfiler::SceneGraphContextFrame);
     return shader;
 }
 
@@ -760,6 +761,10 @@ Renderer::Renderer(QSGRenderContext *ctx)
     , m_clipMatrixId(0)
     , m_currentClip(0)
     , m_currentClipType(NoClip)
+    , m_vertexUploadPool(256)
+#ifdef QSG_SEPARATE_INDEX_BUFFER
+    , m_indexUploadPool(64)
+#endif
     , m_vao(0)
     , m_visualizeMode(VisualizeNothing)
 {
@@ -817,6 +822,11 @@ Renderer::Renderer(QSGRenderContext *ctx)
 static void qsg_wipeBuffer(Buffer *buffer, QOpenGLFunctions *funcs)
 {
     funcs->glDeleteBuffers(1, &buffer->id);
+    // The free here is ok because we're in one of two situations.
+    // 1. We're using the upload pool in which case unmap will have set the
+    //    data pointer to 0 and calling free on 0 is ok.
+    // 2. We're using dedicated buffers because of visualization or IBO workaround
+    //    and the data something we malloced and must be freed.
     free(buffer->data);
 }
 
@@ -838,8 +848,8 @@ Renderer::~Renderer()
         for (int i=0; i<m_batchPool.size(); ++i) qsg_wipeBatch(m_batchPool.at(i), this);
     }
 
-    // The shadowtree
-    qDeleteAll(m_nodes.values());
+    foreach (Node *n, m_nodes.values())
+        m_nodeAllocator.release(n);
 
     // Remaining elements...
     for (int i=0; i<m_elementsToDelete.size(); ++i) {
@@ -847,7 +857,7 @@ Renderer::~Renderer()
         if (e->isRenderNode)
             delete static_cast<RenderNodeElement *>(e);
         else
-            delete e;
+            m_elementAllocator.release(e);
     }
 }
 
@@ -870,14 +880,26 @@ void Renderer::invalidateAndRecycleBatch(Batch *b)
  *
  * ref: http://www.opengl.org/wiki/Buffer_Object
  */
-void Renderer::map(Buffer *buffer, int byteSize)
+void Renderer::map(Buffer *buffer, int byteSize, bool isIndexBuf)
 {
-    if (buffer->size != byteSize) {
-        if (buffer->data)
-            free(buffer->data);
+    if (!m_context->hasBrokenIndexBufferObjects() && m_visualizeMode == VisualizeNothing) {
+        // Common case, use a shared memory pool for uploading vertex data to avoid
+        // excessive reevaluation
+        QDataBuffer<char> &pool =
+#ifdef QSG_SEPARATE_INDEX_BUFFER
+                isIndexBuf ? m_indexUploadPool : m_vertexUploadPool;
+#else
+                m_vertexUploadPool;
+        Q_UNUSED(isIndexBuf);
+#endif
+        if (byteSize > pool.size())
+            pool.resize(byteSize);
+        buffer->data = pool.data();
+    } else {
         buffer->data = (char *) malloc(byteSize);
-        buffer->size = byteSize;
     }
+    buffer->size = byteSize;
+
 }
 
 void Renderer::unmap(Buffer *buffer, bool isIndexBuf)
@@ -887,6 +909,10 @@ void Renderer::unmap(Buffer *buffer, bool isIndexBuf)
     GLenum target = isIndexBuf ? GL_ELEMENT_ARRAY_BUFFER : GL_ARRAY_BUFFER;
     glBindBuffer(target, buffer->id);
     glBufferData(target, buffer->size, buffer->data, m_bufferStrategy);
+
+    if (!m_context->hasBrokenIndexBufferObjects() && m_visualizeMode == VisualizeNothing) {
+        buffer->data = 0;
+    }
 }
 
 BatchRootInfo *Renderer::batchRootInfo(Node *node)
@@ -986,7 +1012,8 @@ void Renderer::nodeWasAdded(QSGNode *node, Node *shadowParent)
     if (node->isSubtreeBlocked())
         return;
 
-    Node *snode = new Node(node);
+    Node *snode = m_nodeAllocator.allocate();
+    snode->sgNode = node;
     m_nodes.insert(node, snode);
     if (shadowParent) {
         snode->parent = shadowParent;
@@ -994,7 +1021,8 @@ void Renderer::nodeWasAdded(QSGNode *node, Node *shadowParent)
     }
 
     if (node->type() == QSGNode::GeometryNodeType) {
-        snode->data = new Element(static_cast<QSGGeometryNode *>(node));
+        snode->data = m_elementAllocator.allocate();
+        snode->element()->setNode(static_cast<QSGGeometryNode *>(node));
 
     } else if (node->type() == QSGNode::ClipNodeType) {
         snode->data = new ClipBatchRootInfo;
@@ -1057,7 +1085,7 @@ void Renderer::nodeWasRemoved(Node *node)
     }
 
     Q_ASSERT(m_nodes.contains(node->sgNode));
-    delete m_nodes.take(node->sgNode);
+    m_nodeAllocator.release(m_nodes.take(node->sgNode));
 }
 
 void Renderer::turnNodeIntoBatchRoot(Node *node)
@@ -1240,8 +1268,8 @@ void Renderer::buildRenderLists(QSGNode *node)
     if (node->isSubtreeBlocked())
         return;
 
-    Q_ASSERT(m_nodes.contains(node));
     Node *shadowNode = m_nodes.value(node);
+    Q_ASSERT(shadowNode);
 
     if (node->type() == QSGNode::GeometryNodeType) {
         QSGGeometryNode *gn = static_cast<QSGGeometryNode *>(node);
@@ -1262,7 +1290,7 @@ void Renderer::buildRenderLists(QSGNode *node)
 
     } else if (node->type() == QSGNode::ClipNodeType || shadowNode->isBatchRoot) {
         Q_ASSERT(m_nodes.contains(node));
-        BatchRootInfo *info = batchRootInfo(m_nodes.value(node));
+        BatchRootInfo *info = batchRootInfo(shadowNode);
         if (node == m_partialRebuildRoot) {
             m_nextRenderOrder = info->firstOrder;
             QSGNODE_TRAVERSE(node)
@@ -1615,6 +1643,26 @@ void Renderer::prepareAlphaBatches()
 
 }
 
+static inline int qsg_fixIndexCount(int iCount, GLenum drawMode) {
+    switch (drawMode) {
+    case GL_TRIANGLE_STRIP:
+        // Merged triangle strips need to contain degenerate triangles at the beginning and end.
+        // One could save 2 uploaded ushorts here by ditching the padding for the front of the
+        // first and the end of the last, but for simplicity, we simply don't care.
+        // Those extra triangles will be skipped while drawing to preserve the strip's parity
+        // anyhow.
+        return iCount + 2;
+    case GL_LINES:
+        // For lines we drop the last vertex if the number of vertices is uneven.
+        return iCount - (iCount % 2);
+    case GL_TRIANGLES:
+        // For triangles we drop trailing vertices until the result is divisible by 3.
+        return iCount - (iCount % 3);
+    default:
+        return iCount;
+    }
+}
+
 /* These parameters warrant some explanation...
  *
  * vaOffset: The byte offset into the vertex data to the location of the
@@ -1645,8 +1693,8 @@ void Renderer::uploadMergedElement(Element *e, int vaOffset, char **vertexData, 
     if (((const QMatrix4x4_Accessor &) localx).flagBits == 1) {
         for (int i=0; i<vCount; ++i) {
             Pt *p = (Pt *) vdata;
-            p->x += ((QMatrix4x4_Accessor &) localx).m[3][0];
-            p->y += ((QMatrix4x4_Accessor &) localx).m[3][1];
+            p->x += ((const QMatrix4x4_Accessor &) localx).m[3][0];
+            p->y += ((const QMatrix4x4_Accessor &) localx).m[3][1];
             vdata += vSize;
         }
     } else if (((const QMatrix4x4_Accessor &) localx).flagBits > 1) {
@@ -1668,15 +1716,21 @@ void Renderer::uploadMergedElement(Element *e, int vaOffset, char **vertexData, 
     quint16 *indices = (quint16 *) *indexData;
 
     if (iCount == 0) {
+        iCount = vCount;
         if (g->drawingMode() == GL_TRIANGLE_STRIP)
             *indices++ = *iBase;
-        iCount = vCount;
+        else
+            iCount = qsg_fixIndexCount(iCount, g->drawingMode());
+
         for (int i=0; i<iCount; ++i)
             indices[i] = *iBase + i;
     } else {
         const quint16 *srcIndices = g->indexDataAsUShort();
         if (g->drawingMode() == GL_TRIANGLE_STRIP)
             *indices++ = *iBase + srcIndices[0];
+        else
+            iCount = qsg_fixIndexCount(iCount, g->drawingMode());
+
         for (int i=0; i<iCount; ++i)
             indices[i] = *iBase + srcIndices[i];
     }
@@ -1725,7 +1779,8 @@ void Renderer::uploadBatch(Batch *b)
         QSGGeometryNode *gn = b->first->node;
         QSGGeometry *g =  gn->geometry();
         QSGMaterial::Flags flags = gn->activeMaterial()->flags();
-        bool canMerge = (g->drawingMode() == GL_TRIANGLES || g->drawingMode() == GL_TRIANGLE_STRIP)
+        bool canMerge = (g->drawingMode() == GL_TRIANGLES || g->drawingMode() == GL_TRIANGLE_STRIP ||
+                         g->drawingMode() == GL_LINES || g->drawingMode() == GL_POINTS)
                         && b->positionAttribute >= 0
                         && g->indexType() == GL_UNSIGNED_SHORT
                         && (flags & (QSGMaterial::CustomCompileStep | QSGMaterial_FullMatrix)) == 0
@@ -1747,11 +1802,7 @@ void Renderer::uploadBatch(Batch *b)
             if (b->merged) {
                 if (iCount == 0)
                     iCount = eg->vertexCount();
-                // merged Triangle strips need to contain degenerate triangles at the beginning and end.
-                // One could save 2 ushorts here by ditching the padding for the front of the
-                // first and the end of the last, but for simplicity, we simply don't care.
-                if (g->drawingMode() == GL_TRIANGLE_STRIP)
-                    iCount += sizeof(quint16);
+                iCount = qsg_fixIndexCount(iCount, g->drawingMode());
             } else {
                 unmergedIndexSize += iCount * eg->sizeOfIndex();
             }
@@ -1787,7 +1838,7 @@ void Renderer::uploadBatch(Batch *b)
         }
 
 #ifdef QSG_SEPARATE_INDEX_BUFFER
-        map(&b->ibo, ibufferSize);
+        map(&b->ibo, ibufferSize, true);
 #else
         bufferSize += ibufferSize;
 #endif
@@ -1821,6 +1872,10 @@ void Renderer::uploadBatch(Batch *b)
                 verticesInSet  += e->node->geometry()->vertexCount();
                 if (verticesInSet > 0xffff) {
                     b->drawSets.last().indexCount = indicesInSet;
+                    if (g->drawingMode() == GL_TRIANGLE_STRIP) {
+                        b->drawSets.last().indices += 1 * sizeof(quint16);
+                        b->drawSets.last().indexCount -= 2;
+                    }
 #ifdef QSG_SEPARATE_INDEX_BUFFER
                     drawSetIndices = indexData - b->ibo.data;
 #else
@@ -1837,6 +1892,12 @@ void Renderer::uploadBatch(Batch *b)
                 e = e->nextInBatch;
             }
             b->drawSets.last().indexCount = indicesInSet;
+            // We skip the very first and very last degenerate triangles since they aren't needed
+            // and the first one would reverse the vertex ordering of the merged strips.
+            if (g->drawingMode() == GL_TRIANGLE_STRIP) {
+                b->drawSets.last().indices += 1 * sizeof(quint16);
+                b->drawSets.last().indexCount -= 2;
+            }
         } else {
             char *vboData = b->vbo.data;
 #ifdef QSG_SEPARATE_INDEX_BUFFER
@@ -1874,11 +1935,11 @@ void Renderer::uploadBatch(Batch *b)
                         if (attr.isVertexCoordinate)
                             dump << "* ";
                         for (int t=0; t<attr.tupleSize; ++t)
-                            dump << *(float *)(vd + offset + t * sizeof(float)) << " ";
+                            dump << *(const float *)(vd + offset + t * sizeof(float)) << " ";
                     } else if (attr.type == GL_UNSIGNED_BYTE) {
                         dump << "ubyte ";
                         for (int t=0; t<attr.tupleSize; ++t)
-                            dump << *(unsigned char *)(vd + offset + t * sizeof(unsigned char)) << " ";
+                            dump << *(const unsigned char *)(vd + offset + t * sizeof(unsigned char)) << " ";
                     }
                     dump << ") ";
                     offset += attr.tupleSize * size_of_type(attr.type);
@@ -2351,9 +2412,17 @@ void Renderer::renderUnmergedBatch(const Batch *batch)
             glLineWidth(g->lineWidth());
 #if !defined(QT_OPENGL_ES_2)
         else if (!QOpenGLContext::currentContext()->isOpenGLES() && g->drawingMode() == GL_POINTS) {
-            QOpenGLFunctions_1_0 *gl1funcs = QOpenGLContext::currentContext()->versionFunctions<QOpenGLFunctions_1_0>();
-            gl1funcs->initializeOpenGLFunctions();
-            gl1funcs->glPointSize(g->lineWidth());
+            QOpenGLFunctions_1_0 *gl1funcs = 0;
+            QOpenGLFunctions_3_2_Core *gl3funcs = 0;
+            if (QOpenGLContext::currentContext()->format().profile() == QSurfaceFormat::CoreProfile)
+                gl3funcs = QOpenGLContext::currentContext()->versionFunctions<QOpenGLFunctions_3_2_Core>();
+            else
+                gl1funcs = QOpenGLContext::currentContext()->versionFunctions<QOpenGLFunctions_1_0>();
+            Q_ASSERT(gl1funcs || gl3funcs);
+            if (gl1funcs)
+                gl1funcs->glPointSize(g->lineWidth());
+            else
+                gl3funcs->glPointSize(g->lineWidth());
         }
 #endif
 
@@ -2466,20 +2535,9 @@ void Renderer::deleteRemovedElements()
         if (e->isRenderNode)
             delete static_cast<RenderNodeElement *>(e);
         else
-            delete e;
+            m_elementAllocator.release(e);
     }
     m_elementsToDelete.reset();
-}
-
-void Renderer::preprocess()
-{
-    // Bind our VAO. It's important that we do this here as the
-    // QSGRenderer::preprocess() call may well do work that requires
-    // a bound VAO.
-    if (m_vao)
-        m_vao->bind();
-
-    QSGRenderer::preprocess();
 }
 
 void Renderer::render()
@@ -2507,6 +2565,9 @@ void Renderer::render()
 
         qDebug() << "Renderer::render()" << this << type;
     }
+
+    if (m_vao)
+        m_vao->bind();
 
     if (m_rebuild & (BuildRenderLists | BuildRenderListsForTaggedRoots)) {
         bool complete = (m_rebuild & BuildRenderLists) != 0;
@@ -2578,14 +2639,37 @@ void Renderer::render()
         m_zRange = 1.0 / (m_nextRenderOrder);
     }
 
+    int largestVBO = 0;
+#ifdef QSG_SEPARATE_INDEX_BUFFER
+    int largestIBO = 0;
+#endif
 
     if (Q_UNLIKELY(debug_upload())) qDebug() << "Uploading Opaque Batches:";
-    for (int i=0; i<m_opaqueBatches.size(); ++i)
-        uploadBatch(m_opaqueBatches.at(i));
+    for (int i=0; i<m_opaqueBatches.size(); ++i) {
+        Batch *b = m_opaqueBatches.at(i);
+        largestVBO = qMax(b->vbo.size, largestVBO);
+#ifdef QSG_SEPARATE_INDEX_BUFFER
+        largestIBO = qMax(b->ibo.size, largestIBO);
+#endif
+        uploadBatch(b);
+    }
 
     if (Q_UNLIKELY(debug_upload())) qDebug() << "Uploading Alpha Batches:";
-    for (int i=0; i<m_alphaBatches.size(); ++i)
-        uploadBatch(m_alphaBatches.at(i));
+    for (int i=0; i<m_alphaBatches.size(); ++i) {
+        Batch *b = m_alphaBatches.at(i);
+        uploadBatch(b);
+        largestVBO = qMax(b->vbo.size, largestVBO);
+#ifdef QSG_SEPARATE_INDEX_BUFFER
+        largestIBO = qMax(b->ibo.size, largestIBO);
+#endif
+    }
+
+    if (largestVBO * 2 < m_vertexUploadPool.size())
+        m_vertexUploadPool.resize(largestVBO * 2);
+#ifdef QSG_SEPARATE_INDEX_BUFFER
+    if (largestIBO * 2 < m_indexUploadPool.size())
+        m_indexUploadPool.resize(largestIBO * 2);
+#endif
 
     renderBatches();
 
@@ -2709,7 +2793,8 @@ public:
     int color;
     int matrix;
     int rotation;
-    int tweak;
+    int pattern;
+    int projection;
 };
 
 void Renderer::visualizeDrawGeometry(const QSGGeometry *g)
@@ -2742,8 +2827,7 @@ void Renderer::visualizeBatch(Batch *b)
     if (b->root)
         matrix = matrix * qsg_matrixForRoot(b->root);
 
-    QRect viewport = viewportRect();
-    shader->setUniformValue(shader->tweak, viewport.width(), viewport.height(), b->merged ? 0 : 1, 0);
+    shader->setUniformValue(shader->pattern, float(b->merged ? 0 : 1));
 
     QColor color = QColor::fromHsvF((rand() & 1023) / 1023.0, 1.0, 1.0);
     float cr = color.redF();
@@ -2815,7 +2899,7 @@ void Renderer::visualizeChangesPrepare(Node *n, uint parentChanges)
 void Renderer::visualizeChanges(Node *n)
 {
 
-    if (n->type() == QSGNode::GeometryNodeType && m_visualizeChanceSet.contains(n)) {
+    if (n->type() == QSGNode::GeometryNodeType && n->element()->batch && m_visualizeChanceSet.contains(n)) {
         uint dirty = m_visualizeChanceSet.value(n);
         bool tinted = (dirty & QSGNODE_DIRTY_PARENT) != 0;
 
@@ -2826,9 +2910,7 @@ void Renderer::visualizeChanges(Node *n)
         float cg = color.greenF() * ca;
         float cb = color.blueF() * ca;
         shader->setUniformValue(shader->color, cr, cg, cb, ca);
-
-        QRect viewport = viewportRect();
-        shader->setUniformValue(shader->tweak, viewport.width(), viewport.height(), tinted ? 0.5 : 0, 0);
+        shader->setUniformValue(shader->pattern, float(tinted ? 0.5 : 0));
 
         QSGGeometryNode *gn = static_cast<QSGGeometryNode *>(n->sgNode);
 
@@ -2852,7 +2934,7 @@ void Renderer::visualizeChanges(Node *n)
 
 void Renderer::visualizeOverdraw_helper(Node *node)
 {
-    if (node->type() == QSGNode::GeometryNodeType) {
+    if (node->type() == QSGNode::GeometryNodeType && node->element()->batch) {
         VisualizeShader *shader = static_cast<VisualizeShader *>(m_shaderManager->visualizeProgram);
         QSGGeometryNode *gn = static_cast<QSGGeometryNode *>(node->sgNode);
 
@@ -2880,10 +2962,8 @@ void Renderer::visualizeOverdraw_helper(Node *node)
 void Renderer::visualizeOverdraw()
 {
     VisualizeShader *shader = static_cast<VisualizeShader *>(m_shaderManager->visualizeProgram);
-    shader->setUniformValue(shader->color, 0.5, 0.5, 1, 1);
-
-    QRect viewport = viewportRect();
-    shader->setUniformValue(shader->tweak, viewport.width(), viewport.height(), 0, 1);
+    shader->setUniformValue(shader->color, 0.5f, 0.5f, 1.0f, 1.0f);
+    shader->setUniformValue(shader->projection, 1);
 
     glBlendFunc(GL_ONE, GL_ONE);
 
@@ -2891,7 +2971,7 @@ void Renderer::visualizeOverdraw()
     step += static_cast<float>(M_PI * 2 / 1000.);
     if (step > M_PI * 2)
         step = 0;
-    float angle = 80.0 * sin(step);
+    float angle = 80.0 * std::sin(step);
 
     QMatrix4x4 xrot; xrot.rotate(20, 1, 0, 0);
     QMatrix4x4 zrot; zrot.rotate(angle, 0, 0, 1);
@@ -2963,7 +3043,8 @@ void Renderer::visualize()
         prog->link();
         prog->bind();
         prog->color = prog->uniformLocation("color");
-        prog->tweak = prog->uniformLocation("tweak");
+        prog->pattern = prog->uniformLocation("pattern");
+        prog->projection = prog->uniformLocation("projection");
         prog->matrix = prog->uniformLocation("matrix");
         prog->rotation = prog->uniformLocation("rotation");
         m_shaderManager->visualizeProgram = prog;
@@ -2973,7 +3054,6 @@ void Renderer::visualize()
     VisualizeShader *shader = static_cast<VisualizeShader *>(m_shaderManager->visualizeProgram);
 
     glDisable(GL_DEPTH_TEST);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     glEnable(GL_BLEND);
     glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
     glEnableVertexAttribArray(0);
@@ -2983,10 +3063,11 @@ void Renderer::visualize()
     if (m_visualizeMode == VisualizeBatches)
         bgOpacity = 1.0;
     float v[] = { -1, 1,   1, 1,   -1, -1,   1, -1 };
-    shader->setUniformValue(shader->color, 0, 0, 0, bgOpacity);
+    shader->setUniformValue(shader->color, 0.0f, 0.0f, 0.0f, bgOpacity);
     shader->setUniformValue(shader->matrix, QMatrix4x4());
     shader->setUniformValue(shader->rotation, QMatrix4x4());
-    shader->setUniformValue(shader->tweak, 0, 0, 0, 0);
+    shader->setUniformValue(shader->pattern, 0.0f);
+    shader->setUniformValue(shader->projection, false);
     glVertexAttribPointer(0, 2, GL_FLOAT, false, 0, v);
     glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 
@@ -2995,9 +3076,8 @@ void Renderer::visualize()
         for (int i=0; i<m_opaqueBatches.size(); ++i) visualizeBatch(m_opaqueBatches.at(i));
         for (int i=0; i<m_alphaBatches.size(); ++i) visualizeBatch(m_alphaBatches.at(i));
     } else if (m_visualizeMode == VisualizeClipping) {
-        QRect viewport = viewportRect();
-        shader->setUniformValue(shader->tweak, viewport.width(), viewport.height(), 0.5, 0);
-        shader->setUniformValue(shader->color, GLfloat(0.2), 0, 0, GLfloat(0.2));
+        shader->setUniformValue(shader->pattern, 0.5f);
+        shader->setUniformValue(shader->color, 0.2f, 0.0f, 0.0f, 0.2f);
         visualizeClipping(rootNode());
     } else if (m_visualizeMode == VisualizeChanges) {
         visualizeChanges(m_nodes.value(rootNode()));

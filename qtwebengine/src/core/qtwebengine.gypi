@@ -8,6 +8,7 @@
     'dependencies': [
       '<(chromium_src_dir)/base/base.gyp:base',
       '<(chromium_src_dir)/base/third_party/dynamic_annotations/dynamic_annotations.gyp:dynamic_annotations',
+      '<(chromium_src_dir)/components/components.gyp:error_page_renderer',
       '<(chromium_src_dir)/components/components.gyp:visitedlink_browser',
       '<(chromium_src_dir)/components/components.gyp:visitedlink_renderer',
       '<(chromium_src_dir)/content/content.gyp:content',
@@ -17,8 +18,7 @@
       '<(chromium_src_dir)/content/content.gyp:content_gpu',
       '<(chromium_src_dir)/content/content.gyp:content_renderer',
       '<(chromium_src_dir)/content/content.gyp:content_utility',
-      '<(chromium_src_dir)/content/content.gyp:content_worker',
-      '<(chromium_src_dir)/content/content_resources.gyp:content_resources',
+      '<(chromium_src_dir)/content/app/resources/content_resources.gyp:content_resources',
       '<(chromium_src_dir)/ipc/ipc.gyp:ipc',
       '<(chromium_src_dir)/media/media.gyp:media',
       '<(chromium_src_dir)/net/net.gyp:net',
@@ -54,18 +54,8 @@
           '<(chromium_src_dir)/base/allocator/allocator.gyp:allocator',
         ],
       }],
-      # embedded_android and embedded_linux need some additional options.
-      ['qt_os=="embedded_linux" or qt_os=="embedded_android"', {
-        'conditions': [
-          ['qt_os=="embedded_android"', {
-            'dependencies': [
-              '<(chromium_src_dir)/ui/ozone/ozone.gyp:ozone_base',
-              '<(chromium_src_dir)/third_party/ashmem/ashmem.gyp:ashmem',
-              '<(chromium_src_dir)/third_party/freetype/freetype.gyp:ft2',
-              '<(chromium_src_dir)/third_party/android_tools/ndk/android_tools_ndk.gyp:cpu_features',
-            ],
-          }],
-        ],
+      # embedded_linux need some additional options.
+      ['qt_os=="embedded_linux"', {
         'configurations': {
           'Debug_Base': {
             # Reduce the binary size.
@@ -102,7 +92,7 @@
           },
         },
         # TODO(jschuh): crbug.com/167187 fix size_t to int truncations.
-        'msvs_disabled_warnings': [ 4267, ],
+        'msvs_disabled_warnings': [ 4267, 4996, ],
       }],  # OS=="win"
       ['OS=="linux"', {
         'dependencies': [

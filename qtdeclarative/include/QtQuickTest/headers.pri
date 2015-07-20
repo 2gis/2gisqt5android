@@ -2,4 +2,5 @@ SYNCQT.HEADER_FILES = quicktest.h quicktestglobal.h ../../include/QtQuickTest/qt
 SYNCQT.HEADER_CLASSES = ../../include/QtQuickTest/QtQuickTestVersion 
 SYNCQT.PRIVATE_HEADER_FILES = qtestoptions_p.h quicktestevent_p.h quicktestresult_p.h 
 SYNCQT.QPA_HEADER_FILES = 
+SYNCQT.CLEAN_HEADER_FILES = quicktest.h quicktestglobal.h 
 SYNCQT.INJECTIONS = 

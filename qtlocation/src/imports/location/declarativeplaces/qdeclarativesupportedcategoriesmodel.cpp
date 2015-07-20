@@ -1,31 +1,35 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2014 Aaron McCarthy <mccarthy.aaron@gmail.com>
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtLocation module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL21$
+** $QT_BEGIN_LICENSE:LGPL3$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 or version 3 as published by the Free
-** Software Foundation and appearing in the file LICENSE.LGPLv21 and
-** LICENSE.LGPLv3 included in the packaging of this file. Please review the
-** following information to ensure the GNU Lesser General Public License
-** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
-** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPLv3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** GNU General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU
+** General Public License version 2.0 or later as published by the Free
+** Software Foundation and appearing in the file LICENSE.GPL included in
+** the packaging of this file. Please review the following information to
+** ensure the GNU General Public License version 2.0 requirements will be
+** met: http://www.gnu.org/licenses/gpl-2.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -49,7 +53,7 @@ QT_USE_NAMESPACE
     \inqmlmodule QtLocation
     \ingroup qml-QtLocation5-places
     \ingroup qml-QtLocation5-places-models
-    \since Qt Location 5.0
+    \since Qt Location 5.5
 
     \brief The CategoryModel type provides a model of the categories supported by a \l Plugin.
 
@@ -78,7 +82,7 @@ QT_USE_NAMESPACE
     The following example displays a flat list of all available categories:
 
     \snippet declarative/places.qml QtQuick import
-    \snippet declarative/places.qml QtLocation import
+    \snippet declarative/maps.qml QtLocation import
     \codeline
     \snippet declarative/places.qml CategoryView
 
@@ -109,7 +113,7 @@ QT_USE_NAMESPACE
 /*!
     \qmlmethod string QtLocation::CategoryModel::errorString() const
 
-    This read-only property holds the textual presentation of latest category model error.
+    This read-only property holds the textual presentation of the latest category model error.
     If no error has occurred, an empty string is returned.
 
     An empty string may also be returned if an error occurred which has no associated
@@ -319,21 +323,21 @@ void QDeclarativeSupportedCategoriesModel::replyFinished()
     if (!m_response)
         return;
 
+    m_response->deleteLater();
+
     if (m_response->error() == QPlaceReply::NoError) {
         m_errorString.clear();
 
-        m_response->deleteLater();
         m_response = 0;
 
         updateLayout();
         setStatus(QDeclarativeSupportedCategoriesModel::Ready);
     } else {
-        m_errorString = m_response->errorString();
+        const QString errorString = m_response->errorString();
 
-        m_response->deleteLater();
         m_response = 0;
 
-        setStatus(QDeclarativeSupportedCategoriesModel::Error);
+        setStatus(Error, errorString);
     }
 }
 
@@ -343,6 +347,9 @@ void QDeclarativeSupportedCategoriesModel::replyFinished()
 void QDeclarativeSupportedCategoriesModel::addedCategory(const QPlaceCategory &category,
                                                          const QString &parentId)
 {
+    if (m_response)
+        return;
+
     if (!m_categoriesTree.contains(parentId))
         return;
 
@@ -376,6 +383,9 @@ void QDeclarativeSupportedCategoriesModel::addedCategory(const QPlaceCategory &c
 void QDeclarativeSupportedCategoriesModel::updatedCategory(const QPlaceCategory &category,
                                                            const QString &parentId)
 {
+    if (m_response)
+        return;
+
     QString categoryId = category.categoryId();
 
     if (!m_categoriesTree.contains(parentId))
@@ -440,6 +450,9 @@ void QDeclarativeSupportedCategoriesModel::updatedCategory(const QPlaceCategory 
 */
 void QDeclarativeSupportedCategoriesModel::removedCategory(const QString &categoryId, const QString &parentId)
 {
+    if (m_response)
+        return;
+
     if (!m_categoriesTree.contains(categoryId) || !m_categoriesTree.contains(parentId))
         return;
 

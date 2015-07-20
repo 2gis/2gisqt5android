@@ -10,9 +10,13 @@
     ['OS != "ios"', {
       'targets': [
         {
+          # GN version: //webkit/common/gpu
           'target_name': 'webkit_gpu',
           'type': '<(component)',
-          'variables': { 'enable_wexit_time_destructors': 1, },
+          'variables': {
+            'chromium_code': 1,
+            'enable_wexit_time_destructors': 1,
+          },
           'dependencies': [
             '<(DEPTH)/base/base.gyp:base',
             '<(DEPTH)/cc/cc.gyp:cc',
@@ -24,13 +28,15 @@
             '<(DEPTH)/gpu/gpu.gyp:gl_in_process_context',
             '<(DEPTH)/gpu/skia_bindings/skia_bindings.gyp:gpu_skia_bindings',
             '<(DEPTH)/skia/skia.gyp:skia',
+            '<(DEPTH)/third_party/khronos/khronos.gyp:khronos_headers',
             '<(DEPTH)/third_party/WebKit/public/blink.gyp:blink_minimal',
-            '<(angle_path)/src/build_angle.gyp:translator',
+            '<(angle_path)/src/angle.gyp:translator',
             '<(DEPTH)/ui/gl/gl.gyp:gl',
             '<(DEPTH)/ui/gfx/gfx.gyp:gfx',
             '<(DEPTH)/ui/gfx/gfx.gyp:gfx_geometry',
           ],
           'export_dependent_settings': [
+            '<(DEPTH)/third_party/khronos/khronos.gyp:khronos_headers',
             '<(DEPTH)/gpu/gpu.gyp:gles2_implementation',
           ],
           'sources': [

@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Mobility Components.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -43,7 +43,7 @@
 #include <QtCore/qbuffer.h>
 
 #include "mfplayercontrol.h"
-#ifndef Q_WS_SIMULATOR
+#if defined(HAVE_WIDGETS) && !defined(Q_WS_SIMULATOR)
 #include "evr9videowindowcontrol.h"
 #endif
 #include "mfvideorenderercontrol.h"
@@ -140,7 +140,7 @@ void MFPlayerSession::close()
 
     if (m_playerService->videoRendererControl()) {
         m_playerService->videoRendererControl()->releaseActivate();
-#ifndef Q_WS_SIMULATOR
+#if defined(HAVE_WIDGETS) && !defined(Q_WS_SIMULATOR)
     } else if (m_playerService->videoWindowControl()) {
         m_playerService->videoWindowControl()->releaseActivate();
 #endif
@@ -404,7 +404,7 @@ IMFTopologyNode* MFPlayerSession::addOutputNode(IMFStreamDescriptor *streamDesc,
                 mediaType = Video;
                 if (m_playerService->videoRendererControl()) {
                     activate = m_playerService->videoRendererControl()->createActivate();
-#ifndef Q_WS_SIMULATOR
+#if defined(HAVE_WIDGETS) && !defined(Q_WS_SIMULATOR)
                 } else if (m_playerService->videoWindowControl()) {
                     activate = m_playerService->videoWindowControl()->createActivate();
 #endif
@@ -556,7 +556,10 @@ QAudioFormat MFPlayerSession::audioFormatForMFMediaType(IMFMediaType *mediaType)
     format.setSampleSize(wfx->wBitsPerSample);
     format.setCodec("audio/pcm");
     format.setByteOrder(QAudioFormat::LittleEndian);
-    format.setSampleType(QAudioFormat::SignedInt);
+    if (format.sampleSize() == 8)
+        format.setSampleType(QAudioFormat::UnSignedInt);
+    else
+        format.setSampleType(QAudioFormat::SignedInt);
 
     CoTaskMemFree(wfx);
     return format;
@@ -1296,7 +1299,7 @@ void MFPlayerSession::commitRateChange(qreal rate, BOOL isThin)
             // (which might be earlier than the last decoded key frame)
             resetPosition = true;
         } else if (cmdNow == CmdPause) {
-            // If paused, dont reset the position until we resume, otherwise
+            // If paused, don't reset the position until we resume, otherwise
             // a new frame will be rendered
             m_presentationClock->GetCorrelatedTime(0, &hnsClockTime, &hnsSystemTime);
             m_request.setCommand(CmdSeekResume);
@@ -1577,7 +1580,7 @@ void MFPlayerSession::handleSessionEvent(IMFMediaEvent *sessionEvent)
         }
 
         updatePendingCommands(CmdStart);
-#ifndef Q_WS_SIMULATOR
+#if defined(HAVE_WIDGETS) && !defined(Q_WS_SIMULATOR)
         // playback started, we can now set again the procAmpValues if they have been
         // changed previously (these are lost when loading a new media)
         if (m_playerService->videoWindowControl()) {
@@ -1721,10 +1724,17 @@ void MFPlayerSession::updatePendingCommands(Command command)
     if (m_state.command != command || m_pendingState == NoPending)
         return;
 
-    // The current pending command has completed.
+    // Seek while paused completed
     if (m_pendingState == SeekPending && m_state.prevCmd == CmdPause) {
         m_pendingState = NoPending;
-        m_state.setCommand(CmdPause);
+        // A seek operation actually restarts playback. If scrubbing is possible, playback rate
+        // is set to 0.0 at this point and we just need to reset the current state to Pause.
+        // If scrubbing is not possible, the playback rate was not changed and we explicitly need
+        // to re-pause playback.
+        if (!canScrub())
+            pause();
+        else
+            m_state.setCommand(CmdPause);
     }
 
     m_pendingState = NoPending;

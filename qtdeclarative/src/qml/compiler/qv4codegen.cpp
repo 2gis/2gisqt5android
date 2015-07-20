@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -538,7 +538,7 @@ IR::Expr *Codegen::subscript(IR::Expr *base, IR::Expr *index)
 
 IR::Expr *Codegen::argument(IR::Expr *expr)
 {
-    if (expr && !expr->asTemp() && !expr->asArgLocal()) {
+    if (expr && !expr->asTemp()) {
         const unsigned t = _block->newTemp();
         move(_block->TEMP(t), expr);
         expr = _block->TEMP(t);
@@ -1965,7 +1965,7 @@ int Codegen::defineFunction(const QString &name, AST::Node *ast,
     // variables in global code are properties of the global context object, not locals as with other functions.
     if (_env->compilationMode == FunctionCode || _env->compilationMode == QmlBinding) {
         unsigned t = 0;
-        for (Environment::MemberMap::iterator it = _env->members.begin(); it != _env->members.end(); ++it) {
+        for (Environment::MemberMap::iterator it = _env->members.begin(), end = _env->members.end(); it != end; ++it) {
             const QString &local = it.key();
             function->LOCAL(local);
             (*it).index = t;
@@ -1984,7 +1984,7 @@ int Codegen::defineFunction(const QString &name, AST::Node *ast,
         }
 
         IR::ExprList *args = 0;
-        for (Environment::MemberMap::const_iterator it = _env->members.constBegin(); it != _env->members.constEnd(); ++it) {
+        for (Environment::MemberMap::const_iterator it = _env->members.constBegin(), cend = _env->members.constEnd(); it != cend; ++it) {
             const QString &local = it.key();
             IR::ExprList *next = function->New<IR::ExprList>();
             next->expr = entryBlock->NAME(local, 0, 0);
@@ -2448,7 +2448,8 @@ bool Codegen::visit(SwitchStatement *ast)
     IR::BasicBlock *switchend = _function->newBasicBlock(exceptionHandler());
 
     if (ast->block) {
-        Result lhs = expression(ast->expression);
+        int lhs = _block->newTemp();
+        move(_block->TEMP(lhs), *expression(ast->expression));
         IR::BasicBlock *switchcond = _function->newBasicBlock(exceptionHandler());
         _block->JUMP(switchcond);
         IR::BasicBlock *previousBlock = 0;
@@ -2510,7 +2511,7 @@ bool Codegen::visit(SwitchStatement *ast)
             Result rhs = expression(clause->expression);
             IR::BasicBlock *iftrue = blockMap[clause];
             IR::BasicBlock *iffalse = _function->newBasicBlock(exceptionHandler());
-            setLocation(cjump(binop(IR::OpStrictEqual, *lhs, *rhs), iftrue, iffalse), clause->caseToken);
+            setLocation(cjump(binop(IR::OpStrictEqual, _block->TEMP(lhs), *rhs), iftrue, iffalse), clause->caseToken);
             _block = iffalse;
         }
 
@@ -2519,7 +2520,7 @@ bool Codegen::visit(SwitchStatement *ast)
             Result rhs = expression(clause->expression);
             IR::BasicBlock *iftrue = blockMap[clause];
             IR::BasicBlock *iffalse = _function->newBasicBlock(exceptionHandler());
-            setLocation(cjump(binop(IR::OpStrictEqual, *lhs, *rhs), iftrue, iffalse), clause->caseToken);
+            setLocation(cjump(binop(IR::OpStrictEqual, _block->TEMP(lhs), *rhs), iftrue, iffalse), clause->caseToken);
             _block = iffalse;
         }
 
@@ -2841,6 +2842,11 @@ QList<QQmlJS::DiagnosticMessage> Codegen::errors() const
 QList<QQmlError> Codegen::qmlErrors() const
 {
     QList<QQmlError> qmlErrors;
+
+    // Short circuit to avoid costly (de)heap allocation of QUrl if there are no errors.
+    if (_errors.size() == 0)
+        return qmlErrors;
+
     qmlErrors.reserve(_errors.size());
 
     QUrl url(_fileNameIsUrl ? QUrl(_module->fileName) : QUrl::fromLocalFile(_module->fileName));
@@ -2861,7 +2867,7 @@ void RuntimeCodegen::throwSyntaxError(const AST::SourceLocation &loc, const QStr
     if (hasError)
         return;
     hasError = true;
-    context->throwSyntaxError(detail, _module->fileName, loc.startLine, loc.startColumn);
+    engine->throwSyntaxError(detail, _module->fileName, loc.startLine, loc.startColumn);
 }
 
 void RuntimeCodegen::throwReferenceError(const AST::SourceLocation &loc, const QString &detail)
@@ -2869,7 +2875,7 @@ void RuntimeCodegen::throwReferenceError(const AST::SourceLocation &loc, const Q
     if (hasError)
         return;
     hasError = true;
-    context->throwReferenceError(detail, _module->fileName, loc.startLine, loc.startColumn);
+    engine->throwReferenceError(detail, _module->fileName, loc.startLine, loc.startColumn);
 }
 
 #endif // V4_BOOTSTRAP

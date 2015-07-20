@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -48,7 +48,6 @@ QAndroidCaptureSession::QAndroidCaptureSession(QAndroidCameraSession *cameraSess
     , m_duration(0)
     , m_state(QMediaRecorder::StoppedState)
     , m_status(QMediaRecorder::UnloadedStatus)
-    , m_resolutionDirty(false)
     , m_containerFormatDirty(true)
     , m_videoSettingsDirty(true)
     , m_audioSettingsDirty(true)
@@ -151,23 +150,19 @@ void QAndroidCaptureSession::setState(QMediaRecorder::State state)
         stop();
         break;
     case QMediaRecorder::RecordingState:
-        if (!start())
-            return;
+        start();
         break;
     case QMediaRecorder::PausedState:
         // Not supported by Android API
         qWarning("QMediaRecorder::PausedState is not supported on Android");
-        return;
+        break;
     }
-
-    m_state = state;
-    emit stateChanged(m_state);
 }
 
-bool QAndroidCaptureSession::start()
+void QAndroidCaptureSession::start()
 {
     if (m_state == QMediaRecorder::RecordingState || m_status != QMediaRecorder::LoadedStatus)
-        return false;
+        return;
 
     setStatus(QMediaRecorder::StartingStatus);
 
@@ -225,13 +220,13 @@ bool QAndroidCaptureSession::start()
     if (!m_mediaRecorder->prepare()) {
         emit error(QMediaRecorder::FormatError, QLatin1String("Unable to prepare the media recorder."));
         restartViewfinder();
-        return false;
+        return;
     }
 
     if (!m_mediaRecorder->start()) {
         emit error(QMediaRecorder::FormatError, QLatin1String("Unable to start the media recorder."));
         restartViewfinder();
-        return false;
+        return;
     }
 
     m_elapsedTime.start();
@@ -241,22 +236,21 @@ bool QAndroidCaptureSession::start()
     if (m_cameraSession)
         m_cameraSession->setReadyForCapture(false);
 
-    return true;
+    m_state = QMediaRecorder::RecordingState;
+    emit stateChanged(m_state);
 }
 
 void QAndroidCaptureSession::stop(bool error)
 {
-    if (m_state == QMediaRecorder::StoppedState)
+    if (m_state == QMediaRecorder::StoppedState || m_mediaRecorder == 0)
         return;
 
     setStatus(QMediaRecorder::FinalizingStatus);
 
     m_mediaRecorder->stop();
-
     m_notifyTimer.stop();
     updateDuration();
     m_elapsedTime.invalidate();
-
     m_mediaRecorder->release();
     delete m_mediaRecorder;
     m_mediaRecorder = 0;
@@ -279,6 +273,9 @@ void QAndroidCaptureSession::stop(bool error)
         m_actualOutputLocation = m_usedOutputLocation;
         emit actualLocationChanged(m_actualOutputLocation);
     }
+
+    m_state = QMediaRecorder::StoppedState;
+    emit stateChanged(m_state);
 }
 
 void QAndroidCaptureSession::setStatus(QMediaRecorder::Status status)
@@ -322,9 +319,6 @@ void QAndroidCaptureSession::setVideoSettings(const QVideoEncoderSettings &setti
 {
     if (!m_cameraSession || m_videoSettings == settings)
         return;
-
-    if (m_videoSettings.resolution() != settings.resolution())
-        m_resolutionDirty = true;
 
     m_videoSettings = settings;
     m_videoSettingsDirty = true;
@@ -378,7 +372,6 @@ void QAndroidCaptureSession::applySettings()
     if (m_cameraSession && m_cameraSession->camera() && m_videoSettingsDirty) {
         if (m_videoSettings.resolution().isEmpty()) {
             m_videoSettings.setResolution(m_defaultSettings.videoResolution);
-            m_resolutionDirty = true;
         } else if (!m_supportedResolutions.contains(m_videoSettings.resolution())) {
             // if the requested resolution is not supported, find the closest one
             QSize reqSize = m_videoSettings.resolution();
@@ -390,7 +383,6 @@ void QAndroidCaptureSession::applySettings()
             }
             int closestIndex = qt_findClosestValue(supportedPixelCounts, reqPixelCount);
             m_videoSettings.setResolution(m_supportedResolutions.at(closestIndex));
-            m_resolutionDirty = true;
         }
 
         if (m_videoSettings.frameRate() <= 0)
@@ -415,12 +407,8 @@ void QAndroidCaptureSession::applySettings()
 
 void QAndroidCaptureSession::updateViewfinder()
 {
-    if (!m_resolutionDirty)
-        return;
-
     m_cameraSession->camera()->stopPreview();
     m_cameraSession->adjustViewfinderSize(m_videoSettings.resolution(), false);
-    m_resolutionDirty = false;
 }
 
 void QAndroidCaptureSession::restartViewfinder()
@@ -541,8 +529,6 @@ void QAndroidCaptureSession::onError(int what, int extra)
     Q_UNUSED(what)
     Q_UNUSED(extra)
     stop(true);
-    m_state = QMediaRecorder::StoppedState;
-    emit stateChanged(m_state);
     emit error(QMediaRecorder::ResourceError, QLatin1String("Unknown error."));
 }
 

@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -37,11 +37,17 @@
 #include <QVector>
 #include <QStringList>
 #include <QHash>
+#include <QUrl>
+
 #include <private/qv4value_p.h>
 #include <private/qv4executableallocator_p.h>
 #include <private/qqmlrefcount_p.h>
+#include <private/qqmlnullablevalue_p.h>
 
 QT_BEGIN_NAMESPACE
+
+class QQmlPropertyCache;
+class QQmlPropertyData;
 
 namespace QmlIR {
 struct Document;
@@ -53,7 +59,6 @@ struct Function;
 }
 
 struct Function;
-struct ExecutionContext;
 
 namespace CompiledData {
 
@@ -130,7 +135,7 @@ struct String
     // uint16 strdata[]
 
     static int calculateSize(const QString &str) {
-        return (sizeof(String) + (str.length() + 1) * sizeof(quint16) + 7) & ~0x7;
+        return (sizeof(String) + str.length() * sizeof(quint16) + 7) & ~0x7;
     }
 };
 
@@ -554,6 +559,9 @@ struct TypeReferenceMap : QHash<int, TypeReference>
     }
 };
 
+// index is per-object binding index
+typedef QVector<QQmlPropertyData*> BindingPropertyData;
+
 // This is how this hooks into the existing structures:
 
 //VM::Function
@@ -568,14 +576,7 @@ struct Q_QML_PRIVATE_EXPORT CompilationUnit : public QQmlRefCount
     {}
     virtual ~CompilationUnit() {}
 #else
-    CompilationUnit()
-        : data(0)
-        , engine(0)
-        , runtimeStrings(0)
-        , runtimeLookups(0)
-        , runtimeRegularExpressions(0)
-        , runtimeClasses(0)
-    {}
+    CompilationUnit();
     virtual ~CompilationUnit();
 #endif
 
@@ -587,12 +588,19 @@ struct Q_QML_PRIVATE_EXPORT CompilationUnit : public QQmlRefCount
 #ifndef V4_BOOTSTRAP
     ExecutionEngine *engine;
     QString fileName() const { return data->stringAt(data->sourceFileIndex); }
+    QUrl url() const { if (m_url.isNull) m_url = QUrl(fileName()); return m_url; }
 
-    QV4::StringValue *runtimeStrings; // Array
+    QV4::Heap::String **runtimeStrings; // Array
     QV4::Lookup *runtimeLookups;
     QV4::Value *runtimeRegularExpressions;
     QV4::InternalClass **runtimeClasses;
     QVector<QV4::Function *> runtimeFunctions;
+    mutable QQmlNullableValue<QUrl> m_url;
+
+    // index is object index. This allows fast access to the
+    // property data when initializing bindings, avoiding expensive
+    // lookups by string (property name).
+    QVector<BindingPropertyData> bindingPropertyDataPerObject;
 
     QV4::Function *linkToEngine(QV4::ExecutionEngine *engine);
     void unlink();

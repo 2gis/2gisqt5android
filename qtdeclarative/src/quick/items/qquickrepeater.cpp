@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQuick module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -44,7 +44,11 @@
 QT_BEGIN_NAMESPACE
 
 QQuickRepeaterPrivate::QQuickRepeaterPrivate()
-    : model(0), ownModel(false), inRequest(false), dataSourceIsObject(false), delegateValidated(false), itemCount(0), createFrom(-1)
+    : model(0)
+    , ownModel(false)
+    , dataSourceIsObject(false)
+    , delegateValidated(false)
+    , itemCount(0)
 {
 }
 
@@ -350,7 +354,9 @@ void QQuickRepeater::clear()
     bool complete = isComponentComplete();
 
     if (d->model) {
-        for (int i = 0; i < d->deletables.count(); ++i) {
+        // We remove in reverse order deliberately; so that signals are emitted
+        // with sensible indices.
+        for (int i = d->deletables.count() - 1; i >= 0; --i) {
             if (QQuickItem *item = d->deletables.at(i)) {
                 if (complete)
                     emit itemRemoved(i, item);
@@ -376,57 +382,51 @@ void QQuickRepeater::regenerate()
 
     d->itemCount = count();
     d->deletables.resize(d->itemCount);
-    d->createFrom = 0;
-    d->createItems();
+    d->requestItems();
 }
 
-void QQuickRepeaterPrivate::createItems()
+void QQuickRepeaterPrivate::requestItems()
 {
-    Q_Q(QQuickRepeater);
-    if (createFrom == -1)
-        return;
-    inRequest = true;
-    for (int ii = createFrom; ii < itemCount; ++ii) {
-        if (!deletables.at(ii)) {
-            QObject *object = model->object(ii, false);
-            QQuickItem *item = qmlobject_cast<QQuickItem*>(object);
-            if (!item) {
-                if (object) {
-                    model->release(object);
-                    if (!delegateValidated) {
-                        delegateValidated = true;
-                        QObject* delegate = q->delegate();
-                        qmlInfo(delegate ? delegate : q) << QQuickRepeater::tr("Delegate must be of Item type");
-                    }
-                }
-                createFrom = ii;
-                break;
-            }
-            deletables[ii] = item;
-            item->setParentItem(q->parentItem());
-            if (ii > 0 && deletables.at(ii-1)) {
-                item->stackAfter(deletables.at(ii-1));
-            } else {
-                QQuickItem *after = q;
-                for (int si = ii+1; si < itemCount; ++si) {
-                    if (deletables.at(si)) {
-                        after = deletables.at(si);
-                        break;
-                    }
-                }
-                item->stackBefore(after);
-            }
-            emit q->itemAdded(ii, item);
-        }
+    for (int i = 0; i < itemCount; i++) {
+        QObject *object = model->object(i, false);
+        if (object)
+            model->release(object);
     }
-    inRequest = false;
 }
 
-void QQuickRepeater::createdItem(int, QObject *)
+void QQuickRepeater::createdItem(int index, QObject *)
 {
     Q_D(QQuickRepeater);
-    if (!d->inRequest)
-        d->createItems();
+    if (!d->deletables.at(index)) {
+        QObject *object = d->model->object(index, false);
+        QQuickItem *item = qmlobject_cast<QQuickItem*>(object);
+        if (!item) {
+            if (object) {
+                d->model->release(object);
+                if (!d->delegateValidated) {
+                    d->delegateValidated = true;
+                    QObject* delegate = this->delegate();
+                    qmlInfo(delegate ? delegate : this) << QQuickRepeater::tr("Delegate must be of Item type");
+                }
+            }
+            return;
+        }
+        d->deletables[index] = item;
+        item->setParentItem(parentItem());
+        if (index > 0 && d->deletables.at(index-1)) {
+            item->stackAfter(d->deletables.at(index-1));
+        } else {
+            QQuickItem *after = this;
+            for (int si = index+1; si < d->itemCount; ++si) {
+                if (d->deletables.at(si)) {
+                    after = d->deletables.at(si);
+                    break;
+                }
+            }
+            item->stackBefore(after);
+        }
+        emit itemAdded(index, item);
+    }
 }
 
 void QQuickRepeater::initItem(int, QObject *object)
@@ -474,7 +474,6 @@ void QQuickRepeater::modelUpdated(const QQmlChangeSet &changeSet, bool reset)
         difference -= remove.count;
     }
 
-    d->createFrom = -1;
     foreach (const QQmlChangeSet::Change &insert, changeSet.inserts()) {
         int index = qMin(insert.index, d->deletables.count());
         if (insert.isMove()) {
@@ -489,13 +488,12 @@ void QQuickRepeater::modelUpdated(const QQmlChangeSet &changeSet, bool reset)
             int modelIndex = index + i;
             ++d->itemCount;
             d->deletables.insert(modelIndex, 0);
-            if (d->createFrom == -1)
-                d->createFrom = modelIndex;
+            QObject *object = d->model->object(modelIndex, false);
+            if (object)
+                d->model->release(object);
         }
         difference += insert.count;
     }
-
-    d->createItems();
 
     if (difference != 0)
         emit countChanged();

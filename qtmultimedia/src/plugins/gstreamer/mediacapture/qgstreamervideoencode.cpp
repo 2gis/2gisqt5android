@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -34,7 +34,7 @@
 #include "qgstreamervideoencode.h"
 #include "qgstreamercapturesession.h"
 #include "qgstreamermediacontainercontrol.h"
-
+#include <private/qgstutils_p.h>
 #include <QtCore/qdebug.h>
 
 #include <math.h>
@@ -147,7 +147,7 @@ GstElement *QGstreamerVideoEncode::createEncoder()
     GstElement *capsFilter = gst_element_factory_make("capsfilter", "capsfilter-video");
     gst_bin_add(encoderBin, capsFilter);
 
-    GstElement *colorspace = gst_element_factory_make("ffmpegcolorspace", NULL);
+    GstElement *colorspace = gst_element_factory_make(QT_GSTREAMER_COLORCONVERSION_ELEMENT_NAME, NULL);
     gst_bin_add(encoderBin, colorspace);
     gst_bin_add(encoderBin, encoderElement);
 
@@ -252,27 +252,22 @@ GstElement *QGstreamerVideoEncode::createEncoder()
     }
 
     if (!m_videoSettings.resolution().isEmpty() || m_videoSettings.frameRate() > 0.001) {
-        GstCaps *caps = gst_caps_new_empty();
-        QStringList structureTypes;
-        structureTypes << "video/x-raw-yuv" << "video/x-raw-rgb";
+        GstCaps *caps = QGstUtils::videoFilterCaps();
 
-        foreach(const QString &structureType, structureTypes) {
-            GstStructure *structure = gst_structure_new(structureType.toLatin1().constData(), NULL);
+        if (!m_videoSettings.resolution().isEmpty()) {
+            gst_caps_set_simple(
+                        caps,
+                        "width", G_TYPE_INT, m_videoSettings.resolution().width(),
+                        "height", G_TYPE_INT, m_videoSettings.resolution().height(),
+                        NULL);
+        }
 
-            if (!m_videoSettings.resolution().isEmpty()) {
-                gst_structure_set(structure, "width", G_TYPE_INT, m_videoSettings.resolution().width(), NULL);
-                gst_structure_set(structure, "height", G_TYPE_INT, m_videoSettings.resolution().height(), NULL);
-            }
-
-            if (m_videoSettings.frameRate() > 0.001) {
-                QPair<int,int> rate = rateAsRational();
-
-                //qDebug() << "frame rate:" << num << denum;
-
-                gst_structure_set(structure, "framerate", GST_TYPE_FRACTION, rate.first, rate.second, NULL);
-            }
-
-            gst_caps_append_structure(caps,structure);
+        if (m_videoSettings.frameRate() > 0.001) {
+            QPair<int,int> rate = rateAsRational();
+            gst_caps_set_simple(
+                        caps,
+                        "framerate", GST_TYPE_FRACTION, rate.first, rate.second,
+                        NULL);
         }
 
         //qDebug() << "set video caps filter:" << gst_caps_to_string(caps);

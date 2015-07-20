@@ -1,8 +1,8 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2015 The Qt Company Ltd.
 ** Copyright (C) 2013 Samuel Gaist <samuel.gaist@edeltech.ch>
-** Contact: http://www.qt-project.org/legal
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the plugins of the Qt Toolkit.
 **
@@ -11,9 +11,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -24,8 +24,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -79,9 +79,7 @@
 #  include "qwindowsglcontext.h"
 #endif
 
-#ifndef Q_OS_WINCE
-#  include "qwindowsopengltester.h"
-#endif
+#include "qwindowsopengltester.h"
 
 QT_BEGIN_NAMESPACE
 
@@ -209,6 +207,10 @@ QWindowsIntegrationPrivate::QWindowsIntegrationPrivate(const QStringList &paramL
     : m_options(0)
     , m_fontDatabase(0)
 {
+#ifndef Q_OS_WINCE
+    Q_INIT_RESOURCE(openglblacklists);
+#endif
+
     static bool dpiAwarenessSet = false;
     int tabletAbsoluteRange = -1;
     // Default to per-monitor awareness to avoid being scaled when monitors with different DPI
@@ -227,6 +229,18 @@ QWindowsIntegrationPrivate::QWindowsIntegrationPrivate(const QStringList &paramL
     qCDebug(lcQpaWindows)
         << __FUNCTION__ << "DpiAwareness=" << dpiAwareness <<",Scaling="
         << QWindowsScaling::factor();
+
+    QTouchDevice *touchDevice = m_context.touchDevice();
+    if (touchDevice) {
+#ifdef Q_OS_WINCE
+        touchDevice->setCapabilities(touchDevice->capabilities() | QTouchDevice::MouseEmulation);
+#else
+        if (!(m_options & QWindowsIntegration::DontPassOsMouseEventsSynthesizedFromTouch)) {
+            touchDevice->setCapabilities(touchDevice->capabilities() | QTouchDevice::MouseEmulation);
+        }
+#endif
+        QWindowSystemInterface::registerTouchDevice(touchDevice);
+    }
 }
 
 QWindowsIntegrationPrivate::~QWindowsIntegrationPrivate()
@@ -235,9 +249,12 @@ QWindowsIntegrationPrivate::~QWindowsIntegrationPrivate()
         delete m_fontDatabase;
 }
 
+QWindowsIntegration *QWindowsIntegration::m_instance = Q_NULLPTR;
+
 QWindowsIntegration::QWindowsIntegration(const QStringList &paramList) :
     d(new QWindowsIntegrationPrivate(paramList))
 {
+    m_instance = this;
 #ifndef QT_NO_CLIPBOARD
     d->m_clipboard.registerViewer();
 #endif
@@ -246,6 +263,7 @@ QWindowsIntegration::QWindowsIntegration(const QStringList &paramList) :
 
 QWindowsIntegration::~QWindowsIntegration()
 {
+    m_instance = Q_NULLPTR;
 }
 
 void QWindowsIntegration::initialize()
@@ -297,13 +315,12 @@ QWindowsWindowData QWindowsIntegration::createWindowData(QWindow *window) const
 
     QWindowsWindowData obtained = QWindowsWindowData::create(window, requested, window->title());
     qCDebug(lcQpaWindows).nospace()
-        << __FUNCTION__ << '<' << window
-        << "\n    Requested: " << requested.geometry << "frame incl.: "
+        << __FUNCTION__ << ' ' << window
+        << "\n    Requested: " << requested.geometry << " frame incl.="
         << QWindowsGeometryHint::positionIncludesFrame(window)
-        << " Flags=" << QWindowsWindow::debugWindowFlags(requested.flags)
-        << "\n    Obtained : " << obtained.geometry << " Margins "<< obtained.frame
-        << " Flags=" << QWindowsWindow::debugWindowFlags(obtained.flags)
-        << " Handle=" << obtained.hwnd << '\n';
+        << ' ' << requested.flags
+        << "\n    Obtained : " << obtained.geometry << " margins=" << obtained.frame
+        << " handle=" << obtained.hwnd << ' ' << obtained.flags << '\n';
 
     if (obtained.hwnd) {
         if (requested.flags != obtained.flags)
@@ -404,7 +421,10 @@ QOpenGLContext::OpenGLModuleType QWindowsIntegration::openGLModuleType()
 
 QWindowsStaticOpenGLContext *QWindowsIntegration::staticOpenGLContext()
 {
-    QWindowsIntegrationPrivate *d = QWindowsIntegration::instance()->d.data();
+    QWindowsIntegration *integration = QWindowsIntegration::instance();
+    if (!integration)
+        return 0;
+    QWindowsIntegrationPrivate *d = integration->d.data();
     if (d->m_staticOpenGLContext.isNull())
         d->m_staticOpenGLContext = QSharedPointer<QWindowsStaticOpenGLContext>(QWindowsStaticOpenGLContext::create());
     return d->m_staticOpenGLContext.data();
@@ -492,13 +512,6 @@ QVariant QWindowsIntegration::styleHint(QPlatformIntegration::StyleHint hint) co
         break;
     case QPlatformIntegration::UseRtlExtensions:
         return QVariant(d->m_context.useRTLExtensions());
-    case QPlatformIntegration::SynthesizeMouseFromTouchEvents:
-#ifdef Q_OS_WINCE
-        // We do not want Qt to synthesize mouse events as Windows also does that.
-       return false;
-#else // Q_OS_WINCE
-       return QVariant(bool(d->m_options & DontPassOsMouseEventsSynthesizedFromTouch));
-#endif // !Q_OS_WINCE
     default:
         break;
     }
@@ -539,11 +552,6 @@ QPlatformAccessibility *QWindowsIntegration::accessibility() const
     return &d->m_accessibility;
 }
 #endif
-
-QWindowsIntegration *QWindowsIntegration::instance()
-{
-    return static_cast<QWindowsIntegration *>(QGuiApplicationPrivate::platformIntegration());
-}
 
 unsigned QWindowsIntegration::options() const
 {

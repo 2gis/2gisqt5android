@@ -1,7 +1,7 @@
 /****************************************************************************
 **
 ** Copyright (C) 2012 Klarälvdalens Datakonsult AB, a KDAB Group company, info@kdab.com, author Stephen Kelly <stephen.kelly@kdab.com>
-** Contact: http://www.qt-project.org/legal
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
@@ -10,15 +10,15 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Free Documentation License Usage
 ** Alternatively, this file may be used under the terms of the GNU Free
 ** Documentation License version 1.3 as published by the Free Software
 ** Foundation and appearing in the file included in the packaging of
-** this file.  Please review the following information to ensure
+** this file. Please review the following information to ensure
 ** the GNU Free Documentation License version 1.3 requirements
 ** will be met: http://www.gnu.org/copyleft/fdl.html.
 ** $QT_END_LICENSE$
@@ -96,7 +96,13 @@
     associated. They provide a list of plugins in the
     \c{Qt5}\e{<Module>}\c{_PLUGINS} variable.
 
-    \snippet snippets/cmake/CMakeLists.pro 7
+    \snippet snippets/cmake/CMakeLists.pro 5
+
+    \section2 Using Qt 5 with \c{CMake} older than 2.8.12
+
+    It is also necessary when using an older \c{CMake} to add Qt5<Module>_EXECUTABLE_COMPILE_FLAGS to
+    the CMAKE_CXX_FLAGS so that the -fPIC flags are added to the compile flags if necessary (as
+    is the default with Qt 5).
 
     \section2 Using Qt 5 with \c{CMake} older than 2.8.11
 
@@ -123,24 +129,6 @@
     specify moc requirements with either \c{qt5_generate_moc} or \c{qt5_wrap_cpp}:
 
     \snippet snippets/cmake/CMakeLists.pro 4
-
-    It is also necessary when using an older \c{CMake} to add Qt5<Module>_EXECUTABLE_COMPILE_FLAGS to
-    the CMAKE_CXX_FLAGS so that the -fPIE flags are added to the compile flags if necessary (as
-    is the default with Qt 5).
-
-    If not using the \c{qt5_use_modules} macro, and if using CMake 2.8.9 or later, the
-    \l{CMake POSITION_INDEPENDENT_CODE Documentation}{POSITION_INDEPENDENT_CODE property} can be set on
-    targets using Qt instead, or it can be set globally for all targets. Note that this is not necessary
-    with CMake 2.8.11:
-
-    \snippet snippets/cmake/CMakeLists.pro 5
-
-    Note that it may be necessary to enable POSITION_INDEPENDENT_CODE globally in order to use try_compile
-    with Qt code, or any wrapper macros around it such as check_cxx_source_compiles etc.
-    As position independent code is a platform-specific and Qt-configuration-specific concept, the
-    Qt5_POSITION_INDEPENDENT_CODE property can be used to check whether it is required.
-
-    \snippet snippets/cmake/CMakeLists.pro 6
 
     \section1 Variable Reference
 
@@ -193,7 +181,13 @@
     \row \li qt5_add_resources(outfiles inputfile ... OPTIONS ...)
          \li Create code from a list of Qt resource files.
              Options may be given to rcc, such as those found
-             when executing "rcc -help"
+             when executing "rcc -help".
+    \row \li qt5_add_binary_resources(target inputfile ... OPTIONS ... DESTINATION ...)
+         \li Create an RCC file from a list of Qt resource files.
+             Options may be given to rcc, such as those found
+             when executing "rcc -help".
+             A destination may be given to use a different filename
+             or path for the RCC file.
     \row \li qt5_generate_moc(inputfile outputfile )
          \li Creates a rule to run moc on infile and create outfile.
              Use this if for some reason QT5_WRAP_CPP() isn't appropriate, e.g.
@@ -270,7 +264,7 @@
              In:  Directories sources ts_files
              Options: flags to pass to lupdate, such as -extensions to specify
              Extensions for a directory scan.
-             Generates commands to create .ts (vie lupdate) and .qm
+             Generates commands to create .ts (via lupdate) and .qm
              (via lrelease) - files from directories and/or sources. The ts files are
              created and/or updated in the source tree (unless given with full paths).
              The qm files are generated in the build tree.

@@ -1,7 +1,7 @@
 /****************************************************************************
 **
 ** Copyright (C) 2013 Research In Motion.
-** Contact: http://www.qt-project.org/legal
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -48,6 +48,7 @@ QQmlInstantiatorPrivate::QQmlInstantiatorPrivate()
     , active(true)
     , async(false)
     , ownModel(false)
+    , requestedIndex(-1)
     , model(QVariant(1))
     , instanceModel(0)
     , delegate(0)
@@ -75,6 +76,15 @@ void QQmlInstantiatorPrivate::clear()
     q->objectChanged();
 }
 
+QObject *QQmlInstantiatorPrivate::modelObject(int index, bool async)
+{
+    requestedIndex = index;
+    QObject *o = instanceModel->object(index, async);
+    requestedIndex = -1;
+    return o;
+}
+
+
 void QQmlInstantiatorPrivate::regenerate()
 {
     Q_Q(QQmlInstantiator);
@@ -92,7 +102,7 @@ void QQmlInstantiatorPrivate::regenerate()
     }
 
     for (int i = 0; i < instanceModel->count(); i++) {
-        QObject *object = instanceModel->object(i, async);
+        QObject *object = modelObject(i, async);
         // If the item was already created we won't get a createdItem
         if (object)
             _q_createdItem(i, object);
@@ -106,8 +116,18 @@ void QQmlInstantiatorPrivate::_q_createdItem(int idx, QObject* item)
     Q_Q(QQmlInstantiator);
     if (objects.contains(item)) //Case when it was created synchronously in regenerate
         return;
+    if (requestedIndex != idx) // Asynchronous creation, reference the object
+        (void)instanceModel->object(idx, false);
     item->setParent(q);
-    objects.insert(idx, item);
+    if (objects.size() < idx + 1) {
+        int modelCount = instanceModel->count();
+        if (objects.capacity() < modelCount)
+            objects.reserve(modelCount);
+        objects.resize(idx + 1);
+    }
+    if (QObject *o = objects.at(idx))
+        instanceModel->release(o);
+    objects.replace(idx, item);
     if (objects.count() == 1)
         q->objectChanged();
     q->objectAdded(idx, item);
@@ -153,11 +173,15 @@ void QQmlInstantiatorPrivate::_q_modelUpdated(const QQmlChangeSet &changeSet, bo
         if (insert.isMove()) {
             QVector<QPointer<QObject> > movedObjects = moved.value(insert.moveId);
             objects = objects.mid(0, index) + movedObjects + objects.mid(index);
-        } else for (int i = 0; i < insert.count; ++i) {
-            int modelIndex = index + i;
-            QObject* obj = instanceModel->object(modelIndex, async);
-            if (obj)
-                _q_createdItem(modelIndex, obj);
+        } else {
+            if (insert.index <= objects.size())
+                objects.insert(insert.index, insert.count, 0);
+            for (int i = 0; i < insert.count; ++i) {
+                int modelIndex = index + i;
+                QObject* obj = modelObject(modelIndex, async);
+                if (obj)
+                    _q_createdItem(modelIndex, obj);
+            }
         }
         difference += insert.count;
     }
@@ -169,7 +193,7 @@ void QQmlInstantiatorPrivate::_q_modelUpdated(const QQmlChangeSet &changeSet, bo
 void QQmlInstantiatorPrivate::makeModel()
 {
     Q_Q(QQmlInstantiator);
-    QQmlDelegateModel* delegateModel = new QQmlDelegateModel(qmlContext(q));
+    QQmlDelegateModel* delegateModel = new QQmlDelegateModel(qmlContext(q), q);
     instanceModel = delegateModel;
     ownModel = true;
     delegateModel->setDelegate(delegate);

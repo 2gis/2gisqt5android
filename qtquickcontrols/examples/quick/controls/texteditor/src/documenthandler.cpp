@@ -1,9 +1,9 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
-** This file is part of the Qt Quick Controls module of the Qt Toolkit.
+** This file is part of the examples of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:BSD$
 ** You may use this file under the terms of the BSD license as follows:
@@ -17,8 +17,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -117,6 +117,24 @@ void DocumentHandler::setText(const QString &arg)
         m_text = arg;
         emit textChanged();
     }
+}
+
+void DocumentHandler::saveAs(const QUrl &arg, const QString &fileType)
+{
+    bool isHtml = fileType.contains(QLatin1String("htm"));
+    QLatin1String ext(isHtml ? ".html" : ".txt");
+    QString localPath = arg.toLocalFile();
+    if (!localPath.endsWith(ext))
+        localPath += ext;
+    QFile f(localPath);
+    if (!f.open(QFile::WriteOnly | QFile::Truncate | (isHtml ? QFile::NotOpen : QFile::Text))) {
+        emit error(tr("Cannot save: ") + f.errorString());
+        return;
+    }
+    f.write((isHtml ? m_doc->toHtml() : m_doc->toPlainText()).toLocal8Bit());
+    f.close();
+    qDebug() << "saved to" << localPath;
+    setFileUrl(QUrl::fromLocalFile(localPath));
 }
 
 QUrl DocumentHandler::fileUrl() const

@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQuick module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -62,7 +62,9 @@ QSGDistanceFieldGlyphCache::QSGDistanceFieldGlyphCache(QSGDistanceFieldGlyphCach
     m_doubleGlyphResolution = qt_fontHasNarrowOutlines(font) && m_glyphCount < QT_DISTANCEFIELD_HIGHGLYPHCOUNT;
 
     m_referenceFont = font;
-    m_referenceFont.setPixelSize(QT_DISTANCEFIELD_BASEFONTSIZE(m_doubleGlyphResolution));
+    // we set the same pixel size as used by the distance field internally.
+    // this allows us to call pathForGlyph once and reuse the result.
+    m_referenceFont.setPixelSize(QT_DISTANCEFIELD_BASEFONTSIZE(m_doubleGlyphResolution) * QT_DISTANCEFIELD_SCALE(m_doubleGlyphResolution));
     Q_ASSERT(m_referenceFont.isValid());
 
     m_coreProfile = (c->format().profile() == QSurfaceFormat::CoreProfile);
@@ -78,8 +80,12 @@ QSGDistanceFieldGlyphCache::GlyphData &QSGDistanceFieldGlyphCache::glyphData(gly
     if (data == m_glyphsData.end()) {
         GlyphData gd;
         gd.texture = &s_emptyTexture;
-        QPainterPath path = m_referenceFont.pathForGlyph(glyph);
-        gd.boundingRect = path.boundingRect();
+        gd.path = m_referenceFont.pathForGlyph(glyph);
+        // need bounding rect in base font size scale
+        qreal scaleFactor = qreal(1) / QT_DISTANCEFIELD_SCALE(m_doubleGlyphResolution);
+        QTransform scaleDown;
+        scaleDown.scale(scaleFactor, scaleFactor);
+        gd.boundingRect = scaleDown.mapRect(gd.path.boundingRect());
         data = m_glyphsData.insert(glyph, gd);
     }
     return data.value();
@@ -153,22 +159,25 @@ void QSGDistanceFieldGlyphCache::update()
     if (m_pendingGlyphs.isEmpty())
         return;
 
-    bool profileFrames = QSG_LOG_TIME_GLYPH().isDebugEnabled() ||
-            QQuickProfiler::profilingSceneGraph();
+    bool profileFrames = QSG_LOG_TIME_GLYPH().isDebugEnabled();
     if (profileFrames)
         qsg_render_timer.start();
+    Q_QUICK_SG_PROFILE_START(QQuickProfiler::SceneGraphAdaptationLayerFrame);
 
     QList<QDistanceField> distanceFields;
     for (int i = 0; i < m_pendingGlyphs.size(); ++i) {
-        distanceFields.append(QDistanceField(m_referenceFont,
+        GlyphData &gd = glyphData(m_pendingGlyphs.at(i));
+        distanceFields.append(QDistanceField(gd.path,
                                              m_pendingGlyphs.at(i),
                                              m_doubleGlyphResolution));
+        gd.path = QPainterPath(); // no longer needed, so release memory used by the painter path
     }
 
     qint64 renderTime = 0;
     int count = m_pendingGlyphs.size();
     if (profileFrames)
         renderTime = qsg_render_timer.nsecsElapsed();
+    Q_QUICK_SG_PROFILE_RECORD(QQuickProfiler::SceneGraphAdaptationLayerFrame);
 
     m_pendingGlyphs.reset();
 
@@ -188,10 +197,8 @@ void QSGDistanceFieldGlyphCache::update()
                 int(renderTime / 1000000),
                 int((now - (renderTime / 1000000))));
     }
-    Q_QUICK_SG_PROFILE(QQuickProfiler::SceneGraphAdaptationLayerFrame, (
-            count,
-            renderTime,
-            qsg_render_timer.nsecsElapsed() - renderTime));
+    Q_QUICK_SG_PROFILE_END_WITH_PAYLOAD(QQuickProfiler::SceneGraphAdaptationLayerFrame,
+                                        (qint64)count);
 }
 
 void QSGDistanceFieldGlyphCache::setGlyphsPosition(const QList<GlyphPosition> &glyphs)

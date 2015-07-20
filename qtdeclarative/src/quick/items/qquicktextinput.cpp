@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQuick module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -234,10 +234,14 @@ QString QQuickTextInputPrivate::realText() const
 
     The weight can be one of:
     \list
+    \li Font.Thin
     \li Font.Light
+    \li Font.ExtraLight
     \li Font.Normal - the default
+    \li Font.Medium
     \li Font.DemiBold
     \li Font.Bold
+    \li Font.ExtraBold
     \li Font.Black
     \endlist
 
@@ -543,7 +547,7 @@ Qt::LayoutDirection QQuickTextInputPrivate::layoutDirection() const
         direction = textDirection();
 #ifndef QT_NO_IM
         if (direction == Qt::LayoutDirectionAuto)
-            direction = qApp->inputMethod()->inputDirection();
+            direction = QGuiApplication::inputMethod()->inputDirection();
 #endif
     }
     return (direction == Qt::LayoutDirectionAuto) ? Qt::LeftToRight : direction;
@@ -556,7 +560,7 @@ bool QQuickTextInputPrivate::determineHorizontalAlignment()
         Qt::LayoutDirection direction = textDirection();
 #ifndef QT_NO_IM
         if (direction == Qt::LayoutDirectionAuto)
-            direction = qApp->inputMethod()->inputDirection();
+            direction = QGuiApplication::inputMethod()->inputDirection();
 #endif
         return setHAlign(direction == Qt::RightToLeft ? QQuickTextInput::AlignRight : QQuickTextInput::AlignLeft);
     }
@@ -578,6 +582,7 @@ void QQuickTextInput::setVAlign(QQuickTextInput::VAlignment alignment)
     emit verticalAlignmentChanged(d->vAlign);
     if (isComponentComplete()) {
         updateCursorRectangle();
+        d->updateBaselineOffset();
     }
 }
 
@@ -657,6 +662,12 @@ void QQuickTextInput::setReadOnly(bool ro)
     q_canPasteChanged();
     d->emitUndoRedoChanged();
     emit readOnlyChanged(ro);
+    if (ro) {
+        setCursorVisible(false);
+    } else if (hasActiveFocus()) {
+        setCursorVisible(true);
+    }
+    update();
 }
 
 /*!
@@ -726,7 +737,7 @@ void QQuickTextInput::setCursorVisible(bool on)
     if (on && isComponentComplete())
         QQuickTextUtil::createCursor(d);
     if (!d->cursorItem) {
-        d->setCursorBlinkPeriod(on ? qApp->styleHints()->cursorFlashTime() : 0);
+        d->setCursorBlinkPeriod(on ? QGuiApplication::styleHints()->cursorFlashTime() : 0);
         d->updateType = QQuickTextInputPrivate::UpdatePaintNode;
         polish();
         update();
@@ -1027,6 +1038,8 @@ void QQuickDoubleValidator::resetLocaleName()
     }
 }
 
+#endif // QT_NO_VALIDATOR
+
 /*!
     \qmlproperty real QtQuick::DoubleValidator::top
 
@@ -1105,12 +1118,19 @@ void QQuickDoubleValidator::resetLocaleName()
 
 QValidator* QQuickTextInput::validator() const
 {
+#ifdef QT_NO_VALIDATOR
+    return 0;
+#else
     Q_D(const QQuickTextInput);
     return d->m_validator;
+#endif // QT_NO_VALIDATOR
 }
 
 void QQuickTextInput::setValidator(QValidator* v)
 {
+#ifdef QT_NO_VALIDATOR
+    Q_UNUSED(v);
+#else
     Q_D(QQuickTextInput);
     if (d->m_validator == v)
         return;
@@ -1133,14 +1153,15 @@ void QQuickTextInput::setValidator(QValidator* v)
         d->checkIsValid();
 
     emit validatorChanged();
+#endif // QT_NO_VALIDATOR
 }
 
+#ifndef QT_NO_VALIDATOR
 void QQuickTextInput::q_validatorChanged()
 {
     Q_D(QQuickTextInput);
     d->checkIsValid();
 }
-
 #endif // QT_NO_VALIDATOR
 
 void QQuickTextInputPrivate::checkIsValid()
@@ -1273,7 +1294,6 @@ void QQuickTextInput::setEchoMode(QQuickTextInput::EchoMode echo)
     emit echoModeChanged(echoMode());
 }
 
-#ifndef QT_NO_IM
 /*!
     \qmlproperty enumeration QtQuick::TextInput::inputMethodHints
 
@@ -1322,12 +1342,19 @@ void QQuickTextInput::setEchoMode(QQuickTextInput::EchoMode echo)
 
 Qt::InputMethodHints QQuickTextInput::inputMethodHints() const
 {
+#ifdef QT_NO_IM
+    return Qt::ImhNone;
+#else
     Q_D(const QQuickTextInput);
     return d->inputMethodHints;
+#endif // QT_NO_IM
 }
 
 void QQuickTextInput::setInputMethodHints(Qt::InputMethodHints hints)
 {
+#ifdef QT_NO_IM
+    Q_UNUSED(hints);
+#else
     Q_D(QQuickTextInput);
 
     if (hints == d->inputMethodHints)
@@ -1336,8 +1363,8 @@ void QQuickTextInput::setInputMethodHints(Qt::InputMethodHints hints)
     d->inputMethodHints = hints;
     updateInputMethod(Qt::ImHints);
     emit inputMethodHintsChanged();
-}
 #endif // QT_NO_IM
+}
 
 /*!
     \qmlproperty Component QtQuick::TextInput::cursorDelegate
@@ -1552,7 +1579,7 @@ void QQuickTextInput::mousePressEvent(QMouseEvent *event)
         d->selectPressed = true;
         QPointF distanceVector = d->pressPos - d->tripleClickStartPoint;
         if (d->hasPendingTripleClick()
-            && distanceVector.manhattanLength() < qApp->styleHints()->startDragDistance()) {
+            && distanceVector.manhattanLength() < QGuiApplication::styleHints()->startDragDistance()) {
             event->setAccepted(true);
             selectAll();
             return;
@@ -1563,15 +1590,8 @@ void QQuickTextInput::mousePressEvent(QMouseEvent *event)
     int cursor = d->positionAt(event->localPos());
     d->moveCursor(cursor, mark);
 
-    if (d->focusOnPress) {
-        bool hadActiveFocus = hasActiveFocus();
-        forceActiveFocus();
-#ifndef QT_NO_IM
-        // re-open input panel on press if already focused
-        if (hasActiveFocus() && hadActiveFocus && !d->m_readOnly)
-            qGuiApp->inputMethod()->show();
-#endif
-    }
+    if (d->focusOnPress && !qGuiApp->styleHints()->setFocusOnTouchRelease())
+        ensureActiveFocus();
 
     event->setAccepted(true);
 }
@@ -1581,7 +1601,7 @@ void QQuickTextInput::mouseMoveEvent(QMouseEvent *event)
     Q_D(QQuickTextInput);
 
     if (d->selectPressed) {
-        if (qAbs(int(event->localPos().x() - d->pressPos.x())) > qApp->styleHints()->startDragDistance())
+        if (qAbs(int(event->localPos().x() - d->pressPos.x())) > QGuiApplication::styleHints()->startDragDistance())
             setKeepMouseGrab(true);
 
 #ifndef QT_NO_IM
@@ -1621,6 +1641,10 @@ void QQuickTextInput::mouseReleaseEvent(QMouseEvent *event)
         }
     }
 #endif
+
+    if (d->focusOnPress && qGuiApp->styleHints()->setFocusOnTouchRelease())
+        ensureActiveFocus();
+
     if (!event->isAccepted())
         QQuickImplicitSizeItem::mouseReleaseEvent(event);
 }
@@ -1633,7 +1657,7 @@ bool QQuickTextInputPrivate::sendMouseEventToInputContext(QMouseEvent *event)
         int mousePos = tmp_cursor - m_cursor;
         if (mousePos >= 0 && mousePos <= m_textLayout.preeditAreaText().length()) {
             if (event->type() == QEvent::MouseButtonRelease) {
-                qApp->inputMethod()->invokeAction(QInputMethod::Click, mousePos);
+                QGuiApplication::inputMethod()->invokeAction(QInputMethod::Click, mousePos);
             }
             return true;
         }
@@ -1851,6 +1875,19 @@ void QQuickTextInput::invalidateFontCaches()
 
     if (d->m_textLayout.engine() != 0)
         d->m_textLayout.engine()->resetFontEngineCache();
+}
+
+void QQuickTextInput::ensureActiveFocus()
+{
+    Q_D(QQuickTextInput);
+
+    bool hadActiveFocus = hasActiveFocus();
+    forceActiveFocus();
+#ifndef QT_NO_IM
+    // re-open input panel on press if already focused
+    if (hasActiveFocus() && hadActiveFocus && !d->m_readOnly)
+        qGuiApp->inputMethod()->show();
+#endif
 }
 
 QSGNode *QQuickTextInput::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData *data)
@@ -2575,13 +2612,14 @@ void QQuickTextInputPrivate::handleFocusEvent(QFocusEvent *event)
 {
     Q_Q(QQuickTextInput);
     bool focus = event->gotFocus();
-    q->setCursorVisible(focus);
+    if (!m_readOnly)
+        q->setCursorVisible(focus);
     if (focus) {
         q->q_updateAlignment();
 #ifndef QT_NO_IM
         if (focusOnPress && !m_readOnly)
             qGuiApp->inputMethod()->show();
-        q->connect(qApp->inputMethod(), SIGNAL(inputDirectionChanged(Qt::LayoutDirection)),
+        q->connect(QGuiApplication::inputMethod(), SIGNAL(inputDirectionChanged(Qt::LayoutDirection)),
                    q, SLOT(q_updateAlignment()));
 #endif
     } else {
@@ -2599,7 +2637,7 @@ void QQuickTextInputPrivate::handleFocusEvent(QFocusEvent *event)
             emit q->editingFinished();
 
 #ifndef QT_NO_IM
-        q->disconnect(qApp->inputMethod(), SIGNAL(inputDirectionChanged(Qt::LayoutDirection)),
+        q->disconnect(QGuiApplication::inputMethod(), SIGNAL(inputDirectionChanged(Qt::LayoutDirection)),
                       q, SLOT(q_updateAlignment()));
 #endif
     }
@@ -2612,7 +2650,6 @@ void QQuickTextInput::focusOutEvent(QFocusEvent *event)
     QQuickImplicitSizeItem::focusOutEvent(event);
 }
 
-#ifndef QT_NO_IM
 /*!
     \qmlproperty bool QtQuick::TextInput::inputMethodComposing
 
@@ -2627,10 +2664,13 @@ void QQuickTextInput::focusOutEvent(QFocusEvent *event)
 */
 bool QQuickTextInput::isInputMethodComposing() const
 {
+#ifdef QT_NO_IM
+    return false;
+#else
     Q_D(const QQuickTextInput);
     return d->hasImState;
-}
 #endif
+}
 
 void QQuickTextInputPrivate::init()
 {
@@ -2990,7 +3030,7 @@ void QQuickTextInputPrivate::commitPreedit()
     if (!hasImState)
         return;
 
-    qApp->inputMethod()->commit();
+    QGuiApplication::inputMethod()->commit();
 
     if (!hasImState)
         return;
@@ -3006,7 +3046,7 @@ void QQuickTextInputPrivate::cancelPreedit()
     if (!hasImState)
         return;
 
-    qApp->inputMethod()->reset();
+    QGuiApplication::inputMethod()->reset();
 
     QInputMethodEvent ev;
     QCoreApplication::sendEvent(q, &ev);

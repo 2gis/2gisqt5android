@@ -1,8 +1,9 @@
 qtHaveModule(webkitwidgets):!contains(QT_CONFIG, static) {
-    QT += webkitwidgets
+    BROWSER = qtwebkit
 } else {
-    DEFINES += QT_NO_WEBKIT
+    BROWSER = qtextbrowser
 }
+
 QT += widgets network help sql help
 qtHaveModule(printsupport): QT += printsupport
 PROJECTNAME = Assistant
@@ -24,6 +25,7 @@ HEADERS += aboutdialog.h \
     findwidget.h \
     filternamedialog.h \
     helpenginewrapper.h \
+    helpbrowsersupport.h \
     helpviewer.h \
     helpviewer_p.h \
     indexwindow.h \
@@ -55,6 +57,7 @@ SOURCES += aboutdialog.cpp \
     findwidget.cpp \
     filternamedialog.cpp \
     helpenginewrapper.cpp \
+    helpbrowsersupport.cpp \
     helpviewer.cpp \
     indexwindow.cpp \
     main.cpp \
@@ -71,9 +74,13 @@ SOURCES += aboutdialog.cpp \
     openpageswidget.cpp \
     openpagesmanager.cpp \
     openpagesswitcher.cpp
-qtHaveModule(webkitwidgets):!contains(QT_CONFIG, static) {
+
+equals(BROWSER, "qtwebkit") {
+    DEFINES += BROWSER_QTWEBKIT
+    QT += webkitwidgets
     SOURCES += helpviewer_qwv.cpp
 } else {
+    DEFINES += BROWSER_QTEXTBROWSER
     SOURCES += helpviewer_qtb.cpp
 }
 

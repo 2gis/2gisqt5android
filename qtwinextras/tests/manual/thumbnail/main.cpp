@@ -1,7 +1,7 @@
 /****************************************************************************
  **
- ** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
- ** Contact: http://www.qt-project.org/legal
+ ** Copyright (C) 2015 The Qt Company Ltd.
+ ** Contact: http://www.qt.io/licensing/
  **
  ** This file is part of the test suite of the Qt Toolkit.
  **
@@ -10,9 +10,9 @@
  ** Licensees holding valid commercial Qt licenses may use this file in
  ** accordance with the commercial license agreement provided with the
  ** Software or, alternatively, in accordance with the terms contained in
- ** a written agreement between you and Digia. For licensing terms and
- ** conditions see http://qt.digia.com/licensing. For further information
- ** use the contact form at http://qt.digia.com/contact-us.
+ ** a written agreement between you and The Qt Company. For licensing terms
+ ** and conditions see http://www.qt.io/terms-conditions. For further
+ ** information use the contact form at http://www.qt.io/contact-us.
  **
  ** GNU Lesser General Public License Usage
  ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
  ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
  ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
  **
- ** In addition, as a special exception, Digia gives you certain additional
- ** rights. These rights are described in the Digia Qt LGPL Exception
+ ** As a special exception, The Qt Company gives you certain additional
+ ** rights. These rights are described in The Qt Company LGPL Exception
  ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
  **
  ** $QT_END_LICENSE$
@@ -81,18 +81,28 @@ public slots:
 private:
     QWinThumbnailToolBar *m_thumbnailToolBar;
     QPlainTextEdit *m_logEdit;
+    QAction *m_enableIconicPixmapAction;
+    QAction *m_enableIconicLivePreviewAction;
 };
 
 MainWindow::MainWindow()
     : m_thumbnailToolBar(new QWinThumbnailToolBar(this))
     , m_logEdit(new QPlainTextEdit)
+    , m_enableIconicPixmapAction(new QAction("Enable Iconic Pixmap", this))
+    , m_enableIconicLivePreviewAction(new QAction("Enable LivePreview", this))
 {
     setMinimumWidth(400);
     setWindowTitle(QStringLiteral("QWinThumbnailToolBar ") + QLatin1String(QT_VERSION_STR));
     QMenu *fileMenu = menuBar()->addMenu("&File");
+    m_enableIconicPixmapAction->setCheckable(true);
+    m_enableIconicPixmapAction->setChecked(true);
+    m_enableIconicLivePreviewAction->setCheckable(true);
+    m_enableIconicLivePreviewAction->setChecked(true);
+    fileMenu->addAction(m_enableIconicPixmapAction);
+    fileMenu->addAction(m_enableIconicLivePreviewAction);
     QAction *quitAction = fileMenu->addAction("&Quit");
     quitAction->setShortcut(QKeySequence(Qt::CTRL + Qt::Key_Q));
-    connect(quitAction, SIGNAL(triggered()), qApp, SLOT(quit()));
+    connect(quitAction, &QAction::triggered, QCoreApplication::quit);
     setCentralWidget(m_logEdit);
 }
 
@@ -102,13 +112,13 @@ void MainWindow::initThumbnailToolBar()
     QWinThumbnailToolButton *testButton = new QWinThumbnailToolButton(m_thumbnailToolBar);
     testButton->setToolTip("Test");
     testButton->setIcon(style()->standardIcon(QStyle::SP_ComputerIcon));
-    connect(testButton, SIGNAL(clicked()), this, SLOT(testButtonClicked()));
+    connect(testButton, &QWinThumbnailToolButton::clicked, this, &MainWindow::testButtonClicked);
     m_thumbnailToolBar->addButton(testButton);
     m_thumbnailToolBar->setIconicPixmapNotificationsEnabled(true);
-    connect(m_thumbnailToolBar, SIGNAL(iconicLivePreviewPixmapRequested()),
-            this, SLOT(updateIconicLivePreviewPixmap()));
-    connect(m_thumbnailToolBar, SIGNAL(iconicThumbnailPixmapRequested()),
-            this, SLOT(updateIconicThumbnailPixmap()));
+    connect(m_thumbnailToolBar, &QWinThumbnailToolBar::iconicLivePreviewPixmapRequested,
+            this, &MainWindow::updateIconicLivePreviewPixmap);
+    connect(m_thumbnailToolBar, &QWinThumbnailToolBar::iconicThumbnailPixmapRequested,
+            this, &MainWindow::updateIconicThumbnailPixmap);
 }
 
 void MainWindow::logText(const QString &text)
@@ -126,6 +136,8 @@ void MainWindow::testButtonClicked()
 void MainWindow::updateIconicThumbnailPixmap()
 {
     static int n = 1;
+    if (!m_enableIconicPixmapAction->isChecked())
+        return;
     const QString number = QString::number(n++);
     logText(QLatin1String(__FUNCTION__) + QLatin1Char(' ') + number);
     const QPixmap pixmap =
@@ -136,6 +148,8 @@ void MainWindow::updateIconicThumbnailPixmap()
 void MainWindow::updateIconicLivePreviewPixmap()
 {
     static int n = 1;
+    if (!m_enableIconicLivePreviewAction->isChecked())
+        return;
     const QString number = QString::number(n++);
     logText(QLatin1String(__FUNCTION__) + QLatin1Char(' ') + number);
     const QPixmap pixmap =

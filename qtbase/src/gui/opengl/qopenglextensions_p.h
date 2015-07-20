@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -72,7 +72,13 @@ public:
     void (QOPENGLF_APIENTRYP CompressedTexImage3D)(GLenum target, GLint level, GLenum internalFormat, GLsizei width, GLsizei height, GLsizei depth, GLint border, GLsizei imageSize, const GLvoid *data);
     void (QOPENGLF_APIENTRYP CompressedTexSubImage3D)(GLenum target, GLint level, GLint xoffset, GLint yoffset, GLint zoffset, GLsizei width, GLsizei height, GLsizei depth, GLenum format, GLsizei imageSize, const GLvoid *data);
 
+    void (QOPENGLF_APIENTRYP TexStorage3D)(GLenum target, GLsizei levels, GLenum internalFormat, GLsizei width, GLsizei height, GLsizei depth);
+    void (QOPENGLF_APIENTRYP TexStorage2D)(GLenum target, GLsizei levels, GLenum internalFormat, GLsizei width, GLsizei height);
+
 private:
+    bool init();
+    QFunctionPointer resolve(const char *name);
+
     QLibrary m_gl;
 };
 
@@ -106,7 +112,8 @@ public:
         MapBuffer               = 0x00040000,
         GeometryShaders         = 0x00080000,
         MapBufferRange          = 0x00100000,
-        Sized8Formats           = 0x00200000
+        Sized8Formats           = 0x00200000,
+        DiscardFramebuffer      = 0x00400000
     };
     Q_DECLARE_FLAGS(OpenGLExtensions, OpenGLExtension)
 
@@ -127,7 +134,11 @@ public:
 
     void glGetBufferSubData(GLenum target, qopengl_GLintptr offset, qopengl_GLsizeiptr size, GLvoid *data);
 
+    void glDiscardFramebufferEXT (GLenum target, GLsizei numAttachments, const GLenum *attachments);
+
     QOpenGLES3Helper *gles3Helper();
+
+    void flushShared();
 
 private:
     static bool isInitialized(const QOpenGLFunctionsPrivate *d) { return d != 0; }
@@ -151,6 +162,10 @@ public:
                                           GLenum internalFormat,
                                           GLsizei width, GLsizei height);
     void (QOPENGLF_APIENTRYP GetBufferSubData)(GLenum target, qopengl_GLintptr offset, qopengl_GLsizeiptr size, GLvoid *data);
+    void (QOPENGLF_APIENTRYP DiscardFramebuffer)(GLenum target, GLsizei numAttachments, const GLenum *attachments);
+
+    bool flushVendorChecked;
+    bool flushIsSufficientToSyncContexts;
 };
 
 inline GLvoid *QOpenGLExtensions::glMapBuffer(GLenum target, GLenum access)
@@ -209,6 +224,14 @@ inline void QOpenGLExtensions::glGetBufferSubData(GLenum target, qopengl_GLintpt
     Q_OPENGL_FUNCTIONS_DEBUG
 }
 
+
+inline void QOpenGLExtensions::glDiscardFramebufferEXT (GLenum target, GLsizei numAttachments, const GLenum *attachments)
+{
+    Q_D(QOpenGLExtensions);
+    Q_ASSERT(QOpenGLExtensions::isInitialized(d));
+    d->DiscardFramebuffer(target,numAttachments, attachments);
+    Q_OPENGL_FUNCTIONS_DEBUG
+}
 QT_END_NAMESPACE
 
 #endif // QOPENGL_EXTENSIONS_P_H

@@ -1,7 +1,7 @@
 /****************************************************************************
 **
 ** Copyright (C) 2013 Research In Motion.
-** Contact: http://www.qt-project.org/legal
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -38,6 +38,7 @@
 #include <QtQml/qqmlcomponent.h>
 #include <QtQml/private/qqmlinstantiator_p.h>
 #include <QtQml/qqmlcontext.h>
+#include <QtQml/qqmlincubator.h>
 #include "../../shared/util.h"
 #include "stringmodel.h"
 
@@ -53,6 +54,9 @@ private slots:
     void activeProperty();
     void intModelChange();
     void createAndRemove();
+
+    void asynchronous_data();
+    void asynchronous();
 };
 
 void tst_qqmlinstantiator::createNone()
@@ -209,6 +213,45 @@ void tst_qqmlinstantiator::createAndRemove()
         QCOMPARE(object->property("datum").toString(), names[i]);
     }
 }
+
+void tst_qqmlinstantiator::asynchronous_data()
+{
+    QTest::addColumn<bool>("asyncIncubator");
+    QTest::addColumn<QString>("fileName");
+
+    QTest::newRow("Asynchronous Instantiator") << false << "createMultipleAsync.qml";
+    QTest::newRow("Nested-asynchronous Instantiator") << true << "createMultiple.qml";
+}
+
+void tst_qqmlinstantiator::asynchronous()
+{
+    QFETCH(bool, asyncIncubator);
+    QFETCH(QString, fileName);
+
+    QQmlEngine engine;
+    QQmlIncubationController incubationController;
+    engine.setIncubationController(&incubationController);
+    QQmlComponent component(&engine, testFileUrl(fileName));
+    QQmlIncubator incubator(asyncIncubator ? QQmlIncubator::Asynchronous : QQmlIncubator::Synchronous);
+    component.create(incubator);
+    while (!incubator.isReady())
+        incubationController.incubateFor(10);
+    QQmlInstantiator *instantiator = qobject_cast<QQmlInstantiator *>(incubator.object());
+    while (incubationController.incubatingObjectCount() > 0)
+        incubationController.incubateFor(10);
+    QVERIFY(instantiator != 0);
+    QCOMPARE(instantiator->isActive(), true);
+    QCOMPARE(instantiator->count(), 10);
+
+    for (int i=0; i<10; i++) {
+        QObject *object = instantiator->objectAt(i);
+        QVERIFY(object);
+        QCOMPARE(object->parent(), instantiator);
+        QCOMPARE(object->property("success").toBool(), true);
+        QCOMPARE(object->property("idx").toInt(), i);
+    }
+}
+
 QTEST_MAIN(tst_qqmlinstantiator)
 
 #include "tst_qqmlinstantiator.moc"

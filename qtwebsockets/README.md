@@ -13,7 +13,7 @@ It is implemented as a Qt add-on module, that can easily be embedded into existi
 Qt 5.x
 
 ### Build And Usage
-Checkout the source code from gitorious
+Checkout the source code from code.qt.io
 Go into the source directory and execute:
 
     qmake
@@ -34,4 +34,4 @@ To use, add `websockets` to the QT variable.
 * Extensions and sub-protocols
 
 ### License
-This code is licensed under LGPL v2.1.
+This code is licensed under LGPLv3 or LGPLv2.1.

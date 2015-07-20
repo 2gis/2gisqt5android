@@ -1,31 +1,34 @@
 /****************************************************************************
  **
- ** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
- ** Contact: http://www.qt-project.org/legal
+ ** Copyright (C) 2015 The Qt Company Ltd.
+ ** Contact: http://www.qt.io/licensing/
  **
  ** This file is part of the QtLocation module of the Qt Toolkit.
  **
- ** $QT_BEGIN_LICENSE:LGPL21$
+ ** $QT_BEGIN_LICENSE:LGPL3$
  ** Commercial License Usage
  ** Licensees holding valid commercial Qt licenses may use this file in
  ** accordance with the commercial license agreement provided with the
  ** Software or, alternatively, in accordance with the terms contained in
- ** a written agreement between you and Digia. For licensing terms and
- ** conditions see http://qt.digia.com/licensing. For further information
- ** use the contact form at http://qt.digia.com/contact-us.
+ ** a written agreement between you and The Qt Company. For licensing terms
+ ** and conditions see http://www.qt.io/terms-conditions. For further
+ ** information use the contact form at http://www.qt.io/contact-us.
  **
  ** GNU Lesser General Public License Usage
  ** Alternatively, this file may be used under the terms of the GNU Lesser
- ** General Public License version 2.1 or version 3 as published by the Free
- ** Software Foundation and appearing in the file LICENSE.LGPLv21 and
- ** LICENSE.LGPLv3 included in the packaging of this file. Please review the
- ** following information to ensure the GNU Lesser General Public License
- ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
- ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+ ** General Public License version 3 as published by the Free Software
+ ** Foundation and appearing in the file LICENSE.LGPLv3 included in the
+ ** packaging of this file. Please review the following information to
+ ** ensure the GNU Lesser General Public License version 3 requirements
+ ** will be met: https://www.gnu.org/licenses/lgpl.html.
  **
- ** In addition, as a special exception, Digia gives you certain additional
- ** rights. These rights are described in the Digia Qt LGPL Exception
- ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+ ** GNU General Public License Usage
+ ** Alternatively, this file may be used under the terms of the GNU
+ ** General Public License version 2.0 or later as published by the Free
+ ** Software Foundation and appearing in the file LICENSE.GPL included in
+ ** the packaging of this file. Please review the following information to
+ ** ensure the GNU General Public License version 2.0 requirements will be
+ ** met: http://www.gnu.org/licenses/gpl-2.0.html.
  **
  ** $QT_END_LICENSE$
  **
@@ -40,10 +43,7 @@
 
 #include <QtCore/QScopedValueRollback>
 #include <QtQml/QQmlInfo>
-#include <QtQml/QQmlContext>
 #include <QtQml/private/qqmlengine_p.h>
-#include <private/qqmlvaluetypewrapper_p.h>
-#include <private/qjsvalue_p.h>
 #include <QPainter>
 #include <QPainterPath>
 #include <QPainterPathStroker>
@@ -88,7 +88,7 @@ QT_BEGIN_NAMESPACE
     the Map grows in direct proportion to the number of points in the polyline.
 
     Like the other map objects, MapPolyline is normally drawn without a smooth
-    appearance. Setting the \l {QtQuick::Item::opacity}{opacity} property will force the object to
+    appearance. Setting the \l {Item::opacity}{opacity} property will force the object to
     be blended, which decreases performance considerably depending on the hardware in use.
 
     \note MapPolylines are implemented using the OpenGL GL_LINES
@@ -201,7 +201,7 @@ void QGeoMapPolylineGeometry::updateSourcePoints(const QGeoMap &map,
 
     double unwrapBelowX = 0;
     if (preserveGeometry_)
-        unwrapBelowX = map.coordinateToScreenPosition(geoLeftBound_, false).x();
+        unwrapBelowX = map.coordinateToItemPosition(geoLeftBound_, false).x();
 
     for (int i = 0; i < path.size(); ++i) {
         const QGeoCoordinate &coord = path.at(i);
@@ -209,7 +209,7 @@ void QGeoMapPolylineGeometry::updateSourcePoints(const QGeoMap &map,
         if (!coord.isValid())
             continue;
 
-        QDoubleVector2D point = map.coordinateToScreenPosition(coord, false);
+        QDoubleVector2D point = map.coordinateToItemPosition(coord, false);
 
         // We can get NaN if the map isn't set up correctly, or the projection
         // is faulty -- probably best thing to do is abort
@@ -217,7 +217,9 @@ void QGeoMapPolylineGeometry::updateSourcePoints(const QGeoMap &map,
             return;
 
         // unwrap x to preserve geometry if moved to border of map
-        if (preserveGeometry_ && point.x() < unwrapBelowX && !qFuzzyCompare(point.x(), unwrapBelowX))
+        if (preserveGeometry_ && point.x() < unwrapBelowX
+                && !qFuzzyCompare(geoLeftBound_.longitude(), coord.longitude())
+                && !qFuzzyCompare(point.x(), unwrapBelowX))
             point.setX(unwrapBelowX + geoDistanceToScreenWidth(map, geoLeftBound_, coord));
 
         if (!foundValid) {
@@ -254,7 +256,7 @@ void QGeoMapPolylineGeometry::updateSourcePoints(const QGeoMap &map,
     }
 
     sourceBounds_ = QRectF(QPointF(minX, minY), QPointF(maxX, maxY));
-    geoLeftBound_ = map.screenPositionToCoordinate(
+    geoLeftBound_ = map.itemPositionToCoordinate(
                                     QDoubleVector2D(minX + origin.x(), minY + origin.y()), false);
 }
 
@@ -381,7 +383,7 @@ void QGeoMapPolylineGeometry::updateScreenPoints(const QGeoMap &map,
     if (!screenDirty_)
         return;
 
-    QPointF origin = map.coordinateToScreenPosition(srcOrigin_, false).toPointF();
+    QPointF origin = map.coordinateToItemPosition(srcOrigin_, false).toPointF();
 
     if (!qIsFinite(origin.x()) || !qIsFinite(origin.y())) {
         clear();
@@ -419,24 +421,32 @@ void QGeoMapPolylineGeometry::updateScreenPoints(const QGeoMap &map,
     // not the number of vertices
     screenVertices_.reserve(ts.vertexCount());
 
-    screenOutline_ = QPainterPath();
+    QRectF bb;
 
-    QPolygonF tri;
+    QPointF pt;
     const float *vs = ts.vertices();
     for (int i = 0; i < (ts.vertexCount()/2*2); i += 2) {
-        screenVertices_ << QPointF(vs[i], vs[i + 1]);
+        pt = QPointF(vs[i], vs[i + 1]);
+        screenVertices_ << pt;
 
-        if (!qIsFinite(vs[i]) || !qIsFinite(vs[i + 1]))
+        if (!qIsFinite(pt.x()) || !qIsFinite(pt.y()))
             break;
 
-        tri << QPointF(vs[i], vs[i + 1]);
-        if (tri.size() == 4) {
-            tri.remove(0);
-            screenOutline_.addPolygon(tri);
+        if (!bb.contains(pt)) {
+            if (pt.x() < bb.left())
+                bb.setLeft(pt.x());
+
+            if (pt.x() > bb.right())
+                bb.setRight(pt.x());
+
+            if (pt.y() < bb.top())
+                bb.setTop(pt.y());
+
+            if (pt.y() > bb.bottom())
+                bb.setBottom(pt.y());
         }
     }
 
-    QRectF bb = screenOutline_.boundingRect();
     screenBounds_ = bb;
     this->translate( -1 * sourceBounds_.topLeft());
 }
@@ -488,21 +498,18 @@ QJSValue QDeclarativePolylineMapItem::path() const
 {
     QQmlContext *context = QQmlEngine::contextForObject(parent());
     QQmlEngine *engine = context->engine();
-    QV8Engine *v8Engine = QQmlEnginePrivate::getV8Engine(engine);
-    QV4::ExecutionEngine *v4 = QV8Engine::getV4(v8Engine);
+    QV4::ExecutionEngine *v4 = QQmlEnginePrivate::getV4Engine(engine);
 
     QV4::Scope scope(v4);
     QV4::Scoped<QV4::ArrayObject> pathArray(scope, v4->newArrayObject(path_.length()));
     for (int i = 0; i < path_.length(); ++i) {
         const QGeoCoordinate &c = path_.at(i);
 
-        QQmlValueType *vt = QQmlValueTypeFactory::valueType(qMetaTypeId<QGeoCoordinate>());
-        QV4::ScopedValue cv(scope, QV4::QmlValueTypeWrapper::create(v8Engine, QVariant::fromValue(c), vt));
-
+        QV4::ScopedValue cv(scope, v4->fromVariant(QVariant::fromValue(c)));
         pathArray->putIndexed(i, cv);
     }
 
-    return new QJSValuePrivate(v4, QV4::ValueRef(pathArray));
+    return QJSValue(v4, pathArray.asReturnedValue());
 }
 
 void QDeclarativePolylineMapItem::setPath(const QJSValue &value)
@@ -524,10 +531,19 @@ void QDeclarativePolylineMapItem::setPath(const QJSValue &value)
         pathList.append(c);
     }
 
-    if (path_ == pathList)
+    setPathFromGeoList(pathList);
+}
+
+
+/*!
+    \internal
+*/
+void QDeclarativePolylineMapItem::setPathFromGeoList(const QList<QGeoCoordinate> &path)
+{
+    if (path_ == path)
         return;
 
-    path_ = pathList;
+    path_ = path;
 
     geometry_.markSourceDirty();
     updateMapItem();
@@ -535,7 +551,7 @@ void QDeclarativePolylineMapItem::setPath(const QJSValue &value)
 }
 
 /*!
-    \qmlmethod MapPolyline::addCoordinate(coordinate)
+    \qmlmethod void MapPolyline::addCoordinate(coordinate)
 
     Adds a coordinate to the path.
 
@@ -552,7 +568,7 @@ void QDeclarativePolylineMapItem::addCoordinate(const QGeoCoordinate &coordinate
 }
 
 /*!
-    \qmlmethod MapPolyline::removeCoordinate(coordinate)
+    \qmlmethod void MapPolyline::removeCoordinate(coordinate)
 
     Removes a coordinate from the path. If there are multiple instances of the
     same coordinate, the one added last is removed.
@@ -610,7 +626,7 @@ void QDeclarativePolylineMapItem::geometryChanged(const QRectF &newGeometry, con
     }
 
     QDoubleVector2D newPoint = QDoubleVector2D(x(),y()) + QDoubleVector2D(geometry_.firstPointOffset());
-    QGeoCoordinate newCoordinate = map()->screenPositionToCoordinate(newPoint, false);
+    QGeoCoordinate newCoordinate = map()->itemPositionToCoordinate(newPoint, false);
     if (newCoordinate.isValid()) {
         double firstLongitude = path_.at(0).longitude();
         double firstLatitude = path_.at(0).latitude();
@@ -720,13 +736,24 @@ QSGNode *QDeclarativePolylineMapItem::updateMapItemPaintNode(QSGNode *oldNode, U
         node->update(line_.color(), &geometry_);
         geometry_.setPreserveGeometry(false);
         geometry_.markClean();
+        dirtyMaterial_ = false;
     }
     return node;
 }
 
 bool QDeclarativePolylineMapItem::contains(const QPointF &point) const
 {
-    return geometry_.contains(point);
+    QPolygonF tri;
+    for (int i = 0; i < geometry_.vertices().size(); ++i) {
+        tri << geometry_.vertices()[i];
+        if (tri.size() == 3) {
+            if (tri.containsPoint(point,Qt::OddEvenFill))
+                return true;
+            tri.remove(0);
+        }
+    }
+
+    return false;
 }
 
 //////////////////////////////////////////////////////////////////////

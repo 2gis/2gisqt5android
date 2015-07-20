@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtWebEngine module of the Qt Toolkit.
 **
@@ -10,15 +10,15 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
 ** General Public License version 3 as published by the Free Software
 ** Foundation and appearing in the file LICENSE.LGPLv3 included in the
-** packaging of this file.  Please review the following information to
+** packaging of this file. Please review the following information to
 ** ensure the GNU Lesser General Public License version 3 requirements
 ** will be met: https://www.gnu.org/licenses/lgpl.html.
 **
@@ -26,7 +26,7 @@
 ** Alternatively, this file may be used under the terms of the GNU
 ** General Public License version 2.0 or later as published by the Free
 ** Software Foundation and appearing in the file LICENSE.GPL included in
-** the packaging of this file.  Please review the following information to
+** the packaging of this file. Please review the following information to
 ** ensure the GNU General Public License version 2.0 requirements will be
 ** met: http://www.gnu.org/licenses/gpl-2.0.html.
 **
@@ -41,9 +41,11 @@
 #include <QObject>
 #include <QScopedPointer>
 
-QT_BEGIN_NAMESPACE
+namespace QtWebEngineCore {
+class WebEngineSettings;
+}
 
-class QQuickWebEngineSettingsPrivate;
+QT_BEGIN_NAMESPACE
 
 class Q_WEBENGINE_PRIVATE_EXPORT QQuickWebEngineSettings : public QObject {
     Q_OBJECT
@@ -61,8 +63,6 @@ class Q_WEBENGINE_PRIVATE_EXPORT QQuickWebEngineSettings : public QObject {
     Q_PROPERTY(QString defaultTextEncoding READ defaultTextEncoding WRITE setDefaultTextEncoding NOTIFY defaultTextEncodingChanged)
 
 public:
-    static QQuickWebEngineSettings *globalSettings();
-
     ~QQuickWebEngineSettings();
 
     bool autoLoadImages() const;
@@ -92,26 +92,28 @@ public:
     void setDefaultTextEncoding(QString encoding);
 
 signals:
-    void autoLoadImagesChanged(bool on);
-    void javascriptEnabledChanged(bool on);
-    void javascriptCanOpenWindowsChanged(bool on);
-    void javascriptCanAccessClipboardChanged(bool on);
-    void linksIncludedInFocusChainChanged(bool on);
-    void localStorageEnabledChanged(bool on);
-    void localContentCanAccessRemoteUrlsChanged(bool on);
-    void spatialNavigationEnabledChanged(bool on);
-    void localContentCanAccessFileUrlsChanged(bool on);
-    void hyperlinkAuditingEnabledChanged(bool on);
-    void errorPageEnabledChanged(bool on);
-    void defaultTextEncodingChanged(QString encoding);
+    void autoLoadImagesChanged();
+    void javascriptEnabledChanged();
+    void javascriptCanOpenWindowsChanged();
+    void javascriptCanAccessClipboardChanged();
+    void linksIncludedInFocusChainChanged();
+    void localStorageEnabledChanged();
+    void localContentCanAccessRemoteUrlsChanged();
+    void spatialNavigationEnabledChanged();
+    void localContentCanAccessFileUrlsChanged();
+    void hyperlinkAuditingEnabledChanged();
+    void errorPageEnabledChanged();
+    void defaultTextEncodingChanged();
 
 private:
-    QQuickWebEngineSettings();
+    explicit QQuickWebEngineSettings(QQuickWebEngineSettings *parentSettings = 0);
     Q_DISABLE_COPY(QQuickWebEngineSettings)
-    Q_DECLARE_PRIVATE(QQuickWebEngineSettings)
+    friend class QQuickWebEngineProfilePrivate;
     friend class QQuickWebEngineViewPrivate;
 
-    QScopedPointer<QQuickWebEngineSettingsPrivate> d_ptr;
+    void setParentSettings(QQuickWebEngineSettings *parentSettings);
+
+    QScopedPointer<QtWebEngineCore::WebEngineSettings> d_ptr;
 };
 
 QT_END_NAMESPACE

@@ -1,8 +1,8 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2015 The Qt Company Ltd.
 ** Copyright (C) 2014 Jolla Ltd, author: <gunnar.sletta@jollamobile.com>
-** Contact: http://www.qt-project.org/legal
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQuick module of the Qt Toolkit.
 **
@@ -11,9 +11,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -24,8 +24,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -55,6 +55,8 @@
 
 #include <private/qquickprofiler_p.h>
 #include <private/qqmldebugservice_p.h>
+
+#include <private/qquickshadereffectnode_p.h>
 
 /*
    Overall design:
@@ -105,16 +107,6 @@ QT_BEGIN_NAMESPACE
 
 #define QSG_RT_PAD "                    (RT)"
 
-static int get_env_int(const char *name, int defaultValue)
-{
-    QByteArray content = qgetenv(name);
-
-    bool ok = false;
-    int value = content.toInt(&ok);
-    return ok ? value : defaultValue;
-}
-
-
 static inline int qsgrl_animation_interval() {
     qreal refreshRate = QGuiApplication::primaryScreen()->refreshRate();
     // To work around that some platforms wrongfully return 0 or something
@@ -155,7 +147,7 @@ const QEvent::Type WM_TryRelease        = QEvent::Type(QEvent::User + 4);
 // called.
 const QEvent::Type WM_Grab              = QEvent::Type(QEvent::User + 5);
 
-template <typename T> T *windowFor(const QList<T> list, QQuickWindow *window)
+template <typename T> T *windowFor(const QList<T> &list, QQuickWindow *window)
 {
     for (int i=0; i<list.size(); ++i) {
         const T &t = list.at(i);
@@ -459,6 +451,8 @@ void QSGRenderThread::invalidateOpenGL(QQuickWindow *window, bool inDestructor, 
         qCDebug(QSG_LOG_RENDERLOOP) << QSG_RT_PAD << "- cleanup without an OpenGL context";
     }
 
+    QQuickShaderEffectMaterial::cleanupMaterialCache();
+
     // The canvas nodes must be cleaned up regardless if we are in the destructor..
     if (wipeSG) {
         QQuickWindowPrivate *dd = QQuickWindowPrivate::get(window);
@@ -500,6 +494,14 @@ void QSGRenderThread::sync(bool inExpose)
     bool current = false;
     if (windowSize.width() > 0 && windowSize.height() > 0)
         current = gl->makeCurrent(window);
+    // Check for context loss.
+    if (!current && !gl->isValid()) {
+        QQuickWindowPrivate::get(window)->cleanupNodesOnShutdown();
+        sgrc->invalidate();
+        current = gl->create() && gl->makeCurrent(window);
+        if (current)
+            sgrc->initialize(gl);
+    }
     if (current) {
         QQuickWindowPrivate *d = QQuickWindowPrivate::get(window);
         bool hadRenderer = d->renderer != 0;
@@ -531,12 +533,12 @@ void QSGRenderThread::sync(bool inExpose)
 
 void QSGRenderThread::syncAndRender()
 {
-    bool profileFrames = QSG_LOG_TIME_RENDERLOOP().isDebugEnabled() ||
-            QQuickProfiler::profilingSceneGraph();
+    bool profileFrames = QSG_LOG_TIME_RENDERLOOP().isDebugEnabled();
     if (profileFrames) {
         sinceLastTime = threadTimer.nsecsElapsed();
         threadTimer.start();
     }
+    Q_QUICK_SG_PROFILE_START(QQuickProfiler::SceneGraphRenderLoopFrame);
 
     QElapsedTimer waitTimer;
     waitTimer.start();
@@ -544,20 +546,24 @@ void QSGRenderThread::syncAndRender()
     qCDebug(QSG_LOG_RENDERLOOP) << QSG_RT_PAD << "syncAndRender()";
 
     syncResultedInChanges = false;
+    QQuickWindowPrivate *d = QQuickWindowPrivate::get(window);
 
-    uint pending = pendingUpdate;
+    bool repaintRequested = (pendingUpdate & RepaintRequest) || d->customRenderStage;
+    bool syncRequested = pendingUpdate & SyncRequest;
+    bool exposeRequested = (pendingUpdate & ExposeRequest) == ExposeRequest;
     pendingUpdate = 0;
 
-    if (pending & SyncRequest) {
+    if (syncRequested) {
         qCDebug(QSG_LOG_RENDERLOOP) << QSG_RT_PAD << "- updatePending, doing sync";
-        sync(pending == ExposeRequest);
+        sync(exposeRequested);
     }
 #ifndef QSG_NO_RENDER_TIMING
     if (profileFrames)
         syncTime = threadTimer.nsecsElapsed();
 #endif
+    Q_QUICK_SG_PROFILE_RECORD(QQuickProfiler::SceneGraphRenderLoopFrame);
 
-    if (!syncResultedInChanges && ((pending & RepaintRequest) == 0)) {
+    if (!syncResultedInChanges && !repaintRequested) {
         qCDebug(QSG_LOG_RENDERLOOP) << QSG_RT_PAD << "- no changes, render aborted";
         int waitTime = vsyncDelta - (int) waitTimer.elapsed();
         if (waitTime > 0)
@@ -567,7 +573,6 @@ void QSGRenderThread::syncAndRender()
 
     qCDebug(QSG_LOG_RENDERLOOP) << QSG_RT_PAD << "- rendering started";
 
-    QQuickWindowPrivate *d = QQuickWindowPrivate::get(window);
 
     if (animatorDriver->isRunning()) {
         d->animationController->lock();
@@ -578,13 +583,22 @@ void QSGRenderThread::syncAndRender()
     bool current = false;
     if (d->renderer && windowSize.width() > 0 && windowSize.height() > 0)
         current = gl->makeCurrent(window);
+    // Check for context loss.
+    if (!current && !gl->isValid()) {
+        // Cannot do anything here because gui is not locked. Request a new
+        // sync+render round on the gui thread and let the sync handle it.
+        QCoreApplication::postEvent(window, new QEvent(QEvent::Type(QQuickWindowPrivate::FullUpdateRequest)));
+    }
     if (current) {
         d->renderSceneGraph(windowSize);
         if (profileFrames)
             renderTime = threadTimer.nsecsElapsed();
-        gl->swapBuffers(window);
+        Q_QUICK_SG_PROFILE_RECORD(QQuickProfiler::SceneGraphRenderLoopFrame);
+        if (!d->customRenderStage || !d->customRenderStage->swap())
+            gl->swapBuffers(window);
         d->fireFrameSwapped();
     } else {
+        Q_QUICK_SG_PROFILE_SKIP(QQuickProfiler::SceneGraphRenderLoopFrame, 1);
         qCDebug(QSG_LOG_RENDERLOOP) << QSG_RT_PAD << "- window not ready, skipping render";
     }
 
@@ -595,7 +609,7 @@ void QSGRenderThread::syncAndRender()
     // that to avoid blocking the GUI thread in the case where it
     // has started rendering with a bad window, causing makeCurrent to
     // fail or if the window has a bad size.
-    if (pending == ExposeRequest) {
+    if (exposeRequested) {
         qCDebug(QSG_LOG_RENDERLOOP) << QSG_RT_PAD << "- wake Gui after initial expose";
         waitCondition.wakeOne();
         mutex.unlock();
@@ -609,10 +623,7 @@ void QSGRenderThread::syncAndRender()
             int(threadTimer.elapsed() - renderTime / 1000000));
 
 
-        Q_QUICK_SG_PROFILE(QQuickProfiler::SceneGraphRenderLoopFrame, (
-                syncTime,
-                renderTime - syncTime,
-                threadTimer.nsecsElapsed() - renderTime));
+    Q_QUICK_SG_PROFILE_END(QQuickProfiler::SceneGraphRenderLoopFrame);
 }
 
 
@@ -695,12 +706,15 @@ QSGThreadedRenderLoop::QSGThreadedRenderLoop()
 
     m_animation_driver = sg->createAnimationDriver(this);
 
-    m_exhaust_delay = get_env_int("QML_EXHAUST_DELAY", 5);
-
     connect(m_animation_driver, SIGNAL(started()), this, SLOT(animationStarted()));
     connect(m_animation_driver, SIGNAL(stopped()), this, SLOT(animationStopped()));
 
     m_animation_driver->install();
+}
+
+QSGThreadedRenderLoop::~QSGThreadedRenderLoop()
+{
+    delete sg;
 }
 
 QSGRenderContext *QSGThreadedRenderLoop::createRenderContext(QSGContext *sg) const
@@ -710,10 +724,7 @@ QSGRenderContext *QSGThreadedRenderLoop::createRenderContext(QSGContext *sg) con
 
 void QSGThreadedRenderLoop::maybePostPolishRequest(Window *w)
 {
-    if (w->timerId == 0) {
-        qCDebug(QSG_LOG_RENDERLOOP) << "- posting update";
-        w->timerId = startTimer(m_exhaust_delay, Qt::PreciseTimer);
-    }
+    w->window->requestUpdate();
 }
 
 QAnimationDriver *QSGThreadedRenderLoop::animationDriver() const
@@ -760,9 +771,9 @@ void QSGThreadedRenderLoop::animationStopped()
 void QSGThreadedRenderLoop::startOrStopAnimationTimer()
 {
     int exposedWindows = 0;
-    Window *theOne = 0;
+    const Window *theOne = 0;
     for (int i=0; i<m_windows.size(); ++i) {
-        Window &w = m_windows[i];
+        const Window &w = m_windows.at(i);
         if (w.window->isVisible() && w.window->isExposed()) {
             ++exposedWindows;
             theOne = &w;
@@ -774,7 +785,7 @@ void QSGThreadedRenderLoop::startOrStopAnimationTimer()
         m_animation_timer = 0;
         // If animations are running, make sure we keep on animating
         if (m_animation_driver->isRunning())
-            maybePostPolishRequest(theOne);
+            maybePostPolishRequest(const_cast<Window *>(theOne));
 
     } else if (m_animation_timer == 0 && exposedWindows != 1 && m_animation_driver->isRunning()) {
         m_animation_timer = startTimer(qsgrl_animation_interval());
@@ -863,7 +874,6 @@ void QSGThreadedRenderLoop::handleExposure(QQuickWindow *window)
         win.window = window;
         win.actualWindowFormat = window->format();
         win.thread = new QSGRenderThread(this, QQuickWindowPrivate::get(window)->context);
-        win.timerId = 0;
         win.updateDuringSync = false;
         win.forceRenderPass = true; // also covered by polishAndSync(inExpose=true), but doesn't hurt
         m_windows << win;
@@ -875,9 +885,11 @@ void QSGThreadedRenderLoop::handleExposure(QQuickWindow *window)
     w->thread->window = window;
 
     if (w->window->width() <= 0 || w->window->height() <= 0
-            || !w->window->geometry().intersects(w->window->screen()->availableGeometry())) {
+        || (w->window->isTopLevel() && !w->window->geometry().intersects(w->window->screen()->availableGeometry()))) {
 #ifndef QT_NO_DEBUG
-        qWarning("QSGThreadedRenderLoop: expose event received for window with invalid geometry.");
+        qWarning().noquote().nospace() << "QSGThreadedRenderLoop: expose event received for window "
+            << w->window << " with invalid geometry: " << w->window->geometry()
+            << " on " << w->window->screen();
 #endif
     }
 
@@ -896,6 +908,7 @@ void QSGThreadedRenderLoop::handleExposure(QQuickWindow *window)
             if (qt_gl_global_share_context())
                 w->thread->gl->setShareContext(qt_gl_global_share_context());
             w->thread->gl->setFormat(w->window->requestedFormat());
+            w->thread->gl->setScreen(w->window->screen());
             if (!w->thread->gl->create()) {
                 const bool isEs = w->thread->gl->isOpenGLES();
                 delete w->thread->gl;
@@ -952,6 +965,14 @@ void QSGThreadedRenderLoop::handleObscurity(Window *w)
     startOrStopAnimationTimer();
 }
 
+
+void QSGThreadedRenderLoop::handleUpdateRequest(QQuickWindow *window)
+{
+    qCDebug(QSG_LOG_RENDERLOOP) << "- polish and sync update request";
+    Window *w = windowFor(m_windows, window);
+    if (w)
+        polishAndSync(w);
+}
 
 void QSGThreadedRenderLoop::maybeUpdate(QQuickWindow *window)
 {
@@ -1080,8 +1101,6 @@ void QSGThreadedRenderLoop::polishAndSync(Window *w, bool inExpose)
     QQuickWindow *window = w->window;
     if (!w->thread || !w->thread->window) {
         qCDebug(QSG_LOG_RENDERLOOP) << "- not exposed, abort";
-        killTimer(w->timerId);
-        w->timerId = 0;
         return;
     }
 
@@ -1091,8 +1110,6 @@ void QSGThreadedRenderLoop::polishAndSync(Window *w, bool inExpose)
     w = windowFor(m_windows, window);
     if (!w || !w->thread || !w->thread->window) {
         qCDebug(QSG_LOG_RENDERLOOP) << "- removed after event flushing, abort";
-        killTimer(w->timerId);
-        w->timerId = 0;
         return;
     }
 
@@ -1101,16 +1118,17 @@ void QSGThreadedRenderLoop::polishAndSync(Window *w, bool inExpose)
     qint64 polishTime = 0;
     qint64 waitTime = 0;
     qint64 syncTime = 0;
-    bool profileFrames = QSG_LOG_TIME_RENDERLOOP().isDebugEnabled()  ||
-            QQuickProfiler::profilingSceneGraph();
+    bool profileFrames = QSG_LOG_TIME_RENDERLOOP().isDebugEnabled();
     if (profileFrames)
         timer.start();
+    Q_QUICK_SG_PROFILE_START(QQuickProfiler::SceneGraphPolishAndSync);
 
     QQuickWindowPrivate *d = QQuickWindowPrivate::get(window);
     d->polishItems();
 
     if (profileFrames)
         polishTime = timer.nsecsElapsed();
+    Q_QUICK_SG_PROFILE_RECORD(QQuickProfiler::SceneGraphPolishAndSync);
 
     w->updateDuringSync = false;
 
@@ -1125,6 +1143,7 @@ void QSGThreadedRenderLoop::polishAndSync(Window *w, bool inExpose)
     qCDebug(QSG_LOG_RENDERLOOP) << "- wait for sync";
     if (profileFrames)
         waitTime = timer.nsecsElapsed();
+    Q_QUICK_SG_PROFILE_RECORD(QQuickProfiler::SceneGraphPolishAndSync);
     w->thread->waitCondition.wait(&w->thread->mutex);
     m_lockedForSync = false;
     w->thread->mutex.unlock();
@@ -1132,9 +1151,7 @@ void QSGThreadedRenderLoop::polishAndSync(Window *w, bool inExpose)
 
     if (profileFrames)
         syncTime = timer.nsecsElapsed();
-
-    killTimer(w->timerId);
-    w->timerId = 0;
+    Q_QUICK_SG_PROFILE_RECORD(QQuickProfiler::SceneGraphPolishAndSync);
 
     if (m_animation_timer == 0 && m_animation_driver->isRunning()) {
         qCDebug(QSG_LOG_RENDERLOOP) << "- advancing animations";
@@ -1155,22 +1172,7 @@ void QSGThreadedRenderLoop::polishAndSync(Window *w, bool inExpose)
             << ", animations=" << (timer.nsecsElapsed() - syncTime) / 1000000
             << " - (on Gui thread) " << window;
 
-    Q_QUICK_SG_PROFILE(QQuickProfiler::SceneGraphPolishAndSync, (
-            polishTime,
-            waitTime - polishTime,
-            syncTime - waitTime,
-            timer.nsecsElapsed() - syncTime));
-}
-
-QSGThreadedRenderLoop::Window *QSGThreadedRenderLoop::windowForTimer(int timerId) const
-{
-    for (int i=0; i<m_windows.size(); ++i) {
-        if (m_windows.at(i).timerId == timerId) {
-            return const_cast<Window *>(&m_windows.at(i));
-            break;
-        }
-    }
-    return 0;
+    Q_QUICK_SG_PROFILE_END(QQuickProfiler::SceneGraphPolishAndSync);
 }
 
 bool QSGThreadedRenderLoop::event(QEvent *e)
@@ -1183,15 +1185,8 @@ bool QSGThreadedRenderLoop::event(QEvent *e)
             qCDebug(QSG_LOG_RENDERLOOP) << "- ticking non-visual timer";
             m_animation_driver->advance();
             emit timeToIncubate();
-        } else {
-            qCDebug(QSG_LOG_RENDERLOOP) << "- polish and sync timer";
-            Window *w = windowForTimer(te->timerId());
-            if (w)
-                polishAndSync(w);
-            else
-                killTimer(te->timerId());
+            return true;
         }
-        return true;
     }
 
     default:

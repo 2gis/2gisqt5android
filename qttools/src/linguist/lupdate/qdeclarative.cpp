@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Linguist of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -79,7 +79,7 @@ public:
         m_todo = engine->comments();
         m_translator = translator;
         m_fileName = fileName;
-        m_component = QFileInfo(fileName).baseName();
+        m_component = QFileInfo(fileName).completeBaseName();
         accept(node);
 
         // process the trailing comments
@@ -109,10 +109,8 @@ protected:
                 }
 
                 QString source;
-                if (!createString(node->arguments->expression, &source)) {
-                    yyMsg(identLineNo) << qPrintable(LU::tr("%1(): text to translate must be a literal string.\n").arg(name));
+                if (!createString(node->arguments->expression, &source))
                     return;
-                }
 
                 QString comment;
                 bool plural = false;
@@ -145,18 +143,14 @@ protected:
                 }
 
                 QString context;
-                if (!createString(node->arguments->expression, &context)) {
-                    yyMsg(identLineNo) << qPrintable(LU::tr("%1(): both arguments must be literal strings.\n").arg(name));
+                if (!createString(node->arguments->expression, &context))
                     return;
-                }
 
                 AST::ArgumentList *sourceNode = node->arguments->next; // we know that it is a valid pointer.
 
                 QString source;
-                if (!createString(sourceNode->expression, &source)) {
-                    yyMsg(identLineNo) << qPrintable(LU::tr("%1(): both arguments must be literal strings.\n").arg(name));
+                if (!createString(sourceNode->expression, &source))
                     return;
-                }
 
                 if (!sourcetext.isEmpty())
                     yyMsg(identLineNo) << qPrintable(LU::tr("//% cannot be used with %1(). Ignoring\n").arg(name));
@@ -190,10 +184,8 @@ protected:
                 }
 
                 QString id;
-                if (!createString(node->arguments->expression, &id)) {
-                    yyMsg(identLineNo) << qPrintable(LU::tr("%1(): identifier must be a literal string.\n").arg(name));
+                if (!createString(node->arguments->expression, &id))
                     return;
-                }
 
                 if (!msgid.isEmpty()) {
                     yyMsg(identLineNo) << qPrintable(LU::tr("//= cannot be used with %1(). Ignoring\n").arg(name));
@@ -432,9 +424,9 @@ public:
     bool operator()() const { return directives != 0; }
     int end() const { return lastOffset; }
 
-    virtual void pragmaLibrary() { consumeDirective(); }
-    virtual void importFile(const QString &, const QString &) { consumeDirective(); }
-    virtual void importModule(const QString &, const QString &, const QString &) { consumeDirective(); }
+    void pragmaLibrary() Q_DECL_OVERRIDE { consumeDirective(); }
+    void importFile(const QString &, const QString &, int, int) Q_DECL_OVERRIDE { consumeDirective(); }
+    void importModule(const QString &, const QString &, const QString &, int, int) Q_DECL_OVERRIDE { consumeDirective(); }
 
 private:
     void consumeDirective()
@@ -466,24 +458,6 @@ static bool load(Translator &translator, const QString &filename, ConversionData
         ts.setCodec("UTF-8");
         ts.setAutoDetectUnicode(true);
         code = ts.readAll();
-    }
-
-    if (! qmlMode) {
-        // fetch the optional pragma directives for Javascript files.
-
-        Lexer lex(/*engine=*/ 0);
-        HasDirectives directives(&lex);
-        lex.setCode(code, 1, qmlMode);
-        if (lex.scanDirectives(&directives)) {
-            if (directives()) {
-                // replace directives with white space characters
-                const int tokenOffset = directives.end();
-                for (int i = 0; i < tokenOffset; ++i) {
-                    if (! code.at(i).isSpace())
-                        code[i] = QLatin1Char(' ');
-                }
-            }
-        }
     }
 
     Engine driver;

@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -36,6 +36,9 @@
 
 #include <private/qqmlglobal_p.h>
 #include <QtCore/qdebug.h>
+#include <private/qmetaobjectbuilder_p.h>
+#include <private/qqmlmodelindexvaluetype_p.h>
+#include <private/qmetatype_p.h>
 
 QT_BEGIN_NAMESPACE
 
@@ -48,7 +51,7 @@ struct QQmlValueTypeFactoryImpl
 
     bool isValueType(int idx);
 
-    QQmlValueType *createValueType(int);
+    const QMetaObject *metaObjectForMetaType(int);
     QQmlValueType *valueType(int);
 
     QQmlValueType *valueTypes[QVariant::UserType];
@@ -60,6 +63,9 @@ QQmlValueTypeFactoryImpl::QQmlValueTypeFactoryImpl()
 {
     for (unsigned int ii = 0; ii < QVariant::UserType; ++ii)
         valueTypes[ii] = 0;
+
+    // See types wrapped in qqmlmodelindexvaluetype_p.h
+    qRegisterMetaType<QItemSelectionRange>();
 }
 
 QQmlValueTypeFactoryImpl::~QQmlValueTypeFactoryImpl()
@@ -83,39 +89,40 @@ bool QQmlValueTypeFactoryImpl::isValueType(int idx)
     return false;
 }
 
-QQmlValueType *QQmlValueTypeFactoryImpl::createValueType(int t)
+const QMetaObject *QQmlValueTypeFactoryImpl::metaObjectForMetaType(int t)
 {
-    QQmlValueType *rv = 0;
-
     switch (t) {
     case QVariant::Point:
-        rv = new QQmlPointValueType;
-        break;
+        return &QQmlPointValueType::staticMetaObject;
     case QVariant::PointF:
-        rv = new QQmlPointFValueType;
-        break;
+        return &QQmlPointFValueType::staticMetaObject;
     case QVariant::Size:
-        rv = new QQmlSizeValueType;
-        break;
+        return &QQmlSizeValueType::staticMetaObject;
     case QVariant::SizeF:
-        rv = new QQmlSizeFValueType;
-        break;
+        return &QQmlSizeFValueType::staticMetaObject;
     case QVariant::Rect:
-        rv = new QQmlRectValueType;
-        break;
+        return &QQmlRectValueType::staticMetaObject;
     case QVariant::RectF:
-        rv = new QQmlRectFValueType;
-        break;
+        return &QQmlRectFValueType::staticMetaObject;
     case QVariant::EasingCurve:
-        rv = new QQmlEasingValueType;
-        break;
+        return &QQmlEasingValueType::staticMetaObject;
+    case QVariant::ModelIndex:
+        return &QQmlModelIndexValueType::staticMetaObject;
+    case QVariant::PersistentModelIndex:
+        return &QQmlPersistentModelIndexValueType::staticMetaObject;
     default:
-        rv = QQml_valueTypeProvider()->createValueType(t);
+        if (t == qMetaTypeId<QItemSelectionRange>())
+            return &QQmlItemSelectionRangeValueType::staticMetaObject;
+
+        if (const QMetaObject *mo = QQml_valueTypeProvider()->metaObjectForMetaType(t))
+            return mo;
         break;
     }
 
-    Q_ASSERT(!rv || rv->metaObject()->propertyCount() < 32);
-    return rv;
+    QMetaType metaType(t);
+    if (metaType.flags() & QMetaType::IsGadget)
+        return metaType.metaObject();
+    return 0;
 }
 
 QQmlValueType *QQmlValueTypeFactoryImpl::valueType(int idx)
@@ -126,7 +133,10 @@ QQmlValueType *QQmlValueTypeFactoryImpl::valueType(int idx)
 
         QHash<int, QQmlValueType *>::iterator it = userTypes.find(idx);
         if (it == userTypes.end()) {
-            it = userTypes.insert(idx, createValueType(idx));
+            QQmlValueType *vt = 0;
+            if (const QMetaObject *mo = metaObjectForMetaType(idx))
+                vt = new QQmlValueType(idx, mo);
+            it = userTypes.insert(idx, vt);
         }
 
         mutex.unlock();
@@ -139,7 +149,8 @@ QQmlValueType *QQmlValueTypeFactoryImpl::valueType(int idx)
 
         // TODO: Investigate the performance/memory characteristics of
         // removing the preallocated array
-        if ((rv = createValueType(idx))) {
+        if (const QMetaObject *mo = metaObjectForMetaType(idx)) {
+            rv = new QQmlValueType(idx, mo);
             valueTypes[idx] = rv;
         }
     }
@@ -161,20 +172,82 @@ QQmlValueType *QQmlValueTypeFactory::valueType(int idx)
     return factoryImpl()->valueType(idx);
 }
 
+const QMetaObject *QQmlValueTypeFactory::metaObjectForMetaType(int type)
+{
+    return factoryImpl()->metaObjectForMetaType(type);
+}
+
 void QQmlValueTypeFactory::registerValueTypes(const char *uri, int versionMajor, int versionMinor)
 {
     qmlRegisterValueTypeEnums<QQmlEasingValueType>(uri, versionMajor, versionMinor, "Easing");
 }
 
+QQmlValueType::QQmlValueType(int typeId, const QMetaObject *gadgetMetaObject)
+    : gadgetPtr(QMetaType::create(typeId))
+    , typeId(typeId)
+    , metaType(typeId)
+{
+    QObjectPrivate *op = QObjectPrivate::get(this);
+    Q_ASSERT(!op->metaObject);
+    op->metaObject = this;
 
-QQmlValueType::QQmlValueType(int userType, QObject *parent)
-: QObject(parent), m_userType(userType)
+    QMetaObjectBuilder builder(gadgetMetaObject);
+    _metaObject = builder.toMetaObject();
+
+    *static_cast<QMetaObject*>(this) = *_metaObject;
+}
+
+QQmlValueType::~QQmlValueType()
+{
+    QObjectPrivate *op = QObjectPrivate::get(this);
+    Q_ASSERT(op->metaObject == this);
+    op->metaObject = 0;
+    ::free((void*)_metaObject);
+    metaType.destroy(gadgetPtr);
+}
+
+void QQmlValueType::read(QObject *obj, int idx)
+{
+    void *a[] = { gadgetPtr, 0 };
+    QMetaObject::metacall(obj, QMetaObject::ReadProperty, idx, a);
+}
+
+void QQmlValueType::write(QObject *obj, int idx, QQmlPropertyPrivate::WriteFlags flags)
+{
+    Q_ASSERT(gadgetPtr);
+    int status = -1;
+    void *a[] = { gadgetPtr, 0, &status, &flags };
+    QMetaObject::metacall(obj, QMetaObject::WriteProperty, idx, a);
+}
+
+QVariant QQmlValueType::value()
+{
+    Q_ASSERT(gadgetPtr);
+    return QVariant(typeId, gadgetPtr);
+}
+
+void QQmlValueType::setValue(const QVariant &value)
+{
+    Q_ASSERT(typeId == value.userType());
+    metaType.destruct(gadgetPtr);
+    metaType.construct(gadgetPtr, value.constData());
+}
+
+QAbstractDynamicMetaObject *QQmlValueType::toDynamicMetaObject(QObject *)
+{
+    return this;
+}
+
+void QQmlValueType::objectDestroyed(QObject *)
 {
 }
 
-QQmlPointFValueType::QQmlPointFValueType(QObject *parent)
-    : QQmlValueTypeBase<QPointF>(QMetaType::QPointF, parent)
+int QQmlValueType::metaCall(QObject *, QMetaObject::Call type, int _id, void **argv)
 {
+    const QMetaObject *mo = _metaObject;
+    QQmlMetaObject::resolveGadgetMethodOrPropertyIndex(type, &mo, &_id);
+    mo->d.static_metacall(reinterpret_cast<QObject*>(gadgetPtr), type, _id, argv);
+    return _id;
 }
 
 QString QQmlPointFValueType::toString() const
@@ -203,16 +276,6 @@ void QQmlPointFValueType::setY(qreal y)
 }
 
 
-QQmlPointValueType::QQmlPointValueType(QObject *parent)
-    : QQmlValueTypeBase<QPoint>(QMetaType::QPoint, parent)
-{
-}
-
-QString QQmlPointValueType::toString() const
-{
-    return QString(QLatin1String("QPoint(%1, %2)")).arg(v.x()).arg(v.y());
-}
-
 int QQmlPointValueType::x() const
 {
     return v.x();
@@ -233,11 +296,6 @@ void QQmlPointValueType::setY(int y)
     v.setY(y);
 }
 
-
-QQmlSizeFValueType::QQmlSizeFValueType(QObject *parent)
-    : QQmlValueTypeBase<QSizeF>(QMetaType::QSizeF, parent)
-{
-}
 
 QString QQmlSizeFValueType::toString() const
 {
@@ -265,16 +323,6 @@ void QQmlSizeFValueType::setHeight(qreal h)
 }
 
 
-QQmlSizeValueType::QQmlSizeValueType(QObject *parent)
-    : QQmlValueTypeBase<QSize>(QMetaType::QSize, parent)
-{
-}
-
-QString QQmlSizeValueType::toString() const
-{
-    return QString(QLatin1String("QSize(%1, %2)")).arg(v.width()).arg(v.height());
-}
-
 int QQmlSizeValueType::width() const
 {
     return v.width();
@@ -293,12 +341,6 @@ void QQmlSizeValueType::setWidth(int w)
 void QQmlSizeValueType::setHeight(int h)
 {
     v.setHeight(h);
-}
-
-
-QQmlRectFValueType::QQmlRectFValueType(QObject *parent)
-    : QQmlValueTypeBase<QRectF>(QMetaType::QRectF, parent)
-{
 }
 
 QString QQmlRectFValueType::toString() const
@@ -346,15 +388,24 @@ void QQmlRectFValueType::setHeight(qreal h)
     v.setHeight(h);
 }
 
-
-QQmlRectValueType::QQmlRectValueType(QObject *parent)
-    : QQmlValueTypeBase<QRect>(QMetaType::QRect, parent)
+qreal QQmlRectFValueType::left() const
 {
+    return v.left();
 }
 
-QString QQmlRectValueType::toString() const
+qreal QQmlRectFValueType::right() const
 {
-    return QString(QLatin1String("QRect(%1, %2, %3, %4)")).arg(v.x()).arg(v.y()).arg(v.width()).arg(v.height());
+    return v.right();
+}
+
+qreal QQmlRectFValueType::top() const
+{
+    return v.top();
+}
+
+qreal QQmlRectFValueType::bottom() const
+{
+    return v.bottom();
 }
 
 int QQmlRectValueType::x() const
@@ -397,15 +448,24 @@ void QQmlRectValueType::setHeight(int h)
     v.setHeight(h);
 }
 
-
-QQmlEasingValueType::QQmlEasingValueType(QObject *parent)
-    : QQmlValueTypeBase<QEasingCurve>(QMetaType::QEasingCurve, parent)
+int QQmlRectValueType::left() const
 {
+    return v.left();
 }
 
-QString QQmlEasingValueType::toString() const
+int QQmlRectValueType::right() const
 {
-    return QString(QLatin1String("QEasingCurve(%1, %2, %3, %4)")).arg(v.type()).arg(v.amplitude()).arg(v.overshoot()).arg(v.period());
+    return v.right();
+}
+
+int QQmlRectValueType::top() const
+{
+    return v.top();
+}
+
+int QQmlRectValueType::bottom() const
+{
+    return v.bottom();
 }
 
 QQmlEasingValueType::Type QQmlEasingValueType::type() const

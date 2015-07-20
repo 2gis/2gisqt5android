@@ -1,31 +1,34 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Quick Controls module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL21$
+** $QT_BEGIN_LICENSE:LGPL3$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 or version 3 as published by the Free
-** Software Foundation and appearing in the file LICENSE.LGPLv21 and
-** LICENSE.LGPLv3 included in the packaging of this file. Please review the
-** following information to ensure the GNU Lesser General Public License
-** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
-** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPLv3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** GNU General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU
+** General Public License version 2.0 or later as published by the Free
+** Software Foundation and appearing in the file LICENSE.GPL included in
+** the packaging of this file. Please review the following information to
+** ensure the GNU General Public License version 2.0 requirements will be
+** met: http://www.gnu.org/licenses/gpl-2.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -367,6 +370,19 @@ void QQuickStyleItem::initStyleOption()
         }
     }
         break;
+    case ItemBranchIndicator: {
+        if (!m_styleoption)
+            m_styleoption = new QStyleOption;
+
+        m_styleoption->state = QStyle::State_Item; // We don't want to fully support Win 95
+        if (m_properties.value("hasChildren").toBool())
+            m_styleoption->state |= QStyle::State_Children;
+        if (m_properties.value("hasSibling").toBool()) // Even this one could go away
+            m_styleoption->state |= QStyle::State_Sibling;
+        if (m_on)
+            m_styleoption->state |= QStyle::State_Open;
+    }
+        break;
     case Header: {
         if (!m_styleoption)
             m_styleoption = new QStyleOptionHeader();
@@ -663,8 +679,9 @@ void QQuickStyleItem::initStyleOption()
         if (opt->singleStep) {
             qreal numOfSteps = (opt->maximum - opt->minimum) / opt->singleStep;
             // at least 5 pixels between tick marks
-            if (numOfSteps && (width() / numOfSteps < 5))
-                opt->tickInterval = qRound((5 * numOfSteps / width()) + 0.5) * step();
+            qreal extent = horizontal() ? width() : height();
+            if (numOfSteps && (extent / numOfSteps < 5))
+                opt->tickInterval = qRound((5 * numOfSteps / extent) + 0.5) * step();
             else
                 opt->tickInterval = opt->singleStep;
 
@@ -798,6 +815,9 @@ void QQuickStyleItem::initStyleOption()
 
 void QQuickStyleItem::resolvePalette()
 {
+    if (QCoreApplication::testAttribute(Qt::AA_SetPalette))
+        return;
+
     QPlatformTheme::Palette paletteType = QPlatformTheme::SystemPalette;
     switch (m_itemType) {
     case Button:
@@ -1220,6 +1240,8 @@ int QQuickStyleItem::pixelMetric(const QString &metric)
         return qApp->style()->pixelMetric(QStyle::PM_SplitterWidth, 0 );
     else if (metric == "scrollbarspacing")
         return abs(qApp->style()->pixelMetric(QStyle::PM_ScrollView_ScrollBarSpacing, 0 ));
+    else if (metric == "treeviewindentation")
+        return qApp->style()->pixelMetric(QStyle::PM_TreeViewIndentation, 0 );
     return 0;
 }
 
@@ -1249,6 +1271,8 @@ QVariant QQuickStyleItem::styleHint(const QString &metric)
         return qApp->style()->styleHint(QStyle::SH_ItemView_ActivateItemOnSingleClick);
     else if (metric == "submenupopupdelay")
         return qApp->style()->styleHint(QStyle::SH_Menu_SubMenuPopupDelay, m_styleoption);
+    else if (metric == "wheelScrollLines")
+        return qApp->wheelScrollLines();
     return 0;
 
     // Add SH_Menu_SpaceActivatesItem
@@ -1306,6 +1330,8 @@ void QQuickStyleItem::setElementType(const QString &str)
         } else {
             m_itemType = (str == "item") ? Item : ItemRow;
         }
+    } else if (str == "itembranchindicator") {
+        m_itemType = ItemBranchIndicator;
     } else if (str == "groupbox") {
         m_itemType = GroupBox;
     } else if (str == "tab") {
@@ -1419,6 +1445,11 @@ QRectF QQuickStyleItem::subControlRect(const QString &subcontrolString)
                                              subcontrol);
     }
         break;
+    case ItemBranchIndicator: {
+        QStyleOption opt;
+        opt.rect = QRect(0, 0, implicitWidth(), implicitHeight());
+        return qApp->style()->subElementRect(QStyle::SE_TreeViewDisclosureItem, &opt, 0);
+    }
     default:
         break;
     }
@@ -1498,6 +1529,9 @@ void QQuickStyleItem::paint(QPainter *painter)
         break;
     case Item:
         qApp->style()->drawControl(QStyle::CE_ItemViewItem, m_styleoption, painter);
+        break;
+    case ItemBranchIndicator:
+        qApp->style()->drawPrimitive(QStyle::PE_IndicatorBranch, m_styleoption, painter);
         break;
     case Header:
         qApp->style()->drawControl(QStyle::CE_Header, m_styleoption, painter);

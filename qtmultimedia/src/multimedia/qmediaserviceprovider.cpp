@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -299,7 +299,14 @@ Q_GLOBAL_STATIC_WITH_ARGS(QMediaPluginLoader, loader,
 
 class QPluginServiceProvider : public QMediaServiceProvider
 {
-    QMap<QMediaService*, QMediaServiceProviderPlugin*> pluginMap;
+    struct MediaServiceData {
+        QByteArray type;
+        QMediaServiceProviderPlugin *plugin;
+
+        MediaServiceData() : plugin(0) { }
+    };
+
+    QMap<const QMediaService*, MediaServiceData> mediaServiceData;
 
 public:
     QMediaService* requestService(const QByteArray &type, const QMediaServiceProviderHint &hint)
@@ -416,8 +423,12 @@ public:
 
             if (plugin != 0) {
                 QMediaService *service = plugin->create(key);
-                if (service != 0)
-                    pluginMap.insert(service, plugin);
+                if (service != 0) {
+                    MediaServiceData d;
+                    d.type = type;
+                    d.plugin = plugin;
+                    mediaServiceData.insert(service, d);
+                }
 
                 return service;
             }
@@ -430,11 +441,28 @@ public:
     void releaseService(QMediaService *service)
     {
         if (service != 0) {
-            QMediaServiceProviderPlugin *plugin = pluginMap.take(service);
+            MediaServiceData d = mediaServiceData.take(service);
 
-            if (plugin != 0)
-                plugin->release(service);
+            if (d.plugin != 0)
+                d.plugin->release(service);
         }
+    }
+
+    QMediaServiceProviderHint::Features supportedFeatures(const QMediaService *service) const
+    {
+        if (service) {
+            MediaServiceData d = mediaServiceData.value(service);
+
+            if (d.plugin) {
+                QMediaServiceFeaturesInterface *iface =
+                        qobject_cast<QMediaServiceFeaturesInterface*>(d.plugin);
+
+                if (iface)
+                    return iface->supportedFeatures(d.type);
+            }
+        }
+
+        return QMediaServiceProviderHint::Features();
     }
 
     QMultimedia::SupportEstimate hasSupport(const QByteArray &serviceType,
@@ -661,6 +689,18 @@ Q_GLOBAL_STATIC(QPluginServiceProvider, pluginProvider);
 */
 
 /*!
+    \fn QMediaServiceProvider::supportedFeatures(const QMediaService *service) const
+
+    Returns the features supported by a given \a service.
+*/
+QMediaServiceProviderHint::Features QMediaServiceProvider::supportedFeatures(const QMediaService *service) const
+{
+    Q_UNUSED(service);
+
+    return QMediaServiceProviderHint::Features(0);
+}
+
+/*!
     \fn QMultimedia::SupportEstimate QMediaServiceProvider::hasSupport(const QByteArray &serviceType, const QString &mimeType, const QStringList& codecs, int flags) const
 
     Returns how confident a media service provider is that is can provide a \a
@@ -850,19 +890,19 @@ QMediaServiceProvider *QMediaServiceProvider::defaultServiceProvider()
 /*!
     \since 5.3
 
-    \fn QMediaServiceSupportedDevicesInterface::defaultDevice(const QByteArray &service) const
+    \fn QByteArray QMediaServiceSupportedDevicesInterface::defaultDevice(const QByteArray &service) const
 
     Returns the default device for a \a service type.
 */
 
 /*!
-    \fn QMediaServiceSupportedDevicesInterface::devices(const QByteArray &service) const
+    \fn QList<QByteArray> QMediaServiceSupportedDevicesInterface::devices(const QByteArray &service) const
 
     Returns a list of devices available for a \a service type.
 */
 
 /*!
-    \fn QMediaServiceSupportedDevicesInterface::deviceDescription(const QByteArray &service, const QByteArray &device)
+    \fn QString QMediaServiceSupportedDevicesInterface::deviceDescription(const QByteArray &service, const QByteArray &device)
 
     Returns the description of a \a device available for a \a service type.
 */

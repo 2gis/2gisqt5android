@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Compositor.
 **
@@ -17,8 +17,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -49,6 +49,9 @@
 #endif
 
 #include <QtCore/QDebug>
+
+#include <wayland-server-protocol.h>
+#include "qwaylandshmformathelper.h"
 
 QT_BEGIN_NAMESPACE
 
@@ -235,7 +238,8 @@ QImage SurfaceBuffer::image()
         int stride = wl_shm_buffer_get_stride(m_shmBuffer);
         int width = wl_shm_buffer_get_width(m_shmBuffer);
         int height = wl_shm_buffer_get_height(m_shmBuffer);
-        m_image = QImage(data, width, height, stride, QImage::Format_ARGB32_Premultiplied);
+        QImage::Format format = QWaylandShmFormatHelper::fromWaylandShmFormat(wl_shm_format(wl_shm_buffer_get_format(m_shmBuffer)));
+        m_image = QImage(data, width, height, stride, format);
     }
 
     return m_image;

@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtPositioning module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -65,6 +65,109 @@ QT_BEGIN_NAMESPACE
     cross one of the poles the height is modified such that the geo rectangle
     touches but does not cross the pole and that the center coordinate is still
     in the center of the geo rectangle.
+
+    This class is a \l Q_GADGET since Qt 5.5. It can be
+    \l{Cpp_value_integration_positioning}{directly used from C++ and QML}.
+*/
+
+/*!
+    \property QGeoRectangle::bottomLeft
+    \brief This property holds the bottom left coorindate of this geo rectangle.
+
+    While this property is introduced in Qt 5.5, the related accessor functions
+    exist since the first version of this class.
+
+    \since 5.5
+*/
+
+/*!
+    \property QGeoRectangle::bottomRight
+    \brief This property holds the bottom right coordinate of this geo rectangle.
+
+    While this property is introduced in Qt 5.5, the related accessor functions
+    exist since the first version of this class.
+
+    \since 5.5
+*/
+
+/*!
+    \property QGeoRectangle::topLeft
+    \brief This property holds the top left coordinate of this geo rectangle.
+
+    While this property is introduced in Qt 5.5, the related accessor functions
+    exist since the first version of this class.
+
+    \since 5.5
+*/
+
+/*!
+    \property QGeoRectangle::topRight
+    \brief This property holds the top right coordinate of this geo rectangle.
+
+    While this property is introduced in Qt 5.5, the related accessor functions
+    exist since the first version of this class.
+
+    \since 5.5
+*/
+
+/*!
+    \property QGeoRectangle::center
+    \brief This property holds the center of this geo rectangle.
+
+    While this property is introduced in Qt 5.5, the related accessor functions
+    exist since the first version of this class.
+
+    \sa QGeoShape::center
+
+    \since 5.5
+*/
+
+/*!
+    \property QGeoRectangle::width
+    \brief This property holds the width of this geo rectangle in degrees.
+
+    The property value is undefined if this geo rectangle is invalid.
+
+    If the new width is less than 0.0 or if this geo rectangle is invalid, this
+    function does nothing. To set up the values of an invalid
+    geo rectangle based on the center, width, and height, you should use
+    \l setCenter() first to make the geo rectangle valid.
+
+    360.0 is the width used only if the new width is equal or greater than 360.
+    In such cases the leftmost longitude of the geo rectangle is set to -180.0
+    degrees and the rightmost longitude of the geo rectangle is set to 180.0
+    degrees.
+
+    While this property is introduced in Qt 5.5, the related accessor functions
+    exist since the first version of this class.
+
+    \since 5.5
+*/
+
+/*!
+    \property QGeoRectangle::height
+    \brief This property holds the height of this geo rectangle in degrees.
+
+    The property value is undefined if this geo rectangle is invalid.
+
+    If the new height is less than 0.0 or if this geo rectangle is invalid,
+    the property is not changed. To set up the values of an invalid
+    geo rectangle based on the center, width, and height, you should use
+    \l setCenter() first to make the geo rectangle valid.
+
+    If the change in height would cause the geo rectangle to cross a pole,
+    the height is adjusted such that the geo rectangle only touches the pole.
+
+    This change is done such that the center coordinate is still at the
+    center of the geo rectangle, which may result in a geo rectangle with
+    a smaller height than expected.
+
+    180.0 is the height used only if the new height is greater or equal than 180.
+
+    While this property is introduced in Qt 5.5, the related accessor functions
+    exist since the first version of this class.
+
+    \since 5.5
 */
 
 inline QGeoRectanglePrivate *QGeoRectangle::d_func()
@@ -77,12 +180,25 @@ inline const QGeoRectanglePrivate *QGeoRectangle::d_func() const
     return static_cast<const QGeoRectanglePrivate *>(d_ptr.constData());
 }
 
+struct RectangleVariantConversions
+{
+    RectangleVariantConversions()
+    {
+        QMetaType::registerConverter<QGeoRectangle, QGeoShape>();
+        QMetaType::registerConverter<QGeoShape, QGeoRectangle>();
+    }
+};
+
+
+Q_GLOBAL_STATIC(RectangleVariantConversions, initRectangleConversions)
+
 /*!
     Constructs a new, invalid geo rectangle.
 */
 QGeoRectangle::QGeoRectangle()
 :   QGeoShape(new QGeoRectanglePrivate)
 {
+    initRectangleConversions();
 }
 
 /*!
@@ -97,6 +213,7 @@ QGeoRectangle::QGeoRectangle()
 */
 QGeoRectangle::QGeoRectangle(const QGeoCoordinate &center, double degreesWidth, double degreesHeight)
 {
+    initRectangleConversions();
     d_ptr = new QGeoRectanglePrivate(center, center);
     setWidth(degreesWidth);
     setHeight(degreesHeight);
@@ -108,6 +225,7 @@ QGeoRectangle::QGeoRectangle(const QGeoCoordinate &center, double degreesWidth, 
 */
 QGeoRectangle::QGeoRectangle(const QGeoCoordinate &topLeft, const QGeoCoordinate &bottomRight)
 {
+    initRectangleConversions();
     d_ptr = new QGeoRectanglePrivate(topLeft, bottomRight);
 }
 
@@ -116,6 +234,7 @@ QGeoRectangle::QGeoRectangle(const QGeoCoordinate &topLeft, const QGeoCoordinate
 */
 QGeoRectangle::QGeoRectangle(const QList<QGeoCoordinate> &coordinates)
 {
+    initRectangleConversions();
     if (coordinates.isEmpty()) {
         d_ptr = new QGeoRectanglePrivate;
     } else {
@@ -134,6 +253,7 @@ QGeoRectangle::QGeoRectangle(const QList<QGeoCoordinate> &coordinates)
 QGeoRectangle::QGeoRectangle(const QGeoRectangle &other)
 :   QGeoShape(other)
 {
+    initRectangleConversions();
 }
 
 /*!
@@ -142,6 +262,7 @@ QGeoRectangle::QGeoRectangle(const QGeoRectangle &other)
 QGeoRectangle::QGeoRectangle(const QGeoShape &other)
 :   QGeoShape(other)
 {
+    initRectangleConversions();
     if (type() != QGeoShape::RectangleType)
         d_ptr = new QGeoRectanglePrivate;
 }
@@ -354,41 +475,17 @@ void QGeoRectangle::setCenter(const QGeoCoordinate &center)
 }
 
 /*!
-    Returns the center of this geo rectangle.
+    Returns the center of this geo rectangle. Equivalent to QGeoShape::center().
 */
 QGeoCoordinate QGeoRectangle::center() const
 {
-    if (!isValid())
-        return QGeoCoordinate();
-
     Q_D(const QGeoRectangle);
 
-    double cLat = (d->topLeft.latitude() + d->bottomRight.latitude()) / 2.0;
-
-    double cLon = (d->bottomRight.longitude() + d->topLeft.longitude()) / 2.0;
-    if (d->topLeft.longitude() > d->bottomRight.longitude()) {
-        cLon = cLon - 180.0;
-    }
-
-    if (cLon < -180.0)
-        cLon += 360.0;
-    if (cLon > 180.0)
-        cLon -= 360.0;
-
-    return QGeoCoordinate(cLat, cLon);
+    return d->center();
 }
 
 /*!
     Sets the width of this geo rectangle in degrees to \a degreesWidth.
-
-    If \a degreesWidth is less than 0.0 or if this geo rectangle is invalid this
-    function does nothing.  To set up the values of an invalid
-    geo rectangle based on the center, width and height you should use
-    setCenter() first in order to make the geo rectangle valid.
-
-    If \a degreesWidth is greater than 360.0 then 360.0 is used as the width,
-    the leftmost longitude of the geo rectangle is set to -180.0 degrees and the
-    rightmost longitude of the geo rectangle is set to 180.0 degrees.
 */
 void QGeoRectangle::setWidth(double degreesWidth)
 {
@@ -452,20 +549,6 @@ double QGeoRectangle::width() const
 
 /*!
     Sets the height of this geo rectangle in degrees to \a degreesHeight.
-
-    If \a degreesHeight is less than 0.0 or if this geo rectangle is invalid
-    this function does nothing. To set up the values of an invalid
-    geo rectangle based on the center, width and height you should use
-    setCenter() first in order to make the geo rectangle valid.
-
-    If the change in height would cause the geo rectangle to cross a pole
-    the height is adjusted such that the geo rectangle only touches the pole.
-
-    This change is done such that the center coordinate is still at the
-    center of the geo rectangle, which may result in a geo rectangle with
-    a smaller height than might otherwise be expected.
-
-    If \a degreesHeight is greater than 180.0 then 180.0 is used as the height.
 */
 void QGeoRectangle::setHeight(double degreesHeight)
 {
@@ -564,6 +647,25 @@ bool QGeoRectanglePrivate::contains(const QGeoCoordinate &coordinate) const
     }
 
     return true;
+}
+
+QGeoCoordinate QGeoRectanglePrivate::center() const
+{
+    if (!isValid())
+        return QGeoCoordinate();
+
+    double cLat = (topLeft.latitude() + bottomRight.latitude()) / 2.0;
+    double cLon = (bottomRight.longitude() + topLeft.longitude()) / 2.0;
+
+    if (topLeft.longitude() > bottomRight.longitude())
+        cLon = cLon - 180.0;
+
+    if (cLon < -180.0)
+        cLon += 360.0;
+    if (cLon > 180.0)
+        cLon -= 360.0;
+
+    return QGeoCoordinate(cLat, cLon);
 }
 
 /*!
@@ -893,6 +995,25 @@ QGeoRectangle &QGeoRectangle::operator|=(const QGeoRectangle &rectangle)
     d->bottomRight = QGeoCoordinate(bottom, right);
 
     return *this;
+}
+
+/*!
+    Returns the geo rectangle properties as a string.
+
+    \since 5.5
+*/
+QString QGeoRectangle::toString() const
+{
+    if (type() != QGeoShape::RectangleType) {
+        qWarning("Not a rectangle a %d\n", type());
+        return QStringLiteral("QGeoRectangle(not a rectangle)");
+    }
+
+    return QStringLiteral("QGeoRectangle({%1, %2}, {%3, %4})")
+        .arg(topLeft().latitude())
+        .arg(topLeft().longitude())
+        .arg(bottomRight().latitude())
+        .arg(bottomRight().longitude());
 }
 
 /*******************************************************************************

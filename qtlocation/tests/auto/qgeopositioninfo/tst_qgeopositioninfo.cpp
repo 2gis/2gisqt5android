@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -33,7 +33,7 @@
 
 //TESTED_COMPONENT=src/location
 
-#include <qgeopositioninfo.h>
+#include <QtPositioning/qgeopositioninfo.h>
 
 #include <QMetaType>
 #include <QObject>
@@ -347,10 +347,11 @@ private slots:
     void debug()
     {
         QFETCH(QGeoPositionInfo, info);
+        QFETCH(int, nextValue);
         QFETCH(QByteArray, debugStringEnd);
 
         qInstallMessageHandler(tst_qgeopositioninfo_messageHandler);
-        qDebug() << info;
+        qDebug() << info << nextValue;
         qInstallMessageHandler(0);
 
         // use endsWith() so we don't depend on QDateTime's debug() implementation
@@ -363,14 +364,15 @@ private slots:
     void debug_data()
     {
         QTest::addColumn<QGeoPositionInfo>("info");
+        QTest::addColumn<int>("nextValue");
         QTest::addColumn<QByteArray>("debugStringEnd");
 
-        QTest::newRow("no values") << QGeoPositionInfo()
-                << QString("QGeoCoordinate(?, ?))").toLatin1();
+        QTest::newRow("no values") << QGeoPositionInfo() << 40
+                << QString("QGeoCoordinate(?, ?)) 40").toLatin1();
 
         QGeoCoordinate coord(1, 1);
         QTest::newRow("coord, time") << QGeoPositionInfo(coord, QDateTime::currentDateTime())
-                << QByteArray("QGeoCoordinate(1, 1))");
+                << 40 << QByteArray("QGeoCoordinate(1, 1)) 40");
 
         QGeoPositionInfo info;
         info.setAttribute(QGeoPositionInfo::Direction, 1.1);
@@ -379,8 +381,8 @@ private slots:
         info.setAttribute(QGeoPositionInfo::MagneticVariation, 4.1);
         info.setAttribute(QGeoPositionInfo::HorizontalAccuracy, 5.1);
         info.setAttribute(QGeoPositionInfo::VerticalAccuracy, 6.1);
-        QTest::newRow("all attributes") << info
-                << QByteArray("QGeoCoordinate(?, ?), Direction=1.1, GroundSpeed=2.1, VerticalSpeed=3.1, MagneticVariation=4.1, HorizontalAccuracy=5.1, VerticalAccuracy=6.1)");
+        QTest::newRow("all attributes") << info << 40
+                << QByteArray("QGeoCoordinate(?, ?), Direction=1.1, GroundSpeed=2.1, VerticalSpeed=3.1, MagneticVariation=4.1, HorizontalAccuracy=5.1, VerticalAccuracy=6.1) 40");
     }
 };
 

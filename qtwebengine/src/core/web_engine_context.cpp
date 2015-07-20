@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtWebEngine module of the Qt Toolkit.
 **
@@ -10,15 +10,15 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
 ** General Public License version 3 as published by the Free Software
 ** Foundation and appearing in the file LICENSE.LGPLv3 included in the
-** packaging of this file.  Please review the following information to
+** packaging of this file. Please review the following information to
 ** ensure the GNU Lesser General Public License version 3 requirements
 ** will be met: https://www.gnu.org/licenses/lgpl.html.
 **
@@ -26,7 +26,7 @@
 ** Alternatively, this file may be used under the terms of the GNU
 ** General Public License version 2.0 or later as published by the Free
 ** Software Foundation and appearing in the file LICENSE.GPL included in
-** the packaging of this file.  Please review the following information to
+** the packaging of this file. Please review the following information to
 ** ensure the GNU General Public License version 2.0 requirements will be
 ** met: http://www.gnu.org/licenses/gpl-2.0.html.
 **
@@ -66,20 +66,24 @@
 #include "content/public/app/startup_helper_win.h"
 #endif // OS_WIN
 
+#include "browser_context_adapter.h"
 #include "content_browser_client_qt.h"
 #include "content_client_qt.h"
 #include "content_main_delegate_qt.h"
+#include "dev_tools_http_handler_delegate_qt.h"
 #include "gl_context_qt.h"
 #include "media_capture_devices_dispatcher.h"
 #include "type_conversion.h"
 #include "surface_factory_qt.h"
 #include "web_engine_library_info.h"
-#include "web_engine_visited_links_manager.h"
+#include <QFileInfo>
 #include <QGuiApplication>
 #include <QOpenGLContext>
 #include <QStringList>
 #include <QVector>
 #include <qpa/qplatformnativeinterface.h>
+
+using namespace QtWebEngineCore;
 
 namespace {
 
@@ -90,10 +94,53 @@ void destroyContext()
     sContext = 0;
 }
 
+bool usingANGLE()
+{
+#if defined(Q_OS_WIN)
+    return QOpenGLContext::openGLModuleType() == QOpenGLContext::LibGLES;
+#else
+    return false;
+#endif
+}
+
+bool usingSoftwareDynamicGL()
+{
+#if defined(Q_OS_WIN)
+    HMODULE handle = static_cast<HMODULE>(QOpenGLContext::openGLModuleHandle());
+    wchar_t path[MAX_PATH];
+    DWORD size = GetModuleFileName(handle, path, MAX_PATH);
+    QFileInfo openGLModule(QString::fromWCharArray(path, size));
+    return openGLModule.fileName() == QLatin1String("opengl32sw.dll");
+#else
+    return false;
+#endif
+}
+
+bool usingQtQuick2DRenderer()
+{
+    const QStringList args = QGuiApplication::arguments();
+    QString device;
+    for (int index = 0; index < args.count(); ++index) {
+        if (args.at(index).startsWith(QLatin1String("--device="))) {
+            device = args.at(index).mid(9);
+            break;
+        }
+    }
+
+    if (device.isEmpty())
+        device = QString::fromLocal8Bit(qgetenv("QMLSCENE_DEVICE"));
+
+    // This assumes that the plugin is installed and is going to be used by QtQuick.
+    return device == QLatin1String("softwarecontext");
+}
+
 } // namespace
 
 WebEngineContext::~WebEngineContext()
 {
+    m_defaultBrowserContext = 0;
+    delete m_globalQObject;
+    m_globalQObject = 0;
     base::MessagePump::Delegate *delegate = m_runLoop->loop_;
     // Flush the UI message loop before quitting.
     while (delegate->DoWork()) { }
@@ -103,7 +150,7 @@ WebEngineContext::~WebEngineContext()
 
 scoped_refptr<WebEngineContext> WebEngineContext::current()
 {
-    if (!sContext) {
+    if (!sContext.get()) {
         sContext = new WebEngineContext();
         // Make sure that we ramp down Chromium before QApplication destroys its X connection, etc.
         qAddPostRoutine(destroyContext);
@@ -111,9 +158,16 @@ scoped_refptr<WebEngineContext> WebEngineContext::current()
     return sContext;
 }
 
-WebEngineVisitedLinksManager *WebEngineContext::visitedLinksManager()
+BrowserContextAdapter* WebEngineContext::defaultBrowserContext()
 {
-    return m_visitedLinksManager.get();
+    if (!m_defaultBrowserContext)
+        m_defaultBrowserContext = new BrowserContextAdapter(QStringLiteral("Default"));
+    return m_defaultBrowserContext.data();
+}
+
+QObject *WebEngineContext::globalQObject()
+{
+    return m_globalQObject;
 }
 
 #ifndef CHROMIUM_VERSION
@@ -125,6 +179,7 @@ WebEngineContext::WebEngineContext()
     : m_mainDelegate(new ContentMainDelegateQt)
     , m_contentRunner(content::ContentMainRunner::Create())
     , m_browserRunner(content::BrowserMainRunner::Create())
+    , m_globalQObject(new QObject())
 {
     QList<QByteArray> args;
     Q_FOREACH (const QString& arg, QCoreApplication::arguments())
@@ -142,28 +197,15 @@ WebEngineContext::WebEngineContext()
     parsedCommandLine->AppendSwitch(switches::kEnableDelegatedRenderer);
     parsedCommandLine->AppendSwitch(switches::kEnableThreadedCompositing);
     parsedCommandLine->AppendSwitch(switches::kInProcessGPU);
-    parsedCommandLine->AppendSwitch(switches::kDisableDesktopNotifications);
-
-#if defined(OS_WIN)
-    parsedCommandLine->AppendSwitch(switches::kDisableD3D11);
-    // ANGLE doesn't support multi-threading, doing texture upload from the GPU thread
-    // hasn't been causing problems yet but doing rendering there is conflicting with
-    // Qt's rendering of the scene graph.
-    parsedCommandLine->AppendSwitch(switches::kDisableExperimentalWebGL);
-    parsedCommandLine->AppendSwitch(switches::kDisableAccelerated2dCanvas);
-#endif
 
 #if defined(QTWEBENGINE_MOBILE_SWITCHES)
-    // Inspired from the Android port's default switches
+    // Inspired by the Android port's default switches
     parsedCommandLine->AppendSwitch(switches::kEnableOverlayScrollbar);
-    parsedCommandLine->AppendSwitch(switches::kEnableGestureTapHighlight);
     parsedCommandLine->AppendSwitch(switches::kEnablePinch);
     parsedCommandLine->AppendSwitch(switches::kEnableViewport);
     parsedCommandLine->AppendSwitch(switches::kEnableViewportMeta);
-    parsedCommandLine->AppendSwitch(switches::kEnableSmoothScrolling);
+    parsedCommandLine->AppendSwitch(switches::kMainFrameResizesAreOrientationChanges);
     parsedCommandLine->AppendSwitch(switches::kDisableAcceleratedVideoDecode);
-    parsedCommandLine->AppendSwitch(switches::kEnableAcceleratedOverflowScroll);
-    parsedCommandLine->AppendSwitch(switches::kEnableCompositingForFixedPosition);
     parsedCommandLine->AppendSwitch(switches::kDisableGpuShaderDiskCache);
     parsedCommandLine->AppendSwitch(switches::kDisable2dCanvasAntialiasing);
     parsedCommandLine->AppendSwitch(switches::kEnableImplSidePainting);
@@ -172,24 +214,22 @@ WebEngineContext::WebEngineContext()
     parsedCommandLine->AppendSwitchASCII(switches::kProfilerTiming, switches::kProfilerTimingDisabledValue);
 #endif
 
-#if defined(OS_ANDROID)
-    // On eAndroid we use this to get the native display
-    // from Qt in GLSurfaceEGL::InitializeOneOff.
-    m_surfaceFactory.reset(new SurfaceFactoryQt());
-#endif
-
     GLContextHelper::initialize();
 
-    const char *glType;
-    switch (QOpenGLContext::currentContext()->openGLModuleType()) {
-    case QOpenGLContext::LibGL:
-        glType = gfx::kGLImplementationDesktopName;
-        break;
-    case QOpenGLContext::LibGLES:
-        glType = gfx::kGLImplementationEGLName;
-        break;
+    if (usingANGLE() || usingSoftwareDynamicGL() || usingQtQuick2DRenderer()) {
+        parsedCommandLine->AppendSwitch(switches::kDisableGpu);
+    } else {
+        const char *glType = 0;
+        switch (QOpenGLContext::openGLModuleType()) {
+        case QOpenGLContext::LibGL:
+            glType = gfx::kGLImplementationDesktopName;
+            break;
+        case QOpenGLContext::LibGLES:
+            glType = gfx::kGLImplementationEGLName;
+            break;
+        }
+        parsedCommandLine->AppendSwitchASCII(switches::kUseGL, glType);
     }
-    parsedCommandLine->AppendSwitchASCII(switches::kUseGL, glType);
 
     content::UtilityProcessHostImpl::RegisterUtilityMainThreadFactory(content::CreateInProcessUtilityThread);
     content::RenderProcessHostImpl::RegisterRendererMainThreadFactory(content::CreateInProcessRendererThread);
@@ -209,11 +249,9 @@ WebEngineContext::WebEngineContext()
     m_runLoop.reset(new base::RunLoop);
     m_runLoop->BeforeRun();
 
+    m_devtools.reset(new DevToolsHttpHandlerDelegateQt);
     // Force the initialization of MediaCaptureDevicesDispatcher on the UI
     // thread to avoid a thread check assertion in its constructor when it
     // first gets referenced on the IO thread.
     MediaCaptureDevicesDispatcher::GetInstance();
-
-    // Ensure we have a VisitedLinksMaster instance up and running
-    m_visitedLinksManager.reset(new WebEngineVisitedLinksManager);
 }

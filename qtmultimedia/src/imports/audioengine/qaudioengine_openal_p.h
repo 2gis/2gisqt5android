@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the plugins of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -38,6 +38,7 @@
 #include <QList>
 #include <QMap>
 #include <QTimer>
+#include <QUrl>
 
 #if defined(HEADER_OPENAL_PREFIX)
 #include <OpenAL/al.h>
@@ -52,6 +53,9 @@
 
 QT_BEGIN_NAMESPACE
 
+class QSample;
+class QSampleCache;
+
 class QSoundBufferPrivateAL : public QSoundBuffer
 {
     Q_OBJECT
@@ -60,6 +64,40 @@ public:
     virtual void bindToSource(ALuint alSource) = 0;
     virtual void unbindFromSource(ALuint alSource) = 0;
 };
+
+
+class StaticSoundBufferAL : public QSoundBufferPrivateAL
+{
+    Q_OBJECT
+
+public:
+    StaticSoundBufferAL(QObject *parent, const QUrl &url, QSampleCache *sampleLoader);
+    ~StaticSoundBufferAL();
+
+    State state() const Q_DECL_OVERRIDE;
+
+    void load() Q_DECL_OVERRIDE;
+
+    void bindToSource(ALuint alSource) Q_DECL_OVERRIDE;
+    void unbindFromSource(ALuint alSource) Q_DECL_OVERRIDE;
+
+    inline long addRef() { return ++m_ref; }
+    inline long release() { return --m_ref; }
+    inline long refCount() const { return m_ref; }
+
+public Q_SLOTS:
+    void sampleReady();
+    void decoderError();
+
+private:
+    long m_ref;
+    QUrl m_url;
+    ALuint m_alBuffer;
+    State m_state;
+    QSample *m_sample;
+    QSampleCache *m_sampleLoader;
+};
+
 
 class QSoundSourcePrivate : public QSoundSource
 {
@@ -113,7 +151,7 @@ private:
     qreal   m_coneOuterGain;
 };
 
-class QSampleCache;
+
 class QAudioEnginePrivate : public QObject
 {
     Q_OBJECT

@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtWebEngine module of the Qt Toolkit.
 **
@@ -10,15 +10,15 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
 ** General Public License version 3 as published by the Free Software
 ** Foundation and appearing in the file LICENSE.LGPLv3 included in the
-** packaging of this file.  Please review the following information to
+** packaging of this file. Please review the following information to
 ** ensure the GNU Lesser General Public License version 3 requirements
 ** will be met: https://www.gnu.org/licenses/lgpl.html.
 **
@@ -26,7 +26,7 @@
 ** Alternatively, this file may be used under the terms of the GNU
 ** General Public License version 2.0 or later as published by the Free
 ** Software Foundation and appearing in the file LICENSE.GPL included in
-** the packaging of this file.  Please review the following information to
+** the packaging of this file. Please review the following information to
 ** ensure the GNU General Public License version 2.0 requirements will be
 ** met: http://www.gnu.org/licenses/gpl-2.0.html.
 **
@@ -38,11 +38,13 @@
 #include "web_contents_adapter.h"
 #include "type_conversion.h"
 
-#include "webkit/common/webpreferences.h"
+#include "content/public/common/web_preferences.h"
 
 #include <QFont>
 #include <QTimer>
 #include <QTouchDevice>
+
+namespace QtWebEngineCore {
 
 static const int batchTimerTimeout = 0;
 
@@ -67,8 +69,6 @@ private:
     WebEngineSettings *m_settings;
 };
 
-#include "web_engine_settings.moc"
-
 static inline bool isTouchScreenAvailable() {
     static bool initialized = false;
     static bool touchScreenAvailable = false;
@@ -85,19 +85,26 @@ static inline bool isTouchScreenAvailable() {
 }
 
 
-WebEngineSettings::WebEngineSettings(WebEngineSettingsDelegate *delegate)
+WebEngineSettings::WebEngineSettings(WebEngineSettings *_parentSettings)
     : m_adapter(0)
-    , m_delegate(delegate)
     , m_batchTimer(new BatchTimer(this))
+    , parentSettings(_parentSettings)
 {
-    Q_ASSERT(delegate);
+    if (parentSettings)
+        parentSettings->childSettings.insert(this);
 }
 
 WebEngineSettings::~WebEngineSettings()
 {
+    if (parentSettings)
+        parentSettings->childSettings.remove(this);
+    // In QML the profile and its settings may be garbage collected before the page and its settings.
+    Q_FOREACH (WebEngineSettings *settings, childSettings) {
+        settings->parentSettings = 0;
+    }
 }
 
-void WebEngineSettings::overrideWebPreferences(WebPreferences *prefs)
+void WebEngineSettings::overrideWebPreferences(content::WebPreferences *prefs)
 {
     // Apply our settings on top of those.
     applySettingsToWebPreferences(prefs);
@@ -105,100 +112,92 @@ void WebEngineSettings::overrideWebPreferences(WebPreferences *prefs)
     // as the host process already overides some of the default WebPreferences values
     // before we get here (e.g. number_of_cpu_cores).
     if (webPreferences.isNull())
-        webPreferences.reset(new WebPreferences(*prefs));
+        webPreferences.reset(new content::WebPreferences(*prefs));
 }
 
 void WebEngineSettings::setAttribute(WebEngineSettings::Attribute attr, bool on)
 {
     m_attributes.insert(attr, on);
-    m_delegate->apply();
+    scheduleApplyRecursively();
 }
 
 bool WebEngineSettings::testAttribute(WebEngineSettings::Attribute attr) const
 {
-    WebEngineSettings *fallback = m_delegate->fallbackSettings();
-    Q_ASSERT(fallback);
-    if (this == fallback) {
+    if (!parentSettings) {
         Q_ASSERT(m_attributes.contains(attr));
         return m_attributes.value(attr);
     }
-    return m_attributes.value(attr, fallback->testAttribute(attr));
+    return m_attributes.value(attr, parentSettings->testAttribute(attr));
 }
 
 void WebEngineSettings::resetAttribute(WebEngineSettings::Attribute attr)
 {
-    if (this == m_delegate->fallbackSettings())
+    if (!parentSettings) // FIXME: Set initial defaults.
         return;
     m_attributes.remove(attr);
-    m_delegate->apply();
+    scheduleApplyRecursively();
 }
 
 void WebEngineSettings::setFontFamily(WebEngineSettings::FontFamily which, const QString &family)
 {
     m_fontFamilies.insert(which, family);
-    m_delegate->apply();
+    scheduleApplyRecursively();
 }
 
 QString WebEngineSettings::fontFamily(WebEngineSettings::FontFamily which)
 {
-    WebEngineSettings *fallback = m_delegate->fallbackSettings();
-    Q_ASSERT(fallback);
-    if (this == fallback) {
+    if (!parentSettings) {
         Q_ASSERT(m_fontFamilies.contains(which));
         return m_fontFamilies.value(which);
     }
-    return m_fontFamilies.value(which, fallback->fontFamily(which));
+    return m_fontFamilies.value(which, parentSettings->fontFamily(which));
 }
 
 void WebEngineSettings::resetFontFamily(WebEngineSettings::FontFamily which)
 {
-    if (this == m_delegate->fallbackSettings())
+    if (!parentSettings) // FIXME: Set initial defaults.
         return;
     m_fontFamilies.remove(which);
-    m_delegate->apply();
+    scheduleApplyRecursively();
 }
 
 void WebEngineSettings::setFontSize(WebEngineSettings::FontSize type, int size)
 {
     m_fontSizes.insert(type, size);
-    m_delegate->apply();
+    scheduleApplyRecursively();
 }
 
 int WebEngineSettings::fontSize(WebEngineSettings::FontSize type) const
 {
-    WebEngineSettings *fallback = m_delegate->fallbackSettings();
-    Q_ASSERT(fallback);
-    if (this == fallback) {
+    if (!parentSettings) {
         Q_ASSERT(m_fontSizes.contains(type));
         return m_fontSizes.value(type);
     }
-    return m_fontSizes.value(type, fallback->fontSize(type));
+    return m_fontSizes.value(type, parentSettings->fontSize(type));
 }
 
 void WebEngineSettings::resetFontSize(WebEngineSettings::FontSize type)
 {
-    if (this == m_delegate->fallbackSettings())
+    if (!parentSettings) // FIXME: Set initial defaults.
         return;
     m_fontSizes.remove(type);
-    m_delegate->apply();
+    scheduleApplyRecursively();
 }
 
 void WebEngineSettings::setDefaultTextEncoding(const QString &encoding)
 {
     m_defaultEncoding = encoding;
-    m_delegate->apply();
+    scheduleApplyRecursively();
 }
 
 QString WebEngineSettings::defaultTextEncoding() const
 {
-    WebEngineSettings *fallback = m_delegate->fallbackSettings();
-    Q_ASSERT(fallback);
-    if (this == fallback)
+    if (!parentSettings)
         return m_defaultEncoding;
-    return m_defaultEncoding.isEmpty()? fallback->defaultTextEncoding() : m_defaultEncoding;
+    return m_defaultEncoding.isEmpty()? parentSettings->defaultTextEncoding() : m_defaultEncoding;
 }
 
-void WebEngineSettings::initDefaults()
+void WebEngineSettings::initDefaults(bool offTheRecord)
 {
     // Initialize the default settings.
     m_attributes.insert(AutoLoadImages, true);
@@ -206,7 +205,7 @@ void WebEngineSettings::initDefaults()
     m_attributes.insert(JavascriptCanOpenWindows, true);
     m_attributes.insert(JavascriptCanAccessClipboard, false);
     m_attributes.insert(LinksIncludedInFocusChain, true);
-    m_attributes.insert(LocalStorageEnabled, true);
+    m_attributes.insert(LocalStorageEnabled, !offTheRecord);
     m_attributes.insert(LocalContentCanAccessRemoteUrls, false);
     m_attributes.insert(XSSAuditingEnabled, false);
     m_attributes.insert(SpatialNavigationEnabled, false);
@@ -258,7 +257,7 @@ void WebEngineSettings::doApply()
     m_adapter->updateWebPreferences(*webPreferences.data());
 }
 
-void WebEngineSettings::applySettingsToWebPreferences(WebPreferences *prefs)
+void WebEngineSettings::applySettingsToWebPreferences(content::WebPreferences *prefs)
 {
     // Override for now
     prefs->java_enabled = false;
@@ -280,17 +279,38 @@ void WebEngineSettings::applySettingsToWebPreferences(WebPreferences *prefs)
     prefs->enable_error_page = testAttribute(ErrorPageEnabled);
 
     // Fonts settings.
-    prefs->standard_font_family_map[webkit_glue::kCommonScript] = toString16(fontFamily(StandardFont));
-    prefs->fixed_font_family_map[webkit_glue::kCommonScript] = toString16(fontFamily(FixedFont));
-    prefs->serif_font_family_map[webkit_glue::kCommonScript] = toString16(fontFamily(SerifFont));
-    prefs->sans_serif_font_family_map[webkit_glue::kCommonScript] = toString16(fontFamily(SansSerifFont));
-    prefs->cursive_font_family_map[webkit_glue::kCommonScript] = toString16(fontFamily(CursiveFont));
-    prefs->fantasy_font_family_map[webkit_glue::kCommonScript] = toString16(fontFamily(FantasyFont));
+    prefs->standard_font_family_map[content::kCommonScript] = toString16(fontFamily(StandardFont));
+    prefs->fixed_font_family_map[content::kCommonScript] = toString16(fontFamily(FixedFont));
+    prefs->serif_font_family_map[content::kCommonScript] = toString16(fontFamily(SerifFont));
+    prefs->sans_serif_font_family_map[content::kCommonScript] = toString16(fontFamily(SansSerifFont));
+    prefs->cursive_font_family_map[content::kCommonScript] = toString16(fontFamily(CursiveFont));
+    prefs->fantasy_font_family_map[content::kCommonScript] = toString16(fontFamily(FantasyFont));
     // FIXME: add pictograph?
-    //    prefs.pictograph_font_family_map[webkit_glue::kCommonScript] = toString16(fontFamily());
+    //    prefs.pictograph_font_family_map[content::kCommonScript] = toString16(fontFamily());
     prefs->default_font_size = fontSize(DefaultFontSize);
     prefs->default_fixed_font_size = fontSize(DefaultFixedFontSize);
     prefs->minimum_font_size = fontSize(MinimumFontSize);
     prefs->minimum_logical_font_size = fontSize(MinimumLogicalFontSize);
     prefs->default_encoding = defaultTextEncoding().toStdString();
 }
+
+void WebEngineSettings::scheduleApplyRecursively()
+{
+    scheduleApply();
+    Q_FOREACH (WebEngineSettings *settings, childSettings) {
+        settings->scheduleApply();
+    }
+}
+
+void WebEngineSettings::setParentSettings(WebEngineSettings *_parentSettings)
+{
+    if (parentSettings)
+        parentSettings->childSettings.remove(this);
+    parentSettings = _parentSettings;
+    if (parentSettings)
+        parentSettings->childSettings.insert(this);
+}
+
+} // namespace QtWebEngineCore
+
+#include "web_engine_settings.moc"

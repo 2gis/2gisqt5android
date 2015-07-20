@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Compositor.
 **
@@ -17,8 +17,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -78,10 +78,10 @@ void XCompositeEglClientBufferIntegration::initializeHardware(QtWayland::Display
 {
     QPlatformNativeInterface *nativeInterface = QGuiApplication::platformNativeInterface();
     if (nativeInterface) {
-        mDisplay = static_cast<Display *>(nativeInterface->nativeResourceForWindow("Display",m_compositor->window()));
+        mDisplay = static_cast<Display *>(nativeInterface->nativeResourceForIntegration("Display"));
         if (!mDisplay)
             qFatal("could not retireve Display from platform integration");
-        mEglDisplay = static_cast<EGLDisplay>(nativeInterface->nativeResourceForWindow("EGLDisplay",m_compositor->window()));
+        mEglDisplay = static_cast<EGLDisplay>(nativeInterface->nativeResourceForIntegration("EGLDisplay"));
         if (!mEglDisplay)
             qFatal("could not retrieve EGLDisplay from platform integration");
     } else {

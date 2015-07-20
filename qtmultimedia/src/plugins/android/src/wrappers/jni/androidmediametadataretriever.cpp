@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -83,15 +83,14 @@ void AndroidMediaMetadataRetriever::release()
     m_metadataRetriever.callMethod<void>("release");
 }
 
-bool AndroidMediaMetadataRetriever::setDataSource(const QString &urlString)
+bool AndroidMediaMetadataRetriever::setDataSource(const QUrl &url)
 {
     if (!m_metadataRetriever.isValid())
         return false;
 
     QJNIEnvironmentPrivate env;
-    QUrl url(urlString);
 
-    if (url.isLocalFile()) { // also includes qrc files (copied to a temp file)
+    if (url.isLocalFile()) { // also includes qrc files (copied to a temp file by QMediaPlayer)
         QJNIObjectPrivate string = QJNIObjectPrivate::fromString(url.path());
         QJNIObjectPrivate fileInputStream("java/io/FileInputStream",
                                           "(Ljava/lang/String;)V",
@@ -153,7 +152,7 @@ bool AndroidMediaMetadataRetriever::setDataSource(const QString &urlString)
             return false;
     } else if (QtAndroidPrivate::androidSdkVersion() >= 14) {
         // On API levels >= 14, only setDataSource(String, Map<String, String>) accepts remote media
-        QJNIObjectPrivate string = QJNIObjectPrivate::fromString(urlString);
+        QJNIObjectPrivate string = QJNIObjectPrivate::fromString(url.toString(QUrl::FullyEncoded));
         QJNIObjectPrivate hash("java/util/HashMap");
 
         m_metadataRetriever.callMethod<void>("setDataSource",
@@ -165,7 +164,7 @@ bool AndroidMediaMetadataRetriever::setDataSource(const QString &urlString)
     } else {
         // While on API levels < 14, only setDataSource(Context, Uri) is available and works for
         // remote media...
-        QJNIObjectPrivate string = QJNIObjectPrivate::fromString(urlString);
+        QJNIObjectPrivate string = QJNIObjectPrivate::fromString(url.toString(QUrl::FullyEncoded));
         QJNIObjectPrivate uri = m_metadataRetriever.callStaticObjectMethod("android/net/Uri",
                                                                            "parse",
                                                                            "(Ljava/lang/String;)Landroid/net/Uri;",

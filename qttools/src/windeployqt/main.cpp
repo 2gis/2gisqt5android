@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the tools applications of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -54,47 +54,53 @@ enum QtModule
     : quint64
 #endif
 {
-    QtBluetoothModule = 0x1,
-    QtCLuceneModule = 0x2,
-    QtConcurrentModule = 0x4,
-    QtCoreModule = 0x8,
-    QtDeclarativeModule = 0x10,
-    QtDesignerComponents = 0x20,
-    QtDesignerModule = 0x40,
-    QtGuiModule = 0x80,
-    QtCluceneModule = 0x100,
-    QtHelpModule = 0x200,
-    QtMultimediaModule = 0x400,
-    QtMultimediaWidgetsModule = 0x800,
-    QtMultimediaQuickModule = 0x1000,
-    QtNetworkModule = 0x2000,
-    QtNfcModule = 0x4000,
-    QtOpenGLModule = 0x8000,
-    QtPositioningModule = 0x10000,
-    QtPrintSupportModule = 0x20000,
-    QtQmlModule = 0x40000,
-    QtQuickModule = 0x80000,
-    QtQuickParticlesModule = 0x100000,
-    QtScriptModule = 0x200000,
-    QtScriptToolsModule = 0x400000,
-    QtSensorsModule = 0x800000,
-    QtSerialPortModule = 0x1000000,
-    QtSqlModule = 0x2000000,
-    QtSvgModule = 0x4000000,
-    QtTestModule = 0x8000000,
-    QtWidgetsModule = 0x10000000,
-    QtWinExtrasModule = 0x20000000,
-    QtXmlModule = 0x40000000,
-    QtXmlPatternsModule = 0x80000000,
-    QtWebKitModule = 0x100000000,
-    QtWebKitWidgetsModule = 0x200000000,
-    QtQuickWidgetsModule = 0x400000000,
-    QtWebSocketsModule = 0x800000000,
-    QtEnginioModule = 0x1000000000,
-    QtWebEngineCoreModule = 0x2000000000,
-    QtWebEngineModule = 0x4000000000,
-    QtWebEngineWidgetsModule = 0x8000000000,
-    QtQmlToolingModule = 0x10000000000
+    QtBluetoothModule         = 0x000000000001,
+    QtCLuceneModule           = 0x000000000002,
+    QtConcurrentModule        = 0x000000000004,
+    QtCoreModule              = 0x000000000008,
+    QtDeclarativeModule       = 0x000000000010,
+    QtDesignerComponents      = 0x000000000020,
+    QtDesignerModule          = 0x000000000040,
+    QtGuiModule               = 0x000000000080,
+    QtCluceneModule           = 0x000000000100,
+    QtHelpModule              = 0x000000000200,
+    QtMultimediaModule        = 0x000000000400,
+    QtMultimediaWidgetsModule = 0x000000000800,
+    QtMultimediaQuickModule   = 0x000000001000,
+    QtNetworkModule           = 0x000000002000,
+    QtNfcModule               = 0x000000004000,
+    QtOpenGLModule            = 0x000000008000,
+    QtPositioningModule       = 0x000000010000,
+    QtPrintSupportModule      = 0x000000020000,
+    QtQmlModule               = 0x000000040000,
+    QtQuickModule             = 0x000000080000,
+    QtQuickParticlesModule    = 0x000000100000,
+    QtScriptModule            = 0x000000200000,
+    QtScriptToolsModule       = 0x000000400000,
+    QtSensorsModule           = 0x000000800000,
+    QtSerialPortModule        = 0x000001000000,
+    QtSqlModule               = 0x000002000000,
+    QtSvgModule               = 0x000004000000,
+    QtTestModule              = 0x000008000000,
+    QtWidgetsModule           = 0x000010000000,
+    QtWinExtrasModule         = 0x000020000000,
+    QtXmlModule               = 0x000040000000,
+    QtXmlPatternsModule       = 0x000080000000,
+    QtWebKitModule            = 0x000100000000,
+    QtWebKitWidgetsModule     = 0x000200000000,
+    QtQuickWidgetsModule      = 0x000400000000,
+    QtWebSocketsModule        = 0x000800000000,
+    QtEnginioModule           = 0x001000000000,
+    QtWebEngineCoreModule     = 0x002000000000,
+    QtWebEngineModule         = 0x004000000000,
+    QtWebEngineWidgetsModule  = 0x008000000000,
+    QtQmlToolingModule        = 0x010000000000,
+    Qt3DCoreModule            = 0x020000000000,
+    Qt3DRendererModule        = 0x040000000000,
+    Qt3DQuickModule           = 0x080000000000,
+    Qt3DQuickRendererModule   = 0x100000000000,
+    Qt3DInputModule           = 0x200000000000,
+    QtLocationModule          = 0x400000000000
 };
 
 struct QtModuleEntry {
@@ -144,7 +150,13 @@ QtModuleEntry qtModuleEntries[] = {
     { QtXmlPatternsModule, "xmlpatterns", "Qt5XmlPatterns", "qtxmlpatterns" },
     { QtWebEngineCoreModule, "webenginecore", "Qt5WebEngineCore", 0 },
     { QtWebEngineModule, "webengine", "Qt5WebEngine", 0 },
-    { QtWebEngineWidgetsModule, "webenginewidgets", "Qt5WebEngineWidgets", 0 }
+    { QtWebEngineWidgetsModule, "webenginewidgets", "Qt5WebEngineWidgets", 0 },
+    { Qt3DCoreModule, "3dcore", "Qt53DCore", 0 },
+    { Qt3DRendererModule, "3drenderer", "Qt53DRenderer", 0 },
+    { Qt3DQuickModule, "3dquick", "Qt53DQuick", 0 },
+    { Qt3DQuickRendererModule, "3dquickrenderer", "Qt53DQuickRenderer", 0 },
+    { Qt3DInputModule, "3dinput", "Qt35DInput", 0 },
+    { QtLocationModule, "geoservices", "Qt5Location", 0 }
 };
 
 static const char webKitProcessC[] = "QtWebProcess";
@@ -184,6 +196,8 @@ static Platform platformFromMkSpec(const QString &xSpec)
         return WinPhoneIntel;
     if (xSpec.startsWith(QLatin1String("winphone-arm")))
         return WinPhoneArm;
+    if (xSpec.startsWith(QLatin1String("wince")))
+        return WinCE;
     return UnknownPlatform;
 }
 
@@ -245,6 +259,7 @@ struct Options {
     quint64 updateFileFlags;
     QStringList qmlDirectories; // Project's QML files.
     QString directory;
+    QString translationsDirectory; // Translations target directory
     QString libraryDirectory;
     QStringList binaries;
     JsonOutput *json;
@@ -577,6 +592,7 @@ static inline int parseArguments(const QStringList &arguments, QCommandLineParse
             options->binaries.append(path);
         }
     }
+    options->translationsDirectory = options->directory + QLatin1String("/translations");
     return 0;
 }
 
@@ -720,10 +736,14 @@ static inline quint64 qtModuleForPlugin(const QString &subDirName)
         return QtDeclarativeModule;
     if (subDirName == QLatin1String("position"))
         return QtPositioningModule;
+    if (subDirName == QLatin1String("geoservices"))
+        return QtLocationModule;
     if (subDirName == QLatin1String("sensors") || subDirName == QLatin1String("sensorgestures"))
         return QtSensorsModule;
     if (subDirName == QLatin1String("qtwebengine"))
         return QtWebEngineModule | QtWebEngineCoreModule | QtWebEngineWidgetsModule;
+    if (subDirName == QLatin1String("sceneparsers"))
+        return Qt3DRendererModule;
     return 0; // "designer"
 }
 
@@ -744,7 +764,7 @@ static quint64 qtModule(const QString &module)
 
 QStringList findQtPlugins(quint64 *usedQtModules, quint64 disabledQtModules,
                           const QString &qtPluginsDirName, const QString &libraryLocation,
-                          DebugMatchMode debugMatchMode, Platform platform, QString *platformPlugin)
+                          DebugMatchMode debugMatchModeIn, Platform platform, QString *platformPlugin)
 {
     QString errorMessage;
     if (qtPluginsDirName.isEmpty())
@@ -754,6 +774,9 @@ QStringList findQtPlugins(quint64 *usedQtModules, quint64 disabledQtModules,
     foreach (const QString &subDirName, pluginsDir.entryList(QStringList(QLatin1String("*")), QDir::Dirs | QDir::NoDotAndDotDot)) {
         const quint64 module = qtModuleForPlugin(subDirName);
         if (module & *usedQtModules) {
+            const DebugMatchMode debugMatchMode = (module & QtWebEngineCoreModule)
+                ? MatchDebugOrRelease // QTBUG-44331: Debug detection does not work for webengine, deploy all.
+                : debugMatchModeIn;
             const QString subDirPath = qtPluginsDirName + QLatin1Char('/') + subDirName;
             QDir subDir(subDirPath);
             // Filter out disabled plugins
@@ -766,6 +789,7 @@ QStringList findQtPlugins(quint64 *usedQtModules, quint64 disabledQtModules,
                 switch (platform) {
                 case Windows:
                 case WindowsMinGW:
+                case WinCE:
                     filter = QStringLiteral("qwindows");
                     break;
                 case WinRtIntel:
@@ -1022,7 +1046,7 @@ static DeployResult deploy(const Options &options,
     }
 
     const bool usesQml2 = !(options.disabledLibraries & QtQmlModule)
-                            && ((result.directlyUsedQtLibraries & (QtQmlModule | QtQuickModule))
+        && ((result.directlyUsedQtLibraries & (QtQmlModule | QtQuickModule | Qt3DQuickModule))
                                 || (options.additionalLibraries & QtQmlModule));
 
     if (optVerboseLevel) {
@@ -1039,11 +1063,13 @@ static DeployResult deploy(const Options &options,
         return result;
     }
 
-    // Some Windows-specific checks in QtCore: ICU
+    // Some Windows-specific checks: Qt5Core depends on ICU when configured with "-icu". Other than
+    // that, Qt5WebKit has a hard dependency on ICU.
     if (options.platform & WindowsBased)  {
-        const QStringList qt5Core = dependentQtLibs.filter(QStringLiteral("Qt5Core"), Qt::CaseInsensitive);
-        if (!qt5Core.isEmpty()) {
-            QStringList icuLibs = findDependentLibraries(qt5Core.front(), options.platform, errorMessage).filter(QStringLiteral("ICU"), Qt::CaseInsensitive);
+        const QStringList qtLibs = dependentQtLibs.filter(QStringLiteral("Qt5Core"), Qt::CaseInsensitive)
+            + dependentQtLibs.filter(QStringLiteral("Qt5WebKit"), Qt::CaseInsensitive);
+        foreach (const QString &qtLib, qtLibs) {
+            QStringList icuLibs = findDependentLibraries(qtLib, options.platform, errorMessage).filter(QStringLiteral("ICU"), Qt::CaseInsensitive);
             if (!icuLibs.isEmpty()) {
                 // Find out the ICU version to add the data library icudtXX.dll, which does not show
                 // as a dependency.
@@ -1064,8 +1090,9 @@ static DeployResult deploy(const Options &options,
                     }
                     dependentQtLibs.push_back(icuPath);
                 } // foreach icuLib
+                break;
             } // !icuLibs.isEmpty()
-        } // Qt5Core
+        } // Qt5Core/Qt5WebKit
     } // Windows
 
     // Scan Quick2 imports
@@ -1158,7 +1185,7 @@ static DeployResult deploy(const Options &options,
             libGlesName += QLatin1Char('d');
         libGlesName += QLatin1String(windowsSharedLibrarySuffix);
         const QStringList guiLibraries = findDependentLibraries(qtGuiLibrary, options.platform, errorMessage);
-        const bool dependsOnAngle = !guiLibraries.filter(libGlesName, Qt::CaseInsensitive).isEmpty();
+        const bool dependsOnAngle = !guiLibraries.filter(libGlesName, Qt::CaseInsensitive).isEmpty() && !(options.platform & WinCE);
         const bool dependsOnOpenGl = !guiLibraries.filter(QStringLiteral("opengl32"), Qt::CaseInsensitive).isEmpty();
         if (options.angleDetection != Options::AngleDetectionForceOff
             && (dependsOnAngle || !dependsOnOpenGl || options.angleDetection == Options::AngleDetectionForceOn)) {
@@ -1259,11 +1286,13 @@ static DeployResult deploy(const Options &options,
         } // Quick 1
     } // optQuickImports
 
-    if (options.translations
-        && !deployTranslations(qmakeVariables.value(QStringLiteral("QT_INSTALL_TRANSLATIONS")),
-                               result.deployedQtLibraries, options.directory,
-                               options.updateFileFlags, errorMessage)) {
-        return result;
+    if (options.translations) {
+        if (!createDirectory(options.translationsDirectory, errorMessage)
+            || !deployTranslations(qmakeVariables.value(QStringLiteral("QT_INSTALL_TRANSLATIONS")),
+                                   result.deployedQtLibraries, options.translationsDirectory,
+                                   options.updateFileFlags, errorMessage)) {
+            return result;
+        }
     }
 
     result.success = true;
@@ -1314,7 +1343,8 @@ static bool deployWebEngine(const QMap<QString, QString> &qmakeVariables,
         return true;
     }
     // Missing translations may cause crashes, ignore --no-translations.
-    return updateFile(translations.absoluteFilePath(), options.directory,
+    return createDirectory(options.translationsDirectory, errorMessage)
+        && updateFile(translations.absoluteFilePath(), options.translationsDirectory,
                       options.updateFileFlags, options.json, errorMessage);
 }
 
@@ -1322,6 +1352,14 @@ int main(int argc, char **argv)
 {
     QCoreApplication a(argc, argv);
     QCoreApplication::setApplicationVersion(QLatin1String(QT_VERSION_STR));
+
+    const QByteArray qtBinPath = QFile::encodeName(QDir::toNativeSeparators(QCoreApplication::applicationDirPath()));
+    QByteArray path = qgetenv("PATH");
+    if (!path.contains(qtBinPath)) { // QTBUG-39177, ensure Qt is in the path so that qt.conf is taken into account.
+        path += ';';
+        path += qtBinPath;
+        qputenv("PATH", path);
+    }
 
     Options options;
     QString errorMessage;

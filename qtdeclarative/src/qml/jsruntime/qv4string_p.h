@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -43,63 +43,94 @@ namespace QV4 {
 struct ExecutionEngine;
 struct Identifier;
 
-struct Q_QML_PRIVATE_EXPORT String : public Managed {
-#ifndef V4_BOOTSTRAP
-    struct Q_QML_PRIVATE_EXPORT Data : Managed::Data {
-        Data(ExecutionEngine *engine, const QString &text);
-        Data(ExecutionEngine *engine, String *l, String *n);
-        ~Data() {
-            if (!largestSubLength && !text->ref.deref())
-                QStringData::deallocate(text);
-        }
-        void simplifyString() const;
-        int length() const {
-            Q_ASSERT((largestSubLength &&
-                      (len == left->d()->len + right->d()->len)) ||
-                     len == (uint)text->size);
-            return len;
-        }
-        union {
-            mutable QStringData *text;
-            mutable String *left;
-        };
-        union {
-            mutable Identifier *identifier;
-            mutable String *right;
-        };
-        mutable uint stringHash;
-        mutable uint largestSubLength;
-        uint len;
-    private:
-        static void append(const Data *data, QChar *ch);
-    };
-    // ### FIXME: Should this be a V4_OBJECT
-    V4_OBJECT(QV4::Managed)
-    Q_MANAGED_TYPE(String)
-    enum {
-        IsString = true
-    };
+namespace Heap {
 
+#ifndef V4_BOOTSTRAP
+struct Q_QML_PRIVATE_EXPORT String : Base {
     enum StringType {
         StringType_Unknown,
         StringType_Regular,
-        StringType_UInt,
         StringType_ArrayIndex
     };
 
-    bool equals(String *other) const;
+    String(const QString &text);
+    String(String *l, String *n);
+    ~String() {
+        if (!largestSubLength && !text->ref.deref())
+            QStringData::deallocate(text);
+    }
+    void simplifyString() const;
+    int length() const {
+        Q_ASSERT((largestSubLength &&
+                  (len == left->len + right->len)) ||
+                 len == (uint)text->size);
+        return len;
+    }
+    void createHashValue() const;
+    inline unsigned hashValue() const {
+        if (subtype == StringType_Unknown)
+            createHashValue();
+        Q_ASSERT(!largestSubLength);
+
+        return stringHash;
+    }
+    inline QString toQString() const {
+        if (largestSubLength)
+            simplifyString();
+        QStringDataPtr ptr = { text };
+        text->ref.ref();
+        return QString(ptr);
+    }
     inline bool isEqualTo(const String *other) const {
         if (this == other)
             return true;
         if (hashValue() != other->hashValue())
             return false;
-        Q_ASSERT(!d()->largestSubLength);
-        if (d()->identifier && d()->identifier == other->d()->identifier)
+        Q_ASSERT(!largestSubLength);
+        if (identifier && identifier == other->identifier)
             return true;
-        if (subtype() >= StringType_UInt && subtype() == other->subtype())
+        if (subtype == Heap::String::StringType_ArrayIndex && other->subtype == Heap::String::StringType_ArrayIndex)
             return true;
 
         return toQString() == other->toQString();
+    }
+
+    union {
+        mutable QStringData *text;
+        mutable String *left;
+    };
+    union {
+        mutable Identifier *identifier;
+        mutable String *right;
+    };
+    mutable uint subtype;
+    mutable uint stringHash;
+    mutable uint largestSubLength;
+    uint len;
+private:
+    static void append(const String *data, QChar *ch);
+};
+#endif
+
+}
+
+struct Q_QML_PRIVATE_EXPORT String : public Managed {
+#ifndef V4_BOOTSTRAP
+    V4_MANAGED(String, Managed)
+    Q_MANAGED_TYPE(String)
+    V4_NEEDS_DESTROY
+    enum {
+        IsString = true
+    };
+
+    uchar subtype() const { return d()->subtype; }
+    void setSubtype(uchar subtype) const { d()->subtype = subtype; }
+
+    bool equals(String *other) const {
+        return d()->isEqualTo(other->d());
+    }
+    inline bool isEqualTo(const String *other) const {
+        return d()->isEqualTo(other->d());
     }
 
     inline bool compare(const String *other) {
@@ -107,62 +138,44 @@ struct Q_QML_PRIVATE_EXPORT String : public Managed {
     }
 
     inline QString toQString() const {
-        if (d()->largestSubLength)
-            d()->simplifyString();
-        QStringDataPtr ptr = { d()->text };
-        d()->text->ref.ref();
-        return QString(ptr);
+        return d()->toQString();
     }
 
     inline unsigned hashValue() const {
-        if (subtype() == StringType_Unknown)
-            createHashValue();
-        Q_ASSERT(!d()->largestSubLength);
-
-        return d()->stringHash;
+        return d()->hashValue();
     }
     uint asArrayIndex() const {
-        if (subtype() == StringType_Unknown)
-            createHashValue();
+        if (subtype() == Heap::String::StringType_Unknown)
+            d()->createHashValue();
         Q_ASSERT(!d()->largestSubLength);
-        if (subtype() == StringType_ArrayIndex)
+        if (subtype() == Heap::String::StringType_ArrayIndex)
             return d()->stringHash;
         return UINT_MAX;
     }
     uint toUInt(bool *ok) const;
 
-    void makeIdentifier() const {
+    void makeIdentifier(ExecutionEngine *e) const {
         if (d()->identifier)
             return;
-        makeIdentifierImpl();
+        makeIdentifierImpl(e);
     }
 
-    void makeIdentifierImpl() const;
+    void makeIdentifierImpl(ExecutionEngine *e) const;
 
-    void createHashValue() const;
     static uint createHashValue(const QChar *ch, int length);
     static uint createHashValue(const char *ch, int length);
 
     bool startsWithUpper() const {
-        const String *l = this;
-        while (l->d()->largestSubLength)
-            l = l->d()->left;
-        return l->d()->text->size && QChar::isUpper(l->d()->text->data()[0]);
+        const String::Data *l = d();
+        while (l->largestSubLength)
+            l = l->left;
+        return l->text->size && QChar::isUpper(l->text->data()[0]);
     }
 
     Identifier *identifier() const { return d()->identifier; }
 
 protected:
-    static void destroy(Managed *);
-    static void markObjects(Managed *that, ExecutionEngine *e);
-    static ReturnedValue get(Managed *m, String *name, bool *hasProperty);
-    static ReturnedValue getIndexed(Managed *m, uint index, bool *hasProperty);
-    static void put(Managed *m, String *name, const ValueRef value);
-    static void putIndexed(Managed *m, uint index, const ValueRef value);
-    static PropertyAttributes query(const Managed *m, String *name);
-    static PropertyAttributes queryIndexed(const Managed *m, uint index);
-    static bool deleteProperty(Managed *, String *);
-    static bool deleteIndexedProperty(Managed *m, uint index);
+    static void markObjects(Heap::Base *that, ExecutionEngine *e);
     static bool isEqualTo(Managed *that, Managed *o);
     static uint getLength(const Managed *m);
 #endif
@@ -170,20 +183,6 @@ protected:
 public:
     static uint toArrayIndex(const QString &str);
 };
-
-#ifndef V4_BOOTSTRAP
-template<>
-inline String *value_cast(const Value &v) {
-    return v.asString();
-}
-
-template<>
-inline ReturnedValue value_convert<String>(ExecutionEngine *e, const Value &v)
-{
-    return v.toString(e)->asReturnedValue();
-}
-
-#endif
 
 }
 

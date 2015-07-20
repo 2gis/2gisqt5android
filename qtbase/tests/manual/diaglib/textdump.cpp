@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -222,6 +222,32 @@ static const EnumLookup scriptEnumLookup[] =
     {QChar::Script_Sharada, "Script_Sharada"},
     {QChar::Script_SoraSompeng, "Script_SoraSompeng"},
     {QChar::Script_Takri, "Script_Takri"},
+
+#if QT_VERSION >= 0x050500
+    {QChar::Script_CaucasianAlbanian, "Script_CaucasianAlbanian"},
+    {QChar::Script_BassaVah, "Script_BassaVah"},
+    {QChar::Script_Duployan, "Script_Duployan"},
+    {QChar::Script_Elbasan, "Script_Elbasan"},
+    {QChar::Script_Grantha, "Script_Grantha"},
+    {QChar::Script_PahawhHmong, "Script_PahawhHmong"},
+    {QChar::Script_Khojki, "Script_Khojki"},
+    {QChar::Script_LinearA, "Script_LinearA"},
+    {QChar::Script_Mahajani, "Script_Mahajani"},
+    {QChar::Script_Manichaean, "Script_Manichaean"},
+    {QChar::Script_MendeKikakui, "Script_MendeKikakui"},
+    {QChar::Script_Modi, "Script_Modi"},
+    {QChar::Script_Mro, "Script_Mro"},
+    {QChar::Script_OldNorthArabian, "Script_OldNorthArabian"},
+    {QChar::Script_Nabataean, "Script_Nabataean"},
+    {QChar::Script_Palmyrene, "Script_Palmyrene"},
+    {QChar::Script_PauCinHau, "Script_PauCinHau"},
+    {QChar::Script_OldPermic, "Script_OldPermic"},
+    {QChar::Script_PsalterPahlavi, "Script_PsalterPahlavi"},
+    {QChar::Script_Siddham, "Script_Siddham"},
+    {QChar::Script_Khudawadi, "Script_Khudawadi"},
+    {QChar::Script_Tirhuta, "Script_Tirhuta"},
+    {QChar::Script_WarangCiti, "Script_WarangCiti"},
+#endif // Qt 5.5
 };
 
 #endif // Qt 5.1
@@ -335,6 +361,9 @@ static const EnumLookup unicodeVersionEnumLookup[] =
     {QChar::Unicode_6_1, "Unicode_6_1"},
     {QChar::Unicode_6_2, "Unicode_6_2"},
     {QChar::Unicode_6_3, "Unicode_6_3"},
+#if QT_VERSION >= 0x050500
+    {QChar::Unicode_7_0, "Unicode_7_0"},
+#endif // Qt 5.5
 #endif // Qt 5
 };
 

@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -32,6 +32,8 @@
 ****************************************************************************/
 
 #include "qv4numberobject_p.h"
+#include "qv4runtime_p.h"
+
 #include <QtCore/qnumeric.h>
 #include <QtCore/qmath.h>
 #include <QtCore/QDebug>
@@ -43,18 +45,16 @@ using namespace QV4;
 DEFINE_OBJECT_VTABLE(NumberCtor);
 DEFINE_OBJECT_VTABLE(NumberObject);
 
-NumberCtor::Data::Data(ExecutionContext *scope)
-    : FunctionObject::Data(scope, QStringLiteral("Number"))
+Heap::NumberCtor::NumberCtor(QV4::ExecutionContext *scope)
+    : Heap::FunctionObject(scope, QStringLiteral("Number"))
 {
-    setVTable(staticVTable());
 }
 
 ReturnedValue NumberCtor::construct(Managed *m, CallData *callData)
 {
-    Scope scope(m->engine());
+    Scope scope(m->cast<NumberCtor>()->engine());
     double dbl = callData->argc ? callData->args[0].toNumber() : 0.;
-    ScopedValue d(scope, QV4::Primitive::fromDouble(dbl));
-    return Encode(m->engine()->newNumberObject(d));
+    return Encode(scope.engine->newNumberObject(dbl));
 }
 
 ReturnedValue NumberCtor::call(Managed *, CallData *callData)
@@ -95,40 +95,41 @@ void NumberPrototype::init(ExecutionEngine *engine, Object *ctor)
 
 inline ReturnedValue thisNumberValue(ExecutionContext *ctx)
 {
-    if (ctx->d()->callData->thisObject.isNumber())
-        return ctx->d()->callData->thisObject.asReturnedValue();
-    NumberObject *n = ctx->d()->callData->thisObject.asNumberObject();
+    if (ctx->thisObject().isNumber())
+        return ctx->thisObject().asReturnedValue();
+    NumberObject *n = ctx->thisObject().asNumberObject();
     if (!n)
-        return ctx->throwTypeError();
-    return n->value().asReturnedValue();
+        return ctx->engine()->throwTypeError();
+    return Encode(n->value());
 }
 
 inline double thisNumber(ExecutionContext *ctx)
 {
-    if (ctx->d()->callData->thisObject.isNumber())
-        return ctx->d()->callData->thisObject.asDouble();
-    NumberObject *n = ctx->d()->callData->thisObject.asNumberObject();
+    if (ctx->thisObject().isNumber())
+        return ctx->thisObject().asDouble();
+    NumberObject *n = ctx->thisObject().asNumberObject();
     if (!n)
-        return ctx->throwTypeError();
-    return n->value().asDouble();
+        return ctx->engine()->throwTypeError();
+    return n->value();
 }
 
 ReturnedValue NumberPrototype::method_toString(CallContext *ctx)
 {
+    Scope scope(ctx);
     double num = thisNumber(ctx);
-    if (ctx->d()->engine->hasException)
+    if (scope.engine->hasException)
         return Encode::undefined();
 
-    if (ctx->d()->callData->argc && !ctx->d()->callData->args[0].isUndefined()) {
-        int radix = ctx->d()->callData->args[0].toInt32();
+    if (ctx->argc() && !ctx->args()[0].isUndefined()) {
+        int radix = ctx->args()[0].toInt32();
         if (radix < 2 || radix > 36)
-            return ctx->throwError(QString::fromLatin1("Number.prototype.toString: %0 is not a valid radix")
+            return ctx->engine()->throwError(QString::fromLatin1("Number.prototype.toString: %0 is not a valid radix")
                             .arg(radix));
 
         if (std::isnan(num)) {
-            return ctx->d()->engine->newString(QStringLiteral("NaN"))->asReturnedValue();
+            return scope.engine->newString(QStringLiteral("NaN"))->asReturnedValue();
         } else if (qIsInf(num)) {
-            return ctx->d()->engine->newString(QLatin1String(num < 0 ? "-Infinity" : "Infinity"))->asReturnedValue();
+            return scope.engine->newString(QLatin1String(num < 0 ? "-Infinity" : "Infinity"))->asReturnedValue();
         }
 
         if (radix != 10) {
@@ -138,39 +139,39 @@ ReturnedValue NumberPrototype::method_toString(CallContext *ctx)
                 negative = true;
                 num = -num;
             }
-            double frac = num - ::floor(num);
+            double frac = num - std::floor(num);
             num = Primitive::toInteger(num);
             do {
-                char c = (char)::fmod(num, radix);
+                char c = (char)std::fmod(num, radix);
                 c = (c < 10) ? (c + '0') : (c - 10 + 'a');
                 str.prepend(QLatin1Char(c));
-                num = ::floor(num / radix);
+                num = std::floor(num / radix);
             } while (num != 0);
             if (frac != 0) {
                 str.append(QLatin1Char('.'));
                 do {
                     frac = frac * radix;
-                    char c = (char)::floor(frac);
+                    char c = (char)std::floor(frac);
                     c = (c < 10) ? (c + '0') : (c - 10 + 'a');
                     str.append(QLatin1Char(c));
-                    frac = frac - ::floor(frac);
+                    frac = frac - std::floor(frac);
                 } while (frac != 0);
             }
             if (negative)
                 str.prepend(QLatin1Char('-'));
-            return ctx->d()->engine->newString(str)->asReturnedValue();
+            return scope.engine->newString(str)->asReturnedValue();
         }
     }
 
-    return Primitive::fromDouble(num).toString(ctx)->asReturnedValue();
+    return Primitive::fromDouble(num).toString(scope.engine)->asReturnedValue();
 }
 
 ReturnedValue NumberPrototype::method_toLocaleString(CallContext *ctx)
 {
     Scope scope(ctx);
     ScopedValue v(scope, thisNumberValue(ctx));
-    ScopedString str(scope, v->toString(ctx));
-    if (ctx->d()->engine->hasException)
+    ScopedString str(scope, v->toString(scope.engine));
+    if (scope.engine->hasException)
         return Encode::undefined();
     return str.asReturnedValue();
 }
@@ -182,47 +183,54 @@ ReturnedValue NumberPrototype::method_valueOf(CallContext *ctx)
 
 ReturnedValue NumberPrototype::method_toFixed(CallContext *ctx)
 {
+    Scope scope(ctx);
     double v = thisNumber(ctx);
-    if (ctx->d()->engine->hasException)
+    if (scope.engine->hasException)
         return Encode::undefined();
 
     double fdigits = 0;
 
-    if (ctx->d()->callData->argc > 0)
-        fdigits = ctx->d()->callData->args[0].toInteger();
+    if (ctx->argc() > 0)
+        fdigits = ctx->args()[0].toInteger();
 
     if (std::isnan(fdigits))
         fdigits = 0;
 
     if (fdigits < 0 || fdigits > 20)
-        return ctx->throwRangeError(ctx->d()->callData->thisObject);
+        return ctx->engine()->throwRangeError(ctx->thisObject());
 
     QString str;
     if (std::isnan(v))
         str = QString::fromLatin1("NaN");
     else if (qIsInf(v))
         str = QString::fromLatin1(v < 0 ? "-Infinity" : "Infinity");
-    else if (v < 1.e21)
-        str = QString::number(v, 'f', int (fdigits));
-    else
-        return RuntimeHelpers::stringFromNumber(ctx, v)->asReturnedValue();
-    return ctx->d()->engine->newString(str)->asReturnedValue();
+    else if (v < 1.e21) {
+        char buf[100];
+        double_conversion::StringBuilder builder(buf, sizeof(buf));
+        double_conversion::DoubleToStringConverter::EcmaScriptConverter().ToFixed(v, fdigits, &builder);
+        str = QString::fromLatin1(builder.Finalize());
+        // At some point, the 3rd party double-conversion code should be moved to qtcore.
+        // When that's done, we can use:
+//        str = QString::number(v, 'f', int (fdigits));
+    } else
+        return RuntimeHelpers::stringFromNumber(ctx->engine(), v)->asReturnedValue();
+    return scope.engine->newString(str)->asReturnedValue();
 }
 
 ReturnedValue NumberPrototype::method_toExponential(CallContext *ctx)
 {
     Scope scope(ctx);
     double d = thisNumber(ctx);
-    if (ctx->d()->engine->hasException)
+    if (scope.engine->hasException)
         return Encode::undefined();
 
     int fdigits = -1;
 
-    if (ctx->d()->callData->argc && !ctx->d()->callData->args[0].isUndefined()) {
-        fdigits = ctx->d()->callData->args[0].toInt32();
+    if (ctx->argc() && !ctx->args()[0].isUndefined()) {
+        fdigits = ctx->args()[0].toInt32();
         if (fdigits < 0 || fdigits > 20) {
-            ScopedString error(scope, ctx->d()->engine->newString(QStringLiteral("Number.prototype.toExponential: fractionDigits out of range")));
-            return ctx->throwRangeError(error);
+            ScopedString error(scope, scope.engine->newString(QStringLiteral("Number.prototype.toExponential: fractionDigits out of range")));
+            return ctx->engine()->throwRangeError(error);
         }
     }
 
@@ -231,23 +239,23 @@ ReturnedValue NumberPrototype::method_toExponential(CallContext *ctx)
     double_conversion::DoubleToStringConverter::EcmaScriptConverter().ToExponential(d, fdigits, &builder);
     QString result = QString::fromLatin1(builder.Finalize());
 
-    return ctx->d()->engine->newString(result)->asReturnedValue();
+    return scope.engine->newString(result)->asReturnedValue();
 }
 
 ReturnedValue NumberPrototype::method_toPrecision(CallContext *ctx)
 {
     Scope scope(ctx);
     ScopedValue v(scope, thisNumberValue(ctx));
-    if (ctx->d()->engine->hasException)
+    if (scope.engine->hasException)
         return Encode::undefined();
 
-    if (!ctx->d()->callData->argc || ctx->d()->callData->args[0].isUndefined())
-        return RuntimeHelpers::toString(ctx, v);
+    if (!ctx->argc() || ctx->args()[0].isUndefined())
+        return RuntimeHelpers::toString(scope.engine, v);
 
-    double precision = ctx->d()->callData->args[0].toInt32();
+    double precision = ctx->args()[0].toInt32();
     if (precision < 1 || precision > 21) {
-        ScopedString error(scope, ctx->d()->engine->newString(QStringLiteral("Number.prototype.toPrecision: precision out of range")));
-        return ctx->throwRangeError(error);
+        ScopedString error(scope, scope.engine->newString(QStringLiteral("Number.prototype.toPrecision: precision out of range")));
+        return ctx->engine()->throwRangeError(error);
     }
 
     char str[100];
@@ -255,5 +263,5 @@ ReturnedValue NumberPrototype::method_toPrecision(CallContext *ctx)
     double_conversion::DoubleToStringConverter::EcmaScriptConverter().ToPrecision(v->asDouble(), precision, &builder);
     QString result = QString::fromLatin1(builder.Finalize());
 
-    return ctx->d()->engine->newString(result)->asReturnedValue();
+    return scope.engine->newString(result)->asReturnedValue();
 }

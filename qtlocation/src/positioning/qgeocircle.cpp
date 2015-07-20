@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtPositioning module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -55,6 +55,39 @@ QT_BEGIN_NAMESPACE
 
     The circle is considered invalid if the center coordinate is invalid
     or if the radius is less than zero.
+
+    This class is a \l Q_GADGET since Qt 5.5.  It can be
+    \l{Cpp_value_integration_positioning}{directly used from C++ and QML}.
+*/
+
+/*!
+    \property QGeoCircle::center
+    \brief This property holds the center coordinate for the geo circle.
+
+    The circle is considered invalid if this property contains an invalid
+    coordinate.
+
+    A default constructed QGeoCircle uses an invalid \l QGeoCoordinate
+    as center.
+
+    While this property is introduced in Qt 5.5, the related accessor functions
+    exist since the first version of this class.
+
+    \since 5.5
+*/
+
+/*!
+    \property QGeoCircle::radius
+    \brief This property holds the circle radius in meters.
+
+    The circle is considered invalid if this property is negative.
+
+    By default, the radius is initialized with \c -1.
+
+    While this property is introduced in Qt 5.5, the related accessor functions
+    exist since the first version of this class.
+
+    \since 5.5
 */
 
 inline QGeoCirclePrivate *QGeoCircle::d_func()
@@ -67,12 +100,24 @@ inline const QGeoCirclePrivate *QGeoCircle::d_func() const
     return static_cast<const QGeoCirclePrivate *>(d_ptr.constData());
 }
 
+struct CircleVariantConversions
+{
+    CircleVariantConversions()
+    {
+        QMetaType::registerConverter<QGeoShape, QGeoCircle>();
+        QMetaType::registerConverter<QGeoCircle, QGeoShape>();
+    }
+};
+
+Q_GLOBAL_STATIC(CircleVariantConversions, initCircleConversions)
+
 /*!
     Constructs a new, invalid geo circle.
 */
 QGeoCircle::QGeoCircle()
 :   QGeoShape(new QGeoCirclePrivate)
 {
+    initCircleConversions();
 }
 
 /*!
@@ -80,6 +125,7 @@ QGeoCircle::QGeoCircle()
 */
 QGeoCircle::QGeoCircle(const QGeoCoordinate &center, qreal radius)
 {
+    initCircleConversions();
     d_ptr = new QGeoCirclePrivate(center, radius);
 }
 
@@ -89,6 +135,7 @@ QGeoCircle::QGeoCircle(const QGeoCoordinate &center, qreal radius)
 QGeoCircle::QGeoCircle(const QGeoCircle &other)
 :   QGeoShape(other)
 {
+    initCircleConversions();
 }
 
 /*!
@@ -97,6 +144,7 @@ QGeoCircle::QGeoCircle(const QGeoCircle &other)
 QGeoCircle::QGeoCircle(const QGeoShape &other)
 :   QGeoShape(other)
 {
+    initCircleConversions();
     if (type() != QGeoShape::CircleType)
         d_ptr = new QGeoCirclePrivate;
 }
@@ -137,7 +185,7 @@ bool QGeoCircle::operator!=(const QGeoCircle &other) const
 
 bool QGeoCirclePrivate::isValid() const
 {
-    return center.isValid() && !qIsNaN(radius) && radius >= -1e-7;
+    return m_center.isValid() && !qIsNaN(radius) && radius >= -1e-7;
 }
 
 bool QGeoCirclePrivate::isEmpty() const
@@ -152,17 +200,17 @@ void QGeoCircle::setCenter(const QGeoCoordinate &center)
 {
     Q_D(QGeoCircle);
 
-    d->center = center;
+    d->m_center = center;
 }
 
 /*!
-    Returns the center coordinate of this geo circle.
+    Returns the center coordinate of this geo circle. Equivalent to QGeoShape::center().
 */
 QGeoCoordinate QGeoCircle::center() const
 {
     Q_D(const QGeoCircle);
 
-    return d->center;
+    return d->center();
 }
 
 /*!
@@ -191,11 +239,16 @@ bool QGeoCirclePrivate::contains(const QGeoCoordinate &coordinate) const
         return false;
 
     // see QTBUG-41447 for details
-    qreal distance = center.distanceTo(coordinate);
+    qreal distance = m_center.distanceTo(coordinate);
     if (qFuzzyCompare(distance, radius) || distance <= radius)
         return true;
 
     return false;
+}
+
+QGeoCoordinate QGeoCirclePrivate::center() const
+{
+    return m_center;
 }
 
 /*!
@@ -206,7 +259,7 @@ void QGeoCirclePrivate::extendShape(const QGeoCoordinate &coordinate)
     if (!isValid() || !coordinate.isValid() || contains(coordinate))
         return;
 
-    radius = center.distanceTo(coordinate);
+    radius = m_center.distanceTo(coordinate);
 }
 
 /*!
@@ -221,8 +274,8 @@ void QGeoCircle::translate(double degreesLatitude, double degreesLongitude)
 
     Q_D(QGeoCircle);
 
-    double lat = d->center.latitude();
-    double lon = d->center.longitude();
+    double lat = d->m_center.latitude();
+    double lon = d->m_center.longitude();
 
     lat += degreesLatitude;
     lon += degreesLongitude;
@@ -248,7 +301,7 @@ void QGeoCircle::translate(double degreesLatitude, double degreesLongitude)
             lon -= 180;
     }
 
-    d->center = QGeoCoordinate(lat, lon);
+    d->m_center = QGeoCoordinate(lat, lon);
 }
 
 /*!
@@ -267,6 +320,25 @@ QGeoCircle QGeoCircle::translated(double degreesLatitude, double degreesLongitud
     return result;
 }
 
+/*!
+    Returns the geo circle properties as a string.
+
+    \since 5.5
+*/
+
+QString QGeoCircle::toString() const
+{
+    if (type() != QGeoShape::CircleType) {
+        qWarning("Not a circle");
+        return QStringLiteral("QGeoCircle(not a circle)");
+    }
+
+    return QStringLiteral("QGeoCircle({%1, %2}, %3)")
+        .arg(center().latitude())
+        .arg(center().longitude())
+        .arg(radius());
+}
+
 /*******************************************************************************
 *******************************************************************************/
 
@@ -276,12 +348,12 @@ QGeoCirclePrivate::QGeoCirclePrivate()
 }
 
 QGeoCirclePrivate::QGeoCirclePrivate(const QGeoCoordinate &center, qreal radius)
-:   QGeoShapePrivate(QGeoShape::CircleType), center(center), radius(radius)
+:   QGeoShapePrivate(QGeoShape::CircleType), m_center(center), radius(radius)
 {
 }
 
 QGeoCirclePrivate::QGeoCirclePrivate(const QGeoCirclePrivate &other)
-:   QGeoShapePrivate(QGeoShape::CircleType), center(other.center),
+:   QGeoShapePrivate(QGeoShape::CircleType), m_center(other.m_center),
     radius(other.radius)
 {
 }
@@ -300,7 +372,7 @@ bool QGeoCirclePrivate::operator==(const QGeoShapePrivate &other) const
 
     const QGeoCirclePrivate &otherCircle = static_cast<const QGeoCirclePrivate &>(other);
 
-    return radius == otherCircle.radius && center == otherCircle.center;
+    return radius == otherCircle.radius && m_center == otherCircle.m_center;
 }
 
 QT_END_NAMESPACE

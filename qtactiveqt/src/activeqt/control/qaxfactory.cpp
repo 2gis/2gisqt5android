@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the ActiveQt framework of the Qt Toolkit.
 **
@@ -17,8 +17,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -278,7 +278,8 @@ bool QAxFactory::validateLicenseKey(const QString &key, const QString &licenseKe
     if (licenseKey.isEmpty()) {
         QString licFile(QString::fromWCharArray(qAxModuleFilename));
         int lastDot = licFile.lastIndexOf(QLatin1Char('.'));
-        licFile = licFile.left(lastDot) + QLatin1String(".lic");
+        licFile.truncate(lastDot);
+        licFile += QLatin1String(".lic");
         if (QFile::exists(licFile))
             return true;
         return false;
@@ -366,7 +367,7 @@ extern wchar_t qAxModuleFilename[MAX_PATH];
     Returns the directory that contains the server binary.
 
     For out-of-process servers this is the same as
-    QApplication::applicationDirPath(). For in-process servers
+    \l {QCoreApplication::applicationDirPath()}. For in-process servers
     that function returns the directory that contains the hosting
     application.
 */
@@ -379,7 +380,7 @@ QString QAxFactory::serverDirPath()
     Returns the file path of the server binary.
 
     For out-of-process servers this is the same as
-    QApplication::applicationFilePath(). For in-process servers
+    \l {QCoreApplication::applicationFilePath()}. For in-process servers
     that function returns the file path of the hosting application.
 */
 QString QAxFactory::serverFilePath()
@@ -492,7 +493,7 @@ bool QAxFactory::registerActiveObject(QObject *object)
     if (qstricmp(object->metaObject()->classInfo(object->metaObject()->indexOfClassInfo("RegisterObject")).value(), "yes"))
         return false;
 
-    if (!QString::fromWCharArray(qAxModuleFilename).toLower().endsWith(QLatin1String(".exe")))
+    if (!QString::fromWCharArray(qAxModuleFilename).endsWith(QLatin1String(".exe"), Qt::CaseInsensitive))
         return false;
 
     ActiveObject *active = new ActiveObject(object, qAxFactory());

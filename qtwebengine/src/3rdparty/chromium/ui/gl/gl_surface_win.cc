@@ -11,7 +11,6 @@
 #include "base/logging.h"
 #include "base/memory/scoped_ptr.h"
 #include "base/win/windows_version.h"
-#include "third_party/mesa/src/include/GL/osmesa.h"
 #include "ui/gfx/frame_time.h"
 #include "ui/gfx/native_widget_types.h"
 #include "ui/gl/gl_bindings.h"
@@ -26,6 +25,15 @@
 #define EGL_D3D11_ELSE_D3D9_DISPLAY_ANGLE \
   reinterpret_cast<EGLNativeDisplayType>(-2)
 #endif
+#if !defined(EGL_PLATFORM_ANGLE_ANGLE)
+#define EGL_PLATFORM_ANGLE_ANGLE 0x3201
+#endif
+#if !defined(EGL_PLATFORM_ANGLE_TYPE_ANGLE)
+#define EGL_PLATFORM_ANGLE_TYPE_ANGLE 0x3202
+#endif
+#if !defined(EGL_PLATFORM_ANGLE_TYPE_D3D11_WARP_ANGLE)
+#define EGL_PLATFORM_ANGLE_TYPE_D3D11_WARP_ANGLE 0x3206
+#endif
 
 namespace gfx {
 
@@ -37,12 +45,12 @@ class NativeViewGLSurfaceOSMesa : public GLSurfaceOSMesa {
   virtual ~NativeViewGLSurfaceOSMesa();
 
   // Implement subset of GLSurface.
-  virtual bool Initialize() OVERRIDE;
-  virtual void Destroy() OVERRIDE;
-  virtual bool IsOffscreen() OVERRIDE;
-  virtual bool SwapBuffers() OVERRIDE;
-  virtual bool SupportsPostSubBuffer() OVERRIDE;
-  virtual bool PostSubBuffer(int x, int y, int width, int height) OVERRIDE;
+  virtual bool Initialize() override;
+  virtual void Destroy() override;
+  virtual bool IsOffscreen() override;
+  virtual bool SwapBuffers() override;
+  virtual bool SupportsPostSubBuffer() override;
+  virtual bool PostSubBuffer(int x, int y, int width, int height) override;
 
  private:
   gfx::AcceleratedWidget window_;
@@ -51,43 +59,90 @@ class NativeViewGLSurfaceOSMesa : public GLSurfaceOSMesa {
   DISALLOW_COPY_AND_ASSIGN(NativeViewGLSurfaceOSMesa);
 };
 
-class DWMVSyncProvider : public VSyncProvider {
+class WinVSyncProvider : public VSyncProvider {
  public:
-  explicit DWMVSyncProvider() {}
+  explicit WinVSyncProvider(gfx::AcceleratedWidget window) :
+    window_(window)
+  {
+    use_dwm_ = (base::win::GetVersion() >= base::win::VERSION_WIN7);
+  }
 
-  virtual ~DWMVSyncProvider() {}
+  virtual ~WinVSyncProvider() {}
 
   virtual void GetVSyncParameters(const UpdateVSyncCallback& callback) {
-    TRACE_EVENT0("gpu", "DWMVSyncProvider::GetVSyncParameters");
-    DWM_TIMING_INFO timing_info;
-    timing_info.cbSize = sizeof(timing_info);
-    HRESULT result = DwmGetCompositionTimingInfo(NULL, &timing_info);
-    if (result != S_OK)
-      return;
+    TRACE_EVENT0("gpu", "WinVSyncProvider::GetVSyncParameters");
 
     base::TimeTicks timebase;
-    // If FrameTime is not high resolution, we do not want to translate the
-    // QPC value provided by DWM into the low-resolution timebase, which
-    // would be error prone and jittery. As a fallback, we assume the timebase
-    // is zero.
-    if (gfx::FrameTime::TimestampsAreHighRes()) {
-      timebase = gfx::FrameTime::FromQPCValue(
-          static_cast<LONGLONG>(timing_info.qpcVBlank));
+    base::TimeDelta interval;
+    bool dwm_active = false;
+
+    // Query the DWM timing info first if available. This will provide the most
+    // precise values.
+    if (use_dwm_) {
+      DWM_TIMING_INFO timing_info;
+      timing_info.cbSize = sizeof(timing_info);
+      HRESULT result = DwmGetCompositionTimingInfo(NULL, &timing_info);
+      if (result == S_OK) {
+        dwm_active = true;
+        // If FrameTime is not high resolution, we do not want to translate the
+        // QPC value provided by DWM into the low-resolution timebase, which
+        // would be error prone and jittery. As a fallback, we assume the
+        // timebase is zero.
+        if (gfx::FrameTime::TimestampsAreHighRes()) {
+          timebase = gfx::FrameTime::FromQPCValue(
+              static_cast<LONGLONG>(timing_info.qpcVBlank));
+        }
+
+        // Swap the numerator/denominator to convert frequency to period.
+        if (timing_info.rateRefresh.uiDenominator > 0 &&
+            timing_info.rateRefresh.uiNumerator > 0) {
+          interval = base::TimeDelta::FromMicroseconds(
+              timing_info.rateRefresh.uiDenominator *
+              base::Time::kMicrosecondsPerSecond /
+              timing_info.rateRefresh.uiNumerator);
+        }
+      }
     }
 
-    // Swap the numerator/denominator to convert frequency to period.
-    if (timing_info.rateRefresh.uiDenominator > 0 &&
-        timing_info.rateRefresh.uiNumerator > 0) {
-      base::TimeDelta interval = base::TimeDelta::FromMicroseconds(
-          timing_info.rateRefresh.uiDenominator *
-          base::Time::kMicrosecondsPerSecond /
-          timing_info.rateRefresh.uiNumerator);
+    // Double check DWM values against per-display refresh rates.
+    // When DWM compositing is active all displays are normalized to the
+    // refresh rate of the primary display, and won't composite any faster.
+    // If the display refresh rate is higher than the DWM reported value we will
+    // favor the DWM value because any additional frames produced will be
+    // discarded by the OS. If the display refresh rate is lower, however, we
+    // can use that to limit the frames we produce more intelligently.
+    // If DWM compositing is not active we will always use the display refresh.
+    HMONITOR monitor = MonitorFromWindow(window_, MONITOR_DEFAULTTONEAREST);
+    MONITORINFOEX monitor_info;
+    monitor_info.cbSize = sizeof(MONITORINFOEX);
+    BOOL result = GetMonitorInfo(monitor, &monitor_info);
+    if (result) {
+      DEVMODE display_info;
+      display_info.dmSize = sizeof(DEVMODE);
+      display_info.dmDriverExtra = 0;
+      result = EnumDisplaySettings(monitor_info.szDevice, ENUM_CURRENT_SETTINGS,
+          &display_info);
+      if (result && display_info.dmDisplayFrequency > 1) {
+        base::TimeDelta display_interval = base::TimeDelta::FromMicroseconds(
+            (1.0 / static_cast<double>(display_info.dmDisplayFrequency)) *
+            base::Time::kMicrosecondsPerSecond);
+
+        if (!dwm_active || display_interval > interval) {
+          interval = display_interval;
+        }
+      }
+    }
+
+    if (interval.ToInternalValue() != 0) {
       callback.Run(timebase, interval);
     }
   }
 
  private:
-  DISALLOW_COPY_AND_ASSIGN(DWMVSyncProvider);
+  DISALLOW_COPY_AND_ASSIGN(WinVSyncProvider);
+
+  gfx::AcceleratedWidget window_;
+  bool use_dwm_;
 };
 
 // Helper routine that does one-off initialization like determining the
@@ -112,9 +167,9 @@ bool GLSurface::InitializeOneOffInternal() {
 
 NativeViewGLSurfaceOSMesa::NativeViewGLSurfaceOSMesa(
     gfx::AcceleratedWidget window)
-  : GLSurfaceOSMesa(OSMESA_RGBA, gfx::Size(1, 1)),
-    window_(window),
-    device_context_(NULL) {
+    : GLSurfaceOSMesa(OSMesaSurfaceFormatRGBA, gfx::Size(1, 1)),
+      window_(window),
+      device_context_(NULL) {
   DCHECK(window);
 }
 
@@ -237,8 +292,7 @@ scoped_refptr<GLSurface> GLSurface::CreateViewGLSurface(
       scoped_refptr<NativeViewGLSurfaceEGL> surface(
           new NativeViewGLSurfaceEGL(window));
       scoped_ptr<VSyncProvider> sync_provider;
-      if (base::win::GetVersion() >= base::win::VERSION_VISTA)
-        sync_provider.reset(new DWMVSyncProvider);
+      sync_provider.reset(new WinVSyncProvider(window));
       if (!surface->Initialize(sync_provider.Pass()))
         return NULL;
 
@@ -265,8 +319,8 @@ scoped_refptr<GLSurface> GLSurface::CreateOffscreenGLSurface(
   TRACE_EVENT0("gpu", "GLSurface::CreateOffscreenGLSurface");
   switch (GetGLImplementation()) {
     case kGLImplementationOSMesaGL: {
-      scoped_refptr<GLSurface> surface(new GLSurfaceOSMesa(OSMESA_RGBA,
-                                                           size));
+      scoped_refptr<GLSurface> surface(
+          new GLSurfaceOSMesa(OSMesaSurfaceFormatRGBA, size));
       if (!surface->Initialize())
         return NULL;
 
@@ -295,10 +349,10 @@ scoped_refptr<GLSurface> GLSurface::CreateOffscreenGLSurface(
 }
 
 EGLNativeDisplayType GetPlatformDefaultEGLNativeDisplay() {
-  if (!CommandLine::ForCurrentProcess()->HasSwitch(switches::kDisableD3D11))
-    return EGL_D3D11_ELSE_D3D9_DISPLAY_ANGLE;
-
-  return EGL_DEFAULT_DISPLAY;
+  if (CommandLine::ForCurrentProcess()->HasSwitch(switches::kDisableD3D11) ||
+      CommandLine::ForCurrentProcess()->HasSwitch(switches::kUseWarp))
+    return GetDC(NULL);
+  return EGL_D3D11_ELSE_D3D9_DISPLAY_ANGLE;
 }
 
 }  // namespace gfx

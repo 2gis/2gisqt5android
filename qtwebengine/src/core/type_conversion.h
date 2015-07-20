@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtWebEngine module of the Qt Toolkit.
 **
@@ -10,15 +10,15 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
 ** General Public License version 3 as published by the Free Software
 ** Foundation and appearing in the file LICENSE.LGPLv3 included in the
-** packaging of this file.  Please review the following information to
+** packaging of this file. Please review the following information to
 ** ensure the GNU Lesser General Public License version 3 requirements
 ** will be met: https://www.gnu.org/licenses/lgpl.html.
 **
@@ -26,7 +26,7 @@
 ** Alternatively, this file may be used under the terms of the GNU
 ** General Public License version 2.0 or later as published by the Free
 ** Software Foundation and appearing in the file LICENSE.GPL included in
-** the packaging of this file.  Please review the following information to
+** the packaging of this file. Please review the following information to
 ** ensure the GNU General Public License version 2.0 requirements will be
 ** met: http://www.gnu.org/licenses/gpl-2.0.html.
 **
@@ -39,17 +39,20 @@
 
 #include <QColor>
 #include <QDateTime>
+#include <QDir>
 #include <QMatrix4x4>
 #include <QRect>
 #include <QString>
 #include <QUrl>
 #include "base/files/file_path.h"
 #include "base/time/time.h"
+#include "content/public/common/file_chooser_file_info.h"
 #include "third_party/skia/include/utils/SkMatrix44.h"
 #include "third_party/skia/include/core/SkColor.h"
 #include "ui/gfx/rect.h"
-#include "ui/shell_dialogs/selected_file_info.h"
 #include "url/gurl.h"
+
+namespace QtWebEngineCore {
 
 inline QString toQt(const base::string16 &string)
 {
@@ -135,10 +138,14 @@ inline QDateTime toQt(base::Time time)
     return QDateTime::fromMSecsSinceEpoch(time.ToJavaTime());
 }
 
+inline base::Time toTime(const QDateTime &dateTime) {
+    return base::Time::FromInternalValue(dateTime.toMSecsSinceEpoch());
+}
+
 inline base::FilePath::StringType toFilePathString(const QString &str)
 {
 #if defined(OS_WIN)
-    return str.toStdWString();
+    return QDir::toNativeSeparators(str).toStdWString();
 #else
     return str.toStdString();
 #endif
@@ -150,13 +157,23 @@ inline base::FilePath toFilePath(const QString &str)
 }
 
 template <typename T>
-inline T fileListingHelper(const QString &) {qFatal("Specialization missing for %s.", Q_FUNC_INFO);}
+inline T fileListingHelper(const QString &)
+// Clang is still picky about this though it should be supported eventually.
+// See http://www.open-std.org/jtc1/sc22/wg21/docs/cwg_defects.html#941
+#ifndef Q_CC_CLANG
+= delete;
+#else
+{ return T(); }
+#endif
 
 template <>
-inline ui::SelectedFileInfo fileListingHelper<ui::SelectedFileInfo>(const QString &file)
+inline content::FileChooserFileInfo fileListingHelper<content::FileChooserFileInfo>(const QString &file)
 {
-    base::FilePath fp(toFilePathString(file));
-    return ui::SelectedFileInfo(fp, fp);
+    content::FileChooserFileInfo choose_file;
+    base::FilePath fp(toFilePath(file));
+    choose_file.file_path = fp;
+    choose_file.display_name = fp.BaseName().value();
+    return choose_file;
 }
 
 template <>
@@ -175,5 +192,7 @@ inline std::vector<T> toVector(const QStringList &fileList)
         selectedFiles.push_back(fileListingHelper<T>(file));
     return selectedFiles;
 }
+
+} // namespace QtWebEngineCore
 
 #endif // TYPE_CONVERSION_H

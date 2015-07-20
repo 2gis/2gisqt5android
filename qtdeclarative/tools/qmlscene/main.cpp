@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the tools applications of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -158,7 +158,6 @@ struct Options
     bool maximized;
     bool fullscreen;
     bool transparent;
-    bool scenegraphOnGraphicsview;
     bool clip;
     bool versionDetection;
     bool slowAnimations;
@@ -351,7 +350,7 @@ static void usage()
     puts("  --quit .................................... Quit immediately after starting");
     puts("  --disable-context-sharing ................. Disable the use of a shared GL context for QtQuick Windows");
     puts("  -I <path> ................................. Add <path> to the list of import paths");
-    puts("  -B <name> <file> .......................... Add a named bundle");
+    puts("  -P <path> ................................. Add <path> to the list of plugin paths");
     puts("  -translation <translationfile> ............ Set the language to run in");
 
     puts(" ");
@@ -363,7 +362,7 @@ int main(int argc, char ** argv)
     Options options;
 
     QStringList imports;
-    QList<QPair<QString, QString> > bundles;
+    QStringList pluginPaths;
     for (int i = 1; i < argc; ++i) {
         if (*argv[i] != '-' && QFileInfo(QFile::decodeName(argv[i])).exists()) {
             options.file = QUrl::fromLocalFile(argv[i]);
@@ -393,11 +392,9 @@ int main(int argc, char ** argv)
                 options.contextSharing = false;
             else if (lowerArgument == QLatin1String("-i") && i + 1 < argc)
                 imports.append(QString::fromLatin1(argv[++i]));
-            else if (lowerArgument == QLatin1String("-b") && i + 2 < argc) {
-                QString name = QString::fromLatin1(argv[++i]);
-                QString file = QString::fromLatin1(argv[++i]);
-                bundles.append(qMakePair(name, file));
-            } else if (lowerArgument == QLatin1String("--help")
+            else if (lowerArgument == QLatin1String("-p") && i + 1 < argc)
+                pluginPaths.append(QString::fromLatin1(argv[++i]));
+            else if (lowerArgument == QLatin1String("--help")
                      || lowerArgument == QLatin1String("-help")
                      || lowerArgument == QLatin1String("--h")
                      || lowerArgument == QLatin1String("-h"))
@@ -460,8 +457,8 @@ int main(int argc, char ** argv)
             QPointer<QQmlComponent> component = new QQmlComponent(&engine);
             for (int i = 0; i < imports.size(); ++i)
                 engine.addImportPath(imports.at(i));
-            for (int i = 0; i < bundles.size(); ++i)
-                engine.addNamedBundle(bundles.at(i).first, bundles.at(i).second);
+            for (int i = 0; i < pluginPaths.size(); ++i)
+                engine.addPluginPath(pluginPaths.at(i));
             if (options.file.isLocalFile()) {
                 QFileInfo fi(options.file.toLocalFile());
 #ifndef QT_NO_TRANSLATION

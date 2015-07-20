@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -48,6 +48,7 @@
 #include <private/qv4functionobject_p.h>
 #include <private/qv4scopedvalue_p.h>
 #include <private/qv4alloca_p.h>
+#include <private/qv4runtime_p.h>
 
 #ifdef Q_CC_MSVC
 #define NO_INLINE __declspec(noinline)
@@ -322,6 +323,9 @@ private slots:
     void contextObjectOnLazyBindings();
     void garbageCollectionDuringCreation();
     void qtbug_39520();
+    void readUnregisteredQObjectProperty();
+    void writeUnregisteredQObjectProperty();
+    void switchExpression();
 
 private:
 //    static void propertyVarWeakRefCallback(v8::Persistent<v8::Value> object, void* parameter);
@@ -2294,20 +2298,18 @@ void tst_qqmlecmascript::regExpBug()
     }
 }
 
-static inline bool evaluate_error(QV8Engine *engine, const QV4::ValueRef o, const char *source)
+static inline bool evaluate_error(QV8Engine *engine, const QV4::Value &o, const char *source)
 {
     QString functionSource = QLatin1String("(function(object) { return ") +
                              QLatin1String(source) + QLatin1String(" })");
 
-    QV4::Script program(QV8Engine::getV4(engine)->rootContext, functionSource);
+    QV4::Scope scope(QV8Engine::getV4(engine));
+    QV4::Script program(QV4::ScopedContext(scope, scope.engine->rootContext()), functionSource);
     program.inheritContext = true;
 
-    QV4::ExecutionContext *ctx = QV8Engine::getV4(engine)->currentContext();
-    QV4::Scope scope(ctx);
-
-    QV4::Scoped<QV4::FunctionObject> function(scope, program.run());
+    QV4::ScopedFunctionObject function(scope, program.run());
     if (scope.engine->hasException) {
-        ctx->catchException();
+        scope.engine->catchException();
         return true;
     }
     QV4::ScopedCallData d(scope, 1);
@@ -2315,27 +2317,25 @@ static inline bool evaluate_error(QV8Engine *engine, const QV4::ValueRef o, cons
     d->thisObject = engine->global();
     function->call(d);
     if (scope.engine->hasException) {
-        ctx->catchException();
+        scope.engine->catchException();
         return true;
     }
     return false;
 }
 
-static inline bool evaluate_value(QV8Engine *engine, const QV4::ValueRef o,
-                                  const char *source, const QV4::ValueRef result)
+static inline bool evaluate_value(QV8Engine *engine, const QV4::Value &o,
+                                  const char *source, const QV4::Value &result)
 {
     QString functionSource = QLatin1String("(function(object) { return ") +
                              QLatin1String(source) + QLatin1String(" })");
 
-    QV4::Script program(QV8Engine::getV4(engine)->rootContext, functionSource);
+    QV4::Scope scope(QV8Engine::getV4(engine));
+    QV4::Script program(QV4::ScopedContext(scope, scope.engine->rootContext()), functionSource);
     program.inheritContext = true;
 
-    QV4::ExecutionContext *ctx = QV8Engine::getV4(engine)->currentContext();
-    QV4::Scope scope(ctx);
-
-    QV4::Scoped<QV4::FunctionObject> function(scope, program.run());
+    QV4::ScopedFunctionObject function(scope, program.run());
     if (scope.engine->hasException) {
-        ctx->catchException();
+        scope.engine->catchException();
         return false;
     }
     if (!function)
@@ -2347,27 +2347,26 @@ static inline bool evaluate_value(QV8Engine *engine, const QV4::ValueRef o,
     d->thisObject = engine->global();
     value = function->call(d);
     if (scope.engine->hasException) {
-        ctx->catchException();
+        scope.engine->catchException();
         return false;
     }
     return QV4::Runtime::strictEqual(value, result);
 }
 
-static inline QV4::ReturnedValue evaluate(QV8Engine *engine, const QV4::ValueRef o,
+static inline QV4::ReturnedValue evaluate(QV8Engine *engine, const QV4::Value &o,
                                              const char *source)
 {
     QString functionSource = QLatin1String("(function(object) { return ") +
                              QLatin1String(source) + QLatin1String(" })");
 
-    QV4::ExecutionContext *ctx = QV8Engine::getV4(engine)->currentContext();
-    QV4::Scope scope(ctx);
+    QV4::Scope scope(QV8Engine::getV4(engine));
 
-    QV4::Script program(QV8Engine::getV4(engine)->rootContext, functionSource);
+    QV4::Script program(QV4::ScopedContext(scope, scope.engine->rootContext()), functionSource);
     program.inheritContext = true;
 
-    QV4::Scoped<QV4::FunctionObject> function(scope, program.run());
+    QV4::ScopedFunctionObject function(scope, program.run());
     if (scope.engine->hasException) {
-        ctx->catchException();
+        scope.engine->catchException();
         return QV4::Encode::undefined();
     }
     if (!function)
@@ -2377,10 +2376,10 @@ static inline QV4::ReturnedValue evaluate(QV8Engine *engine, const QV4::ValueRef
     d->thisObject = engine->global();
     QV4::ScopedValue result(scope, function->call(d));
     if (scope.engine->hasException) {
-        ctx->catchException();
+        scope.engine->catchException();
         return QV4::Encode::undefined();
     }
-    return result.asReturnedValue();
+    return result->asReturnedValue();
 }
 
 #define EVALUATE_ERROR(source) evaluate_error(engine, object, source)
@@ -2466,7 +2465,7 @@ void tst_qqmlecmascript::callQtInvokables()
     {
     QV4::ScopedValue ret(scope, EVALUATE("object.method_NoArgs_QPointF()"));
     QVERIFY(!ret->isUndefined());
-    QCOMPARE(engine->toVariant(ret, -1), QVariant(QPointF(123, 4.5)));
+    QCOMPARE(scope.engine->toVariant(ret, -1), QVariant(QPointF(123, 4.5)));
     QCOMPARE(o->error(), false);
     QCOMPARE(o->invoked(), 3);
     QCOMPARE(o->actuals().count(), 0);
@@ -2499,7 +2498,7 @@ void tst_qqmlecmascript::callQtInvokables()
     }
 
     o->reset();
-    QVERIFY(EVALUATE_VALUE("object.method_NoArgs_QVariant()", QV4::ScopedValue(scope, engine->toString("QML rocks"))));
+    QVERIFY(EVALUATE_VALUE("object.method_NoArgs_QVariant()", QV4::ScopedValue(scope, scope.engine->newString("QML rocks"))));
     QCOMPARE(o->error(), false);
     QCOMPARE(o->invoked(), 7);
     QCOMPARE(o->actuals().count(), 0);
@@ -3539,8 +3538,8 @@ void tst_qqmlecmascript::compiled()
     QCOMPARE(object->property("test17").toInt(), 4);
     QCOMPARE(object->property("test18").toReal(), qreal(176));
     QCOMPARE(object->property("test19").toInt(), 6);
-    QCOMPARE(object->property("test20").toReal(), qreal(6.7));
-    QCOMPARE(object->property("test21").toString(), QLatin1String("6.7"));
+    QCOMPARE(object->property("test20").toReal(), qreal(6.5));
+    QCOMPARE(object->property("test21").toString(), QLatin1String("6.5"));
     QCOMPARE(object->property("test22").toString(), QLatin1String("!"));
     QCOMPARE(object->property("test23").toBool(), true);
     QCOMPARE(qvariant_cast<QColor>(object->property("test24")), QColor(0x11,0x22,0x33));
@@ -3941,7 +3940,7 @@ void tst_qqmlecmascript::verifyContextLifetime(QQmlContextData *ctxt) {
         QV8Engine *engine = QV8Engine::get(ctxt->engine);
         QV4::ExecutionEngine *v4 = QV8Engine::getV4(engine);
         QV4::Scope scope(v4);
-        QV4::ScopedArrayObject scripts(scope, ctxt->importedScripts);
+        QV4::ScopedArrayObject scripts(scope, ctxt->importedScripts.value());
         QV4::ScopedValue qml(scope);
         for (quint32 i = 0; i < scripts->getLength(); ++i) {
             QQmlContextData *scriptContext, *newContext;
@@ -3952,7 +3951,7 @@ void tst_qqmlecmascript::verifyContextLifetime(QQmlContextData *ctxt) {
 
             {
                 QV4::Scope scope(QV8Engine::getV4((engine)));
-                QV4::ScopedValue temporaryScope(scope, QV4::QmlContextWrapper::qmlScope(engine, scriptContext, 0));
+                QV4::ScopedValue temporaryScope(scope, QV4::QmlContextWrapper::qmlScope(scope.engine, scriptContext, 0));
                 Q_UNUSED(temporaryScope)
             }
 
@@ -4109,7 +4108,7 @@ void tst_qqmlecmascript::importScripts_data()
             << testFileUrl("jsimportfail/malformedImport.qml")
             << false /* compilation should succeed */
             << QString()
-            << (QStringList() << testFileUrl("jsimportfail/malformedImport.js").toString() + QLatin1String(":1:1: Syntax error"))
+            << (QStringList() << testFileUrl("jsimportfail/malformedImport.js").toString() + QLatin1String(":1:2: Syntax error"))
             << QStringList()
             << QVariantList();
 
@@ -4141,7 +4140,7 @@ void tst_qqmlecmascript::importScripts_data()
             << testFileUrl("jsimportfail/malformedFileQualifier.2.qml")
             << false /* compilation should succeed */
             << QString()
-            << (QStringList() << testFileUrl("jsimportfail/malformedFileQualifier.2.js").toString() + QLatin1String(":1:1: Invalid import qualifier"))
+            << (QStringList() << testFileUrl("jsimportfail/malformedFileQualifier.2.js").toString() + QLatin1String(":1:23: Invalid import qualifier"))
             << QStringList()
             << QVariantList();
 
@@ -4189,7 +4188,7 @@ void tst_qqmlecmascript::importScripts_data()
             << testFileUrl("jsimportfail/malformedModuleQualifier.2.qml")
             << false /* compilation should succeed */
             << QString()
-            << (QStringList() << testFileUrl("jsimportfail/malformedModuleQualifier.2.js").toString() + QLatin1String(":1:1: Invalid import qualifier"))
+            << (QStringList() << testFileUrl("jsimportfail/malformedModuleQualifier.2.js").toString() + QLatin1String(":1:24: Invalid import qualifier"))
             << QStringList()
             << QVariantList();
 }
@@ -4204,12 +4203,12 @@ void tst_qqmlecmascript::importScripts()
     QFETCH(QVariantList, propertyValues);
 
     TestHTTPServer server;
-    QVERIFY2(server.listen(8111), qPrintable(server.errorString()));
+    QVERIFY2(server.listen(), qPrintable(server.errorString()));
     server.serveDirectory(dataDirectory() + "/remote");
 
     QStringList importPathList = engine.importPathList();
 
-    QString remotePath(QLatin1String("http://127.0.0.1:8111/"));
+    QString remotePath(server.urlString("/"));
     engine.addImportPath(remotePath);
 
     QQmlComponent component(&engine, testfile);
@@ -5077,9 +5076,9 @@ void tst_qqmlecmascript::propertyVarInheritance()
         // XXX NOTE: this is very implementation dependent.  QDVMEMO->vmeProperty() is the only
         // public function which can return us a handle to something in the varProperties array.
         QV4::ReturnedValue tmp = icovmemo->vmeProperty(ico5->metaObject()->indexOfProperty("circ"));
-        icoCanaryHandle = tmp;
+        icoCanaryHandle.set(QQmlEnginePrivate::getV4Engine(&engine), tmp);
         tmp = ccovmemo->vmeProperty(cco5->metaObject()->indexOfProperty("circ"));
-        ccoCanaryHandle = tmp;
+        ccoCanaryHandle.set(QQmlEnginePrivate::getV4Engine(&engine), tmp);
         tmp = QV4::Encode::null();
         QVERIFY(!icoCanaryHandle.isUndefined());
         QVERIFY(!ccoCanaryHandle.isUndefined());
@@ -5117,7 +5116,8 @@ void tst_qqmlecmascript::propertyVarInheritance2()
     QCOMPARE(childObject->property("textCanary").toInt(), 10);
     QV4::WeakValue childObjectVarArrayValueHandle;
     {
-        childObjectVarArrayValueHandle = QQmlVMEMetaObject::get(childObject)->vmeProperty(childObject->metaObject()->indexOfProperty("vp"));
+        childObjectVarArrayValueHandle.set(QQmlEnginePrivate::getV4Engine(&engine),
+                                           QQmlVMEMetaObject::get(childObject)->vmeProperty(childObject->metaObject()->indexOfProperty("vp")));
         QVERIFY(!childObjectVarArrayValueHandle.isUndefined());
         gc(engine);
         QVERIFY(!childObjectVarArrayValueHandle.isUndefined()); // should not have been collected yet.
@@ -5435,7 +5435,7 @@ void tst_qqmlecmascript::sequenceConversionWrite()
         QVERIFY(seq != 0);
 
         // we haven't registered QList<QPoint> as a sequence type, so writing shouldn't work.
-        QString warningOne = qmlFile.toString() + QLatin1String(":16: Error: Cannot assign QJSValue to an unregistered type");
+        QString warningOne = qmlFile.toString() + QLatin1String(":16: Error: Cannot assign QJSValue to QList<QPoint>");
         QTest::ignoreMessage(QtWarningMsg, warningOne.toLatin1().constData());
 
         QMetaObject::invokeMethod(object, "performTest");
@@ -6055,12 +6055,14 @@ void tst_qqmlecmascript::include()
     // Remote - error
     {
     TestHTTPServer server;
-    QVERIFY2(server.listen(8111), qPrintable(server.errorString()));
+    QVERIFY2(server.listen(), qPrintable(server.errorString()));
     server.serveDirectory(dataDirectory());
 
     QQmlComponent component(&engine, testFileUrl("include_remote_missing.qml"));
-    QObject *o = component.create();
+    QObject *o = component.beginCreate(engine.rootContext());
     QVERIFY(o != 0);
+    o->setProperty("serverBaseUrl", server.baseUrl().toString());
+    component.completeCreate();
 
     QTRY_VERIFY(o->property("done").toBool() == true);
 
@@ -6097,12 +6099,14 @@ void tst_qqmlecmascript::includeRemoteSuccess()
 
     // Remote - success
     TestHTTPServer server;
-    QVERIFY2(server.listen(8111), qPrintable(server.errorString()));
+    QVERIFY2(server.listen(), qPrintable(server.errorString()));
     server.serveDirectory(dataDirectory());
 
     QQmlComponent component(&engine, testFileUrl("include_remote.qml"));
-    QObject *o = component.create();
+    QObject *o = component.beginCreate(engine.rootContext());
     QVERIFY(o != 0);
+    o->setProperty("serverBaseUrl", server.baseUrl().toString());
+    component.completeCreate();
 
     QTRY_VERIFY(o->property("done").toBool() == true);
     QTRY_VERIFY(o->property("done2").toBool() == true);
@@ -7390,10 +7394,12 @@ void tst_qqmlecmascript::negativeYear()
     QVERIFY(object != 0);
 
     QVariant q;
-    QMetaObject::invokeMethod(object, "check_negative",
-                              Q_RETURN_ARG(QVariant, q));
+    QMetaObject::invokeMethod(object, "check_negative_tostring", Q_RETURN_ARG(QVariant, q));
     // Strip the timezone. It should be irrelevant as the date was created with the same one.
-    QCOMPARE(q.toString().left(32), QStringLiteral("result: Mon Jan 1 00:00:00 -2000"));
+    QCOMPARE(q.toString().left(32), QStringLiteral("result: Sat Jan 1 00:00:00 -2001"));
+
+    QMetaObject::invokeMethod(object, "check_negative_toisostring", Q_RETURN_ARG(QVariant, q));
+    QCOMPARE(q.toString().left(16), QStringLiteral("result: -002000-"));
 }
 
 void tst_qqmlecmascript::concatenatedStringPropertyAccess()
@@ -7766,6 +7772,103 @@ void tst_qqmlecmascript::qtbug_39520()
 
     QString s = object->property("s").toString();
     QCOMPARE(s.count('\n'), 1 * 1000 * 1000);
+}
+
+class ContainedObject1 : public QObject
+{
+    Q_OBJECT
+};
+
+class ContainedObject2 : public QObject
+{
+    Q_OBJECT
+};
+
+class ObjectContainer : public QObject
+{
+    Q_OBJECT
+    Q_PROPERTY(ContainedObject1 *object1 READ object1 WRITE setObject1)
+    Q_PROPERTY(ContainedObject2 *object2 READ object2 WRITE setObject2)
+public:
+    explicit ObjectContainer(QObject *parent = 0) :
+        QObject(parent),
+        mGetterCalled(false),
+        mSetterCalled(false)
+    {
+    }
+
+    ContainedObject1 *object1()
+    {
+        mGetterCalled = true;
+        return 0;
+    }
+
+    void setObject1(ContainedObject1 *)
+    {
+        mSetterCalled = true;
+    }
+
+    ContainedObject2 *object2()
+    {
+        mGetterCalled = true;
+        return 0;
+    }
+
+    void setObject2(ContainedObject2 *)
+    {
+        mSetterCalled = true;
+    }
+
+public:
+    bool mGetterCalled;
+    bool mSetterCalled;
+};
+
+void tst_qqmlecmascript::readUnregisteredQObjectProperty()
+{
+    qmlRegisterType<ObjectContainer>("Test", 1, 0, "ObjectContainer");
+    QQmlEngine engine;
+    QQmlComponent component(&engine, testFileUrl("accessUnregisteredQObjectProperty.qml"));
+    QObject *root = component.create();
+    QVERIFY(root);
+
+    QMetaObject::invokeMethod(root, "readProperty");
+    QCOMPARE(root->property("container").value<ObjectContainer*>()->mGetterCalled, true);
+}
+
+void tst_qqmlecmascript::writeUnregisteredQObjectProperty()
+{
+    qmlRegisterType<ObjectContainer>("Test", 1, 0, "ObjectContainer");
+    QQmlEngine engine;
+    QQmlComponent component(&engine, testFileUrl("accessUnregisteredQObjectProperty.qml"));
+    QObject *root = component.create();
+    QVERIFY(root);
+
+    QMetaObject::invokeMethod(root, "writeProperty");
+    QCOMPARE(root->property("container").value<ObjectContainer*>()->mSetterCalled, true);
+}
+
+void tst_qqmlecmascript::switchExpression()
+{
+    // verify that we evaluate the expression inside switch() exactly once
+    QJSEngine engine;
+    QJSValue v = engine.evaluate(QString::fromLatin1(
+            "var num = 0\n"
+            "var x = 0\n"
+            "function f() { ++num; return (Math.random() > 0.5) ? 0 : 1; }\n"
+            "for (var i = 0; i < 1000; ++i) {\n"
+            "   switch (f()) {\n"
+            "   case 0:\n"
+            "   case 1:\n"
+            "       break;\n"
+            "   default:\n"
+            "       ++x;\n"
+            "   }\n"
+            "}\n"
+            "(x == 0 && num == 1000) ? true : false\n"
+                        ));
+    QVERIFY(!v.isError());
+    QCOMPARE(v.toBool(), true);
 }
 
 QTEST_MAIN(tst_qqmlecmascript)

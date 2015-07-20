@@ -33,9 +33,17 @@
 
 namespace WTF {
 
-void* OSAllocator::reserveUncommitted(size_t bytes, Usage, bool, bool, bool)
+inline size_t getPageSize()
 {
-    void* result = _aligned_malloc(bytes, 16);
+    SYSTEM_INFO info;
+    GetNativeSystemInfo(&info);
+    return info.dwPageSize;
+}
+
+void* OSAllocator::reserveUncommitted(size_t bytes, Usage, bool, bool)
+{
+    static const size_t pageSize = getPageSize();
+    void* result = _aligned_malloc(bytes, pageSize);
     if (!result)
         CRASH();
     memset(result, 0, bytes);
@@ -47,7 +55,7 @@ void* OSAllocator::reserveAndCommit(size_t bytes, Usage usage, bool writable, bo
     return reserveUncommitted(bytes, usage, writable, executable);
 }
 
-void OSAllocator::commit(void* address, size_t bytes, bool writable, bool executable)
+void OSAllocator::commit(void*, size_t, bool, bool)
 {
     CRASH(); // Unimplemented
 }

@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -55,19 +55,35 @@ class QV8Engine;
 
 namespace QV4 {
 
+namespace Heap {
+
+struct QtObject : Object {
+    QtObject(ExecutionEngine *v4, QQmlEngine *qmlEngine);
+    QObject *platform;
+    QObject *application;
+};
+
+struct ConsoleObject : Object {
+    ConsoleObject(ExecutionEngine *engine);
+};
+
+struct QQmlBindingFunction : FunctionObject {
+    QQmlBindingFunction(QV4::FunctionObject *originalFunction);
+    FunctionObject *originalFunction;
+    // Set when the binding is created later
+    QQmlSourceLocation bindingLocation;
+};
+
+}
+
 struct QtObject : Object
 {
-    struct Data : Object::Data {
-        Data(ExecutionEngine *v4, QQmlEngine *qmlEngine);
-        QObject *platform;
-        QObject *application;
-    };
-    V4_OBJECT(Object)
-
+    V4_OBJECT2(QtObject, Object)
 
     static ReturnedValue method_isQtObject(CallContext *ctx);
     static ReturnedValue method_rgba(CallContext *ctx);
     static ReturnedValue method_hsla(CallContext *ctx);
+    static ReturnedValue method_hsva(CallContext *ctx);
     static ReturnedValue method_colorEqual(CallContext *ctx);
     static ReturnedValue method_font(CallContext *ctx);
     static ReturnedValue method_rect(CallContext *ctx);
@@ -101,16 +117,18 @@ struct QtObject : Object
 #ifndef QT_NO_IM
     static ReturnedValue method_get_inputMethod(CallContext *ctx);
 #endif
+    static ReturnedValue method_get_styleHints(CallContext *ctx);
 };
 
 struct ConsoleObject : Object
 {
-    struct Data : Object::Data {
-        Data(ExecutionEngine *engine);
-    };
+    typedef Heap::ConsoleObject Data;
+    const Data *d() const { return static_cast<const Data *>(Object::d()); }
+    Data *d() { return static_cast<Data *>(Object::d()); }
 
     static ReturnedValue method_error(CallContext *ctx);
     static ReturnedValue method_log(CallContext *ctx);
+    static ReturnedValue method_info(CallContext *ctx);
     static ReturnedValue method_profile(CallContext *ctx);
     static ReturnedValue method_profileEnd(CallContext *ctx);
     static ReturnedValue method_time(CallContext *ctx);
@@ -143,23 +161,14 @@ struct GlobalExtensions {
 
 struct QQmlBindingFunction : public QV4::FunctionObject
 {
-    struct Data : FunctionObject::Data {
-        Data(FunctionObject *originalFunction);
-        QV4::FunctionObject *originalFunction;
-        // Set when the binding is created later
-        QQmlSourceLocation bindingLocation;
-    };
-    V4_OBJECT(QV4::FunctionObject)
+    V4_OBJECT2(QQmlBindingFunction, FunctionObject)
+    V4_NEEDS_DESTROY
 
     void initBindingLocation(); // from caller stack trace
 
     static ReturnedValue call(Managed *that, CallData *callData);
 
-    static void markObjects(Managed *that, ExecutionEngine *e);
-    static void destroy(Managed *that) {
-        static_cast<QQmlBindingFunction *>(that)->d()->~Data();
-    }
-
+    static void markObjects(Heap::Base *that, ExecutionEngine *e);
 };
 
 }

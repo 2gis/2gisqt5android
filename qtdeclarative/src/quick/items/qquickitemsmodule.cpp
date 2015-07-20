@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQuick module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -83,8 +83,7 @@ static QQmlPrivate::AutoParentResult qquickitem_autoParent(QObject *obj, QObject
 {
     // When setting a parent (especially during dynamic object creation) in QML,
     // also try to set up the analogous item/window relationship.
-    QQuickItem *parentItem = qmlobject_cast<QQuickItem *>(parent);
-    if (parentItem) {
+    if (QQuickItem *parentItem = qmlobject_cast<QQuickItem *>(parent)) {
         QQuickItem *item = qmlobject_cast<QQuickItem *>(obj);
         if (item) {
             // An Item has another Item
@@ -99,26 +98,25 @@ static QQmlPrivate::AutoParentResult qquickitem_autoParent(QObject *obj, QObject
             }
         }
         return QQmlPrivate::IncompatibleObject;
-    } else {
-        QQuickWindow *parentWindow = qmlobject_cast<QQuickWindow *>(parent);
-        if (parentWindow) {
-            QQuickWindow *win = qmlobject_cast<QQuickWindow *>(obj);
-            if (win) {
-                // A Window inside a Window should be transient for it
-                win->setTransientParent(parentWindow);
+    } else if (QQuickWindow *parentWindow = qmlobject_cast<QQuickWindow *>(parent)) {
+        QQuickWindow *win = qmlobject_cast<QQuickWindow *>(obj);
+        if (win) {
+            // A Window inside a Window should be transient for it
+            win->setTransientParent(parentWindow);
+            return QQmlPrivate::Parented;
+        } else {
+            QQuickItem *item = qmlobject_cast<QQuickItem *>(obj);
+            if (item) {
+                // The parent of an Item inside a Window is actually the implicit content Item
+                item->setParentItem(parentWindow->contentItem());
                 return QQmlPrivate::Parented;
-            } else {
-                QQuickItem *item = qmlobject_cast<QQuickItem *>(obj);
-                if (item) {
-                    // The parent of an Item inside a Window is actually the implicit content Item
-                    item->setParentItem(parentWindow->contentItem());
-                    return QQmlPrivate::Parented;
-                }
             }
-            return QQmlPrivate::IncompatibleObject;
         }
+        return QQmlPrivate::IncompatibleObject;
+    } else if (qmlobject_cast<QQuickItem *>(obj)) {
+        return QQmlPrivate::IncompatibleParent;
     }
-    return QQmlPrivate::IncompatibleParent;
+    return QQmlPrivate::IncompatibleObject;
 }
 
 static void qt_quickitems_defineModule(const char *uri, int major, int minor)
@@ -128,7 +126,7 @@ static void qt_quickitems_defineModule(const char *uri, int major, int minor)
     QQuickItemPrivate::registerAccessorProperties();
 
 #ifdef QT_NO_MOVIE
-    qmlRegisterTypeNotAvailable(uri,major,minor,"AnimatedImage", qApp->translate("QQuickAnimatedImage","Qt was built without support for QMovie"));
+    qmlRegisterTypeNotAvailable(uri,major,minor,"AnimatedImage", QCoreApplication::translate("QQuickAnimatedImage","Qt was built without support for QMovie"));
 #else
     qmlRegisterType<QQuickAnimatedImage>(uri,major,minor,"AnimatedImage");
 #endif
@@ -267,6 +265,10 @@ static void qt_quickitems_defineModule(const char *uri, int major, int minor)
     qmlRegisterType<QQuickMouseArea, 1>(uri, 2, 4, "MouseArea");
     qmlRegisterType<QQuickShaderEffect, 1>(uri, 2, 4, "ShaderEffect");
     qmlRegisterUncreatableType<QQuickOpenGLInfo>(uri, 2, 4,"OpenGLInfo", QQuickOpenGLInfo::tr("OpenGLInfo is only available via attached properties"));
+
+    qmlRegisterType<QQuickPinchArea, 1>(uri, 2, 5,"PinchArea");
+    qmlRegisterType<QQuickImage, 2>(uri, 2, 5,"Image");
+    qmlRegisterType<QQuickMouseArea, 2>(uri, 2, 5, "MouseArea");
 }
 
 static void initResources()

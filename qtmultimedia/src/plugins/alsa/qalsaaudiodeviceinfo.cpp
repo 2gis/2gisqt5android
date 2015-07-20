@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -337,9 +337,14 @@ QList<QByteArray> QAlsaAudioDeviceInfo::availableDevices(QAudio::Mode mode)
 
 #if(SND_LIB_MAJOR == 1 && SND_LIB_MINOR == 0 && SND_LIB_SUBMINOR >= 14)
     // Create a list of all current audio devices that support mode
-    void **hints;
+    void **hints, **n;
     char *name, *descr, *io;
-    int card = -1;
+
+    if(snd_device_name_hint(-1, "pcm", &hints) < 0) {
+        qWarning() << "no alsa devices available";
+        return devices;
+    }
+    n = hints;
 
     if(mode == QAudio::AudioInput) {
         filter = "Input";
@@ -347,35 +352,28 @@ QList<QByteArray> QAlsaAudioDeviceInfo::availableDevices(QAudio::Mode mode)
         filter = "Output";
     }
 
-    while (snd_card_next(&card) == 0 && card >= 0) {
-        if (snd_device_name_hint(card, "pcm", &hints) < 0)
-            continue;
+    while (*n != NULL) {
+        name = snd_device_name_get_hint(*n, "NAME");
+        if (name != 0 && qstrcmp(name, "null") != 0) {
+            descr = snd_device_name_get_hint(*n, "DESC");
+            io = snd_device_name_get_hint(*n, "IOID");
 
-        void **n = hints;
-        while (*n != NULL) {
-            name = snd_device_name_get_hint(*n, "NAME");
-            if (name != 0 && qstrcmp(name, "null") != 0) {
-                descr = snd_device_name_get_hint(*n, "DESC");
-                io = snd_device_name_get_hint(*n, "IOID");
-
-                if ((descr != NULL) && ((io == NULL) || (io == filter))) {
-                    QString deviceName = QLatin1String(name);
-                    QString deviceDescription = QLatin1String(descr);
-                    if (deviceDescription.contains(QLatin1String("Default Audio Device")))
-                        devices.prepend(deviceName.toLocal8Bit().constData());
-                    else
-                        devices.append(deviceName.toLocal8Bit().constData());
-                }
-
-                free(descr);
-                free(io);
+            if ((descr != NULL) && ((io == NULL) || (io == filter))) {
+                QString deviceName = QLatin1String(name);
+                QString deviceDescription = QLatin1String(descr);
+                if (deviceDescription.contains(QLatin1String("Default Audio Device")))
+                    devices.prepend(deviceName.toLocal8Bit().constData());
+                else
+                    devices.append(deviceName.toLocal8Bit().constData());
             }
-            free(name);
-            ++n;
-        }
 
-        snd_device_name_free_hint(hints);
+            free(descr);
+            free(io);
+        }
+        free(name);
+        ++n;
     }
+    snd_device_name_free_hint(hints);
 #else
     int idx = 0;
     char* name;
@@ -416,41 +414,38 @@ void QAlsaAudioDeviceInfo::checkSurround()
     surround51 = false;
     surround71 = false;
 
-    void **hints;
+    void **hints, **n;
     char *name, *descr, *io;
-    int card = -1;
 
-    while (snd_card_next(&card) == 0 && card >= 0) {
-        if (snd_device_name_hint(card, "pcm", &hints) < 0)
-            continue;
+    if(snd_device_name_hint(-1, "pcm", &hints) < 0)
+        return;
 
-        void **n = hints;
-        while (*n != NULL) {
-            name = snd_device_name_get_hint(*n, "NAME");
-            descr = snd_device_name_get_hint(*n, "DESC");
-            io = snd_device_name_get_hint(*n, "IOID");
-            if((name != NULL) && (descr != NULL)) {
-                QString deviceName = QLatin1String(name);
-                if (mode == QAudio::AudioOutput) {
-                    if(deviceName.contains(QLatin1String("surround40")))
-                        surround40 = true;
-                    if(deviceName.contains(QLatin1String("surround51")))
-                        surround51 = true;
-                    if(deviceName.contains(QLatin1String("surround71")))
-                        surround71 = true;
-                }
+    n = hints;
+
+    while (*n != NULL) {
+        name = snd_device_name_get_hint(*n, "NAME");
+        descr = snd_device_name_get_hint(*n, "DESC");
+        io = snd_device_name_get_hint(*n, "IOID");
+        if((name != NULL) && (descr != NULL)) {
+            QString deviceName = QLatin1String(name);
+            if (mode == QAudio::AudioOutput) {
+                if(deviceName.contains(QLatin1String("surround40")))
+                    surround40 = true;
+                if(deviceName.contains(QLatin1String("surround51")))
+                    surround51 = true;
+                if(deviceName.contains(QLatin1String("surround71")))
+                    surround71 = true;
             }
-            if(name != NULL)
-                free(name);
-            if(descr != NULL)
-                free(descr);
-            if(io != NULL)
-                free(io);
-            ++n;
         }
-
-        snd_device_name_free_hint(hints);
+        if(name != NULL)
+            free(name);
+        if(descr != NULL)
+            free(descr);
+        if(io != NULL)
+            free(io);
+        ++n;
     }
+    snd_device_name_free_hint(hints);
 }
 
 QT_END_NAMESPACE

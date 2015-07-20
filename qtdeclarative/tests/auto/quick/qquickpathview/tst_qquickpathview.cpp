@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -1485,7 +1485,7 @@ void tst_QQuickPathView::mouseDrag()
     QTest::qWait(100);
 
     {
-        QMouseEvent mv(QEvent::MouseMove, QPoint(30,100), Qt::LeftButton, Qt::LeftButton,Qt::NoModifier);
+        QMouseEvent mv(QEvent::MouseMove, QPoint(50,100), Qt::LeftButton, Qt::LeftButton,Qt::NoModifier);
         QGuiApplication::sendEvent(window.data(), &mv);
     }
     // first move beyond threshold does not trigger drag
@@ -1503,6 +1503,10 @@ void tst_QQuickPathView::mouseDrag()
         QGuiApplication::sendEvent(window.data(), &mv);
     }
     // next move beyond threshold does trigger drag
+#ifdef Q_OS_WIN
+    if (!pathview->isMoving())
+        QSKIP("Skipping due to interference from external mouse move events.");
+#endif // Q_OS_WIN
     QVERIFY(pathview->isMoving());
     QVERIFY(pathview->isDragging());
     QCOMPARE(movingSpy.count(), 1);
@@ -1540,7 +1544,7 @@ void tst_QQuickPathView::nestedMouseAreaDrag()
     QVERIFY(pathview != 0);
 
     // Dragging the child mouse area should move it and not animate the PathView
-    flick(window.data(), QPoint(200,200), QPoint(300,200), 200);
+    flick(window.data(), QPoint(200,200), QPoint(400,200), 200);
     QVERIFY(!pathview->isMoving());
 
     // Dragging outside the mouse are should animate the PathView.
@@ -1795,8 +1799,8 @@ void tst_QQuickPathView::cancelDrag()
     // drag between snap points
     QTest::mousePress(window.data(), Qt::LeftButton, 0, QPoint(10,100));
     QTest::qWait(100);
-    QTest::mouseMove(window.data(), QPoint(30, 100));
-    QTest::mouseMove(window.data(), QPoint(85, 100));
+    QTest::mouseMove(window.data(), QPoint(80, 100));
+    QTest::mouseMove(window.data(), QPoint(130, 100));
 
     QTRY_VERIFY(hasFraction(pathview->offset()));
     QTRY_VERIFY(pathview->isMoving());
@@ -2213,7 +2217,7 @@ void tst_QQuickPathView::nestedinFlickable()
     QTest::mouseMove(window.data(), QPoint(26,218), waitInterval);
     QTest::mouseMove(window.data(), QPoint(28,219), waitInterval);
     QTest::mouseMove(window.data(), QPoint(31,219), waitInterval);
-    QTest::mouseMove(window.data(), QPoint(39,219), waitInterval);
+    QTest::mouseMove(window.data(), QPoint(53,219), waitInterval);
 
     // first move beyond threshold does not trigger drag
     QVERIFY(!pathview->isMoving());
@@ -2226,7 +2230,7 @@ void tst_QQuickPathView::nestedinFlickable()
     QCOMPARE(fflickEndedSpy.count(), 0);
 
     // no further moves after the initial move beyond threshold
-    QTest::mouseRelease(window.data(), Qt::LeftButton, 0, QPoint(53,219));
+    QTest::mouseRelease(window.data(), Qt::LeftButton, 0, QPoint(73,219));
     QTRY_COMPARE(movingSpy.count(), 2);
     QTRY_COMPARE(moveEndedSpy.count(), 1);
     QCOMPARE(moveStartedSpy.count(), 1);

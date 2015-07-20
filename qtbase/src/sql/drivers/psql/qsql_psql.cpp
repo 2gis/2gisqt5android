@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtSql module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -200,7 +200,7 @@ public:
         preparedQueriesEnabled(false)
     { }
 
-    QString fieldSerial(int i) const { return QLatin1Char('$') + QString::number(i + 1); }
+    QString fieldSerial(int i) const Q_DECL_OVERRIDE { return QLatin1Char('$') + QString::number(i + 1); }
     void deallocatePreparedStmt();
     const QPSQLDriverPrivate * privDriver() const
     {
@@ -448,7 +448,7 @@ QVariant QPSQLResult::data(int i)
     }
     case QVariant::ByteArray: {
         size_t len;
-        unsigned char *data = PQunescapeBytea((unsigned char*)val, &len);
+        unsigned char *data = PQunescapeBytea((const unsigned char*)val, &len);
         QByteArray ba((const char*)data, len);
         qPQfreemem(data);
         return QVariant(ba);
@@ -565,7 +565,7 @@ void QPSQLResult::virtual_hook(int id, void *data)
     QSqlResult::virtual_hook(id, data);
 }
 
-static QString qCreateParamString(const QVector<QVariant> boundValues, const QSqlDriver *driver)
+static QString qCreateParamString(const QVector<QVariant> &boundValues, const QSqlDriver *driver)
 {
     if (boundValues.isEmpty())
         return QString();
@@ -1248,6 +1248,23 @@ QSqlRecord QPSQLDriver::record(const QString& tablename) const
     return info;
 }
 
+template <class FloatType>
+inline void assignSpecialPsqlFloatValue(FloatType val, QString *target)
+{
+    if (isnan(val)) {
+        *target = QLatin1String("'NaN'");
+    } else {
+        switch (isinf(val)) {
+        case 1:
+            *target = QLatin1String("'Infinity'");
+            break;
+        case -1:
+            *target = QLatin1String("'-Infinity'");
+            break;
+        }
+    }
+}
+
 QString QPSQLDriver::formatValue(const QSqlField &field, bool trimStrings) const
 {
     Q_D(const QPSQLDriver);
@@ -1255,7 +1272,7 @@ QString QPSQLDriver::formatValue(const QSqlField &field, bool trimStrings) const
     if (field.isNull()) {
         r = QLatin1String("NULL");
     } else {
-        switch (field.type()) {
+        switch (int(field.type())) {
         case QVariant::DateTime:
 #ifndef QT_NO_DATESTRING
             if (field.value().toDateTime().isValid()) {
@@ -1295,9 +1312,9 @@ QString QPSQLDriver::formatValue(const QSqlField &field, bool trimStrings) const
             QByteArray ba(field.value().toByteArray());
             size_t len;
 #if defined PG_VERSION_NUM && PG_VERSION_NUM-0 >= 80200
-            unsigned char *data = PQescapeByteaConn(d->connection, (unsigned char*)ba.constData(), ba.size(), &len);
+            unsigned char *data = PQescapeByteaConn(d->connection, (const unsigned char*)ba.constData(), ba.size(), &len);
 #else
-            unsigned char *data = PQescapeBytea((unsigned char*)ba.constData(), ba.size(), &len);
+            unsigned char *data = PQescapeBytea((const unsigned char*)ba.constData(), ba.size(), &len);
 #endif
             r += QLatin1Char('\'');
             r += QLatin1String((const char*)data);
@@ -1305,21 +1322,16 @@ QString QPSQLDriver::formatValue(const QSqlField &field, bool trimStrings) const
             qPQfreemem(data);
             break;
         }
-        case QVariant::Double: {
-            double val = field.value().toDouble();
-            if (isnan(val))
-                r = QLatin1String("'NaN'");
-            else {
-                int res = isinf(val);
-                if (res == 1)
-                    r = QLatin1String("'Infinity'");
-                else if (res == -1)
-                    r = QLatin1String("'-Infinity'");
-                else
-                    r = QSqlDriver::formatValue(field, trimStrings);
-            }
+        case QMetaType::Float:
+            assignSpecialPsqlFloatValue(field.value().toFloat(), &r);
+            if (r.isEmpty())
+                r = QSqlDriver::formatValue(field, trimStrings);
             break;
-        }
+        case QVariant::Double:
+            assignSpecialPsqlFloatValue(field.value().toDouble(), &r);
+            if (r.isEmpty())
+                r = QSqlDriver::formatValue(field, trimStrings);
+            break;
         default:
             r = QSqlDriver::formatValue(field, trimStrings);
             break;

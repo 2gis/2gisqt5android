@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -88,6 +88,8 @@ private slots:
     void testCameraCapture();
     void testCameraCaptureMetadata();
     void testImageSettings();
+    void testViewfinderSettings();
+    void testViewfinderSettingsChange();
     void testCameraLock();
     void testCameraLockCancel();
     void testCameraEncodingProperyChange();
@@ -344,13 +346,13 @@ void tst_QCamera::testSimpleCameraLock()
     QSignalSpy lockStatusChangedSignal(&camera, SIGNAL(lockStatusChanged(QCamera::LockStatus,QCamera::LockChangeReason)));
 
     camera.searchAndLock();
-    QCOMPARE(camera.lockStatus(), QCamera::Locked);
-    QCOMPARE(camera.lockStatus(QCamera::LockExposure), QCamera::Locked);
-    QCOMPARE(camera.lockStatus(QCamera::LockFocus), QCamera::Locked);
-    QCOMPARE(camera.lockStatus(QCamera::LockWhiteBalance), QCamera::Locked);
-    QCOMPARE(lockedSignal.count(), 1);
+    QCOMPARE(camera.lockStatus(), QCamera::Unlocked);
+    QCOMPARE(camera.lockStatus(QCamera::LockExposure), QCamera::Unlocked);
+    QCOMPARE(camera.lockStatus(QCamera::LockFocus), QCamera::Unlocked);
+    QCOMPARE(camera.lockStatus(QCamera::LockWhiteBalance), QCamera::Unlocked);
+    QCOMPARE(lockedSignal.count(), 0);
     QCOMPARE(lockFailedSignal.count(), 0);
-    QCOMPARE(lockStatusChangedSignal.count(), 1);
+    QCOMPARE(lockStatusChangedSignal.count(), 0);
 
     lockedSignal.clear();
     lockFailedSignal.clear();
@@ -364,7 +366,7 @@ void tst_QCamera::testSimpleCameraLock()
 
     QCOMPARE(lockedSignal.count(), 0);
     QCOMPARE(lockFailedSignal.count(), 0);
-    QCOMPARE(lockStatusChangedSignal.count(), 1);
+    QCOMPARE(lockStatusChangedSignal.count(), 0);
 }
 
 void tst_QCamera::testSimpleCaptureDestination()
@@ -874,6 +876,174 @@ void tst_QCamera::testImageSettings()
     QVERIFY(settings1 != settings2);
 }
 
+void tst_QCamera::testViewfinderSettings()
+{
+    QCameraViewfinderSettings settings;
+    QVERIFY(settings.isNull());
+    QVERIFY(settings == QCameraViewfinderSettings());
+
+    QCOMPARE(settings.resolution(), QSize());
+    settings.setResolution(QSize(640, 480));
+    QCOMPARE(settings.resolution(), QSize(640, 480));
+    settings.setResolution(1280, 720);
+    QCOMPARE(settings.resolution(), QSize(1280, 720));
+    QVERIFY(!settings.isNull());
+    QVERIFY(settings != QCameraViewfinderSettings());
+
+    settings = QCameraViewfinderSettings();
+    QVERIFY(qFuzzyIsNull(settings.minimumFrameRate()));
+    settings.setMinimumFrameRate(10.0);
+    QVERIFY(qFuzzyCompare(settings.minimumFrameRate(), 10.0));
+    QVERIFY(qFuzzyIsNull(settings.maximumFrameRate()));
+    settings.setMaximumFrameRate(20.0);
+    QVERIFY(qFuzzyCompare(settings.maximumFrameRate(), 20.0));
+    QVERIFY(!settings.isNull());
+
+    settings = QCameraViewfinderSettings();
+    QCOMPARE(settings.pixelFormat(), QVideoFrame::Format_Invalid);
+    settings.setPixelFormat(QVideoFrame::Format_RGB32);
+    QCOMPARE(settings.pixelFormat(), QVideoFrame::Format_RGB32);
+    QVERIFY(!settings.isNull());
+
+    settings = QCameraViewfinderSettings();
+    QCOMPARE(settings.pixelAspectRatio(), QSize(1, 1));
+    settings.setPixelAspectRatio(QSize(2, 1));
+    QCOMPARE(settings.pixelAspectRatio(), QSize(2, 1));
+    settings.setPixelAspectRatio(3, 2);
+    QCOMPARE(settings.pixelAspectRatio(), QSize(3, 2));
+    QVERIFY(!settings.isNull());
+
+    settings = QCameraViewfinderSettings();
+
+    {
+        QCameraViewfinderSettings settings1;
+        QCameraViewfinderSettings settings2;
+        QCOMPARE(settings2, settings1);
+
+        settings2 = settings1;
+        QCOMPARE(settings2, settings1);
+        QVERIFY(settings2.isNull());
+
+        settings1.setResolution(800, 600);
+
+        QVERIFY(settings2.isNull());
+        QVERIFY(!settings1.isNull());
+        QVERIFY(settings1 != settings2);
+    }
+
+    {
+        QCameraViewfinderSettings settings1;
+        QCameraViewfinderSettings settings2(settings1);
+        QCOMPARE(settings2, settings1);
+
+        settings2 = settings1;
+        QCOMPARE(settings2, settings1);
+        QVERIFY(settings2.isNull());
+
+        settings1.setResolution(800, 600);
+
+        QVERIFY(settings2.isNull());
+        QVERIFY(!settings1.isNull());
+        QVERIFY(settings1 != settings2);
+    }
+
+    QCameraViewfinderSettings settings1;
+    QCameraViewfinderSettings settings2;
+
+    settings1 = QCameraViewfinderSettings();
+    settings1.setResolution(800,600);
+    settings2 = QCameraViewfinderSettings();
+    settings2.setResolution(QSize(800,600));
+    QVERIFY(settings1 == settings2);
+    settings2.setResolution(QSize(400,300));
+    QVERIFY(settings1 != settings2);
+
+    settings1 = QCameraViewfinderSettings();
+    settings1.setMinimumFrameRate(10.0);
+    settings2 = QCameraViewfinderSettings();
+    settings2.setMinimumFrameRate(10.0);
+    QVERIFY(settings1 == settings2);
+    settings2.setMinimumFrameRate(15.0);
+    QVERIFY(settings1 != settings2);
+
+    settings1 = QCameraViewfinderSettings();
+    settings1.setMaximumFrameRate(30.0);
+    settings2 = QCameraViewfinderSettings();
+    settings2.setMaximumFrameRate(30.0);
+    QVERIFY(settings1 == settings2);
+    settings2.setMaximumFrameRate(15.0);
+    QVERIFY(settings1 != settings2);
+
+    settings1 = QCameraViewfinderSettings();
+    settings1.setPixelFormat(QVideoFrame::Format_YV12);
+    settings2 = QCameraViewfinderSettings();
+    settings2.setPixelFormat(QVideoFrame::Format_YV12);
+    QVERIFY(settings1 == settings2);
+    settings2.setPixelFormat(QVideoFrame::Format_NV21);
+    QVERIFY(settings1 != settings2);
+
+    settings1 = QCameraViewfinderSettings();
+    settings1.setPixelAspectRatio(2,1);
+    settings2 = QCameraViewfinderSettings();
+    settings2.setPixelAspectRatio(QSize(2,1));
+    QVERIFY(settings1 == settings2);
+    settings2.setPixelAspectRatio(QSize(1,2));
+    QVERIFY(settings1 != settings2);
+}
+
+void tst_QCamera::testViewfinderSettingsChange()
+{
+    QCamera camera;
+
+    QSignalSpy stateChangedSignal(&camera, SIGNAL(stateChanged(QCamera::State)));
+    QSignalSpy statusChangedSignal(&camera, SIGNAL(statusChanged(QCamera::Status)));
+
+    camera.start();
+    QCOMPARE(camera.state(), QCamera::ActiveState);
+    QCOMPARE(camera.status(), QCamera::ActiveStatus);
+
+    QCOMPARE(stateChangedSignal.count(), 1);
+    QCOMPARE(statusChangedSignal.count(), 1);
+    stateChangedSignal.clear();
+    statusChangedSignal.clear();
+
+    //the settings change should trigger camera stop/start
+    camera.setViewfinderSettings(QCameraViewfinderSettings());
+    QCOMPARE(camera.state(), QCamera::ActiveState);
+    QCOMPARE(camera.status(), QCamera::LoadedStatus);
+
+    QCOMPARE(stateChangedSignal.count(), 0);
+    QCOMPARE(statusChangedSignal.count(), 1);
+    stateChangedSignal.clear();
+    statusChangedSignal.clear();
+
+    QCOMPARE(camera.state(), QCamera::ActiveState);
+    QTRY_COMPARE(camera.status(), QCamera::ActiveStatus);
+
+    QCOMPARE(stateChangedSignal.count(), 0);
+    QCOMPARE(statusChangedSignal.count(), 1);
+    stateChangedSignal.clear();
+    statusChangedSignal.clear();
+
+    //the settings change should trigger camera stop/start only once
+    camera.setViewfinderSettings(QCameraViewfinderSettings());
+    camera.setViewfinderSettings(QCameraViewfinderSettings());
+
+    QCOMPARE(camera.state(), QCamera::ActiveState);
+    QCOMPARE(camera.status(), QCamera::LoadedStatus);
+
+    QCOMPARE(stateChangedSignal.count(), 0);
+    QCOMPARE(statusChangedSignal.count(), 1);
+    stateChangedSignal.clear();
+    statusChangedSignal.clear();
+
+    QCOMPARE(camera.state(), QCamera::ActiveState);
+    QTRY_COMPARE(camera.status(), QCamera::ActiveStatus);
+
+    QCOMPARE(stateChangedSignal.count(), 0);
+    QCOMPARE(statusChangedSignal.count(), 1);
+}
+
 void tst_QCamera::testCameraLock()
 {
     QCamera camera;
@@ -1264,18 +1434,18 @@ void tst_QCamera::testRequestedLocks()
 
     camera.unlock();
     camera.searchAndLock(QCamera::LockWhiteBalance);
-    QCOMPARE(camera.requestedLocks(),QCamera::LockWhiteBalance);
+    QCOMPARE(camera.requestedLocks(),QCamera::NoLock);
 
     camera.unlock();
     camera.searchAndLock(QCamera::LockExposure |QCamera::LockFocus );
     QCOMPARE(camera.requestedLocks(),QCamera::LockExposure |QCamera::LockFocus );
     camera.searchAndLock(QCamera::LockWhiteBalance);
-    QCOMPARE(camera.requestedLocks(),QCamera::LockExposure |QCamera::LockFocus|QCamera::LockWhiteBalance );
+    QCOMPARE(camera.requestedLocks(),QCamera::LockExposure |QCamera::LockFocus);
     camera.unlock(QCamera::LockExposure);
-    QCOMPARE(camera.requestedLocks(),QCamera::LockFocus|QCamera::LockWhiteBalance );
+    QCOMPARE(camera.requestedLocks(),QCamera::LockFocus);
     camera.unlock(QCamera::LockFocus);
     camera.searchAndLock(QCamera::LockExposure |QCamera::LockWhiteBalance );
-    QCOMPARE(camera.requestedLocks(),QCamera::LockExposure|QCamera::LockWhiteBalance );
+    QCOMPARE(camera.requestedLocks(),QCamera::LockExposure);
 }
 
 /* Test case for supportedLocks() */

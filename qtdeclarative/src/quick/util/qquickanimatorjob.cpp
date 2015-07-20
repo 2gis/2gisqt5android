@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQuick module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -42,6 +42,7 @@
 #include <private/qanimationgroupjob_p.h>
 
 #include <qcoreapplication.h>
+#include <qdebug.h>
 
 QT_BEGIN_NAMESPACE
 
@@ -133,6 +134,13 @@ void QQuickAnimatorProxyJob::updateState(QAbstractAnimationJob::State newState, 
     }
 }
 
+void QQuickAnimatorProxyJob::debugAnimation(QDebug d) const
+{
+    d << "QuickAnimatorProxyJob("<< hex << (void *) this << dec
+      << "state:" << state() << "duration:" << duration()
+      << "proxying: (" << job() << ')';
+}
+
 void QQuickAnimatorProxyJob::windowChanged(QQuickWindow *window)
 {
     setWindow(window);
@@ -213,6 +221,13 @@ QQuickAnimatorJob::QQuickAnimatorJob()
     , m_hasBeenRunning(false)
 {
     m_isRenderThreadJob = true;
+}
+
+void QQuickAnimatorJob::debugAnimation(QDebug d) const
+{
+    d << "QuickAnimatorJob(" << hex << (void *) this << dec
+      << ") state:" << state() << "duration:" << duration()
+      << "target:" << m_target << "value:" << m_value;
 }
 
 qreal QQuickAnimatorJob::value() const
@@ -405,21 +420,33 @@ void QQuickOpacityAnimatorJob::initialize(QQuickAnimatorController *controller)
     m_opacityNode = d->opacityNode();
     if (!m_opacityNode) {
         m_opacityNode = new QSGOpacityNode();
-        d->extra.value().opacityNode = m_opacityNode;
 
-        QSGNode *child = d->clipNode();
-        if (!child)
-            child = d->rootNode();
-        if (!child)
-            child = d->groupNode;
-
-        if (child) {
+        /* The item node subtree is like this
+         *
+         * itemNode
+         * (opacityNode)            optional
+         * (clipNode)               optional
+         * (rootNode)               optional
+         * children / paintNode
+         *
+         * If the opacity node doesn't exist, we need to insert it into
+         * the hierarchy between itemNode and clipNode or rootNode. If
+         * neither clip or root exists, we need to reparent all children
+         * from itemNode to opacityNode.
+         */
+        QSGNode *iNode = d->itemNode();
+        QSGNode *child = d->childContainerNode();
+        if (child != iNode) {
             if (child->parent())
                 child->parent()->removeChildNode(child);
             m_opacityNode->appendChildNode(child);
+            iNode->appendChildNode(m_opacityNode);
+        } else {
+            iNode->reparentChildNodesTo(m_opacityNode);
+            iNode->appendChildNode(m_opacityNode);
         }
 
-        d->itemNode()->appendChildNode(m_opacityNode);
+        d->extra.value().opacityNode = m_opacityNode;
     }
 }
 

@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQuick module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -195,6 +195,10 @@ void QQuickImageBase::load()
             d->oldSourceSize = sourceSize();
             emit sourceSizeChanged();
         }
+        if (autoTransform() != d->oldAutoTransform) {
+            d->oldAutoTransform = autoTransform();
+            emit autoTransformBaseChanged();
+        }
         update();
 
     } else {
@@ -209,8 +213,21 @@ void QQuickImageBase::load()
         d->devicePixelRatio = 1.0;
 
         QUrl loadUrl = d->url;
-        resolve2xLocalFile(d->url, targetDevicePixelRatio, &loadUrl, &d->devicePixelRatio);
-        d->pix.load(qmlEngine(this), loadUrl, d->sourcesize * d->devicePixelRatio, options);
+        if (d->url.scheme() == QStringLiteral("image")
+            || d->url.toString().endsWith(QLatin1String(".svg"))
+            || d->url.toString().endsWith(QLatin1String(".svgz"))) {
+            // QQuickImageProvider and SVG can generate a high resolution image when
+            // sourceSize is set. If sourceSize is not set then the provider default size
+            // will be used, as usual.
+            if (!d->sourcesize.isEmpty())
+                d->devicePixelRatio = targetDevicePixelRatio;
+        } else {
+            // (possible) local file: loadUrl and d->devicePixelRatio will be modified if
+            // an "@2x" file is found.
+            resolve2xLocalFile(d->url, targetDevicePixelRatio, &loadUrl, &d->devicePixelRatio);
+        }
+
+        d->pix.load(qmlEngine(this), loadUrl, d->sourcesize * d->devicePixelRatio, options, d->autoTransform);
 
         if (d->pix.isLoading()) {
             if (d->progress != 0.0) {
@@ -265,6 +282,10 @@ void QQuickImageBase::requestFinished()
         d->oldSourceSize = sourceSize();
         emit sourceSizeChanged();
     }
+    if (autoTransform() != d->oldAutoTransform) {
+        d->oldAutoTransform = autoTransform();
+        emit autoTransformBaseChanged();
+    }
     update();
 }
 
@@ -310,7 +331,7 @@ static QString image2xPath(const QString &path)
 {
     const int dotIndex = path.lastIndexOf(QLatin1Char('.'));
     if (dotIndex == -1)
-        return path;
+        return path + QLatin1String("@2x");
     if (path.contains(QLatin1String("@2x.")))
         return path;
 
@@ -353,6 +374,23 @@ void QQuickImageBase::resolve2xLocalFile(const QUrl &url, qreal targetDevicePixe
     // @2x file found found: Change url and devicePixelRatio
     *sourceUrl = QUrl::fromLocalFile(localFile2x);
     *sourceDevicePixelRatio = qreal(2.0);
+}
+
+bool QQuickImageBase::autoTransform() const
+{
+    Q_D(const QQuickImageBase);
+    if (d->autoTransform == UsePluginDefault)
+        return d->pix.autoTransform() == ApplyTransform;
+    return d->autoTransform == ApplyTransform;
+}
+
+void QQuickImageBase::setAutoTransform(bool transform)
+{
+    Q_D(QQuickImageBase);
+    if (d->autoTransform != UsePluginDefault && transform == (d->autoTransform == ApplyTransform))
+        return;
+    d->autoTransform = transform ? ApplyTransform : DoNotApplyTransform;
+    emit autoTransformBaseChanged();
 }
 
 QT_END_NAMESPACE

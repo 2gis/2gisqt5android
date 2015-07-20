@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -53,6 +53,19 @@ static int parseInt(const QStringRef &str, bool *ok)
     else
         *ok = true;
     return number;
+}
+
+static bool parseVersion(const QString &str, int *major, int *minor)
+{
+    const int dotIndex = str.indexOf(QLatin1Char('.'));
+    if (dotIndex != -1 && str.indexOf(QLatin1Char('.'), dotIndex + 1) == -1) {
+        bool ok = false;
+        *major = parseInt(QStringRef(&str, 0, dotIndex), &ok);
+        if (ok)
+            *minor = parseInt(QStringRef(&str, dotIndex + 1, str.length() - dotIndex - 1), &ok);
+        return ok;
+    }
+    return false;
 }
 
 QQmlDirParser::QQmlDirParser() : _designerSupported(false)
@@ -192,27 +205,14 @@ bool QQmlDirParser::parse(const QString &source)
             } else {
                 // handle qmldir module listing case where singleton is defined in the following pattern:
                 // singleton TestSingletonType 2.0 TestSingletonType20.qml
-                const QString &version = sections[2];
-                const int dotIndex = version.indexOf(QLatin1Char('.'));
-
-                if (dotIndex == -1) {
-                    reportError(lineNumber, 0, QLatin1String("expected '.'"));
-                } else if (version.indexOf(QLatin1Char('.'), dotIndex + 1) != -1) {
-                    reportError(lineNumber, 0, QLatin1String("unexpected '.'"));
+                int major, minor;
+                if (parseVersion(sections[2], &major, &minor)) {
+                    const QString &fileName = sections[3];
+                    Component entry(sections[1], fileName, major, minor);
+                    entry.singleton = true;
+                    _components.insertMulti(entry.typeName, entry);
                 } else {
-                    bool validVersionNumber = false;
-                    const int majorVersion = parseInt(QStringRef(&version, 0, dotIndex), &validVersionNumber);
-
-                    if (validVersionNumber) {
-                        const int minorVersion = parseInt(QStringRef(&version, dotIndex+1, version.length()-dotIndex-1), &validVersionNumber);
-
-                        if (validVersionNumber) {
-                            const QString &fileName = sections[3];
-                            Component entry(sections[1], fileName, majorVersion, minorVersion);
-                            entry.singleton = true;
-                            _components.insertMulti(entry.typeName, entry);
-                        }
-                    }
+                    reportError(lineNumber, 0, QStringLiteral("invalid version %1, expected <major>.<minor>").arg(sections[2]));
                 }
             }
         } else if (sections[0] == QLatin1String("typeinfo")) {
@@ -238,53 +238,33 @@ bool QQmlDirParser::parse(const QString &source)
                 continue;
             }
 
-            const QString &version = sections[2];
-            const int dotIndex = version.indexOf(QLatin1Char('.'));
-            bool validVersionNumber = false;
-            const int majorVersion = parseInt(QStringRef(&version, 0, dotIndex), &validVersionNumber);
-            if (validVersionNumber) {
-                const int minorVersion = parseInt(QStringRef(&version, dotIndex+1, version.length()-dotIndex-1), &validVersionNumber);
-
-                if (validVersionNumber) {
-                    Component entry(sections[1], QString(), majorVersion, minorVersion);
-                    entry.internal = true;
-                    _dependencies.insert(entry.typeName, entry);
-                }
+            int major, minor;
+            if (parseVersion(sections[2], &major, &minor)) {
+                Component entry(sections[1], QString(), major, minor);
+                entry.internal = true;
+                _dependencies.insert(entry.typeName, entry);
             } else {
-                reportError(lineNumber, 0, QString(QLatin1String("invalid version %1")).arg(version));
+                reportError(lineNumber, 0, QStringLiteral("invalid version %1, expected <major>.<minor>").arg(sections[2]));
             }
         } else if (sectionCount == 2) {
             // No version specified (should only be used for relative qmldir files)
             const Component entry(sections[0], sections[1], -1, -1);
             _components.insertMulti(entry.typeName, entry);
         } else if (sectionCount == 3) {
-            const QString &version = sections[1];
-            const int dotIndex = version.indexOf(QLatin1Char('.'));
+            int major, minor;
+            if (parseVersion(sections[1], &major, &minor)) {
+                const QString &fileName = sections[2];
 
-            if (dotIndex == -1) {
-                reportError(lineNumber, 0, QLatin1String("expected '.'"));
-            } else if (version.indexOf(QLatin1Char('.'), dotIndex + 1) != -1) {
-                reportError(lineNumber, 0, QLatin1String("unexpected '.'"));
-            } else {
-                bool validVersionNumber = false;
-                const int majorVersion = parseInt(QStringRef(&version, 0, dotIndex), &validVersionNumber);
-
-                if (validVersionNumber) {
-                    const int minorVersion = parseInt(QStringRef(&version, dotIndex+1, version.length()-dotIndex-1), &validVersionNumber);
-
-                    if (validVersionNumber) {
-                        const QString &fileName = sections[2];
-
-                        if (fileName.endsWith(QLatin1String(".js"))) {
-                            // A 'js' extension indicates a namespaced script import
-                            const Script entry(sections[0], fileName, majorVersion, minorVersion);
-                            _scripts.append(entry);
-                        } else {
-                            const Component entry(sections[0], fileName, majorVersion, minorVersion);
-                            _components.insertMulti(entry.typeName, entry);
-                        }
-                    }
+                if (fileName.endsWith(QLatin1String(".js"))) {
+                    // A 'js' extension indicates a namespaced script import
+                    const Script entry(sections[0], fileName, major, minor);
+                    _scripts.append(entry);
+                } else {
+                    const Component entry(sections[0], fileName, major, minor);
+                    _components.insertMulti(entry.typeName, entry);
                 }
+            } else {
+                reportError(lineNumber, 0, QStringLiteral("invalid version %1, expected <major>.<minor>").arg(sections[1]));
             }
         } else {
             reportError(lineNumber, 0,
@@ -314,17 +294,6 @@ bool QQmlDirParser::hasError() const
     return false;
 }
 
-#if defined(QT_BUILD_QMLDEVTOOLS_LIB) || defined(QT_QMLDEVTOOLS_LIB)
-QList<QQmlJS::DiagnosticMessage> QQmlDirParser::errors(const QString &uri) const
-{
-    QList<QQmlJS::DiagnosticMessage> errors = _errors;
-    for (int i = 0; i < errors.size(); ++i) {
-        QQmlJS::DiagnosticMessage &msg = errors[i];
-        msg.message.replace(QLatin1String("$$URI$$"), uri);
-    }
-    return errors;
-}
-#else
 void QQmlDirParser::setError(const QQmlError &e)
 {
     _errors.clear();
@@ -348,7 +317,6 @@ QList<QQmlError> QQmlDirParser::errors(const QString &uri) const
     }
     return errors;
 }
-#endif
 
 QString QQmlDirParser::typeNamespace() const
 {

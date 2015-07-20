@@ -4,7 +4,6 @@
 
 #include "ui/gl/gl_context.h"
 
-#include "base/android/sys_utils.h"
 #include "base/logging.h"
 #include "base/memory/ref_counted.h"
 #include "base/sys_info.h"
@@ -28,14 +27,14 @@ class GLNonOwnedContext : public GLContextReal {
 
   // Implement GLContext.
   virtual bool Initialize(GLSurface* compatible_surface,
-                          GpuPreference gpu_preference) OVERRIDE;
-  virtual void Destroy() OVERRIDE {}
-  virtual bool MakeCurrent(GLSurface* surface) OVERRIDE;
-  virtual void ReleaseCurrent(GLSurface* surface) OVERRIDE {}
-  virtual bool IsCurrent(GLSurface* surface) OVERRIDE { return true; }
-  virtual void* GetHandle() OVERRIDE { return NULL; }
-  virtual void SetSwapInterval(int interval) OVERRIDE {}
-  virtual std::string GetExtensions() OVERRIDE;
+                          GpuPreference gpu_preference) override;
+  virtual void Destroy() override {}
+  virtual bool MakeCurrent(GLSurface* surface) override;
+  virtual void ReleaseCurrent(GLSurface* surface) override {}
+  virtual bool IsCurrent(GLSurface* surface) override { return true; }
+  virtual void* GetHandle() override { return NULL; }
+  virtual void SetSwapInterval(int interval) override {}
+  virtual std::string GetExtensions() override;
 
  protected:
   virtual ~GLNonOwnedContext() {}
@@ -121,14 +120,14 @@ bool GLContextEGL::GetTotalGpuMemory(size_t* bytes) {
   // Droid Razr M(1GB)  114MB (normally 57MB)
   // Galaxy Nexus(1GB)  100MB (normally 50MB)
   // Xoom(1GB)          100MB (normally 50MB)
-  // Nexus S(low-end)   12MB (normally 8MB)
+  // Nexus S(low-end)   8MB (normally 8MB)
   // Note that the compositor now uses only some of this memory for
   // pre-painting and uses the rest only for 'emergencies'.
   static size_t limit_bytes = 0;
   if (limit_bytes == 0) {
     // NOTE: Non-low-end devices use only 50% of these limits,
     // except during 'emergencies' where 100% can be used.
-    if (!base::android::SysUtils::IsLowEndDevice()) {
+    if (!base::SysInfo::IsLowEndDevice()) {
       if (physical_memory_mb >= 1536)
         limit_bytes = physical_memory_mb / 8; // >192MB
       else if (physical_memory_mb >= 1152)
@@ -141,9 +140,7 @@ bool GLContextEGL::GetTotalGpuMemory(size_t* bytes) {
       // Low-end devices have 512MB or less memory by definition
       // so we hard code the limit rather than relying on the heuristics
       // above. Low-end devices use 4444 textures so we can use a lower limit.
-      // NOTE: Low-end uses 2/3 (67%) of this memory in practice, so we have
-      // increased the limit to 12 (8MB, or 12MB in emergencies).
-      limit_bytes = 12;
+      limit_bytes = 8;
     }
     limit_bytes = limit_bytes * 1024 * 1024;
   }

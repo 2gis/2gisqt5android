@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQuick module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -35,6 +35,7 @@
 #include "qquickpathview_p_p.h"
 #include "qquickwindow.h"
 #include "qquickflickablebehavior_p.h" //Contains flicking behavior defines
+#include "qquicktext_p.h"
 
 #include <QtQuick/private/qquickstate_p.h>
 #include <private/qqmlglobal_p.h>
@@ -47,21 +48,19 @@
 #include <QtGui/qguiapplication.h>
 #include <QtGui/qstylehints.h>
 #include <QtCore/qmath.h>
-#include <math.h>
 
+#include <cmath>
 
 QT_BEGIN_NAMESPACE
+
+Q_DECLARE_LOGGING_CATEGORY(lcItemViewDelegateLifecycle)
 
 const qreal MinimumFlickVelocity = 75.0;
 
 inline qreal qmlMod(qreal x, qreal y)
 {
-#ifdef QT_USE_MATH_H_FLOATS
-    if (sizeof(qreal) == sizeof(float))
-        return fmodf(float(x), float(y));
-    else
-#endif
-        return fmod(x, y);
+    using std::fmod;
+    return fmod(x, y);
 }
 
 static QQmlOpenMetaObjectType *qPathViewAttachedType = 0;
@@ -198,6 +197,7 @@ void QQuickPathViewPrivate::releaseItem(QQuickItem *item)
 {
     if (!item || !model)
         return;
+    qCDebug(lcItemViewDelegateLifecycle) << "release" << item;
     QQuickItemPrivate *itemPrivate = QQuickItemPrivate::get(item);
     itemPrivate->removeItemChangeListener(this, QQuickItemPrivate::Geometry);
     QQmlInstanceModel::ReleaseFlags flags = model->release(item);
@@ -828,9 +828,11 @@ void QQuickPathViewPrivate::setOffset(qreal o)
     Q_Q(QQuickPathView);
     if (offset != o) {
         if (isValid() && q->isComponentComplete()) {
+            qreal oldOffset = offset;
             offset = qmlMod(o, qreal(modelCount));
             if (offset < 0)
                 offset += qreal(modelCount);
+            qCDebug(lcItemViewDelegateLifecycle) << o << "was" << oldOffset << "now" << offset;
             q->refill();
         } else {
             offset = o;
@@ -1640,8 +1642,9 @@ void QQuickPathViewPrivate::handleMouseMoveEvent(QMouseEvent *event)
             // then we'll assume that this gesture targets the PathView. This ensures PathView gesture grabbing
             // is in sync with other items.
             QPointF pathDelta = pathPoint - startPoint;
-            if (qAbs(pathDelta.x()) > qApp->styleHints()->startDragDistance() * 0.8
-                    || qAbs(pathDelta.y()) > qApp->styleHints()->startDragDistance() * 0.8) {
+            const int startDragDistance = QGuiApplication::styleHints()->startDragDistance();
+            if (qAbs(pathDelta.x()) > startDragDistance * 0.8
+                    || qAbs(pathDelta.y()) > startDragDistance * 0.8) {
                 stealMouse = true;
                 q->setKeepMouseGrab(true);
             }
@@ -1790,7 +1793,7 @@ bool QQuickPathView::sendMouseEvent(QMouseEvent *event)
         default:
             break;
         }
-        grabber = c->mouseGrabberItem();
+        grabber = c ? c->mouseGrabberItem() : 0;
         if ((grabber && stealThisEvent && !grabber->keepMouseGrab() && grabber != this) || grabberDisabled) {
             grabMouse();
         }
@@ -1894,10 +1897,18 @@ void QQuickPathView::refill()
 
     // first move existing items and remove items off path
     int idx = d->firstIndex;
+    qCDebug(lcItemViewDelegateLifecycle) << "firstIndex" << idx << "currentIndex" << d->currentIndex << "offset" << d->offset;
     QList<QQuickItem*>::iterator it = d->items.begin();
     while (it != d->items.end()) {
         qreal pos = d->positionOfIndex(idx);
         QQuickItem *item = *it;
+        if (lcItemViewDelegateLifecycle().isDebugEnabled()) {
+            QQuickText *text = qmlobject_cast<QQuickText*>(item);
+            if (text)
+                qCDebug(lcItemViewDelegateLifecycle) << "idx" << idx << "@" << pos << ": QQuickText" << text->objectName() << text->text().left(40);
+            else
+                qCDebug(lcItemViewDelegateLifecycle) << "idx" << idx << "@" << pos << ":" << item;
+        }
         if (pos < 1.0) {
             d->updateItem(item, pos);
             if (idx == d->currentIndex) {
@@ -1910,7 +1921,7 @@ void QQuickPathView::refill()
             if (QQuickPathViewAttached *att = d->attached(item))
                 att->setOnPath(pos < 1.0);
             if (!d->isInBound(pos, d->mappedRange - d->mappedCache, 1.0 + d->mappedCache)) {
-//                qDebug() << "release";
+                qCDebug(lcItemViewDelegateLifecycle) << "release" << idx << "@" << pos << ", !isInBound: lower" << (d->mappedRange - d->mappedCache) << "upper" << (1.0 + d->mappedCache);
                 d->releaseItem(item);
                 if (it == d->items.begin()) {
                     if (++d->firstIndex >= d->modelCount) {
@@ -1945,7 +1956,7 @@ void QQuickPathView::refill()
             }
             qreal pos = d->positionOfIndex(idx);
             while ((d->isInBound(pos, startPos, 1.0 + d->mappedCache) || !d->items.count()) && d->items.count() < count+d->cacheSize) {
-//                qDebug() << "append" << idx;
+                qCDebug(lcItemViewDelegateLifecycle)  << "append" << idx << "@" << pos << (d->currentIndex == idx ? "current" : "") << "items count was" << d->items.count();
                 QQuickItem *item = d->getItem(idx, idx+1, pos >= 1.0);
                 if (!item) {
                     waiting = true;
@@ -1970,7 +1981,7 @@ void QQuickPathView::refill()
                 idx = d->modelCount - 1;
             pos = d->positionOfIndex(idx);
             while (!waiting && d->isInBound(pos, d->mappedRange - d->mappedCache, startPos) && d->items.count() < count+d->cacheSize) {
-//                 qDebug() << "prepend" << idx;
+                qCDebug(lcItemViewDelegateLifecycle)  << "prepend" << idx << "@" << pos << (d->currentIndex == idx ? "current" : "") << "items count was" << d->items.count();
                 QQuickItem *item = d->getItem(idx, idx+1, pos >= 1.0);
                 if (!item) {
                     waiting = true;

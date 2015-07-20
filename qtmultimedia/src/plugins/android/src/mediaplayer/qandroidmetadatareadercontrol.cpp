@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -93,18 +93,18 @@ QStringList QAndroidMetaDataReaderControl::availableMetaData() const
     return m_metadata.keys();
 }
 
-void QAndroidMetaDataReaderControl::onMediaChanged(const QString &url)
+void QAndroidMetaDataReaderControl::onMediaChanged(const QMediaContent &media)
 {
     if (!m_retriever)
         return;
 
-    m_mediaLocation = url;
+    m_mediaContent = media;
     updateData();
 }
 
 void QAndroidMetaDataReaderControl::onUpdateMetaData()
 {
-    if (!m_retriever || m_mediaLocation.isEmpty())
+    if (!m_retriever || m_mediaContent.isNull())
         return;
 
     updateData();
@@ -114,8 +114,8 @@ void QAndroidMetaDataReaderControl::updateData()
 {
     m_metadata.clear();
 
-    if (!m_mediaLocation.isEmpty()) {
-        if (m_retriever->setDataSource(m_mediaLocation)) {
+    if (!m_mediaContent.isNull()) {
+        if (m_retriever->setDataSource(m_mediaContent.canonicalUrl())) {
             QString mimeType = m_retriever->extractMetadata(AndroidMediaMetadataRetriever::MimeType);
             if (!mimeType.isNull())
                 m_metadata.insert(QMediaMetaData::MediaType, mimeType);

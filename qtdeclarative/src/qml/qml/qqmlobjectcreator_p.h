@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the tools applications of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -94,18 +94,20 @@ private:
     QObject *createInstance(int index, QObject *parent = 0, bool isContextObject = false);
 
     bool populateInstance(int index, QObject *instance,
-                          QObject *bindingTarget, QQmlPropertyData *valueTypeProperty,
+                          QObject *bindingTarget, const QQmlPropertyData *valueTypeProperty,
                           const QBitArray &bindingsToSkip = QBitArray());
 
     void setupBindings(const QBitArray &bindingsToSkip);
-    bool setPropertyBinding(QQmlPropertyData *property, const QV4::CompiledData::Binding *binding);
-    void setPropertyValue(QQmlPropertyData *property, const QV4::CompiledData::Binding *binding);
+    bool setPropertyBinding(const QQmlPropertyData *property, const QV4::CompiledData::Binding *binding);
+    void setPropertyValue(const QQmlPropertyData *property, const QV4::CompiledData::Binding *binding);
     void setupFunctions();
 
     QString stringAt(int idx) const { return qmlUnit->stringAt(idx); }
     void recordError(const QV4::CompiledData::Location &location, const QString &description);
 
     void registerObjectWithContextById(int objectIndex, QObject *instance) const;
+
+    QV4::Heap::ExecutionContext *currentQmlContext();
 
     enum Phase {
         Startup,
@@ -117,6 +119,7 @@ private:
     } phase;
 
     QQmlEngine *engine;
+    QV4::ExecutionEngine *v4;
     QQmlCompiledData *compiledData;
     const QV4::CompiledData::Unit *qmlUnit;
     QQmlGuardedContextData parentContext;
@@ -133,13 +136,14 @@ private:
     QObject *_scopeObject;
     QObject *_bindingTarget;
 
-    QQmlPropertyData *_valueTypeProperty; // belongs to _qobjectForBindings's property cache
+    const QQmlPropertyData *_valueTypeProperty; // belongs to _qobjectForBindings's property cache
+    int _compiledObjectIndex;
     const QV4::CompiledData::Object *_compiledObject;
     QQmlData *_ddata;
     QQmlRefPointer<QQmlPropertyCache> _propertyCache;
     QQmlVMEMetaObject *_vmeMetaObject;
     QQmlListProperty<void> _currentList;
-    QV4::ExecutionContext *_qmlContext;
+    QV4::Value *_qmlBindingWrapper;
 
     friend struct QQmlObjectCreatorRecursionWatcher;
 };

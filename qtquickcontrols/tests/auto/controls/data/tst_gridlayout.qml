@@ -1,9 +1,9 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
-** This file is part of the Qt Quick Controls module of the Qt Toolkit.
+** This file is part of the test suite of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:BSD$
 ** You may use this file under the terms of the BSD license as follows:
@@ -17,8 +17,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -922,6 +922,104 @@ Item {
                 idealGeom[3] = idealGeom[1]  + rectHeight
             }
 
+            layout.destroy()
+        }
+
+        Component {
+
+            id: layout_Margins_Component
+            GridLayout {
+                columns: 2
+                rowSpacing: 0
+                columnSpacing: 0
+                Rectangle {
+                    color: "red"
+                    Layout.preferredWidth: 20
+                    Layout.preferredHeight: 20
+                    Layout.margins: 10
+                    Layout.leftMargin: 2
+                    Layout.topMargin: 3
+                    Layout.rightMargin: 4
+                    Layout.bottomMargin: 4
+                }
+                Rectangle {
+                    color: "red"
+                    Layout.preferredWidth: 20
+                    Layout.preferredHeight: 20
+                    Layout.leftMargin: 4
+                    Layout.topMargin: 5
+                    Layout.rightMargin: 6
+                    Layout.bottomMargin: 6
+                }
+                Rectangle {
+                    color: "red"
+                    Layout.preferredWidth: 20
+                    Layout.preferredHeight: 20
+                    Layout.leftMargin: 3
+                    Layout.topMargin: 4
+                    Layout.rightMargin: 5
+                    Layout.bottomMargin: 5
+                }
+            }
+        }
+
+        function test_Margins()
+        {
+            var layout = layout_Margins_Component.createObject(container)
+
+            compare(layout.implicitWidth, 3 + 20 + 5 + 4 + 20 + 6)
+            compare(layout.implicitHeight, 5 + 20 + 6 + 4 + 20 + 5)
+            layout.width = layout.implicitWidth
+            layout.height = layout.implicitHeight
+
+            waitForRendering(layout)
+
+            var c0 = layout.children[0]
+            var c1 = layout.children[1]
+            var c2 = layout.children[2]
+
+            compare(c0.x, 2)
+            compare(c0.y, 5)
+            compare(c1.x, 3 + 20 + 5 + 4)
+            compare(c1.y, 5)
+            compare(c2.x, 3)
+            compare(c2.y, 5 + 20 + 6 + 4)
+
+            // reset left|rightMargin. It should then use the generic "margins" property
+            c0.Layout.leftMargin = undefined
+            compare(layout.implicitWidth, 10 + 20 + 4 + 4 + 20 + 6)
+            c0.Layout.bottomMargin = undefined
+            compare(layout.implicitHeight, 3 + 20 + 10 + 4 + 20 + 5)
+        }
+
+        Component {
+            id: layout_invalidateWhileRearranging_Component
+
+            GridLayout {
+                columns: 1
+                Rectangle {
+                    height: 50
+                    Layout.fillWidth: true
+                    color: 'blue'
+                }
+
+                Rectangle {
+                    height: 50
+                    Layout.fillWidth: true
+                    color: 'red'
+                    onYChanged: {
+                        visible = false;
+                    }
+                }
+            }
+        }
+
+        function test_invalidateWhileRearranging_QTBUG_44139()
+        {
+            var layout = layout_invalidateWhileRearranging_Component.createObject(container)
+
+            waitForRendering(layout);
+            verify(layout.children[1].visible == false);
             layout.destroy()
         }
     }

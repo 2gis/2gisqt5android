@@ -63,7 +63,6 @@ typedef int                                         hb_atomic_int_t;
 
 #elif !defined(HB_NO_MT) && (defined(_WIN32) || defined(__CYGWIN__))
 
-#define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 
 /* MinGW has a convoluted history of supporting MemoryBarrier

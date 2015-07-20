@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQuick module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -94,7 +94,7 @@ class Q_QUICK_PRIVATE_EXPORT QQuickFlickable : public QQuickItem
     Q_CLASSINFO("DefaultProperty", "flickableData")
 
     Q_ENUMS(FlickableDirection)
-    Q_ENUMS(BoundsBehavior)
+    Q_FLAGS(BoundsBehavior)
 
 public:
     QQuickFlickable(QQuickItem *parent=0);
@@ -103,7 +103,14 @@ public:
     QQmlListProperty<QObject> flickableData();
     QQmlListProperty<QQuickItem> flickableChildren();
 
-    enum BoundsBehavior { StopAtBounds, DragOverBounds, DragAndOvershootBounds };
+    enum BoundsBehaviorFlag {
+        StopAtBounds = 0x0,
+        DragOverBounds = 0x1,
+        OvershootBounds = 0x2,
+        DragAndOvershootBounds = DragOverBounds | OvershootBounds
+    };
+    Q_DECLARE_FLAGS(BoundsBehavior, BoundsBehaviorFlag)
+
     BoundsBehavior boundsBehavior() const;
     void setBoundsBehavior(BoundsBehavior);
 
@@ -220,14 +227,14 @@ Q_SIGNALS:
     void pixelAlignedChanged();
 
 protected:
-    virtual bool childMouseEventFilter(QQuickItem *, QEvent *);
-    virtual void mousePressEvent(QMouseEvent *event);
-    virtual void mouseMoveEvent(QMouseEvent *event);
-    virtual void mouseReleaseEvent(QMouseEvent *event);
+    bool childMouseEventFilter(QQuickItem *, QEvent *) Q_DECL_OVERRIDE;
+    void mousePressEvent(QMouseEvent *event) Q_DECL_OVERRIDE;
+    void mouseMoveEvent(QMouseEvent *event) Q_DECL_OVERRIDE;
+    void mouseReleaseEvent(QMouseEvent *event) Q_DECL_OVERRIDE;
 #ifndef QT_NO_WHEELEVENT
-    virtual void wheelEvent(QWheelEvent *event);
+    void wheelEvent(QWheelEvent *event) Q_DECL_OVERRIDE;
 #endif
-    virtual void timerEvent(QTimerEvent *event);
+    void timerEvent(QTimerEvent *event) Q_DECL_OVERRIDE;
 
     QQuickFlickableVisibleArea *visibleArea();
 
@@ -244,11 +251,11 @@ protected:
     virtual qreal maxYExtent() const;
     qreal vWidth() const;
     qreal vHeight() const;
-    virtual void componentComplete();
+    void componentComplete() Q_DECL_OVERRIDE;
     virtual void viewportMoved(Qt::Orientations orient);
-    virtual void geometryChanged(const QRectF &newGeometry,
-                                 const QRectF &oldGeometry);
-    void mouseUngrabEvent();
+    void geometryChanged(const QRectF &newGeometry,
+                         const QRectF &oldGeometry) Q_DECL_OVERRIDE;
+    void mouseUngrabEvent() Q_DECL_OVERRIDE;
     bool sendMouseEvent(QQuickItem *item, QMouseEvent *event);
 
     bool xflick() const;

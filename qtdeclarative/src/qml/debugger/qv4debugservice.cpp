@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -62,8 +62,8 @@ const char *V4_LINENUMBER = "linenumber";
 #ifdef NO_PROTOCOL_TRACING
 #  define TRACE_PROTOCOL(x)
 #else
+#include <QtCore/QDebug>
 #  define TRACE_PROTOCOL(x) x
-static QTextStream debug(stderr, QIODevice::WriteOnly);
 #endif
 
 QT_BEGIN_NAMESPACE
@@ -227,17 +227,17 @@ protected:
         addHandle(name, o, QStringLiteral("string"));
     }
 
-    virtual void addObject(const QString &name, QV4::ValueRef value)
+    virtual void addObject(const QString &name, const QV4::Value &value)
     {
         QV4::Scope scope(engine());
-        QV4::ScopedObject obj(scope, value->asObject());
+        QV4::ScopedObject obj(scope, value.asObject());
 
-        int ref = cachedObjectRef(obj.getPointer());
+        int ref = cachedObjectRef(obj);
         if (ref != -1) {
             addNameRefPair(name, ref);
         } else {
             int ref = newRefId();
-            cacheObjectRef(obj.getPointer(), ref);
+            cacheObjectRef(obj, ref);
 
             QJsonArray properties, *prev = &properties;
             QSet<int> used;
@@ -378,7 +378,7 @@ public:
         QByteArray responseData = doc.toJson(QJsonDocument::Indented);
 #endif
 
-        TRACE_PROTOCOL(debug << "sending response for: " << responseData << endl);
+        TRACE_PROTOCOL(qDebug() << "sending response for:" << responseData << endl);
 
         q_func()->sendMessage(packMessage("v8message", responseData));
     }
@@ -422,7 +422,7 @@ public:
 
         QJsonArray scopes;
         // Only type and index are used by Qt Creator, so we keep it easy:
-        QVector<QV4::ExecutionContext::ContextType> scopeTypes = debugger->getScopeTypes(frameNr);
+        QVector<QV4::Heap::ExecutionContext::ContextType> scopeTypes = debugger->getScopeTypes(frameNr);
         for (int i = 0, ei = scopeTypes.count(); i != ei; ++i) {
             int type = encodeScopeType(scopeTypes[i]);
             if (type == -1)
@@ -438,23 +438,23 @@ public:
         return frame;
     }
 
-    int encodeScopeType(QV4::ExecutionContext::ContextType scopeType)
+    int encodeScopeType(QV4::Heap::ExecutionContext::ContextType scopeType)
     {
         switch (scopeType) {
-        case QV4::ExecutionContext::Type_GlobalContext:
+        case QV4::Heap::ExecutionContext::Type_GlobalContext:
             return 0;
             break;
-        case QV4::ExecutionContext::Type_CatchContext:
+        case QV4::Heap::ExecutionContext::Type_CatchContext:
             return 4;
             break;
-        case QV4::ExecutionContext::Type_WithContext:
+        case QV4::Heap::ExecutionContext::Type_WithContext:
             return 2;
             break;
-        case QV4::ExecutionContext::Type_SimpleCallContext:
-        case QV4::ExecutionContext::Type_CallContext:
+        case QV4::Heap::ExecutionContext::Type_SimpleCallContext:
+        case QV4::Heap::ExecutionContext::Type_CallContext:
             return 1;
             break;
-        case QV4::ExecutionContext::Type_QmlContext:
+        case QV4::Heap::ExecutionContext::Type_QmlContext:
         default:
             return -1;
         }
@@ -470,7 +470,7 @@ public:
         QJsonObject anonymous;
         anonymous[QLatin1String("properties")] = properties;
 
-        QVector<QV4::ExecutionContext::ContextType> scopeTypes = debugger->getScopeTypes(frameNr);
+        QVector<QV4::Heap::ExecutionContext::ContextType> scopeTypes = debugger->getScopeTypes(frameNr);
         scope[QLatin1String("type")] = encodeScopeType(scopeTypes[scopeNr]);
         scope[QLatin1String("index")] = scopeNr;
         scope[QLatin1String("frameIndex")] = frameNr;
@@ -523,7 +523,7 @@ public:
 
     void handle(const QJsonObject &request, QQmlDebugService *s, QV4DebugServicePrivate *p)
     {
-        TRACE_PROTOCOL(debug << "handling command " << command() << "..." << endl);
+        TRACE_PROTOCOL(qDebug() << "handling command" << command() << "...");
 
         req = request;
         seq = req.value(QStringLiteral("seq"));
@@ -1137,13 +1137,13 @@ void QV4DebugService::messageReceived(const QByteArray &message)
     QByteArray header;
     ms >> header;
 
-    TRACE_PROTOCOL(debug << "received message with header " << header << endl);
+    TRACE_PROTOCOL(qDebug() << "received message with header" << header);
 
     if (header == "V8DEBUG") {
         QByteArray type;
         QByteArray payload;
         ms >> type >> payload;
-        TRACE_PROTOCOL(debug << "... type: "<<type << endl);
+        TRACE_PROTOCOL(qDebug() << "... type:" << type);
 
         if (type == V4_CONNECT) {
             sendMessage(d->packMessage(type));
@@ -1164,7 +1164,7 @@ void QV4DebugService::messageReceived(const QByteArray &message)
         } else if (type == "v8request") {
             handleV8Request(payload);
         } else if (type == V4_DISCONNECT) {
-            TRACE_PROTOCOL(debug << "... payload:"<<payload << endl);
+            TRACE_PROTOCOL(qDebug() << "... payload:" << payload);
             handleV8Request(payload);
         } else {
             sendSomethingToSomebody(type, 0);
@@ -1249,7 +1249,7 @@ void QV4DebugService::handleV8Request(const QByteArray &payload)
 {
     Q_D(QV4DebugService);
 
-    TRACE_PROTOCOL(debug << "v8request, payload: " << payload << endl);
+    TRACE_PROTOCOL(qDebug() << "v8request, payload:" << payload);
 
     QJsonDocument request = QJsonDocument::fromJson(payload);
     QJsonObject o = request.object();

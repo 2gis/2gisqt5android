@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtWebEngine module of the Qt Toolkit.
 **
@@ -10,15 +10,15 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
 ** General Public License version 3 as published by the Free Software
 ** Foundation and appearing in the file LICENSE.LGPLv3 included in the
-** packaging of this file.  Please review the following information to
+** packaging of this file. Please review the following information to
 ** ensure the GNU Lesser General Public License version 3 requirements
 ** will be met: https://www.gnu.org/licenses/lgpl.html.
 **
@@ -26,7 +26,7 @@
 ** Alternatively, this file may be used under the terms of the GNU
 ** General Public License version 2.0 or later as published by the Free
 ** Software Foundation and appearing in the file LICENSE.GPL included in
-** the packaging of this file.  Please review the following information to
+** the packaging of this file. Please review the following information to
 ** ensure the GNU General Public License version 2.0 requirements will be
 ** met: http://www.gnu.org/licenses/gpl-2.0.html.
 **
@@ -44,9 +44,12 @@
 #include <QOpenGLContext>
 #include <QResizeEvent>
 #include <QSGAbstractRenderer>
-#include <QSGEngine>
 #include <QSGNode>
 #include <QWindow>
+#include <private/qsgcontext_p.h>
+#include <private/qsgengine_p.h>
+
+namespace QtWebEngineCore {
 
 static const int MaxTooltipLength = 1024;
 
@@ -78,7 +81,7 @@ void RenderWidgetHostViewQtDelegateWidget::initAsChild(WebContentsAdapterClient*
     if (pagePrivate->view) {
         pagePrivate->view->layout()->addWidget(this);
         pagePrivate->view->setFocusProxy(this);
-        QOpenGLWidget::show();
+        show();
     } else
         setParent(0);
 }
@@ -119,17 +122,30 @@ bool RenderWidgetHostViewQtDelegateWidget::hasKeyboardFocus()
     return hasFocus();
 }
 
+void RenderWidgetHostViewQtDelegateWidget::lockMouse()
+{
+    grabMouse();
+}
+
+void RenderWidgetHostViewQtDelegateWidget::unlockMouse()
+{
+    releaseMouse();
+}
+
 void RenderWidgetHostViewQtDelegateWidget::show()
 {
     // Check if we're attached to a QWebEngineView, we don't
     // want to show anything else than popups as top-level.
-    if (parent() || m_isPopup)
+    if (parent() || m_isPopup) {
         QOpenGLWidget::show();
+        m_client->notifyShown();
+    }
 }
 
 void RenderWidgetHostViewQtDelegateWidget::hide()
 {
     QOpenGLWidget::hide();
+    m_client->notifyHidden();
 }
 
 bool RenderWidgetHostViewQtDelegateWidget::isVisible() const
@@ -141,6 +157,22 @@ QWindow* RenderWidgetHostViewQtDelegateWidget::window() const
 {
     const QWidget* root = QOpenGLWidget::window();
     return root ? root->windowHandle() : 0;
+}
+
+QSGTexture *RenderWidgetHostViewQtDelegateWidget::createTextureFromImage(const QImage &image)
+{
+    return m_sgEngine->createTextureFromImage(image, QSGEngine::TextureCanUseAtlas);
+}
+
+QSGLayer *RenderWidgetHostViewQtDelegateWidget::createLayer()
+{
+    QSGEnginePrivate *enginePrivate = QSGEnginePrivate::get(m_sgEngine.data());
+    return enginePrivate->sgContext->createLayer(enginePrivate->sgRenderContext.data());
+}
+
+QSGImageNode *RenderWidgetHostViewQtDelegateWidget::createImageNode()
+{
+    return QSGEnginePrivate::get(m_sgEngine.data())->sgContext->createImageNode();
 }
 
 void RenderWidgetHostViewQtDelegateWidget::update()
@@ -266,3 +298,5 @@ void RenderWidgetHostViewQtDelegateWidget::onWindowPosChanged()
 {
     m_client->windowBoundsChanged();
 }
+
+} // namespace QtWebEngineCore

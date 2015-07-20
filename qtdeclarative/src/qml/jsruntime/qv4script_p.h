@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -43,51 +43,69 @@ QT_BEGIN_NAMESPACE
 
 class QQmlContextData;
 
+namespace QQmlJS {
+class Directives;
+}
+
 namespace QV4 {
 
-struct ExecutionContext;
-
 struct ContextStateSaver {
-    ExecutionContext *savedContext;
+    Value *savedContext;
     bool strictMode;
     Lookup *lookups;
     CompiledData::CompilationUnit *compilationUnit;
     int lineNumber;
 
-    ContextStateSaver(ExecutionContext *context)
-        : savedContext(context)
+    ContextStateSaver(Scope &scope, ExecutionContext *context)
+        : savedContext(scope.alloc(1))
         , strictMode(context->d()->strictMode)
         , lookups(context->d()->lookups)
         , compilationUnit(context->d()->compilationUnit)
         , lineNumber(context->d()->lineNumber)
-    {}
+    {
+        savedContext->m = context->d();
+    }
+    ContextStateSaver(Scope &scope, Heap::ExecutionContext *context)
+        : savedContext(scope.alloc(1))
+        , strictMode(context->strictMode)
+        , lookups(context->lookups)
+        , compilationUnit(context->compilationUnit)
+        , lineNumber(context->lineNumber)
+    {
+        savedContext->m = context;
+    }
 
     ~ContextStateSaver()
     {
-        savedContext->d()->strictMode = strictMode;
-        savedContext->d()->lookups = lookups;
-        savedContext->d()->compilationUnit = compilationUnit;
-        savedContext->d()->lineNumber = lineNumber;
+        Heap::ExecutionContext *ctx = static_cast<Heap::ExecutionContext *>(savedContext->m);
+        ctx->strictMode = strictMode;
+        ctx->lookups = lookups;
+        ctx->compilationUnit = compilationUnit;
+        ctx->lineNumber = lineNumber;
     }
 };
 
+namespace Heap {
+struct QmlBindingWrapper : Heap::FunctionObject {
+    QmlBindingWrapper(QV4::ExecutionContext *scope, Function *f, QV4::Object *qml);
+    // Constructor for QML functions and signal handlers, resulting binding wrapper is not callable!
+    QmlBindingWrapper(QV4::ExecutionContext *scope, QV4::Object *qml);
+    Object *qml;
+    CallContext *qmlContext;
+};
+
+}
+
 struct Q_QML_EXPORT QmlBindingWrapper : FunctionObject {
-    struct Data : FunctionObject::Data {
-        Data(ExecutionContext *scope, Function *f, Object *qml);
-        // Constructor for QML functions and signal handlers, resulting binding wrapper is not callable!
-        Data(ExecutionContext *scope, Object *qml);
-        Object *qml;
-        CallContext *qmlContext;
-    };
-    V4_OBJECT(FunctionObject)
+    V4_OBJECT2(QmlBindingWrapper, FunctionObject)
 
     static ReturnedValue call(Managed *that, CallData *);
-    static void markObjects(Managed *m, ExecutionEngine *e);
+    static void markObjects(Heap::Base *m, ExecutionEngine *e);
 
-    CallContext *context() const { return d()->qmlContext; }
+    Heap::CallContext *context() const { return d()->qmlContext; }
 
-    static Returned<FunctionObject> *createQmlCallableForFunction(QQmlContextData *qmlContext, QObject *scopeObject, QV4::Function *runtimeFunction,
-                                                                  const QList<QByteArray> &signalParameters = QList<QByteArray>(), QString *error = 0);
+    static Heap::FunctionObject *createQmlCallableForFunction(QQmlContextData *qmlContext, QObject *scopeObject, QV4::Function *runtimeFunction,
+                                                              const QList<QByteArray> &signalParameters = QList<QByteArray>(), QString *error = 0);
 
 private:
 };
@@ -95,19 +113,20 @@ private:
 struct Q_QML_EXPORT Script {
     Script(ExecutionContext *scope, const QString &sourceCode, const QString &source = QString(), int line = 1, int column = 0)
         : sourceFile(source), line(line), column(column), sourceCode(sourceCode)
-        , scope(scope), strictMode(false), inheritContext(false), parsed(false)
+        , scope(scope->d()), strictMode(false), inheritContext(false), parsed(false)
         , vmFunction(0), parseAsBinding(false) {}
     Script(ExecutionEngine *engine, Object *qml, const QString &sourceCode, const QString &source = QString(), int line = 1, int column = 0)
         : sourceFile(source), line(line), column(column), sourceCode(sourceCode)
-        , scope(engine->rootContext), strictMode(false), inheritContext(true), parsed(false)
-        , qml(qml->asReturnedValue()), vmFunction(0), parseAsBinding(true) {}
+        , scope(engine->rootContext()), strictMode(false), inheritContext(true), parsed(false)
+        , qml(engine, qml), vmFunction(0), parseAsBinding(true) {}
     Script(ExecutionEngine *engine, Object *qml, CompiledData::CompilationUnit *compilationUnit);
     ~Script();
     QString sourceFile;
     int line;
     int column;
     QString sourceCode;
-    ExecutionContext *scope;
+    // ### GC
+    Heap::ExecutionContext *scope;
     bool strictMode;
     bool inheritContext;
     bool parsed;
@@ -122,7 +141,8 @@ struct Q_QML_EXPORT Script {
 
     Function *function();
 
-    static QQmlRefPointer<CompiledData::CompilationUnit> precompile(IR::Module *module, Compiler::JSUnitGenerator *unitGenerator, ExecutionEngine *engine, const QUrl &url, const QString &source, QList<QQmlError> *reportedErrors = 0);
+    static QQmlRefPointer<CompiledData::CompilationUnit> precompile(IR::Module *module, Compiler::JSUnitGenerator *unitGenerator, ExecutionEngine *engine, const QUrl &url, const QString &source,
+                                                                    QList<QQmlError> *reportedErrors = 0, QQmlJS::Directives *directivesCollector = 0);
 
     static ReturnedValue evaluate(ExecutionEngine *engine, const QString &script, Object *scopeObject);
 };

@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -230,6 +230,12 @@ void tst_qquickflickable::boundsBehavior()
     QCOMPARE(spy.count(),3);
     flickable->setBoundsBehavior(QQuickFlickable::StopAtBounds);
     QCOMPARE(spy.count(),3);
+
+    flickable->setBoundsBehavior(QQuickFlickable::OvershootBounds);
+    QVERIFY(flickable->boundsBehavior() == QQuickFlickable::OvershootBounds);
+    QCOMPARE(spy.count(),4);
+    flickable->setBoundsBehavior(QQuickFlickable::OvershootBounds);
+    QCOMPARE(spy.count(),4);
 
     delete flickable;
 }
@@ -1421,17 +1427,30 @@ void tst_qquickflickable::nestedStopAtBounds_data()
 {
     QTest::addColumn<bool>("transpose");
     QTest::addColumn<bool>("invert");
+    QTest::addColumn<int>("boundsBehavior");
+    QTest::addColumn<qreal>("margin");
 
-    QTest::newRow("left") << false << false;
-    QTest::newRow("right") << false << true;
-    QTest::newRow("top") << true << false;
-    QTest::newRow("bottom") << true << true;
+    QTest::newRow("left,stop") << false << false << int(QQuickFlickable::StopAtBounds) << qreal(0);
+    QTest::newRow("right,stop") << false << true << int(QQuickFlickable::StopAtBounds) << qreal(0);
+    QTest::newRow("top,stop") << true << false << int(QQuickFlickable::StopAtBounds) << qreal(0);
+    QTest::newRow("bottom,stop") << true << true << int(QQuickFlickable::StopAtBounds) << qreal(0);
+    QTest::newRow("left,over") << false << false << int(QQuickFlickable::DragOverBounds) << qreal(0);
+    QTest::newRow("right,over") << false << true << int(QQuickFlickable::DragOverBounds) << qreal(0);
+    QTest::newRow("top,over") << true << false << int(QQuickFlickable::DragOverBounds) << qreal(0);
+    QTest::newRow("bottom,over") << true << true << int(QQuickFlickable::DragOverBounds) << qreal(0);
+
+    QTest::newRow("left,stop,margin") << false << false << int(QQuickFlickable::StopAtBounds) << qreal(20);
+    QTest::newRow("right,stop,margin") << false << true << int(QQuickFlickable::StopAtBounds) << qreal(20);
+    QTest::newRow("top,stop,margin") << true << false << int(QQuickFlickable::StopAtBounds) << qreal(20);
+    QTest::newRow("bottom,stop,margin") << true << true << int(QQuickFlickable::StopAtBounds) << qreal(20);
 }
 
 void tst_qquickflickable::nestedStopAtBounds()
 {
     QFETCH(bool, transpose);
     QFETCH(bool, invert);
+    QFETCH(int, boundsBehavior);
+    QFETCH(qreal, margin);
 
     QQuickView view;
     view.setSource(testFileUrl("nestedStopAtBounds.qml"));
@@ -1449,8 +1468,20 @@ void tst_qquickflickable::nestedStopAtBounds()
     QQuickFlickable *inner = outer->findChild<QQuickFlickable*>("innerFlickable");
     QVERIFY(inner);
     inner->setFlickableDirection(transpose ? QQuickFlickable::VerticalFlick : QQuickFlickable::HorizontalFlick);
-    inner->setContentX(invert ? 0 : 100);
-    inner->setContentY(invert ? 0 : 100);
+    inner->setBoundsBehavior(QQuickFlickable::BoundsBehavior(boundsBehavior));
+
+    invert ? inner->setRightMargin(margin) : inner->setLeftMargin(margin);
+    invert ? inner->setBottomMargin(margin) : inner->setTopMargin(margin);
+
+    inner->setContentX(invert ? -margin : 100 - margin);
+    inner->setContentY(invert ? -margin : 100 - margin);
+    inner->setContentWidth(400 - margin);
+    inner->setContentHeight(400 - margin);
+
+    QCOMPARE(inner->isAtXBeginning(), invert);
+    QCOMPARE(inner->isAtXEnd(), !invert);
+    QCOMPARE(inner->isAtYBeginning(), invert);
+    QCOMPARE(inner->isAtYEnd(), !invert);
 
     const int threshold = qApp->styleHints()->startDragDistance();
 
@@ -1487,6 +1518,40 @@ void tst_qquickflickable::nestedStopAtBounds()
     QTest::mouseRelease(&view, Qt::LeftButton, 0, position);
 
     QTRY_VERIFY(!outer->isMoving());
+
+    axis = 200;
+    inner->setContentX(-margin);
+    inner->setContentY(-margin);
+    inner->setContentWidth(inner->width() - margin);
+    inner->setContentHeight(inner->height() - margin);
+
+    // Drag inner with equal size and contentSize
+    QTest::mousePress(&view, Qt::LeftButton, 0, position);
+    QTest::qWait(10);
+    axis += invert ? -threshold * 2 : threshold * 2;
+    QTest::mouseMove(&view, position);
+    axis += invert ? -threshold : threshold;
+    QTest::mouseMove(&view, position);
+    QCOMPARE(outer->isDragging(), true);
+    QCOMPARE(inner->isDragging(), false);
+    QTest::mouseRelease(&view, Qt::LeftButton, 0, position);
+
+    axis = 200;
+    inner->setContentX(-margin);
+    inner->setContentY(-margin);
+    inner->setContentWidth(inner->width() - 100);
+    inner->setContentHeight(inner->height() - 100);
+
+    // Drag inner with size greater than contentSize
+    QTest::mousePress(&view, Qt::LeftButton, 0, position);
+    QTest::qWait(10);
+    axis += invert ? -threshold * 2 : threshold * 2;
+    QTest::mouseMove(&view, position);
+    axis += invert ? -threshold : threshold;
+    QTest::mouseMove(&view, position);
+    QCOMPARE(outer->isDragging(), true);
+    QCOMPARE(inner->isDragging(), false);
+    QTest::mouseRelease(&view, Qt::LeftButton, 0, position);
 }
 
 void tst_qquickflickable::stopAtBounds_data()

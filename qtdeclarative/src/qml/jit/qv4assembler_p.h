@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -101,27 +101,27 @@ struct ExceptionCheck {
 };
 // push_catch and pop context methods shouldn't check for exceptions
 template <>
-struct ExceptionCheck<QV4::ExecutionContext *(*)(QV4::ExecutionContext *)> {
+struct ExceptionCheck<void (*)(QV4::ExecutionEngine *)> {
     enum { NeedsCheck = 0 };
 };
 template <typename A>
-struct ExceptionCheck<QV4::ExecutionContext *(*)(QV4::ExecutionContext *, A)> {
+struct ExceptionCheck<void (*)(A, QV4::NoThrowEngine)> {
     enum { NeedsCheck = 0 };
 };
 template <>
-struct ExceptionCheck<QV4::ReturnedValue (*)(QV4::NoThrowContext *)> {
+struct ExceptionCheck<QV4::ReturnedValue (*)(QV4::NoThrowEngine *)> {
     enum { NeedsCheck = 0 };
 };
 template <typename A>
-struct ExceptionCheck<QV4::ReturnedValue (*)(QV4::NoThrowContext *, A)> {
+struct ExceptionCheck<QV4::ReturnedValue (*)(QV4::NoThrowEngine *, A)> {
     enum { NeedsCheck = 0 };
 };
 template <typename A, typename B>
-struct ExceptionCheck<QV4::ReturnedValue (*)(QV4::NoThrowContext *, A, B)> {
+struct ExceptionCheck<QV4::ReturnedValue (*)(QV4::NoThrowEngine *, A, B)> {
     enum { NeedsCheck = 0 };
 };
 template <typename A, typename B, typename C>
-struct ExceptionCheck<void (*)(QV4::NoThrowContext *, A, B, C)> {
+struct ExceptionCheck<void (*)(QV4::NoThrowEngine *, A, B, C)> {
     enum { NeedsCheck = 0 };
 };
 
@@ -316,8 +316,8 @@ public:
         {}
         IR::Expr *value;
     };
-    struct PointerToString {
-        explicit PointerToString(const QString &string) : string(string) {}
+    struct StringToIndex {
+        explicit StringToIndex(const QString &string) : string(string) {}
         QString string;
     };
     struct Reference {
@@ -446,7 +446,7 @@ public:
             loadArgumentInRegister(addr, dest, argumentNumber);
         }
     }
-    void loadArgumentInRegister(PointerToString temp, RegisterID dest, int argumentNumber)
+    void loadArgumentInRegister(StringToIndex temp, RegisterID dest, int argumentNumber)
     {
         Q_UNUSED(argumentNumber);
         loadStringRef(dest, temp.string);
@@ -662,7 +662,7 @@ public:
     }
 
     template <int StackSlot>
-    void loadArgumentOnStack(PointerToString temp, int argumentNumber)
+    void loadArgumentOnStack(StringToIndex temp, int argumentNumber)
     {
         Q_UNUSED(argumentNumber);
         loadStringRef(ScratchRegister, temp.string);
@@ -797,8 +797,7 @@ public:
                                  const RegisterInformation &fpRegistersToSave);
 
     void checkException() {
-        loadPtr(Address(ContextRegister, qOffsetOf(QV4::ExecutionContext::Data, engine)), ScratchRegister);
-        load32(Address(ScratchRegister, qOffsetOf(QV4::ExecutionEngine, hasException)), ScratchRegister);
+        load32(Address(EngineRegister, qOffsetOf(QV4::ExecutionEngine, hasException)), ScratchRegister);
         Jump exceptionThrown = branch32(NotEqual, ScratchRegister, TrustedImm32(0));
         if (catchBlock)
             addPatch(catchBlock, exceptionThrown);
@@ -917,25 +916,25 @@ public:
     template <typename ArgRet, typename Callable, typename Arg1, typename Arg2, typename Arg3, typename Arg4>
     void generateFunctionCallImp(ArgRet r, const char* functionName, Callable function, Arg1 arg1, Arg2 arg2, Arg3 arg3, Arg4 arg4)
     {
-        generateFunctionCallImp(r, functionName, function, arg1, arg2, arg3, arg4, VoidType());
+        generateFunctionCallImp(r, functionName, function, arg1, arg2, arg3, arg4, VoidType(), VoidType());
     }
 
     template <typename ArgRet, typename Callable, typename Arg1, typename Arg2, typename Arg3>
     void generateFunctionCallImp(ArgRet r, const char* functionName, Callable function, Arg1 arg1, Arg2 arg2, Arg3 arg3)
     {
-        generateFunctionCallImp(r, functionName, function, arg1, arg2, arg3, VoidType(), VoidType());
+        generateFunctionCallImp(r, functionName, function, arg1, arg2, arg3, VoidType(), VoidType(), VoidType());
     }
 
     template <typename ArgRet, typename Callable, typename Arg1, typename Arg2>
     void generateFunctionCallImp(ArgRet r, const char* functionName, Callable function, Arg1 arg1, Arg2 arg2)
     {
-        generateFunctionCallImp(r, functionName, function, arg1, arg2, VoidType(), VoidType(), VoidType());
+        generateFunctionCallImp(r, functionName, function, arg1, arg2, VoidType(), VoidType(), VoidType(), VoidType());
     }
 
     template <typename ArgRet, typename Callable, typename Arg1>
     void generateFunctionCallImp(ArgRet r, const char* functionName, Callable function, Arg1 arg1)
     {
-        generateFunctionCallImp(r, functionName, function, arg1, VoidType(), VoidType(), VoidType(), VoidType());
+        generateFunctionCallImp(r, functionName, function, arg1, VoidType(), VoidType(), VoidType(), VoidType(), VoidType());
     }
 
     Pointer toAddress(RegisterID tmpReg, IR::Expr *e, int offset)
@@ -1226,7 +1225,8 @@ template <typename T> inline bool prepareCall(T &, Assembler *)
 
 template <> inline bool prepareCall(RelativeCall &relativeCall, Assembler *as)
 {
-    as->loadPtr(Assembler::Address(Assembler::ContextRegister, qOffsetOf(QV4::ExecutionContext::Data, lookups)),
+    as->loadPtr(Assembler::Address(Assembler::EngineRegister, qOffsetOf(QV4::ExecutionEngine, current)), Assembler::ScratchRegister);
+    as->loadPtr(Assembler::Address(Assembler::ScratchRegister, qOffsetOf(QV4::Heap::ExecutionContext, lookups)),
                 relativeCall.addr.base);
     return true;
 }
@@ -1236,7 +1236,8 @@ template <> inline bool prepareCall(LookupCall &lookupCall, Assembler *as)
     // IMPORTANT! See generateLookupCall in qv4isel_masm_p.h for details!
 
     // same as prepareCall(RelativeCall ....) : load the table from the context
-    as->loadPtr(Assembler::Address(Assembler::ContextRegister, qOffsetOf(QV4::ExecutionContext::Data, lookups)),
+    as->loadPtr(Assembler::Address(Assembler::EngineRegister, qOffsetOf(QV4::ExecutionEngine, current)), Assembler::ScratchRegister);
+    as->loadPtr(Assembler::Address(Assembler::ScratchRegister, qOffsetOf(QV4::Heap::ExecutionContext, lookups)),
                 lookupCall.addr.base);
     // pre-calculate the indirect address for the lookupCall table:
     if (lookupCall.addr.offset)

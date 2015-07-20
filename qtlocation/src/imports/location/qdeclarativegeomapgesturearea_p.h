@@ -1,31 +1,34 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtLocation module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL21$
+** $QT_BEGIN_LICENSE:LGPL3$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 or version 3 as published by the Free
-** Software Foundation and appearing in the file LICENSE.LGPLv21 and
-** LICENSE.LGPLv3 included in the packaging of this file. Please review the
-** following information to ensure the GNU Lesser General Public License
-** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
-** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPLv3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** GNU General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU
+** General Public License version 2.0 or later as published by the Free
+** Software Foundation and appearing in the file LICENSE.GPL included in
+** the packaging of this file. Please review the following information to
+** ensure the GNU General Public License version 2.0 requirements will be
+** met: http://www.gnu.org/licenses/gpl-2.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -40,6 +43,7 @@
 #include <QDebug>
 #include <QElapsedTimer>
 #include "qgeocoordinate.h"
+#include "qgeomap_p.h"
 
 QT_BEGIN_NAMESPACE
 
@@ -49,6 +53,7 @@ class QTouchEvent;
 class QWheelEvent;
 class QGeoMap;
 class QPropertyAnimation;
+class QQuickItem;
 
 class QDeclarativeGeoMapPinchEvent : public QObject
 {
@@ -109,7 +114,7 @@ class QDeclarativeGeoMapGestureArea: public QObject
     Q_PROPERTY(bool pinchEnabled READ pinchEnabled WRITE setPinchEnabled NOTIFY pinchEnabledChanged)
     Q_PROPERTY(bool panEnabled READ panEnabled WRITE setPanEnabled NOTIFY panEnabledChanged)
     Q_PROPERTY(bool isPinchActive READ isPinchActive NOTIFY pinchActiveChanged)
-    Q_PROPERTY(bool isPanActive READ isPanActive)
+    Q_PROPERTY(bool isPanActive READ isPanActive NOTIFY panActiveChanged)
     Q_PROPERTY(ActiveGestures activeGestures READ activeGestures WRITE setActiveGestures NOTIFY activeGesturesChanged)
     Q_PROPERTY(qreal maximumZoomLevelChange READ maximumZoomLevelChange WRITE setMaximumZoomLevelChange NOTIFY maximumZoomLevelChangeChanged)
     Q_PROPERTY(qreal flickDeceleration READ flickDeceleration WRITE setFlickDeceleration NOTIFY flickDecelerationChanged)
@@ -129,8 +134,8 @@ public:
     void setActiveGestures(ActiveGestures activeGestures);
 
     bool isPinchActive() const;
-    void setPinchActive(bool active);
     bool isPanActive() const;
+    bool isActive() const;
 
     bool enabled() const;
     void setEnabled(bool enabled);
@@ -147,16 +152,13 @@ public:
     qreal flickDeceleration() const;
     void setFlickDeceleration(qreal deceleration);
 
-    void touchEvent(QTouchEvent *event);
-
-    bool wheelEvent(QWheelEvent *event);
-
-    bool mousePressEvent(QMouseEvent *event);
-    bool mouseMoveEvent(QMouseEvent *event);
-    bool mouseReleaseEvent(QMouseEvent *event);
-
-    bool filterMapChildMouseEvent(QMouseEvent *event);
-    bool filterMapChildTouchEvent(QTouchEvent *event);
+    void handleTouchEvent(QTouchEvent *event);
+    void handleWheelEvent(QWheelEvent *event);
+    void handleMousePressEvent(QMouseEvent *event);
+    void handleMouseMoveEvent(QMouseEvent *event);
+    void handleMouseReleaseEvent(QMouseEvent *event);
+    void handleMouseUngrabEvent();
+    void handleTouchUngrabEvent();
 
     void setMinimumZoomLevel(qreal min);
     qreal minimumZoomLevel() const;
@@ -167,6 +169,7 @@ public:
     void setMap(QGeoMap *map);
 
 Q_SIGNALS:
+    void panActiveChanged();
     void pinchActiveChanged();
     void enabledChanged();
     void maximumZoomLevelChangeChanged();
@@ -184,7 +187,6 @@ Q_SIGNALS:
     void panFinished();
     void flickStarted();
     void flickFinished();
-    void movementStopped();
 
 private:
     void update();
@@ -232,7 +234,7 @@ private:
         struct Zoom
         {
             Zoom() : minimum(-1.0), maximum(-1.0), start(0.0), previous(0.0),
-                     maximumChange(2.0) {}
+                     maximumChange(4.0) {}
             qreal minimum;
             qreal maximum;
             qreal start;
@@ -261,7 +263,9 @@ private:
     qreal velocityY_;
     QElapsedTimer lastPosTime_;
     QPointF lastPos_;
-    QList<QTouchEvent::TouchPoint> touchPoints_;
+    QList<QTouchEvent::TouchPoint> m_allPoints;
+    QList<QTouchEvent::TouchPoint> m_touchPoints;
+    QScopedPointer<QTouchEvent::TouchPoint> m_mousePoint;
     QPointF sceneStartPoint1_;
 
     // only set when two points in contact
@@ -283,6 +287,7 @@ private:
     enum PinchState
     {
         pinchInactive,
+        pinchInactiveTwoPoints,
         pinchActive
     } pinchState_;
 
@@ -295,6 +300,6 @@ private:
 };
 
 QT_END_NAMESPACE
-QML_DECLARE_TYPE(QDeclarativeGeoMapGestureArea);
+QML_DECLARE_TYPE(QDeclarativeGeoMapGestureArea)
 
 #endif // QDECLARATIVEGEOMAPGESTUREAREA_P_H

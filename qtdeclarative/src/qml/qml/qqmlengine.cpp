@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -368,7 +368,7 @@ The following functions are also on the Qt object.
 
 /*!
     \qmlproperty object Qt::platform
-    \since 4.8
+    \since 5.1
 
     The \c platform object provides info about the underlying platform.
 
@@ -392,6 +392,8 @@ The following functions are also on the Qt object.
         \li \c "unix" - Other Unix-based OS
         \li \c "windows" - Windows
         \li \c "wince" - Windows CE
+        \li \c "winrt" - Windows RT
+        \li \c "winphone" - Windows Phone
     \endlist
     \endtable
 */
@@ -523,6 +525,34 @@ The following functions are also on the Qt object.
     further details.
 */
 
+/*!
+    \qmlproperty object Qt::styleHints
+    \since 5.5
+
+    The \c styleHints object provides platform-specific style hints and settings.
+    See the QStyleHints documentation for further details.
+
+    \note The \c styleHints object is only available when using the Qt Quick module.
+
+    The following example uses the \c styleHints object to determine whether an
+    item should gain focus on mouse press or touch release:
+    \code
+    import QtQuick 2.4
+
+    MouseArea {
+        id: button
+
+        onPressed: {
+            if (!Qt.styleHints.setFocusOnTouchRelease)
+                button.forceActiveFocus()
+        }
+        onReleased: {
+            if (Qt.styleHints.setFocusOnTouchRelease)
+                button.forceActiveFocus()
+        }
+    }
+    \endcode
+*/
 
 /*!
 \qmlmethod object Qt::include(string url, jsobject callback)
@@ -553,19 +583,21 @@ the same object as is returned from the Qt.include() call.
 
 QQmlEnginePrivate::QQmlEnginePrivate(QQmlEngine *e)
 : propertyCapture(0), rootContext(0), isDebugging(false),
-  profiler(0), outputWarningsToStdErr(true),
+  profiler(0), outputWarningsToMsgLog(true),
   cleanup(0), erroredBindings(0), inProgressCreations(0),
   workerScriptEngine(0),
   activeObjectCreator(0),
   networkAccessManager(0), networkAccessManagerFactory(0), urlInterceptor(0),
   scarceResourcesRefCount(0), typeLoader(e), importDatabase(e), uniqueId(1),
-  incubatorCount(0), incubationController(0), mutex(QMutex::Recursive)
+  incubatorCount(0), incubationController(0)
 {
-    useNewCompiler = true;
 }
 
 QQmlEnginePrivate::~QQmlEnginePrivate()
 {
+    typedef QHash<QPair<QQmlType *, int>, QQmlPropertyCache *>::Iterator TypePropertyCacheIt;
+    typedef QHash<int, QQmlCompiledData *>::Iterator CompositeTypesIt;
+
     if (inProgressCreations)
         qWarning() << QQmlEngine::tr("There are still \"%1\" items in the process of being created at engine destruction.").arg(inProgressCreations);
 
@@ -583,12 +615,16 @@ QQmlEnginePrivate::~QQmlEnginePrivate()
     if (incubationController) incubationController->d = 0;
     incubationController = 0;
 
-    for(QHash<const QMetaObject *, QQmlPropertyCache *>::Iterator iter = propertyCache.begin(); iter != propertyCache.end(); ++iter)
+    for (TypePropertyCacheIt iter = typePropertyCache.begin(), end = typePropertyCache.end(); iter != end; ++iter)
         (*iter)->release();
-    for(QHash<QPair<QQmlType *, int>, QQmlPropertyCache *>::Iterator iter = typePropertyCache.begin(); iter != typePropertyCache.end(); ++iter)
-        (*iter)->release();
-    for (QHash<int, QQmlCompiledData *>::Iterator iter = m_compositeTypes.begin(); iter != m_compositeTypes.end(); ++iter)
+    for (CompositeTypesIt iter = m_compositeTypes.begin(), end = m_compositeTypes.end(); iter != end; ++iter) {
         iter.value()->isRegisteredWithEngine = false;
+
+        // since unregisterInternalCompositeType() will not be called in this
+        // case, we have to clean up the type registration manually
+        QMetaType::unregisterType(iter.value()->metaTypeId);
+        QMetaType::unregisterType(iter.value()->listMetaTypeId);
+    }
     delete profiler;
 }
 
@@ -1181,7 +1217,7 @@ void QQmlEngine::setBaseUrl(const QUrl &url)
 bool QQmlEngine::outputWarningsToStandardError() const
 {
     Q_D(const QQmlEngine);
-    return d->outputWarningsToStdErr;
+    return d->outputWarningsToMsgLog;
 }
 
 /*!
@@ -1197,7 +1233,7 @@ bool QQmlEngine::outputWarningsToStandardError() const
 void QQmlEngine::setOutputWarningsToStandardError(bool enabled)
 {
     Q_D(QQmlEngine);
-    d->outputWarningsToStdErr = enabled;
+    d->outputWarningsToMsgLog = enabled;
 }
 
 /*!
@@ -1449,9 +1485,42 @@ QQmlDebuggingEnabler::QQmlDebuggingEnabler(bool printWarning)
         qDebug("QML debugging is enabled. Only use this in a safe environment.");
     }
     QQmlEnginePrivate::qml_debugging_enabled = true;
+#else
+    Q_UNUSED(printWarning);
 #endif
 }
 
+/*!
+ * \enum QQmlDebuggingEnabler::StartMode
+ *
+ * Defines the debug server's start behavior. You can interrupt QML engines starting while a debug
+ * client is connecting, in order to set breakpoints in or profile startup code.
+ *
+ * \value DoNotWaitForClient Run any QML engines as usual while the debug services are connecting.
+ * \value WaitForClient      If a QML engine starts while the debug services are connecting,
+ *                           interrupt it until they are done.
+ */
+
+/*!
+ * Enables debugging for QML engines created after calling this function. The debug server will
+ * listen on \a port at \a hostName and block the QML engine until it receives a connection if
+ * \a mode is \c WaitForClient. If \a mode is not specified it won't block and if \a hostName is not
+ * specified it will listen on all available interfaces. You can only start one debug server at a
+ * time. A debug server may have already been started if the -qmljsdebugger= command line argument
+ * was given. This method returns \c true if a new debug server was successfully started, or
+ * \c false otherwise.
+ */
+bool QQmlDebuggingEnabler::startTcpDebugServer(int port, StartMode mode, const QString &hostName)
+{
+#ifndef QQML_NO_DEBUG_PROTOCOL
+    return QQmlDebugServer::enable(port, port, mode == WaitForClient, hostName);
+#else
+    Q_UNUSED(port);
+    Q_UNUSED(block);
+    Q_UNUSED(hostName);
+    return false;
+#endif
+}
 
 class QQmlDataExtended {
 public:
@@ -1638,7 +1707,7 @@ void QQmlData::destroyed(QObject *object)
         signalHandler = next;
     }
 
-    if (bindingBits)
+    if (bindingBitsSize > 32)
         free(bindingBits);
 
     if (propertyCache)
@@ -1686,14 +1755,24 @@ void QQmlData::parentChanged(QObject *object, QObject *parent)
 
 static void QQmlData_setBit(QQmlData *data, QObject *obj, int bit)
 {
+    if (data->bindingBitsSize == 0 && bit < 32) {
+        data->bindingBitsSize = 32;
+    }
+
     if (data->bindingBitsSize <= bit) {
         int props = QQmlMetaObject(obj).propertyCount();
         Q_ASSERT(bit < 2 * props);
 
         int arraySize = (2 * props + 31) / 32;
-        int oldArraySize = data->bindingBitsSize / 32;
+        Q_ASSERT(arraySize > 1);
 
-        data->bindingBits = (quint32 *)realloc(data->bindingBits,
+        // special handling for 32 here is to make sure we wipe the first byte
+        // when going from bindingBitsValue to bindingBits, and preserve the old
+        // set bits so we can restore them after the allocation
+        int oldArraySize = data->bindingBitsSize > 32 ? data->bindingBitsSize / 32 : 0;
+        quint32 oldValue = data->bindingBitsSize == 32 ? data->bindingBitsValue : 0;
+
+        data->bindingBits = (quint32 *)realloc((data->bindingBitsSize == 32) ? 0 : data->bindingBits,
                                                arraySize * sizeof(quint32));
 
         memset(data->bindingBits + oldArraySize,
@@ -1701,15 +1780,27 @@ static void QQmlData_setBit(QQmlData *data, QObject *obj, int bit)
                sizeof(quint32) * (arraySize - oldArraySize));
 
         data->bindingBitsSize = arraySize * 32;
+
+        // reinstate bindingBitsValue after we dropped it
+        if (oldValue) {
+            memcpy(data->bindingBits, &oldValue, sizeof(oldValue));
+        }
     }
 
-    data->bindingBits[bit / 32] |= (1 << (bit % 32));
+    if (data->bindingBitsSize == 32)
+        data->bindingBitsValue |= (1 << (bit % 32));
+    else
+        data->bindingBits[bit / 32] |= (1 << (bit % 32));
 }
 
 static void QQmlData_clearBit(QQmlData *data, int bit)
 {
-    if (data->bindingBitsSize > bit)
-        data->bindingBits[bit / 32] &= ~(1 << (bit % 32));
+    if (data->bindingBitsSize > bit) {
+        if (data->bindingBitsSize == 32)
+            data->bindingBitsValue &= ~(1 << (bit % 32));
+        else
+            data->bindingBits[bit / 32] &= ~(1 << (bit % 32));
+    }
 }
 
 void QQmlData::clearBindingBit(int coreIndex)
@@ -1732,13 +1823,13 @@ void QQmlData::setPendingBindingBit(QObject *obj, int coreIndex)
     QQmlData_setBit(this, obj, coreIndex * 2 + 1);
 }
 
-void QQmlData::ensurePropertyCache(QQmlEngine *engine, QObject *object)
+void QQmlData::ensurePropertyCache(QJSEngine *engine, QObject *object)
 {
     Q_ASSERT(engine);
     QQmlData *ddata = QQmlData::get(object, /*create*/true);
     if (ddata->propertyCache)
         return;
-    ddata->propertyCache = QQmlEnginePrivate::get(engine)->cache(object);
+    ddata->propertyCache = QJSEnginePrivate::get(engine)->cache(object);
     if (ddata->propertyCache) ddata->propertyCache->addref();
 }
 
@@ -1768,7 +1859,7 @@ void QQmlEnginePrivate::warning(const QQmlError &error)
 {
     Q_Q(QQmlEngine);
     q->warnings(QList<QQmlError>() << error);
-    if (outputWarningsToStdErr)
+    if (outputWarningsToMsgLog)
         dumpwarning(error);
 }
 
@@ -1776,7 +1867,7 @@ void QQmlEnginePrivate::warning(const QList<QQmlError> &errors)
 {
     Q_Q(QQmlEngine);
     q->warnings(errors);
-    if (outputWarningsToStdErr)
+    if (outputWarningsToMsgLog)
         dumpwarning(errors);
 }
 
@@ -1980,7 +2071,7 @@ void QQmlEngine::setPluginPathList(const QStringList &paths)
 bool QQmlEngine::importPlugin(const QString &filePath, const QString &uri, QList<QQmlError> *errors)
 {
     Q_D(QQmlEngine);
-    return d->importDatabase.importDynamicPlugin(filePath, uri, QString(), errors);
+    return d->importDatabase.importDynamicPlugin(filePath, uri, QString(), -1, errors);
 }
 
 /*!
@@ -2020,22 +2111,6 @@ QString QQmlEngine::offlineStoragePath() const
     }
 
     return d->offlineStoragePath;
-}
-
-QQmlPropertyCache *QQmlEnginePrivate::createCache(const QMetaObject *mo)
-{
-    Q_Q(QQmlEngine);
-
-    if (!mo->superClass()) {
-        QQmlPropertyCache *rv = new QQmlPropertyCache(q, mo);
-        propertyCache.insert(mo, rv);
-        return rv;
-    } else {
-        QQmlPropertyCache *super = cache(mo->superClass());
-        QQmlPropertyCache *rv = super->copyAndAppend(q, mo);
-        propertyCache.insert(mo, rv);
-        return rv;
-    }
 }
 
 QQmlPropertyCache *QQmlEnginePrivate::createCache(QQmlType *type, int minorVersion,
@@ -2244,16 +2319,12 @@ void QQmlEnginePrivate::registerInternalCompositeType(QQmlCompiledData *data)
     QByteArray lst = "QQmlListProperty<" + name + '>';
 
     int ptr_type = QMetaType::registerNormalizedType(ptr,
-                                                     QtMetaTypePrivate::QMetaTypeFunctionHelper<QObject*>::Delete,
-                                                     QtMetaTypePrivate::QMetaTypeFunctionHelper<QObject*>::Create,
                                                      QtMetaTypePrivate::QMetaTypeFunctionHelper<QObject*>::Destruct,
                                                      QtMetaTypePrivate::QMetaTypeFunctionHelper<QObject*>::Construct,
                                                      sizeof(QObject*),
                                                      static_cast<QFlags<QMetaType::TypeFlag> >(QtPrivate::QMetaTypeTypeFlags<QObject*>::Flags),
                                                      0);
     int lst_type = QMetaType::registerNormalizedType(lst,
-                                                     QtMetaTypePrivate::QMetaTypeFunctionHelper<QQmlListProperty<QObject> >::Delete,
-                                                     QtMetaTypePrivate::QMetaTypeFunctionHelper<QQmlListProperty<QObject> >::Create,
                                                      QtMetaTypePrivate::QMetaTypeFunctionHelper<QQmlListProperty<QObject> >::Destruct,
                                                      QtMetaTypePrivate::QMetaTypeFunctionHelper<QQmlListProperty<QObject> >::Construct,
                                                      sizeof(QQmlListProperty<QObject>),
@@ -2279,6 +2350,9 @@ void QQmlEnginePrivate::unregisterInternalCompositeType(QQmlCompiledData *data)
     Locker locker(this);
     m_qmlLists.remove(lst_type);
     m_compositeTypes.remove(ptr_type);
+
+    QMetaType::unregisterType(ptr_type);
+    QMetaType::unregisterType(lst_type);
 }
 
 bool QQmlEnginePrivate::isTypeLoaded(const QUrl &url) const

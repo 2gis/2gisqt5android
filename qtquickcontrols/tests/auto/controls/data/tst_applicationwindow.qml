@@ -1,9 +1,9 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
-** This file is part of the Qt Quick Controls module of the Qt Toolkit.
+** This file is part of the test suite of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:BSD$
 ** You may use this file under the terms of the BSD license as follows:
@@ -17,8 +17,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -233,6 +233,86 @@ TestCase {
         var maxLimit = Math.pow(2,24)-1
         compare(window.maximumWidth, maxLimit)
         compare(window.maximumHeight, maxLimit)
+        window.destroy()
+    }
+
+    function test_invisibleContentItemChildren() {
+        var test_control = 'import QtQuick 2.2; \
+        import QtQuick.Controls 1.2;            \
+        ApplicationWindow {                     \
+            Rectangle {                         \
+                visible: false;                 \
+                implicitWidth: 400;             \
+                implicitHeight: 400;            \
+            }                                   \
+            Rectangle {                         \
+                anchors.fill: parent;           \
+                implicitWidth: 300;             \
+                implicitHeight: 300;            \
+            }                                   \
+        }                                       '
+
+        var window = Qt.createQmlObject(test_control, container, '')
+        window.visible = true
+        waitForRendering(window.contentItem)
+        compare(window.width, 300)
+        compare(window.height, 300)
+        window.destroy()
+    }
+
+    function test_windowHeight() {
+        var test_control = 'import QtQuick 2.2; \
+        import QtQuick.Controls 1.2;            \
+        ApplicationWindow {                     \
+            toolBar: ToolBar {                  \
+                ToolButton {                    \
+                    text: "Menu"                \
+                }                               \
+            }                                   \
+            statusBar: StatusBar {              \
+                Row {                           \
+                    Label {                     \
+                        text: "Window test"     \
+                    }                           \
+                }                               \
+            }                                   \
+                                                \
+            Rectangle {                         \
+                anchors.fill: parent;           \
+                implicitWidth: 300;             \
+                implicitHeight: 300;            \
+            }                                   \
+        }                                       '
+
+        var window = Qt.createQmlObject(test_control, container, '')
+        window.visible = true
+        waitForRendering(window.contentItem)
+        compare(window.contentItem.implicitHeight, 300)
+        verify(window.height > 300)
+        window.destroy()
+    }
+
+    function test_windowHeight2() {
+        var test_control = 'import QtQuick 2.2; \
+        import QtQuick 2.2;                     \
+        import QtQuick.Controls 1.2;            \
+        ApplicationWindow {                     \
+            Rectangle {                         \
+                anchors.fill: parent;           \
+                color: "red"                    \
+            }                                   \
+                                                \
+            menuBar: MenuBar {                  \
+                Menu {                          \
+                    title: qsTr("Menu")         \
+                }                               \
+            }                                   \
+        }                                       '
+
+        var window = Qt.createQmlObject(test_control, container, '')
+        window.visible = true
+        waitForRendering(window.contentItem)
+        verify(window.height > 0)
         window.destroy()
     }
 

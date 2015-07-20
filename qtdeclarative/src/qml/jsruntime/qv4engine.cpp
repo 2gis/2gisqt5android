@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -61,6 +61,18 @@
 #include "qv4qobjectwrapper_p.h"
 #include "qv4qmlextensions_p.h"
 #include "qv4memberdata_p.h"
+#include "qv4arraybuffer_p.h"
+#include "qv4dataview_p.h"
+#include "qv4typedarray_p.h"
+#include <private/qv8engine_p.h>
+#include <private/qjsvalue_p.h>
+#include <private/qqmlcontextwrapper_p.h>
+#include <private/qqmltypewrapper_p.h>
+#include <private/qqmlvaluetypewrapper_p.h>
+#include <private/qqmlvaluetype_p.h>
+#include <private/qqmllistwrapper_p.h>
+#include <private/qqmllist_p.h>
+#include <private/qqmllocale_p.h>
 
 #include <QtCore/QTextStream>
 #include <QDateTime>
@@ -79,6 +91,10 @@
 #endif
 #endif
 
+#ifdef V4_USE_VALGRIND
+#include <valgrind/memcheck.h>
+#endif
+
 QT_BEGIN_NAMESPACE
 
 using namespace QV4;
@@ -87,7 +103,7 @@ static QBasicAtomicInt engineSerial = Q_BASIC_ATOMIC_INITIALIZER(1);
 
 static ReturnedValue throwTypeError(CallContext *ctx)
 {
-    return ctx->throwTypeError();
+    return ctx->engine()->throwTypeError();
 }
 
 const int MinimumStackSize = 256; // in kbytes
@@ -108,15 +124,24 @@ quintptr getStackLimit()
     } else
         size = pthread_get_stacksize_np(thread_self);
     stackLimit -= size;
+#  elif defined(__hppa)
+    // On some architectures the stack grows upwards. All of these are rather exotic, so simply assume
+    // everything is fine there.
+    // Known examples:
+    // -HP PA-RISC
+    stackLimit = 0;
+
 #  else
-    void* stackBottom = 0;
     pthread_attr_t attr;
 #if HAVE(PTHREAD_NP_H) && OS(FREEBSD)
-    if (pthread_attr_get_np(pthread_self(), &attr) == 0) {
+    // on FreeBSD pthread_attr_init() must be called otherwise getting the attrs crashes
+    if (pthread_attr_init(&attr) == 0 && pthread_attr_get_np(pthread_self(), &attr) == 0) {
 #else
     if (pthread_getattr_np(pthread_self(), &attr) == 0) {
 #endif
+        void *stackBottom = Q_NULLPTR;
         size_t stackSize = 0;
+
         pthread_attr_getstack(&attr, &stackBottom, &stackSize);
         pthread_attr_destroy(&attr);
 
@@ -155,16 +180,25 @@ quintptr getStackLimit()
 }
 
 
+QJSEngine *ExecutionEngine::jsEngine() const
+{
+    return v8Engine->publicEngine();
+}
+
+QQmlEngine *ExecutionEngine::qmlEngine() const
+{
+    return v8Engine->engine();
+}
+
 ExecutionEngine::ExecutionEngine(EvalISelFactory *factory)
     : current(0)
-    , memoryManager(new QV4::MemoryManager)
+    , memoryManager(new QV4::MemoryManager(this))
     , executableAllocator(new QV4::ExecutableAllocator)
     , regExpAllocator(new QV4::ExecutableAllocator)
     , bumperPointerAllocator(new WTF::BumpPointerAllocator)
     , jsStack(new WTF::PageAllocation)
     , debugger(0)
     , profiler(0)
-    , globalObject(0)
     , globalCode(0)
     , v8Engine(0)
     , argumentsAccessors(0)
@@ -193,14 +227,18 @@ ExecutionEngine::ExecutionEngine(EvalISelFactory *factory)
     }
     iselFactory.reset(factory);
 
-    memoryManager->setExecutionEngine(this);
-
     // reserve space for the JS stack
     // we allow it to grow to 2 times JSStackLimit, as we can overshoot due to garbage collection
     // and ScopedValues allocated outside of JIT'ed methods.
-    *jsStack = WTF::PageAllocation::allocate(2*JSStackLimit, WTF::OSAllocator::JSVMStackPages, true);
+    *jsStack = WTF::PageAllocation::allocate(2 * JSStackLimit, WTF::OSAllocator::JSVMStackPages,
+                                             /* writable */ true, /* executable */ false,
+                                             /* includesGuardPages */ true);
     jsStackBase = (Value *)jsStack->base();
     jsStackTop = jsStackBase;
+
+#ifdef V4_USE_VALGRIND
+    VALGRIND_MAKE_MEM_UNDEFINED(jsStackBase, 2*JSStackLimit);
+#endif
 
     // set up stack limits
     jsStackLimit = jsStackBase + JSStackLimit/sizeof(Value);
@@ -215,10 +253,6 @@ ExecutionEngine::ExecutionEngine(EvalISelFactory *factory)
     classPool = new InternalClassPool;
 
     emptyClass =  new (classPool) InternalClass(this);
-    executionContextClass = InternalClass::create(this, ExecutionContext::staticVTable(), 0);
-    constructClass = InternalClass::create(this, Object::staticVTable(), 0);
-    stringClass = InternalClass::create(this, String::staticVTable(), 0);
-    regExpValueClass = InternalClass::create(this, RegExp::staticVTable(), 0);
 
     id_empty = newIdentifier(QString());
     id_undefined = newIdentifier(QStringLiteral("undefined"));
@@ -252,165 +286,168 @@ ExecutionEngine::ExecutionEngine(EvalISelFactory *factory)
     id_toString = newIdentifier(QStringLiteral("toString"));
     id_destroy = newIdentifier(QStringLiteral("destroy"));
     id_valueOf = newIdentifier(QStringLiteral("valueOf"));
+    id_byteLength = newIdentifier(QStringLiteral("byteLength"));
+    id_byteOffset = newIdentifier(QStringLiteral("byteOffset"));
+    id_buffer = newIdentifier(QStringLiteral("buffer"));
+    id_lastIndex = newIdentifier(QStringLiteral("lastIndex"));
 
-    memberDataClass = InternalClass::create(this, MemberData::staticVTable(), 0);
+    objectPrototype = memoryManager->alloc<ObjectPrototype>(emptyClass, (QV4::Object *)0);
 
-    ScopedObject objectPrototype(scope, memoryManager->alloc<ObjectPrototype>(InternalClass::create(this, ObjectPrototype::staticVTable(), 0)));
-    objectClass = InternalClass::create(this, Object::staticVTable(), objectPrototype);
-    Q_ASSERT(objectClass->vtable == Object::staticVTable());
+    arrayClass = emptyClass->addMember(id_length, Attr_NotConfigurable|Attr_NotEnumerable);
+    arrayPrototype = memoryManager->alloc<ArrayPrototype>(arrayClass, objectPrototype.asObject());
 
-    arrayClass = InternalClass::create(this, ArrayObject::staticVTable(), objectPrototype);
-    arrayClass = arrayClass->addMember(id_length, Attr_NotConfigurable|Attr_NotEnumerable);
-    ScopedObject arrayPrototype(scope, memoryManager->alloc<ArrayPrototype>(arrayClass));
-    arrayClass = arrayClass->changePrototype(arrayPrototype);
-
-    simpleArrayDataClass = InternalClass::create(this, SimpleArrayData::staticVTable(), 0);
-
-    InternalClass *argsClass = InternalClass::create(this, ArgumentsObject::staticVTable(), objectPrototype);
-    argsClass = argsClass->addMember(id_length, Attr_NotEnumerable);
+    InternalClass *argsClass = emptyClass->addMember(id_length, Attr_NotEnumerable);
     argumentsObjectClass = argsClass->addMember(id_callee, Attr_Data|Attr_NotEnumerable);
     strictArgumentsObjectClass = argsClass->addMember(id_callee, Attr_Accessor|Attr_NotConfigurable|Attr_NotEnumerable);
     strictArgumentsObjectClass = strictArgumentsObjectClass->addMember(id_caller, Attr_Accessor|Attr_NotConfigurable|Attr_NotEnumerable);
-    Q_ASSERT(argumentsObjectClass->vtable == ArgumentsObject::staticVTable());
-    Q_ASSERT(strictArgumentsObjectClass->vtable == ArgumentsObject::staticVTable());
 
+    m_globalObject = newObject();
+    Q_ASSERT(globalObject()->d()->vtable);
     initRootContext();
 
-    ScopedObject stringPrototype(scope, memoryManager->alloc<StringPrototype>(InternalClass::create(this, StringPrototype::staticVTable(), objectPrototype)));
-    stringObjectClass = InternalClass::create(this, String::staticVTable(), stringPrototype);
+    stringPrototype = memoryManager->alloc<StringPrototype>(emptyClass, objectPrototype.asObject());
+    numberPrototype = memoryManager->alloc<NumberPrototype>(emptyClass, objectPrototype.asObject());
+    booleanPrototype = memoryManager->alloc<BooleanPrototype>(emptyClass, objectPrototype.asObject());
+    datePrototype = memoryManager->alloc<DatePrototype>(emptyClass, objectPrototype.asObject());
 
-    ScopedObject numberPrototype(scope, memoryManager->alloc<NumberPrototype>(InternalClass::create(this, NumberPrototype::staticVTable(), objectPrototype)));
-    numberClass = InternalClass::create(this, NumberObject::staticVTable(), numberPrototype);
-
-    ScopedObject booleanPrototype(scope, memoryManager->alloc<BooleanPrototype>(InternalClass::create(this, BooleanPrototype::staticVTable(), objectPrototype)));
-    booleanClass = InternalClass::create(this, BooleanObject::staticVTable(), booleanPrototype);
-
-    ScopedObject datePrototype(scope, memoryManager->alloc<DatePrototype>(InternalClass::create(this, DatePrototype::staticVTable(), objectPrototype)));
-    dateClass = InternalClass::create(this, DateObject::staticVTable(), datePrototype);
-
-    InternalClass *functionProtoClass = InternalClass::create(this, FunctionObject::staticVTable(), objectPrototype);
     uint index;
-    functionProtoClass = functionProtoClass->addMember(id_prototype, Attr_NotEnumerable, &index);
-    Q_ASSERT(index == FunctionObject::Index_Prototype);
-    ScopedObject functionPrototype(scope, memoryManager->alloc<FunctionPrototype>(functionProtoClass));
-    functionClass = InternalClass::create(this, FunctionObject::staticVTable(), functionPrototype);
-    functionClass = functionClass->addMember(id_prototype, Attr_NotEnumerable|Attr_NotConfigurable, &index);
-    Q_ASSERT(index == FunctionObject::Index_Prototype);
-    protoClass = objectClass->addMember(id_constructor, Attr_NotEnumerable, &index);
-    Q_ASSERT(index == FunctionObject::Index_ProtoConstructor);
+    InternalClass *functionProtoClass = emptyClass->addMember(id_prototype, Attr_NotEnumerable, &index);
+    Q_ASSERT(index == Heap::FunctionObject::Index_Prototype);
+    functionPrototype = memoryManager->alloc<FunctionPrototype>(functionProtoClass, objectPrototype.asObject());
+    functionClass = emptyClass->addMember(id_prototype, Attr_NotEnumerable|Attr_NotConfigurable, &index);
+    Q_ASSERT(index == Heap::FunctionObject::Index_Prototype);
+    simpleScriptFunctionClass = functionClass->addMember(id_name, Attr_ReadOnly, &index);
+    Q_ASSERT(index == Heap::SimpleScriptFunction::Index_Name);
+    simpleScriptFunctionClass = simpleScriptFunctionClass->addMember(id_length, Attr_ReadOnly, &index);
+    Q_ASSERT(index == Heap::SimpleScriptFunction::Index_Length);
+    protoClass = emptyClass->addMember(id_constructor, Attr_NotEnumerable, &index);
+    Q_ASSERT(index == Heap::FunctionObject::Index_ProtoConstructor);
 
-    Scoped<RegExpPrototype> regExpPrototype(scope, memoryManager->alloc<RegExpPrototype>(InternalClass::create(this, RegExpPrototype::staticVTable(), objectPrototype)));
-    regExpClass = InternalClass::create(this, RegExpObject::staticVTable(), regExpPrototype.getPointer());
+    regExpPrototype = memoryManager->alloc<RegExpPrototype>(this);
     regExpExecArrayClass = arrayClass->addMember(id_index, Attr_Data, &index);
     Q_ASSERT(index == RegExpObject::Index_ArrayIndex);
     regExpExecArrayClass = regExpExecArrayClass->addMember(id_input, Attr_Data, &index);
     Q_ASSERT(index == RegExpObject::Index_ArrayInput);
 
-    ScopedObject errorPrototype(scope, memoryManager->alloc<ErrorPrototype>(InternalClass::create(this, ErrorObject::staticVTable(), objectPrototype)));
-    errorClass = InternalClass::create(this, ErrorObject::staticVTable(), errorPrototype);
-    ScopedObject evalErrorPrototype(scope, memoryManager->alloc<EvalErrorPrototype>(errorClass));
-    evalErrorClass = InternalClass::create(this, EvalErrorObject::staticVTable(), evalErrorPrototype);
-    ScopedObject rangeErrorPrototype(scope, memoryManager->alloc<RangeErrorPrototype>(errorClass));
-    rangeErrorClass = InternalClass::create(this, RangeErrorObject::staticVTable(), rangeErrorPrototype);
-    ScopedObject referenceErrorPrototype(scope, memoryManager->alloc<ReferenceErrorPrototype>(errorClass));
-    referenceErrorClass = InternalClass::create(this, ReferenceErrorObject::staticVTable(), referenceErrorPrototype);
-    ScopedObject syntaxErrorPrototype(scope, memoryManager->alloc<SyntaxErrorPrototype>(errorClass));
-    syntaxErrorClass = InternalClass::create(this, SyntaxErrorObject::staticVTable(), syntaxErrorPrototype);
-    ScopedObject typeErrorPrototype(scope, memoryManager->alloc<TypeErrorPrototype>(errorClass));
-    typeErrorClass = InternalClass::create(this, TypeErrorObject::staticVTable(), typeErrorPrototype);
-    ScopedObject uRIErrorPrototype(scope, memoryManager->alloc<URIErrorPrototype>(errorClass));
-    uriErrorClass = InternalClass::create(this, URIErrorObject::staticVTable(), uRIErrorPrototype);
+    errorPrototype = memoryManager->alloc<ErrorPrototype>(emptyClass, objectPrototype.asObject());
+    evalErrorPrototype = memoryManager->alloc<EvalErrorPrototype>(emptyClass, errorPrototype.asObject());
+    rangeErrorPrototype = memoryManager->alloc<RangeErrorPrototype>(emptyClass, errorPrototype.asObject());
+    referenceErrorPrototype = memoryManager->alloc<ReferenceErrorPrototype>(emptyClass, errorPrototype.asObject());
+    syntaxErrorPrototype = memoryManager->alloc<SyntaxErrorPrototype>(emptyClass, errorPrototype.asObject());
+    typeErrorPrototype = memoryManager->alloc<TypeErrorPrototype>(emptyClass, errorPrototype.asObject());
+    uRIErrorPrototype = memoryManager->alloc<URIErrorPrototype>(emptyClass, errorPrototype.asObject());
 
-    ScopedObject variantPrototype(scope, memoryManager->alloc<VariantPrototype>(InternalClass::create(this, VariantPrototype::staticVTable(), objectPrototype)));
-    variantClass = InternalClass::create(this, VariantObject::staticVTable(), variantPrototype);
-    Q_ASSERT(variantClass->prototype == variantPrototype);
-    Q_ASSERT(variantPrototype->internalClass()->prototype == objectPrototype);
+    variantPrototype = memoryManager->alloc<VariantPrototype>(emptyClass, objectPrototype.asObject());
+    Q_ASSERT(variantPrototype.asObject()->prototype() == objectPrototype.asObject()->d());
 
-    sequencePrototype = ScopedValue(scope, memoryManager->alloc<SequencePrototype>(arrayClass));
+    sequencePrototype = ScopedValue(scope, memoryManager->alloc<SequencePrototype>(arrayClass, arrayPrototype.asObject()));
 
-    objectCtor = memoryManager->alloc<ObjectCtor>(rootContext);
-    stringCtor = memoryManager->alloc<StringCtor>(rootContext);
-    numberCtor = memoryManager->alloc<NumberCtor>(rootContext);
-    booleanCtor = memoryManager->alloc<BooleanCtor>(rootContext);
-    arrayCtor = memoryManager->alloc<ArrayCtor>(rootContext);
-    functionCtor = memoryManager->alloc<FunctionCtor>(rootContext);
-    dateCtor = memoryManager->alloc<DateCtor>(rootContext);
-    regExpCtor = memoryManager->alloc<RegExpCtor>(rootContext);
-    errorCtor = memoryManager->alloc<ErrorCtor>(rootContext);
-    evalErrorCtor = memoryManager->alloc<EvalErrorCtor>(rootContext);
-    rangeErrorCtor = memoryManager->alloc<RangeErrorCtor>(rootContext);
-    referenceErrorCtor = memoryManager->alloc<ReferenceErrorCtor>(rootContext);
-    syntaxErrorCtor = memoryManager->alloc<SyntaxErrorCtor>(rootContext);
-    typeErrorCtor = memoryManager->alloc<TypeErrorCtor>(rootContext);
-    uRIErrorCtor = memoryManager->alloc<URIErrorCtor>(rootContext);
+    ScopedContext global(scope, rootContext());
+    objectCtor = memoryManager->alloc<ObjectCtor>(global);
+    stringCtor = memoryManager->alloc<StringCtor>(global);
+    numberCtor = memoryManager->alloc<NumberCtor>(global);
+    booleanCtor = memoryManager->alloc<BooleanCtor>(global);
+    arrayCtor = memoryManager->alloc<ArrayCtor>(global);
+    functionCtor = memoryManager->alloc<FunctionCtor>(global);
+    dateCtor = memoryManager->alloc<DateCtor>(global);
+    regExpCtor = memoryManager->alloc<RegExpCtor>(global);
+    errorCtor = memoryManager->alloc<ErrorCtor>(global);
+    evalErrorCtor = memoryManager->alloc<EvalErrorCtor>(global);
+    rangeErrorCtor = memoryManager->alloc<RangeErrorCtor>(global);
+    referenceErrorCtor = memoryManager->alloc<ReferenceErrorCtor>(global);
+    syntaxErrorCtor = memoryManager->alloc<SyntaxErrorCtor>(global);
+    typeErrorCtor = memoryManager->alloc<TypeErrorCtor>(global);
+    uRIErrorCtor = memoryManager->alloc<URIErrorCtor>(global);
 
-    static_cast<ObjectPrototype *>(objectPrototype.getPointer())->init(this, objectCtor.asObject());
-    static_cast<StringPrototype *>(stringPrototype.getPointer())->init(this, stringCtor.asObject());
-    static_cast<NumberPrototype *>(numberPrototype.getPointer())->init(this, numberCtor.asObject());
-    static_cast<BooleanPrototype *>(booleanPrototype.getPointer())->init(this, booleanCtor.asObject());
-    static_cast<ArrayPrototype *>(arrayPrototype.getPointer())->init(this, arrayCtor.asObject());
-    static_cast<DatePrototype *>(datePrototype.getPointer())->init(this, dateCtor.asObject());
-    static_cast<FunctionPrototype *>(functionPrototype.getPointer())->init(this, functionCtor.asObject());
-    static_cast<RegExpPrototype *>(regExpPrototype.getPointer())->init(this, regExpCtor.asObject());
-    static_cast<ErrorPrototype *>(errorPrototype.getPointer())->init(this, errorCtor.asObject());
-    static_cast<EvalErrorPrototype *>(evalErrorPrototype.getPointer())->init(this, evalErrorCtor.asObject());
-    static_cast<RangeErrorPrototype *>(rangeErrorPrototype.getPointer())->init(this, rangeErrorCtor.asObject());
-    static_cast<ReferenceErrorPrototype *>(referenceErrorPrototype.getPointer())->init(this, referenceErrorCtor.asObject());
-    static_cast<SyntaxErrorPrototype *>(syntaxErrorPrototype.getPointer())->init(this, syntaxErrorCtor.asObject());
-    static_cast<TypeErrorPrototype *>(typeErrorPrototype.getPointer())->init(this, typeErrorCtor.asObject());
-    static_cast<URIErrorPrototype *>(uRIErrorPrototype.getPointer())->init(this, uRIErrorCtor.asObject());
+    static_cast<ObjectPrototype *>(objectPrototype.asObject())->init(this, objectCtor.asObject());
+    static_cast<StringPrototype *>(stringPrototype.asObject())->init(this, stringCtor.asObject());
+    static_cast<NumberPrototype *>(numberPrototype.asObject())->init(this, numberCtor.asObject());
+    static_cast<BooleanPrototype *>(booleanPrototype.asObject())->init(this, booleanCtor.asObject());
+    static_cast<ArrayPrototype *>(arrayPrototype.asObject())->init(this, arrayCtor.asObject());
+    static_cast<DatePrototype *>(datePrototype.asObject())->init(this, dateCtor.asObject());
+    static_cast<FunctionPrototype *>(functionPrototype.asObject())->init(this, functionCtor.asObject());
+    static_cast<RegExpPrototype *>(regExpPrototype.asObject())->init(this, regExpCtor.asObject());
+    static_cast<ErrorPrototype *>(errorPrototype.asObject())->init(this, errorCtor.asObject());
+    static_cast<EvalErrorPrototype *>(evalErrorPrototype.asObject())->init(this, evalErrorCtor.asObject());
+    static_cast<RangeErrorPrototype *>(rangeErrorPrototype.asObject())->init(this, rangeErrorCtor.asObject());
+    static_cast<ReferenceErrorPrototype *>(referenceErrorPrototype.asObject())->init(this, referenceErrorCtor.asObject());
+    static_cast<SyntaxErrorPrototype *>(syntaxErrorPrototype.asObject())->init(this, syntaxErrorCtor.asObject());
+    static_cast<TypeErrorPrototype *>(typeErrorPrototype.asObject())->init(this, typeErrorCtor.asObject());
+    static_cast<URIErrorPrototype *>(uRIErrorPrototype.asObject())->init(this, uRIErrorCtor.asObject());
 
-    static_cast<VariantPrototype *>(variantPrototype.getPointer())->init();
-    static_cast<SequencePrototype *>(sequencePrototype.managed())->init();
+    static_cast<VariantPrototype *>(variantPrototype.asObject())->init();
+    sequencePrototype.cast<SequencePrototype>()->init();
+
+
+    // typed arrays
+
+    arrayBufferCtor = memoryManager->alloc<ArrayBufferCtor>(global);
+    arrayBufferPrototype = memoryManager->alloc<ArrayBufferPrototype>(emptyClass, objectPrototype.asObject());
+    static_cast<ArrayBufferPrototype *>(arrayBufferPrototype.asObject())->init(this, arrayBufferCtor.asObject());
+
+    dataViewCtor = memoryManager->alloc<DataViewCtor>(global);
+    dataViewPrototype = memoryManager->alloc<DataViewPrototype>(emptyClass, objectPrototype.asObject());
+    static_cast<DataViewPrototype *>(dataViewPrototype.asObject())->init(this, dataViewCtor.asObject());
+
+    for (int i = 0; i < Heap::TypedArray::NTypes; ++i) {
+        typedArrayCtors[i] = memoryManager->alloc<TypedArrayCtor>(global, Heap::TypedArray::Type(i));
+        typedArrayPrototype[i] = memoryManager->alloc<TypedArrayPrototype>(this, Heap::TypedArray::Type(i));
+        typedArrayPrototype[i].as<TypedArrayPrototype>()->init(this, static_cast<TypedArrayCtor *>(typedArrayCtors[i].asObject()));
+    }
 
     //
     // set up the global object
     //
-    globalObject = newObject()->getPointer();
-    rootContext->d()->global = globalObject;
-    rootContext->d()->callData->thisObject = globalObject;
-    Q_ASSERT(globalObject->internalClass()->vtable);
+    rootContext()->global = globalObject()->d();
+    rootContext()->callData->thisObject = globalObject();
+    Q_ASSERT(globalObject()->d()->vtable);
 
-    globalObject->defineDefaultProperty(QStringLiteral("Object"), objectCtor);
-    globalObject->defineDefaultProperty(QStringLiteral("String"), stringCtor);
-    globalObject->defineDefaultProperty(QStringLiteral("Number"), numberCtor);
-    globalObject->defineDefaultProperty(QStringLiteral("Boolean"), booleanCtor);
-    globalObject->defineDefaultProperty(QStringLiteral("Array"), arrayCtor);
-    globalObject->defineDefaultProperty(QStringLiteral("Function"), functionCtor);
-    globalObject->defineDefaultProperty(QStringLiteral("Date"), dateCtor);
-    globalObject->defineDefaultProperty(QStringLiteral("RegExp"), regExpCtor);
-    globalObject->defineDefaultProperty(QStringLiteral("Error"), errorCtor);
-    globalObject->defineDefaultProperty(QStringLiteral("EvalError"), evalErrorCtor);
-    globalObject->defineDefaultProperty(QStringLiteral("RangeError"), rangeErrorCtor);
-    globalObject->defineDefaultProperty(QStringLiteral("ReferenceError"), referenceErrorCtor);
-    globalObject->defineDefaultProperty(QStringLiteral("SyntaxError"), syntaxErrorCtor);
-    globalObject->defineDefaultProperty(QStringLiteral("TypeError"), typeErrorCtor);
-    globalObject->defineDefaultProperty(QStringLiteral("URIError"), uRIErrorCtor);
+    globalObject()->defineDefaultProperty(QStringLiteral("Object"), objectCtor);
+    globalObject()->defineDefaultProperty(QStringLiteral("String"), stringCtor);
+    globalObject()->defineDefaultProperty(QStringLiteral("Number"), numberCtor);
+    globalObject()->defineDefaultProperty(QStringLiteral("Boolean"), booleanCtor);
+    globalObject()->defineDefaultProperty(QStringLiteral("Array"), arrayCtor);
+    globalObject()->defineDefaultProperty(QStringLiteral("Function"), functionCtor);
+    globalObject()->defineDefaultProperty(QStringLiteral("Date"), dateCtor);
+    globalObject()->defineDefaultProperty(QStringLiteral("RegExp"), regExpCtor);
+    globalObject()->defineDefaultProperty(QStringLiteral("Error"), errorCtor);
+    globalObject()->defineDefaultProperty(QStringLiteral("EvalError"), evalErrorCtor);
+    globalObject()->defineDefaultProperty(QStringLiteral("RangeError"), rangeErrorCtor);
+    globalObject()->defineDefaultProperty(QStringLiteral("ReferenceError"), referenceErrorCtor);
+    globalObject()->defineDefaultProperty(QStringLiteral("SyntaxError"), syntaxErrorCtor);
+    globalObject()->defineDefaultProperty(QStringLiteral("TypeError"), typeErrorCtor);
+    globalObject()->defineDefaultProperty(QStringLiteral("URIError"), uRIErrorCtor);
+
+    globalObject()->defineDefaultProperty(QStringLiteral("ArrayBuffer"), arrayBufferCtor);
+    globalObject()->defineDefaultProperty(QStringLiteral("DataView"), dataViewCtor);
+    ScopedString str(scope);
+    for (int i = 0; i < Heap::TypedArray::NTypes; ++i)
+        globalObject()->defineDefaultProperty((str = typedArrayCtors[i].asFunctionObject()->name())->toQString(), typedArrayCtors[i]);
     ScopedObject o(scope);
-    globalObject->defineDefaultProperty(QStringLiteral("Math"), (o = memoryManager->alloc<MathObject>(QV4::InternalClass::create(this, MathObject::staticVTable(), objectPrototype))));
-    globalObject->defineDefaultProperty(QStringLiteral("JSON"), (o = memoryManager->alloc<JsonObject>(QV4::InternalClass::create(this, JsonObject::staticVTable(), objectPrototype))));
+    globalObject()->defineDefaultProperty(QStringLiteral("Math"), (o = memoryManager->alloc<MathObject>(this)));
+    globalObject()->defineDefaultProperty(QStringLiteral("JSON"), (o = memoryManager->alloc<JsonObject>(this)));
 
-    globalObject->defineReadonlyProperty(QStringLiteral("undefined"), Primitive::undefinedValue());
-    globalObject->defineReadonlyProperty(QStringLiteral("NaN"), Primitive::fromDouble(std::numeric_limits<double>::quiet_NaN()));
-    globalObject->defineReadonlyProperty(QStringLiteral("Infinity"), Primitive::fromDouble(Q_INFINITY));
+    globalObject()->defineReadonlyProperty(QStringLiteral("undefined"), Primitive::undefinedValue());
+    globalObject()->defineReadonlyProperty(QStringLiteral("NaN"), Primitive::fromDouble(std::numeric_limits<double>::quiet_NaN()));
+    globalObject()->defineReadonlyProperty(QStringLiteral("Infinity"), Primitive::fromDouble(Q_INFINITY));
 
 
-    evalFunction = Scoped<EvalFunction>(scope, memoryManager->alloc<EvalFunction>(rootContext));
-    globalObject->defineDefaultProperty(QStringLiteral("eval"), (o = evalFunction));
+    evalFunction = memoryManager->alloc<EvalFunction>(global);
+    globalObject()->defineDefaultProperty(QStringLiteral("eval"), (o = evalFunction));
 
-    globalObject->defineDefaultProperty(QStringLiteral("parseInt"), GlobalFunctions::method_parseInt, 2);
-    globalObject->defineDefaultProperty(QStringLiteral("parseFloat"), GlobalFunctions::method_parseFloat, 1);
-    globalObject->defineDefaultProperty(QStringLiteral("isNaN"), GlobalFunctions::method_isNaN, 1);
-    globalObject->defineDefaultProperty(QStringLiteral("isFinite"), GlobalFunctions::method_isFinite, 1);
-    globalObject->defineDefaultProperty(QStringLiteral("decodeURI"), GlobalFunctions::method_decodeURI, 1);
-    globalObject->defineDefaultProperty(QStringLiteral("decodeURIComponent"), GlobalFunctions::method_decodeURIComponent, 1);
-    globalObject->defineDefaultProperty(QStringLiteral("encodeURI"), GlobalFunctions::method_encodeURI, 1);
-    globalObject->defineDefaultProperty(QStringLiteral("encodeURIComponent"), GlobalFunctions::method_encodeURIComponent, 1);
-    globalObject->defineDefaultProperty(QStringLiteral("escape"), GlobalFunctions::method_escape, 1);
-    globalObject->defineDefaultProperty(QStringLiteral("unescape"), GlobalFunctions::method_unescape, 1);
+    globalObject()->defineDefaultProperty(QStringLiteral("parseInt"), GlobalFunctions::method_parseInt, 2);
+    globalObject()->defineDefaultProperty(QStringLiteral("parseFloat"), GlobalFunctions::method_parseFloat, 1);
+    globalObject()->defineDefaultProperty(QStringLiteral("isNaN"), GlobalFunctions::method_isNaN, 1);
+    globalObject()->defineDefaultProperty(QStringLiteral("isFinite"), GlobalFunctions::method_isFinite, 1);
+    globalObject()->defineDefaultProperty(QStringLiteral("decodeURI"), GlobalFunctions::method_decodeURI, 1);
+    globalObject()->defineDefaultProperty(QStringLiteral("decodeURIComponent"), GlobalFunctions::method_decodeURIComponent, 1);
+    globalObject()->defineDefaultProperty(QStringLiteral("encodeURI"), GlobalFunctions::method_encodeURI, 1);
+    globalObject()->defineDefaultProperty(QStringLiteral("encodeURIComponent"), GlobalFunctions::method_encodeURIComponent, 1);
+    globalObject()->defineDefaultProperty(QStringLiteral("escape"), GlobalFunctions::method_escape, 1);
+    globalObject()->defineDefaultProperty(QStringLiteral("unescape"), GlobalFunctions::method_unescape, 1);
 
-    Scoped<String> name(scope, newString(QStringLiteral("thrower")));
-    thrower = ScopedFunctionObject(scope, BuiltinFunction::create(rootContext, name.getPointer(), throwTypeError)).getPointer();
+    ScopedString name(scope, newString(QStringLiteral("thrower")));
+    thrower = BuiltinFunction::create(global, name, ::throwTypeError);
 }
 
 ExecutionEngine::~ExecutionEngine()
@@ -456,15 +493,16 @@ void ExecutionEngine::enableProfiler()
 
 void ExecutionEngine::initRootContext()
 {
-    GlobalContext *r = static_cast<GlobalContext*>(memoryManager->allocManaged(sizeof(GlobalContext::Data) + sizeof(CallData)));
+    Scope scope(this);
+    Scoped<GlobalContext> r(scope, memoryManager->allocManaged<GlobalContext>(sizeof(GlobalContext::Data) + sizeof(CallData)));
     new (r->d()) GlobalContext::Data(this);
     r->d()->callData = reinterpret_cast<CallData *>(r->d() + 1);
     r->d()->callData->tag = QV4::Value::_Integer_Type;
     r->d()->callData->argc = 0;
-    r->d()->callData->thisObject = globalObject;
+    r->d()->callData->thisObject = globalObject();
     r->d()->callData->args[0] = Encode::undefined();
 
-    rootContext = r;
+    m_rootContext = r->d();
 }
 
 InternalClass *ExecutionEngine::newClass(const InternalClass &other)
@@ -472,63 +510,64 @@ InternalClass *ExecutionEngine::newClass(const InternalClass &other)
     return new (classPool) InternalClass(other);
 }
 
-ExecutionContext *ExecutionEngine::pushGlobalContext()
+Heap::ExecutionContext *ExecutionEngine::pushGlobalContext()
 {
-    GlobalContext *g = memoryManager->alloc<GlobalContext>(this);
-    g->d()->callData = rootContext->d()->callData;
+    Scope scope(this);
+    Scoped<GlobalContext> g(scope, memoryManager->alloc<GlobalContext>(this));
+    g->d()->callData = rootContext()->callData;
 
-    Q_ASSERT(currentContext() == g);
-    return g;
+    Q_ASSERT(currentContext() == g->d());
+    return g->d();
 }
 
 
-Returned<Object> *ExecutionEngine::newObject()
+Heap::Object *ExecutionEngine::newObject()
 {
     Scope scope(this);
     ScopedObject object(scope, memoryManager->alloc<Object>(this));
-    return object->asReturned<Object>();
+    return object->d();
 }
 
-Returned<Object> *ExecutionEngine::newObject(InternalClass *internalClass)
+Heap::Object *ExecutionEngine::newObject(InternalClass *internalClass, QV4::Object *prototype)
 {
     Scope scope(this);
-    ScopedObject object(scope, memoryManager->alloc<Object>(internalClass));
-    return object->asReturned<Object>();
+    ScopedObject object(scope, memoryManager->alloc<Object>(internalClass, prototype));
+    return object->d();
 }
 
-Returned<String> *ExecutionEngine::newString(const QString &s)
+Heap::String *ExecutionEngine::newString(const QString &s)
 {
     Scope scope(this);
-    return ScopedString(scope, memoryManager->alloc<String>(this, s))->asReturned<String>();
+    return ScopedString(scope, memoryManager->alloc<String>(s))->d();
 }
 
-String *ExecutionEngine::newIdentifier(const QString &text)
+Heap::String *ExecutionEngine::newIdentifier(const QString &text)
 {
     return identifierTable->insertString(text);
 }
 
-Returned<Object> *ExecutionEngine::newStringObject(const ValueRef value)
+Heap::Object *ExecutionEngine::newStringObject(const Value &value)
 {
     Scope scope(this);
     Scoped<StringObject> object(scope, memoryManager->alloc<StringObject>(this, value));
-    return object->asReturned<Object>();
+    return object->d();
 }
 
-Returned<Object> *ExecutionEngine::newNumberObject(const ValueRef value)
+Heap::Object *ExecutionEngine::newNumberObject(double value)
 {
     Scope scope(this);
     Scoped<NumberObject> object(scope, memoryManager->alloc<NumberObject>(this, value));
-    return object->asReturned<Object>();
+    return object->d();
 }
 
-Returned<Object> *ExecutionEngine::newBooleanObject(const ValueRef value)
+Heap::Object *ExecutionEngine::newBooleanObject(bool b)
 {
     Scope scope(this);
-    ScopedObject object(scope, memoryManager->alloc<BooleanObject>(this, value));
-    return object->asReturned<Object>();
+    ScopedObject object(scope, memoryManager->alloc<BooleanObject>(this, b));
+    return object->d();
 }
 
-Returned<ArrayObject> *ExecutionEngine::newArrayObject(int count)
+Heap::ArrayObject *ExecutionEngine::newArrayObject(int count)
 {
     Scope scope(this);
     ScopedArrayObject object(scope, memoryManager->alloc<ArrayObject>(this));
@@ -538,39 +577,46 @@ Returned<ArrayObject> *ExecutionEngine::newArrayObject(int count)
             object->arrayReserve(count);
         object->setArrayLengthUnchecked(count);
     }
-    return object->asReturned<ArrayObject>();
+    return object->d();
 }
 
-Returned<ArrayObject> *ExecutionEngine::newArrayObject(const QStringList &list)
+Heap::ArrayObject *ExecutionEngine::newArrayObject(const QStringList &list)
 {
     Scope scope(this);
     ScopedArrayObject object(scope, memoryManager->alloc<ArrayObject>(this, list));
-    return object->asReturned<ArrayObject>();
+    return object->d();
 }
 
-Returned<ArrayObject> *ExecutionEngine::newArrayObject(InternalClass *ic)
+Heap::ArrayObject *ExecutionEngine::newArrayObject(InternalClass *ic, Object *prototype)
 {
     Scope scope(this);
-    ScopedArrayObject object(scope, memoryManager->alloc<ArrayObject>(ic));
-    return object->asReturned<ArrayObject>();
+    ScopedArrayObject object(scope, memoryManager->alloc<ArrayObject>(ic, prototype));
+    return object->d();
+}
+
+Heap::ArrayBuffer *ExecutionEngine::newArrayBuffer(const QByteArray &array)
+{
+    Scope scope(this);
+    Scoped<ArrayBuffer> object(scope, memoryManager->alloc<ArrayBuffer>(this, array));
+    return object->d();
 }
 
 
-Returned<DateObject> *ExecutionEngine::newDateObject(const ValueRef value)
+Heap::DateObject *ExecutionEngine::newDateObject(const Value &value)
 {
     Scope scope(this);
     Scoped<DateObject> object(scope, memoryManager->alloc<DateObject>(this, value));
-    return object->asReturned<DateObject>();
+    return object->d();
 }
 
-Returned<DateObject> *ExecutionEngine::newDateObject(const QDateTime &dt)
+Heap::DateObject *ExecutionEngine::newDateObject(const QDateTime &dt)
 {
     Scope scope(this);
     Scoped<DateObject> object(scope, memoryManager->alloc<DateObject>(this, dt));
-    return object->asReturned<DateObject>();
+    return object->d();
 }
 
-Returned<RegExpObject> *ExecutionEngine::newRegExpObject(const QString &pattern, int flags)
+Heap::RegExpObject *ExecutionEngine::newRegExpObject(const QString &pattern, int flags)
 {
     bool global = (flags & IR::RegExp::RegExp_Global);
     bool ignoreCase = false;
@@ -585,122 +631,125 @@ Returned<RegExpObject> *ExecutionEngine::newRegExpObject(const QString &pattern,
     return newRegExpObject(re, global);
 }
 
-Returned<RegExpObject> *ExecutionEngine::newRegExpObject(RegExp *re, bool global)
+Heap::RegExpObject *ExecutionEngine::newRegExpObject(RegExp *re, bool global)
 {
     Scope scope(this);
     Scoped<RegExpObject> object(scope, memoryManager->alloc<RegExpObject>(this, re, global));
-    return object->asReturned<RegExpObject>();
+    return object->d();
 }
 
-Returned<RegExpObject> *ExecutionEngine::newRegExpObject(const QRegExp &re)
+Heap::RegExpObject *ExecutionEngine::newRegExpObject(const QRegExp &re)
 {
     Scope scope(this);
     Scoped<RegExpObject> object(scope, memoryManager->alloc<RegExpObject>(this, re));
-    return object->asReturned<RegExpObject>();
+    return object->d();
 }
 
-Returned<Object> *ExecutionEngine::newErrorObject(const ValueRef value)
+Heap::Object *ExecutionEngine::newErrorObject(const Value &value)
 {
     Scope scope(this);
-    ScopedObject object(scope, memoryManager->alloc<ErrorObject>(errorClass, value));
-    return object->asReturned<Object>();
+    ScopedObject object(scope, memoryManager->alloc<ErrorObject>(emptyClass, errorPrototype.asObject(), value));
+    return object->d();
 }
 
-Returned<Object> *ExecutionEngine::newSyntaxErrorObject(const QString &message)
+Heap::Object *ExecutionEngine::newSyntaxErrorObject(const QString &message)
 {
     Scope scope(this);
     ScopedString s(scope, newString(message));
     ScopedObject error(scope, memoryManager->alloc<SyntaxErrorObject>(this, s));
-    return error->asReturned<Object>();
+    return error->d();
 }
 
-Returned<Object> *ExecutionEngine::newSyntaxErrorObject(const QString &message, const QString &fileName, int line, int column)
+Heap::Object *ExecutionEngine::newSyntaxErrorObject(const QString &message, const QString &fileName, int line, int column)
 {
     Scope scope(this);
     ScopedObject error(scope, memoryManager->alloc<SyntaxErrorObject>(this, message, fileName, line, column));
-    return error->asReturned<Object>();
+    return error->d();
 }
 
 
-Returned<Object> *ExecutionEngine::newReferenceErrorObject(const QString &message)
+Heap::Object *ExecutionEngine::newReferenceErrorObject(const QString &message)
 {
     Scope scope(this);
     ScopedObject o(scope, memoryManager->alloc<ReferenceErrorObject>(this, message));
-    return o->asReturned<Object>();
+    return o->d();
 }
 
-Returned<Object> *ExecutionEngine::newReferenceErrorObject(const QString &message, const QString &fileName, int lineNumber, int columnNumber)
+Heap::Object *ExecutionEngine::newReferenceErrorObject(const QString &message, const QString &fileName, int lineNumber, int columnNumber)
 {
     Scope scope(this);
     ScopedObject o(scope, memoryManager->alloc<ReferenceErrorObject>(this, message, fileName, lineNumber, columnNumber));
-    return o->asReturned<Object>();
+    return o->d();
 }
 
 
-Returned<Object> *ExecutionEngine::newTypeErrorObject(const QString &message)
+Heap::Object *ExecutionEngine::newTypeErrorObject(const QString &message)
 {
     Scope scope(this);
     ScopedObject o(scope, memoryManager->alloc<TypeErrorObject>(this, message));
-    return o->asReturned<Object>();
+    return o->d();
 }
 
-Returned<Object> *ExecutionEngine::newRangeErrorObject(const QString &message)
+Heap::Object *ExecutionEngine::newRangeErrorObject(const QString &message)
 {
     Scope scope(this);
     ScopedObject o(scope, memoryManager->alloc<RangeErrorObject>(this, message));
-    return o->asReturned<Object>();
+    return o->d();
 }
 
-Returned<Object> *ExecutionEngine::newURIErrorObject(const ValueRef message)
+Heap::Object *ExecutionEngine::newURIErrorObject(const Value &message)
 {
     Scope scope(this);
     ScopedObject o(scope, memoryManager->alloc<URIErrorObject>(this, message));
-    return o->asReturned<Object>();
+    return o->d();
 }
 
-Returned<Object> *ExecutionEngine::newVariantObject(const QVariant &v)
+Heap::Object *ExecutionEngine::newVariantObject(const QVariant &v)
 {
     Scope scope(this);
     ScopedObject o(scope, memoryManager->alloc<VariantObject>(this, v));
-    return o->asReturned<Object>();
+    return o->d();
 }
 
-Returned<Object> *ExecutionEngine::newForEachIteratorObject(ExecutionContext *ctx, Object *o)
+Heap::Object *ExecutionEngine::newForEachIteratorObject(Object *o)
 {
     Scope scope(this);
-    ScopedObject obj(scope, memoryManager->alloc<ForEachIteratorObject>(ctx, o));
-    return obj->asReturned<Object>();
+    ScopedObject obj(scope, memoryManager->alloc<ForEachIteratorObject>(this, o));
+    return obj->d();
 }
 
-Returned<Object> *ExecutionEngine::qmlContextObject() const
+Heap::Object *ExecutionEngine::qmlContextObject() const
 {
-    ExecutionContext *ctx = currentContext();
+    Heap::ExecutionContext *ctx = currentContext();
 
-    if (ctx->d()->type == QV4::ExecutionContext::Type_SimpleCallContext && !ctx->d()->outer)
-        ctx = ctx->d()->parent;
+    if (ctx->type == Heap::ExecutionContext::Type_SimpleCallContext && !ctx->outer)
+        ctx = ctx->parent;
 
-    if (!ctx->d()->outer)
+    if (!ctx->outer)
         return 0;
 
-    while (ctx->d()->outer && ctx->d()->outer->d()->type != ExecutionContext::Type_GlobalContext)
-        ctx = ctx->d()->outer;
+    while (ctx->outer && ctx->outer->type != Heap::ExecutionContext::Type_GlobalContext)
+        ctx = ctx->outer;
 
     Q_ASSERT(ctx);
-    if (ctx->d()->type != ExecutionContext::Type_QmlContext)
+    if (ctx->type != Heap::ExecutionContext::Type_QmlContext)
         return 0;
 
-    return static_cast<CallContext *>(ctx)->d()->activation->asReturned<Object>();
+    Q_ASSERT(static_cast<Heap::CallContext *>(ctx)->activation);
+    return static_cast<Heap::CallContext *>(ctx)->activation;
 }
 
 QVector<StackFrame> ExecutionEngine::stackTrace(int frameLimit) const
 {
-    Scope scope(this->currentContext());
+    Scope scope(const_cast<ExecutionEngine *>(this));
     ScopedString name(scope);
     QVector<StackFrame> stack;
 
-    QV4::ExecutionContext *c = currentContext();
+    ScopedContext c(scope, currentContext());
+    ScopedFunctionObject function(scope);
     while (c && frameLimit) {
-        if (FunctionObject *function = c->getFunctionObject()) {
+        function = c->getFunctionObject();
+        if (function) {
             StackFrame frame;
             if (const Function *f = function->function())
                 frame.source = f->sourceFile();
@@ -723,7 +772,7 @@ QVector<StackFrame> ExecutionEngine::stackTrace(int frameLimit) const
         StackFrame frame;
         frame.source = globalCode->sourceFile();
         frame.function = globalCode->name()->toQString();
-        frame.line = rootContext->d()->lineNumber;
+        frame.line = rootContext()->lineNumber;
         frame.column = -1;
 
         stack.append(frame);
@@ -784,12 +833,13 @@ QUrl ExecutionEngine::resolvedUrl(const QString &file)
         return src;
 
     QUrl base;
-    QV4::ExecutionContext *c = currentContext();
+    Scope scope(this);
+    ScopedContext c(scope, currentContext());
     while (c) {
         CallContext *callCtx = c->asCallContext();
         if (callCtx && callCtx->d()->function) {
-            if (callCtx->d()->function->function())
-                base.setUrl(callCtx->d()->function->function()->sourceFile());
+            if (callCtx->d()->function->function)
+                base.setUrl(callCtx->d()->function->function->sourceFile());
             break;
         }
         c = c->d()->parent;
@@ -822,9 +872,10 @@ void ExecutionEngine::requireArgumentsAccessors(int n)
             memcpy(argumentsAccessors, oldAccessors, oldSize*sizeof(Property));
             delete [] oldAccessors;
         }
+        ScopedContext global(scope, scope.engine->rootContext());
         for (int i = oldSize; i < nArgumentsAccessors; ++i) {
-            argumentsAccessors[i].value = ScopedValue(scope, memoryManager->alloc<ArgumentsGetterFunction>(rootContext, i));
-            argumentsAccessors[i].set = ScopedValue(scope, memoryManager->alloc<ArgumentsSetterFunction>(rootContext, i));
+            argumentsAccessors[i].value = ScopedValue(scope, memoryManager->alloc<ArgumentsGetterFunction>(global, i));
+            argumentsAccessors[i].set = ScopedValue(scope, memoryManager->alloc<ArgumentsSetterFunction>(global, i));
         }
     }
 }
@@ -833,24 +884,24 @@ void ExecutionEngine::markObjects()
 {
     identifierTable->mark(this);
 
-    globalObject->mark(this);
+    globalObject()->mark(this);
 
     for (int i = 0; i < nArgumentsAccessors; ++i) {
         const Property &pd = argumentsAccessors[i];
-        if (FunctionObject *getter = pd.getter())
+        if (Heap::FunctionObject *getter = pd.getter())
             getter->mark(this);
-        if (FunctionObject *setter = pd.setter())
+        if (Heap::FunctionObject *setter = pd.setter())
             setter->mark(this);
     }
 
-    ExecutionContext *c = currentContext();
+    Heap::ExecutionContext *c = currentContext();
     while (c) {
         Q_ASSERT(c->inUse());
-        if (!c->markBit()) {
-            c->d()->markBit = 1;
-            c->markObjects(c, this);
+        if (!c->isMarked()) {
+            c->setMarkBit();
+            c->gcGetVtable()->markObjects(c, this);
         }
-        c = c->d()->parent;
+        c = c->parent;
     }
 
     id_empty->mark(this);
@@ -885,6 +936,10 @@ void ExecutionEngine::markObjects()
     id_toString->mark(this);
     id_destroy->mark(this);
     id_valueOf->mark(this);
+    id_byteLength->mark(this);
+    id_byteOffset->mark(this);
+    id_buffer->mark(this);
+    id_lastIndex->mark(this);
 
     objectCtor.mark(this);
     stringCtor.mark(this);
@@ -901,7 +956,33 @@ void ExecutionEngine::markObjects()
     syntaxErrorCtor.mark(this);
     typeErrorCtor.mark(this);
     uRIErrorCtor.mark(this);
+    arrayBufferCtor.mark(this);
+    dataViewCtor.mark(this);
+    for (int i = 0; i < Heap::TypedArray::NTypes; ++i)
+        typedArrayCtors[i].mark(this);
+
+    objectPrototype.mark(this);
+    arrayPrototype.mark(this);
+    stringPrototype.mark(this);
+    numberPrototype.mark(this);
+    booleanPrototype.mark(this);
+    datePrototype.mark(this);
+    functionPrototype.mark(this);
+    regExpPrototype.mark(this);
+    errorPrototype.mark(this);
+    evalErrorPrototype.mark(this);
+    rangeErrorPrototype.mark(this);
+    referenceErrorPrototype.mark(this);
+    syntaxErrorPrototype.mark(this);
+    typeErrorPrototype.mark(this);
+    uRIErrorPrototype.mark(this);
+    variantPrototype.mark(this);
     sequencePrototype.mark(this);
+
+    arrayBufferPrototype.mark(this);
+    dataViewPrototype.mark(this);
+    for (int i = 0; i < Heap::TypedArray::NTypes; ++i)
+        typedArrayPrototype[i].mark(this);
 
     exceptionValue.mark(this);
 
@@ -924,7 +1005,7 @@ QmlExtensions *ExecutionEngine::qmlExtensions()
     return m_qmlExtensions;
 }
 
-ReturnedValue ExecutionEngine::throwException(const ValueRef value)
+ReturnedValue ExecutionEngine::throwError(const Value &value)
 {
     // we can get in here with an exception already set, as the runtime
     // doesn't check after every operation that can throw.
@@ -948,11 +1029,9 @@ ReturnedValue ExecutionEngine::throwException(const ValueRef value)
     return Encode::undefined();
 }
 
-ReturnedValue ExecutionEngine::catchException(ExecutionContext *catchingContext, StackTrace *trace)
+ReturnedValue ExecutionEngine::catchException(StackTrace *trace)
 {
     Q_ASSERT(hasException);
-    Q_UNUSED(catchingContext);
-    Q_ASSERT(currentContext() == catchingContext);
     if (trace)
         *trace = exceptionStackTrace;
     exceptionStackTrace.clear();
@@ -962,11 +1041,97 @@ ReturnedValue ExecutionEngine::catchException(ExecutionContext *catchingContext,
     return res;
 }
 
-QQmlError ExecutionEngine::catchExceptionAsQmlError(ExecutionContext *context)
+ReturnedValue ExecutionEngine::throwError(const QString &message)
+{
+    Scope scope(this);
+    ScopedValue v(scope, newString(message));
+    v = newErrorObject(v);
+    return throwError(v);
+}
+
+ReturnedValue ExecutionEngine::throwSyntaxError(const QString &message, const QString &fileName, int line, int column)
+{
+    Scope scope(this);
+    ScopedObject error(scope, newSyntaxErrorObject(message, fileName, line, column));
+    return throwError(error);
+}
+
+ReturnedValue ExecutionEngine::throwSyntaxError(const QString &message)
+{
+    Scope scope(this);
+    ScopedObject error(scope, newSyntaxErrorObject(message));
+    return throwError(error);
+}
+
+
+ReturnedValue ExecutionEngine::throwTypeError()
+{
+    Scope scope(this);
+    ScopedObject error(scope, newTypeErrorObject(QStringLiteral("Type error")));
+    return throwError(error);
+}
+
+ReturnedValue ExecutionEngine::throwTypeError(const QString &message)
+{
+    Scope scope(this);
+    ScopedObject error(scope, newTypeErrorObject(message));
+    return throwError(error);
+}
+
+ReturnedValue ExecutionEngine::throwReferenceError(const Value &value)
+{
+    Scope scope(this);
+    ScopedString s(scope, value.toString(this));
+    QString msg = s->toQString() + QStringLiteral(" is not defined");
+    ScopedObject error(scope, newReferenceErrorObject(msg));
+    return throwError(error);
+}
+
+ReturnedValue ExecutionEngine::throwReferenceError(const QString &message, const QString &fileName, int line, int column)
+{
+    Scope scope(this);
+    QString msg = message;
+    ScopedObject error(scope, newReferenceErrorObject(msg, fileName, line, column));
+    return throwError(error);
+}
+
+ReturnedValue ExecutionEngine::throwRangeError(const QString &message)
+{
+    Scope scope(this);
+    ScopedObject error(scope, newRangeErrorObject(message));
+    return throwError(error);
+}
+
+ReturnedValue ExecutionEngine::throwRangeError(const Value &value)
+{
+    Scope scope(this);
+    ScopedString s(scope, value.toString(this));
+    QString msg = s->toQString() + QStringLiteral(" out of range");
+    ScopedObject error(scope, newRangeErrorObject(msg));
+    return throwError(error);
+}
+
+ReturnedValue ExecutionEngine::throwURIError(const Value &msg)
+{
+    Scope scope(this);
+    ScopedObject error(scope, newURIErrorObject(msg));
+    return throwError(error);
+}
+
+ReturnedValue ExecutionEngine::throwUnimplemented(const QString &message)
+{
+    Scope scope(this);
+    ScopedValue v(scope, newString(QStringLiteral("Unimplemented ") + message));
+    v = newErrorObject(v);
+    return throwError(v);
+}
+
+
+QQmlError ExecutionEngine::catchExceptionAsQmlError()
 {
     QV4::StackTrace trace;
-    QV4::Scope scope(context);
-    QV4::ScopedValue exception(scope, context->catchException(&trace));
+    QV4::Scope scope(this);
+    QV4::ScopedValue exception(scope, catchException(&trace));
     QQmlError error;
     if (!trace.isEmpty()) {
         QV4::StackFrame frame = trace.first();
@@ -976,8 +1141,8 @@ QQmlError ExecutionEngine::catchExceptionAsQmlError(ExecutionContext *context)
     }
     QV4::Scoped<QV4::ErrorObject> errorObj(scope, exception);
     if (!!errorObj && errorObj->asSyntaxError()) {
-        QV4::ScopedString m(scope, errorObj->engine()->newString(QStringLiteral("message")));
-        QV4::ScopedValue v(scope, errorObj->get(m.getPointer()));
+        QV4::ScopedString m(scope, newString(QStringLiteral("message")));
+        QV4::ScopedValue v(scope, errorObj->get(m));
         error.setDescription(v->toQStringNoThrow());
     } else
         error.setDescription(exception->toQStringNoThrow());
@@ -998,5 +1163,709 @@ bool ExecutionEngine::recheckCStackLimits()
 
     return (reinterpret_cast<quintptr>(&dummy) >= cStackLimit);
 }
+
+
+// Variant conversion code
+
+typedef QSet<QV4::Heap::Object *> V4ObjectSet;
+static QVariant toVariant(QV4::ExecutionEngine *e, const QV4::Value &value, int typeHint, bool createJSValueForObjects, V4ObjectSet *visitedObjects);
+static QObject *qtObjectFromJS(QV4::ExecutionEngine *engine, const QV4::Value &value);
+static QVariant objectToVariant(QV4::ExecutionEngine *e, QV4::Object *o, V4ObjectSet *visitedObjects = 0);
+static bool convertToNativeQObject(QV4::ExecutionEngine *e, const QV4::Value &value,
+                            const QByteArray &targetType,
+                            void **result);
+static QV4::ReturnedValue variantListToJS(QV4::ExecutionEngine *v4, const QVariantList &lst);
+static QV4::ReturnedValue variantMapToJS(QV4::ExecutionEngine *v4, const QVariantMap &vmap);
+static QV4::ReturnedValue variantToJS(QV4::ExecutionEngine *v4, const QVariant &value)
+{
+    return v4->metaTypeToJS(value.userType(), value.constData());
+}
+
+
+QVariant ExecutionEngine::toVariant(const Value &value, int typeHint, bool createJSValueForObjects)
+{
+    return ::toVariant(this, value, typeHint, createJSValueForObjects, 0);
+}
+
+
+static QVariant toVariant(QV4::ExecutionEngine *e, const QV4::Value &value, int typeHint, bool createJSValueForObjects, V4ObjectSet *visitedObjects)
+{
+    Q_ASSERT (!value.isEmpty());
+    QV4::Scope scope(e);
+
+    if (QV4::VariantObject *v = value.as<QV4::VariantObject>())
+        return v->d()->data;
+
+    if (typeHint == QVariant::Bool)
+        return QVariant(value.toBoolean());
+
+    if (typeHint == QMetaType::QJsonValue)
+        return QVariant::fromValue(QV4::JsonObject::toJsonValue(value));
+
+    if (typeHint == qMetaTypeId<QJSValue>())
+        return QVariant::fromValue(QJSValue(e, value.asReturnedValue()));
+
+    if (value.asObject()) {
+        QV4::ScopedObject object(scope, value);
+        if (typeHint == QMetaType::QJsonObject
+                   && !value.asArrayObject() && !value.asFunctionObject()) {
+            return QVariant::fromValue(QV4::JsonObject::toJsonObject(object));
+        } else if (QV4::QObjectWrapper *wrapper = object->as<QV4::QObjectWrapper>()) {
+            return qVariantFromValue<QObject *>(wrapper->object());
+        } else if (object->as<QV4::QmlContextWrapper>()) {
+            return QVariant();
+        } else if (QV4::QmlTypeWrapper *w = object->as<QV4::QmlTypeWrapper>()) {
+            return w->toVariant();
+        } else if (QV4::QQmlValueTypeWrapper *v = object->as<QV4::QQmlValueTypeWrapper>()) {
+            return v->toVariant();
+        } else if (QV4::QmlListWrapper *l = object->as<QV4::QmlListWrapper>()) {
+            return l->toVariant();
+        } else if (object->isListType())
+            return QV4::SequencePrototype::toVariant(object);
+    }
+
+    if (value.asArrayObject()) {
+        QV4::ScopedArrayObject a(scope, value);
+        if (typeHint == qMetaTypeId<QList<QObject *> >()) {
+            QList<QObject *> list;
+            uint length = a->getLength();
+            QV4::Scoped<QV4::QObjectWrapper> qobjectWrapper(scope);
+            for (uint ii = 0; ii < length; ++ii) {
+                qobjectWrapper = a->getIndexed(ii);
+                if (!!qobjectWrapper) {
+                    list << qobjectWrapper->object();
+                } else {
+                    list << 0;
+                }
+            }
+
+            return qVariantFromValue<QList<QObject*> >(list);
+        } else if (typeHint == QMetaType::QJsonArray) {
+            return QVariant::fromValue(QV4::JsonObject::toJsonArray(a));
+        }
+
+        bool succeeded = false;
+        QVariant retn = QV4::SequencePrototype::toVariant(value, typeHint, &succeeded);
+        if (succeeded)
+            return retn;
+    }
+
+    if (value.isUndefined())
+        return QVariant();
+    if (value.isNull())
+        return QVariant(QMetaType::VoidStar, (void *)0);
+    if (value.isBoolean())
+        return value.booleanValue();
+    if (value.isInteger())
+        return value.integerValue();
+    if (value.isNumber())
+        return value.asDouble();
+    if (value.isString())
+        return value.stringValue()->toQString();
+    if (QV4::QQmlLocaleData *ld = value.as<QV4::QQmlLocaleData>())
+        return ld->d()->locale;
+    if (QV4::DateObject *d = value.asDateObject())
+        return d->toQDateTime();
+    if (QV4::ArrayBuffer *d = value.as<ArrayBuffer>())
+        return d->asByteArray();
+    // NOTE: since we convert QTime to JS Date, round trip will change the variant type (to QDateTime)!
+
+    QV4::ScopedObject o(scope, value);
+    Q_ASSERT(o);
+
+    if (QV4::RegExpObject *re = o->as<QV4::RegExpObject>())
+        return re->toQRegExp();
+
+    if (createJSValueForObjects)
+        return QVariant::fromValue(QJSValue(scope.engine, o->asReturnedValue()));
+
+    return objectToVariant(e, o, visitedObjects);
+}
+
+static QVariant objectToVariant(QV4::ExecutionEngine *e, QV4::Object *o, V4ObjectSet *visitedObjects)
+{
+    Q_ASSERT(o);
+
+    V4ObjectSet recursionGuardSet;
+    if (!visitedObjects) {
+        visitedObjects = &recursionGuardSet;
+    } else if (visitedObjects->contains(o->d())) {
+        // Avoid recursion.
+        // For compatibility with QVariant{List,Map} conversion, we return an
+        // empty object (and no error is thrown).
+        if (o->asArrayObject())
+            return QVariantList();
+        return QVariantMap();
+    }
+    visitedObjects->insert(o->d());
+
+    QVariant result;
+
+    if (o->asArrayObject()) {
+        QV4::Scope scope(e);
+        QV4::ScopedArrayObject a(scope, o->asReturnedValue());
+        QV4::ScopedValue v(scope);
+        QVariantList list;
+
+        int length = a->getLength();
+        for (int ii = 0; ii < length; ++ii) {
+            v = a->getIndexed(ii);
+            list << ::toVariant(e, v, -1, /*createJSValueForObjects*/false, visitedObjects);
+        }
+
+        result = list;
+    } else if (!o->asFunctionObject()) {
+        QVariantMap map;
+        QV4::Scope scope(e);
+        QV4::ObjectIterator it(scope, o, QV4::ObjectIterator::EnumerableOnly);
+        QV4::ScopedValue name(scope);
+        QV4::ScopedValue val(scope);
+        while (1) {
+            name = it.nextPropertyNameAsString(val);
+            if (name->isNull())
+                break;
+
+            QString key = name->toQStringNoThrow();
+            map.insert(key, ::toVariant(e, val, /*type hint*/-1, /*createJSValueForObjects*/false, visitedObjects));
+        }
+
+        result = map;
+    }
+
+    visitedObjects->remove(o->d());
+    return result;
+}
+
+static QV4::ReturnedValue arrayFromVariantList(QV4::ExecutionEngine *e, const QVariantList &list)
+{
+    QV4::Scope scope(e);
+    QV4::ScopedArrayObject a(scope, e->newArrayObject());
+    int len = list.count();
+    a->arrayReserve(len);
+    QV4::ScopedValue v(scope);
+    for (int ii = 0; ii < len; ++ii)
+        a->arrayPut(ii, (v = scope.engine->fromVariant(list.at(ii))));
+
+    a->setArrayLengthUnchecked(len);
+    return a.asReturnedValue();
+}
+
+static QV4::ReturnedValue objectFromVariantMap(QV4::ExecutionEngine *e, const QVariantMap &map)
+{
+    QV4::Scope scope(e);
+    QV4::ScopedObject o(scope, e->newObject());
+    QV4::ScopedString s(scope);
+    QV4::ScopedValue v(scope);
+    for (QVariantMap::const_iterator iter = map.begin(), cend = map.end(); iter != cend; ++iter) {
+        s = e->newString(iter.key());
+        uint idx = s->asArrayIndex();
+        if (idx > 16 && (!o->arrayData() || idx > o->arrayData()->length() * 2))
+            o->initSparseArray();
+        o->put(s, (v = e->fromVariant(iter.value())));
+    }
+    return o.asReturnedValue();
+}
+
+Q_CORE_EXPORT QString qt_regexp_toCanonical(const QString &, QRegExp::PatternSyntax);
+
+QV4::ReturnedValue QV4::ExecutionEngine::fromVariant(const QVariant &variant)
+{
+    int type = variant.userType();
+    const void *ptr = variant.constData();
+
+    if (type < QMetaType::User) {
+        switch (QMetaType::Type(type)) {
+            case QMetaType::UnknownType:
+            case QMetaType::Void:
+                return QV4::Encode::undefined();
+            case QMetaType::VoidStar:
+                return QV4::Encode::null();
+            case QMetaType::Bool:
+                return QV4::Encode(*reinterpret_cast<const bool*>(ptr));
+            case QMetaType::Int:
+                return QV4::Encode(*reinterpret_cast<const int*>(ptr));
+            case QMetaType::UInt:
+                return QV4::Encode(*reinterpret_cast<const uint*>(ptr));
+            case QMetaType::LongLong:
+                return QV4::Encode((double)*reinterpret_cast<const qlonglong*>(ptr));
+            case QMetaType::ULongLong:
+                return QV4::Encode((double)*reinterpret_cast<const qulonglong*>(ptr));
+            case QMetaType::Double:
+                return QV4::Encode(*reinterpret_cast<const double*>(ptr));
+            case QMetaType::QString:
+                return newString(*reinterpret_cast<const QString*>(ptr))->asReturnedValue();
+            case QMetaType::Float:
+                return QV4::Encode(*reinterpret_cast<const float*>(ptr));
+            case QMetaType::Short:
+                return QV4::Encode((int)*reinterpret_cast<const short*>(ptr));
+            case QMetaType::UShort:
+                return QV4::Encode((int)*reinterpret_cast<const unsigned short*>(ptr));
+            case QMetaType::Char:
+                return newString(QChar::fromLatin1(*reinterpret_cast<const char *>(ptr)))->asReturnedValue();
+            case QMetaType::UChar:
+                return newString(QChar::fromLatin1(*reinterpret_cast<const unsigned char *>(ptr)))->asReturnedValue();
+            case QMetaType::QChar:
+                return newString(*reinterpret_cast<const QChar *>(ptr))->asReturnedValue();
+            case QMetaType::QDateTime:
+                return QV4::Encode(newDateObject(*reinterpret_cast<const QDateTime *>(ptr)));
+            case QMetaType::QDate:
+                return QV4::Encode(newDateObject(QDateTime(*reinterpret_cast<const QDate *>(ptr))));
+            case QMetaType::QTime:
+            return QV4::Encode(newDateObject(QDateTime(QDate(1970,1,1), *reinterpret_cast<const QTime *>(ptr))));
+            case QMetaType::QRegExp:
+                return QV4::Encode(newRegExpObject(*reinterpret_cast<const QRegExp *>(ptr)));
+            case QMetaType::QObjectStar:
+                return QV4::QObjectWrapper::wrap(this, *reinterpret_cast<QObject* const *>(ptr));
+            case QMetaType::QStringList:
+                {
+                bool succeeded = false;
+                QV4::Scope scope(this);
+                QV4::ScopedValue retn(scope, QV4::SequencePrototype::fromVariant(this, variant, &succeeded));
+                if (succeeded)
+                    return retn->asReturnedValue();
+                return QV4::Encode(newArrayObject(*reinterpret_cast<const QStringList *>(ptr)));
+                }
+            case QMetaType::QVariantList:
+                return arrayFromVariantList(this, *reinterpret_cast<const QVariantList *>(ptr));
+            case QMetaType::QVariantMap:
+                return objectFromVariantMap(this, *reinterpret_cast<const QVariantMap *>(ptr));
+            case QMetaType::QJsonValue:
+                return QV4::JsonObject::fromJsonValue(this, *reinterpret_cast<const QJsonValue *>(ptr));
+            case QMetaType::QJsonObject:
+                return QV4::JsonObject::fromJsonObject(this, *reinterpret_cast<const QJsonObject *>(ptr));
+            case QMetaType::QJsonArray:
+                return QV4::JsonObject::fromJsonArray(this, *reinterpret_cast<const QJsonArray *>(ptr));
+            case QMetaType::QLocale:
+                return QQmlLocale::wrap(this, *reinterpret_cast<const QLocale*>(ptr));
+            default:
+                break;
+        }
+
+        if (const QMetaObject *vtmo = QQmlValueTypeFactory::metaObjectForMetaType(type))
+            return QV4::QQmlValueTypeWrapper::create(this, variant, vtmo, type);
+    } else {
+        QV4::Scope scope(this);
+        if (type == qMetaTypeId<QQmlListReference>()) {
+            typedef QQmlListReferencePrivate QDLRP;
+            QDLRP *p = QDLRP::get((QQmlListReference*)ptr);
+            if (p->object) {
+                return QV4::QmlListWrapper::create(scope.engine, p->property, p->propertyType);
+            } else {
+                return QV4::Encode::null();
+            }
+        } else if (type == qMetaTypeId<QJSValue>()) {
+            const QJSValue *value = reinterpret_cast<const QJSValue *>(ptr);
+            return QJSValuePrivate::convertedToValue(this, *value);
+        } else if (type == qMetaTypeId<QList<QObject *> >()) {
+            // XXX Can this be made more by using Array as a prototype and implementing
+            // directly against QList<QObject*>?
+            const QList<QObject *> &list = *(QList<QObject *>*)ptr;
+            QV4::ScopedArrayObject a(scope, newArrayObject());
+            a->arrayReserve(list.count());
+            QV4::ScopedValue v(scope);
+            for (int ii = 0; ii < list.count(); ++ii)
+                a->arrayPut(ii, (v = QV4::QObjectWrapper::wrap(this, list.at(ii))));
+            a->setArrayLengthUnchecked(list.count());
+            return a.asReturnedValue();
+        } else if (QMetaType::typeFlags(type) & QMetaType::PointerToQObject) {
+            return QV4::QObjectWrapper::wrap(this, *reinterpret_cast<QObject* const *>(ptr));
+        }
+
+        bool objOk;
+        QObject *obj = QQmlMetaType::toQObject(variant, &objOk);
+        if (objOk)
+            return QV4::QObjectWrapper::wrap(this, obj);
+
+        bool succeeded = false;
+        QV4::ScopedValue retn(scope, QV4::SequencePrototype::fromVariant(this, variant, &succeeded));
+        if (succeeded)
+            return retn->asReturnedValue();
+
+        if (const QMetaObject *vtmo = QQmlValueTypeFactory::metaObjectForMetaType(type))
+            return QV4::QQmlValueTypeWrapper::create(this, variant, vtmo, type);
+    }
+
+    // XXX TODO: To be compatible, we still need to handle:
+    //    + QObjectList
+    //    + QList<int>
+
+    return QV4::Encode(newVariantObject(variant));
+}
+
+QVariantMap ExecutionEngine::variantMapFromJS(Object *o)
+{
+    return objectToVariant(this, o).toMap();
+}
+
+
+// Converts a QVariantList to JS.
+// The result is a new Array object with length equal to the length
+// of the QVariantList, and the elements being the QVariantList's
+// elements converted to JS, recursively.
+static QV4::ReturnedValue variantListToJS(QV4::ExecutionEngine *v4, const QVariantList &lst)
+{
+    QV4::Scope scope(v4);
+    QV4::ScopedArrayObject a(scope, v4->newArrayObject());
+    a->arrayReserve(lst.size());
+    QV4::ScopedValue v(scope);
+    for (int i = 0; i < lst.size(); i++)
+        a->arrayPut(i, (v = variantToJS(v4, lst.at(i))));
+    a->setArrayLengthUnchecked(lst.size());
+    return a.asReturnedValue();
+}
+
+// Converts a QVariantMap to JS.
+// The result is a new Object object with property names being
+// the keys of the QVariantMap, and values being the values of
+// the QVariantMap converted to JS, recursively.
+static QV4::ReturnedValue variantMapToJS(QV4::ExecutionEngine *v4, const QVariantMap &vmap)
+{
+    QV4::Scope scope(v4);
+    QV4::ScopedObject o(scope, v4->newObject());
+    QV4::ScopedString s(scope);
+    QV4::ScopedValue v(scope);
+    for (QVariantMap::const_iterator it = vmap.constBegin(), cend = vmap.constEnd(); it != cend; ++it) {
+        s = v4->newIdentifier(it.key());
+        v = variantToJS(v4, it.value());
+        uint idx = s->asArrayIndex();
+        if (idx < UINT_MAX)
+            o->arraySet(idx, v);
+        else
+            o->insertMember(s, v);
+    }
+    return o.asReturnedValue();
+}
+
+// Converts the meta-type defined by the given type and data to JS.
+// Returns the value if conversion succeeded, an empty handle otherwise.
+QV4::ReturnedValue ExecutionEngine::metaTypeToJS(int type, const void *data)
+{
+    Q_ASSERT(data != 0);
+
+    // check if it's one of the types we know
+    switch (QMetaType::Type(type)) {
+    case QMetaType::UnknownType:
+    case QMetaType::Void:
+        return QV4::Encode::undefined();
+    case QMetaType::VoidStar:
+        return QV4::Encode::null();
+    case QMetaType::Bool:
+        return QV4::Encode(*reinterpret_cast<const bool*>(data));
+    case QMetaType::Int:
+        return QV4::Encode(*reinterpret_cast<const int*>(data));
+    case QMetaType::UInt:
+        return QV4::Encode(*reinterpret_cast<const uint*>(data));
+    case QMetaType::LongLong:
+        return QV4::Encode(double(*reinterpret_cast<const qlonglong*>(data)));
+    case QMetaType::ULongLong:
+#if defined(Q_OS_WIN) && defined(_MSC_FULL_VER) && _MSC_FULL_VER <= 12008804
+#pragma message("** NOTE: You need the Visual Studio Processor Pack to compile support for 64bit unsigned integers.")
+        return QV4::Encode(double((qlonglong)*reinterpret_cast<const qulonglong*>(data)));
+#elif defined(Q_CC_MSVC) && !defined(Q_CC_MSVC_NET)
+        return QV4::Encode(double((qlonglong)*reinterpret_cast<const qulonglong*>(data)));
+#else
+        return QV4::Encode(double(*reinterpret_cast<const qulonglong*>(data)));
+#endif
+    case QMetaType::Double:
+        return QV4::Encode(*reinterpret_cast<const double*>(data));
+    case QMetaType::QString:
+        return newString(*reinterpret_cast<const QString*>(data))->asReturnedValue();
+    case QMetaType::Float:
+        return QV4::Encode(*reinterpret_cast<const float*>(data));
+    case QMetaType::Short:
+        return QV4::Encode((int)*reinterpret_cast<const short*>(data));
+    case QMetaType::UShort:
+        return QV4::Encode((int)*reinterpret_cast<const unsigned short*>(data));
+    case QMetaType::Char:
+        return QV4::Encode((int)*reinterpret_cast<const char*>(data));
+    case QMetaType::UChar:
+        return QV4::Encode((int)*reinterpret_cast<const unsigned char*>(data));
+    case QMetaType::QChar:
+        return QV4::Encode((int)(*reinterpret_cast<const QChar*>(data)).unicode());
+    case QMetaType::QStringList:
+        return QV4::Encode(newArrayObject(*reinterpret_cast<const QStringList *>(data)));
+    case QMetaType::QVariantList:
+        return variantListToJS(this, *reinterpret_cast<const QVariantList *>(data));
+    case QMetaType::QVariantMap:
+        return variantMapToJS(this, *reinterpret_cast<const QVariantMap *>(data));
+    case QMetaType::QDateTime:
+        return QV4::Encode(newDateObject(*reinterpret_cast<const QDateTime *>(data)));
+    case QMetaType::QDate:
+        return QV4::Encode(newDateObject(QDateTime(*reinterpret_cast<const QDate *>(data))));
+    case QMetaType::QRegExp:
+        return QV4::Encode(newRegExpObject(*reinterpret_cast<const QRegExp *>(data)));
+    case QMetaType::QObjectStar:
+        return QV4::QObjectWrapper::wrap(this, *reinterpret_cast<QObject* const *>(data));
+    case QMetaType::QVariant:
+        return variantToJS(this, *reinterpret_cast<const QVariant*>(data));
+    case QMetaType::QJsonValue:
+        return QV4::JsonObject::fromJsonValue(this, *reinterpret_cast<const QJsonValue *>(data));
+    case QMetaType::QJsonObject:
+        return QV4::JsonObject::fromJsonObject(this, *reinterpret_cast<const QJsonObject *>(data));
+    case QMetaType::QJsonArray:
+        return QV4::JsonObject::fromJsonArray(this, *reinterpret_cast<const QJsonArray *>(data));
+    default:
+        if (type == qMetaTypeId<QJSValue>()) {
+            return QJSValuePrivate::convertedToValue(this, *reinterpret_cast<const QJSValue*>(data));
+        } else {
+            QByteArray typeName = QMetaType::typeName(type);
+            if (typeName.endsWith('*') && !*reinterpret_cast<void* const *>(data)) {
+                return QV4::Encode::null();
+            }
+            QMetaType mt(type);
+            if (mt.flags() & QMetaType::IsGadget) {
+                Q_ASSERT(mt.metaObject());
+                return QV4::QQmlValueTypeWrapper::create(this, QVariant(type, data), mt.metaObject(), type);
+            }
+            // Fall back to wrapping in a QVariant.
+            return QV4::Encode(newVariantObject(QVariant(type, data)));
+        }
+    }
+    Q_UNREACHABLE();
+    return 0;
+}
+
+void ExecutionEngine::assertObjectBelongsToEngine(const Value &v)
+{
+    Q_UNUSED(v);
+    Q_ASSERT(!v.isObject() || v.objectValue()->engine() == this);
+    Q_UNUSED(v);
+}
+
+// Converts a JS value to a meta-type.
+// data must point to a place that can store a value of the given type.
+// Returns true if conversion succeeded, false otherwise.
+bool ExecutionEngine::metaTypeFromJS(const QV4::Value &value, int type, void *data)
+{
+    QV4::Scope scope(this);
+
+    // check if it's one of the types we know
+    switch (QMetaType::Type(type)) {
+    case QMetaType::Bool:
+        *reinterpret_cast<bool*>(data) = value.toBoolean();
+        return true;
+    case QMetaType::Int:
+        *reinterpret_cast<int*>(data) = value.toInt32();
+        return true;
+    case QMetaType::UInt:
+        *reinterpret_cast<uint*>(data) = value.toUInt32();
+        return true;
+    case QMetaType::LongLong:
+        *reinterpret_cast<qlonglong*>(data) = qlonglong(value.toInteger());
+        return true;
+    case QMetaType::ULongLong:
+        *reinterpret_cast<qulonglong*>(data) = qulonglong(value.toInteger());
+        return true;
+    case QMetaType::Double:
+        *reinterpret_cast<double*>(data) = value.toNumber();
+        return true;
+    case QMetaType::QString:
+        if (value.isUndefined() || value.isNull())
+            *reinterpret_cast<QString*>(data) = QString();
+        else
+            *reinterpret_cast<QString*>(data) = value.toQString();
+        return true;
+    case QMetaType::Float:
+        *reinterpret_cast<float*>(data) = value.toNumber();
+        return true;
+    case QMetaType::Short:
+        *reinterpret_cast<short*>(data) = short(value.toInt32());
+        return true;
+    case QMetaType::UShort:
+        *reinterpret_cast<unsigned short*>(data) = value.toUInt16();
+        return true;
+    case QMetaType::Char:
+        *reinterpret_cast<char*>(data) = char(value.toInt32());
+        return true;
+    case QMetaType::UChar:
+        *reinterpret_cast<unsigned char*>(data) = (unsigned char)(value.toInt32());
+        return true;
+    case QMetaType::QChar:
+        if (value.isString()) {
+            QString str = value.stringValue()->toQString();
+            *reinterpret_cast<QChar*>(data) = str.isEmpty() ? QChar() : str.at(0);
+        } else {
+            *reinterpret_cast<QChar*>(data) = QChar(ushort(value.toUInt16()));
+        }
+        return true;
+    case QMetaType::QDateTime:
+        if (QV4::DateObject *d = value.asDateObject()) {
+            *reinterpret_cast<QDateTime *>(data) = d->toQDateTime();
+            return true;
+        } break;
+    case QMetaType::QDate:
+        if (QV4::DateObject *d = value.asDateObject()) {
+            *reinterpret_cast<QDate *>(data) = d->toQDateTime().date();
+            return true;
+        } break;
+    case QMetaType::QRegExp:
+        if (QV4::RegExpObject *r = value.as<QV4::RegExpObject>()) {
+            *reinterpret_cast<QRegExp *>(data) = r->toQRegExp();
+            return true;
+        } break;
+    case QMetaType::QObjectStar: {
+        QV4::QObjectWrapper *qobjectWrapper = value.as<QV4::QObjectWrapper>();
+        if (qobjectWrapper || value.isNull()) {
+            *reinterpret_cast<QObject* *>(data) = qtObjectFromJS(scope.engine, value);
+            return true;
+        } break;
+    }
+    case QMetaType::QStringList: {
+        QV4::ScopedArrayObject a(scope, value);
+        if (a) {
+            *reinterpret_cast<QStringList *>(data) = a->toQStringList();
+            return true;
+        }
+        break;
+    }
+    case QMetaType::QVariantList: {
+        QV4::ScopedArrayObject a(scope, value);
+        if (a) {
+            *reinterpret_cast<QVariantList *>(data) = scope.engine->toVariant(a, /*typeHint*/-1, /*createJSValueForObjects*/false).toList();
+            return true;
+        }
+        break;
+    }
+    case QMetaType::QVariantMap: {
+        QV4::ScopedObject o(scope, value);
+        if (o) {
+            *reinterpret_cast<QVariantMap *>(data) = variantMapFromJS(o);
+            return true;
+        }
+        break;
+    }
+    case QMetaType::QVariant:
+        *reinterpret_cast<QVariant*>(data) = scope.engine->toVariant(value, /*typeHint*/-1, /*createJSValueForObjects*/false);
+        return true;
+    case QMetaType::QJsonValue:
+        *reinterpret_cast<QJsonValue *>(data) = QV4::JsonObject::toJsonValue(value);
+        return true;
+    case QMetaType::QJsonObject: {
+        QV4::ScopedObject o(scope, value);
+        *reinterpret_cast<QJsonObject *>(data) = QV4::JsonObject::toJsonObject(o);
+        return true;
+    }
+    case QMetaType::QJsonArray: {
+        QV4::ScopedArrayObject a(scope, value);
+        if (a) {
+            *reinterpret_cast<QJsonArray *>(data) = QV4::JsonObject::toJsonArray(a);
+            return true;
+        }
+        break;
+    }
+    default:
+    ;
+    }
+
+    {
+        QV4::Scoped<QV4::QQmlValueTypeWrapper> vtw(scope, value);
+        if (vtw && vtw->typeId() == type) {
+            return vtw->toGadget(data);
+        }
+    }
+
+#if 0
+    if (isQtVariant(value)) {
+        const QVariant &var = variantValue(value);
+        // ### Enable once constructInPlace() is in qt master.
+        if (var.userType() == type) {
+            QMetaType::constructInPlace(type, data, var.constData());
+            return true;
+        }
+        if (var.canConvert(type)) {
+            QVariant vv = var;
+            vv.convert(type);
+            Q_ASSERT(vv.userType() == type);
+            QMetaType::constructInPlace(type, data, vv.constData());
+            return true;
+        }
+
+    }
+#endif
+
+    // Try to use magic; for compatibility with qscriptvalue_cast.
+
+    QByteArray name = QMetaType::typeName(type);
+    if (convertToNativeQObject(this, value, name, reinterpret_cast<void* *>(data)))
+        return true;
+    if (value.as<QV4::VariantObject>() && name.endsWith('*')) {
+        int valueType = QMetaType::type(name.left(name.size()-1));
+        QVariant &var = value.as<QV4::VariantObject>()->d()->data;
+        if (valueType == var.userType()) {
+            // We have T t, T* is requested, so return &t.
+            *reinterpret_cast<void* *>(data) = var.data();
+            return true;
+        } else if (value.isObject()) {
+            // Look in the prototype chain.
+            QV4::ScopedObject proto(scope, value.objectValue()->prototype());
+            while (proto) {
+                bool canCast = false;
+                if (QV4::VariantObject *vo = proto->as<QV4::VariantObject>()) {
+                    const QVariant &v = vo->d()->data;
+                    canCast = (type == v.userType()) || (valueType && (valueType == v.userType()));
+                }
+                else if (proto->as<QV4::QObjectWrapper>()) {
+                    QByteArray className = name.left(name.size()-1);
+                    QV4::ScopedObject p(scope, proto.getPointer());
+                    if (QObject *qobject = qtObjectFromJS(scope.engine, p))
+                        canCast = qobject->qt_metacast(className) != 0;
+                }
+                if (canCast) {
+                    QByteArray varTypeName = QMetaType::typeName(var.userType());
+                    if (varTypeName.endsWith('*'))
+                        *reinterpret_cast<void* *>(data) = *reinterpret_cast<void* *>(var.data());
+                    else
+                        *reinterpret_cast<void* *>(data) = var.data();
+                    return true;
+                }
+                proto = proto->prototype();
+            }
+        }
+    } else if (value.isNull() && name.endsWith('*')) {
+        *reinterpret_cast<void* *>(data) = 0;
+        return true;
+    } else if (type == qMetaTypeId<QJSValue>()) {
+        *reinterpret_cast<QJSValue*>(data) = QJSValue(this, value.asReturnedValue());
+        return true;
+    }
+
+    return false;
+}
+
+static bool convertToNativeQObject(QV4::ExecutionEngine *e, const Value &value, const QByteArray &targetType, void **result)
+{
+    if (!targetType.endsWith('*'))
+        return false;
+    if (QObject *qobject = qtObjectFromJS(e, value)) {
+        int start = targetType.startsWith("const ") ? 6 : 0;
+        QByteArray className = targetType.mid(start, targetType.size()-start-1);
+        if (void *instance = qobject->qt_metacast(className)) {
+            *result = instance;
+            return true;
+        }
+    }
+    return false;
+}
+
+static QObject *qtObjectFromJS(QV4::ExecutionEngine *engine, const Value &value)
+{
+    if (!value.isObject())
+        return 0;
+
+    QV4::Scope scope(engine);
+    QV4::Scoped<QV4::VariantObject> v(scope, value);
+
+    if (v) {
+        QVariant variant = v->d()->data;
+        int type = variant.userType();
+        if (type == QMetaType::QObjectStar)
+            return *reinterpret_cast<QObject* const *>(variant.constData());
+    }
+    QV4::Scoped<QV4::QObjectWrapper> wrapper(scope, value);
+    if (!wrapper)
+        return 0;
+    return wrapper->object();
+}
+
 
 QT_END_NAMESPACE

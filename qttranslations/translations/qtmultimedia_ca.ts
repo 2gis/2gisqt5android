@@ -496,6 +496,10 @@
 <context>
     <name>QMediaPlayer</name>
     <message>
+        <source>Attempting to play invalid Qt resource</source>
+        <translation>S&apos;intenta reproduir un recurs de Qt no vàlid</translation>
+    </message>
+    <message>
         <source>The QMediaPlayer object does not have a valid service</source>
         <translation>L&apos;objecte «QMediaPlayer» no té un servei vàlid</translation>
     </message>
@@ -545,6 +549,25 @@
         <source>CameraImageProcessing is provided by Camera</source>
         <translation>El processament de la imatge és proporcionat per la càmera</translation>
     </message>
+    <message>
+        <source>CameraViewfinder is provided by Camera</source>
+        <translation>El visor és proporcionat per la càmera</translation>
+    </message>
+</context>
+<context>
+    <name>QObject</name>
+    <message>
+        <source>%1 playlist type is unknown</source>
+        <translation>El tipus %1 per a llistes de reproducció és desconegut</translation>
+    </message>
+    <message>
+        <source>invalid line in playlist file</source>
+        <translation>línia no vàlida al fitxer de la llista de reproducció</translation>
+    </message>
+    <message>
+        <source>Empty file provided</source>
+        <translation>S&apos;ha proporcionat un fitxer buit</translation>
+    </message>
 </context>
 <context>
     <name>QPlaylistFileParser</name>
@@ -566,6 +589,21 @@
     <message>
         <source>Empty file provided</source>
         <translation>S&apos;ha proporcionat un fitxer buit</translation>
+    </message>
+</context>
+<context>
+    <name>QWinRTCameraImageCaptureControl</name>
+    <message>
+        <source>Camera not ready</source>
+        <translation>La càmera no està preparada</translation>
+    </message>
+    <message>
+        <source>Invalid photo data length.</source>
+        <translation>Longitud no vàlida de les dades de la foto.</translation>
+    </message>
+    <message>
+        <source>Image saving failed</source>
+        <translation>Ha fallat en desar la imatge</translation>
     </message>
 </context>
 </TS>

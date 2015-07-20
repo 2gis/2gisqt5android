@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the plugins of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -445,6 +437,9 @@ void QIOSInputContext::scrollToCursor()
     if (!rootView)
         return;
 
+    if (!focusView())
+        return;
+
     if (rootView.window != focusView().window)
         return;
 
@@ -548,6 +543,9 @@ void QIOSInputContext::setFocusObject(QObject *focusObject)
         qImDebug() << "clearing focus object" << focusObject << "as hide-keyboard gesture is active";
         clearCurrentFocusObject();
         return;
+    } else if (focusObject == m_imeState.focusObject) {
+        qImDebug() << "same focus object as last update, skipping reset";
+        return;
     }
 
     reset();
@@ -583,40 +581,32 @@ void QIOSInputContext::update(Qt::InputMethodQueries updatedProperties)
     // Mask for properties that we are interested in and see if any of them changed
     updatedProperties &= (Qt::ImEnabled | Qt::ImHints | Qt::ImQueryInput | Qt::ImPlatformData);
 
-    if (updatedProperties & Qt::ImEnabled) {
-        // Switching on and off input-methods needs a re-fresh of hints and platform
-        // data when we turn them on again, as the IM state we have may have been
-        // invalidated when IM was switched off. We could defer this until we know
-        // if IM was turned on, to limit the extra query parameters, but for simplicity
-        // we always do the update.
-        updatedProperties |= (Qt::ImHints | Qt::ImPlatformData);
-    }
-
     qImDebug() << "fw =" << qApp->focusWindow() << "fo =" << qApp->focusObject();
 
+    // Perform update first, so we can trust the value of inputMethodAccepted()
     Qt::InputMethodQueries changedProperties = m_imeState.update(updatedProperties);
-    if (changedProperties & (Qt::ImEnabled | Qt::ImHints | Qt::ImPlatformData)) {
-        // Changes to enablement or hints require virtual keyboard reconfigure
 
-        qImDebug() << "changed IM properties" << changedProperties << "require keyboard reconfigure";
-
-        if (inputMethodAccepted()) {
-            qImDebug() << "replacing text responder with new text responder";
+    if (inputMethodAccepted()) {
+        if (!m_textResponder || [m_textResponder needsKeyboardReconfigure:changedProperties]) {
+            qImDebug() << "creating new text responder";
             [m_textResponder autorelease];
             m_textResponder = [[QIOSTextInputResponder alloc] initWithInputContext:this];
-            [m_textResponder becomeFirstResponder];
-        } else if ([UIResponder currentFirstResponder] == m_textResponder) {
-            qImDebug() << "IM not enabled, resigning text responder as first responder";
-            [m_textResponder resignFirstResponder];
         } else {
-            qImDebug() << "IM not enabled. Text responder not first responder. Nothing to do";
+            qImDebug() << "no need to reconfigure keyboard, just notifying input delegate";
+            [m_textResponder notifyInputDelegate:changedProperties];
         }
-    } else {
-        [m_textResponder notifyInputDelegate:changedProperties];
-    }
 
-    if (changedProperties & Qt::ImCursorRectangle)
-        scrollToCursor();
+        if (![m_textResponder isFirstResponder]) {
+            qImDebug() << "IM enabled, making text responder first responder";
+            [m_textResponder becomeFirstResponder];
+        }
+
+        if (changedProperties & Qt::ImCursorRectangle)
+            scrollToCursor();
+    } else if ([m_textResponder isFirstResponder]) {
+        qImDebug() << "IM not enabled, resigning text responder as first responder";
+        [m_textResponder resignFirstResponder];
+    }
 }
 
 bool QIOSInputContext::inputMethodAccepted() const
@@ -644,6 +634,8 @@ bool QIOSInputContext::inputMethodAccepted() const
 */
 void QIOSInputContext::reset()
 {
+    qImDebug() << "updating Qt::ImQueryAll and unmarking text";
+
     update(Qt::ImQueryAll);
 
     [m_textResponder setMarkedText:@"" selectedRange:NSMakeRange(0, 0)];
@@ -660,6 +652,8 @@ void QIOSInputContext::reset()
 */
 void QIOSInputContext::commit()
 {
+    qImDebug() << "unmarking text";
+
     [m_textResponder unmarkText];
     [m_textResponder notifyInputDelegate:Qt::ImSurroundingText];
 }

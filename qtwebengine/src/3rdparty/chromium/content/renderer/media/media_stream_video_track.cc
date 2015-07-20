@@ -7,7 +7,7 @@
 #include <utility>
 
 #include "base/bind.h"
-#include "media/base/bind_to_current_loop.h"
+#include "third_party/libjingle/source/talk/app/webrtc/mediastreaminterface.h"
 
 namespace content {
 
@@ -79,7 +79,7 @@ MediaStreamVideoTrack::FrameDeliverer::FrameDeliverer(
     const scoped_refptr<base::MessageLoopProxy>& io_message_loop, bool enabled)
     : io_message_loop_(io_message_loop),
       enabled_(enabled) {
-  DCHECK(io_message_loop_);
+  DCHECK(io_message_loop_.get());
 }
 
 MediaStreamVideoTrack::FrameDeliverer::~FrameDeliverer() {
@@ -161,7 +161,7 @@ const scoped_refptr<media::VideoFrame>&
 MediaStreamVideoTrack::FrameDeliverer::GetBlackFrame(
     const scoped_refptr<media::VideoFrame>& reference_frame) {
   DCHECK(io_message_loop_->BelongsToCurrentThread());
-  if (!black_frame_ ||
+  if (!black_frame_.get() ||
       black_frame_->natural_size() != reference_frame->natural_size())
     black_frame_ =
         media::VideoFrame::CreateBlackFrame(reference_frame->natural_size());
@@ -196,7 +196,7 @@ MediaStreamVideoTrack::MediaStreamVideoTrack(
     const blink::WebMediaConstraints& constraints,
     const MediaStreamVideoSource::ConstraintsCallback& callback,
     bool enabled)
-    : MediaStreamTrack(NULL, true),
+    : MediaStreamTrack(true),
       frame_deliverer_(
           new MediaStreamVideoTrack::FrameDeliverer(source->io_message_loop(),
                                                     enabled)),
@@ -236,8 +236,6 @@ void MediaStreamVideoTrack::RemoveSink(MediaStreamVideoSink* sink) {
 
 void MediaStreamVideoTrack::SetEnabled(bool enabled) {
   DCHECK(thread_checker_.CalledOnValidThread());
-  MediaStreamTrack::SetEnabled(enabled);
-
   frame_deliverer_->SetEnabled(enabled);
   for (std::vector<MediaStreamVideoSink*>::const_iterator it = sinks_.begin();
        it != sinks_.end(); ++it) {

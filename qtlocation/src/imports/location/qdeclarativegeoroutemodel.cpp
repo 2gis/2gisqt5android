@@ -1,31 +1,34 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtLocation module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL21$
+** $QT_BEGIN_LICENSE:LGPL3$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 or version 3 as published by the Free
-** Software Foundation and appearing in the file LICENSE.LGPLv21 and
-** LICENSE.LGPLv3 included in the packaging of this file. Please review the
-** following information to ensure the GNU Lesser General Public License
-** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
-** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPLv3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** GNU General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU
+** General Public License version 2.0 or later as published by the Free
+** Software Foundation and appearing in the file LICENSE.GPL included in
+** the packaging of this file. Please review the following information to
+** ensure the GNU General Public License version 2.0 requirements will be
+** met: http://www.gnu.org/licenses/gpl-2.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -35,12 +38,9 @@
 #include "qdeclarativegeoroute_p.h"
 #include "error_messages.h"
 #include "locationvaluetypehelper_p.h"
-#include <private/qqmlvaluetypewrapper_p.h>
-#include <private/qjsvalue_p.h>
 
 #include <QtCore/QCoreApplication>
 #include <QtQml/QQmlEngine>
-#include <QtQml/QQmlContext>
 #include <QtQml/qqmlinfo.h>
 #include <QtQml/private/qqmlengine_p.h>
 #include <QtLocation/QGeoRoutingManager>
@@ -53,7 +53,7 @@ QT_BEGIN_NAMESPACE
     \instantiates QDeclarativeGeoRouteModel
     \inqmlmodule QtLocation
     \ingroup qml-QtLocation5-routing
-    \since Qt Location 5.0
+    \since Qt Location 5.5
 
     \brief The RouteModel type provides access to routes.
 
@@ -89,7 +89,7 @@ QT_BEGIN_NAMESPACE
     \code
     Plugin {
         id: aPlugin
-        name: "nokia"
+        name: "osm"
     }
 
     RouteQuery {
@@ -150,7 +150,7 @@ int QDeclarativeGeoRouteModel::count() const
 }
 
 /*!
-    \qmlmethod QtLocation::RouteModel::reset()
+    \qmlmethod void QtLocation::RouteModel::reset()
 
     Resets the model. All route data is cleared, any outstanding requests
     are aborted and possible errors are cleared. Model status will be set
@@ -175,7 +175,7 @@ void QDeclarativeGeoRouteModel::reset()
 }
 
 /*!
-    \qmlmethod QtLocation::RouteModel::cancel()
+    \qmlmethod void QtLocation::RouteModel::cancel()
 
     Cancels any outstanding requests and clears errors.  Model status will be set to either
     RouteModel.Null or RouteModel.Ready.
@@ -202,7 +202,7 @@ void QDeclarativeGeoRouteModel::abortRequest()
 
 
 /*!
-    \qmlmethod QtLocation::RouteModel::get(int)
+    \qmlmethod void QtLocation::RouteModel::get(int)
 
     Returns the Route at given index. Use \l count property to check the
     amount of routes available. The routes are indexed from zero, so the accessible range
@@ -516,7 +516,7 @@ void QDeclarativeGeoRouteModel::setErrorString(const QString &error)
 /*!
     \qmlproperty string QtLocation::RouteModel::errorString
 
-    This read-only property holds the textual presentation of latest routing error.
+    This read-only property holds the textual presentation of the latest routing error.
     If no error has occurred or the model has been reset, an empty string is returned.
 
     An empty string may also be returned if an error occurred which has no associated
@@ -557,7 +557,7 @@ void QDeclarativeGeoRouteModel::setError(RouteError error)
 }
 
 /*!
-    \qmlmethod QtLocation::RouteModel::update()
+    \qmlmethod void QtLocation::RouteModel::update()
 
     Instructs the RouteModel to update its data. This is most useful
     when \l autoUpdate is disabled, to force a refresh when the query
@@ -662,7 +662,7 @@ void QDeclarativeGeoRouteModel::routingError(QGeoRouteReply *reply,
     \instantiates QDeclarativeGeoRouteQuery
     \inqmlmodule QtLocation
     \ingroup qml-QtLocation5-routing
-    \since Qt Location 5.0
+    \since Qt Location 5.5
 
     \brief The RouteQuery type is used to provide query parameters to a
            RouteModel.
@@ -795,21 +795,18 @@ QJSValue QDeclarativeGeoRouteQuery::waypoints()
 {
     QQmlContext *context = QQmlEngine::contextForObject(parent());
     QQmlEngine *engine = context->engine();
-    QV8Engine *v8Engine = QQmlEnginePrivate::getV8Engine(engine);
-    QV4::ExecutionEngine *v4 = QV8Engine::getV4(v8Engine);
+    QV4::ExecutionEngine *v4 = QQmlEnginePrivate::getV4Engine(engine);
 
     QV4::Scope scope(v4);
     QV4::Scoped<QV4::ArrayObject> waypointArray(scope, v4->newArrayObject(request_.waypoints().length()));
     for (int i = 0; i < request_.waypoints().length(); ++i) {
         const QGeoCoordinate &c = request_.waypoints().at(i);
 
-        QQmlValueType *vt = QQmlValueTypeFactory::valueType(qMetaTypeId<QGeoCoordinate>());
-        QV4::ScopedValue cv(scope, QV4::QmlValueTypeWrapper::create(v8Engine, QVariant::fromValue(c), vt));
-
+        QV4::ScopedValue cv(scope, v4->fromVariant(QVariant::fromValue(c)));
         waypointArray->putIndexed(i, cv);
     }
 
-    return new QJSValuePrivate(v4, QV4::ValueRef(waypointArray));
+    return QJSValue(v4, waypointArray.asReturnedValue());
 }
 
 void QDeclarativeGeoRouteQuery::setWaypoints(const QJSValue &value)
@@ -854,21 +851,18 @@ QJSValue QDeclarativeGeoRouteQuery::excludedAreas() const
 {
     QQmlContext *context = QQmlEngine::contextForObject(parent());
     QQmlEngine *engine = context->engine();
-    QV8Engine *v8Engine = QQmlEnginePrivate::getV8Engine(engine);
-    QV4::ExecutionEngine *v4 = QV8Engine::getV4(v8Engine);
+    QV4::ExecutionEngine *v4 = QQmlEnginePrivate::getV4Engine(engine);
 
     QV4::Scope scope(v4);
     QV4::Scoped<QV4::ArrayObject> excludedAreasArray(scope, v4->newArrayObject(request_.excludeAreas().length()));
     for (int i = 0; i < request_.excludeAreas().length(); ++i) {
         const QGeoRectangle &r = request_.excludeAreas().at(i);
 
-        QQmlValueType *vt = QQmlValueTypeFactory::valueType(qMetaTypeId<QGeoRectangle>());
-        QV4::ScopedValue cv(scope, QV4::QmlValueTypeWrapper::create(v8Engine, QVariant::fromValue(r), vt));
-
+        QV4::ScopedValue cv(scope, v4->fromVariant(QVariant::fromValue(r)));
         excludedAreasArray->putIndexed(i, cv);
     }
 
-    return new QJSValuePrivate(v4, QV4::ValueRef(excludedAreasArray));
+    return QJSValue(v4, excludedAreasArray.asReturnedValue());
 }
 
 void QDeclarativeGeoRouteQuery::setExcludedAreas(const QJSValue &value)
@@ -900,7 +894,7 @@ void QDeclarativeGeoRouteQuery::setExcludedAreas(const QJSValue &value)
 }
 
 /*!
-    \qmlmethod QtLocation::RouteQuery::addExcludedArea(georectangle)
+    \qmlmethod void QtLocation::RouteQuery::addExcludedArea(georectangle)
 
     Adds the given area to excluded areas (areas that the route must not cross).
     Same area can only be added once.
@@ -930,7 +924,7 @@ void QDeclarativeGeoRouteQuery::addExcludedArea(const QGeoRectangle &area)
 }
 
 /*!
-    \qmlmethod QtLocation::RouteQuery::removeExcludedArea(georectangle)
+    \qmlmethod void QtLocation::RouteQuery::removeExcludedArea(georectangle)
 
     Removes the given area to excluded areas (areas that the route must not cross).
 
@@ -957,7 +951,7 @@ void QDeclarativeGeoRouteQuery::removeExcludedArea(const QGeoRectangle &area)
 }
 
 /*!
-    \qmlmethod QtLocation::RouteQuery::clearExcludedAreas()
+    \qmlmethod void QtLocation::RouteQuery::clearExcludedAreas()
 
     Clears all excluded areas (areas that the route must not cross).
 
@@ -976,7 +970,7 @@ void QDeclarativeGeoRouteQuery::clearExcludedAreas()
 }
 
 /*!
-    \qmlmethod QtLocation::RouteQuery::addWaypoint(coordinate)
+    \qmlmethod void QtLocation::RouteQuery::addWaypoint(coordinate)
 
     Appends a coordinate to the list of waypoints. Same coordinate
     can be set multiple times.
@@ -1001,7 +995,7 @@ void QDeclarativeGeoRouteQuery::addWaypoint(const QGeoCoordinate &waypoint)
 }
 
 /*!
-    \qmlmethod QtLocation::RouteQuery::removeWaypoint(coordinate)
+    \qmlmethod void QtLocation::RouteQuery::removeWaypoint(coordinate)
 
     Removes the given from the list of waypoints. In case same coordinate
     appears multiple times, the most recently added coordinate instance is
@@ -1028,7 +1022,7 @@ void QDeclarativeGeoRouteQuery::removeWaypoint(const QGeoCoordinate &waypoint)
 }
 
 /*!
-    \qmlmethod QtLocation::RouteQuery::clearWaypoints()
+    \qmlmethod void QtLocation::RouteQuery::clearWaypoints()
 
     Clears all waypoints.
 
@@ -1046,7 +1040,7 @@ void QDeclarativeGeoRouteQuery::clearWaypoints()
 }
 
 /*!
-    \qmlmethod QtLocation::RouteQuery::setFeatureWeight(FeatureType, FeatureWeight)
+    \qmlmethod void QtLocation::RouteQuery::setFeatureWeight(FeatureType, FeatureWeight)
 
     Defines the weight to associate with a feature during the planning of a
     route.
@@ -1088,7 +1082,7 @@ void QDeclarativeGeoRouteQuery::setFeatureWeight(FeatureType featureType, Featur
 }
 
 /*!
-    \qmlmethod QtLocation::RouteQuery::resetFeatureWeights()
+    \qmlmethod void QtLocation::RouteQuery::resetFeatureWeights()
 
     Resets all feature weights to their default state (NeutralFeatureWeight).
 

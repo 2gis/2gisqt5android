@@ -3,7 +3,7 @@
 ** Copyright (C) 2012 Denis Shienkov <denis.shienkov@gmail.com>
 ** Copyright (C) 2012 Laszlo Papp <lpapp@kde.org>
 ** Copyright (C) 2012 Andre Hartmann <aha_1980@gmx.de>
-** Contact: http://www.qt-project.org/legal
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtSerialPort module of the Qt Toolkit.
 **
@@ -12,9 +12,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -25,15 +25,15 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
 
-#include "qserialport_wince_p.h"
+#include "qserialport_p.h"
 
 #include <QtCore/qelapsedtimer.h>
 #include <QtCore/qthread.h>
@@ -178,14 +178,6 @@ private:
 };
 
 #include "qserialport_wince.moc"
-
-QSerialPortPrivate::QSerialPortPrivate(QSerialPort *q)
-    : QSerialPortPrivateData(q)
-    , handle(INVALID_HANDLE_VALUE)
-    , parityErrorOccurred(false)
-    , eventNotifier(Q_NULLPTR)
-{
-}
 
 bool QSerialPortPrivate::open(QIODevice::OpenMode mode)
 {
@@ -339,12 +331,12 @@ bool QSerialPortPrivate::setBreakEnabled(bool set)
 
 qint64 QSerialPortPrivate::readData(char *data, qint64 maxSize)
 {
-    return readBuffer.read(data, maxSize);
+    return buffer.read(data, maxSize);
 }
 
 bool QSerialPortPrivate::waitForReadyRead(int msec)
 {
-    if (!readBuffer.isEmpty())
+    if (!buffer.isEmpty())
         return true;
 
     QElapsedTimer stopWatch;
@@ -501,8 +493,8 @@ bool QSerialPortPrivate::notifyRead()
 
     DWORD bytesToRead = (policy == QSerialPort::IgnorePolicy) ? ReadChunkSize : 1;
 
-    if (readBufferMaxSize && bytesToRead > (readBufferMaxSize - readBuffer.size())) {
-        bytesToRead = readBufferMaxSize - readBuffer.size();
+    if (readBufferMaxSize && bytesToRead > (readBufferMaxSize - buffer.size())) {
+        bytesToRead = readBufferMaxSize - buffer.size();
         if (bytesToRead == 0) {
             // Buffer is full. User must read data from the buffer
             // before we can read more from the port.
@@ -510,18 +502,18 @@ bool QSerialPortPrivate::notifyRead()
         }
     }
 
-    char *ptr = readBuffer.reserve(bytesToRead);
+    char *ptr = buffer.reserve(bytesToRead);
 
     DWORD readBytes = 0;
     BOOL sucessResult = ::ReadFile(handle, ptr, bytesToRead, &readBytes, Q_NULLPTR);
 
     if (!sucessResult) {
-        readBuffer.truncate(bytesToRead);
+        buffer.chop(bytesToRead);
         q->setError(QSerialPort::ReadError);
         return false;
     }
 
-    readBuffer.truncate(readBytes);
+    buffer.chop(readBytes);
 
     // Process emulate policy.
     if ((policy != QSerialPort::IgnorePolicy) && parityErrorOccurred) {
@@ -530,11 +522,11 @@ bool QSerialPortPrivate::notifyRead()
 
         switch (policy) {
         case QSerialPort::SkipPolicy:
-            readBuffer.getChar();
+            buffer.getChar();
             return true;
         case QSerialPort::PassZeroPolicy:
-            readBuffer.getChar();
-            readBuffer.putChar('\0');
+            buffer.getChar();
+            buffer.ungetChar('\0');
             break;
         case QSerialPort::StopReceivingPolicy:
             // FIXME: Maybe need disable read notifier?
@@ -689,8 +681,10 @@ bool QSerialPortPrivate::updateCommTimeouts()
     return true;
 }
 
-QSerialPort::SerialPortError QSerialPortPrivate::decodeSystemError() const
+QSerialPort::SerialPortError QSerialPortPrivate::decodeSystemError(int systemErrorCode) const
 {
+    Q_UNUSED(systemErrorCode);
+
     QSerialPort::SerialPortError error;
     switch (::GetLastError()) {
     case ERROR_IO_PENDING:

@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the plugins of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -216,6 +216,42 @@ void QDeclarativeCameraImageProcessing::setDenoisingLevel(qreal value)
     if (value != denoisingLevel()) {
         m_imageProcessing->setDenoisingLevel(value);
         emit denoisingLevelChanged(denoisingLevel());
+    }
+}
+
+/*!
+    \qmlproperty QtMultimedia::CameraImageProcessing::colorFilter
+
+    This property holds which color filter if any will be applied to image data captured by the camera.
+
+    It can be one of:
+
+    \table
+    \row \li CameraImageProcessing.ColorFilterNone       \li No filter is applied to images.
+    \row \li CameraImageProcessing.ColorFilterGrayscale  \li A grayscale filter.
+    \row \li CameraImageProcessing.ColorFilterNegative   \li A negative filter.
+    \row \li CameraImageProcessing.ColorFilterSolarize   \li A solarize filter.
+    \row \li CameraImageProcessing.ColorFilterSepia      \li A sepia filter.
+    \row \li CameraImageProcessing.ColorFilterPosterize  \li A posterize filter.
+    \row \li CameraImageProcessing.ColorFilterWhiteboard \li A whiteboard filter.
+    \row \li CameraImageProcessing.ColorFilterBlackboard \li A blackboard filter.
+    \row \li CameraImageProcessing.ColorFilterAqua       \li An aqua filter.
+    \row \li CameraImageProcessing.ColorFilterVendor     \li The base value for vendor defined filters.
+    \endtable
+
+    \since 5.5
+*/
+
+QDeclarativeCameraImageProcessing::ColorFilter QDeclarativeCameraImageProcessing::colorFilter() const
+{
+    return ColorFilter(m_imageProcessing->colorFilter());
+}
+
+void QDeclarativeCameraImageProcessing::setColorFilter(ColorFilter filter)
+{
+    if (this->colorFilter() != filter) {
+        m_imageProcessing->setColorFilter(QCameraImageProcessing::ColorFilter(filter));
+        emit colorFilterChanged();
     }
 }
 

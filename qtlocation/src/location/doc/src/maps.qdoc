@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
@@ -10,15 +10,15 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Free Documentation License Usage
 ** Alternatively, this file may be used under the terms of the GNU Free
 ** Documentation License version 1.3 as published by the Free Software
 ** Foundation and appearing in the file included in the packaging of
-** this file.  Please review the following information to ensure
+** this file. Please review the following information to ensure
 ** the GNU Free Documentation License version 1.3 requirements
 ** will be met: http://www.gnu.org/copyleft/fdl.html.
 ** $QT_END_LICENSE$
@@ -132,7 +132,7 @@ varying degrees of accuracy.
 A geocoding query in QML is performed using the
 \l{QtLocation::GeocodeModel}{GeocodeModel} type. For an address-to-coordinate
 query, its \c{query} property may be set to either an
-\l{QtPositioning::Address}{Address} object or a string containing the textual
+\l [QtPositioning]{Address} object or a string containing the textual
 form of the address to search for. To perform the reverse, the same property
 can be set to a \l {coordinate} instead. Results are made available in the
 contents of the model.
@@ -146,7 +146,7 @@ contents of the model.
         \li \l{QtLocation::GeocodeModel}{GeocodeModel}
         \li Queries the Plugin for geocoding translations and provides access to results via indexes in the model.
     \row
-        \li \l{QtPositioning::Address}{Address}
+        \li \l[QtPositioning]{Address}
         \li Structured address for use in queries and results of geocoding.
 \endtable
 

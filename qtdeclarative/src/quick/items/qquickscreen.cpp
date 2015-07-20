@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQuick module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -37,6 +37,7 @@
 #include "qquickitem_p.h"
 #include "qquickwindow.h"
 
+#include <QGuiApplication>
 #include <QScreen>
 
 QT_BEGIN_NAMESPACE
@@ -197,7 +198,7 @@ QT_BEGIN_NAMESPACE
     This contains the update mask for the orientation. Screen::orientation
     only emits changes for the screen orientations matching this mask.
 
-    The default, \c 0, means Screen::orientation never updates.
+    By default it is set to the value of the QScreen that the window uses.
 */
 
 QQuickScreenAttached::QQuickScreenAttached(QObject* attachee)
@@ -205,6 +206,7 @@ QQuickScreenAttached::QQuickScreenAttached(QObject* attachee)
     , m_screen(NULL)
     , m_window(NULL)
     , m_updateMask(0)
+    , m_updateMaskSet(false)
 {
     m_attachee = qobject_cast<QQuickItem*>(attachee);
 
@@ -218,6 +220,9 @@ QQuickScreenAttached::QQuickScreenAttached(QObject* attachee)
         if (window)
             windowChanged(window);
     }
+
+    if (!m_screen)
+        screenChanged(QGuiApplication::primaryScreen());
 }
 
 QString QQuickScreenAttached::name() const
@@ -297,6 +302,7 @@ Qt::ScreenOrientations QQuickScreenAttached::orientationUpdateMask() const
 
 void QQuickScreenAttached::setOrientationUpdateMask(Qt::ScreenOrientations mask)
 {
+    m_updateMaskSet = true;
     if (m_updateMask == mask)
         return;
 
@@ -338,26 +344,22 @@ void QQuickScreenAttached::screenChanged(QScreen *screen)
         if (!screen)
             return; //Don't bother emitting signals, because the new values are garbage anyways
 
-        screen->setOrientationUpdateMask(m_updateMask);
-
-        if (!oldScreen || screen->size() != oldScreen->size()) {
-            emit widthChanged();
-            emit heightChanged();
+        if (m_updateMaskSet) {
+            screen->setOrientationUpdateMask(m_updateMask);
+        } else if (m_updateMask != screen->orientationUpdateMask()) {
+            m_updateMask = screen->orientationUpdateMask();
+            emit orientationUpdateMaskChanged();
         }
-        if (!oldScreen || screen->name() != oldScreen->name())
-            emit nameChanged();
-        if (!oldScreen || screen->orientation() != oldScreen->orientation())
-            emit orientationChanged();
-        if (!oldScreen || screen->primaryOrientation() != oldScreen->primaryOrientation())
-            emit primaryOrientationChanged();
-        if (!oldScreen || screen->availableVirtualGeometry() != oldScreen->availableVirtualGeometry())
-            emit desktopGeometryChanged();
-        if (!oldScreen || screen->logicalDotsPerInch() != oldScreen->logicalDotsPerInch())
-            emit logicalPixelDensityChanged();
-        if (!oldScreen || screen->physicalDotsPerInch() != oldScreen->physicalDotsPerInch())
-            emit pixelDensityChanged();
-        if (!oldScreen || screen->devicePixelRatio() != oldScreen->devicePixelRatio())
-            emit devicePixelRatioChanged();
+
+        emit widthChanged();
+        emit heightChanged();
+        emit nameChanged();
+        emit orientationChanged();
+        emit primaryOrientationChanged();
+        emit desktopGeometryChanged();
+        emit logicalPixelDensityChanged();
+        emit pixelDensityChanged();
+        emit devicePixelRatioChanged();
 
         connect(screen, SIGNAL(geometryChanged(QRect)),
                 this, SIGNAL(widthChanged()));

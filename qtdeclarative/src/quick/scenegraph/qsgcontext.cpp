@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQuick module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -256,12 +256,12 @@ public:
         advanceAnimation();
     }
 
-    float m_time;
-    float m_vsync;
+    double m_time;
+    double m_vsync;
     Mode m_mode;
     QElapsedTimer m_timer;
     QElapsedTimer m_wallTime;
-    float m_lag;
+    double m_lag;
     int m_bad;
     int m_good;
 };
@@ -315,11 +315,11 @@ QSGContext::QSGContext(QObject *parent) :
 
     // Adds compatibility with Qt 5.3 and earlier's QSG_RENDER_TIMING
     if (qEnvironmentVariableIsSet("QSG_RENDER_TIMING")) {
-        ((QLoggingCategory &) QSG_LOG_TIME_GLYPH()).setEnabled(QtDebugMsg, true);
-        ((QLoggingCategory &) QSG_LOG_TIME_TEXTURE()).setEnabled(QtDebugMsg, true);
-        ((QLoggingCategory &) QSG_LOG_TIME_RENDERER()).setEnabled(QtDebugMsg, true);
-        ((QLoggingCategory &) QSG_LOG_TIME_RENDERLOOP()).setEnabled(QtDebugMsg, true);
-        ((QLoggingCategory &) QSG_LOG_TIME_COMPILATION()).setEnabled(QtDebugMsg, true);
+        const_cast<QLoggingCategory &>(QSG_LOG_TIME_GLYPH()).setEnabled(QtDebugMsg, true);
+        const_cast<QLoggingCategory &>(QSG_LOG_TIME_TEXTURE()).setEnabled(QtDebugMsg, true);
+        const_cast<QLoggingCategory &>(QSG_LOG_TIME_RENDERER()).setEnabled(QtDebugMsg, true);
+        const_cast<QLoggingCategory &>(QSG_LOG_TIME_RENDERLOOP()).setEnabled(QtDebugMsg, true);
+        const_cast<QLoggingCategory &>(QSG_LOG_TIME_COMPILATION()).setEnabled(QtDebugMsg, true);
     }
 }
 
@@ -379,6 +379,7 @@ void QSGContext::renderContextInitialized(QSGRenderContext *renderContext)
         QByteArray all; foreach (const QByteArray &e, exts) all += ' ' + e;
         qCDebug(QSG_LOG_INFO) << "GL_EXTENSIONS:    " << all.constData();
         qCDebug(QSG_LOG_INFO) << "Max Texture Size: " << renderContext->maxTextureSize();
+        qCDebug(QSG_LOG_INFO) << "Debug context:    " << format.testOption(QSurfaceFormat::DebugContext);
     }
 
     d->mutex.unlock();
@@ -469,8 +470,11 @@ QSurfaceFormat QSGContext::defaultSurfaceFormat() const
     QSurfaceFormat format = QSurfaceFormat::defaultFormat();
     static bool useDepth = qEnvironmentVariableIsEmpty("QSG_NO_DEPTH_BUFFER");
     static bool useStencil = qEnvironmentVariableIsEmpty("QSG_NO_STENCIL_BUFFER");
+    static bool enableDebug = qEnvironmentVariableIsSet("QSG_OPENGL_DEBUG");
     format.setDepthBufferSize(useDepth ? 24 : 0);
     format.setStencilBufferSize(useStencil ? 8 : 0);
+    if (enableDebug)
+        format.setOption(QSurfaceFormat::DebugContext);
     if (QQuickWindow::hasDefaultAlphaBuffer())
         format.setAlphaBufferSize(8);
     format.setSwapBehavior(QSurfaceFormat::DoubleBuffer);
@@ -802,10 +806,7 @@ QSGTexture *QSGRenderContext::textureForFactory(QQuickTextureFactory *factory, Q
     m_mutex.unlock();
 
     if (!texture) {
-        if (QQuickDefaultTextureFactory *dtf = qobject_cast<QQuickDefaultTextureFactory *>(factory))
-            texture = createTexture(dtf->image());
-        else
-            texture = factory->createTexture(window);
+        texture = factory->createTexture(window);
 
         m_mutex.lock();
         m_textures.insert(factory, texture);

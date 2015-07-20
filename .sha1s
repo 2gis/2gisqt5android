@@ -1,62 +1,66 @@
-qt5 was archived from e3cd5bb3688aa24224106bc16a269a286eb238dc
+qt5 was archived from afc1ddcee694c24caf97b76cd629e9163a8787ea
 ------------------------------------------------------------------------
-qtactiveqt was archived from 23fefdce7b6198b176e204316611f0d3596f635b
+qt3d was archived from a2bd6a2a820fc2f2c881102f884df34a190505c7
 ------------------------------------------------------------------------
-qtandroidextras was archived from 030a9c9a0d00bf15ea632d956c9c84535774dfe7
+qtactiveqt was archived from 66e1ecc28e8bcb0b92ea0212caf611d99a80b0ce
 ------------------------------------------------------------------------
-qtbase was archived from 69196b38c481610ef30bfe8ce8e7ba6826729ab8
+qtandroidextras was archived from b8a97cdf78761470c8c67b7780a08f7ef7984c8d
 ------------------------------------------------------------------------
-qtconnectivity was archived from 9cc6a9b3af559004bbfdfec3aa7dd258bee1eb77
+qtbase was archived from fae33bfbe35f8d082b420ee09662ff60634cb355
 ------------------------------------------------------------------------
-qtdeclarative was archived from aebdf4649934e65bdab94d799da5afb2da145a37
+qtcanvas3d was archived from debe68a85b571b70e2fe0824e5ed40484a72c216
 ------------------------------------------------------------------------
-qtdoc was archived from 6c4215658a40e761b9869e9c4c206966282dba96
+qtconnectivity was archived from d332ce0f202c3a7065901a7f6d7fdd99438e7670
 ------------------------------------------------------------------------
-qtenginio was archived from 37e40d3ae296ed8a4ad4f2a641c984897316671f
+qtdeclarative was archived from b1ccb1f8c30d601c55145b65add3846fe5f9bb32
 ------------------------------------------------------------------------
-qtgraphicaleffects was archived from caaf216efb1494e06340632e86bd04c5db759b6d
+qtdoc was archived from 01a1ca7eefa4774c6e278bf2b73f8ffe4c582807
 ------------------------------------------------------------------------
-qtimageformats was archived from 2cf398f541d68f60e0205820524b79b37045bf0f
+qtenginio was archived from efac3cd245e2610924133e304d15bf726f5864f5
 ------------------------------------------------------------------------
-qtlocation was archived from 72217c530ee588f7e0f6eeacea407a1b49592b72
+qtgraphicaleffects was archived from 4ee79d3eb4baef9e5b2a3d263f002a24184d0e6e
 ------------------------------------------------------------------------
-qtmacextras was archived from 4f432b26b489b07545cada1c5c92266238a214df
+qtimageformats was archived from 3b680d667dabfac043464791af31a7a100f2fe82
 ------------------------------------------------------------------------
-qtmultimedia was archived from 6b6cb2121f1ec56ba710a9b57ace3ee74aebe4f1
+qtlocation was archived from 70f7505a0000f391c617e5d388cbfafd7f5111f6
 ------------------------------------------------------------------------
-qtquick1 was archived from bc0cbee60cc309bef5e5359254f798942f676928
+qtmacextras was archived from e16dffd3e0e8dbc1aadb686b6c502944d9557de9
 ------------------------------------------------------------------------
-qtquickcontrols was archived from daa01c6130b27aad5b59f99727761688f9b509fe
+qtmultimedia was archived from 04e086e33667ca1a7aa8a7be7427bfba491a72b0
 ------------------------------------------------------------------------
-qtscript was archived from 52e775b4d0e59dfb44c22b070f272dbc21014389
+qtquick1 was archived from 91394cccb942df1b5699b0d9d69de9ecc6ced86a
 ------------------------------------------------------------------------
-qtsensors was archived from 2abe02fb8dd6b33eb5f891789217bf9de283331e
+qtquickcontrols was archived from b4dc4a98d5deffbbb30f7011f6c0d3d10f430b98
 ------------------------------------------------------------------------
-qtserialport was archived from 5a05fb7b63b6e3a89ab6d4ea8a7795ecdb95748b
+qtscript was archived from c095135d047db6190beafab48d083b00ec82f2d8
 ------------------------------------------------------------------------
-qtsvg was archived from d6357e11474284ddfdb2e860d9661bdf0290ec9b
+qtsensors was archived from d15ee516e5a67823cd44b1cbdc490ad175eb29b4
 ------------------------------------------------------------------------
-qttools was archived from e8efb8f55d9ef0f1cfbbf6c50a71a3aada017f78
+qtserialport was archived from e7efbd88cd7a52a32116497d3e125d9b0bd9cd36
 ------------------------------------------------------------------------
-qttranslations was archived from 28db19a305159b18479fc35ab225dd771323991f
+qtsvg was archived from 7e767afb429910adc0e9a219c5d600b55f6d72d1
 ------------------------------------------------------------------------
-qtwayland was archived from 23bb7cad3166eedcd528da2d3c35377b506f80cc
+qttools was archived from e1b97bb31a685b1d98d26046c4129f2bf6903af0
 ------------------------------------------------------------------------
-qtwebchannel was archived from 616a5ea6ea99882de7e65c80b362699742448b75
+qttranslations was archived from 87f6ce434cce55010a63ebed6f611de3087f24d4
 ------------------------------------------------------------------------
-qtwebengine was archived from 72ff0b7d9600db642e2d2e95c78c70454bbdb5e7
+qtwayland was archived from 862673b75f81e7e836ea083498734b49bae4218a
 ------------------------------------------------------------------------
-qtwebengine/src/3rdparty was archived from f9c03801de86b5e9da2b915a9e490c2f2254fecf
+qtwebchannel was archived from 3be45d074935a3ea372da67a40d234b0e701d77b
 ------------------------------------------------------------------------
-qtwebkit was archived from 383587d4f7200f7ee551a5f71fb0ce145a0ae256
+qtwebengine was archived from 5da2b1ae6284c7da608eda15a00f43d42928ecbb
 ------------------------------------------------------------------------
-qtwebkit-examples was archived from e4076871cd815b7e7e79886c01cffce81d9e699c
+qtwebengine/src/3rdparty was archived from 41a1a031cd69e187a9608359ffe56652dcaaa6c5
 ------------------------------------------------------------------------
-qtwebsockets was archived from 5f8093e6f985a7a887ffaa1e2fecd7314b5444c6
+qtwebkit was archived from 76bc9563d4c12cb5567bef44d5428f18a9245590
 ------------------------------------------------------------------------
-qtwinextras was archived from e57ba2b4c0f412eb70b90b7801af6881a8e185f2
+qtwebkit-examples was archived from f5230ca1daad6923e4f307e82337bf93424b73a4
 ------------------------------------------------------------------------
-qtx11extras was archived from ffeff89b8497d42ed2a786053a9a14775f77f782
+qtwebsockets was archived from 0e3d20ddcfcb520fba3cab53fe39e1493a8348f9
 ------------------------------------------------------------------------
-qtxmlpatterns was archived from 060cc3c47062a35e8127413ece57573d1aca067f
+qtwinextras was archived from 5e9d33513e56e177b3825c01281f67cb197f7fd2
+------------------------------------------------------------------------
+qtx11extras was archived from e6a813c7869fb3677b15b3907bd6647b5f80bd5e
+------------------------------------------------------------------------
+qtxmlpatterns was archived from 8d5f3bd730486b3fd3d5b1782fa70b80108c0ba4
 ------------------------------------------------------------------------

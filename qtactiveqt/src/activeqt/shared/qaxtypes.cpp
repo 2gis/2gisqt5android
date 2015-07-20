@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the ActiveQt framework of the Qt Toolkit.
 **
@@ -17,8 +17,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -50,6 +50,7 @@
 #include <qpixmap.h>
 #include <qpainter.h>
 #include <qobject.h>
+#include <qdebug.h>
 #ifdef QAX_SERVER
 #   include <qaxfactory.h>
 #   include <private/qsystemlibrary_p.h>
@@ -78,10 +79,6 @@ extern void *qax_createObjectWrapper(int metaType, IUnknown *iface);
 
 static IFontDisp *QFontToIFont(const QFont &font)
 {
-#if defined(Q_OS_WINCE)
-    Q_UNUSED(font);
-    return 0;
-#else
     FONTDESC fdesc;
     memset(&fdesc, 0, sizeof(fdesc));
     fdesc.cbSizeofstruct = sizeof(FONTDESC);
@@ -102,7 +99,6 @@ static IFontDisp *QFontToIFont(const QFont &font)
 #endif
     }
     return f;
-#endif
 }
 
 static QFont IFontToQFont(IFont *f)
@@ -134,10 +130,6 @@ static QFont IFontToQFont(IFont *f)
 
 static IPictureDisp *QPixmapToIPicture(const QPixmap &pixmap)
 {
-#if defined(Q_OS_WINCE)
-    Q_UNUSED(pixmap);
-    return 0;
-#else
     IPictureDisp *pic = 0;
 
     PICTDESC desc;
@@ -161,7 +153,6 @@ static IPictureDisp *QPixmapToIPicture(const QPixmap &pixmap)
 #endif
     }
     return pic;
-#endif
 }
 
 static QPixmap IPictureToQPixmap(IPicture *ipic)
@@ -217,6 +208,12 @@ static DATE QDateTimeToDATE(const QDateTime &dt)
     return vtime;
 }
 
+static QByteArray msgOutParameterNotSupported(const QByteArray &type)
+{
+    return QByteArrayLiteral("QVariantToVARIANT: out-parameter not supported for \"")
+        + type + QByteArrayLiteral("\".");
+}
+
 /*
     Converts \a var to \a arg, and tries to coerce \a arg to \a type.
 
@@ -236,17 +233,27 @@ static DATE QDateTimeToDATE(const QDateTime &dt)
 
     Also called recoursively for lists.
 */
+
+// Convenience macro for function QVariantToVARIANT()
+// storing a POD QVariant value in the VARIANT arg.
+#define QVARIANT_TO_VARIANT_POD(type, value, out, varType, varMember, varPointerMember) \
+    if (out && arg.vt == ((varType) | VT_BYREF)) { \
+        *arg.varPointerMember = value; /* pre-allocated out-parameter */ \
+    } else { \
+        if (out) { \
+            arg.vt = (varType) | VT_BYREF; \
+            arg.varPointerMember = new type(value); \
+        } else { \
+            arg.vt = (varType); \
+            arg.varMember = value; \
+        } \
+    }
+
 bool QVariantToVARIANT(const QVariant &var, VARIANT &arg, const QByteArray &typeName, bool out)
 {
     QVariant qvar = var;
     // "type" is the expected type, so coerce if necessary
-    QVariant::Type proptype = typeName.isEmpty() ? QVariant::Invalid : QVariant::nameToType(typeName);
-    if ((proptype == QVariant::UserType || proptype == int(QMetaType::QVariant)) && !typeName.isEmpty()) {
-        if (typeName == "short" || typeName == "char")
-            proptype = QVariant::Int;
-        else if (typeName == "float")
-            proptype = QVariant::Double;
-    }
+    const QVariant::Type proptype = typeName.isEmpty() ? QVariant::Invalid : QVariant::nameToType(typeName);
     if (proptype != QVariant::Invalid
         && proptype != QVariant::UserType
         && proptype != int(QMetaType::QVariant)
@@ -286,152 +293,71 @@ bool QVariantToVARIANT(const QVariant &var, VARIANT &arg, const QByteArray &type
         }
         break;
 
+    case QMetaType::Char:
+        QVARIANT_TO_VARIANT_POD(char, char(qvar.toInt()), out, VT_I1, cVal, pcVal)
+        break;
+
+    case QMetaType::UChar:
+        QVARIANT_TO_VARIANT_POD(BYTE, uchar(qvar.toUInt()), out, VT_UI1, bVal, pbVal)
+        break;
+
+    case QMetaType::Short:
+        QVARIANT_TO_VARIANT_POD(short, qvariant_cast<short>(qvar), out, VT_I2, iVal, piVal)
+        break;
+
+    case QMetaType::UShort:
+        QVARIANT_TO_VARIANT_POD(ushort, qvariant_cast<ushort>(qvar), out, VT_UI2, uiVal, puiVal)
+        break;
+
     case QVariant::Int:
-        if (out && arg.vt == (VT_I4|VT_BYREF)) {
-            *arg.plVal = qvar.toInt();
-        } else {
-            arg.vt = VT_I4;
-            arg.lVal = qvar.toInt();
-            if (out) {
-                if (typeName == "short") {
-                    arg.vt = VT_I2;
-                    arg.piVal = new short(arg.lVal);
-                } else if (typeName == "char") {
-                    arg.vt = VT_I1;
-                    arg.pcVal= new char(arg.lVal);
-                } else {
-                    arg.plVal = new long(arg.lVal);
-                }
-                arg.vt |= VT_BYREF;
-            }
-        }
+        QVARIANT_TO_VARIANT_POD(long, qvar.toInt(), out, VT_I4, lVal, plVal)
         break;
 
     case QVariant::UInt:
-        if (out && (arg.vt == (VT_UINT|VT_BYREF) || arg.vt == (VT_I4|VT_BYREF))) {
-            *arg.puintVal = qvar.toUInt();
-        } else {
-            arg.vt = VT_UINT;
-            arg.uintVal = qvar.toUInt();
-            if (out) {
-                arg.puintVal = new uint(arg.uintVal);
-                arg.vt |= VT_BYREF;
-            }
-        }
+        QVARIANT_TO_VARIANT_POD(uint, qvar.toUInt(), out, VT_UI4, uintVal, puintVal)
         break;
 
     case QVariant::LongLong:
-        if (out && arg.vt == (VT_CY|VT_BYREF)) {
+        if (out && arg.vt == (VT_CY|VT_BYREF)) { // VT_CY: Currency
             arg.pcyVal->int64 = qvar.toLongLong();
-#if !defined(Q_OS_WINCE) && defined(_MSC_VER) && _MSC_VER >= 1400
-        } else if (out && arg.vt == (VT_I8|VT_BYREF)) {
-            *arg.pllVal = qvar.toLongLong();
         } else {
-            arg.vt = VT_I8;
-            arg.llVal = qvar.toLongLong();
-            if (out) {
-                arg.pllVal = new LONGLONG(arg.llVal);
-                arg.vt |= VT_BYREF;
-            }
+            QVARIANT_TO_VARIANT_POD(LONGLONG, qvar.toLongLong(), out, VT_I8, llVal, pllVal)
         }
-#else
-        } else {
-            arg.vt = VT_CY;
-            arg.cyVal.int64 = qvar.toLongLong();
-            if (out) {
-                arg.pcyVal = new CY(arg.cyVal);
-                arg.vt |= VT_BYREF;
-            }
-        }
-#endif
         break;
 
     case QVariant::ULongLong:
-        if (out && arg.vt == (VT_CY|VT_BYREF)) {
+        if (out && arg.vt == (VT_CY|VT_BYREF)) { // VT_CY: Currency
             arg.pcyVal->int64 = qvar.toULongLong();
-#if !defined(Q_OS_WINCE) && defined(_MSC_VER) && _MSC_VER >= 1400
-        } else if (out && arg.vt == (VT_UI8|VT_BYREF)) {
-            *arg.pullVal = qvar.toULongLong();
         } else {
-            arg.vt = VT_UI8;
-            arg.ullVal = qvar.toULongLong();
-            if (out) {
-                arg.pullVal = new ULONGLONG(arg.ullVal);
-                arg.vt |= VT_BYREF;
-            }
+            QVARIANT_TO_VARIANT_POD(ULONGLONG, qvar.toULongLong(), out, VT_UI8, ullVal, pullVal)
         }
-#else
-        } else {
-            arg.vt = VT_CY;
-            arg.cyVal.int64 = qvar.toULongLong();
-            if (out) {
-                arg.pcyVal = new CY(arg.cyVal);
-                arg.vt |= VT_BYREF;
-            }
-        }
-
-#endif
-
         break;
 
     case QVariant::Bool:
-        if (out && arg.vt == (VT_BOOL|VT_BYREF)) {
-            *arg.pboolVal = qvar.toBool() ? VARIANT_TRUE : VARIANT_FALSE;
-        } else {
-            arg.vt = VT_BOOL;
-            arg.boolVal = qvar.toBool() ? VARIANT_TRUE : VARIANT_FALSE;
-            if (out) {
-                arg.pboolVal = new short(arg.boolVal);
-                arg.vt |= VT_BYREF;
-            }
-        }
+        QVARIANT_TO_VARIANT_POD(short, short(qvar.toBool() ? VARIANT_TRUE : VARIANT_FALSE),
+                                out, VT_BOOL, boolVal, pboolVal)
         break;
-    case QMetaType::Float:
-    case QVariant::Double:
-        if (out && arg.vt == (VT_R8|VT_BYREF)) {
-            *arg.pdblVal = qvar.toDouble();
-        } else {
-            arg.vt = VT_R8;
-            arg.dblVal = qvar.toDouble();
-            if (out) {
-                if (typeName == "float") {
-                    arg.vt = VT_R4;
-                    arg.pfltVal = new float(arg.dblVal);
-                } else {
-                    arg.pdblVal = new double(arg.dblVal);
-                }
-                arg.vt |= VT_BYREF;
-            }
-        }
-        break;
-    case QVariant::Color:
-        if (out && arg.vt == (VT_COLOR|VT_BYREF)) {
 
-            *arg.plVal = QColorToOLEColor(qvariant_cast<QColor>(qvar));
-        } else {
-            arg.vt = VT_COLOR;
-            arg.lVal = QColorToOLEColor(qvariant_cast<QColor>(qvar));
-            if (out) {
-                arg.plVal = new long(arg.lVal);
-                arg.vt |= VT_BYREF;
-            }
-        }
+    case QMetaType::Float:
+        QVARIANT_TO_VARIANT_POD(float, float(qvar.toDouble()), out, VT_R4, fltVal, pfltVal)
+        break;
+
+    case QMetaType::Double:
+        QVARIANT_TO_VARIANT_POD(double, qvar.toDouble(), out, VT_R8, dblVal, pdblVal)
+        break;
+
+    case QVariant::Color:
+        QVARIANT_TO_VARIANT_POD(long, QColorToOLEColor(qvariant_cast<QColor>(qvar)),
+                                out, VT_COLOR, lVal, plVal)
         break;
 
     case QVariant::Date:
     case QVariant::Time:
-    case QVariant::DateTime:
-        if (out && arg.vt == (VT_DATE|VT_BYREF)) {
-            *arg.pdate = QDateTimeToDATE(qvar.toDateTime());
-        } else {
-            arg.vt = VT_DATE;
-            arg.date = QDateTimeToDATE(qvar.toDateTime());
-            if (out) {
-                arg.pdate = new DATE(arg.date);
-                arg.vt |= VT_BYREF;
-            }
-        }
+    case QVariant::DateTime: // DATE = double
+        QVARIANT_TO_VARIANT_POD(DATE, QDateTimeToDATE(qvar.toDateTime()),
+                                out, VT_DATE, date, pdate)
         break;
+
     case QVariant::Font:
         if (out && arg.vt == (VT_DISPATCH|VT_BYREF)) {
             if (*arg.ppdispVal)
@@ -530,13 +456,8 @@ bool QVariantToVARIANT(const QVariant &var, VARIANT &arg, const QByteArray &type
                 pElement = &variant.boolVal;
                 break;
             case QVariant::LongLong:
-#if !defined(Q_OS_WINCE) && defined(_MSC_VER) && _MSC_VER >= 1400
                 vt = VT_I8;
                 pElement = &variant.llVal;
-#else
-                vt = VT_CY;
-                pElement = &variant.cyVal;
-#endif
                 break;
             default:
                 break;
@@ -706,13 +627,15 @@ bool QVariantToVARIANT(const QVariant &var, VARIANT &arg, const QByteArray &type
                 break;
             }
 
+            if (out) {
+                qWarning().noquote() << msgOutParameterNotSupported("records");
+                arg.vt = VT_EMPTY;
+                arg.byref = Q_NULLPTR;
+                return false;
+            }
             arg.vt = VT_RECORD;
             arg.pRecInfo = recordInfo,
             arg.pvRecord = record;
-            if (out) {
-                qWarning("QVariantToVARIANT: out-parameter not supported for records");
-                return false;
-           }
         }
         break;
 #endif // QAX_SERVER
@@ -724,30 +647,40 @@ bool QVariantToVARIANT(const QVariant &var, VARIANT &arg, const QByteArray &type
                 subType.truncate(subType.length() - 1);
 #endif
             if (!qstrcmp(qvar.typeName(), "IDispatch*")) {
+                if (out) {
+                    qWarning().noquote() << msgOutParameterNotSupported(qvar.typeName());
+                    arg.vt = VT_EMPTY;
+                    arg.byref = Q_NULLPTR;
+                    return false;
+                }
                 arg.vt = VT_DISPATCH;
                 arg.pdispVal = *(IDispatch**)qvar.data();
                 if (arg.pdispVal)
                     arg.pdispVal->AddRef();
-                if (out) {
-                    qWarning("QVariantToVARIANT: out-parameter not supported for IDispatch");
-                    return false;
-                }
             } else if (!qstrcmp(qvar.typeName(), "IDispatch**")) {
                 arg.vt = VT_DISPATCH;
                 arg.ppdispVal = *(IDispatch***)qvar.data();
                 if (out)
                     arg.vt |= VT_BYREF;
             } else if (!qstrcmp(qvar.typeName(), "IUnknown*")) {
+                if (out) {
+                    qWarning().noquote() << msgOutParameterNotSupported(qvar.typeName());
+                    arg.vt = VT_EMPTY;
+                    arg.byref = Q_NULLPTR;
+                    return false;
+                }
                 arg.vt = VT_UNKNOWN;
                 arg.punkVal = *(IUnknown**)qvar.data();
                 if (arg.punkVal)
                     arg.punkVal->AddRef();
-                if (out) {
-                    qWarning("QVariantToVARIANT: out-parameter not supported for IUnknown");
-                    return false;
-                }
 #ifdef QAX_SERVER
             } else if (qAxFactory()->metaObject(QString::fromLatin1(subType.constData()))) {
+                if (out) {
+                    qWarning().noquote() << msgOutParameterNotSupported("subtype");
+                    arg.vt = VT_EMPTY;
+                    arg.byref = Q_NULLPTR;
+                    return false;
+                }
                 arg.vt = VT_DISPATCH;
                 void *user = *(void**)qvar.constData();
 //                qVariantGet(qvar, user, qvar.typeName());
@@ -756,20 +689,18 @@ bool QVariantToVARIANT(const QVariant &var, VARIANT &arg, const QByteArray &type
                 } else {
                     qAxFactory()->createObjectWrapper(static_cast<QObject*>(user), &arg.pdispVal);
                 }
-                if (out) {
-                    qWarning("QVariantToVARIANT: out-parameter not supported for subtype");
-                    return false;
-                }
 #else
             } else if (QMetaType::type(subType)) {
+                if (out) {
+                    qWarning().noquote() << msgOutParameterNotSupported("subtype");
+                    arg.vt = VT_EMPTY;
+                    arg.byref = Q_NULLPTR;
+                    return false;
+                }
                 QAxObject *object = *(QAxObject**)qvar.constData();
 //                qVariantGet(qvar, object, subType);
                 arg.vt = VT_DISPATCH;
                 object->queryInterface(IID_IDispatch, (void**)&arg.pdispVal);
-                if (out) {
-                    qWarning("QVariantToVARIANT: out-parameter not supported for subtype");
-                    return false;
-                }
 #endif
             } else {
                 return false;
@@ -796,6 +727,8 @@ bool QVariantToVARIANT(const QVariant &var, VARIANT &arg, const QByteArray &type
     Q_ASSERT(!out || (arg.vt & VT_BYREF));
     return true;
 }
+
+#undef QVARIANT_TO_VARIANT_POD
 
 /*!
     Returns \a arg as a QVariant of type \a type.
@@ -921,7 +854,6 @@ QVariant VARIANTToQVariant(const VARIANT &arg, const QByteArray &typeName, uint 
     case VT_CY|VT_BYREF:
         var = arg.pcyVal->int64;
         break;
-#if !defined(Q_OS_WINCE) && defined(_MSC_VER) && _MSC_VER >= 1400
     case VT_I8:
         var = arg.llVal;
         break;
@@ -934,7 +866,6 @@ QVariant VARIANTToQVariant(const VARIANT &arg, const QByteArray &typeName, uint 
     case VT_UI8|VT_BYREF:
         var = *arg.pullVal;
         break;
-#endif
     case VT_R4:
         var = arg.fltVal;
         break;
@@ -1210,7 +1141,6 @@ QVariant VARIANTToQVariant(const VARIANT &arg, const QByteArray &typeName, uint 
         break;
 #endif // QAX_SERVER
     default:
-#if !defined(Q_OS_WINCE)
         // support for any SAFEARRAY(Type) where Type can be converted to a QVariant
         // -> QVariantList
         if (arg.vt & VT_ARRAY) {
@@ -1238,10 +1168,8 @@ QVariant VARIANTToQVariant(const VARIANT &arg, const QByteArray &typeName, uint 
             case VT_I1: pElement = &variant.cVal; break;
             case VT_I2: pElement = &variant.iVal; break;
             case VT_I4: pElement = &variant.lVal; break;
-#if defined(_MSC_VER) && _MSC_VER >= 1400
             case VT_I8: pElement = &variant.llVal; break;
             case VT_UI8: pElement = &variant.ullVal; break;
-#endif
             case VT_INT: pElement = &variant.intVal; break;
             case VT_UI1: Q_ASSERT(false); break; // already covered
             case VT_UI2: pElement = &variant.uiVal; break;
@@ -1274,7 +1202,6 @@ QVariant VARIANTToQVariant(const VARIANT &arg, const QByteArray &typeName, uint 
 
             var = list;
         }
-#endif
         break;
     }
 
@@ -1291,9 +1218,8 @@ QVariant VARIANTToQVariant(const VARIANT &arg, const QByteArray &typeName, uint 
         } else if (proptype == QVariant::StringList && var.type() == QVariant::List) {
             bool allStrings = true;
             QStringList strings;
-            const QList<QVariant> list(var.toList());
-            for (QList<QVariant>::ConstIterator it(list.begin()); it != list.end(); ++it) {
-                QVariant variant = *it;
+            const QVariantList list(var.toList());
+            foreach (const QVariant &variant, list) {
                 if (variant.canConvert(QVariant::String))
                     strings << variant.toString();
                 else

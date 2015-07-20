@@ -13,5 +13,9 @@ GYP_CONFIG += \
     use_gnome_keyring=0 \
     use_kerberos=0 \
     use_pango=0 \
+    host_clang=0 \
+    clang=0 \
+
+contains(QT_CONFIG, system-jpeg): GYP_CONFIG += use_system_libjpeg=1
 
 !contains(QT_CONFIG, pulseaudio): GYP_CONFIG += use_pulseaudio=0

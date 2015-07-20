@@ -26,19 +26,18 @@
 #include "config.h"
 #include "modules/indexeddb/IDBCursor.h"
 
-#include "bindings/v8/ExceptionState.h"
-#include "bindings/v8/IDBBindingUtilities.h"
-#include "bindings/v8/ScriptState.h"
+#include "bindings/core/v8/ExceptionState.h"
+#include "bindings/core/v8/ScriptState.h"
+#include "bindings/modules/v8/IDBBindingUtilities.h"
 #include "core/dom/ExceptionCode.h"
-#include "core/dom/ExecutionContext.h"
 #include "core/inspector/ScriptCallStack.h"
+#include "modules/IndexedDBNames.h"
 #include "modules/indexeddb/IDBAny.h"
 #include "modules/indexeddb/IDBDatabase.h"
 #include "modules/indexeddb/IDBObjectStore.h"
 #include "modules/indexeddb/IDBTracing.h"
 #include "modules/indexeddb/IDBTransaction.h"
 #include "modules/indexeddb/WebIDBCallbacksImpl.h"
-#include "public/platform/WebBlobInfo.h"
 #include "public/platform/WebIDBDatabase.h"
 #include "public/platform/WebIDBKeyRange.h"
 #include <limits>
@@ -46,38 +45,14 @@
 using blink::WebIDBCursor;
 using blink::WebIDBDatabase;
 
-namespace WebCore {
+namespace blink {
 
-IDBCursor* IDBCursor::create(PassOwnPtr<blink::WebIDBCursor> backend, blink::WebIDBCursorDirection direction, IDBRequest* request, IDBAny* source, IDBTransaction* transaction)
+IDBCursor* IDBCursor::create(PassOwnPtr<WebIDBCursor> backend, WebIDBCursorDirection direction, IDBRequest* request, IDBAny* source, IDBTransaction* transaction)
 {
     return new IDBCursor(backend, direction, request, source, transaction);
 }
 
-const AtomicString& IDBCursor::directionNext()
-{
-    DEFINE_STATIC_LOCAL(AtomicString, next, ("next", AtomicString::ConstructFromLiteral));
-    return next;
-}
-
-const AtomicString& IDBCursor::directionNextUnique()
-{
-    DEFINE_STATIC_LOCAL(AtomicString, nextunique, ("nextunique", AtomicString::ConstructFromLiteral));
-    return nextunique;
-}
-
-const AtomicString& IDBCursor::directionPrev()
-{
-    DEFINE_STATIC_LOCAL(AtomicString, prev, ("prev", AtomicString::ConstructFromLiteral));
-    return prev;
-}
-
-const AtomicString& IDBCursor::directionPrevUnique()
-{
-    DEFINE_STATIC_LOCAL(AtomicString, prevunique, ("prevunique", AtomicString::ConstructFromLiteral));
-    return prevunique;
-}
-
-IDBCursor::IDBCursor(PassOwnPtr<blink::WebIDBCursor> backend, blink::WebIDBCursorDirection direction, IDBRequest* request, IDBAny* source, IDBTransaction* transaction)
+IDBCursor::IDBCursor(PassOwnPtr<WebIDBCursor> backend, WebIDBCursorDirection direction, IDBRequest* request, IDBAny* source, IDBTransaction* transaction)
     : m_backend(backend)
     , m_request(request)
     , m_direction(direction)
@@ -92,12 +67,10 @@ IDBCursor::IDBCursor(PassOwnPtr<blink::WebIDBCursor> backend, blink::WebIDBCurso
     ASSERT(m_request);
     ASSERT(m_source->type() == IDBAny::IDBObjectStoreType || m_source->type() == IDBAny::IDBIndexType);
     ASSERT(m_transaction);
-    ScriptWrappable::init(this);
 }
 
 IDBCursor::~IDBCursor()
 {
-    handleBlobAcks();
 }
 
 void IDBCursor::trace(Visitor* visitor)
@@ -109,7 +82,7 @@ void IDBCursor::trace(Visitor* visitor)
     visitor->trace(m_primaryKey);
 }
 
-IDBRequest* IDBCursor::update(ScriptState* scriptState, ScriptValue& value, ExceptionState& exceptionState)
+IDBRequest* IDBCursor::update(ScriptState* scriptState, const ScriptValue& value, ExceptionState& exceptionState)
 {
     IDB_TRACE("IDBCursor::update");
 
@@ -139,17 +112,7 @@ IDBRequest* IDBCursor::update(ScriptState* scriptState, ScriptValue& value, Exce
     }
 
     IDBObjectStore* objectStore = effectiveObjectStore();
-    const IDBKeyPath& keyPath = objectStore->metadata().keyPath;
-    const bool usesInLineKeys = !keyPath.isNull();
-    if (usesInLineKeys) {
-        IDBKey* keyPathKey = createIDBKeyFromScriptValueAndKeyPath(scriptState->isolate(), value, keyPath);
-        if (!keyPathKey || !keyPathKey->isEqual(m_primaryKey.get())) {
-            exceptionState.throwDOMException(DataError, "The effective object store of this cursor uses in-line keys and evaluating the key path of the value parameter results in a different value than the cursor's effective key.");
-            return 0;
-        }
-    }
-
-    return objectStore->put(scriptState, blink::WebIDBPutModeCursorUpdate, IDBAny::create(this), value, m_primaryKey, exceptionState);
+    return objectStore->put(scriptState, WebIDBPutModeCursorUpdate, IDBAny::create(this), value, m_primaryKey, exceptionState);
 }
 
 void IDBCursor::advance(unsigned long count, ExceptionState& exceptionState)
@@ -230,7 +193,7 @@ void IDBCursor::continueFunction(IDBKey* key, IDBKey* primaryKey, ExceptionState
 
     if (key) {
         ASSERT(m_key);
-        if (m_direction == blink::WebIDBCursorDirectionNext || m_direction == blink::WebIDBCursorDirectionNextNoDuplicate) {
+        if (m_direction == WebIDBCursorDirectionNext || m_direction == WebIDBCursorDirectionNextNoDuplicate) {
             const bool ok = m_key->isLessThan(key)
                 || (primaryKey && m_key->isEqual(key) && m_primaryKey->isLessThan(primaryKey));
             if (!ok) {
@@ -304,7 +267,7 @@ void IDBCursor::postSuccessHandlerCallback()
 
 void IDBCursor::close()
 {
-    handleBlobAcks();
+    m_blobs.clear();
     m_request.clear();
     m_backend.clear();
 }
@@ -329,17 +292,16 @@ ScriptValue IDBCursor::value(ScriptState* scriptState)
     const IDBObjectStoreMetadata& metadata = objectStore->metadata();
     IDBAny* value;
     if (metadata.autoIncrement && !metadata.keyPath.isNull()) {
-        value = IDBAny::create(m_value, m_blobInfo.get(), m_primaryKey, metadata.keyPath);
-#ifndef NDEBUG
-        assertPrimaryKeyValidOrInjectable(scriptState, m_value, m_blobInfo.get(), m_primaryKey, metadata.keyPath);
+        value = IDBAny::create(m_value, m_blobs->getInfo(), m_primaryKey, metadata.keyPath);
+#if ENABLE(ASSERT)
+        assertPrimaryKeyValidOrInjectable(scriptState, m_value, m_blobs->getInfo(), m_primaryKey, metadata.keyPath);
 #endif
     } else {
-        value = IDBAny::create(m_value, m_blobInfo.get());
+        value = IDBAny::create(m_value, m_blobs->getInfo());
     }
 
     m_valueDirty = false;
     ScriptValue scriptValue = idbAnyToScriptValue(scriptState, value);
-    handleBlobAcks();
     return scriptValue;
 }
 
@@ -348,7 +310,7 @@ ScriptValue IDBCursor::source(ScriptState* scriptState) const
     return idbAnyToScriptValue(scriptState, m_source);
 }
 
-void IDBCursor::setValueReady(IDBKey* key, IDBKey* primaryKey, PassRefPtr<SharedBuffer> value, PassOwnPtr<Vector<blink::WebBlobInfo> > blobInfo)
+void IDBCursor::setValueReady(IDBKey* key, IDBKey* primaryKey, PassRefPtr<SharedBuffer> value, PassOwnPtr<IDBRequest::IDBBlobHolder> blobs)
 {
     m_key = key;
     m_keyDirty = true;
@@ -358,8 +320,7 @@ void IDBCursor::setValueReady(IDBKey* key, IDBKey* primaryKey, PassRefPtr<Shared
 
     if (isCursorWithValue()) {
         m_value = value;
-        handleBlobAcks();
-        m_blobInfo = blobInfo;
+        m_blobs = blobs;
         m_valueDirty = true;
     }
 
@@ -380,50 +341,40 @@ bool IDBCursor::isDeleted() const
     return m_source->idbIndex()->isDeleted();
 }
 
-void IDBCursor::handleBlobAcks()
+WebIDBCursorDirection IDBCursor::stringToDirection(const String& directionString, ExceptionState& exceptionState)
 {
-    ASSERT(m_request || !m_blobInfo || !m_blobInfo->size());
-    if (m_blobInfo.get() && m_blobInfo->size()) {
-        ASSERT(m_request);
-        m_transaction->db()->ackReceivedBlobs(m_blobInfo.get());
-        m_blobInfo.clear();
-    }
-}
-
-blink::WebIDBCursorDirection IDBCursor::stringToDirection(const String& directionString, ExceptionState& exceptionState)
-{
-    if (directionString.isNull() || directionString == IDBCursor::directionNext())
-        return blink::WebIDBCursorDirectionNext;
-    if (directionString == IDBCursor::directionNextUnique())
-        return blink::WebIDBCursorDirectionNextNoDuplicate;
-    if (directionString == IDBCursor::directionPrev())
-        return blink::WebIDBCursorDirectionPrev;
-    if (directionString == IDBCursor::directionPrevUnique())
-        return blink::WebIDBCursorDirectionPrevNoDuplicate;
+    if (directionString == IndexedDBNames::next)
+        return WebIDBCursorDirectionNext;
+    if (directionString == IndexedDBNames::nextunique)
+        return WebIDBCursorDirectionNextNoDuplicate;
+    if (directionString == IndexedDBNames::prev)
+        return WebIDBCursorDirectionPrev;
+    if (directionString == IndexedDBNames::prevunique)
+        return WebIDBCursorDirectionPrevNoDuplicate;
 
     exceptionState.throwTypeError("The direction provided ('" + directionString + "') is not one of 'next', 'nextunique', 'prev', or 'prevunique'.");
-    return blink::WebIDBCursorDirectionNext;
+    return WebIDBCursorDirectionNext;
 }
 
-const AtomicString& IDBCursor::directionToString(unsigned short direction)
+const String& IDBCursor::direction() const
 {
-    switch (direction) {
-    case blink::WebIDBCursorDirectionNext:
-        return IDBCursor::directionNext();
+    switch (m_direction) {
+    case WebIDBCursorDirectionNext:
+        return IndexedDBNames::next;
 
-    case blink::WebIDBCursorDirectionNextNoDuplicate:
-        return IDBCursor::directionNextUnique();
+    case WebIDBCursorDirectionNextNoDuplicate:
+        return IndexedDBNames::nextunique;
 
-    case blink::WebIDBCursorDirectionPrev:
-        return IDBCursor::directionPrev();
+    case WebIDBCursorDirectionPrev:
+        return IndexedDBNames::prev;
 
-    case blink::WebIDBCursorDirectionPrevNoDuplicate:
-        return IDBCursor::directionPrevUnique();
+    case WebIDBCursorDirectionPrevNoDuplicate:
+        return IndexedDBNames::prevunique;
 
     default:
         ASSERT_NOT_REACHED();
-        return IDBCursor::directionNext();
+        return IndexedDBNames::next;
     }
 }
 
-} // namespace WebCore
+} // namespace blink

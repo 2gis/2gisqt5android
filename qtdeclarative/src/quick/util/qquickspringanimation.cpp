@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQuick module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -41,8 +41,7 @@
 
 #include <private/qobject_p.h>
 
-#include <limits.h>
-#include <math.h>
+#include <cmath>
 
 #define DELAY_STOP_TIMER_INTERVAL 32
 
@@ -87,6 +86,7 @@ public:
     bool haveModulus : 1;
     bool skipUpdate : 1;
     typedef QHash<QQmlProperty, QSpringAnimation*> ActiveAnimationHash;
+    typedef ActiveAnimationHash::Iterator ActiveAnimationHashIt;
 
     void clearTemplate() { animationTemplate = 0; }
 
@@ -162,14 +162,12 @@ QSpringAnimation::~QSpringAnimation()
 {
     if (animationTemplate) {
         if (target.object()) {
-            QSpringAnimation::ActiveAnimationHash::iterator it =
-                    animationTemplate->activeAnimations.find(target);
+            ActiveAnimationHashIt it = animationTemplate->activeAnimations.find(target);
             if (it != animationTemplate->activeAnimations.end() && it.value() == this)
                 animationTemplate->activeAnimations.erase(it);
         } else {
             //target is no longer valid, need to search linearly
-            QSpringAnimation::ActiveAnimationHash::iterator it;
-            for (it = animationTemplate->activeAnimations.begin(); it != animationTemplate->activeAnimations.end(); ++it) {
+            for (ActiveAnimationHashIt it = animationTemplate->activeAnimations.begin(); it != animationTemplate->activeAnimations.end(); ++it) {
                 if (it.value() == this) {
                     animationTemplate->activeAnimations.erase(it);
                     break;
@@ -282,11 +280,11 @@ void QSpringAnimation::updateCurrentTime(int time)
         if (diff > 0) {
             currentValue += moveBy;
             if (haveModulus)
-                currentValue = fmod(currentValue, modulus);
+                currentValue = std::fmod(currentValue, modulus);
         } else {
             currentValue -= moveBy;
             if (haveModulus && currentValue < 0.0)
-                currentValue = fmod(currentValue, modulus) + modulus;
+                currentValue = std::fmod(currentValue, modulus) + modulus;
         }
         if (lastTime - startTime >= dura) {
             currentValue = to;
@@ -315,7 +313,7 @@ void QSpringAnimation::updateState(QAbstractAnimationJob::State newState, QAbstr
 
 void QSpringAnimation::debugAnimation(QDebug d) const
 {
-    d << "SpringAnimationJob(" << hex << (void *) this << dec << ")" << "velocity:" << maxVelocity
+    d << "SpringAnimationJob(" << hex << (const void *) this << dec << ")" << "velocity:" << maxVelocity
       << "spring:" << spring << "damping:" << damping << "epsilon:" << epsilon << "modulus:" << modulus
       << "mass:" << mass << "target:" << target.object() << "property:" << target.name()
       << "to:" << to << "current velocity:" << velocity;
@@ -330,8 +328,7 @@ void QQuickSpringAnimationPrivate::updateMode()
         mode = QSpringAnimation::Spring;
     else {
         mode = QSpringAnimation::Velocity;
-        QSpringAnimation::ActiveAnimationHash::iterator it;
-        for (it = activeAnimations.begin(); it != activeAnimations.end(); ++it) {
+        for (QSpringAnimation::ActiveAnimationHashIt it = activeAnimations.begin(), end = activeAnimations.end(); it != end; ++it) {
             QSpringAnimation *animation = *it;
             animation->startTime = animation->lastTime;
             qreal dist = qAbs(animation->currentValue - animation->to);
@@ -379,10 +376,8 @@ QQuickSpringAnimation::QQuickSpringAnimation(QObject *parent)
 QQuickSpringAnimation::~QQuickSpringAnimation()
 {
     Q_D(QQuickSpringAnimation);
-    QSpringAnimation::ActiveAnimationHash::iterator it;
-    for (it = d->activeAnimations.begin(); it != d->activeAnimations.end(); ++it) {
+    for (QSpringAnimation::ActiveAnimationHashIt it = d->activeAnimations.begin(), end = d->activeAnimations.end(); it != end; ++it)
         it.value()->clearTemplate();
-    }
 }
 
 /*!

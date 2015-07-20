@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQuick module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -49,6 +49,14 @@
 #include <private/qglyphrun_p.h>
 
 QT_BEGIN_NAMESPACE
+
+QQuickTextNodeEngine::BinaryTreeNodeKey::BinaryTreeNodeKey(BinaryTreeNode *node)
+    : fontEngine(QRawFontPrivate::get(node->glyphRun.rawFont())->fontEngine)
+    , clipNode(node->clipNode)
+    , color(node->color.rgba())
+    , selectionState(node->selectionState)
+{
+}
 
 QQuickTextNodeEngine::BinaryTreeNode::BinaryTreeNode(const QGlyphRun &g,
                                                      SelectionState selState,
@@ -191,7 +199,10 @@ void QQuickTextNodeEngine::addTextDecorations(const QVarLengthArray<TextDecorati
 
         {
             QRectF &rect = textDecoration.rect;
-            rect.setY(qRound(rect.y() + m_currentLine.ascent() + offset));
+            rect.setY(qRound(rect.y()
+                             + m_currentLine.ascent()
+                             + (m_currentLine.leadingIncluded() ? m_currentLine.leading() : qreal(0.0f))
+                             + offset));
             rect.setHeight(thickness);
         }
 
@@ -405,7 +416,7 @@ void QQuickTextNodeEngine::addImage(const QRectF &rect, const QImage &image, qre
     QRectF searchRect = rect;
     if (layoutPosition == QTextFrameFormat::InFlow) {
         if (m_currentLineTree.isEmpty()) {
-            searchRect.moveTopLeft(m_position + m_currentLine.position());
+            searchRect.moveTopLeft(m_position + m_currentLine.position() + QPointF(0,1));
         } else {
             const BinaryTreeNode *lastNode = m_currentLineTree.data() + m_currentLineTree.size() - 1;
             if (lastNode->glyphRun.isRightToLeft()) {
@@ -667,6 +678,72 @@ void QQuickTextNodeEngine::addFrameDecorations(QTextDocument *document, QTextFra
     }
 }
 
+uint qHash(const QQuickTextNodeEngine::BinaryTreeNodeKey &key)
+{
+    // Just use the default hash for pairs
+    return qHash(qMakePair(key.fontEngine, qMakePair(key.clipNode,
+                                                     qMakePair(key.color, key.selectionState))));
+}
+
+void QQuickTextNodeEngine::mergeProcessedNodes(QList<BinaryTreeNode *> *regularNodes,
+                                               QList<BinaryTreeNode *> *imageNodes)
+{
+    QHash<BinaryTreeNodeKey, QList<BinaryTreeNode *> > map;
+
+    for (int i = 0; i < m_processedNodes.size(); ++i) {
+        BinaryTreeNode *node = m_processedNodes.data() + i;
+
+        if (node->image.isNull()) {
+            BinaryTreeNodeKey key(node);
+
+            QList<BinaryTreeNode *> &nodes = map[key];
+            if (nodes.isEmpty())
+                regularNodes->append(node);
+
+            nodes.append(node);
+        } else {
+            imageNodes->append(node);
+        }
+    }
+
+    for (int i = 0; i < regularNodes->size(); ++i) {
+        BinaryTreeNode *primaryNode = regularNodes->at(i);
+        BinaryTreeNodeKey key(primaryNode);
+
+        const QList<BinaryTreeNode *> &nodes = map.value(key);
+        Q_ASSERT(nodes.first() == primaryNode);
+
+        int count = 0;
+        for (int j = 0; j < nodes.size(); ++j)
+            count += nodes.at(j)->glyphRun.glyphIndexes().size();
+
+        if (count != primaryNode->glyphRun.glyphIndexes().size()) {
+            QGlyphRun &glyphRun = primaryNode->glyphRun;
+            QVector<quint32> glyphIndexes = glyphRun.glyphIndexes();
+            glyphIndexes.reserve(count);
+
+            QVector<QPointF> glyphPositions = glyphRun.positions();
+            glyphPositions.reserve(count);
+
+            for (int j = 1; j < nodes.size(); ++j) {
+                BinaryTreeNode *otherNode = nodes.at(j);
+                glyphIndexes += otherNode->glyphRun.glyphIndexes();
+                primaryNode->ranges += otherNode->ranges;
+
+                QVector<QPointF> otherPositions = otherNode->glyphRun.positions();
+                for (int k = 0; k < otherPositions.size(); ++k)
+                    glyphPositions += otherPositions.at(k) + (otherNode->position - primaryNode->position);
+            }
+
+            Q_ASSERT(glyphPositions.size() == count);
+            Q_ASSERT(glyphIndexes.size() == count);
+
+            glyphRun.setGlyphIndexes(glyphIndexes);
+            glyphRun.setPositions(glyphPositions);
+        }
+    }
+}
+
 void  QQuickTextNodeEngine::addToSceneGraph(QQuickTextNode *parentNode,
                                             QQuickText::TextStyle style,
                                             const QColor &styleColor)
@@ -674,54 +751,9 @@ void  QQuickTextNodeEngine::addToSceneGraph(QQuickTextNode *parentNode,
     if (m_currentLine.isValid())
         processCurrentLine();
 
-    // Then, go through all the nodes for all lines and combine all QGlyphRuns with a common
-    // font, selection state and clip node.
-    typedef QPair<QFontEngine *, QPair<QQuickDefaultClipNode *, QPair<QRgb, int> > > KeyType;
-    QHash<KeyType, BinaryTreeNode *> map;
     QList<BinaryTreeNode *> nodes;
     QList<BinaryTreeNode *> imageNodes;
-    for (int i = 0; i < m_processedNodes.size(); ++i) {
-        BinaryTreeNode *node = m_processedNodes.data() + i;
-
-        if (node->image.isNull()) {
-            QGlyphRun glyphRun = node->glyphRun;
-            QRawFont rawFont = glyphRun.rawFont();
-            QRawFontPrivate *rawFontD = QRawFontPrivate::get(rawFont);
-
-            QFontEngine *fontEngine = rawFontD->fontEngine;
-
-            KeyType key(qMakePair(fontEngine,
-                                  qMakePair(node->clipNode,
-                                            qMakePair(node->color.rgba(), int(node->selectionState)))));
-
-            BinaryTreeNode *otherNode = map.value(key, 0);
-            if (otherNode != 0) {
-                QGlyphRun &otherGlyphRun = otherNode->glyphRun;
-
-                QVector<quint32> otherGlyphIndexes = otherGlyphRun.glyphIndexes();
-                QVector<QPointF> otherGlyphPositions = otherGlyphRun.positions();
-
-                otherGlyphIndexes += glyphRun.glyphIndexes();
-
-                QVector<QPointF> glyphPositions = glyphRun.positions();
-                otherGlyphPositions.reserve(otherGlyphPositions.size() + glyphPositions.size());
-                for (int j = 0; j < glyphPositions.size(); ++j) {
-                    otherGlyphPositions += glyphPositions.at(j) + (node->position - otherNode->position);
-                }
-
-                otherGlyphRun.setGlyphIndexes(otherGlyphIndexes);
-                otherGlyphRun.setPositions(otherGlyphPositions);
-
-                otherNode->ranges += node->ranges;
-
-            } else {
-                map.insert(key, node);
-                nodes.append(node);
-            }
-        } else {
-            imageNodes.append(node);
-        }
-    }
+    mergeProcessedNodes(&nodes, &imageNodes);
 
     for (int i = 0; i < m_backgrounds.size(); ++i) {
         const QRectF &rect = m_backgrounds.at(i).first;
@@ -980,7 +1012,18 @@ void QQuickTextNodeEngine::addTextBlock(QTextDocument *textDocument, const QText
             continue;
 
         QTextCharFormat charFormat = fragment.charFormat();
-        setPosition(blockPosition);
+        QFont font(charFormat.font());
+        QFontMetricsF fontMetrics(font);
+
+        int fontHeight = fontMetrics.descent() + fontMetrics.ascent();
+        int valign = charFormat.verticalAlignment();
+        if (valign == QTextCharFormat::AlignSuperScript)
+            setPosition(QPointF(blockPosition.x(), blockPosition.y() - fontHeight / 2));
+        else if (valign == QTextCharFormat::AlignSubScript)
+            setPosition(QPointF(blockPosition.x(), blockPosition.y() + fontHeight / 6));
+        else
+            setPosition(blockPosition);
+
         if (text.contains(QChar::ObjectReplacementCharacter)) {
             QTextFrame *frame = qobject_cast<QTextFrame *>(textDocument->objectForFormat(charFormat));
             if (frame && frame->frameFormat().position() == QTextFrameFormat::InFlow) {
@@ -1016,6 +1059,13 @@ void QQuickTextNodeEngine::addTextBlock(QTextDocument *textDocument, const QText
                 fragmentEnd += preeditLength;
             }
 #endif
+            if (charFormat.background().style() != Qt::NoBrush) {
+                QTextLayout::FormatRange additionalFormat;
+                additionalFormat.start = textPos - block.position();
+                additionalFormat.length = fragmentEnd - textPos;
+                additionalFormat.format = charFormat;
+                colorChanges << additionalFormat;
+            }
 
             textPos = addText(block, charFormat, textColor, colorChanges, textPos, fragmentEnd,
                                                  selectionStart, selectionEnd);

@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQuick module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -46,9 +46,9 @@
 #include <QtQml/qqmlinfo.h>
 #include <QtGui/qpen.h>
 #include <QtGui/qguiapplication.h>
+#include <QtGui/qstylehints.h>
 #include <QtGui/private/qguiapplication_p.h>
 #include <QtGui/qinputmethod.h>
-#include <QtCore/qdebug.h>
 #include <QtCore/qcoreevent.h>
 #include <QtCore/qnumeric.h>
 #include <QtGui/qpa/qplatformtheme.h>
@@ -65,6 +65,7 @@
 
 #include <private/qv4engine_p.h>
 #include <private/qv4object_p.h>
+#include <private/qdebug_p.h>
 
 #ifndef QT_NO_CURSOR
 # include <QtGui/qcursor.h>
@@ -1756,11 +1757,9 @@ void QQuickItemPrivate::updateSubFocusItem(QQuickItem *scope, bool focus)
     QQmlProperty(), or QMetaProperty::write() when you need to modify those
     properties from C++. This ensures that the QML engine knows about the
     property change. Otherwise, the engine won't be able to carry out your
-    requested animation. For example, if you call \l setPosition() directly,
-    any behavior that reacts to changes in the x or y properties will not take
-    effect, as you are bypassing Qt's meta-object system. Note that these
-    functions incur a slight performance penalty. For more details, see
-    \l {Accessing Members of a QML Object Type from C++}.
+    requested animation.
+    Note that these functions incur a slight performance penalty. For more
+    details, see \l {Accessing Members of a QML Object Type from C++}.
 
     \sa QQuickWindow, QQuickPaintedItem
 */
@@ -2292,16 +2291,6 @@ QQuickItem::~QQuickItem()
 /*!
     \internal
 */
-bool QQuickItemPrivate::qt_tab_all_widgets()
-{
-    if (const QPlatformTheme *theme = QGuiApplicationPrivate::platformTheme())
-        return theme->themeHint(QPlatformTheme::TabAllWidgets).toBool();
-    return true;
-}
-
-/*!
-    \internal
-*/
 bool QQuickItemPrivate::canAcceptTabFocus(QQuickItem *item)
 {
     if (!item->window())
@@ -2364,7 +2353,7 @@ QQuickItem* QQuickItemPrivate::nextPrevItemInTabFocusChain(QQuickItem *item, boo
     if (!contentItem)
         return item;
 
-    bool all = QQuickItemPrivate::qt_tab_all_widgets();
+    bool all = QGuiApplication::styleHints()->tabFocusBehavior() == Qt::TabFocusAllControls;
 
     QQuickItem *from = 0;
     if (forward) {
@@ -2529,13 +2518,12 @@ void QQuickItem::setParentItem(QQuickItem *parentItem)
         QQuickWindowPrivate::get(d->window)->parentlessItems.remove(this);
     }
 
-    QQuickWindow *oldParentWindow = oldParentItem ? QQuickItemPrivate::get(oldParentItem)->window : 0;
     QQuickWindow *parentWindow = parentItem ? QQuickItemPrivate::get(parentItem)->window : 0;
-    if (oldParentWindow == parentWindow) {
+    if (d->window == parentWindow) {
         // Avoid freeing and reallocating resources if the window stays the same.
         d->parentItem = parentItem;
     } else {
-        if (oldParentWindow)
+        if (d->window)
             d->derefWindow();
         d->parentItem = parentItem;
         if (parentWindow)
@@ -2724,8 +2712,11 @@ void QQuickItemPrivate::addChild(QQuickItem *child)
 
 #ifndef QT_NO_CURSOR
     QQuickItemPrivate *childPrivate = QQuickItemPrivate::get(child);
-    if (childPrivate->extra.isAllocated())
-        incrementCursorCount(childPrivate->extra.value().numItemsWithCursor);
+
+    // if the added child has a cursor and we do not currently have any children
+    // with cursors, bubble the notification up
+    if (childPrivate->hasCursorInChild && !hasCursorInChild)
+        setHasCursorInChild(true);
 #endif
 
     markSortedChildrenDirty(child);
@@ -2747,8 +2738,10 @@ void QQuickItemPrivate::removeChild(QQuickItem *child)
 
 #ifndef QT_NO_CURSOR
     QQuickItemPrivate *childPrivate = QQuickItemPrivate::get(child);
-    if (childPrivate->extra.isAllocated())
-        incrementCursorCount(-childPrivate->extra.value().numItemsWithCursor);
+
+    // turn it off, if nothing else is using it
+    if (childPrivate->hasCursorInChild && hasCursorInChild)
+        setHasCursorInChild(false);
 #endif
 
     markSortedChildrenDirty(child);
@@ -2843,10 +2836,8 @@ void QQuickItemPrivate::derefWindow()
         extra->opacityNode = 0;
         extra->clipNode = 0;
         extra->rootNode = 0;
-        extra->beforePaintNode = 0;
     }
 
-    groupNode = 0;
     paintNode = 0;
 
     for (int ii = 0; ii < childItems.count(); ++ii) {
@@ -2952,6 +2943,7 @@ QQuickItemPrivate::QQuickItemPrivate()
     , isAccessible(false)
     , culled(false)
     , hasCursor(false)
+    , hasCursorInChild(false)
     , activeFocusOnTab(false)
     , implicitAntialiasing(false)
     , antialiasingValid(false)
@@ -2971,7 +2963,6 @@ QQuickItemPrivate::QQuickItemPrivate()
     , implicitHeight(0)
     , baselineOffset(0)
     , itemNodeInstance(0)
-    , groupNode(0)
     , paintNode(0)
 {
 }
@@ -4122,8 +4113,8 @@ void QQuickItem::polish()
     \qmlmethod object QtQuick::Item::mapFromItem(Item item, real x, real y, real width, real height)
 
     Maps the point (\a x, \a y) or rect (\a x, \a y, \a width, \a height), which is in \a
-    item's coordinate system, to this item's coordinate system, and returns an object with \c x and
-    \c y (and optionally \c width and \c height) properties matching the mapped coordinate.
+    item's coordinate system, to this item's coordinate system, and returns a \l point or \rect
+    matching the mapped coordinate.
 
     If \a item is a \c null value, this maps the point or rect from the coordinate system of
     the root QML view.
@@ -4133,50 +4124,43 @@ void QQuickItem::polish()
   */
 void QQuickItem::mapFromItem(QQmlV4Function *args) const
 {
-    if (args->length() != 0) {
-        QV4::ExecutionEngine *v4 = args->v4engine();
-        QV4::Scope scope(v4);
-        QV4::ScopedValue item(scope, (*args)[0]);
+    if (args->length() == 0)
+        return;
 
-        QQuickItem *itemObj = 0;
-        if (!item->isNull()) {
-            QV4::Scoped<QV4::QObjectWrapper> qobjectWrapper(scope, item->as<QV4::QObjectWrapper>());
-            if (qobjectWrapper)
-                itemObj = qobject_cast<QQuickItem*>(qobjectWrapper->object());
-        }
+    QV4::ExecutionEngine *v4 = args->v4engine();
+    QV4::Scope scope(v4);
+    QV4::ScopedValue item(scope, (*args)[0]);
 
-        if (!itemObj && !item->isNull()) {
-            qmlInfo(this) << "mapFromItem() given argument \"" << item->toQStringNoThrow()
-                          << "\" which is neither null nor an Item";
-            return;
-        }
-
-        QV4::Scoped<QV4::Object> rv(scope, v4->newObject());
-        args->setReturnValue(rv.asReturnedValue());
-
-        QV4::ScopedString s(scope);
-        QV4::ScopedValue v(scope);
-
-        qreal x = (args->length() > 1) ? (v = (*args)[1])->asDouble() : 0;
-        qreal y = (args->length() > 2) ? (v = (*args)[2])->asDouble() : 0;
-
-        if (args->length() > 3) {
-            qreal w = (v = (*args)[3])->asDouble();
-            qreal h = (args->length() > 4) ? (v = (*args)[4])->asDouble() : 0;
-
-            QRectF r = mapRectFromItem(itemObj, QRectF(x, y, w, h));
-
-            rv->put((s = v4->newString(QStringLiteral("x"))).getPointer(), (v = QV4::Primitive::fromDouble(r.x())));
-            rv->put((s = v4->newString(QStringLiteral("y"))).getPointer(), (v = QV4::Primitive::fromDouble(r.y())));
-            rv->put((s = v4->newString(QStringLiteral("width"))).getPointer(), (v = QV4::Primitive::fromDouble(r.width())));
-            rv->put((s = v4->newString(QStringLiteral("height"))).getPointer(), (v = QV4::Primitive::fromDouble(r.height())));
-        } else {
-            QPointF p = mapFromItem(itemObj, QPointF(x, y));
-
-            rv->put((s = v4->newString(QStringLiteral("x"))).getPointer(), (v = QV4::Primitive::fromDouble(p.x())));
-            rv->put((s = v4->newString(QStringLiteral("y"))).getPointer(), (v = QV4::Primitive::fromDouble(p.y())));
-        }
+    QQuickItem *itemObj = 0;
+    if (!item->isNull()) {
+        QV4::Scoped<QV4::QObjectWrapper> qobjectWrapper(scope, item->as<QV4::QObjectWrapper>());
+        if (qobjectWrapper)
+            itemObj = qobject_cast<QQuickItem*>(qobjectWrapper->object());
     }
+
+    if (!itemObj && !item->isNull()) {
+        qmlInfo(this) << "mapFromItem() given argument \"" << item->toQStringNoThrow()
+                      << "\" which is neither null nor an Item";
+        return;
+    }
+
+    QV4::ScopedValue v(scope);
+
+    qreal x = (args->length() > 1) ? (v = (*args)[1])->asDouble() : 0;
+    qreal y = (args->length() > 2) ? (v = (*args)[2])->asDouble() : 0;
+
+    QVariant result;
+
+    if (args->length() > 3) {
+        qreal w = (v = (*args)[3])->asDouble();
+        qreal h = (args->length() > 4) ? (v = (*args)[4])->asDouble() : 0;
+        result = mapRectFromItem(itemObj, QRectF(x, y, w, h));
+    } else {
+        result = mapFromItem(itemObj, QPointF(x, y));
+    }
+
+    QV4::ScopedObject rv(scope, v4->fromVariant(result));
+    args->setReturnValue(rv.asReturnedValue());
 }
 
 /*!
@@ -4201,8 +4185,8 @@ QTransform QQuickItem::itemTransform(QQuickItem *other, bool *ok) const
     \qmlmethod object QtQuick::Item::mapToItem(Item item, real x, real y, real width, real height)
 
     Maps the point (\a x, \a y) or rect (\a x, \a y, \a width, \a height), which is in this
-    item's coordinate system, to \a item's coordinate system, and returns an object with \c x and
-    \c y (and optionally \c width and \c height) properties matching the mapped coordinate.
+    item's coordinate system, to \a item's coordinate system, and returns a \l point or \l rect
+    matching the mapped coordinate.
 
     If \a item is a \c null value, this maps the point or rect to the coordinate system of the
     root QML view.
@@ -4212,51 +4196,43 @@ QTransform QQuickItem::itemTransform(QQuickItem *other, bool *ok) const
   */
 void QQuickItem::mapToItem(QQmlV4Function *args) const
 {
-    if (args->length() != 0) {
-        QV4::ExecutionEngine *v4 = args->v4engine();
-        QV4::Scope scope(v4);
-        QV4::ScopedValue item(scope, (*args)[0]);
+    if (args->length() == 0)
+        return;
 
-        QQuickItem *itemObj = 0;
-        if (!item->isNull()) {
-            QV4::Scoped<QV4::QObjectWrapper> qobjectWrapper(scope, item->as<QV4::QObjectWrapper>());
-            if (qobjectWrapper)
-                itemObj = qobject_cast<QQuickItem*>(qobjectWrapper->object());
-        }
+    QV4::ExecutionEngine *v4 = args->v4engine();
+    QV4::Scope scope(v4);
+    QV4::ScopedValue item(scope, (*args)[0]);
 
-        if (!itemObj && !item->isNull()) {
-            qmlInfo(this) << "mapToItem() given argument \"" << item->toQStringNoThrow()
-                          << "\" which is neither null nor an Item";
-            return;
-        }
-
-        QV4::Scoped<QV4::Object> rv(scope, v4->newObject());
-        args->setReturnValue(rv.asReturnedValue());
-
-        QV4::ScopedValue v(scope);
-
-        qreal x = (args->length() > 1) ? (v = (*args)[1])->asDouble() : 0;
-        qreal y = (args->length() > 2) ? (v = (*args)[2])->asDouble() : 0;
-
-        QV4::ScopedString s(scope);
-
-        if (args->length() > 3) {
-            qreal w = (v = (*args)[3])->asDouble();
-            qreal h = (args->length() > 4) ? (v = (*args)[4])->asDouble() : 0;
-
-            QRectF r = mapRectToItem(itemObj, QRectF(x, y, w, h));
-
-            rv->put((s = v4->newString(QStringLiteral("x"))).getPointer(), (v = QV4::Primitive::fromDouble(r.x())));
-            rv->put((s = v4->newString(QStringLiteral("y"))).getPointer(), (v = QV4::Primitive::fromDouble(r.y())));
-            rv->put((s = v4->newString(QStringLiteral("width"))).getPointer(), (v = QV4::Primitive::fromDouble(r.width())));
-            rv->put((s = v4->newString(QStringLiteral("height"))).getPointer(), (v = QV4::Primitive::fromDouble(r.height())));
-        } else {
-            QPointF p = mapToItem(itemObj, QPointF(x, y));
-
-            rv->put((s = v4->newString(QStringLiteral("x"))).getPointer(), (v = QV4::Primitive::fromDouble(p.x())));
-            rv->put((s = v4->newString(QStringLiteral("y"))).getPointer(), (v = QV4::Primitive::fromDouble(p.y())));
-        }
+    QQuickItem *itemObj = 0;
+    if (!item->isNull()) {
+        QV4::Scoped<QV4::QObjectWrapper> qobjectWrapper(scope, item->as<QV4::QObjectWrapper>());
+        if (qobjectWrapper)
+            itemObj = qobject_cast<QQuickItem*>(qobjectWrapper->object());
     }
+
+    if (!itemObj && !item->isNull()) {
+        qmlInfo(this) << "mapToItem() given argument \"" << item->toQStringNoThrow()
+                      << "\" which is neither null nor an Item";
+        return;
+    }
+
+    QV4::ScopedValue v(scope);
+    QVariant result;
+
+    qreal x = (args->length() > 1) ? (v = (*args)[1])->asDouble() : 0;
+    qreal y = (args->length() > 2) ? (v = (*args)[2])->asDouble() : 0;
+
+    if (args->length() > 3) {
+        qreal w = (v = (*args)[3])->asDouble();
+        qreal h = (args->length() > 4) ? (v = (*args)[4])->asDouble() : 0;
+
+        result = mapRectToItem(itemObj, QRectF(x, y, w, h));
+    } else {
+        result = mapToItem(itemObj, QPointF(x, y));
+    }
+
+    QV4::ScopedObject rv(scope, v4->fromVariant(result));
+    args->setReturnValue(rv.asReturnedValue());
 }
 
 /*!
@@ -4268,7 +4244,7 @@ void QQuickItem::mapToItem(QQmlV4Function *args) const
     This method sets focus on the item and ensures that all ancestor
     FocusScope objects in the object hierarchy are also given \l focus.
 
-    The reason for the focus change will be \a Qt::OtherFocusReason. Use
+    The reason for the focus change will be \l [CPP] Qt::OtherFocusReason. Use
     the overloaded method to specify the focus reason to enable better
     handling of the focus change.
 
@@ -4760,7 +4736,7 @@ void QQuickItem::itemChange(ItemChange change, const ItemChangeData &value)
 void QQuickItem::updateInputMethod(Qt::InputMethodQueries queries)
 {
     if (hasActiveFocus())
-        qApp->inputMethod()->update(queries);
+        QGuiApplication::inputMethod()->update(queries);
 }
 #endif // QT_NO_IM
 
@@ -5059,7 +5035,7 @@ void QQuickItem::setZ(qreal v)
   \endqml
   \endtable
 
-  \sa transform, Rotation
+  \sa Transform, Rotation
 */
 /*!
   \property QQuickItem::rotation
@@ -5085,7 +5061,7 @@ void QQuickItem::setZ(qreal v)
   \endqml
   \endtable
 
-  \sa transform, Rotation
+  \sa Transform, Rotation
   */
 qreal QQuickItem::rotation() const
 {
@@ -5145,7 +5121,7 @@ void QQuickItem::setRotation(qreal r)
   \endqml
   \endtable
 
-  \sa transform, Scale
+  \sa Transform, Scale
 */
 /*!
   \property QQuickItem::scale
@@ -5184,7 +5160,7 @@ void QQuickItem::setRotation(qreal r)
   \endqml
   \endtable
 
-  \sa transform, Scale
+  \sa Transform, Scale
   */
 qreal QQuickItem::scale() const
 {
@@ -6129,7 +6105,7 @@ qreal QQuickItem::implicitWidth() const
     Defines the natural width or height of the Item if no \l width or \l height is specified.
 
     The default implicit size for most items is 0x0, however some items have an inherent
-    implicit size which cannot be overridden, e.g. Image, Text.
+    implicit size which cannot be overridden, for example, \l [QML] Image and \l [QML] Text.
 
     Setting the implicit size is useful for defining components that have a preferred size
     based on their content, for example:
@@ -6153,7 +6129,7 @@ qreal QQuickItem::implicitWidth() const
     }
     \endqml
 
-    \b Note: using implicitWidth of Text or TextEdit and setting the width explicitly
+    \note Using implicitWidth of \l [QML] Text or \l [QML] TextEdit and setting the width explicitly
     incurs a performance penalty as the text must be laid out twice.
 */
 /*!
@@ -6163,7 +6139,7 @@ qreal QQuickItem::implicitWidth() const
     Defines the natural width or height of the Item if no \l width or \l height is specified.
 
     The default implicit size for most items is 0x0, however some items have an inherent
-    implicit size which cannot be overridden, e.g. Image, Text.
+    implicit size which cannot be overridden, for example, \l [QML] Image and \l [QML] Text.
 
     Setting the implicit size is useful for defining components that have a preferred size
     based on their content, for example:
@@ -6187,7 +6163,7 @@ qreal QQuickItem::implicitWidth() const
     }
     \endqml
 
-    \b Note: using implicitWidth of Text or TextEdit and setting the width explicitly
+    \note Using implicitWidth of \l [QML] Text or \l [QML] TextEdit and setting the width explicitly
     incurs a performance penalty as the text must be laid out twice.
 */
 void QQuickItem::setImplicitWidth(qreal w)
@@ -6374,7 +6350,7 @@ void QQuickItem::setSize(const QSizeF &size)
     d->heightValid = true;
     d->widthValid = true;
 
-    if (QSizeF(d->width, d->height) == size)
+    if (d->width == size.width() && d->height == size.height())
         return;
 
     qreal oldHeight = d->height;
@@ -6736,15 +6712,27 @@ void QQuickItem::setAcceptHoverEvents(bool enabled)
     d->hoverEnabled = enabled;
 }
 
-void QQuickItemPrivate::incrementCursorCount(int delta)
+void QQuickItemPrivate::setHasCursorInChild(bool hasCursor)
 {
 #ifndef QT_NO_CURSOR
     Q_Q(QQuickItem);
-    extra.value().numItemsWithCursor += delta;
+
+    // if we're asked to turn it off (because of an unsetcursor call, or a node
+    // removal) then we should check our children and make sure it's really ok
+    // to turn it off.
+    if (!hasCursor && hasCursorInChild) {
+        foreach (QQuickItem *otherChild, childItems) {
+            QQuickItemPrivate *otherChildPrivate = QQuickItemPrivate::get(otherChild);
+            if (otherChildPrivate->hasCursorInChild)
+                return; // nope! sorry, something else wants it kept on.
+        }
+    }
+
+    hasCursorInChild = hasCursor;
     QQuickItem *parent = q->parentItem();
     if (parent) {
         QQuickItemPrivate *parentPrivate = QQuickItemPrivate::get(parent);
-        parentPrivate->incrementCursorCount(delta);
+        parentPrivate->setHasCursorInChild(hasCursor);
     }
 #endif
 }
@@ -6752,9 +6740,7 @@ void QQuickItemPrivate::incrementCursorCount(int delta)
 void QQuickItemPrivate::markObjects(QV4::ExecutionEngine *e)
 {
     Q_Q(QQuickItem);
-    QQmlData *ddata = QQmlData::get(q);
-    if (ddata)
-        ddata->jsWrapper.markOnce(e);
+    QV4::QObjectWrapper::markWrapper(q, e);
 
     foreach (QQuickItem *child, childItems)
         QQuickItemPrivate::get(child)->markObjects(e);
@@ -6807,7 +6793,7 @@ void QQuickItem::setCursor(const QCursor &cursor)
     }
 
     if (!d->hasCursor) {
-        d->incrementCursorCount(+1);
+        d->setHasCursorInChild(true);
         d->hasCursor = true;
         if (d->window) {
             QWindow *renderWindow = QQuickRenderControl::renderWindowFor(d->window);
@@ -6830,7 +6816,7 @@ void QQuickItem::unsetCursor()
     Q_D(QQuickItem);
     if (!d->hasCursor)
         return;
-    d->incrementCursorCount(-1);
+    d->setHasCursorInChild(false);
     d->hasCursor = false;
     if (d->extra.isAllocated())
         d->extra->cursor = QCursor();
@@ -7301,6 +7287,9 @@ bool QQuickItem::event(QEvent *ev)
         dropEvent(static_cast<QDropEvent*>(ev));
         break;
 #endif // QT_NO_DRAGANDDROP
+    case QEvent::NativeGesture:
+        ev->ignore();
+        break;
     default:
         return QObject::event(ev);
     }
@@ -7309,18 +7298,27 @@ bool QQuickItem::event(QEvent *ev)
 }
 
 #ifndef QT_NO_DEBUG_STREAM
+// FIXME: Qt 6: Make this QDebug operator<<(QDebug debug, const QQuickItem *item)
 QDebug operator<<(QDebug debug, QQuickItem *item)
 {
+    QDebugStateSaver saver(debug);
+    debug.nospace();
     if (!item) {
         debug << "QQuickItem(0)";
         return debug;
     }
 
-    debug << item->metaObject()->className() << "(this =" << ((void*)item)
-          << ", name=" << item->objectName()
-          << ", parent =" << ((void*)item->parentItem())
-          << ", geometry =" << QRectF(item->position(), QSizeF(item->width(), item->height()))
-          << ", z =" << item->z() << ')';
+    const QRectF rect(item->position(), QSizeF(item->width(), item->height()));
+
+    debug << item->metaObject()->className() << '(' << static_cast<void *>(item);
+    if (!item->objectName().isEmpty())
+        debug << ", name=" << item->objectName();
+    debug << ", parent=" << static_cast<void *>(item->parentItem())
+          << ", geometry=";
+    QtDebugUtils::formatQRect(debug, rect);
+    if (const qreal z = item->z())
+        debug << ", z=" << z;
+    debug << ')';
     return debug;
 }
 #endif
@@ -7819,11 +7817,8 @@ QQuickItemPrivate::ExtraData::ExtraData()
 : z(0), scale(1), rotation(0), opacity(1),
   contents(0), screenAttached(0), layoutDirectionAttached(0),
   keyHandler(0), layer(0),
-#ifndef QT_NO_CURSOR
-  numItemsWithCursor(0),
-#endif
   effectRefCount(0), hideRefCount(0),
-  opacityNode(0), clipNode(0), rootNode(0), beforePaintNode(0),
+  opacityNode(0), clipNode(0), rootNode(0),
   acceptedMouseButtons(0), origin(QQuickItem::Center),
   transparentForPositioner(false)
 {

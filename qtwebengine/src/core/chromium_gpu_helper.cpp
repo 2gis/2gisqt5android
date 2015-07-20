@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtWebEngine module of the Qt Toolkit.
 **
@@ -10,15 +10,15 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
 ** General Public License version 3 as published by the Free Software
 ** Foundation and appearing in the file LICENSE.LGPLv3 included in the
-** packaging of this file.  Please review the following information to
+** packaging of this file. Please review the following information to
 ** ensure the GNU Lesser General Public License version 3 requirements
 ** will be met: https://www.gnu.org/licenses/lgpl.html.
 **
@@ -26,7 +26,7 @@
 ** Alternatively, this file may be used under the terms of the GNU
 ** General Public License version 2.0 or later as published by the Free
 ** Software Foundation and appearing in the file LICENSE.GPL included in
-** the packaging of this file.  Please review the following information to
+** the packaging of this file. Please review the following information to
 ** ensure the GNU General Public License version 2.0 requirements will be
 ** met: http://www.gnu.org/licenses/gpl-2.0.html.
 **
@@ -40,13 +40,15 @@
 
 #include "chromium_gpu_helper.h"
 
-#include "content/common/gpu/gpu_channel_manager.h"
-#include "content/common/gpu/sync_point_manager.h"
-#include "content/gpu/gpu_child_thread.h"
+// Including gpu/command_buffer headers before content/gpu headers makes sure that
+// guards are defined to prevent duplicate definition errors with forward declared
+// GL typedefs cascading through content header includes.
 #include "gpu/command_buffer/service/mailbox_manager.h"
 #include "gpu/command_buffer/service/texture_manager.h"
 
-#include <QtGlobal> // We need this for the Q_OS_QNX define.
+#include "content/common/gpu/gpu_channel_manager.h"
+#include "content/common/gpu/sync_point_manager.h"
+#include "content/gpu/gpu_child_thread.h"
 
 #ifdef Q_OS_QNX
 #include "content/common/gpu/stream_texture_qnx.h"
@@ -96,7 +98,8 @@ gpu::gles2::MailboxManager *mailbox_manager()
 
 gpu::gles2::Texture* ConsumeTexture(gpu::gles2::MailboxManager *mailboxManager, unsigned target, const gpu::Mailbox& mailbox)
 {
-    return mailboxManager->ConsumeTexture(target, mailbox);
+    Q_UNUSED(target);
+    return mailboxManager->ConsumeTexture(mailbox);
 }
 
 unsigned int service_id(gpu::gles2::Texture *tex)

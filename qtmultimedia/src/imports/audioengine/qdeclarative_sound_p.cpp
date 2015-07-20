@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the plugins of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -169,13 +169,14 @@ void QDeclarativeSoundCone::componentComplete()
 
             Sound {
                 name:"explosion"
+                playType: Sound.Random
                 PlayVariation {
                     sample:"explosion01"
                     minPitch: 0.8
                     maxPitch: 1.1
                 }
                 PlayVariation {
-                    sample:"explosion01"
+                    sample:"explosion02"
                     minGain: 1.1
                     maxGain: 1.5
                 }
@@ -239,7 +240,7 @@ QDeclarativeSound::PlayType QDeclarativeSound::playType() const
 void QDeclarativeSound::setPlayType(PlayType playType)
 {
     if (m_complete) {
-        qWarning("Sound: playType not changable after initialization.");
+        qWarning("Sound: playType not changeable after initialization.");
         return;
     }
     m_playType = playType;
@@ -258,7 +259,7 @@ QString QDeclarativeSound::category() const
 void QDeclarativeSound::setCategory(const QString& category)
 {
     if (m_complete) {
-        qWarning("Sound: category not changable after initialization.");
+        qWarning("Sound: category not changeable after initialization.");
         return;
     }
     m_category = category;
@@ -278,7 +279,7 @@ QString QDeclarativeSound::name() const
 void QDeclarativeSound::setName(const QString& name)
 {
     if (m_complete) {
-        qWarning("Sound: category not changable after initialization.");
+        qWarning("Sound: category not changeable after initialization.");
         return;
     }
     m_name = name;
@@ -319,10 +320,10 @@ QDeclarativePlayVariation* QDeclarativeSound::getVariation(int index)
     return m_playlist[index];
 }
 
-void QDeclarativeSound::setAttenuationModel(QString attenuationModel)
+void QDeclarativeSound::setAttenuationModel(const QString &attenuationModel)
 {
     if (m_complete) {
-        qWarning("Sound: attenuationModel not changable after initialization.");
+        qWarning("Sound: attenuationModel not changeable after initialization.");
         return;
     }
     m_attenuationModel = attenuationModel;

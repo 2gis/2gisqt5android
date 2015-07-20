@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd and/or its subsidiary(-ies).
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -43,23 +35,27 @@
 #include "avfcamerasession.h"
 #include "avfcameraservice.h"
 #include "avfcameracontrol.h"
-#include "avfvideorenderercontrol.h"
-#include "avfvideodevicecontrol.h"
+#include "avfcamerarenderercontrol.h"
+#include "avfcameradevicecontrol.h"
 #include "avfaudioinputselectorcontrol.h"
+#include "avfmediavideoprobecontrol.h"
+#include "avfcameraviewfindersettingscontrol.h"
+#include "avfimageencodercontrol.h"
+#include "avfcamerautility.h"
 
 #include <CoreFoundation/CoreFoundation.h>
 #include <Foundation/Foundation.h>
 
 #include <QtCore/qdatetime.h>
 #include <QtCore/qurl.h>
+#include <QtCore/qelapsedtimer.h>
 
 #include <QtCore/qdebug.h>
 
 QT_USE_NAMESPACE
 
-QByteArray AVFCameraSession::m_defaultCameraDevice;
-QList<QByteArray> AVFCameraSession::m_cameraDevices;
-QMap<QByteArray, AVFCameraInfo> AVFCameraSession::m_cameraInfo;
+int AVFCameraSession::m_defaultCameraIndex;
+QList<AVFCameraInfo> AVFCameraSession::m_cameraDevices;
 
 @interface AVFCameraSessionObserver : NSObject
 {
@@ -147,7 +143,7 @@ AVFCameraSession::AVFCameraSession(AVFCameraService *service, QObject *parent)
    , m_state(QCamera::UnloadedState)
    , m_active(false)
    , m_videoInput(nil)
-   , m_audioInput(nil)
+   , m_defaultCodec(0)
 {
     m_captureSession = [[AVCaptureSession alloc] init];
     m_observer = [[AVFCameraSessionObserver alloc] initWithCameraSession:this];
@@ -163,54 +159,59 @@ AVFCameraSession::~AVFCameraSession()
         [m_videoInput release];
     }
 
-    if (m_audioInput) {
-        [m_captureSession removeInput:m_audioInput];
-        [m_audioInput release];
-    }
-
     [m_observer release];
     [m_captureSession release];
 }
 
-const QByteArray &AVFCameraSession::defaultCameraDevice()
+int AVFCameraSession::defaultCameraIndex()
 {
-    if (m_cameraDevices.isEmpty())
-        updateCameraDevices();
-
-    return m_defaultCameraDevice;
+    updateCameraDevices();
+    return m_defaultCameraIndex;
 }
 
-const QList<QByteArray> &AVFCameraSession::availableCameraDevices()
+const QList<AVFCameraInfo> &AVFCameraSession::availableCameraDevices()
 {
-    if (m_cameraDevices.isEmpty())
-        updateCameraDevices();
-
+    updateCameraDevices();
     return m_cameraDevices;
 }
 
 AVFCameraInfo AVFCameraSession::cameraDeviceInfo(const QByteArray &device)
 {
-    if (m_cameraDevices.isEmpty())
-        updateCameraDevices();
+    updateCameraDevices();
 
-    return m_cameraInfo.value(device);
+    Q_FOREACH (const AVFCameraInfo &info, m_cameraDevices) {
+        if (info.deviceId == device)
+            return info;
+    }
+
+    return AVFCameraInfo();
 }
 
 void AVFCameraSession::updateCameraDevices()
 {
-    m_defaultCameraDevice.clear();
+#ifdef Q_OS_IOS
+    // Cameras can't change dynamically on iOS. Update only once.
+    if (!m_cameraDevices.isEmpty())
+        return;
+#else
+    // On OS X, cameras can be added or removed. Update the list every time, but not more than
+    // once every 500 ms
+    static QElapsedTimer timer;
+    if (timer.isValid() && timer.elapsed() < 500) // ms
+        return;
+#endif
+
+    m_defaultCameraIndex = -1;
     m_cameraDevices.clear();
-    m_cameraInfo.clear();
 
     AVCaptureDevice *defaultDevice = [AVCaptureDevice defaultDeviceWithMediaType:AVMediaTypeVideo];
-    if (defaultDevice)
-        m_defaultCameraDevice = QByteArray([[defaultDevice uniqueID] UTF8String]);
-
     NSArray *videoDevices = [AVCaptureDevice devicesWithMediaType:AVMediaTypeVideo];
     for (AVCaptureDevice *device in videoDevices) {
-        QByteArray deviceId([[device uniqueID] UTF8String]);
+        if (defaultDevice && [defaultDevice.uniqueID isEqualToString:device.uniqueID])
+            m_defaultCameraIndex = m_cameraDevices.count();
 
         AVFCameraInfo info;
+        info.deviceId = QByteArray([[device uniqueID] UTF8String]);
         info.description = QString::fromNSString([device localizedName]);
 
         // There is no API to get the camera sensor orientation, however, cameras are always
@@ -235,12 +236,15 @@ void AVFCameraSession::updateCameraDevices()
             break;
         }
 
-        m_cameraDevices << deviceId;
-        m_cameraInfo.insert(deviceId, info);
+        m_cameraDevices.append(info);
     }
+
+#ifndef Q_OS_IOS
+    timer.restart();
+#endif
 }
 
-void AVFCameraSession::setVideoOutput(AVFVideoRendererControl *output)
+void AVFCameraSession::setVideoOutput(AVFCameraRendererControl *output)
 {
     m_videoOutput = output;
     if (output)
@@ -273,13 +277,16 @@ void AVFCameraSession::setState(QCamera::State newState)
     QCamera::State oldState = m_state;
     m_state = newState;
 
-    //attach audio and video inputs during Unloaded->Loaded transition
-    if (oldState == QCamera::UnloadedState) {
-        attachInputDevices();
-    }
+    //attach video input during Unloaded->Loaded transition
+    if (oldState == QCamera::UnloadedState)
+        attachVideoInputDevice();
 
     if (m_state == QCamera::ActiveState) {
         Q_EMIT readyToConfigureConnections();
+        m_defaultCodec = 0;
+        defaultCodec();
+        applyImageEncoderSettings();
+        applyViewfinderSettings();
         [m_captureSession commitConfiguration];
         [m_captureSession startRunning];
     }
@@ -318,7 +325,7 @@ void AVFCameraSession::processSessionStopped()
     }
 }
 
-void AVFCameraSession::attachInputDevices()
+void AVFCameraSession::attachVideoInputDevice()
 {
     //Attach video input device:
     if (m_service->videoDeviceControl()->isDirty()) {
@@ -346,29 +353,74 @@ void AVFCameraSession::attachInputDevices()
             }
         }
     }
+}
 
-    //Attach audio input device:
-    if (m_service->audioInputSelectorControl()->isDirty()) {
-        if (m_audioInput) {
-            [m_captureSession removeInput:m_audioInput];
-            [m_audioInput release];
-            m_audioInput = 0;
+void AVFCameraSession::applyImageEncoderSettings()
+{
+    if (AVFImageEncoderControl *control = m_service->imageEncoderControl())
+        control->applySettings();
+}
+
+void AVFCameraSession::applyViewfinderSettings()
+{
+    if (AVFCameraViewfinderSettingsControl2 *vfControl = m_service->viewfinderSettingsControl2()) {
+        QCameraViewfinderSettings vfSettings(vfControl->requestedSettings());
+        if (AVFImageEncoderControl *imControl = m_service->imageEncoderControl()) {
+            const QSize imageResolution(imControl->imageSettings().resolution());
+            if (!imageResolution.isNull() && imageResolution.isValid()) {
+                vfSettings.setResolution(imageResolution);
+                vfControl->setViewfinderSettings(vfSettings);
+                return;
+            }
         }
 
-        AVCaptureDevice *audioDevice = m_service->audioInputSelectorControl()->createCaptureDevice();
-
-        NSError *error = nil;
-        m_audioInput = [AVCaptureDeviceInput
-                deviceInputWithDevice:audioDevice
-                error:&error];
-
-        if (!m_audioInput) {
-            qWarning() << "Failed to create audio device input";
-        } else {
-            [m_audioInput retain];
-            [m_captureSession addInput:m_audioInput];
-        }
+        vfControl->applySettings();
     }
+}
+
+void AVFCameraSession::addProbe(AVFMediaVideoProbeControl *probe)
+{
+    m_videoProbesMutex.lock();
+    if (probe)
+        m_videoProbes << probe;
+    m_videoProbesMutex.unlock();
+}
+
+void AVFCameraSession::removeProbe(AVFMediaVideoProbeControl *probe)
+{
+    m_videoProbesMutex.lock();
+    m_videoProbes.remove(probe);
+    m_videoProbesMutex.unlock();
+}
+
+FourCharCode AVFCameraSession::defaultCodec()
+{
+    if (!m_defaultCodec) {
+#if QT_MAC_PLATFORM_SDK_EQUAL_OR_ABOVE(__MAC_10_7, __IPHONE_7_0)
+        if (QSysInfo::MacintoshVersion >= qt_OS_limit(QSysInfo::MV_10_7, QSysInfo::MV_IOS_7_0)) {
+            if (AVCaptureDevice *device = videoCaptureDevice()) {
+                AVCaptureDeviceFormat *format = device.activeFormat;
+                if (!format || !format.formatDescription)
+                    return m_defaultCodec;
+                m_defaultCodec = CMVideoFormatDescriptionGetCodecType(format.formatDescription);
+            }
+        }
+#else
+    // TODO: extract media subtype.
+#endif
+    }
+    return m_defaultCodec;
+}
+
+void AVFCameraSession::onCameraFrameFetched(const QVideoFrame &frame)
+{
+    m_videoProbesMutex.lock();
+    QSet<AVFMediaVideoProbeControl *>::const_iterator i = m_videoProbes.constBegin();
+    while (i != m_videoProbes.constEnd()) {
+        (*i)->newFrameProbed(frame);
+        ++i;
+    }
+    m_videoProbesMutex.unlock();
 }
 
 #include "moc_avfcamerasession.cpp"

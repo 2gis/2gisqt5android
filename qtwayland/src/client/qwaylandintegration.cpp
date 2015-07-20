@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the config.tests of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -43,6 +35,7 @@
 
 #include "qwaylanddisplay_p.h"
 #include "qwaylandshmwindow_p.h"
+#include "qwaylandinputdevice_p.h"
 #include "qwaylandinputcontext_p.h"
 #include "qwaylandshmbackingstore_p.h"
 #include "qwaylandnativeinterface_p.h"
@@ -76,7 +69,12 @@
 #include "qwaylandshellintegration_p.h"
 #include "qwaylandshellintegrationfactory_p.h"
 
+#include "qwaylandinputdeviceintegration_p.h"
+#include "qwaylandinputdeviceintegrationfactory_p.h"
+
 QT_BEGIN_NAMESPACE
+
+namespace QtWaylandClient {
 
 class GenericWaylandTheme: public QGenericUnixTheme
 {
@@ -113,6 +111,7 @@ public:
 QWaylandIntegration::QWaylandIntegration()
     : mClientBufferIntegration(0)
     , mShellIntegration(Q_NULLPTR)
+    , mInputDeviceIntegration(Q_NULLPTR)
     , mFontDb(new QGenericUnixFontDatabase())
     , mNativeInterface(new QWaylandNativeInterface(this))
 #ifndef QT_NO_ACCESSIBILITY
@@ -124,6 +123,7 @@ QWaylandIntegration::QWaylandIntegration()
     , mServerBufferIntegrationInitialized(false)
     , mShellIntegrationInitialized(false)
 {
+    initializeInputDeviceIntegration();
     mDisplay = new QWaylandDisplay(this);
     mClipboard = new QWaylandClipboard(mDisplay);
     mDrag = new QWaylandDrag(mDisplay);
@@ -225,6 +225,13 @@ QVariant QWaylandIntegration::styleHint(StyleHint hint) const
 {
     if (hint == ShowIsFullScreen && mDisplay->windowManagerIntegration())
         return mDisplay->windowManagerIntegration()->showIsFullScreen();
+
+    switch (hint) {
+    case QPlatformIntegration::FontSmoothingGamma:
+        return qreal(1.0);
+    default:
+        break;
+    }
 
     return QPlatformIntegration::styleHint(hint);
 }
@@ -361,6 +368,34 @@ void QWaylandIntegration::initializeShellIntegration()
         mShellIntegration = Q_NULLPTR;
         qWarning("Failed to load shell integration %s", qPrintable(targetKey));
     }
+}
+
+QWaylandInputDevice *QWaylandIntegration::createInputDevice(QWaylandDisplay *display, int version, uint32_t id)
+{
+    if (mInputDeviceIntegration) {
+        return mInputDeviceIntegration->createInputDevice(display, version, id);
+    }
+    return new QWaylandInputDevice(display, version, id);
+}
+
+void QWaylandIntegration::initializeInputDeviceIntegration()
+{
+    QByteArray integrationName = qgetenv("QT_WAYLAND_INPUTDEVICE_INTEGRATION");
+    QString targetKey = QString::fromLocal8Bit(integrationName);
+
+    if (targetKey.isEmpty()) {
+        return;
+    }
+
+    QStringList keys = QWaylandInputDeviceIntegrationFactory::keys();
+    if (keys.contains(targetKey)) {
+        mInputDeviceIntegration = QWaylandInputDeviceIntegrationFactory::create(targetKey, QStringList());
+        qDebug("Using the '%s' input device integration", qPrintable(targetKey));
+    } else {
+        qWarning("Wayland inputdevice integration '%s' not found, using default", qPrintable(targetKey));
+    }
+}
+
 }
 
 QT_END_NAMESPACE

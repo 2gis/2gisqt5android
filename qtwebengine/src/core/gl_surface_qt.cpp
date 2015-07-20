@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtWebEngine module of the Qt Toolkit.
 **
@@ -10,15 +10,15 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
 ** General Public License version 3 as published by the Free Software
 ** Foundation and appearing in the file LICENSE.LGPLv3 included in the
-** packaging of this file.  Please review the following information to
+** packaging of this file. Please review the following information to
 ** ensure the GNU Lesser General Public License version 3 requirements
 ** will be met: https://www.gnu.org/licenses/lgpl.html.
 **
@@ -26,7 +26,7 @@
 ** Alternatively, this file may be used under the terms of the GNU
 ** General Public License version 2.0 or later as published by the Free
 ** Software Foundation and appearing in the file LICENSE.GPL included in
-** the packaging of this file.  Please review the following information to
+** the packaging of this file. Please review the following information to
 ** ensure the GNU General Public License version 2.0 requirements will be
 ** met: http://www.gnu.org/licenses/gpl-2.0.html.
 **
@@ -49,8 +49,6 @@
 #include "base/logging.h"
 #include "base/memory/scoped_ptr.h"
 #include "content/common/gpu/image_transport_surface.h"
-#include "content/common/gpu/gpu_channel_manager.h"
-#include "content/common/gpu/gpu_command_buffer_stub.h"
 #include "ui/gl/egl_util.h"
 #include "ui/gl/gl_context.h"
 #include "ui/gl/gl_implementation.h"
@@ -67,6 +65,12 @@ extern "C" {
 #if defined(OS_WIN)
 #include "ui/gl/gl_surface_wgl.h"
 #include "ui/gl/gl_context_wgl.h"
+#endif
+
+// From ANGLE's egl/eglext.h.
+#ifndef EGL_ANGLE_surface_d3d_texture_2d_share_handle
+#define EGL_ANGLE_surface_d3d_texture_2d_share_handle 1
+#define EGL_D3D_TEXTURE_2D_SHARE_HANDLE_ANGLE 0x3200
 #endif
 
 using ui::GetLastEGLErrorString;
@@ -92,7 +96,6 @@ public:
     virtual bool Initialize() Q_DECL_OVERRIDE;
     virtual void Destroy() Q_DECL_OVERRIDE;
     virtual void* GetHandle() Q_DECL_OVERRIDE;
-    virtual void* GetShareHandle() Q_DECL_OVERRIDE;
     virtual bool Resize(const gfx::Size &size) Q_DECL_OVERRIDE;
 
 protected:
@@ -357,12 +360,13 @@ bool GLSurface::InitializeOneOffInternal()
     if (GetGLImplementation() == kGLImplementationEGLGLES2)
         return GLSurfaceQtEGL::InitializeOneOff();
 
-    if (GetGLImplementation() == kGLImplementationDesktopGL)
+    if (GetGLImplementation() == kGLImplementationDesktopGL) {
 #if defined(USE_X11)
         return GLSurfaceQtGLX::InitializeOneOff();
 #elif defined(OS_WIN)
         return GLSurfaceQtWGL::InitializeOneOff();
 #endif
+    }
 
     return false;
 }
@@ -483,30 +487,6 @@ void* GLSurfaceQtEGL::GetHandle()
     return reinterpret_cast<void*>(m_surfaceBuffer);
 }
 
-void* GLSurfaceQtEGL::GetShareHandle()
-{
-#if defined(OS_ANDROID)
-    Q_UNREACHABLE();
-    return NULL;
-#else
-    if (!gfx::g_driver_egl.ext.b_EGL_ANGLE_query_surface_pointer)
-        return NULL;
-
-    if (!gfx::g_driver_egl.ext.b_EGL_ANGLE_surface_d3d_texture_2d_share_handle)
-        return NULL;
-
-    void* handle;
-    if (!eglQuerySurfacePointerANGLE(g_display,
-                                     GetHandle(),
-                                     EGL_D3D_TEXTURE_2D_SHARE_HANDLE_ANGLE,
-                                     &handle)) {
-        return NULL;
-    }
-
-    return handle;
-#endif
-}
-
 void* GLSurfaceQt::GetDisplay()
 {
     return g_display;
@@ -562,7 +542,9 @@ GLSurface::CreateViewGLSurface(gfx::AcceleratedWidget window)
 }  // namespace gfx
 
 namespace content {
-scoped_refptr<gfx::GLSurface> ImageTransportSurface::CreateNativeSurface(GpuChannelManager* manager, GpuCommandBufferStub* stub, const gfx::GLSurfaceHandle& handle)
+class GpuCommandBufferStub;
+class GpuChannelManager;
+scoped_refptr<gfx::GLSurface> ImageTransportSurface::CreateNativeSurface(GpuChannelManager*, GpuCommandBufferStub*, const gfx::GLSurfaceHandle&)
 {
     QT_NOT_USED
     return scoped_refptr<gfx::GLSurface>();

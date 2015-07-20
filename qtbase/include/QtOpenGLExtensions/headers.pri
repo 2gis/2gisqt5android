@@ -2,4 +2,5 @@ SYNCQT.HEADER_FILES = qopenglextensions.h ../../include/QtOpenGLExtensions/qtope
 SYNCQT.HEADER_CLASSES = ../../include/QtOpenGLExtensions/QOpenGLExtensions ../../include/QtOpenGLExtensions/QtOpenGLExtensionsVersion 
 SYNCQT.PRIVATE_HEADER_FILES = 
 SYNCQT.QPA_HEADER_FILES = 
+SYNCQT.CLEAN_HEADER_FILES = qopenglextensions.h 
 SYNCQT.INJECTIONS = 

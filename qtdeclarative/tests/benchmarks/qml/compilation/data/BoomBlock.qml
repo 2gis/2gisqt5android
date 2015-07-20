@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -32,18 +32,22 @@
 ****************************************************************************/
 
 import QtQuick 2.0
-import Qt.labs.particles 1.0
+import QtQuick.Particles 2.0
 
 Item {
     id: block
     property bool dying: false
     property bool spawned: false
     property int type: 0
-    property int targetX: 0
-    property int targetY: 0
+    property ParticleSystem particleSystem
 
-    SpringFollow on x { enabled: spawned; to: targetX; spring: 2; damping: 0.2 }
-    SpringFollow on y { to: targetY; spring: 2; damping: 0.2 }
+    Behavior on x {
+        enabled: spawned;
+        SpringAnimation{ spring: 2; damping: 0.2 }
+    }
+    Behavior on y {
+        SpringAnimation{ spring: 2; damping: 0.2 }
+    }
 
     Image {
         id: img
@@ -60,26 +64,28 @@ Item {
         Behavior on opacity { NumberAnimation { duration: 200 } }
         anchors.fill: parent
     }
-
-    Particles {
+    Emitter {
         id: particles
-
-        width: 1; height: 1
-        anchors.centerIn: parent
-
-        emissionRate: 0
-        lifeSpan: 700; lifeSpanDeviation: 600
-        angle: 0; angleDeviation: 360;
-        velocity: 100; velocityDeviation: 30
-        source: {
+        system: particleSystem
+        group: {
             if(type == 0){
-                "pics/redStar.png";
+                "red";
             } else if (type == 1) {
-                "pics/blueStar.png";
+                "blue";
             } else {
-                "pics/greenStar.png";
+                "green";
             }
         }
+        anchors.fill: parent
+
+        velocity: TargetDirection{targetX: block.width/2; targetY: block.height/2; magnitude: -60; magnitudeVariation: 60}
+        shape: EllipseShape{fill:true}
+        enabled: false;
+        lifeSpan: 700; lifeSpanVariation: 100
+        emitRate: 1000
+        maximumEmitted: 100 //only fires 0.1s bursts (still 2x old number)
+        size: 28
+        endSize: 14
     }
 
     states: [
@@ -90,7 +96,7 @@ Item {
 
         State {
             name: "DeathState"; when: dying == true
-            StateChangeScript { script: particles.burst(50); }
+            StateChangeScript { script: particles.pulse(0.1); }
             PropertyChanges { target: img; opacity: 0 }
             StateChangeScript { script: block.destroy(1000); }
         }

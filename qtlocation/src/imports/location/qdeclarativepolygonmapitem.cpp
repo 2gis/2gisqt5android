@@ -1,31 +1,34 @@
 /****************************************************************************
  **
- ** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
- ** Contact: http://www.qt-project.org/legal
+ ** Copyright (C) 2015 The Qt Company Ltd.
+ ** Contact: http://www.qt.io/licensing/
  **
  ** This file is part of the QtLocation module of the Qt Toolkit.
  **
- ** $QT_BEGIN_LICENSE:LGPL21$
+ ** $QT_BEGIN_LICENSE:LGPL3$
  ** Commercial License Usage
  ** Licensees holding valid commercial Qt licenses may use this file in
  ** accordance with the commercial license agreement provided with the
  ** Software or, alternatively, in accordance with the terms contained in
- ** a written agreement between you and Digia. For licensing terms and
- ** conditions see http://qt.digia.com/licensing. For further information
- ** use the contact form at http://qt.digia.com/contact-us.
+ ** a written agreement between you and The Qt Company. For licensing terms
+ ** and conditions see http://www.qt.io/terms-conditions. For further
+ ** information use the contact form at http://www.qt.io/contact-us.
  **
  ** GNU Lesser General Public License Usage
  ** Alternatively, this file may be used under the terms of the GNU Lesser
- ** General Public License version 2.1 or version 3 as published by the Free
- ** Software Foundation and appearing in the file LICENSE.LGPLv21 and
- ** LICENSE.LGPLv3 included in the packaging of this file. Please review the
- ** following information to ensure the GNU Lesser General Public License
- ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
- ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+ ** General Public License version 3 as published by the Free Software
+ ** Foundation and appearing in the file LICENSE.LGPLv3 included in the
+ ** packaging of this file. Please review the following information to
+ ** ensure the GNU Lesser General Public License version 3 requirements
+ ** will be met: https://www.gnu.org/licenses/lgpl.html.
  **
- ** In addition, as a special exception, Digia gives you certain additional
- ** rights. These rights are described in the Digia Qt LGPL Exception
- ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+ ** GNU General Public License Usage
+ ** Alternatively, this file may be used under the terms of the GNU
+ ** General Public License version 2.0 or later as published by the Free
+ ** Software Foundation and appearing in the file LICENSE.GPL included in
+ ** the packaging of this file. Please review the following information to
+ ** ensure the GNU General Public License version 2.0 requirements will be
+ ** met: http://www.gnu.org/licenses/gpl-2.0.html.
  **
  ** $QT_END_LICENSE$
  **
@@ -40,10 +43,7 @@
 #include <QtCore/QScopedValueRollback>
 #include <QtGui/private/qtriangulator_p.h>
 #include <QtQml/QQmlInfo>
-#include <QtQml/QQmlContext>
 #include <QtQml/private/qqmlengine_p.h>
-#include <private/qqmlvaluetypewrapper_p.h>
-#include <private/qjsvalue_p.h>
 #include <QPainter>
 #include <QPainterPath>
 #include <qnumeric.h>
@@ -61,7 +61,7 @@ QT_BEGIN_NAMESPACE
     \instantiates QDeclarativePolygonMapItem
     \inqmlmodule QtLocation
     \ingroup qml-QtLocation5-maps
-    \since Qt Location 5.0
+    \since Qt Location 5.5
 
     \brief The MapPolygon type displays a polygon on a Map
 
@@ -107,7 +107,7 @@ QT_BEGIN_NAMESPACE
     or removing points.
 
     Like the other map objects, MapPolygon is normally drawn without a smooth
-    appearance. Setting the \l {QtQuick::Item::opacity}{opacity} property will force the object to
+    appearance. Setting the \l {Item::opacity}{opacity} property will force the object to
     be blended, which decreases performance considerably depending on the hardware in use.
 
     \section2 Example Usage
@@ -160,7 +160,7 @@ void QGeoMapPolygonGeometry::updateSourcePoints(const QGeoMap &map,
 
     double unwrapBelowX = 0;
     if (preserveGeometry_ )
-        unwrapBelowX = map.coordinateToScreenPosition(geoLeftBound_, false).x();
+        unwrapBelowX = map.coordinateToItemPosition(geoLeftBound_, false).x();
 
     for (int i = 0; i < path.size(); ++i) {
         const QGeoCoordinate &coord = path.at(i);
@@ -168,7 +168,7 @@ void QGeoMapPolygonGeometry::updateSourcePoints(const QGeoMap &map,
         if (!coord.isValid())
             continue;
 
-        QDoubleVector2D point = map.coordinateToScreenPosition(coord, false);
+        QDoubleVector2D point = map.coordinateToItemPosition(coord, false);
 
         // We can get NaN if the map isn't set up correctly, or the projection
         // is faulty -- probably best thing to do is abort
@@ -176,7 +176,9 @@ void QGeoMapPolygonGeometry::updateSourcePoints(const QGeoMap &map,
             return;
 
         // unwrap x to preserve geometry if moved to border of map
-        if (preserveGeometry_ && point.x() < unwrapBelowX && !qFuzzyCompare(point.x(), unwrapBelowX))
+        if (preserveGeometry_ && point.x() < unwrapBelowX
+                && !qFuzzyCompare(point.x(), unwrapBelowX)
+                && !qFuzzyCompare(geoLeftBound_.longitude(), coord.longitude()))
             point.setX(unwrapBelowX + geoDistanceToScreenWidth(map, geoLeftBound_, coord));
 
         if (i == 0) {
@@ -202,7 +204,7 @@ void QGeoMapPolygonGeometry::updateSourcePoints(const QGeoMap &map,
         srcPath_ = srcPath_.simplified();
 
     sourceBounds_ = srcPath_.boundingRect();
-    geoLeftBound_ = map.screenPositionToCoordinate(QDoubleVector2D(minX, 0), false);
+    geoLeftBound_ = map.itemPositionToCoordinate(QDoubleVector2D(minX, 0), false);
 }
 
 /*!
@@ -218,7 +220,7 @@ void QGeoMapPolygonGeometry::updateScreenPoints(const QGeoMap &map)
         return;
     }
 
-    QDoubleVector2D origin = map.coordinateToScreenPosition(srcOrigin_, false);
+    QDoubleVector2D origin = map.coordinateToItemPosition(srcOrigin_, false);
 
     // Create the viewport rect in the same coordinate system
     // as the actual points
@@ -381,21 +383,18 @@ QJSValue QDeclarativePolygonMapItem::path() const
 {
     QQmlContext *context = QQmlEngine::contextForObject(parent());
     QQmlEngine *engine = context->engine();
-    QV8Engine *v8Engine = QQmlEnginePrivate::getV8Engine(engine);
-    QV4::ExecutionEngine *v4 = QV8Engine::getV4(v8Engine);
+    QV4::ExecutionEngine *v4 = QQmlEnginePrivate::getV4Engine(engine);
 
     QV4::Scope scope(v4);
     QV4::Scoped<QV4::ArrayObject> pathArray(scope, v4->newArrayObject(path_.length()));
     for (int i = 0; i < path_.length(); ++i) {
         const QGeoCoordinate &c = path_.at(i);
 
-        QQmlValueType *vt = QQmlValueTypeFactory::valueType(qMetaTypeId<QGeoCoordinate>());
-        QV4::ScopedValue cv(scope, QV4::QmlValueTypeWrapper::create(v8Engine, QVariant::fromValue(c), vt));
-
+        QV4::ScopedValue cv(scope, v4->fromVariant(QVariant::fromValue(c)));
         pathArray->putIndexed(i, cv);
     }
 
-    return new QJSValuePrivate(v4, QV4::ValueRef(pathArray));
+    return QJSValue(v4, pathArray.asReturnedValue());
 }
 
 void QDeclarativePolygonMapItem::setPath(const QJSValue &value)
@@ -429,7 +428,7 @@ void QDeclarativePolygonMapItem::setPath(const QJSValue &value)
 }
 
 /*!
-    \qmlmethod MapPolygon::addCoordinate(coordinate)
+    \qmlmethod void MapPolygon::addCoordinate(coordinate)
 
     Adds a coordinate to the path.
 
@@ -447,7 +446,7 @@ void QDeclarativePolygonMapItem::addCoordinate(const QGeoCoordinate &coordinate)
 }
 
 /*!
-    \qmlmethod MapPolygon::removeCoordinate(coordinate)
+    \qmlmethod void MapPolygon::removeCoordinate(coordinate)
 
     Removes a coordinate from the path. If there are multiple instances of the
     same coordinate, the one added last is removed.
@@ -612,7 +611,7 @@ void QDeclarativePolygonMapItem::geometryChanged(const QRectF &newGeometry, cons
     }
 
     QDoubleVector2D newPoint = QDoubleVector2D(x(),y()) + QDoubleVector2D(geometry_.firstPointOffset());
-    QGeoCoordinate newCoordinate = map()->screenPositionToCoordinate(newPoint, false);
+    QGeoCoordinate newCoordinate = map()->itemPositionToCoordinate(newPoint, false);
     if (newCoordinate.isValid()) {
         double firstLongitude = path_.at(0).longitude();
         double firstLatitude = path_.at(0).latitude();

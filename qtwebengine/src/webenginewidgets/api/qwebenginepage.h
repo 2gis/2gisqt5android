@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtWebEngine module of the Qt Toolkit.
 **
@@ -10,15 +10,15 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
 ** General Public License version 3 as published by the Free Software
 ** Foundation and appearing in the file LICENSE.LGPLv3 included in the
-** packaging of this file.  Please review the following information to
+** packaging of this file. Please review the following information to
 ** ensure the GNU Lesser General Public License version 3 requirements
 ** will be met: https://www.gnu.org/licenses/lgpl.html.
 **
@@ -26,7 +26,7 @@
 ** Alternatively, this file may be used under the terms of the GNU
 ** General Public License version 2.0 or later as published by the Free
 ** Software Foundation and appearing in the file LICENSE.GPL included in
-** the packaging of this file.  Please review the following information to
+** the packaging of this file. Please review the following information to
 ** ensure the GNU General Public License version 2.0 requirements will be
 ** met: http://www.gnu.org/licenses/gpl-2.0.html.
 **
@@ -48,10 +48,13 @@
 
 QT_BEGIN_NAMESPACE
 class QMenu;
+class QWebChannel;
 class QWebEngineHistory;
 class QWebEnginePage;
-class QWebEngineSettings;
 class QWebEnginePagePrivate;
+class QWebEngineProfile;
+class QWebEngineScriptCollection;
+class QWebEngineSettings;
 
 namespace QtWebEnginePrivate {
 
@@ -122,7 +125,7 @@ public:
         FindBackward = 1,
         FindCaseSensitively = 2,
     };
-    Q_DECLARE_FLAGS(FindFlags, FindFlag);
+    Q_DECLARE_FLAGS(FindFlags, FindFlag)
 
     enum WebWindowType {
         WebBrowserWindow,
@@ -136,14 +139,25 @@ public:
         PermissionDeniedByUser
     };
 
+    // must match WebContentsAdapterClient::NavigationType
+    enum NavigationType {
+        NavigationTypeLinkClicked,
+        NavigationTypeTyped,
+        NavigationTypeFormSubmitted,
+        NavigationTypeBackForward,
+        NavigationTypeReload,
+        NavigationTypeOther
+    };
+
     enum Feature {
 #ifndef Q_QDOC
         Notifications = 0,
-        Geolocation = 1,
 #endif
+        Geolocation = 1,
         MediaAudioCapture = 2,
         MediaVideoCapture,
-        MediaAudioVideoCapture
+        MediaAudioVideoCapture,
+        MouseLock
     };
 
     // Ex-QWebFrame enum
@@ -161,6 +175,7 @@ public:
     };
 
     explicit QWebEnginePage(QObject *parent = 0);
+    QWebEnginePage(QWebEngineProfile *profile, QObject *parent = 0);
     ~QWebEnginePage();
     QWebEngineHistory *history() const;
 
@@ -169,6 +184,8 @@ public:
 
     bool hasSelection() const;
     QString selectedText() const;
+
+    QWebEngineProfile *profile() const;
 
 #ifndef QT_NO_ACTION
     QAction *action(WebAction action) const;
@@ -214,8 +231,11 @@ public:
 #else
     void runJavaScript(const QString& scriptSource, const QWebEngineCallback<const QVariant &> &resultCallback);
 #endif
-
+    QWebEngineScriptCollection &scripts();
     QWebEngineSettings *settings() const;
+
+    QWebChannel *webChannel() const;
+    void setWebChannel(QWebChannel *);
 
 Q_SIGNALS:
     void loadStarted();
@@ -248,9 +268,10 @@ protected:
     virtual bool javaScriptPrompt(const QUrl &securityOrigin, const QString& msg, const QString& defaultValue, QString* result);
     virtual void javaScriptConsoleMessage(JavaScriptConsoleMessageLevel level, const QString& message, int lineNumber, const QString& sourceID);
     virtual bool certificateError(const QWebEngineCertificateError &certificateError);
+    virtual bool acceptNavigationRequest(const QUrl &url, NavigationType type, bool isMainFrame);
 
 private:
-    Q_DECLARE_PRIVATE(QWebEnginePage);
+    Q_DECLARE_PRIVATE(QWebEnginePage)
     QScopedPointer<QWebEnginePagePrivate> d_ptr;
 #ifndef QT_NO_ACTION
     Q_PRIVATE_SLOT(d_func(), void _q_webActionTriggered(bool checked))
@@ -258,7 +279,9 @@ private:
 
     friend class QWebEngineView;
     friend class QWebEngineViewPrivate;
+#ifndef QT_NO_ACCESSIBILITY
     friend class QWebEngineViewAccessible;
+#endif // QT_NO_ACCESSIBILITY
 };
 
 

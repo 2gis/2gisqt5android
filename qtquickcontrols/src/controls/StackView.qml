@@ -1,38 +1,34 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Quick Controls module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:BSD$
-** You may use this file under the terms of the BSD license as follows:
+** $QT_BEGIN_LICENSE:LGPL3$
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
-** "Redistribution and use in source and binary forms, with or without
-** modification, are permitted provided that the following conditions are
-** met:
-**   * Redistributions of source code must retain the above copyright
-**     notice, this list of conditions and the following disclaimer.
-**   * Redistributions in binary form must reproduce the above copyright
-**     notice, this list of conditions and the following disclaimer in
-**     the documentation and/or other materials provided with the
-**     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
-**     from this software without specific prior written permission.
+** GNU Lesser General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU Lesser
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPLv3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl.html.
 **
-**
-** THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-** "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-** LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
-** A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
-** OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
-** SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
-** LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
-** DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
-** THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-** (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-** OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE."
+** GNU General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU
+** General Public License version 2.0 or later as published by the Free
+** Software Foundation and appearing in the file LICENSE.GPL included in
+** the packaging of this file. Please review the following information to
+** ensure the GNU General Public License version 2.0 requirements will be
+** met: http://www.gnu.org/licenses/gpl-2.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -121,7 +117,7 @@ import QtQuick.Controls.Private 1.0
     \li \l{pop()}{pop(A)} => [A] - "pop" transition between C and A
     \endlist
 
-    \note Note that when the stack is empty, a push() will not perform a
+    \note When the stack is empty, a push() will not perform a
     transition animation because there is nothing to transition from (typically during
     application start-up). A pop() on a stack with depth 1 or 0 is a no-operation.
     If removing all items from the stack is needed, a separate function clear() is
@@ -221,7 +217,7 @@ import QtQuick.Controls.Private 1.0
     \endcode
 
 
-    \note Note that if an item is declared inside another item, and if that parent gets destroyed,
+    \note If an item is declared inside another item, and if that parent gets destroyed,
     (even if a component was used), that child item will also be destroyed.
     This follows normal Qt parent-child destruction rules, but sometimes comes as a surprise
     for developers.
@@ -298,7 +294,7 @@ import QtQuick.Controls.Private 1.0
 
     When the transition starts, the StackView will search for a transition that
     matches the operation executed. There are three transitions to choose
-    from: pushTransition, popTransition, and replaceTransition. Each implements how
+    from: \l {StackViewDelegate::}{pushTransition}, \l {StackViewDelegate::}{popTransition}, and \l {StackViewDelegate::}{replaceTransition}. Each implements how
     enterItem should animate in, and exitItem out. The transitions are
     collected inside a StackViewDelegate object assigned to
     \l {StackView::delegate}{delegate}. By default, popTransition and
@@ -488,7 +484,7 @@ FocusScope {
     */
     readonly property alias currentItem: root.__currentItem
 
-    /*! The first \l item that should be shown when the StackView is created.
+    /*! The first item that should be shown when the StackView is created.
         \a initialItem can take same value as the first argument to \l{StackView::push()}
         {StackView.push()}. Note that this is just a convenience for writing
         \c{Component.onCompleted: stackView.push(myInitialItem)}
@@ -510,10 +506,13 @@ FocusScope {
 
     /*! The transitions to use when pushing or popping items.
         For better understanding on how to apply custom transitions, read \l{Transitions}.
-        \sa {Stack::transitions}{Stack.transitions} */
+        \sa {Transitions} */
     property StackViewDelegate delegate: StackViewSlideDelegate {}
 
-    /*! Pushes an item onto the stack. The function takes a property list as argument, which
+    /*! \qmlmethod Item StackView::push(Item item)
+        Pushes an item onto the stack.
+
+        The function can also take a property list as argument - \c {Item StackView::push(jsobject dict)}, which
         should contain one or more of the following properties:
         \list
         \li \c item: this property is required, and holds the item you want to push.
@@ -549,7 +548,7 @@ FocusScope {
         \li stackView.push([{item:anitem, immediate:true}, {item:aURL}])
         \endlist
 
-        \note Note: if the only argument needed is "item", you can apply the following short-
+        \note If the only argument needed is "item", you can apply the following short-
         hand notation: \c{stackView.push(anItem)}.
 
         Returns the item that became current.
@@ -603,7 +602,10 @@ FocusScope {
         return __currentItem
     }
 
-    /*! Pops one or more items off the stack. The function takes a property list as argument
+    /*! \qmlmethod Item StackView::pop(Item item = undefined)
+        Pops one or more items off the stack.
+
+        The function can also take a property list as argument - \c {Item StackView::pop(jsobject dict)},
         which can contain one or more of the following properties:
         \list
         \li \c item: if specified, all items down to (but not including) \a item will be
@@ -621,7 +623,7 @@ FocusScope {
         \li stackView.pop(null)
         \endlist
 
-        \note Note: If the only argument needed is "item", you can apply the following short-
+        \note If the only argument needed is "item", you can apply the following short-
         hand notation: \c{stackView.pop(anItem)}.
 
         Returns the item that was popped off
@@ -675,7 +677,8 @@ FocusScope {
         return outElement.item;
     }
 
-    /*! Remove all items from the stack. No animations will be applied. */
+    /*! \qmlmethod void StackView::clear()
+        Remove all items from the stack. No animations will be applied. */
     function clear() {
         if (__recursionGuard(true))
             return
@@ -691,7 +694,8 @@ FocusScope {
         __recursionGuard(false)
     }
 
-    /*! Search for a specific item inside the stack. \a func will
+    /*! \qmlmethod Item StackView::find(function, bool onlySearchLoadedItems = false)
+        Search for a specific item inside the stack. \a func will
         be called for each item in the stack (with the item as argument)
         until the function returns true. Return value will be the item found. For
         example:
@@ -711,7 +715,8 @@ FocusScope {
         return null;
     }
 
-    /*! Returns the item at position \a index in
+    /*! \qmlmethod Item StackView::get(int index, bool dontLoad = false)
+        Returns the item at position \a index in
         the stack. If \a dontLoad is true, the
         item will not be forced to load (and \c null
         will be returned if not yet loaded) */
@@ -730,7 +735,8 @@ FocusScope {
         }
     }
 
-    /*! Immediately completes any ongoing transition.
+    /*! \qmlmethod void StackView::completeTransition()
+        Immediately completes any ongoing transition.
         /sa Animation.complete
       */
     function completeTransition()
@@ -751,9 +757,6 @@ FocusScope {
     }
 
     /********* PRIVATE API *********/
-
-    width: parent ? parent.width : 0
-    height: parent ? parent.height : 0
 
     /*! \internal The currently top-most item on the stack. */
     property Item __currentItem: null

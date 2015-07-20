@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtWebEngine module of the Qt Toolkit.
 **
@@ -10,15 +10,15 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
 ** General Public License version 3 as published by the Free Software
 ** Foundation and appearing in the file LICENSE.LGPLv3 included in the
-** packaging of this file.  Please review the following information to
+** packaging of this file. Please review the following information to
 ** ensure the GNU Lesser General Public License version 3 requirements
 ** will be met: https://www.gnu.org/licenses/lgpl.html.
 **
@@ -26,7 +26,7 @@
 ** Alternatively, this file may be used under the terms of the GNU
 ** General Public License version 2.0 or later as published by the Free
 ** Software Foundation and appearing in the file LICENSE.GPL included in
-** the packaging of this file.  Please review the following information to
+** the packaging of this file. Please review the following information to
 ** ensure the GNU General Public License version 2.0 requirements will be
 ** met: http://www.gnu.org/licenses/gpl-2.0.html.
 **
@@ -43,19 +43,15 @@
 #include <QScopedPointer>
 #include <QHash>
 #include <QUrl>
+#include <QSet>
+
+namespace content {
+struct WebPreferences;
+}
+namespace QtWebEngineCore {
 
 class BatchTimer;
 class WebContentsAdapter;
-class WebEngineSettings;
-struct WebPreferences;
-
-class QWEBENGINE_EXPORT WebEngineSettingsDelegate {
-public:
-    virtual ~WebEngineSettingsDelegate() {}
-    virtual void apply() = 0;
-    // Needs to be a valid pointer, the last available fallback (ex: global settings) should return itself.
-    virtual WebEngineSettings *fallbackSettings() const = 0;
-};
 
 class QWEBENGINE_EXPORT WebEngineSettings {
 public:
@@ -95,10 +91,12 @@ public:
         DefaultFixedFontSize
     };
 
-    WebEngineSettings(WebEngineSettingsDelegate*);
-    virtual ~WebEngineSettings();
+    explicit WebEngineSettings(WebEngineSettings *parentSettings = 0);
+    ~WebEngineSettings();
 
-    void overrideWebPreferences(WebPreferences *prefs);
+    void setParentSettings(WebEngineSettings *parentSettings);
+
+    void overrideWebPreferences(content::WebPreferences *prefs);
 
     void setAttribute(Attribute, bool on);
     bool testAttribute(Attribute) const;
@@ -115,25 +113,31 @@ public:
     void setDefaultTextEncoding(const QString &encoding);
     QString defaultTextEncoding() const;
 
-    void initDefaults();
+    void initDefaults(bool offTheRecord = false);
     void scheduleApply();
+
+    void scheduleApplyRecursively();
 
 private:
     void doApply();
-    void applySettingsToWebPreferences(WebPreferences *);
+    void applySettingsToWebPreferences(content::WebPreferences *);
     void setWebContentsAdapter(WebContentsAdapter *adapter) { m_adapter = adapter; }
 
     WebContentsAdapter* m_adapter;
-    WebEngineSettingsDelegate* m_delegate;
     QHash<Attribute, bool> m_attributes;
     QHash<FontFamily, QString> m_fontFamilies;
     QHash<FontSize, int> m_fontSizes;
     QString m_defaultEncoding;
-    QScopedPointer<WebPreferences> webPreferences;
+    QScopedPointer<content::WebPreferences> webPreferences;
     QScopedPointer<BatchTimer> m_batchTimer;
+
+    WebEngineSettings *parentSettings;
+    QSet<WebEngineSettings *> childSettings;
 
     friend class BatchTimer;
     friend class WebContentsAdapter;
 };
+
+} // namespace QtWebEngineCore
 
 #endif // WEB_ENGINE_SETTINGS_H

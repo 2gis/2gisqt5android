@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the examples of the Qt Toolkit.
 **
@@ -17,8 +17,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -38,21 +38,20 @@
 **
 ****************************************************************************/
 
-#include <QtDesigner>
-#include <QtWidgets>
-
 #include "tictactoe.h"
 #include "tictactoedialog.h"
 #include "tictactoetaskmenu.h"
 
+#include <QtDesigner/QDesignerFormEditorInterface>
+#include <QAction>
+
 //! [0]
 TicTacToeTaskMenu::TicTacToeTaskMenu(TicTacToe *tic, QObject *parent)
     : QObject(parent)
+    , editStateAction(new QAction(tr("Edit State..."), this))
+    , ticTacToe(tic)
 {
-    ticTacToe = tic;
-
-    editStateAction = new QAction(tr("Edit State..."), this);
-    connect(editStateAction, SIGNAL(triggered()), this, SLOT(editState()));
+    connect(editStateAction, &QAction::triggered, this, &TicTacToeTaskMenu::editState);
 }
 //! [0]
 

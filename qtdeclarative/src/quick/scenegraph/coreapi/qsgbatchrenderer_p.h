@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQuick module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,22 +23,24 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
 
-#ifndef ULTRARENDERER_H
-#define ULTRARENDERER_H
+#ifndef QSGBATCHRENDERER_P_H
+#define QSGBATCHRENDERER_P_H
 
 #include <private/qsgrenderer_p.h>
 #include <private/qsgnodeupdater_p.h>
 #include <private/qdatabuffer_p.h>
 
 #include <private/qsgrendernode_p.h>
+
+#include <QtCore/QBitArray>
 
 QT_BEGIN_NAMESPACE
 
@@ -58,6 +60,120 @@ struct Node;
 class Updater;
 class Renderer;
 class ShaderManager;
+
+template <typename Type, int PageSize> class AllocatorPage
+{
+public:
+    // The memory used by this allocator
+    char data[sizeof(Type) * PageSize];
+
+    // 'blocks' contains a list of free indices which can be allocated.
+    // The first available index is found in PageSize - available.
+    int blocks[PageSize];
+
+    // 'available' is the number of available instances this page has left to allocate.
+    int available;
+
+    // This is not strictly needed, but useful for sanity checking and anyway
+    // pretty small..
+    QBitArray allocated;
+
+    AllocatorPage()
+        : available(PageSize)
+        , allocated(PageSize)
+    {
+        for (int i=0; i<PageSize; ++i) blocks[i] = i;
+    }
+
+    const Type *at(uint index) const
+    {
+        return (Type *) &data[index * sizeof(Type)];
+    }
+
+    Type *at(uint index)
+    {
+        return (Type *) &data[index * sizeof(Type)];
+    }
+};
+
+template <typename Type, int PageSize> class Allocator
+{
+public:
+    Allocator()
+    {
+        pages.push_back(new AllocatorPage<Type, PageSize>());
+    }
+
+    ~Allocator()
+    {
+        qDeleteAll(pages);
+    }
+
+    Type *allocate()
+    {
+        AllocatorPage<Type, PageSize> *p = 0;
+        for (int i=0; i<pages.size(); ++i) {
+            if (pages.at(i)->available > 0) {
+                p = pages.at(i);
+                break;
+            }
+        }
+        if (!p) {
+            p = new AllocatorPage<Type, PageSize>();
+            pages.push_back(p);
+        }
+        uint pos = p->blocks[PageSize - p->available];
+        void *mem = p->at(pos);
+        p->available--;
+        p->allocated.setBit(pos);
+        Type *t = new (mem) Type();
+        return t;
+    }
+
+    void releaseExplicit(uint pageIndex, uint index)
+    {
+        AllocatorPage<Type, PageSize> *page = pages.at(pageIndex);
+        if (!page->allocated.testBit(index))
+            qFatal("Double delete in allocator: page=%d, index=%d", pageIndex , index);
+
+        // Call the destructor
+        page->at(index)->~Type();
+
+        page->allocated[index] = false;
+        page->available++;
+        page->blocks[PageSize - page->available] = index;
+
+        // Remove the pages if they are empty and they are the last ones. We need to keep the
+        // order of pages since we have references to their index, so we can only remove
+        // from the end.
+        while (page->available == PageSize && pages.size() > 1 && pages.back() == page) {
+            pages.pop_back();
+            delete page;
+            page = pages.back();
+        }
+    }
+
+    void release(Type *t)
+    {
+        int pageIndex = -1;
+        for (int i=0; i<pages.size(); ++i) {
+            AllocatorPage<Type, PageSize> *p = pages.at(i);
+            if ((Type *) (&p->data[0]) <= t && (Type *) (&p->data[PageSize * sizeof(Type)]) > t) {
+                pageIndex = i;
+                break;
+            }
+        }
+        Q_ASSERT(pageIndex >= 0);
+
+        AllocatorPage<Type, PageSize> *page = pages.at(pageIndex);
+        int index = (quint64(t) - quint64(&page->data[0])) / sizeof(Type);
+
+        releaseExplicit(pageIndex, index);
+    }
+
+    QVector<AllocatorPage<Type, PageSize> *> pages;
+};
+
 
 inline bool hasMaterialWithBlending(QSGGeometryNode *n)
 {
@@ -144,13 +260,15 @@ inline QDebug operator << (QDebug d, const Rect &r) {
 struct Buffer {
     GLuint id;
     int size;
+    // Data is only valid while preparing the upload. Exception is if we are using the
+    // broken IBO workaround or we are using a visualization mode.
     char *data;
 };
 
 struct Element {
 
-    Element(QSGGeometryNode *n)
-        : node(n)
+    Element()
+        : node(0)
         , batch(0)
         , nextInBatch(0)
         , root(0)
@@ -161,8 +279,13 @@ struct Element {
         , removed(false)
         , orphaned(false)
         , isRenderNode(false)
-        , isMaterialBlended(n ? hasMaterialWithBlending(n) : false)
+        , isMaterialBlended(false)
     {
+    }
+
+    void setNode(QSGGeometryNode *n) {
+        node = n;
+        isMaterialBlended = hasMaterialWithBlending(n);
     }
 
     inline void ensureBoundsValid() {
@@ -192,8 +315,7 @@ struct Element {
 struct RenderNodeElement : public Element {
 
     RenderNodeElement(QSGRenderNode *rn)
-        : Element(0)
-        , renderNode(rn)
+        : renderNode(rn)
     {
         isRenderNode = true;
     }
@@ -289,15 +411,14 @@ struct Batch
 
 struct Node
 {
-    Node(QSGNode *node, Node *sparent = 0)
-        : sgNode(node)
-        , parent(sparent)
+    Node()
+        : sgNode(0)
+        , parent(0)
         , data(0)
         , dirtyState(0)
         , isOpaque(false)
         , isBatchRoot(false)
     {
-
     }
 
     QSGNode *sgNode;
@@ -414,7 +535,6 @@ public:
 
 protected:
     void nodeChanged(QSGNode *node, QSGNode::DirtyState state);
-    void preprocess() Q_DECL_OVERRIDE;
     void render();
 
 private:
@@ -435,8 +555,7 @@ private:
 
     friend class Updater;
 
-
-    void map(Buffer *buffer, int size);
+    void map(Buffer *buffer, int size, bool isIndexBuf = false);
     void unmap(Buffer *buffer, bool isIndexBuf = false);
 
     void buildRenderListsFromScratch();
@@ -527,11 +646,18 @@ private:
     const QSGClipNode *m_currentClip;
     ClipType m_currentClipType;
 
+    QDataBuffer<char> m_vertexUploadPool;
+#ifdef QSG_SEPARATE_INDEX_BUFFER
+    QDataBuffer<char> m_indexUploadPool;
+#endif
     // For minimal OpenGL core profile support
     QOpenGLVertexArrayObject *m_vao;
 
     QHash<Node *, uint> m_visualizeChanceSet;
     VisualizeMode m_visualizeMode;
+
+    Allocator<Node, 256> m_nodeAllocator;
+    Allocator<Element, 64> m_elementAllocator;
 };
 
 Batch *Renderer::newBatch()
@@ -556,4 +682,4 @@ Batch *Renderer::newBatch()
 
 QT_END_NAMESPACE
 
-#endif // ULTRARENDERER_H
+#endif // QSGBATCHRENDERER_P_H

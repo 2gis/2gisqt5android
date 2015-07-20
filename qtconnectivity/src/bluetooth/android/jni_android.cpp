@@ -1,8 +1,8 @@
 /****************************************************************************
 **
 ** Copyright (C) 2013 Lauri Laanmets (Proekspert AS) <lauri.laanmets@eesti.ee>
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtBluetooth module of the Qt Toolkit.
 **
@@ -11,9 +11,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -24,8 +24,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -40,6 +40,7 @@
 #include "android/androidbroadcastreceiver_p.h"
 #include "android/serveracceptancethread_p.h"
 #include "android/inputstreamthread_p.h"
+#include "android/lowenergynotificationhub_p.h"
 
 Q_DECLARE_LOGGING_CATEGORY(QT_BT_ANDROID)
 
@@ -183,10 +184,39 @@ static void QtBluetoothInputStreamThread_readyData(JNIEnv */*env*/, jobject /*ja
     reinterpret_cast<InputStreamThread*>(qtObject)->javaReadyRead(buffer, bufferLength);
 }
 
+void QtBluetoothLE_leScanResult(JNIEnv *env, jobject, jlong qtObject, jobject bluetoothDevice, jint rssi)
+{
+    reinterpret_cast<AndroidBroadcastReceiver*>(qtObject)->onReceiveLeScan(
+                                                                env, bluetoothDevice, rssi);
+}
+
 
 static JNINativeMethod methods[] = {
     {"jniOnReceive", "(JLandroid/content/Context;Landroid/content/Intent;)V",
                 (void *) QtBroadcastReceiver_jniOnReceive},
+};
+
+static JNINativeMethod methods_le[] = {
+    {"leScanResult", "(JLandroid/bluetooth/BluetoothDevice;I)V",
+                (void *) QtBluetoothLE_leScanResult},
+    {"leConnectionStateChange", "(JII)V",
+                (void *) LowEnergyNotificationHub::lowEnergy_connectionChange},
+    {"leServicesDiscovered", "(JILjava/lang/String;)V",
+                (void *) LowEnergyNotificationHub::lowEnergy_servicesDiscovered},
+    {"leServiceDetailDiscoveryFinished", "(JLjava/lang/String;II)V",
+                (void *) LowEnergyNotificationHub::lowEnergy_serviceDetailsDiscovered},
+    {"leCharacteristicRead", "(JLjava/lang/String;ILjava/lang/String;I[B)V",
+                (void *) LowEnergyNotificationHub::lowEnergy_characteristicRead},
+    {"leDescriptorRead", "(JLjava/lang/String;Ljava/lang/String;ILjava/lang/String;[B)V",
+                (void *) LowEnergyNotificationHub::lowEnergy_descriptorRead},
+    {"leCharacteristicWritten", "(JI[BI)V",
+                (void *) LowEnergyNotificationHub::lowEnergy_characteristicWritten},
+    {"leDescriptorWritten", "(JI[BI)V",
+                (void *) LowEnergyNotificationHub::lowEnergy_descriptorWritten},
+    {"leCharacteristicChanged", "(JI[B)V",
+                (void *) LowEnergyNotificationHub::lowEnergy_characteristicChanged},
+    {"leServiceError", "(JII)V",
+                (void *) LowEnergyNotificationHub::lowEnergy_serviceError},
 };
 
 static JNINativeMethod methods_server[] = {
@@ -218,11 +248,17 @@ static bool registerNatives(JNIEnv *env)
     jclass clazz;
     FIND_AND_CHECK_CLASS("org/qtproject/qt5/android/bluetooth/QtBluetoothBroadcastReceiver");
 
-
     if (env->RegisterNatives(clazz, methods, sizeof(methods) / sizeof(methods[0])) < 0) {
         __android_log_print(ANDROID_LOG_FATAL, logTag, "RegisterNatives for BraodcastReceiver failed");
         return false;
     }
+
+    FIND_AND_CHECK_CLASS("org/qtproject/qt5/android/bluetooth/QtBluetoothLE");
+    if (env->RegisterNatives(clazz, methods_le, sizeof(methods_le) / sizeof(methods_le[0])) < 0) {
+        __android_log_print(ANDROID_LOG_FATAL, logTag, "RegisterNatives for QBLuetoothLE failed");
+        return false;
+    }
+
 
     FIND_AND_CHECK_CLASS("org/qtproject/qt5/android/bluetooth/QtBluetoothSocketServer");
     if (env->RegisterNatives(clazz, methods_server, sizeof(methods_server) / sizeof(methods_server[0])) < 0) {

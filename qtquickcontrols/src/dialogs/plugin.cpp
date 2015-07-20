@@ -1,31 +1,34 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
-** This file is part of the QtQuick.Dialogs module of the Qt Toolkit.
+** This file is part of the Qt Quick Dialogs module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL21$
+** $QT_BEGIN_LICENSE:LGPL3$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 or version 3 as published by the Free
-** Software Foundation and appearing in the file LICENSE.LGPLv21 and
-** LICENSE.LGPLv3 included in the packaging of this file. Please review the
-** following information to ensure the GNU Lesser General Public License
-** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
-** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPLv3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** GNU General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU
+** General Public License version 2.0 or later as published by the Free
+** Software Foundation and appearing in the file LICENSE.GPL included in
+** the packaging of this file. Please review the following information to
+** ensure the GNU General Public License version 2.0 requirements will be
+** met: http://www.gnu.org/licenses/gpl-2.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -103,11 +106,13 @@ public:
         QDir widgetsDir(baseUrl().toLocalFile());
         widgetsDir.cd("../PrivateWidgets");
 
+#ifndef ALWAYS_LOAD_FROM_RESOURCES
         // If at least one file was actually installed, then use installed qml files instead of resources.
         // This makes debugging and incremental development easier, whereas the "normal" installation
         // uses resources to save space and cut down on the number of files to deploy.
         if (qmlDir.exists(QString("DefaultFileDialog.qml")))
             m_useResources = false;
+#endif
         m_decorationComponentUrl = m_useResources ?
             QUrl("qrc:/QtQuick/Dialogs/qml/DefaultWindowDecoration.qml") :
             QUrl::fromLocalFile(qmlDir.filePath(QString("qml/DefaultWindowDecoration.qml")));
@@ -131,8 +136,11 @@ public:
 
         // FileDialog
 #ifndef PURE_QML_ONLY
+        // We register the QML version of the filedialog, even if the platform has native support.
+        // QQuickAbstractDialog::setVisible() will check if a native dialog can be shown, and
+        // only fall back to use the QML version if showing fails.
         if (QGuiApplicationPrivate::platformTheme()->usePlatformNativeDialog(QPlatformTheme::FileDialog))
-            qmlRegisterType<QQuickPlatformFileDialog>(uri, 1, 0, "FileDialog");
+            registerQmlImplementation<QQuickPlatformFileDialog>(qmlDir, "FileDialog", uri, 1, 0);
         else
 #endif
             registerWidgetOrQmlImplementation<QQuickFileDialog>(widgetsDir, qmlDir, "FileDialog", uri, hasTopLevelWindows, 1, 0);
@@ -171,12 +179,22 @@ protected:
             const char *qmlName, const char *uri, bool hasTopLevelWindows, int versionMajor, int versionMinor) {
         qCDebug(lcRegistration) << qmlName << uri << ": QML in" << qmlDir.absolutePath()
                                 << "using resources?" << m_useResources << "; widgets in" << widgetsDir.absolutePath();
-        bool needQmlImplementation = true;
 
-#ifdef PURE_QML_ONLY
+#ifndef PURE_QML_ONLY
+        if (!registerWidgetImplementation<WrapperType>(
+                    widgetsDir, qmlDir, qmlName, uri, hasTopLevelWindows, versionMajor, versionMinor))
+#else
         Q_UNUSED(widgetsDir)
         Q_UNUSED(hasTopLevelWindows)
-#else
+#endif
+        registerQmlImplementation<WrapperType>(qmlDir, qmlName, uri, versionMajor, versionMinor);
+    }
+
+    template <class WrapperType>
+    bool registerWidgetImplementation(QDir widgetsDir, QDir qmlDir,
+            const char *qmlName, const char *uri, bool hasTopLevelWindows, int versionMajor, int versionMinor)
+    {
+
         bool mobileTouchPlatform = false;
 #if defined(Q_OS_IOS)
         mobileTouchPlatform = true;
@@ -185,6 +203,7 @@ protected:
             if (dev->type() == QTouchDevice::TouchScreen)
                 mobileTouchPlatform = true;
 #endif
+
         // If there is a qmldir and we have a QApplication instance (as opposed to a
         // widget-free QGuiApplication), and this isn't a mobile touch-based platform,
         // assume that the widget-based dialog will work.  Otherwise an application developer
@@ -196,20 +215,25 @@ protected:
                 QUrl(QString("qrc:/QtQuick/Dialogs/Widget%1.qml").arg(qmlName)) :
                 QUrl::fromLocalFile(qmlDir.filePath(QString("Widget%1.qml").arg(qmlName)));
             if (qmlRegisterType(dialogQmlPath, uri, versionMajor, versionMinor, qmlName) >= 0) {
-                needQmlImplementation = false;
-                qCDebug(lcRegistration) << "    registering" << qmlName << " as " << dialogQmlPath << "success?" << !needQmlImplementation;
+                qCDebug(lcRegistration) << "    registering" << qmlName << " as " << dialogQmlPath;
+                return true;
             }
         }
-#endif
-        if (needQmlImplementation) {
-            QByteArray abstractTypeName = QByteArray("Abstract") + qmlName;
-            qmlRegisterType<WrapperType>(uri, versionMajor, versionMinor, abstractTypeName); // implementation wrapper
-            QUrl dialogQmlPath =  m_useResources ?
-                QUrl(QString("qrc:/QtQuick/Dialogs/Default%1.qml").arg(qmlName)) :
-                QUrl::fromLocalFile(qmlDir.filePath(QString("Default%1.qml").arg(qmlName)));
-            qCDebug(lcRegistration) << "    registering" << qmlName << " as " << dialogQmlPath;
-            qmlRegisterType(dialogQmlPath, uri, versionMajor, versionMinor, qmlName);
-        }
+        return false;
+    }
+
+    template <class WrapperType>
+    void registerQmlImplementation(QDir qmlDir, const char *qmlName, const char *uri , int versionMajor, int versionMinor)
+    {
+        qCDebug(lcRegistration) << "Register QML version for" << qmlName << "with uri:" << uri;
+
+        QByteArray abstractTypeName = QByteArray("Abstract") + qmlName;
+        qmlRegisterType<WrapperType>(uri, versionMajor, versionMinor, abstractTypeName);
+        QUrl dialogQmlPath =  m_useResources ?
+                    QUrl(QString("qrc:/QtQuick/Dialogs/Default%1.qml").arg(qmlName)) :
+                    QUrl::fromLocalFile(qmlDir.filePath(QString("Default%1.qml").arg(qmlName)));
+        qCDebug(lcRegistration) << "    registering" << qmlName << " as " << dialogQmlPath;
+        qmlRegisterType(dialogQmlPath, uri, versionMajor, versionMinor, qmlName);
     }
 
     QUrl m_decorationComponentUrl;

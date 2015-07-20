@@ -1,31 +1,34 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtLocation module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL21$
+** $QT_BEGIN_LICENSE:LGPL3$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 or version 3 as published by the Free
-** Software Foundation and appearing in the file LICENSE.LGPLv21 and
-** LICENSE.LGPLv3 included in the packaging of this file. Please review the
-** following information to ensure the GNU Lesser General Public License
-** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
-** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPLv3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** GNU General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU
+** General Public License version 2.0 or later as published by the Free
+** Software Foundation and appearing in the file LICENSE.GPL included in
+** the packaging of this file. Please review the following information to
+** ensure the GNU General Public License version 2.0 requirements will be
+** met: http://www.gnu.org/licenses/gpl-2.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -36,13 +39,15 @@
 #include "qgeotilefetcher_p.h"
 
 
-#include "qgeotiledmapdata_p.h"
+#include "qgeotiledmap_p.h"
 #include "qgeotilerequestmanager_p.h"
 #include "qgeotilecache_p.h"
 #include "qgeotilespec_p.h"
 
 #include <QTimer>
 #include <QLocale>
+#include <QDir>
+#include <QStandardPaths>
 
 QT_BEGIN_NAMESPACE
 
@@ -89,28 +94,37 @@ QGeoTileFetcher *QGeoTiledMappingManagerEngine::tileFetcher()
     return d->fetcher_;
 }
 
-QGeoMap *QGeoTiledMappingManagerEngine::createMap(QObject *parent)
+QGeoMap *QGeoTiledMappingManagerEngine::createMap()
 {
-    Q_UNUSED(parent);
     return NULL;
 }
 
-void QGeoTiledMappingManagerEngine::registerMap(QGeoTiledMapData *map)
+void QGeoTiledMappingManagerEngine::registerMap(QGeoMap *m)
 {
+    QGeoTiledMap* map = qobject_cast<QGeoTiledMap*>(m);
+    if (!map) {
+        qWarning() << "QGeoTiledMappingManagerEngine can only register QGeoTiledMap";
+        return;
+    }
     d_ptr->tileMaps_.insert(map);
 }
 
-void QGeoTiledMappingManagerEngine::deregisterMap(QGeoTiledMapData *map)
+void QGeoTiledMappingManagerEngine::deregisterMap(QGeoMap *m)
 {
+    QGeoTiledMap* map = qobject_cast<QGeoTiledMap*>(m);
+    if (!map) {
+        qWarning() << "QGeoTiledMappingManagerEngine can only deregister QGeoTiledMap";
+        return;
+    }
     d_ptr->tileMaps_.remove(map);
     d_ptr->mapHash_.remove(map);
 
-    QHash<QGeoTileSpec, QSet<QGeoTiledMapData *> > newTileHash = d_ptr->tileHash_;
-    typedef QHash<QGeoTileSpec, QSet<QGeoTiledMapData *> >::const_iterator h_iter;
+    QHash<QGeoTileSpec, QSet<QGeoTiledMap *> > newTileHash = d_ptr->tileHash_;
+    typedef QHash<QGeoTileSpec, QSet<QGeoTiledMap *> >::const_iterator h_iter;
     h_iter hi = d_ptr->tileHash_.constBegin();
     h_iter hend = d_ptr->tileHash_.constEnd();
     for (; hi != hend; ++hi) {
-        QSet<QGeoTiledMapData *> maps = hi.value();
+        QSet<QGeoTiledMap *> maps = hi.value();
         if (maps.contains(map)) {
             maps.remove(map);
             if (maps.isEmpty())
@@ -122,7 +136,7 @@ void QGeoTiledMappingManagerEngine::deregisterMap(QGeoTiledMapData *map)
     d_ptr->tileHash_ = newTileHash;
 }
 
-void QGeoTiledMappingManagerEngine::updateTileRequests(QGeoTiledMapData *map,
+void QGeoTiledMappingManagerEngine::updateTileRequests(QGeoTiledMap *map,
                                             const QSet<QGeoTileSpec> &tilesAdded,
                                             const QSet<QGeoTileSpec> &tilesRemoved)
 {
@@ -155,7 +169,7 @@ void QGeoTiledMappingManagerEngine::updateTileRequests(QGeoTiledMapData *map,
 
     rem = tilesRemoved.constBegin();
     for (; rem != remEnd; ++rem) {
-        QSet<QGeoTiledMapData *> mapSet = d->tileHash_.value(*rem);
+        QSet<QGeoTiledMap *> mapSet = d->tileHash_.value(*rem);
         mapSet.remove(map);
         if (mapSet.isEmpty()) {
             cancelTiles.insert(*rem);
@@ -167,7 +181,7 @@ void QGeoTiledMappingManagerEngine::updateTileRequests(QGeoTiledMapData *map,
 
     add = tilesAdded.constBegin();
     for (; add != addEnd; ++add) {
-        QSet<QGeoTiledMapData *> mapSet = d->tileHash_.value(*add);
+        QSet<QGeoTiledMap *> mapSet = d->tileHash_.value(*add);
         if (mapSet.isEmpty()) {
             reqTiles.insert(*add);
         }
@@ -187,9 +201,9 @@ void QGeoTiledMappingManagerEngine::engineTileFinished(const QGeoTileSpec &spec,
 {
     Q_D(QGeoTiledMappingManagerEngine);
 
-    QSet<QGeoTiledMapData *> maps = d->tileHash_.value(spec);
+    QSet<QGeoTiledMap *> maps = d->tileHash_.value(spec);
 
-    typedef QSet<QGeoTiledMapData *>::const_iterator map_iter;
+    typedef QSet<QGeoTiledMap *>::const_iterator map_iter;
 
     map_iter map = maps.constBegin();
     map_iter mapEnd = maps.constEnd();
@@ -209,7 +223,7 @@ void QGeoTiledMappingManagerEngine::engineTileFinished(const QGeoTileSpec &spec,
     map = maps.constBegin();
     mapEnd = maps.constEnd();
     for (; map != mapEnd; ++map) {
-        (*map)->getRequestManager()->tileFetched(spec);
+        (*map)->requestManager()->tileFetched(spec);
     }
 }
 
@@ -217,8 +231,8 @@ void QGeoTiledMappingManagerEngine::engineTileError(const QGeoTileSpec &spec, co
 {
     Q_D(QGeoTiledMappingManagerEngine);
 
-    QSet<QGeoTiledMapData *> maps = d->tileHash_.value(spec);
-    typedef QSet<QGeoTiledMapData *>::const_iterator map_iter;
+    QSet<QGeoTiledMap *> maps = d->tileHash_.value(spec);
+    typedef QSet<QGeoTiledMap *>::const_iterator map_iter;
     map_iter map = maps.constBegin();
     map_iter mapEnd = maps.constEnd();
     for (; map != mapEnd; ++map) {
@@ -233,7 +247,7 @@ void QGeoTiledMappingManagerEngine::engineTileError(const QGeoTileSpec &spec, co
     d->tileHash_.remove(spec);
 
     for (map = maps.constBegin(); map != mapEnd; ++map) {
-        (*map)->getRequestManager()->tileError(spec, errorString);
+        (*map)->requestManager()->tileError(spec, errorString);
     }
 
     emit tileError(spec, errorString);
@@ -274,8 +288,14 @@ QGeoTileCache *QGeoTiledMappingManagerEngine::createTileCacheWithDir(const QStri
 QGeoTileCache *QGeoTiledMappingManagerEngine::tileCache()
 {
     Q_D(QGeoTiledMappingManagerEngine);
-    if (!d->tileCache_)
-        d->tileCache_ = new QGeoTileCache();
+    if (!d->tileCache_) {
+        QString cacheDirectory;
+        if (!managerName().isEmpty()) {
+            cacheDirectory = QStandardPaths::writableLocation(QStandardPaths::GenericCacheLocation)
+                    + QLatin1String("/QtLocation/") + managerName();
+        }
+        d->tileCache_ = new QGeoTileCache(cacheDirectory);
+    }
     return d->tileCache_;
 }
 

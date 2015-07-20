@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -569,61 +569,62 @@ void QVideoSurfaceFormat::setProperty(const char *name, const QVariant &value)
 #ifndef QT_NO_DEBUG_STREAM
 QDebug operator<<(QDebug dbg, QVideoSurfaceFormat::YCbCrColorSpace cs)
 {
-    QDebug nospace = dbg.nospace();
+    QDebugStateSaver saver(dbg);
+    dbg.nospace();
     switch (cs) {
         case QVideoSurfaceFormat::YCbCr_BT601:
-            nospace << "YCbCr_BT601";
+            dbg << "YCbCr_BT601";
             break;
         case QVideoSurfaceFormat::YCbCr_BT709:
-            nospace << "YCbCr_BT709";
+            dbg << "YCbCr_BT709";
             break;
         case QVideoSurfaceFormat::YCbCr_JPEG:
-            nospace << "YCbCr_JPEG";
+            dbg << "YCbCr_JPEG";
             break;
         case QVideoSurfaceFormat::YCbCr_xvYCC601:
-            nospace << "YCbCr_xvYCC601";
+            dbg << "YCbCr_xvYCC601";
             break;
         case QVideoSurfaceFormat::YCbCr_xvYCC709:
-            nospace << "YCbCr_xvYCC709";
+            dbg << "YCbCr_xvYCC709";
             break;
         case QVideoSurfaceFormat::YCbCr_CustomMatrix:
-            nospace << "YCbCr_CustomMatrix";
+            dbg << "YCbCr_CustomMatrix";
             break;
         default:
-            nospace << "YCbCr_Undefined";
+            dbg << "YCbCr_Undefined";
             break;
     }
-    return nospace;
+    return dbg;
 }
 
 QDebug operator<<(QDebug dbg, QVideoSurfaceFormat::Direction dir)
 {
-    QDebug nospace = dbg.nospace();
+    QDebugStateSaver saver(dbg);
+    dbg.nospace();
     switch (dir) {
         case QVideoSurfaceFormat::BottomToTop:
-            nospace << "BottomToTop";
+            dbg << "BottomToTop";
             break;
         case QVideoSurfaceFormat::TopToBottom:
-            nospace << "TopToBottom";
+            dbg << "TopToBottom";
             break;
     }
-    return nospace;
+    return dbg;
 }
 
 QDebug operator<<(QDebug dbg, const QVideoSurfaceFormat &f)
 {
-    dbg.nospace() << "QVideoSurfaceFormat(" << f.pixelFormat();
-    dbg.nospace() << ", " << f.frameSize();
-    dbg.nospace() << ", viewport=" << f.viewport();
-    dbg.nospace() << ", pixelAspectRatio=" << f.pixelAspectRatio();
-    dbg.nospace() << ", handleType=" << f.handleType();
-    dbg.nospace() << ", yCbCrColorSpace=" << f.yCbCrColorSpace();
-    dbg.nospace() << ")";
+    QDebugStateSaver saver(dbg);
+    dbg.nospace();
+    dbg << "QVideoSurfaceFormat(" << f.pixelFormat() << ", " << f.frameSize()
+        << ", viewport=" << f.viewport() << ", pixelAspectRatio=" << f.pixelAspectRatio()
+        << ", handleType=" << f.handleType() <<  ", yCbCrColorSpace=" << f.yCbCrColorSpace()
+        << ')';
 
     foreach(const QByteArray& propertyName, f.propertyNames())
         dbg << "\n    " << propertyName.data() << " = " << f.property(propertyName.data());
 
-    return dbg.space();
+    return dbg;
 }
 #endif
 

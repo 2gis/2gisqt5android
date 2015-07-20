@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
@@ -10,15 +10,15 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Free Documentation License Usage
 ** Alternatively, this file may be used under the terms of the GNU Free
 ** Documentation License version 1.3 as published by the Free Software
 ** Foundation and appearing in the file included in the packaging of
-** this file.  Please review the following information to ensure
+** this file. Please review the following information to ensure
 ** the GNU Free Documentation License version 1.3 requirements
 ** will be met: http://www.gnu.org/copyleft/fdl.html.
 ** $QT_END_LICENSE$
@@ -123,11 +123,12 @@
 
     \section1 Warning and Debugging Messages
 
-    Qt includes four global functions for writing out warning and debug
+    Qt includes global macros for writing out warning and debug
     text. You can use them for the following purposes:
 
     \list
     \li qDebug() is used for writing custom debug output.
+    \li qInfo() is used for informational messages.
     \li qWarning() is used to report warnings and recoverable errors in
        your application.
     \li qCritical() is used for writing critical error messages and
@@ -135,12 +136,12 @@
     \li qFatal() is used for writing fatal error messages shortly before exiting.
     \endlist
 
-    If you include the <QtDebug> header file, the \c qDebug() function
+    If you include the <QtDebug> header file, the \c qDebug() macro
     can also be used as an output stream. For example:
 
     \snippet snippets/code/doc_src_debug.cpp 0
 
-    The Qt implementation of these functions prints to the
+    The Qt implementation of these macros prints to the
     \c stderr output under Unix/X11 and OS X. With Windows, if it
     is a console application, the text is sent to console; otherwise, it
     is sent to the debugger.
@@ -152,27 +153,16 @@
     QT_MESSAGE_PATTERN="[%{type}] %{appname} (%{file}:%{line}) - %{message}"
     \endcode
 
-    \table
-    \header \li Placeholder \li Description
-    \row \li \c %{appname} \li QCoreApplication::applicationName()
-    \row \li \c %{file} \li Path to source file
-    \row \li \c %{function} \li Function
-    \row \li \c %{line} \li Line in source file
-    \row \li \c %{message} \li The actual message
-    \row \li \c %{pid} \li QCoreApplication::applicationPid()
-    \row \li \c %{threadid} \li ID of current thread
-    \row \li \c %{type} \li "debug", "warning", "critical" or "fatal"
-    \endtable
-
-    You can also install your own message handler using qInstallMessageHandler().
+    The format is documented in qSetMessagePattern(). You can also install your
+    own message handler using qInstallMessageHandler().
 
     If the \c QT_FATAL_WARNINGS environment variable is set,
     qWarning() exits after printing the warning message. This makes
     it easy to obtain a backtrace in the debugger.
 
-    Both qDebug() and qWarning() are debugging tools. They can be
-    compiled away by defining \c QT_NO_DEBUG_OUTPUT and \c
-    QT_NO_WARNING_OUTPUT during compilation.
+    qDebug(), qInfo(), and qWarning() are debugging tools. They can be
+    compiled away by defining \c QT_NO_DEBUG_OUTPUT, \c
+    QT_NO_INFO_OUTPUT, or \c QT_NO_WARNING_OUTPUT during compilation.
 
     The debugging functions QObject::dumpObjectTree() and
     QObject::dumpObjectInfo() are often useful when an application
