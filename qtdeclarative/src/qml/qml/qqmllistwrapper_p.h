@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -59,28 +59,32 @@ class QV8Engine;
 
 namespace QV4 {
 
+namespace Heap {
+
+struct QmlListWrapper : Object {
+    QmlListWrapper(ExecutionEngine *engine);
+    ~QmlListWrapper();
+    QPointer<QObject> object;
+    QQmlListProperty<QObject> property;
+    int propertyType;
+};
+
+}
+
 struct Q_QML_EXPORT QmlListWrapper : Object
 {
-    struct Data : Object::Data {
-        Data(QV8Engine *engine);
-        ~Data();
-        QV8Engine *v8;
-        QPointer<QObject> object;
-        QQmlListProperty<QObject> property;
-        int propertyType;
-    };
-    V4_OBJECT(Object)
+    V4_OBJECT2(QmlListWrapper, Object)
+    V4_NEEDS_DESTROY
 
-    static ReturnedValue create(QV8Engine *v8, QObject *object, int propId, int propType);
-    static ReturnedValue create(QV8Engine *v8, const QQmlListProperty<QObject> &prop, int propType);
+    static ReturnedValue create(ExecutionEngine *engine, QObject *object, int propId, int propType);
+    static ReturnedValue create(ExecutionEngine *engine, const QQmlListProperty<QObject> &prop, int propType);
 
     QVariant toVariant() const;
 
     static ReturnedValue get(Managed *m, String *name, bool *hasProperty);
     static ReturnedValue getIndexed(Managed *m, uint index, bool *hasProperty);
-    static void put(Managed *m, String *name, const ValueRef value);
-    static void advanceIterator(Managed *m, ObjectIterator *it, String *&name, uint *index, Property *p, PropertyAttributes *attributes);
-    static void destroy(Managed *that);
+    static void put(Managed *m, String *name, const Value &value);
+    static void advanceIterator(Managed *m, ObjectIterator *it, Heap::String **name, uint *index, Property *p, PropertyAttributes *attributes);
 };
 
 }

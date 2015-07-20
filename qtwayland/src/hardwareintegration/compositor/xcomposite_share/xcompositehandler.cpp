@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Compositor.
 **
@@ -17,8 +17,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -50,9 +50,7 @@ QT_BEGIN_NAMESPACE
 XCompositeHandler::XCompositeHandler(QtWayland::Compositor *compositor, Display *display)
     : QtWaylandServer::qt_xcomposite(compositor->wl_display(), 1)
 {
-    compositor->window()->create();
-
-    mFakeRootWindow = new QWindow(compositor->window());
+    mFakeRootWindow = new QWindow();
     mFakeRootWindow->setGeometry(QRect(-1,-1,1,1));
     mFakeRootWindow->create();
     mFakeRootWindow->show();

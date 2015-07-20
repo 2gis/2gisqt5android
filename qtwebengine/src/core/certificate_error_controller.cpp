@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtWebEngine module of the Qt Toolkit.
 **
@@ -10,15 +10,15 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
 ** General Public License version 3 as published by the Free Software
 ** Foundation and appearing in the file LICENSE.LGPLv3 included in the
-** packaging of this file.  Please review the following information to
+** packaging of this file. Please review the following information to
 ** ensure the GNU Lesser General Public License version 3 requirements
 ** will be met: https://www.gnu.org/licenses/lgpl.html.
 **
@@ -26,7 +26,7 @@
 ** Alternatively, this file may be used under the terms of the GNU
 ** General Public License version 2.0 or later as published by the Free
 ** Software Foundation and appearing in the file LICENSE.GPL included in
-** the packaging of this file.  Please review the following information to
+** the packaging of this file. Please review the following information to
 ** ensure the GNU General Public License version 2.0 requirements will be
 ** met: http://www.gnu.org/licenses/gpl-2.0.html.
 **
@@ -43,6 +43,10 @@
 #include "chrome/grit/generated_resources.h"
 #include "type_conversion.h"
 
+QT_BEGIN_NAMESPACE
+
+using namespace QtWebEngineCore;
+
 void CertificateErrorControllerPrivate::accept(bool accepted)
 {
     callback.Run(accepted);
@@ -51,7 +55,7 @@ void CertificateErrorControllerPrivate::accept(bool accepted)
 CertificateErrorControllerPrivate::CertificateErrorControllerPrivate(int cert_error,
                                                                      const net::SSLInfo& ssl_info,
                                                                      const GURL &request_url,
-                                                                     ResourceType::Type resource_type,
+                                                                     content::ResourceType resource_type,
                                                                      bool _overridable,
                                                                      bool strict_enforcement,
                                                                      const base::Callback<void(bool)>& cb
@@ -63,7 +67,7 @@ CertificateErrorControllerPrivate::CertificateErrorControllerPrivate(int cert_er
     , strictEnforcement(strict_enforcement)
     , callback(cb)
 {
-    if (ssl_info.cert) {
+    if (ssl_info.cert.get()) {
         validStart = toQt(ssl_info.cert->valid_start());
         validExpiry = toQt(ssl_info.cert->valid_expiry());
     }
@@ -135,8 +139,6 @@ QString CertificateErrorController::errorString() const
         return getQStringForMessageId(IDS_CERT_ERROR_CONTAINS_ERRORS_DESCRIPTION);
     case CertificateNoRevocationMechanism:
         return getQStringForMessageId(IDS_CERT_ERROR_NO_REVOCATION_MECHANISM_DETAILS);
-    case CertificateUnableToCheckRevocation:
-        return getQStringForMessageId(IDS_CERT_ERROR_UNABLE_TO_CHECK_REVOCATION_DETAILS);
     case CertificateRevoked:
         return getQStringForMessageId(IDS_CERT_ERROR_REVOKED_CERT_DESCRIPTION);
     case CertificateInvalid:
@@ -149,9 +151,12 @@ QString CertificateErrorController::errorString() const
         return getQStringForMessageId(IDS_CERT_ERROR_WEAK_KEY_DESCRIPTION);
     case CertificateNameConstraintViolation:
         return getQStringForMessageId(IDS_CERT_ERROR_NAME_CONSTRAINT_VIOLATION_DESCRIPTION);
+    case CertificateUnableToCheckRevocation: // Deprecated in Chromium.
     default:
         break;
     }
 
     return getQStringForMessageId(IDS_CERT_ERROR_UNKNOWN_ERROR_DESCRIPTION);
 }
+
+QT_END_NAMESPACE

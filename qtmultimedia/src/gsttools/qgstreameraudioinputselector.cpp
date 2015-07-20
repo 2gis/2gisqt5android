@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -111,36 +111,33 @@ void QGstreamerAudioInputSelector::updateAlsaDevices()
 {
 #ifdef HAVE_ALSA
     void **hints, **n;
-    int card = -1;
+    if (snd_device_name_hint(-1, "pcm", &hints) < 0) {
+        qWarning()<<"no alsa devices available";
+        return;
+    }
+    n = hints;
 
-    while (snd_card_next(&card) == 0 && card >= 0) {
-        if (snd_device_name_hint(card, "pcm", &hints) < 0)
-            continue;
+    while (*n != NULL) {
+        char *name = snd_device_name_get_hint(*n, "NAME");
+        char *descr = snd_device_name_get_hint(*n, "DESC");
+        char *io = snd_device_name_get_hint(*n, "IOID");
 
-        n = hints;
-        while (*n != NULL) {
-            char *name = snd_device_name_get_hint(*n, "NAME");
-            char *descr = snd_device_name_get_hint(*n, "DESC");
-            char *io = snd_device_name_get_hint(*n, "IOID");
-
-            if ((name != NULL) && (descr != NULL)) {
-                if ( io == NULL || qstrcmp(io,"Input") == 0 ) {
-                    m_names.append(QLatin1String("alsa:")+QString::fromUtf8(name));
-                    m_descriptions.append(QString::fromUtf8(descr));
-                }
+        if ((name != NULL) && (descr != NULL)) {
+            if ( io == NULL || qstrcmp(io,"Input") == 0 ) {
+                m_names.append(QLatin1String("alsa:")+QString::fromUtf8(name));
+                m_descriptions.append(QString::fromUtf8(descr));
             }
-
-            if (name != NULL)
-                free(name);
-            if (descr != NULL)
-                free(descr);
-            if (io != NULL)
-                free(io);
-            ++n;
         }
 
-        snd_device_name_free_hint(hints);
+        if (name != NULL)
+            free(name);
+        if (descr != NULL)
+            free(descr);
+        if (io != NULL)
+            free(io);
+        n++;
     }
+    snd_device_name_free_hint(hints);
 #endif
 }
 

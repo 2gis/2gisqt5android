@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -232,7 +232,7 @@ Item {
             // sanity check that the coordinate conversion works, as
             // rest of the case relies on it. for robustness cut
             // a little slack with fuzzy compare
-            var mapcenter = map.toScreenPosition(map.center)
+            var mapcenter = map.fromCoordinate(map.center)
             verify (fuzzy_compare(mapcenter.x, 100, 2))
             verify (fuzzy_compare(mapcenter.y, 100, 2))
 
@@ -474,7 +474,7 @@ Item {
             mapCircleBottomRight = itemBottomRight;
 
             itemTopLeft = preMapQuickItem.coordinate
-            var preMapQuickItemScreenPosition = map.toScreenPosition(preMapQuickItem.coordinate)
+            var preMapQuickItemScreenPosition = map.fromCoordinate(preMapQuickItem.coordinate)
             preMapQuickItemScreenPosition.x += preMapQuickItem.sourceItem.width
             preMapQuickItemScreenPosition.y += preMapQuickItem.sourceItem.height
             itemBottomRight = map.toCoordinate(preMapQuickItemScreenPosition)
@@ -497,14 +497,14 @@ Item {
 
         function min_max_bounds_from_list(coorindates){
             var i = 0
-            var point = map.toScreenPosition(coorindates[0])
+            var point = map.fromCoordinate(coorindates[0])
             var minX = point.x
             var minY = point.y
             var maxX = point.x
             var maxY = point.y
 
             for (i=1; i < coorindates.length; ++i) {
-                point = map.toScreenPosition(coorindates[i])
+                point = map.fromCoordinate(coorindates[i])
                 if (point.x < minX)
                     minX = point.x
                 if (point.x > maxX)
@@ -582,7 +582,7 @@ Item {
         }
 
         function is_coord_on_screen(coord) {
-            return is_point_on_screen(map.toScreenPosition(coord))
+            return is_point_on_screen(map.fromCoordinate(coord))
         }
 
         function is_point_on_screen(point) {

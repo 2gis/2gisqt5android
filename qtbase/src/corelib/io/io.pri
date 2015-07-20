@@ -7,6 +7,7 @@ HEADERS +=  \
         io/qdatastream_p.h \
         io/qdataurl_p.h \
         io/qdebug.h \
+        io/qdebug_p.h \
         io/qdir.h \
         io/qdir_p.h \
         io/qdiriterator.h \
@@ -137,6 +138,10 @@ win32 {
                 io/qlockfile_unix.cpp \
                 io/qprocess_unix.cpp \
                 io/qfilesystemiterator_unix.cpp \
+                io/forkfd_qt.cpp
+        HEADERS += \
+                ../3rdparty/forkfd/forkfd.h
+        INCLUDEPATH += ../3rdparty/forkfd
 
         !nacl:mac: {
             SOURCES += io/qsettings_mac.cpp
@@ -165,6 +170,11 @@ win32 {
             SOURCES += \
                 io/qstandardpaths_android.cpp \
                 io/qstorageinfo_unix.cpp
+        } else:haiku {
+            SOURCES += \
+                io/qstandardpaths_haiku.cpp \
+                io/qstorageinfo_unix.cpp
+            LIBS += -lbe
         } else {
             SOURCES += \
                 io/qstandardpaths_unix.cpp \
@@ -177,7 +187,7 @@ win32 {
         }
 
         !nacl {
-            freebsd-*|mac|darwin-*|openbsd-*:{
+            freebsd-*|mac|darwin-*|openbsd-*|netbsd-*:{
                 SOURCES += io/qfilesystemwatcher_kqueue.cpp
                 HEADERS += io/qfilesystemwatcher_kqueue_p.h
             }

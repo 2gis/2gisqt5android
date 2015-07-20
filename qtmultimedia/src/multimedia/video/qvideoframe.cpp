@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -366,6 +366,23 @@ QVideoFrame &QVideoFrame::operator =(const QVideoFrame &other)
     d = other.d;
 
     return *this;
+}
+
+/*!
+  \return \c true if this QVideoFrame and \a other reflect the same frame.
+ */
+bool QVideoFrame::operator==(const QVideoFrame &other) const
+{
+    // Due to explicit sharing we just compare the QSharedData which in turn compares the pointers.
+    return d == other.d;
+}
+
+/*!
+  \return \c true if this QVideoFrame and \a other do not reflect the same frame.
+ */
+bool QVideoFrame::operator!=(const QVideoFrame &other) const
+{
+    return d != other.d;
 }
 
 /*!
@@ -985,90 +1002,94 @@ QImage::Format QVideoFrame::imageFormatFromPixelFormat(PixelFormat format)
 #ifndef QT_NO_DEBUG_STREAM
 QDebug operator<<(QDebug dbg, QVideoFrame::PixelFormat pf)
 {
+    QDebugStateSaver saver(dbg);
+    dbg.nospace();
     switch (pf) {
         case QVideoFrame::Format_Invalid:
-            return dbg.nospace() << "Format_Invalid";
+            return dbg << "Format_Invalid";
         case QVideoFrame::Format_ARGB32:
-            return dbg.nospace() << "Format_ARGB32";
+            return dbg << "Format_ARGB32";
         case QVideoFrame::Format_ARGB32_Premultiplied:
-            return dbg.nospace() << "Format_ARGB32_Premultiplied";
+            return dbg << "Format_ARGB32_Premultiplied";
         case QVideoFrame::Format_RGB32:
-            return dbg.nospace() << "Format_RGB32";
+            return dbg << "Format_RGB32";
         case QVideoFrame::Format_RGB24:
-            return dbg.nospace() << "Format_RGB24";
+            return dbg << "Format_RGB24";
         case QVideoFrame::Format_RGB565:
-            return dbg.nospace() << "Format_RGB565";
+            return dbg << "Format_RGB565";
         case QVideoFrame::Format_RGB555:
-            return dbg.nospace() << "Format_RGB555";
+            return dbg << "Format_RGB555";
         case QVideoFrame::Format_ARGB8565_Premultiplied:
-            return dbg.nospace() << "Format_ARGB8565_Premultiplied";
+            return dbg << "Format_ARGB8565_Premultiplied";
         case QVideoFrame::Format_BGRA32:
-            return dbg.nospace() << "Format_BGRA32";
+            return dbg << "Format_BGRA32";
         case QVideoFrame::Format_BGRA32_Premultiplied:
-            return dbg.nospace() << "Format_BGRA32_Premultiplied";
+            return dbg << "Format_BGRA32_Premultiplied";
         case QVideoFrame::Format_BGR32:
-            return dbg.nospace() << "Format_BGR32";
+            return dbg << "Format_BGR32";
         case QVideoFrame::Format_BGR24:
-            return dbg.nospace() << "Format_BGR24";
+            return dbg << "Format_BGR24";
         case QVideoFrame::Format_BGR565:
-            return dbg.nospace() << "Format_BGR565";
+            return dbg << "Format_BGR565";
         case QVideoFrame::Format_BGR555:
-            return dbg.nospace() << "Format_BGR555";
+            return dbg << "Format_BGR555";
         case QVideoFrame::Format_BGRA5658_Premultiplied:
-            return dbg.nospace() << "Format_BGRA5658_Premultiplied";
+            return dbg << "Format_BGRA5658_Premultiplied";
         case QVideoFrame::Format_AYUV444:
-            return dbg.nospace() << "Format_AYUV444";
+            return dbg << "Format_AYUV444";
         case QVideoFrame::Format_AYUV444_Premultiplied:
-            return dbg.nospace() << "Format_AYUV444_Premultiplied";
+            return dbg << "Format_AYUV444_Premultiplied";
         case QVideoFrame::Format_YUV444:
-            return dbg.nospace() << "Format_YUV444";
+            return dbg << "Format_YUV444";
         case QVideoFrame::Format_YUV420P:
-            return dbg.nospace() << "Format_YUV420P";
+            return dbg << "Format_YUV420P";
         case QVideoFrame::Format_YV12:
-            return dbg.nospace() << "Format_YV12";
+            return dbg << "Format_YV12";
         case QVideoFrame::Format_UYVY:
-            return dbg.nospace() << "Format_UYVY";
+            return dbg << "Format_UYVY";
         case QVideoFrame::Format_YUYV:
-            return dbg.nospace() << "Format_YUYV";
+            return dbg << "Format_YUYV";
         case QVideoFrame::Format_NV12:
-            return dbg.nospace() << "Format_NV12";
+            return dbg << "Format_NV12";
         case QVideoFrame::Format_NV21:
-            return dbg.nospace() << "Format_NV21";
+            return dbg << "Format_NV21";
         case QVideoFrame::Format_IMC1:
-            return dbg.nospace() << "Format_IMC1";
+            return dbg << "Format_IMC1";
         case QVideoFrame::Format_IMC2:
-            return dbg.nospace() << "Format_IMC2";
+            return dbg << "Format_IMC2";
         case QVideoFrame::Format_IMC3:
-            return dbg.nospace() << "Format_IMC3";
+            return dbg << "Format_IMC3";
         case QVideoFrame::Format_IMC4:
-            return dbg.nospace() << "Format_IMC4";
+            return dbg << "Format_IMC4";
         case QVideoFrame::Format_Y8:
-            return dbg.nospace() << "Format_Y8";
+            return dbg << "Format_Y8";
         case QVideoFrame::Format_Y16:
-            return dbg.nospace() << "Format_Y16";
+            return dbg << "Format_Y16";
         case QVideoFrame::Format_Jpeg:
-            return dbg.nospace() << "Format_Jpeg";
+            return dbg << "Format_Jpeg";
         case QVideoFrame::Format_AdobeDng:
-            return dbg.nospace() << "Format_AdobeDng";
+            return dbg << "Format_AdobeDng";
         case QVideoFrame::Format_CameraRaw:
-            return dbg.nospace() << "Format_CameraRaw";
+            return dbg << "Format_CameraRaw";
 
         default:
-            return dbg.nospace() << QString(QLatin1String("UserType(%1)" )).arg(int(pf)).toLatin1().constData();
+            return dbg << QString(QLatin1String("UserType(%1)" )).arg(int(pf)).toLatin1().constData();
     }
 }
 
 QDebug operator<<(QDebug dbg, QVideoFrame::FieldType f)
 {
+    QDebugStateSaver saver(dbg);
+    dbg.nospace();
     switch (f) {
         case QVideoFrame::TopField:
-            return dbg.nospace() << "TopField";
+            return dbg << "TopField";
         case QVideoFrame::BottomField:
-            return dbg.nospace() << "BottomField";
+            return dbg << "BottomField";
         case QVideoFrame::InterlacedFrame:
-            return dbg.nospace() << "InterlacedFrame";
+            return dbg << "InterlacedFrame";
         default:
-            return dbg.nospace() << "ProgressiveFrame";
+            return dbg << "ProgressiveFrame";
     }
 }
 
@@ -1144,16 +1165,17 @@ static QString qFormatTimeStamps(qint64 start, qint64 end)
 
 QDebug operator<<(QDebug dbg, const QVideoFrame& f)
 {
-    dbg.nospace() << "QVideoFrame(" << f.size() << ", "
+    QDebugStateSaver saver(dbg);
+    dbg.nospace();
+    dbg << "QVideoFrame(" << f.size() << ", "
                << f.pixelFormat() << ", "
                << f.handleType() << ", "
                << f.mapMode() << ", "
                << qFormatTimeStamps(f.startTime(), f.endTime()).toLatin1().constData();
-    if (f.availableMetaData().count()) {
-        dbg.nospace() << ", metaData: ";
-        dbg.nospace() << f.availableMetaData();
-    }
-    return dbg.nospace() << ")";
+    if (f.availableMetaData().count())
+        dbg << ", metaData: " << f.availableMetaData();
+    dbg << ')';
+    return dbg;
 }
 #endif
 

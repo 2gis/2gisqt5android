@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -38,6 +38,7 @@
 
 #include "qgstreamervideorendererinterface_p.h"
 #include <private/qgstreamerbushelper_p.h>
+#include <private/qgstreamerbufferprobe_p.h>
 #include <QtGui/qcolor.h>
 
 QT_BEGIN_NAMESPACE
@@ -45,7 +46,8 @@ class QAbstractVideoSurface;
 
 class QGstreamerVideoWindow : public QVideoWindowControl,
         public QGstreamerVideoRendererInterface,
-        public QGstreamerSyncMessageFilter
+        public QGstreamerSyncMessageFilter,
+        private QGstreamerBufferProbe
 {
     Q_OBJECT
     Q_INTERFACES(QGstreamerVideoRendererInterface QGstreamerSyncMessageFilter)
@@ -101,10 +103,10 @@ signals:
     void readyChanged(bool);
 
 private slots:
-    void updateNativeVideoSize();
+    void updateNativeVideoSize(const QSize &size);
 
 private:
-    static void padBufferProbe(GstPad *pad, GstBuffer *buffer, gpointer user_data);
+    void probeCaps(GstCaps *caps);
 
     GstElement *m_videoSink;
     WId m_windowId;
@@ -113,7 +115,6 @@ private:
     bool m_fullScreen;
     QSize m_nativeSize;
     mutable QColor m_colorKey;
-    int m_bufferProbeId;
 };
 
 QT_END_NAMESPACE

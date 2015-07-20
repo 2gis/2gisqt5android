@@ -1,5 +1,5 @@
 /*
-    Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+    Copyright (C) 2015 The Qt Company Ltd.
     Copyright (C) 2008 Nokia Corporation and/or its subsidiary(-ies)
 
     This library is free software; you can redistribute it and/or
@@ -25,12 +25,15 @@
 #include <QtCore/qscopedpointer.h>
 #include <QtCore/qstring.h>
 
+namespace QtWebEngineCore {
+class WebEngineSettings;
+}
+
 QT_BEGIN_NAMESPACE
 
 class QIcon;
 class QPixmap;
 class QUrl;
-class QWebEngineSettingsPrivate;
 
 class QWEBENGINEWIDGETS_EXPORT QWebEngineSettings {
 public:
@@ -65,7 +68,10 @@ public:
         DefaultFixedFontSize
     };
 
+#if QT_DEPRECATED_SINCE(5, 5)
     static QWebEngineSettings *globalSettings();
+#endif
+    static QWebEngineSettings *defaultSettings();
 
     void setFontFamily(FontFamily which, const QString &family);
     QString fontFamily(FontFamily which) const;
@@ -84,12 +90,15 @@ public:
 
 private:
     Q_DISABLE_COPY(QWebEngineSettings)
-    Q_DECLARE_PRIVATE(QWebEngineSettings);
+    typedef ::QtWebEngineCore::WebEngineSettings QWebEngineSettingsPrivate;
+    QWebEngineSettingsPrivate* d_func() { return d_ptr.data(); }
+    const QWebEngineSettingsPrivate* d_func() const { return d_ptr.data(); }
     QScopedPointer<QWebEngineSettingsPrivate> d_ptr;
     friend class QWebEnginePagePrivate;
+    friend class QWebEngineProfilePrivate;
 
-    QWebEngineSettings();
     ~QWebEngineSettings();
+    explicit QWebEngineSettings(QWebEngineSettings *parentSettings = 0);
 };
 
 QT_END_NAMESPACE

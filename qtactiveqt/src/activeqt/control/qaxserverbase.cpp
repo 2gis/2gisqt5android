@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the ActiveQt framework of the Qt Toolkit.
 **
@@ -17,8 +17,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -423,7 +423,7 @@ public:
         InitializeCriticalSection(&refCountSection);
         InitializeCriticalSection(&createWindowSection);
     }
-    ~QAxServerAggregate()
+    virtual ~QAxServerAggregate()
     {
         DeleteCriticalSection(&refCountSection);
         DeleteCriticalSection(&createWindowSection);
@@ -504,7 +504,7 @@ public:
         for (int i = 0; i < count; ++i)
             cpoints.at(i)->AddRef();
     }
-    ~QAxSignalVec()
+    virtual ~QAxSignalVec()
     {
         const int count = cpoints.count();
         for (int i = 0; i < count; ++i)
@@ -620,14 +620,10 @@ public:
         connections = old.connections;
         that = old.that;
         iid = old.iid;
-        QList<CONNECTDATA>::Iterator it = connections.begin();
-        while (it != connections.end()) {
-            CONNECTDATA connection = *it;
-            ++it;
+        foreach (const CONNECTDATA &connection, connections)
             connection.pUnk->AddRef();
-        }
     }
-    ~QAxConnection()
+    virtual ~QAxConnection()
     {
         DeleteCriticalSection(&refCountSection);
     }
@@ -786,7 +782,7 @@ LRESULT QT_WIN_CALLBACK axs_FilterProc(int nCode, WPARAM wParam, LPARAM lParam)
 class QAxWinEventFilter : public QAbstractNativeEventFilter
 {
 public:
-    virtual bool nativeEventFilter(const QByteArray &, void *message, long *) Q_DECL_OVERRIDE;
+    bool nativeEventFilter(const QByteArray &, void *message, long *) Q_DECL_OVERRIDE;
 };
 
 bool QAxWinEventFilter::nativeEventFilter(const QByteArray &, void *message, long *)
@@ -833,9 +829,9 @@ public:
 
         // COM only knows the CLSID, but QAxFactory is class name based...
         QStringList keys = qAxFactory()->featureList();
-        for (QStringList::Iterator  key = keys.begin(); key != keys.end(); ++key) {
-            if (qAxFactory()->classID(*key) == clsid) {
-                className = *key;
+        foreach (const QString &key, keys) {
+            if (qAxFactory()->classID(key) == clsid) {
+                className = key;
                 break;
             }
         }
@@ -847,7 +843,7 @@ public:
         }
     }
 
-    ~QClassFactory()
+    virtual ~QClassFactory()
     {
         DeleteCriticalSection(&refCountSection);
     }
@@ -1114,9 +1110,9 @@ QAxServerBase::~QAxServerBase()
 
     revokeActiveObject();
 
-    for (QAxServerBase::ConnectionPointsIterator it = points.begin(); it != points.end(); ++it) {
-        if (it.value())
-            (*it)->Release();
+    foreach (IConnectionPoint *point, points) {
+        if (point)
+            point->Release();
     }
     delete aggregatedObject;
     aggregatedObject = 0;
@@ -1330,12 +1326,9 @@ bool QAxServerBase::internalCreate()
     // install an event filter for stock events
     if (isWidget) {
         qt.object->installEventFilter(this);
-        const QList<QWidget*> children = qt.object->findChildren<QWidget*>();
-        QList<QWidget*>::ConstIterator it = children.constBegin();
-        while (it != children.constEnd()) {
-            (*it)->installEventFilter(this);
-            ++it;
-        }
+        const QWidgetList children = qt.object->findChildren<QWidget*>();
+        foreach (QWidget *child, children)
+            child->installEventFilter(this);
     }
     return true;
 }
@@ -2351,7 +2344,8 @@ HRESULT WINAPI QAxServerBase::Invoke(DISPID dispidMember, REFIID riid,
                     if (index == -1) {
                         QRegExp regexp(QLatin1String("_([0-9])\\("));
                         if (regexp.lastIndexIn(QString::fromLatin1(name.constData())) != -1) {
-                            name = name.left(name.length() - regexp.cap(0).length()) + '(';
+                            name.chop(regexp.cap(0).length());
+                            name += '(';
                             int overload = regexp.cap(1).toInt() + 1;
 
                             for (int s = 0; s < qt.object->metaObject()->methodCount(); ++s) {
@@ -2609,11 +2603,11 @@ HRESULT WINAPI QAxServerBase::Invoke(DISPID dispidMember, REFIID riid,
                 int br = context.indexOf(QLatin1Char('['));
                 if (br != -1) {
                     context = context.mid(br+1);
-                    context = context.left(context.length() - 1);
+                    context.chop(1);
                     contextID = context.toInt();
 
                     context = exception->context;
-                    context = context.left(br-1);
+                    context.truncate(br-1);
                 }
                 pexcepinfo->bstrHelpFile = QStringToBSTR(context);
                 pexcepinfo->dwHelpContext = contextID;
@@ -2713,7 +2707,7 @@ HRESULT WINAPI QAxServerBase::Load(IStream *pStm)
     QBuffer qtbuffer(&qtarray);
     QByteArray mimeType = mo->classInfo(mo->indexOfClassInfo("MIME")).value();
     if (!mimeType.isEmpty()) {
-        mimeType = mimeType.left(mimeType.indexOf(':')); // first type
+        mimeType.truncate(mimeType.indexOf(':')); // first type
         QAxBindable *axb = (QAxBindable*)qt.object->qt_metacast("QAxBindable");
         if (axb && axb->readData(&qtbuffer, QString::fromLatin1(mimeType)))
             return S_OK;
@@ -3031,13 +3025,13 @@ HRESULT WINAPI QAxServerBase::Load(LPCOLESTR fileName, DWORD /* mode */)
             continue;
         }
 
-        mimeType = mime.left(mimeType.indexOf(QLatin1Char(':'))); // first type
+        mimeType.truncate(mimeType.indexOf(QLatin1Char(':'))); // first type
         if (mimeType.isEmpty()) {
             qWarning() << class_name << ": Invalid syntax in Q_CLASSINFO for MIME";
             continue;
         }
         QString mimeExtension = mime.mid(mimeType.length() + 1);
-        mimeExtension = mimeExtension.left(mimeExtension.indexOf(QLatin1Char(':')));
+        mimeExtension.truncate(mimeExtension.indexOf(QLatin1Char(':')));
         if (mimeExtension != fileExtension)
             continue;
 
@@ -3075,13 +3069,13 @@ HRESULT WINAPI QAxServerBase::Save(LPCOLESTR fileName, BOOL fRemember)
             qWarning() << class_name << ": Invalid syntax in Q_CLASSINFO for MIME";
             continue;
         }
-        mimeType = mime.left(mimeType.indexOf(QLatin1Char(':'))); // first type
+        mimeType.truncate(mimeType.indexOf(QLatin1Char(':'))); // first type
         if (mimeType.isEmpty()) {
             qWarning() << class_name << ": Invalid syntax in Q_CLASSINFO for MIME";
             continue;
         }
         QString mimeExtension = mime.mid(mimeType.length() + 1);
-        mimeExtension = mimeExtension.left(mimeExtension.indexOf(QLatin1Char(':')));
+        mimeExtension.truncate(mimeExtension.indexOf(QLatin1Char(':')));
         if (mimeExtension != fileExtension)
             continue;
         if (axb->writeData(&file)) {

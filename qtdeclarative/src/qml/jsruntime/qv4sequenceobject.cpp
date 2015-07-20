@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -39,7 +39,11 @@
 #include <private/qv4arrayobject_p.h>
 #include <private/qqmlengine_p.h>
 #include <private/qv4scopedvalue_p.h>
-#include <private/qv4internalclass_p.h>
+#include "qv4runtime_p.h"
+#include "qv4objectiterator_p.h"
+#include <private/qqmlvaluetypewrapper_p.h>
+#include <private/qqmlmodelindexvaluetype_p.h>
+#include <QtCore/qabstractitemmodel.h>
 
 #include <algorithm>
 
@@ -48,15 +52,15 @@ QT_BEGIN_NAMESPACE
 using namespace QV4;
 
 // helper function to generate valid warnings if errors occur during sequence operations.
-static void generateWarning(QV4::ExecutionContext *ctx, const QString& description)
+static void generateWarning(QV4::ExecutionEngine *v4, const QString& description)
 {
-    QQmlEngine *engine = ctx->d()->engine->v8Engine->engine();
+    QQmlEngine *engine = v4->qmlEngine();
     if (!engine)
         return;
     QQmlError retn;
     retn.setDescription(description);
 
-    QV4::StackFrame frame = ctx->d()->engine->currentStackFrame();
+    QV4::StackFrame frame = v4->currentStackFrame();
 
     retn.setLine(frame.line);
     retn.setUrl(QUrl(frame.source));
@@ -70,7 +74,9 @@ static void generateWarning(QV4::ExecutionContext *ctx, const QString& descripti
     F(bool, Bool, QList<bool>, false) \
     F(QString, String, QList<QString>, QString()) \
     F(QString, QString, QStringList, QString()) \
-    F(QUrl, Url, QList<QUrl>, QUrl())
+    F(QUrl, Url, QList<QUrl>, QUrl()) \
+    F(QModelIndex, QModelIndex, QModelIndexList, QModelIndex()) \
+    F(QItemSelectionRange, QItemSelectionRange, QItemSelection, QItemSelectionRange())
 
 static QV4::ReturnedValue convertElementToValue(QV4::ExecutionEngine *engine, const QString &element)
 {
@@ -85,6 +91,19 @@ static QV4::ReturnedValue convertElementToValue(QV4::ExecutionEngine *, int elem
 static QV4::ReturnedValue convertElementToValue(QV4::ExecutionEngine *engine, const QUrl &element)
 {
     return engine->newString(element.toString())->asReturnedValue();
+}
+
+static QV4::ReturnedValue convertElementToValue(QV4::ExecutionEngine *engine, const QModelIndex &element)
+{
+    const QMetaObject *vtmo = QQmlValueTypeFactory::metaObjectForMetaType(QMetaType::QModelIndex);
+    return QV4::QQmlValueTypeWrapper::create(engine, QVariant(element), vtmo, QMetaType::QModelIndex);
+}
+
+static QV4::ReturnedValue convertElementToValue(QV4::ExecutionEngine *engine, const QItemSelectionRange &element)
+{
+    int metaTypeId = qMetaTypeId<QItemSelectionRange>();
+    const QMetaObject *vtmo = QQmlValueTypeFactory::metaObjectForMetaType(metaTypeId);
+    return QV4::QQmlValueTypeWrapper::create(engine, QVariant::fromValue(element), vtmo, metaTypeId);
 }
 
 static QV4::ReturnedValue convertElementToValue(QV4::ExecutionEngine *, qreal element)
@@ -112,6 +131,16 @@ static QString convertElementToString(const QUrl &element)
     return element.toString();
 }
 
+static QString convertElementToString(const QModelIndex &element)
+{
+    return reinterpret_cast<const QQmlModelIndexValueType *>(&element)->toString();
+}
+
+static QString convertElementToString(const QItemSelectionRange &element)
+{
+    return reinterpret_cast<const QQmlItemSelectionRangeValueType *>(&element)->toString();
+}
+
 static QString convertElementToString(qreal element)
 {
     QString qstr;
@@ -127,68 +156,74 @@ static QString convertElementToString(bool element)
         return QStringLiteral("false");
 }
 
-template <typename ElementType> ElementType convertValueToElement(const QV4::ValueRef value);
+template <typename ElementType> ElementType convertValueToElement(const Value &value);
 
-template <> QString convertValueToElement(const QV4::ValueRef value)
+template <> QString convertValueToElement(const Value &value)
 {
-    return value->toQString();
+    return value.toQString();
 }
 
-template <> int convertValueToElement(const QV4::ValueRef value)
+template <> int convertValueToElement(const Value &value)
 {
-    return value->toInt32();
+    return value.toInt32();
 }
 
-template <> QUrl convertValueToElement(const QV4::ValueRef value)
+template <> QUrl convertValueToElement(const Value &value)
 {
-    return QUrl(value->toQString());
+    return QUrl(value.toQString());
 }
 
-template <> qreal convertValueToElement(const QV4::ValueRef value)
+template <> QModelIndex convertValueToElement(const Value &value)
 {
-    return value->toNumber();
+    const QQmlValueTypeWrapper *v = value_cast<QQmlValueTypeWrapper>(value);
+    if (v)
+        return v->toVariant().toModelIndex();
+    return QModelIndex();
 }
 
-template <> bool convertValueToElement(const ValueRef value)
+template <> QItemSelectionRange convertValueToElement(const Value &value)
 {
-    return value->toBoolean();
+    const QQmlValueTypeWrapper *v = value_cast<QQmlValueTypeWrapper>(value);
+    if (v)
+        return v->toVariant().value<QItemSelectionRange>();
+    return QItemSelectionRange();
+}
+
+template <> qreal convertValueToElement(const Value &value)
+{
+    return value.toNumber();
+}
+
+template <> bool convertValueToElement(const Value &value)
+{
+    return value.toBoolean();
+}
+
+namespace QV4 {
+
+template <typename Container> struct QQmlSequence;
+
+namespace Heap {
+
+template <typename Container>
+struct QQmlSequence : Object {
+    QQmlSequence(QV4::ExecutionEngine *engine, const Container &container);
+    QQmlSequence(QV4::ExecutionEngine *engine, QObject *object, int propertyIndex);
+
+    mutable Container container;
+    QPointer<QObject> object;
+    int propertyIndex;
+    bool isReference;
+};
+
 }
 
 template <typename Container>
 struct QQmlSequence : public QV4::Object
 {
-    struct Data : Object::Data {
-        Data(QV4::ExecutionEngine *engine, const Container &container)
-            : Object::Data(InternalClass::create(engine, staticVTable(), engine->sequencePrototype.asObject()))
-            , container(container)
-            , propertyIndex(-1)
-            , isReference(false)
-        {
-            QV4::Scope scope(engine);
-            QV4::Scoped<QQmlSequence<Container> > o(scope, this);
-            o->setArrayType(ArrayData::Custom);
-            o->init();
-        }
-
-        Data(QV4::ExecutionEngine *engine, QObject *object, int propertyIndex)
-            : Object::Data(InternalClass::create(engine, staticVTable(), engine->sequencePrototype.asObject()))
-            , object(object)
-            , propertyIndex(propertyIndex)
-            , isReference(true)
-        {
-            QV4::Scope scope(engine);
-            QV4::Scoped<QQmlSequence<Container> > o(scope, this);
-            o->setArrayType(ArrayData::Custom);
-            o->loadReference();
-            o->init();
-        }
-        mutable Container container;
-        QPointer<QObject> object;
-        int propertyIndex;
-        bool isReference;
-    };
-    V4_OBJECT(QV4::Object)
+    V4_OBJECT2(QQmlSequence<Container>, QV4::Object)
     Q_MANAGED_TYPE(QmlSequence)
+    V4_NEEDS_DESTROY
 public:
 
     void init()
@@ -200,7 +235,7 @@ public:
     {
         /* Qt containers have int (rather than uint) allowable indexes. */
         if (index > INT_MAX) {
-            generateWarning(engine()->currentContext(), QLatin1String("Index out of range during indexed get"));
+            generateWarning(engine(), QLatin1String("Index out of range during indexed get"));
             if (hasProperty)
                 *hasProperty = false;
             return Encode::undefined();
@@ -224,14 +259,14 @@ public:
         return Encode::undefined();
     }
 
-    void containerPutIndexed(uint index, const QV4::ValueRef value)
+    void containerPutIndexed(uint index, const QV4::Value &value)
     {
         if (internalClass()->engine->hasException)
             return;
 
         /* Qt containers have int (rather than uint) allowable indexes. */
         if (index > INT_MAX) {
-            generateWarning(engine()->currentContext(), QLatin1String("Index out of range during indexed set"));
+            generateWarning(engine(), QLatin1String("Index out of range during indexed set"));
             return;
         }
 
@@ -269,7 +304,7 @@ public:
     {
         /* Qt containers have int (rather than uint) allowable indexes. */
         if (index > INT_MAX) {
-            generateWarning(engine()->currentContext(), QLatin1String("Index out of range during indexed query"));
+            generateWarning(engine(), QLatin1String("Index out of range during indexed query"));
             return QV4::Attr_Invalid;
         }
         if (d()->isReference) {
@@ -281,9 +316,9 @@ public:
         return (signedIdx < d()->container.count()) ? QV4::Attr_Data : QV4::Attr_Invalid;
     }
 
-    void containerAdvanceIterator(ObjectIterator *it, String *&name, uint *index, Property *p, PropertyAttributes *attrs)
+    void containerAdvanceIterator(ObjectIterator *it, Heap::String **name, uint *index, Property *p, PropertyAttributes *attrs)
     {
-        name = (String *)0;
+        *name = (Heap::String *)0;
         *index = UINT_MAX;
 
         if (d()->isReference) {
@@ -354,8 +389,8 @@ public:
 
     struct CompareFunctor
     {
-        CompareFunctor(QV4::ExecutionContext *ctx, const QV4::ValueRef compareFn)
-            : m_ctx(ctx), m_compareFn(compareFn)
+        CompareFunctor(QV4::ExecutionContext *ctx, const QV4::Value &compareFn)
+            : m_ctx(ctx), m_compareFn(&compareFn)
         {}
 
         bool operator()(typename Container::value_type lhs, typename Container::value_type rhs)
@@ -365,14 +400,14 @@ public:
             ScopedCallData callData(scope, 2);
             callData->args[0] = convertElementToValue(this->m_ctx->d()->engine, lhs);
             callData->args[1] = convertElementToValue(this->m_ctx->d()->engine, rhs);
-            callData->thisObject = this->m_ctx->d()->engine->globalObject;
+            callData->thisObject = this->m_ctx->d()->engine->globalObject();
             QV4::ScopedValue result(scope, compare->call(callData));
             return result->toNumber() < 0;
         }
 
     private:
         QV4::ExecutionContext *m_ctx;
-        QV4::ValueRef m_compareFn;
+        const QV4::Value *m_compareFn;
     };
 
     void sort(QV4::CallContext *ctx)
@@ -384,8 +419,8 @@ public:
         }
 
         QV4::Scope scope(ctx);
-        if (ctx->d()->callData->argc == 1 && ctx->d()->callData->args[0].asFunctionObject()) {
-            CompareFunctor cf(ctx, ctx->d()->callData->args[0]);
+        if (ctx->argc() == 1 && ctx->args()[0].asFunctionObject()) {
+            CompareFunctor cf(ctx, ctx->args()[0]);
             std::sort(d()->container.begin(), d()->container.end(), cf);
         } else {
             DefaultCompareFunctor cf;
@@ -399,9 +434,9 @@ public:
     static QV4::ReturnedValue method_get_length(QV4::CallContext *ctx)
     {
         QV4::Scope scope(ctx);
-        QV4::Scoped<QQmlSequence<Container> > This(scope, ctx->d()->callData->thisObject.as<QQmlSequence<Container> >());
+        QV4::Scoped<QQmlSequence<Container> > This(scope, ctx->thisObject().as<QQmlSequence<Container> >());
         if (!This)
-            return ctx->throwTypeError();
+            return ctx->engine()->throwTypeError();
 
         if (This->d()->isReference) {
             if (!This->d()->object)
@@ -414,14 +449,14 @@ public:
     static QV4::ReturnedValue method_set_length(QV4::CallContext* ctx)
     {
         QV4::Scope scope(ctx);
-        QV4::Scoped<QQmlSequence<Container> > This(scope, ctx->d()->callData->thisObject.as<QQmlSequence<Container> >());
+        QV4::Scoped<QQmlSequence<Container> > This(scope, ctx->thisObject().as<QQmlSequence<Container> >());
         if (!This)
-            return ctx->throwTypeError();
+            return ctx->engine()->throwTypeError();
 
-        quint32 newLength = ctx->d()->callData->args[0].toUInt32();
+        quint32 newLength = ctx->args()[0].toUInt32();
         /* Qt containers have int (rather than uint) allowable indexes. */
         if (newLength > INT_MAX) {
-            generateWarning(ctx, QLatin1String("Index out of range during length set"));
+            generateWarning(scope.engine, QLatin1String("Index out of range during length set"));
             return QV4::Encode::undefined();
         }
         /* Read the sequence from the QObject property if we're a reference */
@@ -473,7 +508,6 @@ public:
         return QVariant::fromValue(result);
     }
 
-private:
     void loadReference() const
     {
         Q_ASSERT(d()->object);
@@ -494,7 +528,7 @@ private:
 
     static QV4::ReturnedValue getIndexed(QV4::Managed *that, uint index, bool *hasProperty)
     { return static_cast<QQmlSequence<Container> *>(that)->containerGetIndexed(index, hasProperty); }
-    static void putIndexed(Managed *that, uint index, const QV4::ValueRef value)
+    static void putIndexed(Managed *that, uint index, const QV4::Value &value)
     { static_cast<QQmlSequence<Container> *>(that)->containerPutIndexed(index, value); }
     static QV4::PropertyAttributes queryIndexed(const QV4::Managed *that, uint index)
     { return static_cast<const QQmlSequence<Container> *>(that)->containerQueryIndexed(index); }
@@ -502,14 +536,42 @@ private:
     { return static_cast<QQmlSequence<Container> *>(that)->containerDeleteIndexedProperty(index); }
     static bool isEqualTo(Managed *that, Managed *other)
     { return static_cast<QQmlSequence<Container> *>(that)->containerIsEqualTo(other); }
-    static void advanceIterator(Managed *that, ObjectIterator *it, String *&name, uint *index, Property *p, PropertyAttributes *attrs)
+    static void advanceIterator(Managed *that, ObjectIterator *it, Heap::String **name, uint *index, Property *p, PropertyAttributes *attrs)
     { return static_cast<QQmlSequence<Container> *>(that)->containerAdvanceIterator(it, name, index, p, attrs); }
 
-    static void destroy(Managed *that)
-    {
-        static_cast<QQmlSequence<Container> *>(that)->d()->~Data();
-    }
 };
+
+
+template <typename Container>
+Heap::QQmlSequence<Container>::QQmlSequence(QV4::ExecutionEngine *engine, const Container &container)
+    : Heap::Object(engine->emptyClass, engine->sequencePrototype.asObject())
+    , container(container)
+    , propertyIndex(-1)
+    , isReference(false)
+{
+    QV4::Scope scope(engine);
+    QV4::Scoped<QV4::QQmlSequence<Container> > o(scope, this);
+    o->setArrayType(Heap::ArrayData::Custom);
+    o->init();
+}
+
+template <typename Container>
+Heap::QQmlSequence<Container>::QQmlSequence(QV4::ExecutionEngine *engine, QObject *object, int propertyIndex)
+    : Heap::Object(engine->emptyClass, engine->sequencePrototype.asObject())
+    , object(object)
+    , propertyIndex(propertyIndex)
+    , isReference(true)
+{
+    QV4::Scope scope(engine);
+    QV4::Scoped<QV4::QQmlSequence<Container> > o(scope, this);
+    o->setArrayType(Heap::ArrayData::Custom);
+    o->loadReference();
+    o->init();
+}
+
+}
+
+namespace QV4 {
 
 typedef QQmlSequence<QStringList> QQmlQStringList;
 template<>
@@ -523,12 +585,20 @@ DEFINE_OBJECT_VTABLE(QQmlIntList);
 typedef QQmlSequence<QList<QUrl> > QQmlUrlList;
 template<>
 DEFINE_OBJECT_VTABLE(QQmlUrlList);
+typedef QQmlSequence<QModelIndexList> QQmlQModelIndexList;
+template<>
+DEFINE_OBJECT_VTABLE(QQmlQModelIndexList);
+typedef QQmlSequence<QItemSelection> QQmlQItemSelectionRangeList;
+template<>
+DEFINE_OBJECT_VTABLE(QQmlQItemSelectionRangeList);
 typedef QQmlSequence<QList<bool> > QQmlBoolList;
 template<>
 DEFINE_OBJECT_VTABLE(QQmlBoolList);
 typedef QQmlSequence<QList<qreal> > QQmlRealList;
 template<>
 DEFINE_OBJECT_VTABLE(QQmlRealList);
+
+}
 
 #define REGISTER_QML_SEQUENCE_METATYPE(unused, unused2, SequenceType, unused3) qRegisterMetaType<SequenceType>(#SequenceType);
 void SequencePrototype::init()
@@ -542,11 +612,11 @@ void SequencePrototype::init()
 QV4::ReturnedValue SequencePrototype::method_sort(QV4::CallContext *ctx)
 {
     QV4::Scope scope(ctx);
-    QV4::ScopedObject o(scope, ctx->d()->callData->thisObject);
+    QV4::ScopedObject o(scope, ctx->thisObject());
     if (!o || !o->isListType())
-        return ctx->throwTypeError();
+        return ctx->engine()->throwTypeError();
 
-    if (ctx->d()->callData->argc >= 2)
+    if (ctx->argc() >= 2)
         return o.asReturnedValue();
 
 #define CALL_SORT(SequenceElementType, SequenceElementTypeName, SequenceType, DefaultValue) \
@@ -574,7 +644,7 @@ bool SequencePrototype::isSequenceType(int sequenceTypeId)
 
 #define NEW_REFERENCE_SEQUENCE(ElementType, ElementTypeName, SequenceType, unused) \
     if (sequenceType == qMetaTypeId<SequenceType>()) { \
-        QV4::Scoped<QV4::Object> obj(scope, engine->memoryManager->alloc<QQml##ElementTypeName##List>(engine, object, propertyIndex)); \
+        QV4::ScopedObject obj(scope, engine->memoryManager->alloc<QQml##ElementTypeName##List>(engine, object, propertyIndex)); \
         return obj.asReturnedValue(); \
     } else
 
@@ -592,7 +662,7 @@ ReturnedValue SequencePrototype::newSequence(QV4::ExecutionEngine *engine, int s
 
 #define NEW_COPY_SEQUENCE(ElementType, ElementTypeName, SequenceType, unused) \
     if (sequenceType == qMetaTypeId<SequenceType>()) { \
-        QV4::Scoped<QV4::Object> obj(scope, engine->memoryManager->alloc<QQml##ElementTypeName##List>(engine, v.value<SequenceType >())); \
+        QV4::ScopedObject obj(scope, engine->memoryManager->alloc<QQml##ElementTypeName##List>(engine, v.value<SequenceType >())); \
         return obj.asReturnedValue(); \
     } else
 
@@ -626,15 +696,15 @@ QVariant SequencePrototype::toVariant(Object *object)
         return QQml##ElementTypeName##List::toVariant(a); \
     } else
 
-QVariant SequencePrototype::toVariant(const QV4::ValueRef array, int typeHint, bool *succeeded)
+QVariant SequencePrototype::toVariant(const QV4::Value &array, int typeHint, bool *succeeded)
 {
     *succeeded = true;
 
-    if (!array->asArrayObject()) {
+    if (!array.asArrayObject()) {
         *succeeded = false;
         return QVariant();
     }
-    QV4::Scope scope(array->engine());
+    QV4::Scope scope(array.asObject()->engine());
     QV4::ScopedArrayObject a(scope, array);
 
     FOREACH_QML_SEQUENCE_TYPE(SEQUENCE_TO_VARIANT) { /* else */ *succeeded = false; return QVariant(); }

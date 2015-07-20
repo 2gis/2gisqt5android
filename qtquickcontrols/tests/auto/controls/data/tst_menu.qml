@@ -1,9 +1,9 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
-** This file is part of the Qt Quick Controls module of the Qt Toolkit.
+** This file is part of the test suite of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:BSD$
 ** You may use this file under the terms of the BSD license as follows:
@@ -17,8 +17,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -65,6 +65,18 @@ TestCase {
         signalName: "triggered"
     }
 
+    SignalSpy {
+        id: aboutToShowSpy
+        target: testcase.menu
+        signalName: "aboutToShow"
+    }
+
+    SignalSpy {
+        id: aboutToHideSpy
+        target: testcase.menu
+        signalName: "aboutToHide"
+    }
+
     Component {
         id: creationComponent
         Menu {
@@ -82,6 +94,8 @@ TestCase {
     function cleanup() {
         menuSpy.clear()
         menuItemSpy.clear()
+        aboutToShowSpy.clear()
+        aboutToHideSpy.clear()
         if (menu !== 0)
             menu.destroy()
     }
@@ -217,5 +231,21 @@ TestCase {
             else if (i !== separatorIdx)
                 compare(item.text, "Item " + i)
         }
+    }
+
+    function test_popupSignals() {
+        if (Qt.platform.os === "osx") {
+            // On Mac the popup() function blocks. The signals are still
+            // emitted by the QPA plugin and the relayed by QQuickMenu.
+            return;
+        }
+        menu.__popup(Qt.rect(50, 50, 20, 20))
+        wait(100) // Give it a chance to actually pop-up
+        compare(aboutToShowSpy.count, 1)
+        compare(aboutToHideSpy.count, 0)
+        aboutToShowSpy.clear()
+        menu.__dismissMenu()
+        compare(aboutToShowSpy.count, 0)
+        compare(aboutToHideSpy.count, 1)
     }
 }

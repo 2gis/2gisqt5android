@@ -9,14 +9,20 @@
 
 #include "base/memory/ref_counted.h"
 #include "base/memory/scoped_ptr.h"
+#include "cc/surfaces/surface_id_allocator.h"
 #include "content/common/content_export.h"
 #include "ui/gfx/native_widget_types.h"
+
+namespace cc {
+class SurfaceManager;
+}
 
 namespace gfx {
 class Size;
 }
 
 namespace ui {
+class Compositor;
 class ContextFactory;
 class Texture;
 }
@@ -55,8 +61,7 @@ class CONTENT_EXPORT ImageTransportFactory {
 
   // Initializes the global transport factory for unit tests using the provided
   // context factory.
-  static void InitializeForUnitTests(
-      scoped_ptr<ui::ContextFactory> test_factory);
+  static void InitializeForUnitTests(scoped_ptr<ImageTransportFactory> factory);
 
   // Terminates the global transport factory.
   static void Terminate();
@@ -68,6 +73,7 @@ class CONTENT_EXPORT ImageTransportFactory {
   virtual ui::ContextFactory* GetContextFactory() = 0;
 
   virtual gfx::GLSurfaceHandle GetSharedSurfaceHandle() = 0;
+  virtual cc::SurfaceManager* GetSurfaceManager() = 0;
 
   // Gets a GLHelper instance, associated with the shared context. This
   // GLHelper will get destroyed whenever the shared context is lost
@@ -79,6 +85,13 @@ class CONTENT_EXPORT ImageTransportFactory {
 
 #if defined(OS_MACOSX)
   virtual void OnSurfaceDisplayed(int surface_id) = 0;
+  // Called when the ui::Compositor has been disconnected from an NSView and
+  // may be attached to another one. This ensures that content and frames
+  // intended for the old NSView will not appear in the new NSView.
+  virtual void OnCompositorRecycled(ui::Compositor* compositor) = 0;
+  // Used by GpuProcessHostUIShim to determine if a frame should not be
+  // displayed because it is targetted to an NSView that has been disconnected.
+  virtual bool SurfaceShouldNotShowFramesAfterRecycle(int surface_id) const = 0;
 #endif
 };
 

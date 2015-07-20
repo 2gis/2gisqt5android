@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQuick module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -36,6 +36,7 @@
 #include "qquickitem_p.h"
 #include "qquickwindow.h"
 
+#include <private/qv4arraybuffer_p.h>
 #include <private/qqmlengine_p.h>
 
 #ifndef QT_NO_DRAGANDDROP
@@ -496,6 +497,14 @@ void QQuickDropArea::dropEvent(QDropEvent *event)
     Returns the data for the given \a format converted to a string. \a format should be one contained in the \l formats property.
 */
 
+/*!
+    \qmlmethod string QtQuick::DragEvent::getDataAsArrayBuffer(string format)
+    \since 5.5
+
+    Returns the data for the given \a format into an ArrayBuffer, which can
+    easily be translated into a QByteArray. \a format should be one contained in the \l formats property.
+*/
+
 QObject *QQuickDropEvent::source()
 {
     if (const QQuickDragMimeData *dragMime = qobject_cast<const QQuickDragMimeData *>(event->mimeData()))
@@ -563,6 +572,17 @@ void QQuickDropEvent::getDataAsString(QQmlV4Function *args)
         QString format = v->toQString();
         QString rv = QString::fromUtf8(event->mimeData()->data(format));
         args->setReturnValue(v4->newString(rv)->asReturnedValue());
+    }
+}
+
+void QQuickDropEvent::getDataAsArrayBuffer(QQmlV4Function *args)
+{
+    if (args->length() != 0) {
+        QV4::ExecutionEngine *v4 = args->v4engine();
+        QV4::Scope scope(v4);
+        QV4::ScopedValue v(scope, (*args)[0]);
+        const QString format = v->toQString();
+        args->setReturnValue(v4->newArrayBuffer(event->mimeData()->data(format))->asReturnedValue());
     }
 }
 

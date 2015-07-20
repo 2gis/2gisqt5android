@@ -1,7 +1,8 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2014 Pier Luigi Fiorini <pierluigi.fiorini@gmail.com>
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Compositor.
 **
@@ -17,8 +18,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -41,74 +42,96 @@
 #ifndef WL_OUTPUT_H
 #define WL_OUTPUT_H
 
+#include <QtCompositor/qwaylandexport.h>
+
 #include <QtCore/QRect>
 #include <QtCore/QList>
 
 #include <QtCompositor/private/qwayland-server-wayland.h>
+#include <QtCompositor/qwaylandoutput.h>
 
 QT_BEGIN_NAMESPACE
 
+class QWindow;
+
 namespace QtWayland {
 
+class Compositor;
 class ExtendedOutput;
 
-struct Output : public QtWaylandServer::wl_output::Resource
+struct OutputResource : public QtWaylandServer::wl_output::Resource
 {
-    Output() : extendedOutput(0) {}
+    OutputResource() : extendedOutput(0) {}
     ExtendedOutput *extendedOutput;
 };
 
-class OutputGlobal : public QtWaylandServer::wl_output
+class Output : public QtWaylandServer::wl_output
 {
 public:
-    OutputGlobal(struct ::wl_display *display);
-    ~OutputGlobal();
+    explicit Output(Compositor *compositor, QWindow *window = 0);
 
+    Compositor *compositor() const { return m_compositor; }
+
+    QWaylandOutput *output() const { return m_output; }
+
+    QString manufacturer() const { return m_manufacturer; }
+    void setManufacturer(const QString &manufacturer);
+
+    QString model() const { return m_model; }
+    void setModel(const QString &model);
+
+    QPoint position() const { return m_position; }
+    void setPosition(const QPoint &position);
+
+    QRect geometry() const;
     void setGeometry(const QRect &geometry);
-    QRect geometry() const { return m_geometry; }
 
-    int x() const { return m_geometry.x(); }
-    int y() const { return m_geometry.y(); }
-    QSize size() const { return m_geometry.size(); }
+    QWaylandOutput::Mode mode() const { return m_mode; }
+    void setMode(const QWaylandOutput::Mode &mode);
 
-    void setPhysicalSize(const QSize &size);
-    void setRefreshRate(int rate);
-    int refreshRate() const { return m_refreshRate; }
-    void sendOutputOrientation(Qt::ScreenOrientation orientation);
+    QRect availableGeometry() const { return m_availableGeometry; }
+    void setAvailableGeometry(const QRect &availableGeometry);
 
-    Output *outputForClient(struct wl_client *client) const;
+    QSize physicalSize() const { return m_physicalSize; }
+    void setPhysicalSize(const QSize &physicalSize);
+
+    QWaylandOutput::Subpixel subpixel() const { return m_subpixel; }
+    void setSubpixel(const QWaylandOutput::Subpixel &subpixel);
+
+    QWaylandOutput::Transform transform() const { return m_transform; }
+    void setTransform(const QWaylandOutput::Transform &transform);
+
+    int scaleFactor() const { return m_scaleFactor; }
+    void setScaleFactor(int scale);
+
+    QWindow *window() const { return m_window; }
+
+    OutputResource *outputForClient(struct wl_client *client) const;
+
+    QWaylandOutput *waylandOutput() const { return m_output; }
 
     void output_bind_resource(Resource *resource) Q_DECL_OVERRIDE;
-    Resource *output_allocate() Q_DECL_OVERRIDE { return new Output; }
+    Resource *output_allocate() Q_DECL_OVERRIDE { return new OutputResource; }
 
 private:
-    QRect m_geometry;
+    friend class QT_PREPEND_NAMESPACE(QWaylandOutput);
+
+    Compositor *m_compositor;
+    QWindow *m_window;
+    QWaylandOutput *m_output;
+    QString m_manufacturer;
+    QString m_model;
+    QPoint m_position;
+    QWaylandOutput::Mode m_mode;
+    QRect m_availableGeometry;
     QSize m_physicalSize;
-    int m_refreshRate;
-    int m_displayId;
-    int m_numQueued;
-    wl_output_transform m_transform;
+    QWaylandOutput::Subpixel m_subpixel;
+    QWaylandOutput::Transform m_transform;
+    int m_scaleFactor;
+    QList<QWaylandSurface *> m_surfaces;
+
+    void sendGeometryInfo();
 };
-
-#if 0
-class Output
-{
-public:
-    Output(OutputGlobal *outputGlobal, struct ::wl_resource *resource);
-    ~Output();
-
-    OutputGlobal *outputGlobal() const;
-
-    ExtendedOutput *extendedOutput() const;
-    void setExtendedOutput(ExtendedOutput *extendedOutput);
-
-    struct wl_resource *handle() const;
-private:
-    struct wl_resource *m_output_resource;
-    OutputGlobal *m_output_global;
-    ExtendedOutput *m_extended_output;
-};
-#endif
 
 }
 

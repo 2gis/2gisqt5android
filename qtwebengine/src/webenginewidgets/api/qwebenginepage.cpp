@@ -1,5 +1,5 @@
 /*
-    Copyright (C) 2012, 2013 Digia Plc and/or its subsidiary(-ies).
+    Copyright (C) 2015 The Qt Company Ltd.
     Copyright (C) 2008, 2009, 2012 Nokia Corporation and/or its subsidiary(-ies)
     Copyright (C) 2007 Staikos Computing Services Inc.
     Copyright (C) 2007 Apple Inc.
@@ -23,23 +23,32 @@
 #include "qwebenginepage.h"
 #include "qwebenginepage_p.h"
 
+#include "browser_context_adapter.h"
 #include "certificate_error_controller.h"
 #include "javascript_dialog_controller.h"
 #include "qwebenginehistory.h"
 #include "qwebenginehistory_p.h"
+#include "qwebengineprofile.h"
+#include "qwebengineprofile_p.h"
+#include "qwebenginescriptcollection_p.h"
 #include "qwebenginesettings.h"
-#include "qwebenginesettings_p.h"
 #include "qwebengineview.h"
 #include "qwebengineview_p.h"
 #include "render_widget_host_view_qt_delegate_widget.h"
 #include "web_contents_adapter.h"
 #include "web_engine_settings.h"
 
+#ifdef QT_UI_DELEGATES
+#include "ui/messagebubblewidget_p.h"
+#endif
+
 #include <QAction>
 #include <QApplication>
 #include <QAuthenticator>
 #include <QClipboard>
+#include <QContextMenuEvent>
 #include <QFileDialog>
+#include <QKeyEvent>
 #include <QIcon>
 #include <QInputDialog>
 #include <QLayout>
@@ -50,6 +59,8 @@
 #include <QUrl>
 
 QT_BEGIN_NAMESPACE
+
+using namespace QtWebEngineCore;
 
 static QWebEnginePage::WebWindowType toWindowType(WebContentsAdapterClient::WindowOpenDisposition disposition)
 {
@@ -166,12 +177,14 @@ void CallbackDirectory::CallbackSharedDataPointer::doDeref()
     }
 }
 
-QWebEnginePagePrivate::QWebEnginePagePrivate()
+QWebEnginePagePrivate::QWebEnginePagePrivate(QWebEngineProfile *_profile)
     : adapter(new WebContentsAdapter)
     , history(new QWebEngineHistory(new QWebEngineHistoryPrivate(this)))
-    , settings(new QWebEngineSettings)
+    , profile(_profile ? _profile : QWebEngineProfile::defaultProfile())
+    , settings(new QWebEngineSettings(profile->settings()))
     , view(0)
     , isLoading(false)
+    , scriptCollection(new QWebEngineScriptCollectionPrivate(browserContextAdapter()->userScriptController(), adapter.data()))
 {
     memset(actions, 0, sizeof(actions));
 }
@@ -234,10 +247,14 @@ qreal QWebEnginePagePrivate::dpiScale() const
     return 1.0;
 }
 
-void QWebEnginePagePrivate::loadStarted(const QUrl &provisionalUrl)
+void QWebEnginePagePrivate::loadStarted(const QUrl &provisionalUrl, bool isErrorPage)
 {
-    Q_UNUSED(provisionalUrl)
+    Q_UNUSED(provisionalUrl);
     Q_Q(QWebEnginePage);
+
+    if (isErrorPage)
+        return;
+
     isLoading = true;
     Q_EMIT q->loadStarted();
     updateNavigationActions();
@@ -248,12 +265,16 @@ void QWebEnginePagePrivate::loadCommitted()
     updateNavigationActions();
 }
 
-void QWebEnginePagePrivate::loadFinished(bool success, const QUrl &url, int errorCode, const QString &errorDescription)
+void QWebEnginePagePrivate::loadFinished(bool success, const QUrl &url, bool isErrorPage, int errorCode, const QString &errorDescription)
 {
     Q_Q(QWebEnginePage);
     Q_UNUSED(url);
     Q_UNUSED(errorCode);
     Q_UNUSED(errorDescription);
+
+    if (isErrorPage)
+        return;
+
     isLoading = false;
     if (success)
         explicitUrl = QUrl();
@@ -265,6 +286,12 @@ void QWebEnginePagePrivate::focusContainer()
 {
     if (view)
         view->setFocus();
+}
+
+void QWebEnginePagePrivate::unhandledKeyEvent(QKeyEvent *event)
+{
+    if (view && view->parentWidget())
+        QGuiApplication::sendEvent(view->parentWidget(), event);
 }
 
 void QWebEnginePagePrivate::adoptNewWindow(WebContentsAdapter *newWebContents, WindowOpenDisposition disposition, bool userGesture, const QRect &initialGeometry)
@@ -342,10 +369,24 @@ void QWebEnginePagePrivate::runMediaAccessPermissionRequest(const QUrl &security
     Q_EMIT q->featurePermissionRequested(securityOrigin, requestedFeature);
 }
 
+void QWebEnginePagePrivate::runGeolocationPermissionRequest(const QUrl &securityOrigin)
+{
+    Q_Q(QWebEnginePage);
+    Q_EMIT q->featurePermissionRequested(securityOrigin, QWebEnginePage::Geolocation);
+}
+
+void QWebEnginePagePrivate::runMouseLockPermissionRequest(const QUrl &securityOrigin)
+{
+    Q_Q(QWebEnginePage);
+    Q_EMIT q->featurePermissionRequested(securityOrigin, QWebEnginePage::MouseLock);
+}
+
+#ifndef QT_NO_ACCESSIBILITY
 QObject *QWebEnginePagePrivate::accessibilityParentObject()
 {
     return view;
 }
+#endif // QT_NO_ACCESSIBILITY
 
 void QWebEnginePagePrivate::updateAction(QWebEnginePage::WebAction action) const
 {
@@ -410,9 +451,31 @@ void QWebEnginePagePrivate::recreateFromSerializedHistory(QDataStream &input)
     }
 }
 
+BrowserContextAdapter *QWebEnginePagePrivate::browserContextAdapter()
+{
+    return profile->d_ptr->browserContext();
+}
+
 QWebEnginePage::QWebEnginePage(QObject* parent)
     : QObject(parent)
-    , d_ptr(new QWebEnginePagePrivate)
+    , d_ptr(new QWebEnginePagePrivate())
+{
+    Q_D(QWebEnginePage);
+    d->q_ptr = this;
+    d->adapter->initialize(d);
+}
+
+/*!
+    Constructs an empty QWebEnginePage in the QWebEngineProfile \a profile with parent \a parent.
+
+    If the profile is not the default profile the caller must ensure the profile is alive for as
+    long as the page is.
+
+    \since 5.5
+*/
+QWebEnginePage::QWebEnginePage(QWebEngineProfile *profile, QObject* parent)
+    : QObject(parent)
+    , d_ptr(new QWebEnginePagePrivate(profile))
 {
     Q_D(QWebEnginePage);
     d->q_ptr = this;
@@ -437,6 +500,37 @@ QWebEngineSettings *QWebEnginePage::settings() const
     return d->settings;
 }
 
+/*!
+ * Returns a pointer to the web channel instance used by this page, or a null pointer if none was set.
+ * This channel is automatically using the internal QtWebEngine transport mechanism over Chromium IPC,
+ * and exposed in the javascript context of this page as  \c qt.webChannelTransport
+ *
+ * \since 5.5
+ * \sa {QtWebChannel::QWebChannel}{QWebChannel}
+ */
+QWebChannel *QWebEnginePage::webChannel() const
+{
+    Q_D(const QWebEnginePage);
+    return d->adapter->webChannel();
+}
+
+/*!
+ * Sets the web channel instance to be used by this page and connects it to QtWebEngine's transport
+ * using Chromium IPC messages. That transport is exposed in the javascript context of this page as
+ * \c qt.webChannelTransport, which should be used when using the \l{Qt WebChannel JavaScript API}.
+ *
+ * \note The page does not take ownership of the \a channel object.
+ *
+ * \since 5.5
+ * \param channel
+ */
+
+void QWebEnginePage::setWebChannel(QWebChannel *channel)
+{
+    Q_D(QWebEnginePage);
+    d->adapter->setWebChannel(channel);
+}
+
 void QWebEnginePage::setView(QWidget *view)
 {
     QWebEngineViewPrivate::bind(qobject_cast<QWebEngineView*>(view), this);
@@ -446,6 +540,16 @@ QWidget *QWebEnginePage::view() const
 {
     Q_D(const QWebEnginePage);
     return d->view;
+}
+
+/*!
+    Returns the QWebEngineProfile the page belongs to.
+    \since 5.5
+*/
+QWebEngineProfile *QWebEnginePage::profile() const
+{
+    Q_D(const QWebEnginePage);
+    return d->profile;
 }
 
 bool QWebEnginePage::hasSelection() const
@@ -543,6 +647,9 @@ void QWebEnginePage::triggerAction(WebAction action, bool)
     case Reload:
         d->adapter->reload();
         break;
+    case ReloadAndBypassCache:
+        d->adapter->reloadAndBypassCache();
+        break;
     case Cut:
         d->adapter->cut();
         break;
@@ -624,6 +731,13 @@ bool QWebEnginePagePrivate::contextMenuRequested(const WebEngineContextMenuData 
     return true;
 }
 
+void QWebEnginePagePrivate::navigationRequested(int navigationType, const QUrl &url, int &navigationRequestAction, bool isMainFrame)
+{
+    Q_Q(QWebEnginePage);
+    bool accepted = q->acceptNavigationRequest(url, static_cast<QWebEnginePage::NavigationType>(navigationType), isMainFrame);
+    navigationRequestAction = accepted ? WebContentsAdapterClient::AcceptRequest : WebContentsAdapterClient::IgnoreRequest;
+}
+
 void QWebEnginePagePrivate::javascriptDialog(QSharedPointer<JavaScriptDialogController> controller)
 {
     Q_Q(QWebEnginePage);
@@ -654,7 +768,7 @@ void QWebEnginePagePrivate::javascriptDialog(QSharedPointer<JavaScriptDialogCont
         controller->reject();
 }
 
-void QWebEnginePagePrivate::allowCertificateError(const QExplicitlySharedDataPointer<CertificateErrorController> &controller)
+void QWebEnginePagePrivate::allowCertificateError(const QSharedPointer<CertificateErrorController> &controller)
 {
     Q_Q(QWebEnginePage);
     bool accepted = false;
@@ -670,6 +784,27 @@ void QWebEnginePagePrivate::javaScriptConsoleMessage(JavaScriptConsoleMessageLev
 {
     Q_Q(QWebEnginePage);
     q->javaScriptConsoleMessage(static_cast<QWebEnginePage::JavaScriptConsoleMessageLevel>(level), message, lineNumber, sourceID);
+}
+
+void QWebEnginePagePrivate::showValidationMessage(const QRect &anchor, const QString &mainText, const QString &subText)
+{
+#ifdef QT_UI_DELEGATES
+    QtWebEngineWidgetUI::MessageBubbleWidget::showBubble(view, anchor, mainText, subText);
+#endif
+}
+
+void QWebEnginePagePrivate::hideValidationMessage()
+{
+#ifdef QT_UI_DELEGATES
+    QtWebEngineWidgetUI::MessageBubbleWidget::hideBubble();
+#endif
+}
+
+void QWebEnginePagePrivate::moveValidationMessage(const QRect &anchor)
+{
+#ifdef QT_UI_DELEGATES
+    QtWebEngineWidgetUI::MessageBubbleWidget::moveBubble(view, anchor);
+#endif
 }
 
 namespace {
@@ -743,6 +878,8 @@ QMenu *QWebEnginePage::createStandardContextMenu()
 void QWebEnginePage::setFeaturePermission(const QUrl &securityOrigin, QWebEnginePage::Feature feature, QWebEnginePage::PermissionPolicy policy)
 {
     Q_D(QWebEnginePage);
+    if (policy == PermissionUnknown)
+        return;
     WebContentsAdapterClient::MediaRequestFlags flags =  WebContentsAdapterClient::MediaNone;
     switch (feature) {
     case MediaAudioVideoCapture:
@@ -761,6 +898,16 @@ void QWebEnginePage::setFeaturePermission(const QUrl &securityOrigin, QWebEngine
             }
             d->adapter->grantMediaAccessPermission(securityOrigin, flags);
         }
+        d->adapter->grantMediaAccessPermission(securityOrigin, flags);
+        break;
+    case QWebEnginePage::Geolocation:
+        d->adapter->runGeolocationRequestCallback(securityOrigin, (policy == PermissionGrantedByUser) ? true : false);
+        break;
+    case MouseLock:
+        if (policy == PermissionGrantedByUser)
+            d->adapter->grantMouseLockPermission(true);
+        else
+            d->adapter->grantMouseLockPermission(false);
         break;
     default:
         break;
@@ -782,7 +929,7 @@ void QWebEnginePagePrivate::runFileChooser(WebContentsAdapterClient::FileChooser
 
 WebEngineSettings *QWebEnginePagePrivate::webEngineSettings() const
 {
-    return settings->d_func()->coreSettings.data();
+    return settings->d_func();
 }
 
 void QWebEnginePage::load(const QUrl& url)
@@ -872,6 +1019,17 @@ void QWebEnginePage::runJavaScript(const QString& scriptSource, const QWebEngine
     d->m_callbacks.registerCallback(requestId, resultCallback.d);
 }
 
+/*!
+    Returns the script collection used by this page.
+    \sa QWebEngineScriptCollection
+*/
+
+QWebEngineScriptCollection &QWebEnginePage::scripts()
+{
+    Q_D(QWebEnginePage);
+    return d->scriptCollection;
+}
+
 QWebEnginePage *QWebEnginePage::createWindow(WebWindowType type)
 {
     Q_D(QWebEnginePage);
@@ -883,8 +1041,8 @@ QWebEnginePage *QWebEnginePage::createWindow(WebWindowType type)
     return 0;
 }
 
-Q_STATIC_ASSERT_X(static_cast<int>(WebContentsAdapterClient::Open) == static_cast<int>(QWebEnginePage::FileSelectOpen), "Enums out of sync");
-Q_STATIC_ASSERT_X(static_cast<int>(WebContentsAdapterClient::OpenMultiple) == static_cast<int>(QWebEnginePage::FileSelectOpenMultiple), "Enums out of sync");
+ASSERT_ENUMS_MATCH(WebContentsAdapterClient::Open, QWebEnginePage::FileSelectOpen)
+ASSERT_ENUMS_MATCH(WebContentsAdapterClient::OpenMultiple, QWebEnginePage::FileSelectOpenMultiple)
 
 QStringList QWebEnginePage::chooseFiles(FileSelectionMode mode, const QStringList &oldFiles, const QStringList &acceptedMimeTypes)
 {
@@ -943,6 +1101,14 @@ void QWebEnginePage::javaScriptConsoleMessage(JavaScriptConsoleMessageLevel leve
 bool QWebEnginePage::certificateError(const QWebEngineCertificateError &)
 {
     return false;
+}
+
+bool QWebEnginePage::acceptNavigationRequest(const QUrl &url, NavigationType type, bool isMainFrame)
+{
+    Q_UNUSED(url);
+    Q_UNUSED(type);
+    Q_UNUSED(isMainFrame);
+    return true;
 }
 
 QT_END_NAMESPACE

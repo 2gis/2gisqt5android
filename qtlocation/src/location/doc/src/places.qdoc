@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
@@ -10,15 +10,15 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Free Documentation License Usage
 ** Alternatively, this file may be used under the terms of the GNU Free
 ** Documentation License version 1.3 as published by the Free Software
 ** Foundation and appearing in the file included in the packaging of
-** this file.  Please review the following information to ensure
+** this file. Please review the following information to ensure
 ** the GNU Free Documentation License version 1.3 requirements
 ** will be met: http://www.gnu.org/copyleft/fdl.html.
 ** $QT_END_LICENSE$
@@ -42,7 +42,7 @@
     \section2 Plugin
     A \l Plugin is an abstraction for a backend. One \l Plugin might access places from a
     REST server while another may access places from a local database. The following
-    instantiates a \l Plugin object by providing a name of "nokia". The \l Plugin name
+    instantiates a \l Plugin object by providing a name of "osm". The \l Plugin name
     identifies which backend to choose from. Plugins may also be provided with a set of
     \l {PluginParameter} {parameters}, which essentially takes the form of a set of
     key-value pairs. The \l {PluginParameter} {parameters} that can be specified vary
@@ -52,8 +52,8 @@
 
     \snippet places_list/places_list.qml Initialize Plugin
 
-    \note The Nokia plugin must be supplied with some mandatory parameters as outlined
-    in the \l {Mandatory Parameters} {Nokia Plugin} documentation.
+    \note The HERE plugin must be supplied with some mandatory parameters as outlined
+    in the \l {Mandatory Parameters} {HERE Plugin} documentation.
 
     \section2 Models, Views and Delegates
     The QML Places API is built around the notion of models, views and delegates.
@@ -398,8 +398,8 @@
 
     The matching mechanism can vary between managers, but is typically accomplished through an alternative identifier.
     As part of the save process, the place identifier from the origin manager is saved as an alternative identifier attribute in the destination manager
-    (which can have its own place identifier scheme).  In the following example, the origin manager is from the 'nokia' QGeoServiceProider, therefore
-    as part of the saving process an alternative identifier attribute, x_id_nokia, is set for the place saved into the destination manager
+    (which can have its own place identifier scheme).  In the following example, the origin manager is from the 'here' QGeoServiceProider, therefore
+    as part of the saving process an alternative identifier attribute, x_id_here, is set for the place saved into the destination manager
     (when QPlaceManager::compatiblePlace() is called)
 
     \input place-crossref.qdocinc
@@ -408,7 +408,7 @@
     The QPlaceMatchRequest will be used on the destination manager to return corresponding places.  We also specify
     matching parameters which are key value pairs.  As mentioned previously, this can vary depending on the manager but typically
     the key is QPlaceMatchRequest::AlternativeId to indicate we are matching by alternative id, the value in this case would be
-    x_id_nokia which specifies which alternative identifier attribute we are using to do the matching.
+    x_id_here which specifies which alternative identifier attribute we are using to do the matching.
 
     \snippet places/requesthandler.h Match places
     \dots

@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -608,7 +608,7 @@ QQmlVMEMetaObject::QQmlVMEMetaObject(QObject *obj,
 
             QV4::Function *runtimeFunction = compilationUnit->runtimeFunctions[data->runtimeFunctionIndex];
             o = QV4::FunctionObject::createScriptFunction(qmlBindingContext, runtimeFunction);
-            v8methods[index] = o;
+            v8methods[index].set(qmlBindingContext->engine(), o);
         }
     }
 }
@@ -926,7 +926,7 @@ int QQmlVMEMetaObject::metaCall(QMetaObject::Call c, int _id, void **a)
                 QV4::Scope scope(ep->v4engine());
 
 
-                QV4::Scoped<QV4::FunctionObject> function(scope, method(id));
+                QV4::ScopedFunctionObject function(scope, method(id));
                 if (!function) {
                     // The function was not compiled.  There are some exceptional cases which the
                     // expression rewriter does not rewrite properly (e.g., \r-terminated lines
@@ -945,18 +945,17 @@ int QQmlVMEMetaObject::metaCall(QMetaObject::Call c, int _id, void **a)
                 callData->thisObject = ep->v8engine()->global();
 
                 for (int ii = 0; ii < data->parameterCount; ++ii)
-                    callData->args[ii] = ep->v8engine()->fromVariant(*(QVariant *)a[ii + 1]);
+                    callData->args[ii] = scope.engine->fromVariant(*(QVariant *)a[ii + 1]);
 
                 QV4::ScopedValue result(scope);
-                QV4::ExecutionContext *ctx = function->engine()->currentContext();
                 result = function->call(callData);
                 if (scope.hasException()) {
-                    QQmlError error = QV4::ExecutionEngine::catchExceptionAsQmlError(ctx);
+                    QQmlError error = scope.engine->catchExceptionAsQmlError();
                     if (error.isValid())
                         ep->warning(error);
                     if (a[0]) *(QVariant *)a[0] = QVariant();
                 } else {
-                    if (a[0]) *(QVariant *)a[0] = ep->v8engine()->toVariant(result, 0);
+                    if (a[0]) *(QVariant *)a[0] = scope.engine->toVariant(result, 0);
                 }
 
                 ep->dereferenceScarceResources(); // "release" scarce resources if top-level expression evaluation is complete.
@@ -1005,7 +1004,7 @@ QVariant QQmlVMEMetaObject::readPropertyAsVariant(int id)
             QV4::Scope scope(v4);
             QV4::ScopedObject o(scope, varProperties.value());
             QV4::ScopedValue val(scope, o->getIndexed(id - firstVarPropertyIndex));
-            return v4->v8Engine->toVariant(val, -1);
+            return scope.engine->toVariant(val, -1);
         }
         return QVariant();
     } else {
@@ -1017,7 +1016,7 @@ QVariant QQmlVMEMetaObject::readPropertyAsVariant(int id)
     }
 }
 
-void QQmlVMEMetaObject::writeVarProperty(int id, const QV4::ValueRef value)
+void QQmlVMEMetaObject::writeVarProperty(int id, const QV4::Value &value)
 {
     Q_ASSERT(id >= firstVarPropertyIndex);
     if (!ensureVarPropertiesAllocated())
@@ -1078,7 +1077,7 @@ void QQmlVMEMetaObject::writeProperty(int id, const QVariant &value)
 
         // And, if the new value is a scarce resource, we need to ensure that it does not get
         // automatically released by the engine until no other references to it exist.
-        QV4::ScopedValue newv(scope, QQmlEnginePrivate::get(ctxt->engine)->v8engine()->fromVariant(value));
+        QV4::ScopedValue newv(scope, scope.engine->fromVariant(value));
         QV4::Scoped<QV4::VariantObject> v(scope, newv);
         if (!!v)
             v->addVmePropertyReference();
@@ -1171,7 +1170,7 @@ QV4::ReturnedValue QQmlVMEMetaObject::vmeMethod(int index)
 }
 
 // Used by debugger
-void QQmlVMEMetaObject::setVmeMethod(int index, QV4::ValueRef function)
+void QQmlVMEMetaObject::setVmeMethod(int index, const QV4::Value &function)
 {
     if (index < methodOffset()) {
         Q_ASSERT(parentVMEMetaObject());
@@ -1184,7 +1183,7 @@ void QQmlVMEMetaObject::setVmeMethod(int index, QV4::ValueRef function)
         v8methods = new QV4::PersistentValue[metaData->methodCount];
 
     int methodIndex = index - methodOffset() - plainSignals;
-    v8methods[methodIndex] = function;
+    v8methods[methodIndex].set(function.asObject()->engine(), function);
 }
 
 QV4::ReturnedValue QQmlVMEMetaObject::vmeProperty(int index)
@@ -1196,7 +1195,7 @@ QV4::ReturnedValue QQmlVMEMetaObject::vmeProperty(int index)
     return readVarProperty(index - propOffset());
 }
 
-void QQmlVMEMetaObject::setVMEProperty(int index, const QV4::ValueRef v)
+void QQmlVMEMetaObject::setVMEProperty(int index, const QV4::Value &v)
 {
     if (index < propOffset()) {
         Q_ASSERT(parentVMEMetaObject());
@@ -1228,6 +1227,11 @@ void QQmlVMEMetaObject::ensureQObjectWrapper()
 
 void QQmlVMEMetaObject::mark(QV4::ExecutionEngine *e)
 {
+    QQmlEnginePrivate *ep = (ctxt == 0 || ctxt->engine == 0) ? 0 : QQmlEnginePrivate::get(ctxt->engine);
+    QV4::ExecutionEngine *v4 = (ep == 0) ? 0 : ep->v4engine();
+    if (v4 != e)
+        return;
+
     varProperties.markOnce(e);
 
     // add references created by VMEVariant properties
@@ -1235,12 +1239,8 @@ void QQmlVMEMetaObject::mark(QV4::ExecutionEngine *e)
     for (int ii = 0; ii < maxDataIdx; ++ii) { // XXX TODO: optimize?
         if (data[ii].dataType() == QMetaType::QObjectStar) {
             // possible QObject reference.
-            QObject *ref = data[ii].asQObject();
-            if (ref) {
-                QQmlData *ddata = QQmlData::get(ref);
-                if (ddata)
-                    ddata->jsWrapper.markOnce(e);
-            }
+            if (QObject *ref = data[ii].asQObject())
+                QV4::QObjectWrapper::markWrapper(ref, e);
         }
     }
 
@@ -1254,7 +1254,7 @@ void QQmlVMEMetaObject::allocateVarPropertiesArray()
     assert(qml);
     QV4::ExecutionEngine *v4 = QV8Engine::getV4(qml->handle());
     QV4::Scope scope(v4);
-    varProperties = QV4::ScopedValue(scope, v4->newArrayObject(metaData->varPropertyCount));
+    varProperties.set(scope.engine, v4->newArrayObject(metaData->varPropertyCount));
     varPropertiesInitialized = true;
 }
 

@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -49,17 +49,17 @@
 
 QT_BEGIN_NAMESPACE
 
-QV4Include::QV4Include(const QUrl &url, QV8Engine *engine, QQmlContextData *context,
-                       const QV4::ValueRef qmlglobal, const QV4::ValueRef callback)
-    : v4(QV8Engine::getV4(engine)), m_network(0), m_reply(0), m_url(url), m_redirectCount(0), m_context(context)
+QV4Include::QV4Include(const QUrl &url, QV4::ExecutionEngine *engine, QQmlContextData *context,
+                       const QV4::Value &qmlglobal, const QV4::Value &callback)
+    : v4(engine), m_network(0), m_reply(0), m_url(url), m_redirectCount(0), m_context(context)
 {
-    m_qmlglobal = qmlglobal;
-    if (callback->asFunctionObject())
-        m_callbackFunction = callback;
+    m_qmlglobal.set(engine, qmlglobal);
+    if (callback.asFunctionObject())
+        m_callbackFunction.set(engine, callback);
 
-    m_resultObject = resultValue(v4);
+    m_resultObject.set(v4, resultValue(v4));
 
-    m_network = engine->networkAccessManager();
+    m_network = engine->v8Engine->networkAccessManager();
 
     QNetworkRequest request;
     request.setUrl(url);
@@ -81,32 +81,31 @@ QV4::ReturnedValue QV4Include::resultValue(QV4::ExecutionEngine *v4, Status stat
     QV4::ScopedObject o(scope, v4->newObject());
     QV4::ScopedString s(scope);
     QV4::ScopedValue v(scope);
-    o->put((s = v4->newString(QStringLiteral("OK"))).getPointer(), (v = QV4::Primitive::fromInt32(Ok)));
-    o->put((s = v4->newString(QStringLiteral("LOADING"))).getPointer(), (v = QV4::Primitive::fromInt32(Loading)));
-    o->put((s = v4->newString(QStringLiteral("NETWORK_ERROR"))).getPointer(), (v = QV4::Primitive::fromInt32(NetworkError)));
-    o->put((s = v4->newString(QStringLiteral("EXCEPTION"))).getPointer(), (v = QV4::Primitive::fromInt32(Exception)));
-    o->put((s = v4->newString(QStringLiteral("status"))).getPointer(), (v = QV4::Primitive::fromInt32(status)));
+    o->put((s = v4->newString(QStringLiteral("OK"))), (v = QV4::Primitive::fromInt32(Ok)));
+    o->put((s = v4->newString(QStringLiteral("LOADING"))), (v = QV4::Primitive::fromInt32(Loading)));
+    o->put((s = v4->newString(QStringLiteral("NETWORK_ERROR"))), (v = QV4::Primitive::fromInt32(NetworkError)));
+    o->put((s = v4->newString(QStringLiteral("EXCEPTION"))), (v = QV4::Primitive::fromInt32(Exception)));
+    o->put((s = v4->newString(QStringLiteral("status"))), (v = QV4::Primitive::fromInt32(status)));
 
     return o.asReturnedValue();
 }
 
-void QV4Include::callback(const QV4::ValueRef callback, const QV4::ValueRef status)
+void QV4Include::callback(const QV4::Value &callback, const QV4::Value &status)
 {
-    QV4::ExecutionEngine *v4 = callback->engine();
-    if (!v4)
+    if (!callback.isObject())
         return;
+    QV4::ExecutionEngine *v4 = callback.asObject()->engine();
     QV4::Scope scope(v4);
     QV4::ScopedFunctionObject f(scope, callback);
     if (!f)
         return;
 
-    QV4::ExecutionContext *ctx = v4->currentContext();
     QV4::ScopedCallData callData(scope, 1);
-    callData->thisObject = v4->globalObject->asReturnedValue();
+    callData->thisObject = v4->globalObject()->asReturnedValue();
     callData->args[0] = status;
     f->call(callData);
     if (scope.hasException())
-        ctx->catchException();
+        scope.engine->catchException();
 }
 
 QV4::ReturnedValue QV4Include::result()
@@ -136,6 +135,7 @@ void QV4Include::finished()
 
     QV4::Scope scope(v4);
     QV4::ScopedObject resultObj(scope, m_resultObject.value());
+    QV4::ScopedString status(scope, v4->newString(QStringLiteral("status")));
     if (m_reply->error() == QNetworkReply::NoError) {
         QByteArray data = m_reply->readAll();
 
@@ -145,20 +145,19 @@ void QV4Include::finished()
         QV4::ScopedObject qmlglobal(scope, m_qmlglobal.value());
         QV4::Script script(v4, qmlglobal, code, m_url.toString());
 
-        QV4::ExecutionContext *ctx = v4->currentContext();
-        QV4::ScopedString status(scope, v4->newString(QStringLiteral("status")));
         script.parse();
         if (!scope.engine->hasException)
             script.run();
         if (scope.engine->hasException) {
-            QV4::ScopedValue ex(scope, ctx->catchException());
-            resultObj->put(status.getPointer(), QV4::ScopedValue(scope, QV4::Primitive::fromInt32(Exception)));
-            resultObj->put(v4->newString(QStringLiteral("exception"))->getPointer(), ex);
+            QV4::ScopedValue ex(scope, scope.engine->catchException());
+            resultObj->put(status, QV4::ScopedValue(scope, QV4::Primitive::fromInt32(Exception)));
+            QV4::ScopedString exception(scope, v4->newString(QStringLiteral("exception")));
+            resultObj->put(exception, ex);
         } else {
-            resultObj->put(status.getPointer(), QV4::ScopedValue(scope, QV4::Primitive::fromInt32(Ok)));
+            resultObj->put(status, QV4::ScopedValue(scope, QV4::Primitive::fromInt32(Ok)));
         }
     } else {
-        resultObj->put(v4->newString(QStringLiteral("status"))->getPointer(), QV4::ScopedValue(scope, QV4::Primitive::fromInt32(NetworkError)));
+        resultObj->put(status, QV4::ScopedValue(scope, QV4::Primitive::fromInt32(NetworkError)));
     }
 
     QV4::ScopedValue cb(scope, m_callbackFunction.value());
@@ -173,21 +172,20 @@ void QV4Include::finished()
 */
 QV4::ReturnedValue QV4Include::method_include(QV4::CallContext *ctx)
 {
-    if (!ctx->d()->callData->argc)
+    if (!ctx->argc())
         return QV4::Encode::undefined();
 
     QV4::Scope scope(ctx->engine());
-    QV8Engine *engine = scope.engine->v8Engine;
     QQmlContextData *context = QV4::QmlContextWrapper::callingContext(scope.engine);
 
     if (!context || !context->isJSContext)
         V4THROW_ERROR("Qt.include(): Can only be called from JavaScript files");
 
-    QUrl url(scope.engine->resolvedUrl(ctx->d()->callData->args[0].toQStringNoThrow()));
+    QUrl url(scope.engine->resolvedUrl(ctx->args()[0].toQStringNoThrow()));
 
     QV4::ScopedValue callbackFunction(scope, QV4::Primitive::undefinedValue());
-    if (ctx->d()->callData->argc >= 2 && ctx->d()->callData->args[1].asFunctionObject())
-        callbackFunction = ctx->d()->callData->args[1];
+    if (ctx->argc() >= 2 && ctx->args()[1].asFunctionObject())
+        callbackFunction = ctx->args()[1];
 
     QString localFile = QQmlFile::urlToLocalFileOrQrc(url);
 
@@ -195,7 +193,7 @@ QV4::ReturnedValue QV4Include::method_include(QV4::CallContext *ctx)
     QV4::ScopedObject qmlcontextobject(scope, scope.engine->qmlContextObject());
 
     if (localFile.isEmpty()) {
-        QV4Include *i = new QV4Include(url, engine, context,
+        QV4Include *i = new QV4Include(url, scope.engine, context,
                                        qmlcontextobject,
                                        callbackFunction);
         result = i->result();
@@ -219,14 +217,14 @@ QV4::ReturnedValue QV4Include::method_include(QV4::CallContext *ctx)
         }
 
         if (!script.isNull()) {
-            QV4::ExecutionContext *ctx = scope.engine->currentContext();
             script->parse();
             if (!scope.engine->hasException)
                 script->run();
             if (scope.engine->hasException) {
-                QV4::ScopedValue ex(scope, ctx->catchException());
+                QV4::ScopedValue ex(scope, scope.engine->catchException());
                 result = resultValue(scope.engine, Exception);
-                result->asObject()->put(scope.engine->newString(QStringLiteral("exception"))->getPointer(), ex);
+                QV4::ScopedString exception(scope, scope.engine->newString(QStringLiteral("exception")));
+                result->asObject()->put(exception, ex);
             } else {
                 result = resultValue(scope.engine, Ok);
             }
@@ -237,7 +235,7 @@ QV4::ReturnedValue QV4Include::method_include(QV4::CallContext *ctx)
         callback(callbackFunction, result);
     }
 
-    return result.asReturnedValue();
+    return result->asReturnedValue();
 }
 
 QT_END_NAMESPACE

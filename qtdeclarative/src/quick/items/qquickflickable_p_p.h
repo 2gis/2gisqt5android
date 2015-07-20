@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQuick module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -80,7 +80,7 @@ public:
     {
         Velocity(QQuickFlickablePrivate *p)
             : parent(p) {}
-        virtual void setValue(qreal v) {
+        void setValue(qreal v) Q_DECL_OVERRIDE {
             if (v != value()) {
                 QQuickTimeLineValue::setValue(v);
                 parent->updateVelocity();
@@ -93,7 +93,7 @@ public:
         AxisData(QQuickFlickablePrivate *fp, void (QQuickFlickablePrivate::*func)(qreal))
             : move(fp, func)
             , transitionToBounds(0)
-            , viewSize(-1), lastPos(0), velocity(0), startMargin(0), endMargin(0)
+            , viewSize(-1), lastPos(0), previousDragDelta(0), velocity(0), startMargin(0), endMargin(0)
             , origin(0)
             , transitionTo(0)
             , continuousFlickVelocity(0), velocityTime(), vTime(0)
@@ -135,6 +135,7 @@ public:
         qreal dragStartOffset;
         qreal dragMinBound;
         qreal dragMaxBound;
+        qreal previousDragDelta;
         qreal velocity;
         qreal flickTarget;
         qreal startMargin;
@@ -151,6 +152,7 @@ public:
         bool transitionToSet : 1;
         bool fixingUp : 1;
         bool inOvershoot : 1;
+        bool inRebound : 1;
         bool moving : 1;
         bool flicking : 1;
         bool dragging : 1;
@@ -185,7 +187,7 @@ public:
 
     qreal overShootDistance(qreal size);
 
-    void itemGeometryChanged(QQuickItem *, const QRectF &, const QRectF &);
+    void itemGeometryChanged(QQuickItem *, const QRectF &, const QRectF &) Q_DECL_OVERRIDE;
 
     void draggingStarting();
     void draggingEnding();
@@ -205,6 +207,7 @@ public:
     bool vMoved : 1;
     bool stealMouse : 1;
     bool pressed : 1;
+    bool scrollingPhase : 1;
     bool interactive : 1;
     bool calcVelocity : 1;
     bool pixelAligned : 1;
@@ -214,6 +217,7 @@ public:
     qint64 lastPressTime;
     QPointF lastPos;
     QPointF pressPos;
+    QVector2D accumulatedWheelPixelDelta;
     qreal deceleration;
     qreal maxVelocity;
     qreal reportedVelocitySmoothing;
@@ -244,7 +248,12 @@ public:
     void handleMouseMoveEvent(QMouseEvent *);
     void handleMouseReleaseEvent(QMouseEvent *);
 
+    void maybeBeginDrag(qint64 currentTimestamp, const QPointF &pressPosn);
+    void drag(qint64 currentTimestamp, QEvent::Type eventType, const QPointF &localPos,
+              const QVector2D &deltas, bool overThreshold, bool momentum, const QVector2D &velocity);
+
     qint64 computeCurrentTime(QInputEvent *event);
+    qreal devicePixelRatio();
 
     // flickableData property
     static void data_append(QQmlListProperty<QObject> *, QObject *);

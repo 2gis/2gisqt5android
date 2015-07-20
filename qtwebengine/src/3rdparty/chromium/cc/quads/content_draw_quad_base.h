@@ -8,8 +8,8 @@
 #include "base/memory/scoped_ptr.h"
 #include "cc/base/cc_export.h"
 #include "cc/quads/draw_quad.h"
-#include "ui/gfx/point.h"
-#include "ui/gfx/size.h"
+#include "ui/gfx/geometry/point.h"
+#include "ui/gfx/geometry/size.h"
 
 namespace cc {
 
@@ -40,8 +40,8 @@ class CC_EXPORT ContentDrawQuadBase : public DrawQuad {
 
  protected:
   ContentDrawQuadBase();
-  virtual ~ContentDrawQuadBase();
-  virtual void ExtendValue(base::DictionaryValue* value) const OVERRIDE;
+  ~ContentDrawQuadBase() override;
+  void ExtendValue(base::debug::TracedValue* value) const override;
 };
 
 }  // namespace cc

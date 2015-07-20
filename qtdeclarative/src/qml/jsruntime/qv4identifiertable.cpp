@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -53,41 +53,41 @@ IdentifierTable::IdentifierTable(ExecutionEngine *engine)
     , numBits(8)
 {
     alloc = primeForNumBits(numBits);
-    entries = (String **)malloc(alloc*sizeof(String *));
-    memset(entries, 0, alloc*sizeof(String *));
+    entries = (Heap::String **)malloc(alloc*sizeof(Heap::String *));
+    memset(entries, 0, alloc*sizeof(Heap::String *));
 }
 
 IdentifierTable::~IdentifierTable()
 {
     for (int i = 0; i < alloc; ++i)
         if (entries[i])
-            delete entries[i]->d()->identifier;
+            delete entries[i]->identifier;
     free(entries);
 }
 
-void IdentifierTable::addEntry(String *str)
+void IdentifierTable::addEntry(Heap::String *str)
 {
     uint hash = str->hashValue();
 
-    if (str->subtype() == String::StringType_ArrayIndex)
+    if (str->subtype == Heap::String::StringType_ArrayIndex)
         return;
 
-    str->d()->identifier = new Identifier;
-    str->d()->identifier->string = str->toQString();
-    str->d()->identifier->hashValue = hash;
+    str->identifier = new Identifier;
+    str->identifier->string = str->toQString();
+    str->identifier->hashValue = hash;
 
     bool grow = (alloc <= size*2);
 
     if (grow) {
         ++numBits;
         int newAlloc = primeForNumBits(numBits);
-        String **newEntries = (String **)malloc(newAlloc*sizeof(String *));
-        memset(newEntries, 0, newAlloc*sizeof(String *));
+        Heap::String **newEntries = (Heap::String **)malloc(newAlloc*sizeof(Heap::String *));
+        memset(newEntries, 0, newAlloc*sizeof(Heap::String *));
         for (int i = 0; i < alloc; ++i) {
-            String *e = entries[i];
+            Heap::String *e = entries[i];
             if (!e)
                 continue;
-            uint idx = e->d()->stringHash % newAlloc;
+            uint idx = e->stringHash % newAlloc;
             while (newEntries[idx]) {
                 ++idx;
                 idx %= newAlloc;
@@ -110,48 +110,48 @@ void IdentifierTable::addEntry(String *str)
 
 
 
-String *IdentifierTable::insertString(const QString &s)
+Heap::String *IdentifierTable::insertString(const QString &s)
 {
     uint hash = String::createHashValue(s.constData(), s.length());
     uint idx = hash % alloc;
-    while (String *e = entries[idx]) {
-        if (e->d()->stringHash == hash && e->toQString() == s)
+    while (Heap::String *e = entries[idx]) {
+        if (e->stringHash == hash && e->toQString() == s)
             return e;
         ++idx;
         idx %= alloc;
     }
 
-    String *str = engine->newString(s)->getPointer();
+    Heap::String *str = engine->newString(s);
     addEntry(str);
     return str;
 }
 
 
-Identifier *IdentifierTable::identifierImpl(const String *str)
+Identifier *IdentifierTable::identifierImpl(const Heap::String *str)
 {
-    if (str->d()->identifier)
-        return str->d()->identifier;
+    if (str->identifier)
+        return str->identifier;
     uint hash = str->hashValue();
-    if (str->subtype() == String::StringType_ArrayIndex)
+    if (str->subtype == Heap::String::StringType_ArrayIndex)
         return 0;
 
     uint idx = hash % alloc;
-    while (String *e = entries[idx]) {
-        if (e->d()->stringHash == hash && e->isEqualTo(str)) {
-            str->d()->identifier = e->d()->identifier;
-            return e->d()->identifier;
+    while (Heap::String *e = entries[idx]) {
+        if (e->stringHash == hash && e->isEqualTo(str)) {
+            str->identifier = e->identifier;
+            return e->identifier;
         }
         ++idx;
         idx %= alloc;
     }
 
-    addEntry(const_cast<QV4::String *>(str));
-    return str->d()->identifier;
+    addEntry(const_cast<QV4::Heap::String *>(str));
+    return str->identifier;
 }
 
 Identifier *IdentifierTable::identifier(const QString &s)
 {
-    return insertString(s)->d()->identifier;
+    return insertString(s)->identifier;
 }
 
 Identifier *IdentifierTable::identifier(const char *s, int len)
@@ -162,16 +162,16 @@ Identifier *IdentifierTable::identifier(const char *s, int len)
 
     QLatin1String latin(s, len);
     uint idx = hash % alloc;
-    while (String *e = entries[idx]) {
-        if (e->d()->stringHash == hash && e->toQString() == latin)
-            return e->d()->identifier;
+    while (Heap::String *e = entries[idx]) {
+        if (e->stringHash == hash && e->toQString() == latin)
+            return e->identifier;
         ++idx;
         idx %= alloc;
     }
 
-    String *str = engine->newString(QString::fromLatin1(s, len))->getPointer();
+    Heap::String *str = engine->newString(QString::fromLatin1(s, len));
     addEntry(str);
-    return str->d()->identifier;
+    return str->identifier;
 }
 
 }

@@ -27,12 +27,11 @@
 
 #include "core/html/canvas/WebGLDrawBuffers.h"
 
-namespace WebCore {
+namespace blink {
 
 WebGLDrawBuffers::WebGLDrawBuffers(WebGLRenderingContextBase* context)
     : WebGLExtension(context)
 {
-    ScriptWrappable::init(this);
     context->extensionsUtil()->ensureExtensionEnabled("GL_EXT_draw_buffers");
 }
 
@@ -45,9 +44,9 @@ WebGLExtensionName WebGLDrawBuffers::name() const
     return WebGLDrawBuffersName;
 }
 
-PassRefPtr<WebGLDrawBuffers> WebGLDrawBuffers::create(WebGLRenderingContextBase* context)
+PassRefPtrWillBeRawPtr<WebGLDrawBuffers> WebGLDrawBuffers::create(WebGLRenderingContextBase* context)
 {
-    return adoptRef(new WebGLDrawBuffers(context));
+    return adoptRefWillBeNoop(new WebGLDrawBuffers(context));
 }
 
 // static
@@ -64,35 +63,36 @@ const char* WebGLDrawBuffers::extensionName()
 
 void WebGLDrawBuffers::drawBuffersWEBGL(const Vector<GLenum>& buffers)
 {
-    if (isLost())
+    WebGLExtensionScopedContext scoped(this);
+    if (scoped.isLost())
         return;
     GLsizei n = buffers.size();
     const GLenum* bufs = buffers.data();
-    if (!m_context->m_framebufferBinding) {
+    if (!scoped.context()->m_framebufferBinding) {
         if (n != 1) {
-            m_context->synthesizeGLError(GL_INVALID_VALUE, "drawBuffersWEBGL", "more than one buffer");
+            scoped.context()->synthesizeGLError(GL_INVALID_VALUE, "drawBuffersWEBGL", "more than one buffer");
             return;
         }
         if (bufs[0] != GL_BACK && bufs[0] != GL_NONE) {
-            m_context->synthesizeGLError(GL_INVALID_OPERATION, "drawBuffersWEBGL", "BACK or NONE");
+            scoped.context()->synthesizeGLError(GL_INVALID_OPERATION, "drawBuffersWEBGL", "BACK or NONE");
             return;
         }
         // Because the backbuffer is simulated on all current WebKit ports, we need to change BACK to COLOR_ATTACHMENT0.
         GLenum value = (bufs[0] == GL_BACK) ? GL_COLOR_ATTACHMENT0 : GL_NONE;
-        m_context->webContext()->drawBuffersEXT(1, &value);
-        m_context->setBackDrawBuffer(bufs[0]);
+        scoped.context()->webContext()->drawBuffersEXT(1, &value);
+        scoped.context()->setBackDrawBuffer(bufs[0]);
     } else {
-        if (n > m_context->maxDrawBuffers()) {
-            m_context->synthesizeGLError(GL_INVALID_VALUE, "drawBuffersWEBGL", "more than max draw buffers");
+        if (n > scoped.context()->maxDrawBuffers()) {
+            scoped.context()->synthesizeGLError(GL_INVALID_VALUE, "drawBuffersWEBGL", "more than max draw buffers");
             return;
         }
         for (GLsizei i = 0; i < n; ++i) {
             if (bufs[i] != GL_NONE && bufs[i] != static_cast<GLenum>(GL_COLOR_ATTACHMENT0_EXT + i)) {
-                m_context->synthesizeGLError(GL_INVALID_OPERATION, "drawBuffersWEBGL", "COLOR_ATTACHMENTi_EXT or NONE");
+                scoped.context()->synthesizeGLError(GL_INVALID_OPERATION, "drawBuffersWEBGL", "COLOR_ATTACHMENTi_EXT or NONE");
                 return;
             }
         }
-        m_context->m_framebufferBinding->drawBuffers(buffers);
+        scoped.context()->m_framebufferBinding->drawBuffers(buffers);
     }
 }
 
@@ -177,4 +177,4 @@ bool WebGLDrawBuffers::satisfiesWebGLRequirements(WebGLRenderingContextBase* web
     return ok;
 }
 
-} // namespace WebCore
+} // namespace blink

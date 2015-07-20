@@ -1,7 +1,8 @@
 /****************************************************************************
 **
+** Copyright (C) 2014 Pier Luigi Fiorini <pierluigi.fiorini@gmail.com>
 ** Copyright (C) 2013 Klarälvdalens Datakonsult AB (KDAB).
-** Contact: http://www.qt-project.org/legal
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Compositor.
 **
@@ -17,8 +18,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -77,10 +78,11 @@ void InputPanelSurface::input_panel_surface_set_overlay_panel(Resource *)
     m_type = OverlayPanel;
 }
 
-void InputPanelSurface::input_panel_surface_set_toplevel(Resource *, wl_resource *output, uint32_t position)
+void InputPanelSurface::input_panel_surface_set_toplevel(Resource *, wl_resource *output_resource, uint32_t position)
 {
     m_type = Toplevel;
-    m_output = static_cast<Output *>(Output::Resource::fromResource(output));
+    OutputResource *output = static_cast<OutputResource *>(Output::Resource::fromResource(output_resource));
+    m_output = static_cast<Output *>(output->output_object);
     m_position = static_cast<wl_input_panel_surface::position>(position);
 }
 

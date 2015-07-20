@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -46,21 +46,21 @@ QT_BEGIN_NAMESPACE
 class QQmlAdaptorModelEngineData : public QV8Engine::Deletable
 {
 public:
-    QQmlAdaptorModelEngineData(QV8Engine *engine);
+    QQmlAdaptorModelEngineData(QV4::ExecutionEngine *v4);
     ~QQmlAdaptorModelEngineData();
 
     QV4::ExecutionEngine *v4;
     QV4::PersistentValue listItemProto;
 };
 
-V8_DEFINE_EXTENSION(QQmlAdaptorModelEngineData, engineData)
+V4_DEFINE_EXTENSION(QQmlAdaptorModelEngineData, engineData)
 
 static QV4::ReturnedValue get_index(QV4::CallContext *ctx)
 {
     QV4::Scope scope(ctx);
-    QV4::Scoped<QQmlDelegateModelItemObject> o(scope, ctx->d()->callData->thisObject.as<QQmlDelegateModelItemObject>());
+    QV4::Scoped<QQmlDelegateModelItemObject> o(scope, ctx->thisObject().as<QQmlDelegateModelItemObject>());
     if (!o)
-        return ctx->throwTypeError(QStringLiteral("Not a valid VisualData object"));
+        return ctx->engine()->throwTypeError(QStringLiteral("Not a valid VisualData object"));
 
     return QV4::Encode(o->d()->item->index);
 }
@@ -190,9 +190,9 @@ public:
     static QV4::ReturnedValue get_hasModelChildren(QV4::CallContext *ctx)
     {
         QV4::Scope scope(ctx);
-        QV4::Scoped<QQmlDelegateModelItemObject> o(scope, ctx->d()->callData->thisObject.as<QQmlDelegateModelItemObject>());
+        QV4::Scoped<QQmlDelegateModelItemObject> o(scope, ctx->thisObject().as<QQmlDelegateModelItemObject>());
         if (!o)
-            return ctx->throwTypeError(QStringLiteral("Not a valid VisualData object"));
+            return ctx->engine()->throwTypeError(QStringLiteral("Not a valid VisualData object"));
 
         const QQmlAdaptorModel *const model = static_cast<QQmlDMCachedModelData *>(o->d()->item)->type->model;
         if (o->d()->item->index >= 0 && *model) {
@@ -208,7 +208,7 @@ public:
     {
         QV4::ExecutionEngine *v4 = data->v4;
         QV4::Scope scope(v4);
-        QV4::Scoped<QV4::Object> proto(scope, v4->newObject());
+        QV4::ScopedObject proto(scope, v4->newObject());
         proto->defineAccessorProperty(QStringLiteral("index"), get_index, 0);
         proto->defineAccessorProperty(QStringLiteral("hasModelChildren"), get_hasModelChildren, 0);
         QV4::ScopedProperty p(scope);
@@ -219,13 +219,14 @@ public:
             const QByteArray &propertyName = it.key();
 
             QV4::ScopedString name(scope, v4->newString(QString::fromUtf8(propertyName)));
-            QV4::ScopedFunctionObject g(scope, v4->memoryManager->alloc<QV4::IndexedBuiltinFunction>(v4->rootContext, propertyId, QQmlDMCachedModelData::get_property));
-            QV4::ScopedFunctionObject s(scope, v4->memoryManager->alloc<QV4::IndexedBuiltinFunction>(v4->rootContext, propertyId, QQmlDMCachedModelData::set_property));
+            QV4::ScopedContext global(scope, v4->rootContext());
+            QV4::ScopedFunctionObject g(scope, v4->memoryManager->alloc<QV4::IndexedBuiltinFunction>(global, propertyId, QQmlDMCachedModelData::get_property));
+            QV4::ScopedFunctionObject s(scope, v4->memoryManager->alloc<QV4::IndexedBuiltinFunction>(global, propertyId, QQmlDMCachedModelData::set_property));
             p->setGetter(g);
             p->setSetter(s);
-            proto->insertMember(name.getPointer(), p, QV4::Attr_Accessor|QV4::Attr_NotEnumerable|QV4::Attr_NotConfigurable);
+            proto->insertMember(name, p, QV4::Attr_Accessor|QV4::Attr_NotEnumerable|QV4::Attr_NotConfigurable);
         }
-        prototype = proto;
+        prototype.set(v4, proto);
     }
 
     // QAbstractDynamicMetaObject
@@ -337,18 +338,18 @@ bool QQmlDMCachedModelData::resolveIndex(const QQmlAdaptorModel &, int idx)
 QV4::ReturnedValue QQmlDMCachedModelData::get_property(QV4::CallContext *ctx, uint propertyId)
 {
     QV4::Scope scope(ctx);
-    QV4::Scoped<QQmlDelegateModelItemObject> o(scope, ctx->d()->callData->thisObject.as<QQmlDelegateModelItemObject>());
+    QV4::Scoped<QQmlDelegateModelItemObject> o(scope, ctx->thisObject().as<QQmlDelegateModelItemObject>());
     if (!o)
-        return ctx->throwTypeError(QStringLiteral("Not a valid VisualData object"));
+        return ctx->engine()->throwTypeError(QStringLiteral("Not a valid VisualData object"));
 
     QQmlDMCachedModelData *modelData = static_cast<QQmlDMCachedModelData *>(o->d()->item);
     if (o->d()->item->index == -1) {
         if (!modelData->cachedData.isEmpty()) {
-            return ctx->d()->engine->v8Engine->fromVariant(
+            return scope.engine->fromVariant(
                     modelData->cachedData.at(modelData->type->hasModelData ? 0 : propertyId));
         }
     } else if (*modelData->type->model) {
-        return ctx->d()->engine->v8Engine->fromVariant(
+        return scope.engine->fromVariant(
                 modelData->value(modelData->type->propertyRoles.at(propertyId)));
     }
     return QV4::Encode::undefined();
@@ -357,20 +358,20 @@ QV4::ReturnedValue QQmlDMCachedModelData::get_property(QV4::CallContext *ctx, ui
 QV4::ReturnedValue QQmlDMCachedModelData::set_property(QV4::CallContext *ctx, uint propertyId)
 {
     QV4::Scope scope(ctx);
-    QV4::Scoped<QQmlDelegateModelItemObject> o(scope, ctx->d()->callData->thisObject.as<QQmlDelegateModelItemObject>());
+    QV4::Scoped<QQmlDelegateModelItemObject> o(scope, ctx->thisObject().as<QQmlDelegateModelItemObject>());
     if (!o)
-        return ctx->throwTypeError(QStringLiteral("Not a valid VisualData object"));
-    if (!ctx->d()->callData->argc)
-        return ctx->throwTypeError();
+        return ctx->engine()->throwTypeError(QStringLiteral("Not a valid VisualData object"));
+    if (!ctx->argc())
+        return ctx->engine()->throwTypeError();
 
     if (o->d()->item->index == -1) {
         QQmlDMCachedModelData *modelData = static_cast<QQmlDMCachedModelData *>(o->d()->item);
         if (!modelData->cachedData.isEmpty()) {
             if (modelData->cachedData.count() > 1) {
-                modelData->cachedData[propertyId] = scope.engine->v8Engine->toVariant(ctx->d()->callData->args[0], QVariant::Invalid);
+                modelData->cachedData[propertyId] = scope.engine->toVariant(ctx->args()[0], QVariant::Invalid);
                 QMetaObject::activate(o->d()->item, o->d()->item->metaObject(), propertyId, 0);
             } else if (modelData->cachedData.count() == 1) {
-                modelData->cachedData[0] = scope.engine->v8Engine->toVariant(ctx->d()->callData->args[0], QVariant::Invalid);
+                modelData->cachedData[0] = scope.engine->toVariant(ctx->args()[0], QVariant::Invalid);
                 QMetaObject::activate(o->d()->item, o->d()->item->metaObject(), 0, 0);
                 QMetaObject::activate(o->d()->item, o->d()->item->metaObject(), 1, 0);
             }
@@ -420,13 +421,13 @@ public:
     QV4::ReturnedValue get()
     {
         if (type->prototype.isUndefined()) {
-            QQmlAdaptorModelEngineData * const data = engineData(v4->v8Engine);
+            QQmlAdaptorModelEngineData * const data = engineData(v4);
             type->initializeConstructor(data);
         }
         QV4::Scope scope(v4);
         QV4::ScopedObject proto(scope, type->prototype.value());
         QV4::ScopedObject o(scope, proto->engine()->memoryManager->alloc<QQmlDelegateModelItemObject>(proto->engine(), this));
-        o->setPrototype(proto.getPointer());
+        o->setPrototype(proto);
         ++scriptRef;
         return o.asReturnedValue();
     }
@@ -526,7 +527,7 @@ public:
 
         const QByteArray propertyType = QByteArrayLiteral("QVariant");
         const QHash<int, QByteArray> names = model.aim()->roleNames();
-        for (QHash<int, QByteArray>::const_iterator it = names.begin(); it != names.end(); ++it) {
+        for (QHash<int, QByteArray>::const_iterator it = names.begin(), cend = names.end(); it != cend; ++it) {
             const int propertyId = propertyRoles.count();
             propertyRoles.append(it.key());
             roleNames.insert(it.value(), it.key());
@@ -579,33 +580,33 @@ public:
     static QV4::ReturnedValue get_modelData(QV4::CallContext *ctx)
     {
         QV4::Scope scope(ctx);
-        QV4::Scoped<QQmlDelegateModelItemObject> o(scope, ctx->d()->callData->thisObject.as<QQmlDelegateModelItemObject>());
+        QV4::Scoped<QQmlDelegateModelItemObject> o(scope, ctx->thisObject().as<QQmlDelegateModelItemObject>());
         if (!o)
-            return ctx->throwTypeError(QStringLiteral("Not a valid VisualData object"));
+            return ctx->engine()->throwTypeError(QStringLiteral("Not a valid VisualData object"));
 
-        return scope.engine->v8Engine->fromVariant(static_cast<QQmlDMListAccessorData *>(o->d()->item)->cachedData);
+        return scope.engine->fromVariant(static_cast<QQmlDMListAccessorData *>(o->d()->item)->cachedData);
     }
 
     static QV4::ReturnedValue set_modelData(QV4::CallContext *ctx)
     {
         QV4::Scope scope(ctx);
-        QV4::Scoped<QQmlDelegateModelItemObject> o(scope, ctx->d()->callData->thisObject.as<QQmlDelegateModelItemObject>());
+        QV4::Scoped<QQmlDelegateModelItemObject> o(scope, ctx->thisObject().as<QQmlDelegateModelItemObject>());
         if (!o)
-            return ctx->throwTypeError(QStringLiteral("Not a valid VisualData object"));
-        if (!ctx->d()->callData->argc)
-            return ctx->throwTypeError();
+            return ctx->engine()->throwTypeError(QStringLiteral("Not a valid VisualData object"));
+        if (!ctx->argc())
+            return ctx->engine()->throwTypeError();
 
-        static_cast<QQmlDMListAccessorData *>(o->d()->item)->setModelData(scope.engine->v8Engine->toVariant(ctx->d()->callData->args[0], QVariant::Invalid));
+        static_cast<QQmlDMListAccessorData *>(o->d()->item)->setModelData(scope.engine->toVariant(ctx->args()[0], QVariant::Invalid));
         return QV4::Encode::undefined();
     }
 
     QV4::ReturnedValue get()
     {
-        QQmlAdaptorModelEngineData *data = engineData(v4->v8Engine);
+        QQmlAdaptorModelEngineData *data = engineData(v4);
         QV4::Scope scope(v4);
         QV4::ScopedObject o(scope, v4->memoryManager->alloc<QQmlDelegateModelItemObject>(v4, this));
         QV4::ScopedObject p(scope, data->listItemProto.value());
-        o->setPrototype(p.getPointer());
+        o->setPrototype(p);
         ++scriptRef;
         return o.asReturnedValue();
     }
@@ -954,15 +955,15 @@ void QQmlAdaptorModel::objectDestroyed(QObject *)
     setModel(QVariant(), 0, 0);
 }
 
-QQmlAdaptorModelEngineData::QQmlAdaptorModelEngineData(QV8Engine *e)
-    : v4(QV8Engine::getV4(e))
+QQmlAdaptorModelEngineData::QQmlAdaptorModelEngineData(QV4::ExecutionEngine *v4)
+    : v4(v4)
 {
     QV4::Scope scope(v4);
-    QV4::Scoped<QV4::Object> proto(scope, v4->newObject());
+    QV4::ScopedObject proto(scope, v4->newObject());
     proto->defineAccessorProperty(QStringLiteral("index"), get_index, 0);
     proto->defineAccessorProperty(QStringLiteral("modelData"),
                                   QQmlDMListAccessorData::get_modelData, QQmlDMListAccessorData::set_modelData);
-    listItemProto = proto;
+    listItemProto.set(v4, proto);
 }
 
 QQmlAdaptorModelEngineData::~QQmlAdaptorModelEngineData()

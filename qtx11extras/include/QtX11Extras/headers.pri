@@ -2,4 +2,5 @@ SYNCQT.HEADER_FILES = qtx11extrasglobal.h qx11info_x11.h ../../include/QtX11Extr
 SYNCQT.HEADER_CLASSES = ../../include/QtX11Extras/QX11Info ../../include/QtX11Extras/QtX11ExtrasVersion 
 SYNCQT.PRIVATE_HEADER_FILES = 
 SYNCQT.QPA_HEADER_FILES = 
+SYNCQT.CLEAN_HEADER_FILES = qtx11extrasglobal.h qx11info_x11.h 
 SYNCQT.INJECTIONS = 

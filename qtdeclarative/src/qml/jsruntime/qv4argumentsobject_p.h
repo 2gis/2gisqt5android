@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -40,73 +40,82 @@ QT_BEGIN_NAMESPACE
 
 namespace QV4 {
 
-struct ArgumentsGetterFunction: FunctionObject
-{
-    struct Data : FunctionObject::Data {
-        Data(ExecutionContext *scope, uint index)
-            : FunctionObject::Data(scope)
-            , index(index)
-        {
-            setVTable(staticVTable());
-        }
-        uint index;
-    };
-    V4_OBJECT(FunctionObject)
+namespace Heap {
 
-    uint index() const { return d()->index; }
-
-    static ReturnedValue call(Managed *that, CallData *d);
+struct ArgumentsGetterFunction : FunctionObject {
+    inline ArgumentsGetterFunction(QV4::ExecutionContext *scope, uint index);
+    uint index;
 };
 
-struct ArgumentsSetterFunction: FunctionObject
-{
-    struct Data : FunctionObject::Data {
-        Data(ExecutionContext *scope, uint index)
-            : FunctionObject::Data(scope)
-            , index(index)
-        {
-            setVTable(staticVTable());
-        }
-        uint index;
-    };
-    V4_OBJECT(FunctionObject)
-
-    uint index() const { return d()->index; }
-
-    static ReturnedValue call(Managed *that, CallData *callData);
+struct ArgumentsSetterFunction : FunctionObject {
+    inline ArgumentsSetterFunction(QV4::ExecutionContext *scope, uint index);
+    uint index;
 };
 
-
-struct ArgumentsObject: Object {
-    struct Data : Object::Data {
-        Data(CallContext *context);
-        CallContext *context;
-        bool fullyCreated;
-        Members mappedArguments;
-    };
-    V4_OBJECT(Object)
-    Q_MANAGED_TYPE(ArgumentsObject)
-
-    CallContext *context() const { return d()->context; }
-    bool fullyCreated() const { return d()->fullyCreated; }
-    Members &mappedArguments() { return d()->mappedArguments; }
-
-    static bool isNonStrictArgumentsObject(Managed *m) {
-        return m->internalClass()->vtable->type == Type_ArgumentsObject &&
-                !static_cast<ArgumentsObject *>(m)->context()->d()->strictMode;
-    }
-
+struct ArgumentsObject : Object {
     enum {
         LengthPropertyIndex = 0,
         CalleePropertyIndex = 1,
         CallerPropertyIndex = 3
     };
-    bool defineOwnProperty(ExecutionContext *ctx, uint index, const Property &desc, PropertyAttributes attrs);
+    ArgumentsObject(QV4::CallContext *context);
+    CallContext *context;
+    bool fullyCreated;
+    MemberData *mappedArguments;
+};
+
+}
+
+struct ArgumentsGetterFunction: FunctionObject
+{
+    V4_OBJECT2(ArgumentsGetterFunction, FunctionObject)
+
+    uint index() const { return d()->index; }
+    static ReturnedValue call(Managed *that, CallData *d);
+};
+
+inline
+Heap::ArgumentsGetterFunction::ArgumentsGetterFunction(QV4::ExecutionContext *scope, uint index)
+    : Heap::FunctionObject(scope)
+    , index(index)
+{
+}
+
+struct ArgumentsSetterFunction: FunctionObject
+{
+    V4_OBJECT2(ArgumentsSetterFunction, FunctionObject)
+
+    uint index() const { return d()->index; }
+    static ReturnedValue call(Managed *that, CallData *callData);
+};
+
+inline
+Heap::ArgumentsSetterFunction::ArgumentsSetterFunction(QV4::ExecutionContext *scope, uint index)
+    : Heap::FunctionObject(scope)
+    , index(index)
+{
+}
+
+
+struct ArgumentsObject: Object {
+    V4_OBJECT2(ArgumentsObject, Object)
+    Q_MANAGED_TYPE(ArgumentsObject)
+
+    Heap::CallContext *context() const { return d()->context; }
+    bool fullyCreated() const { return d()->fullyCreated; }
+    Heap::MemberData *mappedArguments() { return d()->mappedArguments; }
+
+    static bool isNonStrictArgumentsObject(Managed *m) {
+        return m->d()->vtable->type == Type_ArgumentsObject &&
+                !static_cast<ArgumentsObject *>(m)->context()->strictMode;
+    }
+
+    bool defineOwnProperty(ExecutionEngine *engine, uint index, const Property *desc, PropertyAttributes attrs);
     static ReturnedValue getIndexed(Managed *m, uint index, bool *hasProperty);
-    static void putIndexed(Managed *m, uint index, const ValueRef value);
+    static void putIndexed(Managed *m, uint index, const Value &value);
     static bool deleteIndexedProperty(Managed *m, uint index);
     static PropertyAttributes queryIndexed(const Managed *m, uint index);
-    static void markObjects(Managed *that, ExecutionEngine *e);
+    static void markObjects(Heap::Base *that, ExecutionEngine *e);
 
     void fullyCreate();
 };

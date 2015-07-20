@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQuick module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -65,11 +65,25 @@ QT_BEGIN_NAMESPACE
 /*!
     \qmlmethod QtQuick.Particles::ItemParticle::take(Item item, bool prioritize)
 
-    Asks the ItemParticle to take over control of item. It will be emitted when there is a logical particle available.
+    Asks the ItemParticle to take over control of item positioning temporarily.
+    It will follow the movement of a logical particle when one is available.
 
     By default items form a queue when waiting for a logical particle, but if prioritize is true then it will go immediately to the
     head of the queue.
+
+    ItemParticle does not take ownership of the item, and will relinquish
+    control when the logical particle expires. Commonly at this point you will
+    want to put it back in the queue, you can do this with the below line in
+    the delegate definition:
+    \code
+    ItemParticle.onDetached: itemParticleInstance.take(delegateRootItem);
+    \endcode
+    or delete it, such as with the below line in the delegate definition:
+    \code
+    ItemParticle.onDetached: delegateRootItem.destroy();
+    \endcode
 */
+
 /*!
     \qmlmethod QtQuick.Particles::ItemParticle::give(Item item)
 
@@ -88,8 +102,13 @@ QT_BEGIN_NAMESPACE
 /*!
     \qmlproperty Component QtQuick.Particles::ItemParticle::delegate
 
-    An instance of the delegate will be created for every logical
-    particle, and moved along with it.
+    An instance of the delegate will be created for every logical particle, and
+    moved along with it. As an alternative to using delegate, you can create
+    Item instances yourself and hand them to the ItemParticle to move using the
+    \l take method.
+
+    Any delegate instances created by ItemParticle will be destroyed when
+    the logical particle expires.
 */
 
 QQuickItemParticle::QQuickItemParticle(QQuickItem *parent) :
@@ -139,9 +158,8 @@ void QQuickItemParticle::commit(int, int)
 {
 }
 
-void QQuickItemParticle::tick(int time)
+void QQuickItemParticle::processDeletables()
 {
-    Q_UNUSED(time);//only needed because QTickAnimationProxy expects one
     foreach (QQuickItem* item, m_deletables){
         if (m_fade)
             item->setOpacity(0.);
@@ -149,26 +167,39 @@ void QQuickItemParticle::tick(int time)
         QQuickItemParticleAttached* mpa;
         if ((mpa = qobject_cast<QQuickItemParticleAttached*>(qmlAttachedPropertiesObject<QQuickItemParticle>(item))))
             mpa->detach();//reparent as well?
-        //TODO: Delete iff we created it
+        int idx = -1;
+        if ((idx = m_managed.indexOf(item)) != -1) {
+            m_managed.takeAt(idx);
+            delete item;
+        }
         m_activeCount--;
     }
     m_deletables.clear();
+}
+
+void QQuickItemParticle::tick(int time)
+{
+    Q_UNUSED(time);//only needed because QTickAnimationProxy expects one
+    processDeletables();
 
     foreach (QQuickParticleData* d, m_loadables){
         Q_ASSERT(d);
         if (m_stasis.contains(d->delegate))
             qWarning() << "Current model particles prefers overwrite:false";
         //remove old item from the particle that is dying to make room for this one
-        if (d->delegate)
+        if (d->delegate) {
             m_deletables << d->delegate;
-        d->delegate = 0;
+            d->delegate = 0;
+        }
         if (!m_pendingItems.isEmpty()){
             d->delegate = m_pendingItems.front();
             m_pendingItems.pop_front();
         }else if (m_delegate){
             d->delegate = qobject_cast<QQuickItem*>(m_delegate->create(qmlContext(this)));
+            if (d->delegate)
+                m_managed << d->delegate;
         }
-        if (d->delegate && d){//###Data can be zero if creating an item leads to a reset - this screws things up.
+        if (d && d->delegate){//###Data can be zero if creating an item leads to a reset - this screws things up.
             d->delegate->setX(d->curX() - d->delegate->width()/2);//TODO: adjust for system?
             d->delegate->setY(d->curY() - d->delegate->height()/2);
             QQuickItemParticleAttached* mpa = qobject_cast<QQuickItemParticleAttached*>(qmlAttachedPropertiesObject<QQuickItemParticle>(d->delegate));
@@ -190,8 +221,18 @@ void QQuickItemParticle::reset()
 {
     QQuickParticlePainter::reset();
     m_loadables.clear();
-    //TODO: Cleanup items?
-    //deletables?
+
+    // delete all managed items which had their logical particles cleared
+    // but leave it alone if the logical particle is maintained
+    QSet<QQuickItem*> lost = QSet<QQuickItem*>::fromList(m_managed);
+    foreach (const QString group, m_groups){
+        int gIdx = m_system->groupIds[group];
+        foreach (QQuickParticleData* d, m_system->groupData[gIdx]->data)
+                lost.remove(d->delegate);
+    }
+    m_deletables.append(lost.toList());
+    //TODO: This doesn't yet handle calling detach on taken particles in the system reset case
+    processDeletables();
 }
 
 

@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the examples of the Qt Toolkit.
 **
@@ -17,8 +17,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -42,7 +42,7 @@
 #ifndef MULTIPAGEWIDGETPLUGIN_H
 #define MULTIPAGEWIDGETPLUGIN_H
 
-#include <QtDesigner/QDesignerCustomWidgetInterface>
+#include <QtUiPlugin/QDesignerCustomWidgetInterface>
 
 QT_BEGIN_NAMESPACE
 class QIcon;
@@ -57,19 +57,19 @@ class MultiPageWidgetPlugin: public QObject, public QDesignerCustomWidgetInterfa
 //! [1]
     Q_INTERFACES(QDesignerCustomWidgetInterface)
 public:
-    MultiPageWidgetPlugin(QObject *parent = 0);
+    explicit MultiPageWidgetPlugin(QObject *parent = 0);
 
-    QString name() const;
-    QString group() const;
-    QString toolTip() const;
-    QString whatsThis() const;
-    QString includeFile() const;
-    QIcon icon() const;
-    bool isContainer() const;
-    QWidget *createWidget(QWidget *parent);
-    bool isInitialized() const;
-    void initialize(QDesignerFormEditorInterface *formEditor);
-    QString domXml() const;
+    QString name() const Q_DECL_OVERRIDE;
+    QString group() const Q_DECL_OVERRIDE;
+    QString toolTip() const Q_DECL_OVERRIDE;
+    QString whatsThis() const Q_DECL_OVERRIDE;
+    QString includeFile() const Q_DECL_OVERRIDE;
+    QIcon icon() const Q_DECL_OVERRIDE;
+    bool isContainer() const Q_DECL_OVERRIDE;
+    QWidget *createWidget(QWidget *parent) Q_DECL_OVERRIDE;
+    bool isInitialized() const Q_DECL_OVERRIDE;
+    void initialize(QDesignerFormEditorInterface *formEditor) Q_DECL_OVERRIDE;
+    QString domXml() const Q_DECL_OVERRIDE;
 
 private slots:
     void currentIndexChanged(int index);

@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Designer of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -63,15 +63,15 @@ public:
     explicit MetaDataBaseItem(QObject *object);
     virtual ~MetaDataBaseItem();
 
-    virtual QString name() const;
-    virtual void setName(const QString &name);
+    QString name() const Q_DECL_OVERRIDE;
+    void setName(const QString &name) Q_DECL_OVERRIDE;
 
     typedef QList<QWidget*> TabOrder;
-    virtual TabOrder tabOrder() const;
-    virtual void setTabOrder(const TabOrder &tabOrder);
+    TabOrder tabOrder() const Q_DECL_OVERRIDE;
+    void setTabOrder(const TabOrder &tabOrder) Q_DECL_OVERRIDE;
 
-    virtual bool enabled() const;
-    virtual void setEnabled(bool b);
+    bool enabled() const Q_DECL_OVERRIDE;
+    void setEnabled(bool b) Q_DECL_OVERRIDE;
 
     QString customClassName() const;
     void setCustomClassName(const QString &customClassName);
@@ -98,14 +98,14 @@ public:
     explicit MetaDataBase(QDesignerFormEditorInterface *core, QObject *parent = 0);
     virtual ~MetaDataBase();
 
-    virtual QDesignerFormEditorInterface *core() const;
+    QDesignerFormEditorInterface *core() const Q_DECL_OVERRIDE;
 
     virtual QDesignerMetaDataBaseItemInterface *item(QObject *object) const { return metaDataBaseItem(object); }
     virtual MetaDataBaseItem *metaDataBaseItem(QObject *object) const;
-    virtual void add(QObject *object);
-    virtual void remove(QObject *object);
+    void add(QObject *object) Q_DECL_OVERRIDE;
+    void remove(QObject *object) Q_DECL_OVERRIDE;
 
-    virtual QList<QObject*> objects() const;
+    QList<QObject*> objects() const Q_DECL_OVERRIDE;
 
 private slots:
     void slotDestroyed(QObject *object);

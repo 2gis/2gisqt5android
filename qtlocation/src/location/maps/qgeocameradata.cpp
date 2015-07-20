@@ -1,44 +1,42 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtLocation module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL21$
+** $QT_BEGIN_LICENSE:LGPL3$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 or version 3 as published by the Free
-** Software Foundation and appearing in the file LICENSE.LGPLv21 and
-** LICENSE.LGPLv3 included in the packaging of this file. Please review the
-** following information to ensure the GNU Lesser General Public License
-** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
-** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPLv3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** GNU General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU
+** General Public License version 2.0 or later as published by the Free
+** Software Foundation and appearing in the file LICENSE.GPL included in
+** the packaging of this file. Please review the following information to
+** ensure the GNU General Public License version 2.0 requirements will be
+** met: http://www.gnu.org/licenses/gpl-2.0.html.
 **
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
 #include "qgeocameradata_p.h"
 #include <QtPositioning/private/qgeocoordinate_p.h>
-
-#include <QVariant>
-#include <QVariantAnimation>
-
-#include <QMetaType>
-
-#include <cmath>
+#include <QtCore/QVariant>
+#include <QtCore/QVariantAnimation>
 
 QT_BEGIN_NAMESPACE
 
@@ -52,50 +50,50 @@ public:
 
     bool operator == (const QGeoCameraDataPrivate &rhs) const;
 
-    QGeoCoordinate center_;
-    double bearing_;
-    double tilt_;
-    double roll_;
-    double zoomLevel_;
+    QGeoCoordinate m_center;
+    double m_bearing;
+    double m_tilt;
+    double m_roll;
+    double m_zoomLevel;
 };
 
 QGeoCameraDataPrivate::QGeoCameraDataPrivate()
     : QSharedData(),
-      center_(-27.5, 153),
-      bearing_(0.0),
-      tilt_(0.0),
-      roll_(0.0),
-      zoomLevel_(9.0) {}
+      m_center(-27.5, 153),
+      m_bearing(0.0),
+      m_tilt(0.0),
+      m_roll(0.0),
+      m_zoomLevel(9.0) {}
 
 QGeoCameraDataPrivate::QGeoCameraDataPrivate(const QGeoCameraDataPrivate &rhs)
     : QSharedData(rhs),
-      center_(rhs.center_),
-      bearing_(rhs.bearing_),
-      tilt_(rhs.tilt_),
-      roll_(rhs.roll_),
-      zoomLevel_(rhs.zoomLevel_) {}
+      m_center(rhs.m_center),
+      m_bearing(rhs.m_bearing),
+      m_tilt(rhs.m_tilt),
+      m_roll(rhs.m_roll),
+      m_zoomLevel(rhs.m_zoomLevel) {}
 
 QGeoCameraDataPrivate &QGeoCameraDataPrivate::operator = (const QGeoCameraDataPrivate &rhs)
 {
     if (this == &rhs)
         return *this;
 
-    center_ = rhs.center_;
-    bearing_ = rhs.bearing_;
-    tilt_ = rhs.tilt_;
-    roll_ = rhs.roll_;
-    zoomLevel_ = rhs.zoomLevel_;
+    m_center = rhs.m_center;
+    m_bearing = rhs.m_bearing;
+    m_tilt = rhs.m_tilt;
+    m_roll = rhs.m_roll;
+    m_zoomLevel = rhs.m_zoomLevel;
 
     return *this;
 }
 
 bool QGeoCameraDataPrivate::operator == (const QGeoCameraDataPrivate &rhs) const
 {
-    return ((center_ == rhs.center_)
-            && (bearing_ == rhs.bearing_)
-            && (tilt_ == rhs.tilt_)
-            && (roll_ == rhs.roll_)
-            && (zoomLevel_ == rhs.zoomLevel_));
+    return ((m_center == rhs.m_center)
+            && (m_bearing == rhs.m_bearing)
+            && (m_tilt == rhs.m_tilt)
+            && (m_roll == rhs.m_roll)
+            && (m_zoomLevel == rhs.m_zoomLevel));
 }
 
 QVariant cameraInterpolator(const QGeoCameraData &start,
@@ -164,52 +162,52 @@ bool QGeoCameraData::operator != (const QGeoCameraData &other) const
 
 void QGeoCameraData::setCenter(const QGeoCoordinate &center)
 {
-    d->center_ = center;
+    d->m_center = center;
 }
 
 QGeoCoordinate QGeoCameraData::center() const
 {
-    return d->center_;
+    return d->m_center;
 }
 
 void QGeoCameraData::setBearing(double bearing)
 {
-    d->bearing_ = bearing;
+    d->m_bearing = bearing;
 }
 
 double QGeoCameraData::bearing() const
 {
-    return d->bearing_;
+    return d->m_bearing;
 }
 
 void QGeoCameraData::setTilt(double tilt)
 {
-    d->tilt_ = tilt;
+    d->m_tilt = tilt;
 }
 
 double QGeoCameraData::tilt() const
 {
-    return d->tilt_;
+    return d->m_tilt;
 }
 
 void QGeoCameraData::setRoll(double roll)
 {
-    d->roll_ = roll;
+    d->m_roll = roll;
 }
 
 double QGeoCameraData::roll() const
 {
-    return d->roll_;
+    return d->m_roll;
 }
 
 void QGeoCameraData::setZoomLevel(double zoomFactor)
 {
-    d->zoomLevel_ = zoomFactor;
+    d->m_zoomLevel = zoomFactor;
 }
 
 double QGeoCameraData::zoomLevel() const
 {
-    return d->zoomLevel_;
+    return d->m_zoomLevel;
 }
 
 QT_END_NAMESPACE

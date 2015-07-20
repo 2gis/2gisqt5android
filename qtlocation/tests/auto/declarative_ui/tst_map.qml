@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -42,14 +42,14 @@ Item {
     // General-purpose elements for the test:
     Plugin { id: testPlugin; name: "qmlgeo.test.plugin"; allowExperimental: true }
     Plugin { id: testPlugin2; name: "gmlgeo.test.plugin"; allowExperimental: true }
-    Plugin { id: nokiaPlugin; name: "nokia";
+    Plugin { id: herePlugin; name: "here";
         parameters: [
                        PluginParameter {
-                           name: "app_id"
+                           name: "here.app_id"
                            value: "stub"
                        },
                        PluginParameter {
-                           name: "token"
+                           name: "here.token"
                            value: "stub"
                        }
                    ]
@@ -63,10 +63,18 @@ Item {
     property variant invalidCoordinate: QtPositioning.coordinate()
     property variant altitudelessCoordinate: QtPositioning.coordinate(50, 50)
 
+    Map { id: mapZoomOnCompleted; width: 200; height: 200;
+          zoomLevel: 3; center: coordinate1; plugin: testPlugin;
+          Component.onCompleted: { zoomLevel = 7 } }
+    Map { id: mapZoomDefault; width: 200; height: 200;
+          center: coordinate1; plugin: testPlugin; }
+    Map { id: mapZoomUserInit; width: 200; height: 200;
+          zoomLevel: 4; center: coordinate1; plugin: testPlugin; }
     Map {id: map; plugin: testPlugin; center: coordinate1; width: 100; height: 100}
-    Map {id: coordinateMap; plugin: nokiaPlugin; center: coordinate3; width: 1000; height: 1000; zoomLevel: 15}
+    Map {id: coordinateMap; plugin: herePlugin; center: coordinate3; width: 1000; height: 1000; zoomLevel: 15}
 
     SignalSpy {id: mapCenterSpy; target: map; signalName: 'centerChanged'}
+    SignalSpy {id: mapZoomSpy; target: mapZoomOnCompleted; signalName: 'zoomLevelChanged'}
 
     TestCase {
         when: windowShown
@@ -146,6 +154,18 @@ Item {
             map.maximumZoomLevel = 20
             compare(map.minimumZoomLevel, 0)
             compare(map.maximumZoomLevel, 20)
+        }
+
+        function test_zoom() {
+            wait(100)
+            compare(mapZoomOnCompleted.zoomLevel, 7)
+            compare(mapZoomDefault.zoomLevel, 8)
+            compare(mapZoomUserInit.zoomLevel, 4)
+
+            mapZoomSpy.clear()
+            mapZoomOnCompleted.zoomLevel = 6
+            tryCompare(mapZoomSpy, "count", 1)
+
         }
 
         function test_pan() {
@@ -236,22 +256,22 @@ Item {
             compare(coordinateMap.center.latitude, 50)
             compare(coordinateMap.center.longitude, 50)
             // valid to screen position
-            var point = coordinateMap.toScreenPosition(coordinateMap.center)
+            var point = coordinateMap.fromCoordinate(coordinateMap.center)
             verify (point.x > 495 && point.x < 505)
             verify (point.y > 495 && point.y < 505)
             // valid coordinate without altitude
-            point = coordinateMap.toScreenPosition(altitudelessCoordinate)
+            point = coordinateMap.fromCoordinate(altitudelessCoordinate)
             verify (point.x > 495 && point.x < 505)
             verify (point.y > 495 && point.y < 505)
             // out of map area
-            point = coordinateMap.toScreenPosition(coordinate4)
+            point = coordinateMap.fromCoordinate(coordinate4)
             verify(isNaN(point.x))
             verify(isNaN(point.y))
             // invalid coordinates
-            point = coordinateMap.toScreenPosition(invalidCoordinate)
+            point = coordinateMap.fromCoordinate(invalidCoordinate)
             verify(isNaN(point.x))
             verify(isNaN(point.y))
-            point = coordinateMap.toScreenPosition(null)
+            point = coordinateMap.fromCoordinate(null)
             verify(isNaN(point.x))
             verify(isNaN(point.y))
             // valid point to coordinate

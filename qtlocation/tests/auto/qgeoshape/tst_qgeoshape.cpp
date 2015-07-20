@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -33,6 +33,23 @@
 
 #include <QtTest/QtTest>
 #include <QtPositioning/QGeoShape>
+#include <QtCore/QDebug>
+#include <QtPositioning/QGeoRectangle>
+#include <QtPositioning/QGeoCircle>
+
+QString tst_qgeoshape_debug;
+
+void tst_qgeoshape_messageHandler(QtMsgType type, const QMessageLogContext&,
+                                  const QString &msg)
+{
+    switch (type) {
+        case QtDebugMsg :
+            tst_qgeoshape_debug = msg;
+            break;
+        default:
+            break;
+    }
+}
 
 class tst_qgeoshape : public QObject
 {
@@ -40,6 +57,9 @@ class tst_qgeoshape : public QObject
 
 private slots:
     void testArea();
+    void debug_data();
+    void debug();
+    void conversions();
 };
 
 void tst_qgeoshape::testArea()
@@ -63,6 +83,52 @@ void tst_qgeoshape::testArea()
     QGeoShape area3(area2);
 
     QCOMPARE(area2, area3);
+}
+
+void tst_qgeoshape::debug_data()
+{
+    QTest::addColumn<QGeoShape>("shape");
+    QTest::addColumn<int>("nextValue");
+    QTest::addColumn<QString>("debugString");
+
+    QTest::newRow("uninitialized") << QGeoShape() << 45
+            << QString("QGeoShape(Unknown) 45");
+    QTest::newRow("uninitialized") << QGeoShape(QGeoRectangle()) << 45
+            << QString("QGeoShape(Rectangle) 45");
+    QTest::newRow("uninitialized") << QGeoShape(QGeoCircle()) << 45
+            << QString("QGeoShape(Circle) 45");
+}
+
+
+void tst_qgeoshape::debug()
+{
+    QFETCH(QGeoShape, shape);
+    QFETCH(int, nextValue);
+    QFETCH(QString, debugString);
+
+    qInstallMessageHandler(tst_qgeoshape_messageHandler);
+    qDebug() << shape << nextValue;
+    qInstallMessageHandler(0);
+    QCOMPARE(tst_qgeoshape_debug, debugString);
+}
+
+void tst_qgeoshape::conversions()
+{
+    QVariant varShape = QVariant::fromValue(QGeoShape());
+    QVariant varRect = QVariant::fromValue(QGeoRectangle(
+                                               QGeoCoordinate(1, 1),
+                                               QGeoCoordinate(2, 2)));
+    QVariant varCircle = QVariant::fromValue(QGeoCircle(QGeoCoordinate(3, 3), 1000));
+
+    QVERIFY(varShape.canConvert<QGeoShape>());
+    QVERIFY(varShape.canConvert<QGeoCircle>());
+    QVERIFY(varShape.canConvert<QGeoRectangle>());
+    QVERIFY(!varRect.canConvert<QGeoCircle>());
+    QVERIFY(varRect.canConvert<QGeoRectangle>());
+    QVERIFY(varRect.canConvert<QGeoShape>());
+    QVERIFY(varCircle.canConvert<QGeoCircle>());
+    QVERIFY(!varCircle.canConvert<QGeoRectangle>());
+    QVERIFY(varCircle.canConvert<QGeoShape>());
 }
 
 QTEST_MAIN(tst_qgeoshape)

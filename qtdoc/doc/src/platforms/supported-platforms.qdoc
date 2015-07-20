@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
@@ -10,15 +10,15 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Free Documentation License Usage
 ** Alternatively, this file may be used under the terms of the GNU Free
 ** Documentation License version 1.3 as published by the Free Software
 ** Foundation and appearing in the file included in the packaging of
-** this file.  Please review the following information to ensure
+** this file. Please review the following information to ensure
 ** the GNU Free Documentation License version 1.3 requirements
 ** will be met: http://www.gnu.org/copyleft/fdl.html.
 ** $QT_END_LICENSE$
@@ -26,26 +26,43 @@
 ****************************************************************************/
 
 /*!
+    \keyword Supported Platforms
     \page supported-platforms.html
-    \title Supported Platforms
+    \title Community Supported Platforms
     \brief The platforms supported by Qt.
 
-    Qt is a cross-platform application and UI framework. Using Qt,
-    you can write GUI applications once and deploy them
+    Qt is a commercial and open source licensed cross-platform application
+    and UI framework. It is developed by The Qt Company, a solely owned
+    entity of Digia Plc, together with the Qt Project Community under an
+    open source governance model.
+
+    Using Qt, you can write GUI applications once and deploy them
     across desktop, mobile and embedded operating systems without
-    rewriting the source code.In Qt 5 all platforms are created using
-    the new \l{Qt Platform Abstraction} (QPA), which makes it easier
-    than before to port Qt into a new operating system.
+    rewriting the source code.
 
     Qt is supported on a variety of 32-bit and 64-bit platforms,
     and can usually be built on each platform with GCC, a vendor-supplied
-    compiler, or a third party compiler. Open GL (ES) 2.0 or
-    DirectX 9 (with ANGLE) is required for Qt Quick 2. Widgets and
-    Qt Quick 1 can be used also without hardware acceleration.
+    compiler, or a third party compiler. Open GL (ES) 2.0,
+    DirectX 9 (with ANGLE), or an \l {Qt Quick 2D Renderer} {alternative
+    renderer} is required for \l [QtQuick] {Qt Quick} 2.
+    \l [QtWidgets] {Qt Widgets}{Widgets} can be used also without
+    hardware acceleration.
+
+    Not all platforms supported by the Community are supported by The
+    Qt Company, and vice versa.
+
+    \list
+        \li \l {Officially Supported Platforms} - Platforms supported
+        by The Qt Company.
+    \endlist
+
+    In Qt 5 all platforms are created using the
+    \l{Qt Platform Abstraction} (QPA), which makes it easier
+    than before to port Qt into a new operating system.
 
     \section1 Desktop Platforms
 
-    You can develop with Qt on the following desktop platforms:
+    You can develop with Qt for the following desktop platforms:
 
     \list
         \li \l{Qt for Windows}{Windows}
@@ -65,7 +82,7 @@
     \section1 Mobile Platforms
 
     You can develop with Qt for the following mobile platforms supported
-    by Digia:
+    by The Qt Company:
 
     \list
         \li \l{Qt for Android}{Android}
@@ -98,11 +115,9 @@
     \table
     \header \li Platform
                                      \li Compiler
-    \row    \li Ubuntu Linux 11.10, X11 (32-bit and 64-bit)
+    \row    \li Ubuntu Linux 14.04, X11 (64-bit)
                                      \li As provided by Ubuntu
-    \row    \li Ubuntu Linux 12.04, X11 (64-bit)
-                                     \li As provided by Ubuntu
-    \row    \li RedHat 6.5, X11 (64-bit)
+    \row    \li RedHat 6.6, X11 (64-bit)
                                      \li As provided by Red Hat
     \row    \li openSUSE 13.1, X11 (64-bit)
                                      \li As provided by SUSE
@@ -150,17 +165,15 @@
     \table
     \header \li Platform
                                      \li Compiler
-    \row    \li Ubuntu Linux 10.04, X11 (32-bit)
+    \row    \li Ubuntu Linux 11.10, X11 (32-bit and 64-bit)
                                      \li As provided by Ubuntu
-    \row    \li Microsoft Windows XP (32-bit)
-                                     \li MSVC 2008 SP1
     \row    \li Microsoft Windows CE 7.0
                                      \li MSVC 2008 SP1
     \row    \li Apple OS X 10.7 "Lion", Cocoa (64-bit)
                                      \li Clang as provided by Apple
     \endtable
 
-    Digia, Qt partners, open source projects and community users
+    The Qt Company, Qt partners, open source projects and community users
     are able to provide assistance with various different supported
     platforms and configurations.
 
@@ -190,7 +203,7 @@
 
     Please note that Qt is offered on an "as is" basis without warranty
     of any kind and that our products are not error or bug free. To the maximum extent
-    permitted by applicable law, Digia on behalf of itself and its suppliers, disclaims all
+    permitted by applicable law, The Qt Company on behalf of itself and its suppliers, disclaims all
     warranties and conditions, either express or implied, including, but not limited to,
     implied warranties of merchantability, fitness for a particular purpose, title and
     non-infringement with regard to the Licensed Software.

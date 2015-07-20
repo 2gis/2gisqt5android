@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtWidgets module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -594,11 +594,6 @@ void QAbstractItemViewPrivate::_q_scrollerStateChanged()
 */
 
 /*!
-    \fn void QAbstractItemView::update()
-    \internal
-*/
-
-/*!
     Constructs an abstract item view with the given \a parent.
 */
 QAbstractItemView::QAbstractItemView(QWidget *parent)
@@ -1060,7 +1055,7 @@ void QAbstractItemView::setCurrentIndex(const QModelIndex &index)
         d->selectionModel->setCurrentIndex(index, command);
         d->currentIndexSet = true;
         if ((command & QItemSelectionModel::Current) == 0)
-            d->pressedPosition = visualRect(currentIndex()).center() + d->offset();
+            d->currentSelectionStartIndex = index;
     }
 }
 
@@ -1538,6 +1533,7 @@ void QAbstractItemView::setIconSize(const QSize &size)
         return;
     d->iconSize = size;
     d->doDelayedItemsLayout();
+    emit iconSizeChanged(size);
 }
 
 QSize QAbstractItemView::iconSize() const
@@ -1711,10 +1707,12 @@ void QAbstractItemView::mousePressEvent(QMouseEvent *event)
     QItemSelectionModel::SelectionFlags command = selectionCommand(index, event);
     d->noSelectionOnMousePress = command == QItemSelectionModel::NoUpdate || !index.isValid();
     QPoint offset = d->offset();
-    if ((command & QItemSelectionModel::Current) == 0)
+    if ((command & QItemSelectionModel::Current) == 0) {
         d->pressedPosition = pos + offset;
-    else if (!indexAt(d->pressedPosition - offset).isValid())
-        d->pressedPosition = visualRect(currentIndex()).center() + offset;
+        d->currentSelectionStartIndex = index;
+    }
+    else if (!d->currentSelectionStartIndex.isValid())
+        d->currentSelectionStartIndex = currentIndex();
 
     if (edit(index, NoEditTriggers, event))
         return;
@@ -1726,7 +1724,7 @@ void QAbstractItemView::mousePressEvent(QMouseEvent *event)
         d->autoScroll = false;
         d->selectionModel->setCurrentIndex(index, QItemSelectionModel::NoUpdate);
         d->autoScroll = autoScroll;
-        QRect rect(d->pressedPosition - offset, pos);
+        QRect rect(visualRect(d->currentSelectionStartIndex).center(), pos);
         if (command.testFlag(QItemSelectionModel::Toggle)) {
             command &= ~QItemSelectionModel::Toggle;
             d->ctrlDragSelectionFlag = d->selectionModel->isSelected(index) ? QItemSelectionModel::Deselect : QItemSelectionModel::Select;
@@ -2323,16 +2321,16 @@ void QAbstractItemView::keyPressEvent(QKeyEvent *event)
             // note that we don't check if the new current index is enabled because moveCursor() makes sure it is
             if (command & QItemSelectionModel::Current) {
                 d->selectionModel->setCurrentIndex(newCurrent, QItemSelectionModel::NoUpdate);
-                if (!indexAt(d->pressedPosition - d->offset()).isValid())
-                    d->pressedPosition = visualRect(oldCurrent).center() + d->offset();
-                QRect rect(d->pressedPosition - d->offset(), visualRect(newCurrent).center());
+                if (!d->currentSelectionStartIndex.isValid())
+                    d->currentSelectionStartIndex = oldCurrent;
+                QRect rect(visualRect(d->currentSelectionStartIndex).center(), visualRect(newCurrent).center());
                 setSelection(rect, command);
             } else {
                 d->selectionModel->setCurrentIndex(newCurrent, command);
-                d->pressedPosition = visualRect(newCurrent).center() + d->offset();
+                d->currentSelectionStartIndex = newCurrent;
                 if (newCurrent.isValid()) {
                     // We copy the same behaviour as for mousePressEvent().
-                    QRect rect(d->pressedPosition - d->offset(), QSize(1, 1));
+                    QRect rect(visualRect(newCurrent).center(), QSize(1, 1));
                     setSelection(rect, command);
                 }
             }
@@ -2388,7 +2386,7 @@ void QAbstractItemView::keyPressEvent(QKeyEvent *event)
         }
 #endif
         break;
-#ifdef Q_WS_MAC
+#ifdef Q_OS_MAC
     case Qt::Key_Enter:
     case Qt::Key_Return:
         // Propagate the enter if you couldn't edit the item and there are no
@@ -2418,7 +2416,7 @@ void QAbstractItemView::keyPressEvent(QKeyEvent *event)
             selectAll();
             break;
         }
-#ifdef Q_WS_MAC
+#ifdef Q_OS_MAC
         if (event->key() == Qt::Key_O && event->modifiers() & Qt::ControlModifier && currentIndex().isValid()) {
             emit activated(currentIndex());
             break;
@@ -3623,7 +3621,7 @@ QStyleOptionViewItem QAbstractItemView::viewOptions() const
     option.state &= ~QStyle::State_MouseOver;
     option.font = font();
 
-#ifndef Q_WS_MAC
+#ifndef Q_DEAD_CODE_FROM_QT4_MAC
     // On mac the focus appearance follows window activation
     // not widget activation
     if (!hasFocus())

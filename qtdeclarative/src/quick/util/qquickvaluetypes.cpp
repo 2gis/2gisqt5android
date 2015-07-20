@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQuick module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -46,11 +46,6 @@ namespace QQuickValueTypes {
         QQmlValueTypeFactory::registerValueTypes("QtQuick", 2, 0);
         qmlRegisterValueTypeEnums<QQuickFontValueType>("QtQuick", 2, 0, "Font");
     }
-}
-
-QQuickColorValueType::QQuickColorValueType(QObject *parent)
-    : QQmlValueTypeBase<QColor>(QMetaType::QColor, parent)
-{
 }
 
 QString QQuickColorValueType::toString() const
@@ -99,24 +94,9 @@ void QQuickColorValueType::setA(qreal a)
     v.setAlphaF(a);
 }
 
-
-QQuickVector2DValueType::QQuickVector2DValueType(QObject *parent)
-    : QQmlValueTypeBase<QVector2D>(QMetaType::QVector2D, parent)
-{
-}
-
 QString QQuickVector2DValueType::toString() const
 {
     return QString(QLatin1String("QVector2D(%1, %2)")).arg(v.x()).arg(v.y());
-}
-
-bool QQuickVector2DValueType::isEqual(const QVariant &other) const
-{
-    if (other.userType() != QMetaType::QVector2D)
-        return false;
-
-    QVector2D otherVector = other.value<QVector2D>();
-    return (v == otherVector);
 }
 
 qreal QQuickVector2DValueType::x() const
@@ -199,24 +179,9 @@ bool QQuickVector2DValueType::fuzzyEquals(const QVector2D &vec) const
     return qFuzzyCompare(v, vec);
 }
 
-
-QQuickVector3DValueType::QQuickVector3DValueType(QObject *parent)
-    : QQmlValueTypeBase<QVector3D>(QMetaType::QVector3D, parent)
-{
-}
-
 QString QQuickVector3DValueType::toString() const
 {
     return QString(QLatin1String("QVector3D(%1, %2, %3)")).arg(v.x()).arg(v.y()).arg(v.z());
-}
-
-bool QQuickVector3DValueType::isEqual(const QVariant &other) const
-{
-    if (other.userType() != QMetaType::QVector3D)
-        return false;
-
-    QVector3D otherVector = other.value<QVector3D>();
-    return (v == otherVector);
 }
 
 qreal QQuickVector3DValueType::x() const
@@ -321,24 +286,9 @@ bool QQuickVector3DValueType::fuzzyEquals(const QVector3D &vec) const
     return qFuzzyCompare(v, vec);
 }
 
-
-QQuickVector4DValueType::QQuickVector4DValueType(QObject *parent)
-    : QQmlValueTypeBase<QVector4D>(QMetaType::QVector4D, parent)
-{
-}
-
 QString QQuickVector4DValueType::toString() const
 {
     return QString(QLatin1String("QVector4D(%1, %2, %3, %4)")).arg(v.x()).arg(v.y()).arg(v.z()).arg(v.w());
-}
-
-bool QQuickVector4DValueType::isEqual(const QVariant &other) const
-{
-    if (other.userType() != QMetaType::QVector4D)
-        return false;
-
-    QVector4D otherVector = other.value<QVector4D>();
-    return (v == otherVector);
 }
 
 qreal QQuickVector4DValueType::x() const
@@ -450,11 +400,6 @@ bool QQuickVector4DValueType::fuzzyEquals(const QVector4D &vec) const
     return qFuzzyCompare(v, vec);
 }
 
-QQuickQuaternionValueType::QQuickQuaternionValueType(QObject *parent)
-    : QQmlValueTypeBase<QQuaternion>(QMetaType::QQuaternion, parent)
-{
-}
-
 QString QQuickQuaternionValueType::toString() const
 {
     return QString(QLatin1String("QQuaternion(%1, %2, %3, %4)")).arg(v.scalar()).arg(v.x()).arg(v.y()).arg(v.z());
@@ -498,12 +443,6 @@ void QQuickQuaternionValueType::setY(qreal y)
 void QQuickQuaternionValueType::setZ(qreal z)
 {
     v.setZ(z);
-}
-
-
-QQuickMatrix4x4ValueType::QQuickMatrix4x4ValueType(QObject *parent)
-    : QQmlValueTypeBase<QMatrix4x4>(QMetaType::QMatrix4x4, parent)
-{
 }
 
 QMatrix4x4 QQuickMatrix4x4ValueType::times(const QMatrix4x4 &m) const
@@ -577,38 +516,6 @@ bool QQuickMatrix4x4ValueType::fuzzyEquals(const QMatrix4x4 &m, qreal epsilon) c
 bool QQuickMatrix4x4ValueType::fuzzyEquals(const QMatrix4x4 &m) const
 {
     return qFuzzyCompare(v, m);
-}
-
-QString QQuickMatrix4x4ValueType::toString() const
-{
-    return QString(QLatin1String("QMatrix4x4(%1, %2, %3, %4, %5, %6, %7, %8, %9, %10, %11, %12, %13, %14, %15, %16)"))
-            .arg(v(0, 0)).arg(v(0, 1)).arg(v(0, 2)).arg(v(0, 3))
-            .arg(v(1, 0)).arg(v(1, 1)).arg(v(1, 2)).arg(v(1, 3))
-            .arg(v(2, 0)).arg(v(2, 1)).arg(v(2, 2)).arg(v(2, 3))
-            .arg(v(3, 0)).arg(v(3, 1)).arg(v(3, 2)).arg(v(3, 3));
-}
-
-bool QQuickMatrix4x4ValueType::isEqual(const QVariant &other) const
-{
-    if (other.userType() != qMetaTypeId<QMatrix4x4>())
-        return false;
-
-    QMatrix4x4 otherMatrix = other.value<QMatrix4x4>();
-    return (v == otherMatrix);
-
-}
-
-QQuickFontValueType::QQuickFontValueType(QObject *parent)
-    : QQmlValueTypeBase<QFont>(QMetaType::QFont, parent),
-      pixelSizeSet(false),
-      pointSizeSet(false)
-{
-}
-
-void QQuickFontValueType::onLoad()
-{
-    pixelSizeSet = false;
-    pointSizeSet = false;
 }
 
 QString QQuickFontValueType::toString() const
@@ -689,34 +596,27 @@ void QQuickFontValueType::setStrikeout(bool b)
 qreal QQuickFontValueType::pointSize() const
 {
     if (v.pointSizeF() == -1) {
-        if (dpi.isNull)
-            dpi = qt_defaultDpi();
-        return v.pixelSize() * qreal(72.) / qreal(dpi);
+        return v.pixelSize() * qreal(72.) / qreal(qt_defaultDpi());
     }
     return v.pointSizeF();
 }
 
 void QQuickFontValueType::setPointSize(qreal size)
 {
-    if (pixelSizeSet) {
+    if ((v.resolve() & QFont::SizeResolved) && v.pixelSize() != -1) {
         qWarning() << "Both point size and pixel size set. Using pixel size.";
         return;
     }
 
     if (size >= 0.0) {
-        pointSizeSet = true;
         v.setPointSizeF(size);
-    } else {
-        pointSizeSet = false;
     }
 }
 
 int QQuickFontValueType::pixelSize() const
 {
     if (v.pixelSize() == -1) {
-        if (dpi.isNull)
-            dpi = qt_defaultDpi();
-        return (v.pointSizeF() * dpi) / qreal(72.);
+        return (v.pointSizeF() * qt_defaultDpi()) / qreal(72.);
     }
     return v.pixelSize();
 }
@@ -724,12 +624,9 @@ int QQuickFontValueType::pixelSize() const
 void QQuickFontValueType::setPixelSize(int size)
 {
     if (size >0) {
-        if (pointSizeSet)
+        if ((v.resolve() & QFont::SizeResolved) && v.pointSizeF() != -1)
             qWarning() << "Both point size and pixel size set. Using pixel size.";
         v.setPixelSize(size);
-        pixelSizeSet = true;
-    } else {
-        pixelSizeSet = false;
     }
 }
 

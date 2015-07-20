@@ -22,7 +22,7 @@ namespace content {
 class GeolocationDispatcherHost : public WebContentsObserver {
  public:
   explicit GeolocationDispatcherHost(WebContents* web_contents);
-  virtual ~GeolocationDispatcherHost();
+  ~GeolocationDispatcherHost() override;
 
   // Pause or resumes geolocation. Resuming when nothing is paused is a no-op.
   // If the web contents is paused while not currently using geolocation but
@@ -30,24 +30,33 @@ class GeolocationDispatcherHost : public WebContentsObserver {
   // geolocation updates until it is resumed.
   void PauseOrResume(bool should_pause);
 
+  // Enables geolocation override. This method is used by DevTools to
+  // trigger possible location-specific behavior in particular web contents.
+  void SetOverride(scoped_ptr<Geoposition> geoposition);
+
+  // Disables geolocation override.
+  void ClearOverride();
+
  private:
   // WebContentsObserver
-  virtual void RenderFrameDeleted(RenderFrameHost* render_frame_host) OVERRIDE;
-  virtual void RenderViewHostChanged(RenderViewHost* old_host,
-                                     RenderViewHost* new_host) OVERRIDE;
-  virtual bool OnMessageReceived(
-      const IPC::Message& msg, RenderFrameHost* render_frame_host) OVERRIDE;
+  void RenderFrameDeleted(RenderFrameHost* render_frame_host) override;
+  void RenderViewHostChanged(RenderViewHost* old_host,
+                             RenderViewHost* new_host) override;
+  void DidNavigateAnyFrame(RenderFrameHost* render_frame_host,
+                           const LoadCommittedDetails& details,
+                           const FrameNavigateParams& params) override;
+  bool OnMessageReceived(const IPC::Message& msg,
+                         RenderFrameHost* render_frame_host) override;
 
   // Message handlers:
+  // TODO(mlamouri): |requesting_origin| should be a security origin to
+  // guarantee that a proper origin is passed.
   void OnRequestPermission(RenderFrameHost* render_frame_host,
                            int bridge_id,
-                           const GURL& requesting_frame,
+                           const GURL& requesting_origin,
                            bool user_gesture);
-  void OnCancelPermissionRequest(RenderFrameHost* render_frame_host,
-                                 int bridge_id,
-                                 const GURL& requesting_frame);
   void OnStartUpdating(RenderFrameHost* render_frame_host,
-                       const GURL& requesting_frame,
+                       const GURL& requesting_origin,
                        bool enable_high_accuracy);
   void OnStopUpdating(RenderFrameHost* render_frame_host);
 
@@ -56,11 +65,16 @@ class GeolocationDispatcherHost : public WebContentsObserver {
   void RefreshGeolocationOptions();
 
   void OnLocationUpdate(const Geoposition& position);
+  void UpdateGeoposition(RenderFrameHost* frame, const Geoposition& position);
 
   void SendGeolocationPermissionResponse(int render_process_id,
                                          int render_frame_id,
                                          int bridge_id,
                                          bool allowed);
+
+  // Clear pending permissions associated with a given frame and request the
+  // browser to cancel the permission requests.
+  void CancelPermissionRequestsForFrame(RenderFrameHost* render_frame_host);
 
   // A map from the RenderFrameHosts that have requested geolocation updates to
   // the type of accuracy they requested (true = high accuracy).
@@ -70,16 +84,18 @@ class GeolocationDispatcherHost : public WebContentsObserver {
   struct PendingPermission {
     PendingPermission(int render_frame_id,
                       int render_process_id,
-                      int bridge_id);
+                      int bridge_id,
+                      const GURL& origin);
     ~PendingPermission();
     int render_frame_id;
     int render_process_id;
     int bridge_id;
-    base::Closure cancel;
+    GURL origin;
   };
   std::vector<PendingPermission> pending_permissions_;
 
   scoped_ptr<GeolocationProvider::Subscription> geolocation_subscription_;
+  scoped_ptr<Geoposition> geoposition_override_;
 
   base::WeakPtrFactory<GeolocationDispatcherHost> weak_factory_;
 

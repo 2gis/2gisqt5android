@@ -3,20 +3,13 @@ include($QT_INSTALL_DOCS/global/qt-module-defaults.qdocconf)
 # Name of the project which must match the outputdir. Determines the .index file
 project = QtScriptTools
 
-# Directories in which to search for files to document and images.
-# By default set to the root directory of the project for sources
-# and headers and qdoc will therefore generate output for each file.
-# Images should be placed in <rootdir>/dic/images and examples in
-# <rootdir>/examples.
-# Paths are relative to the  location of this file.
-exampledirs += ../../../examples \
-               snippets
+exampledirs += snippets
 
 headerdirs += ..
 imagedirs += images
 sourcedirs += ..
 
-depends += qtcore qtlinguist qtscript qtdoc
+depends += qtcore qtlinguist qtscript qtdoc qtwidgets qtqml qmake
 
 # The following parameters are for creating a qhp file, the qhelpgenerator
 # program can convert the qhp file into a qch file which can be opened in

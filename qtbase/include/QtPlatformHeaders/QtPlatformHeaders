@@ -6,6 +6,7 @@
 #include "qeglnativecontext.h"
 #include "qglxnativecontext.h"
 #include "qwglnativecontext.h"
+#include "qwindowswindowfunctions.h"
 #include "qxcbwindowfunctions.h"
 #include "qtplatformheadersversion.h"
 #endif

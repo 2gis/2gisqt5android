@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtBluetooth module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -59,6 +59,9 @@ private slots:
     void tst_construction();
 
     void tst_copy();
+
+    void tst_compare_data();
+    void tst_compare();
 };
 
 tst_QBluetoothHostInfo::tst_QBluetoothHostInfo()
@@ -179,6 +182,61 @@ void tst_QBluetoothHostInfo::tst_copy()
     assignOperator = original;
     QCOMPARE(assignOperator.name(), original.name());
     QCOMPARE(assignOperator.address(), original.address());
+}
+
+void tst_QBluetoothHostInfo::tst_compare_data()
+{
+    QTest::addColumn<QString>("btAddress1");
+    QTest::addColumn<QString>("name1");
+    QTest::addColumn<QString>("btAddress2");
+    QTest::addColumn<QString>("name2");
+    QTest::addColumn<bool>("sameHostInfo");
+
+    QTest::newRow("11:22:33:44:55:66 - same") << QString("11:22:33:44:55:66") << QString("same")
+                                       << QString("11:22:33:44:55:66") << QString("same")
+                                       << true;
+    QTest::newRow("11:22:33:44:55:66 - address") << QString("11:22:33:44:55:66") << QString("same")
+                                       << QString("11:22:33:44:55:77") << QString("same")
+                                       << false;
+    QTest::newRow("11:22:33:44:55:66 - name") << QString("11:22:33:44:55:66") << QString("same")
+                                       << QString("11:22:33:44:55:66") << QString("different")
+                                       << false;
+    QTest::newRow("11:22:33:44:55:66 - name/address") << QString("11:22:33:44:55:66") << QString("same")
+                                       << QString("11:22:33:44:55:77") << QString("different")
+                                       << false;
+    QTest::newRow("empty") << QString() << QString() << QString() << QString() << true;
+    QTest::newRow("empty left") << QString() << QString()
+                                << QString("11:22:33:44:55:66") << QString("same") << false;
+    QTest::newRow("empty right") << QString("11:22:33:44:55:66") << QString("same")
+                                 << QString() << QString() << false;
+    QTest::newRow("00:00:00:00:00:00") << QString("00:00:00:00:00:00") << QString("foobar1")
+                                       << QString("") << QString("foobar1") << true;
+    QTest::newRow("00:00:00:00:00:00") << QString("00:00:00:00:00:00") << QString("foobar1")
+                                       << QString("") << QString("foobar2") << false;
+    QTest::newRow("00:00:00:00:00:00") << QString("00:00:00:00:00:00") << QString("")
+                                       << QString("") << QString("") << true;
+}
+
+void tst_QBluetoothHostInfo::tst_compare()
+{
+    QFETCH(QString, btAddress1);
+    QFETCH(QString, name1);
+    QFETCH(QString, btAddress2);
+    QFETCH(QString, name2);
+    QFETCH(bool, sameHostInfo);
+
+    QVERIFY(QBluetoothHostInfo() == QBluetoothHostInfo());
+
+    QBluetoothHostInfo info1;
+    info1.setAddress(QBluetoothAddress(btAddress1));
+    info1.setName(name1);
+
+    QBluetoothHostInfo info2;
+    info2.setAddress(QBluetoothAddress(btAddress2));
+    info2.setName(name2);
+
+    QCOMPARE(info1 == info2, sameHostInfo);
+    QCOMPARE(info1 != info2, !sameHostInfo);
 }
 
 QTEST_MAIN(tst_QBluetoothHostInfo)

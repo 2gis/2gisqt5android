@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQuick module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -49,18 +49,25 @@ class QQmlEngine;
 class QQuickPixmapData;
 class QQuickTextureFactory;
 
+enum AutoTransform {
+    UsePluginDefault = -1,
+    ApplyTransform = 0,
+    DoNotApplyTransform = 1
+};
+
 class QQuickDefaultTextureFactory : public QQuickTextureFactory
 {
     Q_OBJECT
 public:
     QQuickDefaultTextureFactory(const QImage &i);
     QSGTexture *createTexture(QQuickWindow *window) const;
-    QSize textureSize() const { return im.size(); }
-    int textureByteCount() const { return im.byteCount(); }
+    QSize textureSize() const { return size; }
+    int textureByteCount() const { return size.width() * size.height() * 4; }
     QImage image() const { return im; }
 
 private:
     QImage im;
+    QSize size;
 };
 
 class Q_QUICK_PRIVATE_EXPORT QQuickPixmap
@@ -91,6 +98,7 @@ public:
     const QUrl &url() const;
     const QSize &implicitSize() const;
     const QSize &requestSize() const;
+    AutoTransform autoTransform() const;
     QImage image() const;
     void setImage(const QImage &);
     void setPixmap(const QQuickPixmap &other);
@@ -105,6 +113,7 @@ public:
     void load(QQmlEngine *, const QUrl &, QQuickPixmap::Options options);
     void load(QQmlEngine *, const QUrl &, const QSize &);
     void load(QQmlEngine *, const QUrl &, const QSize &, QQuickPixmap::Options options);
+    void load(QQmlEngine *, const QUrl &, const QSize &, QQuickPixmap::Options options, AutoTransform autoTransform);
 
     void clear();
     void clear(QObject *);

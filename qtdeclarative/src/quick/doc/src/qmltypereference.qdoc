@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
@@ -10,15 +10,15 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Free Documentation License Usage
 ** Alternatively, this file may be used under the terms of the GNU Free
 ** Documentation License version 1.3 as published by the Free Software
 ** Foundation and appearing in the file included in the packaging of
-** this file.  Please review the following information to ensure
+** this file. Please review the following information to ensure
 ** the GNU Free Documentation License version 1.3 requirements
 ** will be met: http://www.gnu.org/copyleft/fdl.html.
 ** $QT_END_LICENSE$
@@ -26,7 +26,7 @@
 ****************************************************************************/
 
 /*!
-\qmlmodule QtQuick 2.4
+\qmlmodule QtQuick 2.5
 \title Qt Quick QML Types
 \ingroup qmlmodules
 \brief Provides graphical QML types.
@@ -34,11 +34,11 @@
 The \l{Qt Quick} module provides graphical primitive types. These types are only
 available in a QML document if that document imports the \c QtQuick namespace.
 
-The current version of the \c QtQuick module is version 2.4, and thus it may be
+The current version of the \c QtQuick module is version 2.5, and thus it may be
 imported via the following statement:
 
 \qml
-import QtQuick 2.4
+import QtQuick 2.5
 \endqml
 
 Visit the \l {Qt Quick} module documentation for more
@@ -185,17 +185,29 @@ available when you import \c QtQuick.
 
     \table
     \row
+        \li \c Font.Thin
+        \li 0
+    \row
+        \li \c Font.ExtraLight
+        \li 12
+    \row
         \li \c Font.Light
         \li 25
     \row
         \li \c Font.Normal
         \li 50
     \row
+        \li \c Font.Medium
+        \li 57
+    \row
         \li \c Font.DemiBold
         \li 63
     \row
         \li \c Font.Bold
         \li 75
+    \row
+        \li \c Font.ExtraBold
+        \li 81
     \row
         \li \c Font.Black
         \li 87

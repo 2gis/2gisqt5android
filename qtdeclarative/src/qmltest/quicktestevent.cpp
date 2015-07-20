@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -111,7 +111,7 @@ namespace QTest {
 
 namespace QtQuickTest
 {
-    enum MouseAction { MousePress, MouseRelease, MouseClick, MouseDoubleClick, MouseMove };
+    enum MouseAction { MousePress, MouseRelease, MouseClick, MouseDoubleClick, MouseMove, MouseDoubleClickSequence };
 
     static void mouseEvent(MouseAction action, QWindow *window,
                            QObject *item, Qt::MouseButton button,
@@ -127,6 +127,15 @@ namespace QtQuickTest
 
         if (action == MouseClick) {
             mouseEvent(MousePress, window, item, button, stateKey, _pos);
+            mouseEvent(MouseRelease, window, item, button, stateKey, _pos);
+            return;
+        }
+
+        if (action == MouseDoubleClickSequence) {
+            mouseEvent(MousePress, window, item, button, stateKey, _pos);
+            mouseEvent(MouseRelease, window, item, button, stateKey, _pos);
+            mouseEvent(MousePress, window, item, button, stateKey, _pos);
+            mouseEvent(MouseDoubleClick, window, item, button, stateKey, _pos);
             mouseEvent(MouseRelease, window, item, button, stateKey, _pos);
             return;
         }
@@ -162,7 +171,7 @@ namespace QtQuickTest
         QSpontaneKeyEvent::setSpontaneous(&me);
         if (!qApp->notify(window, &me)) {
             static const char *mouseActionNames[] =
-                { "MousePress", "MouseRelease", "MouseClick", "MouseDoubleClick", "MouseMove" };
+                { "MousePress", "MouseRelease", "MouseClick", "MouseDoubleClick", "MouseMove", "MouseDoubleClickSequence" };
             QString warning = QString::fromLatin1("Mouse event \"%1\" not accepted by receiving window");
             QWARN(warning.arg(QString::fromLatin1(mouseActionNames[static_cast<int>(action)])).toLatin1().data());
         }
@@ -263,6 +272,20 @@ bool QuickTestEvent::mouseDoubleClick
     if (!view)
         return false;
     QtQuickTest::mouseEvent(QtQuickTest::MouseDoubleClick, view, item,
+                            Qt::MouseButton(button),
+                            Qt::KeyboardModifiers(modifiers),
+                            QPointF(x, y), delay);
+    return true;
+}
+
+bool QuickTestEvent::mouseDoubleClickSequence
+    (QObject *item, qreal x, qreal y, int button,
+     int modifiers, int delay)
+{
+    QWindow *view = eventWindow();
+    if (!view)
+        return false;
+    QtQuickTest::mouseEvent(QtQuickTest::MouseDoubleClickSequence, view, item,
                             Qt::MouseButton(button),
                             Qt::KeyboardModifiers(modifiers),
                             QPointF(x, y), delay);

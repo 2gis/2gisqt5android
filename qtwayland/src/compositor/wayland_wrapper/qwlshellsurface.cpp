@@ -1,7 +1,8 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2014 Pier Luigi Fiorini <pierluigi.fiorini@gmail.com>
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Compositor.
 **
@@ -17,8 +18,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -42,11 +43,13 @@
 
 #include "qwlcompositor_p.h"
 #include "qwlsurface_p.h"
+#include "qwloutput_p.h"
 #include "qwlinputdevice_p.h"
 #include "qwlsubsurface_p.h"
 #include "qwlpointer_p.h"
 #include "qwlextendedsurface_p.h"
 
+#include "qwaylandoutput.h"
 #include "qwaylandsurfaceview.h"
 
 #include <QtCore/qglobal.h>
@@ -103,6 +106,7 @@ ShellSurface::ShellSurface(Shell *shell, wl_client *client, uint32_t id, Surface
 
 ShellSurface::~ShellSurface()
 {
+    delete m_view;
 }
 
 void ShellSurface::sendConfigure(uint32_t edges, int32_t width, int32_t height)
@@ -278,14 +282,33 @@ void ShellSurface::shell_surface_set_transient(Resource *resource,
 void ShellSurface::shell_surface_set_fullscreen(Resource *resource,
                        uint32_t method,
                        uint32_t framerate,
-                       struct wl_resource *output)
+                       struct wl_resource *output_resource)
 {
     Q_UNUSED(resource);
     Q_UNUSED(method);
     Q_UNUSED(framerate);
-    Q_UNUSED(output);
-    QSize defaultScreenSize = m_surface->compositor()->outputGeometry().size();
-    send_configure(resize_bottom_right, defaultScreenSize.width(), defaultScreenSize.height());
+
+    QWaylandOutput *output = output_resource
+            ? QWaylandOutput::fromResource(output_resource)
+            : Q_NULLPTR;
+    if (!output) {
+        // Look for an output that can contain this surface
+        Q_FOREACH (QWaylandOutput *curOutput, m_surface->compositor()->outputs()) {
+            if (curOutput->geometry().size().width() >= m_surface->size().width() &&
+                    curOutput->geometry().size().height() >= m_surface->size().height()) {
+                output = curOutput;
+                break;
+            }
+        }
+    }
+    if (!output) {
+        qWarning() << "Unable to resize surface full screen, cannot determine output";
+        return;
+    }
+    QSize outputSize = output->geometry().size();
+
+    m_view->setPos(output->geometry().topLeft());
+    send_configure(resize_bottom_right, outputSize.width(), outputSize.height());
 
     if (m_surface->extendedSurface())
         m_surface->extendedSurface()->setVisibility(QWindow::FullScreen, false);
@@ -311,12 +334,31 @@ void ShellSurface::shell_surface_set_popup(Resource *resource, wl_resource *inpu
 }
 
 void ShellSurface::shell_surface_set_maximized(Resource *resource,
-                       struct wl_resource *output)
+                       struct wl_resource *output_resource)
 {
     Q_UNUSED(resource);
-    Q_UNUSED(output);
-    QSize defaultScreenSize = m_surface->compositor()->outputGeometry().size();
-    send_configure(resize_bottom_right, defaultScreenSize.width(), defaultScreenSize.height());
+
+    QWaylandOutput *output = output_resource
+            ? QWaylandOutput::fromResource(output_resource)
+            : Q_NULLPTR;
+    if (!output) {
+        // Look for an output that can contain this surface
+        Q_FOREACH (QWaylandOutput *curOutput, m_surface->compositor()->outputs()) {
+            if (curOutput->geometry().size().width() >= m_surface->size().width() &&
+                    curOutput->geometry().size().height() >= m_surface->size().height()) {
+                output = curOutput;
+                break;
+            }
+        }
+    }
+    if (!output) {
+        qWarning() << "Unable to maximize surface, cannot determine output";
+        return;
+    }
+    QSize outputSize = output->availableGeometry().size();
+
+    m_view->setPos(output->availableGeometry().topLeft());
+    send_configure(resize_bottom_right, outputSize.width(), outputSize.height());
 
     if (m_surface->extendedSurface())
         m_surface->extendedSurface()->setVisibility(QWindow::Maximized, false);

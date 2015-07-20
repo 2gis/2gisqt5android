@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -39,7 +39,6 @@
 #include "qqmlcompiler_p.h"
 #include "qqmldata_p.h"
 #include <private/qqmlprofiler_p.h>
-#include <private/qqmltrace_p.h>
 #include <private/qqmlexpression_p.h>
 #include <private/qqmlscriptstring_p.h>
 #include <private/qqmlcontextwrapper_p.h>
@@ -75,7 +74,8 @@ QQmlBinding::QQmlBinding(const QString &str, QObject *obj, QQmlContext *ctxt)
     QQmlAbstractExpression::setContext(QQmlContextData::get(ctxt));
     setScopeObject(obj);
 
-    v4function = qmlBinding(context(), obj, str, QString(), 0);
+    QV4::ExecutionEngine *v4 = QQmlEnginePrivate::get(context()->engine)->v4engine();
+    v4function.set(v4, qmlBinding(context(), obj, str, QString(), 0));
 }
 
 QQmlBinding::QQmlBinding(const QQmlScriptString &script, QObject *obj, QQmlContext *ctxt)
@@ -93,8 +93,8 @@ QQmlBinding::QQmlBinding(const QQmlScriptString &script, QObject *obj, QQmlConte
 
     QQmlContextData *ctxtdata = QQmlContextData::get(scriptPrivate->context);
     QQmlEnginePrivate *engine = QQmlEnginePrivate::get(scriptPrivate->context->engine());
-    if (engine && ctxtdata && !ctxtdata->url.isEmpty() && ctxtdata->typeCompilationUnit) {
-        url = ctxtdata->url.toString();
+    if (engine && ctxtdata && !ctxtdata->urlString().isEmpty() && ctxtdata->typeCompilationUnit) {
+        url = ctxtdata->urlString();
         if (scriptPrivate->bindingId != QQmlBinding::Invalid)
             runtimeFunction = ctxtdata->typeCompilationUnit->runtimeFunctions.at(scriptPrivate->bindingId);
     }
@@ -103,11 +103,12 @@ QQmlBinding::QQmlBinding(const QQmlScriptString &script, QObject *obj, QQmlConte
     QQmlAbstractExpression::setContext(QQmlContextData::get(ctxt ? ctxt : scriptPrivate->context));
     setScopeObject(obj ? obj : scriptPrivate->scope);
 
+    QV4::ExecutionEngine *v4 = QQmlEnginePrivate::get(context()->engine)->v4engine();
     if (runtimeFunction) {
-        v4function = QV4::QmlBindingWrapper::createQmlCallableForFunction(ctxtdata, scopeObject(), runtimeFunction);
+        v4function.set(v4, QV4::QmlBindingWrapper::createQmlCallableForFunction(ctxtdata, scopeObject(), runtimeFunction));
     } else {
         QString code = scriptPrivate->script;
-        v4function = qmlBinding(context(), scopeObject(), code, url, scriptPrivate->lineNumber);
+        v4function.set(v4, qmlBinding(context(), scopeObject(), code, url, scriptPrivate->lineNumber));
     }
 }
 
@@ -118,7 +119,8 @@ QQmlBinding::QQmlBinding(const QString &str, QObject *obj, QQmlContextData *ctxt
     QQmlAbstractExpression::setContext(ctxt);
     setScopeObject(obj);
 
-    v4function = qmlBinding(ctxt, obj, str, QString(), 0);
+    QV4::ExecutionEngine *v4 = QQmlEnginePrivate::get(context()->engine)->v4engine();
+    v4function.set(v4, qmlBinding(ctxt, obj, str, QString(), 0));
 }
 
 QQmlBinding::QQmlBinding(const QString &str, QObject *obj,
@@ -131,17 +133,18 @@ QQmlBinding::QQmlBinding(const QString &str, QObject *obj,
     QQmlAbstractExpression::setContext(ctxt);
     setScopeObject(obj);
 
-    v4function = qmlBinding(ctxt, obj, str, url, lineNumber);
+    QV4::ExecutionEngine *v4 = QQmlEnginePrivate::get(context()->engine)->v4engine();
+    v4function.set(v4, qmlBinding(ctxt, obj, str, url, lineNumber));
 }
 
-QQmlBinding::QQmlBinding(const QV4::ValueRef functionPtr, QObject *obj, QQmlContextData *ctxt)
+QQmlBinding::QQmlBinding(const QV4::Value &functionPtr, QObject *obj, QQmlContextData *ctxt)
 : QQmlJavaScriptExpression(&QQmlBinding_jsvtable), QQmlAbstractBinding(Binding)
 {
     setNotifyOnValueChanged(true);
     QQmlAbstractExpression::setContext(ctxt);
     setScopeObject(obj);
 
-    v4function = functionPtr;
+    v4function.set(functionPtr.asObject()->engine(), functionPtr);
 }
 
 QQmlBinding::~QQmlBinding()
@@ -162,39 +165,13 @@ void QQmlBinding::update(QQmlPropertyPrivate::WriteFlags flags)
     if (QQmlData::wasDeleted(object()))
         return;
 
-    QString url;
-    quint16 lineNumber;
-    quint16 columnNumber;
-
     QQmlEnginePrivate *ep = QQmlEnginePrivate::get(context()->engine);
     QV4::Scope scope(ep->v4engine());
     QV4::ScopedFunctionObject f(scope, v4function.value());
     Q_ASSERT(f);
-    if (f->bindingKeyFlag()) {
-        Q_ASSERT(f->as<QV4::QQmlBindingFunction>());
-        QQmlSourceLocation loc = static_cast<QV4::QQmlBindingFunction *>(f.getPointer())->d()->bindingLocation;
-        url = loc.sourceFile;
-        lineNumber = loc.line;
-        columnNumber = loc.column;
-    } else {
-        QV4::Function *function = f->asFunctionObject()->function();
-        Q_ASSERT(function);
-
-        url = function->sourceFile();
-        lineNumber = function->compiledFunction->location.line;
-        columnNumber = function->compiledFunction->location.column;
-    }
-
-    int lineNo = qmlSourceCoordinate(lineNumber);
-    int columnNo = qmlSourceCoordinate(columnNumber);
-
-    QQmlTrace trace("General Binding Update");
-    trace.addDetail("URL", url);
-    trace.addDetail("Line", lineNo);
-    trace.addDetail("Column", columnNo);
 
     if (!updatingFlag()) {
-        QQmlBindingProfiler prof(ep->profiler, url, lineNo, columnNo);
+        QQmlBindingProfiler prof(ep->profiler, f);
         setUpdatingFlag(true);
 
         QQmlAbstractExpression::DeleteWatcher watcher(this);
@@ -216,8 +193,6 @@ void QQmlBinding::update(QQmlPropertyPrivate::WriteFlags flags)
 
             QV4::ScopedValue result(scope, QQmlJavaScriptExpression::evaluate(context(), f, &isUndefined));
 
-            trace.event("writing binding result");
-
             bool needsErrorLocationData = false;
             if (!watcher.wasDeleted() && !hasError())
                 needsErrorLocationData = !QQmlPropertyPrivate::writeBinding(*m_coreObject, m_core, context(),
@@ -226,7 +201,7 @@ void QQmlBinding::update(QQmlPropertyPrivate::WriteFlags flags)
             if (!watcher.wasDeleted()) {
 
                 if (needsErrorLocationData)
-                    delayedError()->setErrorLocation(QUrl(url), lineNumber, columnNumber);
+                    delayedError()->setErrorLocation(f->sourceLocation());
 
                 if (hasError()) {
                     if (!delayedError()->addError(ep)) ep->warning(this->error(context()->engine));
@@ -260,7 +235,7 @@ QVariant QQmlBinding::evaluate()
 
     ep->dereferenceScarceResources();
 
-    return ep->v8engine()->toVariant(result, qMetaTypeId<QList<QObject*> >());
+    return scope.engine->toVariant(result, qMetaTypeId<QList<QObject*> >());
 }
 
 QString QQmlBinding::expressionIdentifier(QQmlJavaScriptExpression *e)

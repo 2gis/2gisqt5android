@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -35,18 +35,11 @@
 
 #include <cmath> // this HAS to come
 
-#include <QtCore/QString>
-#include <QtCore/qnumeric.h>
-#include "qv4global_p.h"
+#include "qv4value_p.h"
+
 #include "qv4string_p.h"
-#include <QtCore/QDebug>
 #include "qv4managed_p.h"
 #include "qv4engine_p.h"
-#include <private/qtqmlglobal_p.h>
-
-//#include <wtf/MathExtras.h>
-
-#include "qv4value_p.h"
 
 QT_BEGIN_NAMESPACE
 
@@ -56,13 +49,13 @@ inline bool Value::isString() const
 {
     if (!isManaged())
         return false;
-    return managed() && managed()->internalClass()->vtable->isString;
+    return m && m->vtable->isString;
 }
 inline bool Value::isObject() const
 {
     if (!isManaged())
         return false;
-    return managed() && managed()->internalClass()->vtable->isObject;
+    return m && m->vtable->isObject;
 }
 
 inline bool Value::isPrimitive() const
@@ -70,10 +63,11 @@ inline bool Value::isPrimitive() const
     return !isObject();
 }
 
-inline ExecutionEngine *Value::engine() const
+inline String *Value::asString() const
 {
-    Managed *m = asManaged();
-    return m ? m->engine() : 0;
+    if (isString())
+        return stringValue();
+    return 0;
 }
 
 inline void Value::mark(ExecutionEngine *e) const
@@ -274,6 +268,21 @@ inline ErrorObject *Value::asErrorObject() const
 
 template<typename T>
 inline T *Value::as() const { Managed *m = isObject() ? managed() : 0; return m ? m->as<T>() : 0; }
+
+#ifndef V4_BOOTSTRAP
+
+template<>
+inline String *value_cast(const Value &v) {
+    return v.asString();
+}
+
+template<>
+inline ReturnedValue value_convert<String>(ExecutionEngine *e, const Value &v)
+{
+    return v.toString(e)->asReturnedValue();
+}
+
+#endif
 
 #endif
 

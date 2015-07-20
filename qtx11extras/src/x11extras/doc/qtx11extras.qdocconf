@@ -22,7 +22,7 @@ qhp.QtX11Extras.subprojects.classes.indexTitle = Qt X11 Extras C++ Classes
 qhp.QtX11Extras.subprojects.classes.selectors = class fake:headerfile
 qhp.QtX11Extras.subprojects.classes.sortPages = true
 
-depends += qtcore qtwidgets qtdoc
+depends += qtcore qtwidgets qtdoc qmake
 
 headerdirs  += ..
 

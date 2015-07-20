@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQuick module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -377,28 +377,30 @@ void Atlas::bind(QSGTexture::Filtering filtering)
     // Upload all pending images..
     for (int i=0; i<m_pending_uploads.size(); ++i) {
 
-        bool profileFrames = QSG_LOG_TIME_TEXTURE().isDebugEnabled() ||
-                QQuickProfiler::profilingSceneGraph();
+        bool profileFrames = QSG_LOG_TIME_TEXTURE().isDebugEnabled();
         if (profileFrames)
             qsg_renderer_timer.start();
+        // Skip bind, convert, swizzle; they're irrelevant
+        Q_QUICK_SG_PROFILE_START(QQuickProfiler::SceneGraphTexturePrepare);
+        Q_QUICK_SG_PROFILE_SKIP(QQuickProfiler::SceneGraphTexturePrepare, 3);
 
+        Texture *t = m_pending_uploads.at(i);
         if (m_externalFormat == GL_BGRA &&
                 !m_use_bgra_fallback) {
-            uploadBgra(m_pending_uploads.at(i));
+            uploadBgra(t);
         } else {
-            upload(m_pending_uploads.at(i));
+            upload(t);
         }
+        t->releaseImage();
 
         qCDebug(QSG_LOG_TIME_TEXTURE).nospace() << "atlastexture uploaded in: " << qsg_renderer_timer.elapsed()
-                                           << "ms (" << m_pending_uploads.at(i)->image().width() << "x"
-                                           << m_pending_uploads.at(i)->image().height() << ")";
+                                           << "ms (" << t->textureSize().width() << "x"
+                                           << t->textureSize().height() << ")";
 
-        Q_QUICK_SG_PROFILE(QQuickProfiler::SceneGraphTexturePrepare, (
-                0,  // bind (not relevant)
-                0,  // convert (not relevant)
-                0,  // swizzle (not relevant)
-                qsg_renderer_timer.nsecsElapsed(), // (upload all of the above)
-                0)); // mipmap (not used ever...)
+        // Skip mipmap; unused
+        Q_QUICK_SG_PROFILE_RECORD(QQuickProfiler::SceneGraphTexturePrepare);
+        Q_QUICK_SG_PROFILE_SKIP(QQuickProfiler::SceneGraphTexturePrepare, 1);
+        Q_QUICK_SG_PROFILE_REPORT(QQuickProfiler::SceneGraphTexturePrepare);
     }
 
     GLenum f = filtering == QSGTexture::Nearest ? GL_NEAREST : GL_LINEAR;
@@ -423,15 +425,15 @@ Texture::Texture(Atlas *atlas, const QRect &textureRect, const QImage &image)
     , m_image(image)
     , m_atlas(atlas)
     , m_nonatlas_texture(0)
+    , m_has_alpha(image.hasAlphaChannel())
 {
-    m_allocated_rect_without_padding = m_allocated_rect.adjusted(1, 1, -1, -1);
     float w = atlas->size().width();
     float h = atlas->size().height();
-
-    m_texture_coords_rect = QRectF(m_allocated_rect_without_padding.x() / w,
-                                   m_allocated_rect_without_padding.y() / h,
-                                   m_allocated_rect_without_padding.width() / w,
-                                   m_allocated_rect_without_padding.height() / h);
+    QRect nopad = atlasSubRectWithoutPadding();
+    m_texture_coords_rect = QRectF(nopad.x() / w,
+                                   nopad.y() / h,
+                                   nopad.width() / w,
+                                   nopad.height() / h);
 }
 
 Texture::~Texture()
@@ -448,12 +450,54 @@ void Texture::bind()
 
 QSGTexture *Texture::removedFromAtlas() const
 {
-    if (!m_nonatlas_texture) {
+    if (m_nonatlas_texture) {
+        m_nonatlas_texture->setMipmapFiltering(mipmapFiltering());
+        m_nonatlas_texture->setFiltering(filtering());
+        return m_nonatlas_texture;
+    }
+
+    if (!m_image.isNull()) {
         m_nonatlas_texture = new QSGPlainTexture();
         m_nonatlas_texture->setImage(m_image);
         m_nonatlas_texture->setFiltering(filtering());
-        m_nonatlas_texture->setMipmapFiltering(mipmapFiltering());
+
+    } else {
+        QOpenGLFunctions *f = QOpenGLContext::currentContext()->functions();
+        // bind the atlas texture as an fbo and extract the texture..
+
+        // First extract the currently bound fbo so we can restore it later.
+        GLint currentFbo;
+        f->glGetIntegerv(GL_FRAMEBUFFER_BINDING, &currentFbo);
+
+        // Create an FBO and bind the atlas texture into it.
+        GLuint fbo;
+        f->glGenFramebuffers(1, &fbo);
+        f->glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+        f->glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, m_atlas->textureId(), 0);
+
+        // Create the target texture, QSGPlainTexture below will deal with the texparams, so we don't
+        // need to worry about those here.
+        GLuint texture;
+        f->glGenTextures(1, &texture);
+        f->glBindTexture(GL_TEXTURE_2D, texture);
+        QRect r = atlasSubRectWithoutPadding();
+        // and copy atlas into our texture.
+        f->glCopyTexImage2D(GL_TEXTURE_2D, 0, m_atlas->internalFormat(), r.x(), r.y(), r.width(), r.height(), 0);
+
+        m_nonatlas_texture = new QSGPlainTexture();
+        m_nonatlas_texture->setTextureId(texture);
+        m_nonatlas_texture->setOwnsTexture(true);
+        m_nonatlas_texture->setHasAlphaChannel(m_has_alpha);
+        m_nonatlas_texture->setTextureSize(r.size());
+
+        // cleanup: unbind our atlas from the fbo, rebind the old default and delete the fbo.
+        f->glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, 0, 0);
+        f->glBindFramebuffer(GL_FRAMEBUFFER, (GLuint) currentFbo);
+        f->glDeleteFramebuffers(1, &fbo);
     }
+
+    m_nonatlas_texture->setMipmapFiltering(mipmapFiltering());
+    m_nonatlas_texture->setFiltering(filtering());
     return m_nonatlas_texture;
 }
 

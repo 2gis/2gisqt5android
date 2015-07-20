@@ -1,39 +1,34 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd and/or its subsidiary(-ies).
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL3$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPLv3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or later as published by the Free
+** Software Foundation and appearing in the file LICENSE.GPL included in
+** the packaging of this file. Please review the following information to
+** ensure the GNU General Public License version 2.0 requirements will be
+** met: http://www.gnu.org/licenses/gpl-2.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -50,7 +45,7 @@
 #include <wrl.h>
 using namespace Microsoft::WRL;
 
-QT_USE_NAMESPACE
+QT_BEGIN_NAMESPACE
 
 class D3DVideoBlitter
 {
@@ -140,11 +135,14 @@ private:
     ComPtr<ID3D11VideoProcessorOutputView> m_outputView;
 };
 
+#define CAMERA_SAMPLE_QUEUE_SIZE 5
 class QWinRTCameraVideoRendererControlPrivate
 {
 public:
     QScopedPointer<D3DVideoBlitter> blitter;
-    QVector<ComPtr<IMF2DBuffer>> buffers;
+    ComPtr<IMF2DBuffer> buffers[CAMERA_SAMPLE_QUEUE_SIZE];
+    QAtomicInteger<quint16> writeIndex;
+    QAtomicInteger<quint16> readIndex;
 };
 
 QWinRTCameraVideoRendererControl::QWinRTCameraVideoRendererControl(const QSize &size, QObject *parent)
@@ -161,13 +159,17 @@ bool QWinRTCameraVideoRendererControl::render(ID3D11Texture2D *target)
 {
     Q_D(QWinRTCameraVideoRendererControl);
 
-    if (d->buffers.isEmpty()) {
+    const quint16 readIndex = d->readIndex;
+    if (readIndex == d->writeIndex) {
         emit bufferRequested();
         return false;
     }
 
     HRESULT hr;
-    ComPtr<IMF2DBuffer> buffer = d->buffers.takeFirst();
+    ComPtr<IMF2DBuffer> buffer = d->buffers[readIndex];
+    Q_ASSERT(buffer);
+    d->buffers[readIndex].Reset();
+    d->readIndex = (readIndex + 1) % CAMERA_SAMPLE_QUEUE_SIZE;
 
     ComPtr<ID3D11Texture2D> sourceTexture;
     ComPtr<IMFDXGIBuffer> dxgiBuffer;
@@ -194,11 +196,19 @@ void QWinRTCameraVideoRendererControl::queueBuffer(IMF2DBuffer *buffer)
 {
     Q_D(QWinRTCameraVideoRendererControl);
     Q_ASSERT(buffer);
-    d->buffers.append(buffer);
+    const quint16 writeIndex = (d->writeIndex + 1) % CAMERA_SAMPLE_QUEUE_SIZE;
+    if (d->readIndex == writeIndex) // Drop new sample if queue is full
+        return;
+    d->buffers[d->writeIndex] = buffer;
+    d->writeIndex = writeIndex;
 }
 
 void QWinRTCameraVideoRendererControl::discardBuffers()
 {
     Q_D(QWinRTCameraVideoRendererControl);
-    d->buffers.clear();
+    d->writeIndex = d->readIndex = 0;
+    for (ComPtr<IMF2DBuffer> &buffer : d->buffers)
+        buffer.Reset();
 }
+
+QT_END_NAMESPACE

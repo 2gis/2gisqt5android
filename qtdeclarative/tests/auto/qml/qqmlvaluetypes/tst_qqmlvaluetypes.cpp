@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -79,7 +79,6 @@ private slots:
     void deletedObject();
     void bindingVariantCopy();
     void scriptVariantCopy();
-    void cppClasses();
     void enums();
     void conflictingBindings();
     void returnValues();
@@ -89,6 +88,10 @@ private slots:
     void initializeByWrite();
     void groupedInterceptors();
     void groupedInterceptors_data();
+    void customValueType();
+    void customValueTypeInQml();
+    void gadgetInheritance();
+    void toStringConversion();
 
 private:
     QQmlEngine engine;
@@ -368,6 +371,10 @@ void tst_qqmlvaluetypes::rect()
         QCOMPARE(object->property("r_y").toInt(), 3);
         QCOMPARE(object->property("r_width").toInt(), 109);
         QCOMPARE(object->property("r_height").toInt(), 102);
+        QCOMPARE(object->property("r_left").toInt(), 2);
+        QCOMPARE(object->property("r_right").toInt(), 110);
+        QCOMPARE(object->property("r_top").toInt(), 3);
+        QCOMPARE(object->property("r_bottom").toInt(), 104);
         QCOMPARE(object->property("copy"), QVariant(QRect(2, 3, 109, 102)));
 
         delete object;
@@ -415,6 +422,10 @@ void tst_qqmlvaluetypes::rectf()
         QCOMPARE(float(object->property("r_y").toDouble()), float(99.2));
         QCOMPARE(float(object->property("r_width").toDouble()), float(88.1));
         QCOMPARE(float(object->property("r_height").toDouble()), float(77.6));
+        QCOMPARE(float(object->property("r_left").toDouble()), float(103.8));
+        QCOMPARE(float(object->property("r_right").toDouble()), float(191.9));
+        QCOMPARE(float(object->property("r_top").toDouble()), float(99.2));
+        QCOMPARE(float(object->property("r_bottom").toDouble()), float(176.8));
         QCOMPARE(object->property("copy"), QVariant(QRectF(103.8, 99.2, 88.1, 77.6)));
 
         delete object;
@@ -1166,26 +1177,6 @@ void tst_qqmlvaluetypes::scriptVariantCopy()
     delete object;
 }
 
-
-// Test that the value type classes can be used manually
-void tst_qqmlvaluetypes::cppClasses()
-{
-    CPP_TEST(QQmlPointValueType, QPoint(19, 33));
-    CPP_TEST(QQmlPointFValueType, QPointF(33.6, -23));
-    CPP_TEST(QQmlSizeValueType, QSize(-100, 18));
-    CPP_TEST(QQmlSizeFValueType, QSizeF(-100.7, 18.2));
-    CPP_TEST(QQmlRectValueType, QRect(13, 39, 10928, 88));
-    CPP_TEST(QQmlRectFValueType, QRectF(88.2, -90.1, 103.2, 118));
-    CPP_TEST(QQuickVector2DValueType, QVector2D(19.7f, 1002));
-    CPP_TEST(QQuickVector3DValueType, QVector3D(18.2f, 19.7f, 1002));
-    CPP_TEST(QQuickVector4DValueType, QVector4D(18.2f, 19.7f, 1002, 54));
-    CPP_TEST(QQuickQuaternionValueType, QQuaternion(18.2f, 19.7f, 1002, 54));
-    CPP_TEST(QQuickMatrix4x4ValueType,
-             QMatrix4x4(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16));
-    CPP_TEST(QQuickFontValueType, QFont("Helvetica"));
-
-}
-
 void tst_qqmlvaluetypes::enums()
 {
     {
@@ -1442,6 +1433,169 @@ void tst_qqmlvaluetypes::groupedInterceptors()
 
     delete object;
 }
+
+struct MyDesk
+{
+    Q_PROPERTY(int monitorCount MEMBER monitorCount)
+    Q_GADGET
+public:
+    MyDesk() : monitorCount(1) {}
+
+    int monitorCount;
+};
+
+bool operator==(const MyDesk &lhs, const MyDesk &rhs)
+{ return lhs.monitorCount == rhs.monitorCount; }
+bool operator!=(const MyDesk &lhs, const MyDesk &rhs)
+{ return lhs.monitorCount != rhs.monitorCount; }
+
+Q_DECLARE_METATYPE(MyDesk)
+
+struct MyOffice
+{
+    Q_PROPERTY(int chairs MEMBER m_chairs)
+    Q_PROPERTY(MyDesk desk READ desk WRITE setDesk)
+    Q_GADGET
+public:
+    MyOffice() : m_chairs(0) {}
+
+    MyDesk desk() const { return m_desk; }
+    void setDesk(const MyDesk &d) { m_desk = d; }
+
+    int m_chairs;
+    MyDesk m_desk;
+};
+
+Q_DECLARE_METATYPE(MyOffice)
+
+void tst_qqmlvaluetypes::customValueType()
+{
+    QJSEngine engine;
+
+    MyOffice cppOffice;
+    cppOffice.m_chairs = 2;
+
+    QJSValue office = engine.toScriptValue(cppOffice);
+    QCOMPARE(office.property("chairs").toInt(), 2);
+    office.setProperty("chairs", 1);
+    QCOMPARE(office.property("chairs").toInt(), 1);
+    QCOMPARE(cppOffice.m_chairs, 2);
+
+    QJSValue jsDesk = office.property("desk");
+    QCOMPARE(jsDesk.property("monitorCount").toInt(), 1);
+    jsDesk.setProperty("monitorCount", 2);
+    QCOMPARE(jsDesk.property("monitorCount").toInt(), 2);
+
+    QCOMPARE(cppOffice.desk().monitorCount, 1);
+
+    office.setProperty("desk", jsDesk);
+    cppOffice = engine.fromScriptValue<MyOffice>(office);
+    QCOMPARE(cppOffice.m_chairs, 1);
+    QCOMPARE(cppOffice.desk().monitorCount, 2);
+}
+
+struct BaseGadget
+{
+    Q_GADGET
+    Q_PROPERTY(int baseProperty READ baseProperty WRITE setBaseProperty)
+public:
+    BaseGadget() : m_baseProperty(0) {}
+
+    int baseProperty() const { return m_baseProperty; }
+    void setBaseProperty(int value) { m_baseProperty = value; }
+    int m_baseProperty;
+
+    Q_INVOKABLE void functionInBaseGadget(int value) { m_baseProperty = value; }
+};
+
+Q_DECLARE_METATYPE(BaseGadget)
+
+struct DerivedGadget : public BaseGadget
+{
+    Q_GADGET
+    Q_PROPERTY(int derivedProperty READ derivedProperty WRITE setDerivedProperty)
+public:
+    DerivedGadget() : m_derivedProperty(0) {}
+
+    int derivedProperty() const { return m_derivedProperty; }
+    void setDerivedProperty(int value) { m_derivedProperty = value; }
+    int m_derivedProperty;
+
+    Q_INVOKABLE void functionInDerivedGadget(int value) { m_derivedProperty = value; }
+};
+
+class TypeWithCustomValueType : public QObject
+{
+    Q_OBJECT
+    Q_PROPERTY(MyDesk desk MEMBER m_desk)
+    Q_PROPERTY(DerivedGadget derivedGadget READ derivedGadget WRITE setDerivedGadget)
+public:
+
+    MyDesk m_desk;
+
+    DerivedGadget derivedGadget() const { return m_derivedGadget; }
+    void setDerivedGadget(const DerivedGadget &value) { m_derivedGadget = value; }
+    DerivedGadget m_derivedGadget;
+};
+
+void tst_qqmlvaluetypes::customValueTypeInQml()
+{
+    qmlRegisterType<TypeWithCustomValueType>("Test", 1, 0, "TypeWithCustomValueType");
+    QQmlComponent component(&engine, testFileUrl("customvaluetype.qml"));
+    QScopedPointer<QObject> object(component.create());
+    QVERIFY(!object.isNull());
+
+    TypeWithCustomValueType *t = qobject_cast<TypeWithCustomValueType*>(object.data());
+    Q_ASSERT(t);
+    QCOMPARE(t->m_desk.monitorCount, 3);
+    QCOMPARE(t->m_derivedGadget.baseProperty(), 42);
+}
+
+Q_DECLARE_METATYPE(DerivedGadget)
+
+void tst_qqmlvaluetypes::gadgetInheritance()
+{
+    QJSEngine engine;
+
+    QJSValue value = engine.toScriptValue(DerivedGadget());
+
+    QCOMPARE(value.property("baseProperty").toInt(), 0);
+    value.setProperty("baseProperty", 10);
+    QCOMPARE(value.property("baseProperty").toInt(), 10);
+
+    QJSValue method = value.property("functionInBaseGadget");
+    method.call(QJSValueList() << QJSValue(42));
+    QCOMPARE(value.property("baseProperty").toInt(), 42);
+}
+
+struct StringLessGadget {
+    Q_GADGET
+};
+
+Q_DECLARE_METATYPE(StringLessGadget)
+
+static QString StringLessGadget_to_QString(const StringLessGadget &)
+{
+    return QLatin1String("Surprise!");
+}
+
+void tst_qqmlvaluetypes::toStringConversion()
+{
+    QJSEngine engine;
+
+    StringLessGadget g;
+    QJSValue value = engine.toScriptValue(g);
+
+    QJSValue method = value.property("toString");
+    QJSValue stringConversion = method.callWithInstance(value);
+    QCOMPARE(stringConversion.toString(), QString("StringLessGadget()"));
+
+    QMetaType::registerConverter<StringLessGadget, QString>(StringLessGadget_to_QString);
+
+    stringConversion = method.callWithInstance(value);
+    QCOMPARE(stringConversion.toString(), StringLessGadget_to_QString(g));
+}
+
 
 QTEST_MAIN(tst_qqmlvaluetypes)
 

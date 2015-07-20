@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -57,7 +57,6 @@
 #include <private/qqmlimport_p.h>
 #include <private/qqmlcleanup_p.h>
 #include <private/qqmldirparser_p.h>
-#include <private/qqmlbundle_p.h>
 #include <private/qflagpointer_p.h>
 #include <private/qqmlirbuilder_p.h>
 
@@ -73,7 +72,7 @@ class QQmlTypeLoader;
 class QQmlCompiledData;
 class QQmlComponentPrivate;
 class QQmlTypeData;
-class QQmlDataLoader;
+class QQmlTypeLoader;
 class QQmlExtensionInterface;
 
 namespace QmlIR {
@@ -84,7 +83,7 @@ class Q_QML_PRIVATE_EXPORT QQmlDataBlob : public QQmlRefCount
 {
 public:
     enum Status {
-        Null,                    // Prior to QQmlDataLoader::load()
+        Null,                    // Prior to QQmlTypeLoader::load()
         Loading,                 // Prior to data being received and dataReceived() being called
         WaitingForDependencies,  // While there are outstanding addDependency()s
         Complete,                // Finished
@@ -97,10 +96,12 @@ public:
         QmldirFile = QQmlAbstractUrlInterceptor::QmldirFile
     };
 
-    QQmlDataBlob(const QUrl &, Type);
+    QQmlDataBlob(const QUrl &, Type, QQmlTypeLoader* manager);
     virtual ~QQmlDataBlob();
 
-    void startLoading(QQmlDataLoader* manager);
+    void startLoading();
+
+    QQmlTypeLoader *typeLoader() const { return m_typeLoader; }
 
     Type type() const;
 
@@ -132,7 +133,7 @@ public:
 
     private:
         friend class QQmlDataBlob;
-        friend class QQmlDataLoader;
+        friend class QQmlTypeLoader;
         inline Data();
         Data(const Data &);
         Data &operator=(const Data &);
@@ -157,9 +158,14 @@ protected:
     // Callbacks made in main thread
     virtual void downloadProgressChanged(qreal);
     virtual void completed();
+
+protected:
+    // Manager that is currently fetching data for me
+    QQmlTypeLoader *m_typeLoader;
+
 private:
-    friend class QQmlDataLoader;
-    friend class QQmlDataLoaderThread;
+    friend class QQmlTypeLoader;
+    friend class QQmlTypeLoaderThread;
 
     void tryDone();
     void cancelAllWaitingFor();
@@ -198,80 +204,25 @@ private:
     // List of QQmlDataBlob's that I am waiting for to complete.
     QList<QQmlDataBlob *> m_waitingFor;
 
-    // Manager that is currently fetching data for me
-    QQmlDataLoader *m_manager;
     int m_redirectCount:30;
     bool m_inCallback:1;
     bool m_isDone:1;
 };
 
-class QQmlDataLoaderThread;
-class QQmlDataLoader
-{
-public:
-    QQmlDataLoader(QQmlEngine *);
-    ~QQmlDataLoader();
+class QQmlTypeLoaderThread;
 
-    void lock();
-    void unlock();
-
-    bool isConcurrent() const { return true; }
-
-    enum Mode { PreferSynchronous, Asynchronous };
-
-    void load(QQmlDataBlob *, Mode = PreferSynchronous);
-    void loadWithStaticData(QQmlDataBlob *, const QByteArray &, Mode = PreferSynchronous);
-    void loadWithCachedUnit(QQmlDataBlob *blob, const QQmlPrivate::CachedQmlUnit *unit, Mode mode = PreferSynchronous);
-
-    QQmlEngine *engine() const;
-    void initializeEngine(QQmlExtensionInterface *, const char *);
-    void invalidate();
-
-protected:
-    void shutdownThread();
-
-private:
-    friend class QQmlDataBlob;
-    friend class QQmlDataLoaderThread;
-    friend class QQmlDataLoaderNetworkReplyProxy;
-
-    void loadThread(QQmlDataBlob *);
-    void loadWithStaticDataThread(QQmlDataBlob *, const QByteArray &);
-    void loadWithCachedUnitThread(QQmlDataBlob *blob, const QQmlPrivate::CachedQmlUnit *unit);
-    void networkReplyFinished(QNetworkReply *);
-    void networkReplyProgress(QNetworkReply *, qint64, qint64);
-
-    typedef QHash<QNetworkReply *, QQmlDataBlob *> NetworkReplies;
-
-    void setData(QQmlDataBlob *, const QByteArray &);
-    void setData(QQmlDataBlob *, QQmlFile *);
-    void setData(QQmlDataBlob *, const QQmlDataBlob::Data &);
-    void setCachedUnit(QQmlDataBlob *blob, const QQmlPrivate::CachedQmlUnit *unit);
-
-    QQmlEngine *m_engine;
-    QQmlDataLoaderThread *m_thread;
-    NetworkReplies m_networkReplies;
-};
-
-class QQmlBundleData : public QQmlBundle,
-                       public QQmlRefCount
-{
-public:
-    QQmlBundleData(const QString &);
-    QString fileName;
-};
-
-class Q_AUTOTEST_EXPORT QQmlTypeLoader : public QQmlDataLoader
+class Q_AUTOTEST_EXPORT QQmlTypeLoader
 {
     Q_DECLARE_TR_FUNCTIONS(QQmlTypeLoader)
 public:
+    enum Mode { PreferSynchronous, Asynchronous };
+
     class Q_QML_PRIVATE_EXPORT Blob : public QQmlDataBlob
     {
     public:
         Blob(const QUrl &url, QQmlDataBlob::Type type, QQmlTypeLoader *loader);
         ~Blob();
 
-        QQmlTypeLoader *typeLoader() const { return m_typeLoader; }
         const QQmlImports &imports() const { return m_importCache; }
 
     protected:
@@ -292,7 +243,6 @@ public:
     protected:
         virtual QString stringAt(int) const { return QString(); }
 
-        QQmlTypeLoader *m_typeLoader;
         QQmlImports m_importCache;
         bool m_isSingleton;
         QHash<const QV4::CompiledData::Import*, int> m_unresolvedImports;
@@ -338,14 +288,10 @@ public:
     QQmlScriptBlob *getScript(const QUrl &);
     QQmlQmldirData *getQmldir(const QUrl &);
 
-    QQmlBundleData *getBundle(const QString &);
-    QQmlBundleData *getBundle(const QHashedStringRef &);
-    void addBundle(const QString &, const QString &);
-
     QString absoluteFilePath(const QString &path);
     bool directoryExists(const QString &path);
 
-    const QmldirContent *qmldirContent(const QString &filePath, const QString &uriHint);
+    const QmldirContent *qmldirContent(const QString &filePath);
     void setQmldirContent(const QString &filePath, const QString &content);
 
     void clearCache();
@@ -354,9 +300,36 @@ public:
     bool isTypeLoaded(const QUrl &url) const;
     bool isScriptLoaded(const QUrl &url) const;
 
+    void lock();
+    void unlock();
+
+    void load(QQmlDataBlob *, Mode = PreferSynchronous);
+    void loadWithStaticData(QQmlDataBlob *, const QByteArray &, Mode = PreferSynchronous);
+    void loadWithCachedUnit(QQmlDataBlob *blob, const QQmlPrivate::CachedQmlUnit *unit, Mode mode = PreferSynchronous);
+
+    QQmlEngine *engine() const;
+    void initializeEngine(QQmlExtensionInterface *, const char *);
+    void invalidate();
+
 private:
-    void addBundleNoLock(const QString &, const QString &);
-    QString bundleIdForQmldir(const QString &qmldir, const QString &uriHint);
+    friend class QQmlDataBlob;
+    friend class QQmlTypeLoaderThread;
+    friend class QQmlTypeLoaderNetworkReplyProxy;
+
+    void shutdownThread();
+
+    void loadThread(QQmlDataBlob *);
+    void loadWithStaticDataThread(QQmlDataBlob *, const QByteArray &);
+    void loadWithCachedUnitThread(QQmlDataBlob *blob, const QQmlPrivate::CachedQmlUnit *unit);
+    void networkReplyFinished(QNetworkReply *);
+    void networkReplyProgress(QNetworkReply *, qint64, qint64);
+
+    typedef QHash<QNetworkReply *, QQmlDataBlob *> NetworkReplies;
+
+    void setData(QQmlDataBlob *, const QByteArray &);
+    void setData(QQmlDataBlob *, QQmlFile *);
+    void setData(QQmlDataBlob *, const QQmlDataBlob::Data &);
+    void setCachedUnit(QQmlDataBlob *blob, const QQmlPrivate::CachedQmlUnit *unit);
 
     template<typename T>
     struct TypedCallback
@@ -380,16 +353,15 @@ private:
     typedef QStringHash<bool> StringSet;
     typedef QStringHash<StringSet*> ImportDirCache;
     typedef QStringHash<QmldirContent *> ImportQmlDirCache;
-    typedef QStringHash<QQmlBundleData *> BundleCache;
-    typedef QStringHash<QString> QmldirBundleIdCache;
 
+    QQmlEngine *m_engine;
+    QQmlTypeLoaderThread *m_thread;
+    NetworkReplies m_networkReplies;
     TypeCache m_typeCache;
     ScriptCache m_scriptCache;
     QmldirCache m_qmldirCache;
     ImportDirCache m_importDirCache;
     ImportQmlDirCache m_importQmlDirCache;
-    BundleCache m_bundleCache;
-    QmldirBundleIdCache m_qmldirBundleIdCache;
 };
 
 class Q_AUTOTEST_EXPORT QQmlTypeData : public QQmlTypeLoader::Blob

@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -36,6 +36,7 @@
 #include "qjsvalue_p.h"
 #include "private/qv4string_p.h"
 #include "private/qv4object_p.h"
+#include "private/qv4context_p.h"
 
 QT_BEGIN_NAMESPACE
 
@@ -44,14 +45,13 @@ QJSValueIteratorPrivate::QJSValueIteratorPrivate(const QJSValue &v)
     , currentIndex(UINT_MAX)
     , nextIndex(UINT_MAX)
 {
-    QJSValuePrivate *jsp = QJSValuePrivate::get(value);
-    QV4::ExecutionEngine *e = jsp->engine;
+    QV4::ExecutionEngine *e = QJSValuePrivate::engine(&v);
     if (!e)
         return;
 
     QV4::Scope scope(e);
-    QV4::ScopedObject o(scope, jsp->value);
-    iterator = e->newForEachIteratorObject(e->currentContext(), o)->asReturnedValue();
+    QV4::ScopedObject o(scope, QJSValuePrivate::getValue(&v));
+    iterator.set(e, e->newForEachIteratorObject(o));
 
     currentName = (QV4::String *)0;
     nextName = (QV4::String *)0;
@@ -101,8 +101,8 @@ QJSValueIterator::QJSValueIterator(const QJSValue& object)
     QV4::Scope scope(v4);
     QV4::Scoped<QV4::ForEachIteratorObject> it(scope, d_ptr->iterator.value());
     it->d()->it.flags =  QV4::ObjectIterator::NoFlags;
-    QV4::String *nm = 0;
-    it->d()->it.next(nm, &d_ptr->nextIndex, &d_ptr->nextProperty, &d_ptr->nextAttributes);
+    QV4::ScopedString nm(scope);
+    it->d()->it.next(nm.getRef(), &d_ptr->nextIndex, &d_ptr->nextProperty, &d_ptr->nextAttributes);
     d_ptr->nextName = nm;
 }
 
@@ -122,7 +122,8 @@ QJSValueIterator::~QJSValueIterator()
 */
 bool QJSValueIterator::hasNext() const
 {
-    if (!QJSValuePrivate::get(d_ptr->value)->value.isObject())
+    QV4::Value *val = QJSValuePrivate::getValue(&d_ptr->value);
+    if (!val || !val->isObject())
         return false;
     return !!d_ptr->nextName || d_ptr->nextIndex != UINT_MAX;
 }
@@ -137,11 +138,12 @@ bool QJSValueIterator::hasNext() const
 */
 bool QJSValueIterator::next()
 {
-    if (!QJSValuePrivate::get(d_ptr->value)->value.isObject())
+    QV4::Value *val = QJSValuePrivate::getValue(&d_ptr->value);
+    if (!val || !val->isObject())
         return false;
     d_ptr->currentName = d_ptr->nextName;
     d_ptr->currentIndex = d_ptr->nextIndex;
-    d_ptr->currentProperty.copy(d_ptr->nextProperty, d_ptr->nextAttributes);
+    d_ptr->currentProperty.copy(&d_ptr->nextProperty, d_ptr->nextAttributes);
     d_ptr->currentAttributes = d_ptr->nextAttributes;
 
     QV4::ExecutionEngine *v4 = d_ptr->iterator.engine();
@@ -149,8 +151,8 @@ bool QJSValueIterator::next()
         return false;
     QV4::Scope scope(v4);
     QV4::Scoped<QV4::ForEachIteratorObject> it(scope, d_ptr->iterator.value());
-    QV4::String *nm = 0;
-    it->d()->it.next(nm, &d_ptr->nextIndex, &d_ptr->nextProperty, &d_ptr->nextAttributes);
+    QV4::ScopedString nm(scope);
+    it->d()->it.next(nm.getRef(), &d_ptr->nextIndex, &d_ptr->nextProperty, &d_ptr->nextAttributes);
     d_ptr->nextName = nm;
     return !!d_ptr->currentName || d_ptr->currentIndex != UINT_MAX;
 }
@@ -163,7 +165,8 @@ bool QJSValueIterator::next()
 */
 QString QJSValueIterator::name() const
 {
-    if (!QJSValuePrivate::get(d_ptr->value)->value.isObject())
+    QV4::Value *val = QJSValuePrivate::getValue(&d_ptr->value);
+    if (!val || !val->isObject())
         return QString();
     if (!!d_ptr->currentName)
         return d_ptr->currentName->toQString();
@@ -185,20 +188,19 @@ QJSValue QJSValueIterator::value() const
     if (!engine)
         return QJSValue();
     QV4::Scope scope(engine);
-    QV4::ScopedObject obj(scope, QJSValuePrivate::get(d_ptr->value)->value);
+    QV4::ScopedObject obj(scope, QJSValuePrivate::getValue(&d_ptr->value));
     if (!obj)
         return QJSValue();
 
-    QV4::ExecutionContext *ctx = engine->currentContext();
     if (!d_ptr->currentName && d_ptr->currentIndex == UINT_MAX)
         return QJSValue();
 
-    QV4::ScopedValue v(scope, obj->getValue(obj, &d_ptr->currentProperty, d_ptr->currentAttributes));
+    QV4::ScopedValue v(scope, obj->getValue(*obj, &d_ptr->currentProperty, d_ptr->currentAttributes));
     if (scope.hasException()) {
-        ctx->catchException();
+        engine->catchException();
         return QJSValue();
     }
-    return new QJSValuePrivate(engine, v);
+    return QJSValue(engine, v->asReturnedValue());
 }
 
 
@@ -216,18 +218,17 @@ QJSValueIterator& QJSValueIterator::operator=(QJSValue& object)
     d_ptr->nextName = (QV4::String *)0;
     QV4::ExecutionEngine *v4 = d_ptr->iterator.engine();
     if (!v4) {
-        d_ptr->iterator = QV4::Encode::undefined();
+        d_ptr->iterator.clear();
         return *this;
     }
 
-    QJSValuePrivate *jsp = QJSValuePrivate::get(object);
     QV4::Scope scope(v4);
-    QV4::ScopedObject o(scope, jsp->value);
-    d_ptr->iterator = v4->newForEachIteratorObject(v4->currentContext(), o)->asReturnedValue();
+    QV4::ScopedObject o(scope, QJSValuePrivate::getValue(&object));
+    d_ptr->iterator.set(v4, v4->newForEachIteratorObject(o));
     QV4::Scoped<QV4::ForEachIteratorObject> it(scope, d_ptr->iterator.value());
     it->d()->it.flags =  QV4::ObjectIterator::NoFlags;
-    QV4::String *nm = 0;
-    it->d()->it.next(nm, &d_ptr->nextIndex, &d_ptr->nextProperty, &d_ptr->nextAttributes);
+    QV4::ScopedString nm(scope);
+    it->d()->it.next(nm.getRef(), &d_ptr->nextIndex, &d_ptr->nextProperty, &d_ptr->nextAttributes);
     d_ptr->nextName = nm;
     return *this;
 }

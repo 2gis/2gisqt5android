@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,14 +23,15 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
 #include <qv4engine_p.h>
+#include <qv4runtime_p.h>
 #ifndef V4_BOOTSTRAP
 #include <qv4object_p.h>
 #include <qv4objectproto_p.h>
@@ -87,9 +88,11 @@ double Value::toNumberImpl() const
         if (isString())
             return RuntimeHelpers::stringToNumber(stringValue()->toQString());
         {
-            ExecutionContext *ctx = objectValue()->internalClass()->engine->currentContext();
-            Scope scope(ctx);
-            ScopedValue prim(scope, RuntimeHelpers::toPrimitive(ValueRef::fromRawValue(this), NUMBER_HINT));
+            Q_ASSERT(isObject());
+            Scope scope(objectValue()->engine());
+            ScopedValue prim(scope, RuntimeHelpers::toPrimitive(*this, NUMBER_HINT));
+            if (scope.engine->hasException)
+                return 0;
             return prim->toNumber();
         }
 #endif
@@ -121,13 +124,13 @@ QString Value::toQStringNoThrow() const
         if (isString())
             return stringValue()->toQString();
         {
-            ExecutionContext *ctx = objectValue()->internalClass()->engine->currentContext();
-            Scope scope(ctx);
+            Q_ASSERT(isObject());
+            Scope scope(objectValue()->engine());
             ScopedValue ex(scope);
             bool caughtException = false;
-            ScopedValue prim(scope, RuntimeHelpers::toPrimitive(ValueRef::fromRawValue(this), STRING_HINT));
+            ScopedValue prim(scope, RuntimeHelpers::toPrimitive(*this, STRING_HINT));
             if (scope.hasException()) {
-                ex = ctx->catchException();
+                ex = scope.engine->catchException();
                 caughtException = true;
             } else if (prim->isPrimitive()) {
                     return prim->toQStringNoThrow();
@@ -136,7 +139,7 @@ QString Value::toQStringNoThrow() const
             if (caughtException) {
                 ScopedValue prim(scope, RuntimeHelpers::toPrimitive(ex, STRING_HINT));
                 if (scope.hasException()) {
-                    ex = ctx->catchException();
+                    ex = scope.engine->catchException();
                 } else if (prim->isPrimitive()) {
                     return prim->toQStringNoThrow();
                 }
@@ -174,9 +177,9 @@ QString Value::toQString() const
         if (isString())
             return stringValue()->toQString();
         {
-            ExecutionContext *ctx = objectValue()->internalClass()->engine->currentContext();
-            Scope scope(ctx);
-            ScopedValue prim(scope, RuntimeHelpers::toPrimitive(ValueRef::fromRawValue(this), STRING_HINT));
+            Q_ASSERT(isObject());
+            Scope scope(objectValue()->engine());
+            ScopedValue prim(scope, RuntimeHelpers::toPrimitive(*this, STRING_HINT));
             return prim->toQString();
         }
     case Value::Integer_Type: {
@@ -264,23 +267,18 @@ double Primitive::toInteger(double number)
 }
 
 #ifndef V4_BOOTSTRAP
-String *Value::toString(ExecutionEngine *e) const
-{
-    return toString(e->currentContext());
-}
-
-String *Value::toString(ExecutionContext *ctx) const
+Heap::String *Value::toString(ExecutionEngine *e) const
 {
     if (isString())
-        return stringValue();
-    return RuntimeHelpers::convertToString(ctx, ValueRef::fromRawValue(this))->getPointer();
+        return stringValue()->d();
+    return RuntimeHelpers::convertToString(e, *this);
 }
 
-Object *Value::toObject(ExecutionContext *ctx) const
+Heap::Object *Value::toObject(ExecutionEngine *e) const
 {
     if (isObject())
-        return objectValue();
-    return RuntimeHelpers::convertToObject(ctx, ValueRef::fromRawValue(this))->getPointer();
+        return objectValue()->d();
+    return RuntimeHelpers::convertToObject(e, *this);
 }
 
 #endif // V4_BOOTSTRAP

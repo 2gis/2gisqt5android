@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2015 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the plugins of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -34,42 +34,14 @@
 #ifndef QWINDOWSOPENGLTESTER_H
 #define QWINDOWSOPENGLTESTER_H
 
-#include <qtwindowsglobal.h>
-
 #include <QtCore/QByteArray>
 #include <QtCore/QFlags>
+#include <private/qversionnumber_p.h>
 
 QT_BEGIN_NAMESPACE
 
 class QDebug;
 class QVariant;
-
-struct GpuDriverVersion // ### fixme: Use QVersionNumber in Qt 5.5?
-{
-    GpuDriverVersion(int p = 0, int v = 0, int sv =0, int b = 0) : product(p), version(v), subVersion(sv), build(b) {}
-    QString toString() const;
-    int compare(const GpuDriverVersion &rhs) const;
-
-    int product;
-    int version;
-    int subVersion;
-    int build;
-};
-
-inline bool operator==(const GpuDriverVersion &v1, const GpuDriverVersion &v2)
-    { return !v1.compare(v2); }
-inline bool operator!=(const GpuDriverVersion &v1, const GpuDriverVersion &v2)
-    { return v1.compare(v2); }
-inline bool operator< (const GpuDriverVersion &v1, const GpuDriverVersion &v2)
-    { return v1.compare(v2) < 0; }
-inline bool operator<=(const GpuDriverVersion &v1, const GpuDriverVersion &v2)
-    { return v1.compare(v2) <= 0; }
-inline bool operator> (const GpuDriverVersion &v1, const GpuDriverVersion &v2)
-    { return v1.compare(v2) > 0; }
-inline bool operator>=(const GpuDriverVersion &v1, const GpuDriverVersion &v2)
-    { return v1.compare(v2) >= 0; }
-
-QDebug operator<<(QDebug d, const GpuDriverVersion &gd);
 
 struct GpuDescription
 {
@@ -83,7 +55,7 @@ struct GpuDescription
     int deviceId;
     int revision;
     int subSysId;
-    GpuDriverVersion driverVersion;
+    QVersionNumber driverVersion;
     QByteArray driverName;
     QByteArray description;
 };
@@ -108,9 +80,12 @@ public:
 
     static Renderer requestedGlesRenderer();
     static Renderer requestedRenderer();
+
     static Renderers supportedGlesRenderers();
     static Renderers supportedRenderers();
 
+private:
+    static QWindowsOpenGLTester::Renderers detectSupportedRenderers(const GpuDescription &gpu, bool glesOnly);
     static bool testDesktopGL();
 };
 

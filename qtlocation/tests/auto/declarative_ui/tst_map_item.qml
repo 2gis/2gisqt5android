@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -115,7 +115,7 @@ Item {
     Map {
         id: map;
         x: 20; y: 20; width: 200; height: 200
-        zoomLevel: 3
+        zoomLevel: 9
         center: mapDefaultCenter
         plugin: testPlugin;
 
@@ -246,7 +246,7 @@ Item {
             // sanity check that the coordinate conversion works, as
             // rest of the case relies on it. for robustness cut
             // a little slack with fuzzy compare
-            var mapcenter = map.toScreenPosition(map.center)
+            var mapcenter = map.fromCoordinate(map.center)
             verify (fuzzy_compare(mapcenter.x, 100, 2))
             verify (fuzzy_compare(mapcenter.y, 100, 2))
 
@@ -256,7 +256,7 @@ Item {
 
             // click rect
             map.center = preMapRect.topLeft
-            var point = map.toScreenPosition(preMapRect.topLeft)
+            var point = map.fromCoordinate(preMapRect.topLeft)
             mouseClick(map, point.x + 5, point.y + 5)
             compare(preMapRectClicked.count, 1)
             mouseClick(map, 1, 1) // no item hit
@@ -265,7 +265,7 @@ Item {
 
             // click circle, overlaps and is above rect
             map.center = preMapCircle.center
-            point = map.toScreenPosition(preMapCircle.center)
+            point = map.fromCoordinate(preMapCircle.center)
             mouseClick(map, point.x - 5, point.y - 5)
             compare(preMapRectClicked.count, 1)
             compare(preMapCircleClicked.count, 1)
@@ -279,14 +279,14 @@ Item {
             // click quick item
             compare(preMapQuickItemClicked.count, 0)
             map.center = preMapQuickItem.coordinate
-            point = map.toScreenPosition(preMapQuickItem.coordinate)
+            point = map.fromCoordinate(preMapQuickItem.coordinate)
             mouseClick(map, point.x + 5, point.y + 5)
             compare(preMapQuickItemClicked.count, 1)
 
             // click polygon
             compare (preMapPolygonClicked.count, 0)
             map.center = preMapPolygon.path[1]
-            point = map.toScreenPosition(preMapPolygon.path[1])
+            point = map.fromCoordinate(preMapPolygon.path[1])
             mouseClick(map, point.x - 5, point.y)
             compare(preMapPolygonClicked.count, 1)
 
@@ -295,12 +295,12 @@ Item {
             clear_data()
             compare (map.mapItems.length, 0)
             map.center = preMapRect.topLeft
-            point = map.toScreenPosition(preMapRect.topLeft)
+            point = map.fromCoordinate(preMapRect.topLeft)
             mouseClick(map, point.x + 5, point.y + 5)
             compare(preMapRectClicked.count, 0)
             visualInspectionPoint()
             map.center = preMapCircle.center
-            point = map.toScreenPosition(preMapCircle.center)
+            point = map.fromCoordinate(preMapCircle.center)
             mouseClick(map, point.x - 5, point.y - 5)
             compare(preMapRectClicked.count, 0)
             compare(preMapCircleClicked.count, 0)
@@ -310,11 +310,11 @@ Item {
             compare(preMapCircleClicked.count, 0)
             compare(preMapQuickItemClicked.count, 0)
             map.center = preMapQuickItem.coordinate
-            point = map.toScreenPosition(preMapQuickItem.coordinate)
+            point = map.fromCoordinate(preMapQuickItem.coordinate)
             mouseClick(map, point.x + 5, point.y + 5)
             compare(preMapQuickItemClicked.count, 0)
             map.center = preMapPolygon.path[1]
-            point = map.toScreenPosition(preMapPolygon.path[1])
+            point = map.fromCoordinate(preMapPolygon.path[1])
             mouseClick(map, point.x - 5, point.y)
             compare(preMapPolygonClicked.count, 0)
 
@@ -329,11 +329,11 @@ Item {
             compare (map.mapItems.length, 6)
             visualInspectionPoint()
             map.center = preMapRect.topLeft
-            point = map.toScreenPosition(preMapRect.topLeft)
+            point = map.fromCoordinate(preMapRect.topLeft)
             mouseClick(map, point.x + 5, point.y + 5)
             compare(preMapRectClicked.count, 1)
             map.center = preMapCircle.center
-            point = map.toScreenPosition(preMapCircle.center)
+            point = map.fromCoordinate(preMapCircle.center)
             mouseClick(map, point.x - 5, point.y - 5)
             compare(preMapRectClicked.count, 1)
             compare(preMapCircleClicked.count, 1)
@@ -343,11 +343,11 @@ Item {
             compare(preMapCircleClicked.count, 1)
             compare(preMapQuickItemClicked.count, 0)
             map.center = preMapQuickItem.coordinate
-            point = map.toScreenPosition(preMapQuickItem.coordinate)
+            point = map.fromCoordinate(preMapQuickItem.coordinate)
             mouseClick(map, point.x + 5, point.y + 5)
             compare(preMapQuickItemClicked.count, 1)
             map.center = preMapPolygon.path[1]
-            point = map.toScreenPosition(preMapPolygon.path[1])
+            point = map.fromCoordinate(preMapPolygon.path[1])
             mouseClick(map, point.x - 5, point.y)
             compare(preMapPolygonClicked.count, 1)
 
@@ -356,7 +356,7 @@ Item {
             map.addMapItem(extMapCircle)
             map.center = extMapCircle.center
             visualInspectionPoint();
-            point = map.toScreenPosition(extMapCircle.center)
+            point = map.fromCoordinate(extMapCircle.center)
             mouseClick(map, point.x, point.y)
             compare(extMapCircleClicked.count, 1)
             mouseClick(map, point.x, -5)
@@ -366,7 +366,7 @@ Item {
             map.addMapItem(extMapQuickItem)
             map.center = extMapQuickItem.coordinate
             visualInspectionPoint();
-            point = map.toScreenPosition(extMapQuickItem.coordinate)
+            point = map.fromCoordinate(extMapQuickItem.coordinate)
             mouseClick(map, point.x + 5, point.y + 5)
             compare(extMapQuickItemClicked.count, 1)
             mouseClick(map, map.width + 5, point.y + 5)
@@ -380,7 +380,7 @@ Item {
             compare (preMapRectActiveChanged.count, 0)
             map.center = preMapRect.topLeft
             var i
-            var point = map.toScreenPosition(preMapRect.topLeft)
+            var point = map.fromCoordinate(preMapRect.topLeft)
             var targetCoordinate = map.toCoordinate(51, 51)
             mousePress(map, point.x + 5, point.y + 5)
             for (i = 0; i < 50; i += 1) {
@@ -401,7 +401,7 @@ Item {
             // drag circle
             compare (preMapCircleActiveChanged.count, 0)
             map.center = preMapCircle.center
-            point = map.toScreenPosition(preMapCircle.center)
+            point = map.fromCoordinate(preMapCircle.center)
             targetCoordinate = map.toCoordinate(51, 51)
             mousePress(map, point.x, point.y)
             for (i = 0; i < 50; i += 1) {
@@ -419,7 +419,7 @@ Item {
             // drag quick item
             compare (preMapQuickItemActiveChanged.count, 0)
             map.center = preMapQuickItem.coordinate
-            point = map.toScreenPosition(preMapQuickItem.coordinate)
+            point = map.fromCoordinate(preMapQuickItem.coordinate)
             targetCoordinate = map.toCoordinate(51, 51)
             mousePress(map, point.x + 5, point.y + 5)
             for (i = 0; i < 50; i += 1) {

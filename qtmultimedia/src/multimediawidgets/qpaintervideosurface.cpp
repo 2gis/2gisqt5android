@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -91,15 +91,16 @@ QVideoSurfaceGenericPainter::QVideoSurfaceGenericPainter()
     : m_imageFormat(QImage::Format_Invalid)
     , m_scanLineDirection(QVideoSurfaceFormat::TopToBottom)
 {
-    m_imagePixelFormats
-        << QVideoFrame::Format_RGB32
-        << QVideoFrame::Format_ARGB32
-        << QVideoFrame::Format_RGB565;
+    m_imagePixelFormats << QVideoFrame::Format_RGB32;
+
     // The raster formats should be a subset of the GL formats.
 #ifndef QT_NO_OPENGL
     if (QOpenGLContext::openGLModuleType() != QOpenGLContext::LibGLES)
 #endif
         m_imagePixelFormats << QVideoFrame::Format_RGB24;
+
+     m_imagePixelFormats << QVideoFrame::Format_ARGB32
+                         << QVideoFrame::Format_RGB565;
 }
 
 QList<QVideoFrame::PixelFormat> QVideoSurfaceGenericPainter::supportedPixelFormats(
@@ -141,8 +142,8 @@ QAbstractVideoSurface::Error QVideoSurfaceGenericPainter::start(const QVideoSurf
         bool ok = m_imageFormat != QImage::Format_Invalid && !m_imageSize.isEmpty();
 #ifndef QT_NO_OPENGL
         if (QOpenGLContext::openGLModuleType() == QOpenGLContext::LibGLES)
-#endif
             ok &= format.pixelFormat() != QVideoFrame::Format_RGB24;
+#endif
         if (ok)
             return QAbstractVideoSurface::NoError;
     } else if (t == QAbstractVideoBuffer::QPixmapHandle) {
@@ -1055,7 +1056,13 @@ QVideoSurfaceGlslPainter::QVideoSurfaceGlslPainter(QGLContext *context)
     m_imagePixelFormats
             << QVideoFrame::Format_RGB32
             << QVideoFrame::Format_BGR32
-            << QVideoFrame::Format_ARGB32
+            << QVideoFrame::Format_ARGB32;
+    if (!context->contextHandle()->isOpenGLES()) {
+        m_imagePixelFormats
+            << QVideoFrame::Format_RGB24
+            << QVideoFrame::Format_BGR24;
+    }
+    m_imagePixelFormats
             << QVideoFrame::Format_RGB565
             << QVideoFrame::Format_YUV444
             << QVideoFrame::Format_AYUV444
@@ -1064,11 +1071,6 @@ QVideoSurfaceGlslPainter::QVideoSurfaceGlslPainter(QGLContext *context)
     m_glPixelFormats
             << QVideoFrame::Format_RGB32
             << QVideoFrame::Format_ARGB32;
-    if (!context->contextHandle()->isOpenGLES()) {
-        m_imagePixelFormats
-            << QVideoFrame::Format_RGB24
-            << QVideoFrame::Format_BGR24;
-    }
 }
 
 QAbstractVideoSurface::Error QVideoSurfaceGlslPainter::start(const QVideoSurfaceFormat &format)

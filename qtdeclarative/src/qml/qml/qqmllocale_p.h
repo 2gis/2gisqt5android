@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -38,8 +38,7 @@
 
 #include <QtCore/qlocale.h>
 #include <QtCore/qobject.h>
-#include <private/qv8engine_p.h>
-
+#include <private/qqmlglobal_p.h>
 
 QT_BEGIN_NAMESPACE
 
@@ -110,8 +109,8 @@ public:
         Saturday = Qt::Saturday
     };
 
-    static QV4::ReturnedValue locale(QV8Engine *v8engine, const QString &localeName);
-    static QV4::ReturnedValue wrap(QV8Engine *engine, const QLocale &locale);
+    static QV4::ReturnedValue locale(QV4::ExecutionEngine *engine, const QString &localeName);
+    static QV4::ReturnedValue wrap(QV4::ExecutionEngine *engine, const QLocale &locale);
 
     static void registerStringLocaleCompare(QV4::ExecutionEngine *engine);
 
@@ -121,23 +120,27 @@ private:
     static QV4::ReturnedValue method_localeCompare(QV4::CallContext *ctx);
 };
 
+namespace QV4 {
+
+namespace Heap {
+
+struct QQmlLocaleData : Object {
+    inline QQmlLocaleData(ExecutionEngine *engine);
+    QLocale locale;
+};
+
+}
+
 struct QQmlLocaleData : public QV4::Object
 {
-    struct Data : Object::Data {
-        Data(QV4::ExecutionEngine *engine)
-            : Object::Data(engine)
-        {
-            setVTable(staticVTable());
-        }
-        QLocale locale;
-    };
-    V4_OBJECT(Object)
+    V4_OBJECT2(QQmlLocaleData, Object)
+    V4_NEEDS_DESTROY
 
     static QLocale *getThisLocale(QV4::CallContext *ctx) {
-        QV4::Object *o = ctx->d()->callData->thisObject.asObject();
+        QV4::Object *o = ctx->thisObject().asObject();
         QQmlLocaleData *thisObject = o ? o->as<QQmlLocaleData>() : 0;
         if (!thisObject) {
-            ctx->throwTypeError();
+            ctx->engine()->throwTypeError();
             return 0;
         }
         return &thisObject->d()->locale;
@@ -170,13 +173,14 @@ struct QQmlLocaleData : public QV4::Object
     static QV4::ReturnedValue method_get_exponential(QV4::CallContext *ctx);
     static QV4::ReturnedValue method_get_amText(QV4::CallContext *ctx);
     static QV4::ReturnedValue method_get_pmText(QV4::CallContext *ctx);
-
-private:
-    static void destroy(Managed *that)
-    {
-        static_cast<QQmlLocaleData *>(that)->d()->~Data();
-    }
 };
+
+Heap::QQmlLocaleData::QQmlLocaleData(ExecutionEngine *engine)
+    : Heap::Object(engine)
+{
+}
+
+}
 
 QT_END_NAMESPACE
 

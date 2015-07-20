@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -181,6 +181,36 @@ bool QAndroidCameraExposureControl::setValue(ExposureParameter parameter, const 
             case QCameraExposure::ExposureNight:
                 sceneMode = QLatin1String("night");
                 break;
+            case QCameraExposure::ExposureAction:
+                sceneMode = QLatin1String("action");
+                break;
+            case QCameraExposure::ExposureLandscape:
+                sceneMode = QLatin1String("landscape");
+                break;
+            case QCameraExposure::ExposureNightPortrait:
+                sceneMode = QLatin1String("night-portrait");
+                break;
+            case QCameraExposure::ExposureTheatre:
+                sceneMode = QLatin1String("theatre");
+                break;
+            case QCameraExposure::ExposureSunset:
+                sceneMode = QLatin1String("sunset");
+                break;
+            case QCameraExposure::ExposureSteadyPhoto:
+                sceneMode = QLatin1String("steadyphoto");
+                break;
+            case QCameraExposure::ExposureFireworks:
+                sceneMode = QLatin1String("fireworks");
+                break;
+            case QCameraExposure::ExposureParty:
+                sceneMode = QLatin1String("party");
+                break;
+            case QCameraExposure::ExposureCandlelight:
+                sceneMode = QLatin1String("candlelight");
+                break;
+            case QCameraExposure::ExposureBarcode:
+                sceneMode = QLatin1String("barcode");
+                break;
             default:
                 sceneMode = QLatin1String("auto");
                 m_actualExposureMode = QCameraExposure::ExposureAuto;
@@ -226,6 +256,26 @@ void QAndroidCameraExposureControl::onCameraOpened()
                 m_supportedExposureModes << QVariant::fromValue(QCameraExposure::ExposureSnow);
             else if (sceneMode == QLatin1String("sports"))
                 m_supportedExposureModes << QVariant::fromValue(QCameraExposure::ExposureSports);
+            else if (sceneMode == QLatin1String("action"))
+                m_supportedExposureModes << QVariant::fromValue(QCameraExposure::ExposureAction);
+            else if (sceneMode == QLatin1String("landscape"))
+                m_supportedExposureModes << QVariant::fromValue(QCameraExposure::ExposureLandscape);
+            else if (sceneMode == QLatin1String("night-portrait"))
+                m_supportedExposureModes << QVariant::fromValue(QCameraExposure::ExposureNightPortrait);
+            else if (sceneMode == QLatin1String("theatre"))
+                m_supportedExposureModes << QVariant::fromValue(QCameraExposure::ExposureTheatre);
+            else if (sceneMode == QLatin1String("sunset"))
+                m_supportedExposureModes << QVariant::fromValue(QCameraExposure::ExposureSunset);
+            else if (sceneMode == QLatin1String("steadyphoto"))
+                m_supportedExposureModes << QVariant::fromValue(QCameraExposure::ExposureSteadyPhoto);
+            else if (sceneMode == QLatin1String("fireworks"))
+                m_supportedExposureModes << QVariant::fromValue(QCameraExposure::ExposureFireworks);
+            else if (sceneMode == QLatin1String("party"))
+                m_supportedExposureModes << QVariant::fromValue(QCameraExposure::ExposureParty);
+            else if (sceneMode == QLatin1String("candlelight"))
+                m_supportedExposureModes << QVariant::fromValue(QCameraExposure::ExposureCandlelight);
+            else if (sceneMode == QLatin1String("barcode"))
+                m_supportedExposureModes << QVariant::fromValue(QCameraExposure::ExposureBarcode);
         }
         emit parameterRangeChanged(QCameraExposureControl::ExposureMode);
     }

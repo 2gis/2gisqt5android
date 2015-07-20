@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -43,54 +43,10 @@
 //
 
 #include "qwindowsaudiooutput.h"
+#include "qwindowsaudiodeviceinfo.h"
+#include "qwindowsaudioutils.h"
 #include <QtEndian>
-
-#ifndef SPEAKER_FRONT_LEFT
-    #define SPEAKER_FRONT_LEFT            0x00000001
-    #define SPEAKER_FRONT_RIGHT           0x00000002
-    #define SPEAKER_FRONT_CENTER          0x00000004
-    #define SPEAKER_LOW_FREQUENCY         0x00000008
-    #define SPEAKER_BACK_LEFT             0x00000010
-    #define SPEAKER_BACK_RIGHT            0x00000020
-    #define SPEAKER_FRONT_LEFT_OF_CENTER  0x00000040
-    #define SPEAKER_FRONT_RIGHT_OF_CENTER 0x00000080
-    #define SPEAKER_BACK_CENTER           0x00000100
-    #define SPEAKER_SIDE_LEFT             0x00000200
-    #define SPEAKER_SIDE_RIGHT            0x00000400
-    #define SPEAKER_TOP_CENTER            0x00000800
-    #define SPEAKER_TOP_FRONT_LEFT        0x00001000
-    #define SPEAKER_TOP_FRONT_CENTER      0x00002000
-    #define SPEAKER_TOP_FRONT_RIGHT       0x00004000
-    #define SPEAKER_TOP_BACK_LEFT         0x00008000
-    #define SPEAKER_TOP_BACK_CENTER       0x00010000
-    #define SPEAKER_TOP_BACK_RIGHT        0x00020000
-    #define SPEAKER_RESERVED              0x7FFC0000
-    #define SPEAKER_ALL                   0x80000000
-#endif
-
-#ifndef _WAVEFORMATEXTENSIBLE_
-
-    #define _WAVEFORMATEXTENSIBLE_
-    typedef struct
-    {
-        WAVEFORMATEX Format;          // Base WAVEFORMATEX data
-        union
-        {
-            WORD wValidBitsPerSample; // Valid bits in each sample container
-            WORD wSamplesPerBlock;    // Samples per block of audio data; valid
-                                      // if wBitsPerSample=0 (but rarely used).
-            WORD wReserved;           // Zero if neither case above applies.
-        } Samples;
-        DWORD dwChannelMask;          // Positions of the audio channels
-        GUID SubFormat;               // Format identifier GUID
-    } WAVEFORMATEXTENSIBLE, *PWAVEFORMATEXTENSIBLE, *LPPWAVEFORMATEXTENSIBLE;
-    typedef const WAVEFORMATEXTENSIBLE* LPCWAVEFORMATEXTENSIBLE;
-
-#endif
-
-#if !defined(WAVE_FORMAT_EXTENSIBLE)
-#define WAVE_FORMAT_EXTENSIBLE 0xFFFE
-#endif
+#include <QtCore/QDataStream>
 
 //#define DEBUG_AUDIO 1
 
@@ -264,16 +220,8 @@ bool QWindowsAudioOutput::open()
 
     period_size = 0;
 
-    if (!settings.isValid()) {
+    if (!qt_convertFormat(settings, &wfx)) {
         qWarning("QAudioOutput: open error, invalid format.");
-    } else if (settings.channelCount() <= 0) {
-        qWarning("QAudioOutput: open error, invalid number of channels (%d).",
-                 settings.channelCount());
-    } else if (settings.sampleSize() <= 0) {
-        qWarning("QAudioOutput: open error, invalid sample size (%d).",
-                 settings.sampleSize());
-    } else if (settings.sampleRate() < 8000 || settings.sampleRate() > 96000) {
-        qWarning("QAudioOutput: open error, sample rate out of range (%d).", settings.sampleRate());
     } else if (buffer_size == 0) {
         // Default buffer size, 200ms, default period size is 40ms
         buffer_size
@@ -307,67 +255,19 @@ bool QWindowsAudioOutput::open()
     timeStamp.restart();
     elapsedTimeOffset = 0;
 
-    wfx.nSamplesPerSec = settings.sampleRate();
-    wfx.wBitsPerSample = settings.sampleSize();
-    wfx.nChannels = settings.channelCount();
-    wfx.cbSize = 0;
-
-    bool surround = false;
-
-    if (settings.channelCount() > 2)
-        surround = true;
-
-    wfx.wFormatTag = WAVE_FORMAT_PCM;
-    wfx.nBlockAlign = (wfx.wBitsPerSample >> 3) * wfx.nChannels;
-    wfx.nAvgBytesPerSec = wfx.nBlockAlign * wfx.nSamplesPerSec;
-
     QDataStream ds(&m_device, QIODevice::ReadOnly);
     quint32 deviceId;
     ds >> deviceId;
 
-    if (!surround) {
-        if (waveOutOpen(&hWaveOut, UINT_PTR(deviceId), &wfx,
+    if (waveOutOpen(&hWaveOut, UINT_PTR(deviceId), &wfx.Format,
                     (DWORD_PTR)&waveOutProc,
                     (DWORD_PTR) this,
                     CALLBACK_FUNCTION) != MMSYSERR_NOERROR) {
-            errorState = QAudio::OpenError;
-            deviceState = QAudio::StoppedState;
-            emit stateChanged(deviceState);
-            qWarning("QAudioOutput: open error");
-            return false;
-        }
-    } else {
-        WAVEFORMATEXTENSIBLE wfex;
-        wfex.Format.wFormatTag = WAVE_FORMAT_EXTENSIBLE;
-        wfex.Format.nChannels = settings.channelCount();
-        wfex.Format.wBitsPerSample = settings.sampleSize();
-        wfex.Format.nSamplesPerSec = settings.sampleRate();
-        wfex.Format.nBlockAlign = wfex.Format.nChannels*wfex.Format.wBitsPerSample/8;
-        wfex.Format.nAvgBytesPerSec=wfex.Format.nSamplesPerSec*wfex.Format.nBlockAlign;
-        wfex.Samples.wValidBitsPerSample=wfex.Format.wBitsPerSample;
-        static const GUID _KSDATAFORMAT_SUBTYPE_PCM = {
-             0x00000001, 0x0000, 0x0010, {0x80, 0x00, 0x00, 0xaa, 0x00, 0x38, 0x9b, 0x71}};
-        wfex.SubFormat=_KSDATAFORMAT_SUBTYPE_PCM;
-        wfex.Format.cbSize=22;
-
-        wfex.dwChannelMask = SPEAKER_FRONT_LEFT | SPEAKER_FRONT_RIGHT;
-        if (settings.channelCount() >= 4)
-            wfex.dwChannelMask |= SPEAKER_BACK_LEFT | SPEAKER_BACK_RIGHT;
-        if (settings.channelCount() >= 6)
-            wfex.dwChannelMask |= SPEAKER_FRONT_CENTER | SPEAKER_LOW_FREQUENCY;
-        if (settings.channelCount() == 8)
-            wfex.dwChannelMask |= SPEAKER_SIDE_LEFT | SPEAKER_SIDE_RIGHT;
-
-        if (waveOutOpen(&hWaveOut, UINT_PTR(deviceId), &wfex.Format,
-                    (DWORD_PTR)&waveOutProc,
-                    (DWORD_PTR) this,
-                    CALLBACK_FUNCTION) != MMSYSERR_NOERROR) {
-            errorState = QAudio::OpenError;
-            deviceState = QAudio::StoppedState;
-            emit stateChanged(deviceState);
-            qWarning("QAudioOutput: open error");
-            return false;
-        }
+        errorState = QAudio::OpenError;
+        deviceState = QAudio::StoppedState;
+        emit stateChanged(deviceState);
+        qWarning("QAudioOutput: open error");
+        return false;
     }
 
     totalTimeValue = 0;

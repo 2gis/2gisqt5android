@@ -1,8 +1,8 @@
 /****************************************************************************
 **
 ** Copyright (C) 2013 BlackBerry Limited. All rights reserved.
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtWebEngine module of the Qt Toolkit.
 **
@@ -11,15 +11,15 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
 ** General Public License version 3 as published by the Free Software
 ** Foundation and appearing in the file LICENSE.LGPLv3 included in the
-** packaging of this file.  Please review the following information to
+** packaging of this file. Please review the following information to
 ** ensure the GNU Lesser General Public License version 3 requirements
 ** will be met: https://www.gnu.org/licenses/lgpl.html.
 **
@@ -27,7 +27,7 @@
 ** Alternatively, this file may be used under the terms of the GNU
 ** General Public License version 2.0 or later as published by the Free
 ** Software Foundation and appearing in the file LICENSE.GPL included in
-** the packaging of this file.  Please review the following information to
+** the packaging of this file. Please review the following information to
 ** ensure the GNU General Public License version 2.0 requirements will be
 ** met: http://www.gnu.org/licenses/gpl-2.0.html.
 **
@@ -38,9 +38,11 @@
 #include "web_engine_library_info.h"
 
 #include "base/base_paths.h"
-#include "base/file_util.h"
+#include "base/command_line.h"
+#include "base/files/file_util.h"
 #include "content/public/common/content_paths.h"
 #include "ui/base/ui_base_paths.h"
+#include "ui/base/ui_base_switches.h"
 #include "type_conversion.h"
 
 #include <QByteArray>
@@ -56,40 +58,13 @@
 #error "No name defined for QtWebEngine's process"
 #endif
 
+using namespace QtWebEngineCore;
 
 namespace {
 
-QString location(QLibraryInfo::LibraryLocation path)
-{
-#if defined(Q_OS_BLACKBERRY)
-    // On BlackBerry, the qtwebengine may live in /usr/lib/qtwebengine.
-    // If so, the QTWEBENGINEPROCESS_PATH env var is set to /usr/lib/qtwebengine/bin/QTWEBENGINEPROCESS_NAME.
-    static QString webEnginePath;
-    static bool initialized = false;
-    if (!initialized) {
-        const QByteArray fromEnv = qgetenv("QTWEBENGINEPROCESS_PATH");
-        if (!fromEnv.isEmpty()) {
-            QDir dir = QFileInfo(QString::fromLatin1(fromEnv)).dir();
-            if (dir.cdUp())
-                webEnginePath = dir.absolutePath();
-        }
-        initialized = true;
-    }
-    switch (path) {
-    case QLibraryInfo::TranslationsPath:
-        if (!webEnginePath.isEmpty())
-            return webEnginePath % QDir::separator() % QLatin1String("translations");
-        break;
-    case QLibraryInfo::DataPath:
-        if (!webEnginePath.isEmpty())
-            return webEnginePath;
-        break;
-    default:
-        break;
-    }
-#endif
-
-    return QLibraryInfo::location(path);
+QString fallbackDir() {
+    static QString directory = QDir::homePath() % QLatin1String("/.") % QCoreApplication::applicationName();
+    return directory;
 }
 
 #if defined(OS_MACOSX)
@@ -147,8 +122,8 @@ QString subProcessPath()
     static QString processPath (getPath(frameworkBundle())
                                 % QStringLiteral("/Helpers/" QTWEBENGINEPROCESS_NAME ".app/Contents/MacOS/" QTWEBENGINEPROCESS_NAME));
 #else
-    static QString processPath (location(QLibraryInfo::LibraryExecutablesPath)
-                                % QDir::separator() % processBinary);
+    static QString processPath (QLibraryInfo::location(QLibraryInfo::LibraryExecutablesPath)
+                                % QLatin1Char('/') % processBinary);
 #endif
     if (!initialized) {
         // Allow overriding at runtime for the time being.
@@ -157,7 +132,7 @@ QString subProcessPath()
             processPath = QString::fromLatin1(fromEnv);
         if (!QFileInfo(processPath).exists()) {
             qWarning("QtWebEngineProcess not found at location %s. Trying fallback path...", qPrintable(processPath));
-            processPath = QCoreApplication::applicationDirPath() % QDir::separator() % processBinary;
+            processPath = QCoreApplication::applicationDirPath() % QLatin1Char('/') % processBinary;
         }
         if (!QFileInfo(processPath).exists())
             qFatal("QtWebEngineProcess not found at location %s. Try setting the QTWEBENGINEPROCESS_PATH environment variable.", qPrintable(processPath));
@@ -172,7 +147,22 @@ QString pluginsPath()
 #if defined(OS_MACOSX) && defined(QT_MAC_FRAMEWORK_BUILD)
     return getPath(frameworkBundle()) % QLatin1String("/Libraries");
 #else
-    return location(QLibraryInfo::PluginsPath) % QDir::separator() % QLatin1String("qtwebengine");
+    static bool initialized = false;
+    static QString potentialPluginsPath = QLibraryInfo::location(QLibraryInfo::PluginsPath) % QDir::separator() % QLatin1String("qtwebengine");
+
+    if (!initialized) {
+        initialized = true;
+        if (!QFileInfo::exists(potentialPluginsPath)) {
+            qWarning("Installed Qt plugins directory not found at location %s. Trying application directory...", qPrintable(potentialPluginsPath));
+            potentialPluginsPath = QCoreApplication::applicationDirPath() % QDir::separator() % QLatin1String("qtwebengine");
+        }
+        if (!QFileInfo::exists(potentialPluginsPath)) {
+            qWarning("Qt WebEngine Plugins directory not found at location %s. Trying fallback directory... Plugins as for example video codecs MAY NOT work.", qPrintable(potentialPluginsPath));
+            potentialPluginsPath = fallbackDir();
+        }
+    }
+
+    return potentialPluginsPath;
 #endif
 }
 
@@ -181,30 +171,48 @@ QString localesPath()
 #if defined(OS_MACOSX) && defined(QT_MAC_FRAMEWORK_BUILD)
     return getResourcesPath(frameworkBundle()) % QLatin1String("/qtwebengine_locales");
 #else
-    return location(QLibraryInfo::TranslationsPath) % QDir::separator() % QLatin1String("qtwebengine_locales");
+    static bool initialized = false;
+    static QString potentialLocalesPath = QLibraryInfo::location(QLibraryInfo::TranslationsPath) % QDir::separator() % QLatin1String("qtwebengine_locales");
+
+    if (!initialized) {
+        initialized = true;
+        if (!QFileInfo::exists(potentialLocalesPath)) {
+            qWarning("Installed Qt WebEngine locales directory not found at location %s. Trying application directory...", qPrintable(potentialLocalesPath));
+            potentialLocalesPath = QCoreApplication::applicationDirPath() % QDir::separator() % QLatin1String("qtwebengine_locales");
+        }
+        if (!QFileInfo::exists(potentialLocalesPath)) {
+            qWarning("Qt WebEngine locales directory not found at location %s. Trying fallback directory... Translations MAY NOT not be correct.", qPrintable(potentialLocalesPath));
+            potentialLocalesPath = fallbackDir();
+        }
+    }
+
+    return potentialLocalesPath;
 #endif
 }
 
-QString fallbackDir() {
-    static QString directory = QDir::homePath() % QDir::separator() % QChar::fromLatin1('.') % QCoreApplication::applicationName();
-    return directory;
-}
-
-} // namespace
-
-#if defined(OS_ANDROID)
-namespace base {
-// Replace the Android base path provider that depends on jni.
-// With this we avoid patching chromium which we would need since
-// PathService registers PathProviderAndroid by default on Android.
-bool PathProviderAndroid(int key, FilePath* result)
+QString libraryDataPath()
 {
-    *result = WebEngineLibraryInfo::getPath(key);
-    return !(result->empty());
-}
+#if defined(OS_MACOSX) && defined(QT_MAC_FRAMEWORK_BUILD)
+    return getResourcesPath(frameworkBundle());
+#else
+    static bool initialized = false;
+    static QString potentialDataPath = QLibraryInfo::location(QLibraryInfo::DataPath);
+    if (!initialized) {
+        initialized = true;
+        if (!QFileInfo::exists(potentialDataPath)) {
+            qWarning("Qt WebEngine data directory not found at location %s. Trying application directory...", qPrintable(potentialDataPath));
+            potentialDataPath = QCoreApplication::applicationDirPath();
+        }
+        if (!QFileInfo::exists(potentialDataPath)) {
+            qWarning("Qt WebEngine data directory not found at location %s. Trying fallback directory... The application MAY NOT work.", qPrintable(potentialDataPath));
+            potentialDataPath = fallbackDir();
+        }
+    }
 
+    return potentialDataPath;
+#endif
 }
-#endif // defined(OS_ANDROID)
+} // namespace
 
 base::FilePath WebEngineLibraryInfo::getPath(int key)
 {
@@ -214,7 +222,7 @@ base::FilePath WebEngineLibraryInfo::getPath(int key)
 #if defined(OS_MACOSX) && defined(QT_MAC_FRAMEWORK_BUILD)
         return toFilePath(getResourcesPath(frameworkBundle()) % QLatin1String("/qtwebengine_resources.pak"));
 #else
-        return toFilePath(location(QLibraryInfo::DataPath) % QDir::separator() %  QLatin1String("qtwebengine_resources.pak"));
+        return toFilePath(QLibraryInfo::location(QLibraryInfo::DataPath) % QDir::separator() %  QLatin1String("qtwebengine_resources.pak"));
 #endif
     case base::FILE_EXE:
     case content::CHILD_PROCESS_EXE:
@@ -231,18 +239,7 @@ base::FilePath WebEngineLibraryInfo::getPath(int key)
         directory = QStandardPaths::writableLocation(QStandardPaths::DesktopLocation);
         break;
     case base::DIR_QT_LIBRARY_DATA:
-#if defined(OS_MACOSX) && defined(QT_MAC_FRAMEWORK_BUILD)
-        return toFilePath(getResourcesPath(frameworkBundle()));
-#else
-        return toFilePath(location(QLibraryInfo::DataPath));
-#endif
-#if defined(OS_ANDROID)
-    case base::DIR_SOURCE_ROOT:
-    case base::DIR_ANDROID_EXTERNAL_STORAGE:
-    case base::DIR_ANDROID_APP_DATA:
-        directory = QStandardPaths::writableLocation(QStandardPaths::DataLocation);
-        break;
-#endif
+        return toFilePath(libraryDataPath());
     case content::DIR_MEDIA_LIBS:
         return toFilePath(pluginsPath());
     case ui::DIR_LOCALES:
@@ -260,4 +257,13 @@ base::FilePath WebEngineLibraryInfo::getPath(int key)
 base::string16 WebEngineLibraryInfo::getApplicationName()
 {
     return toString16(qApp->applicationName());
+}
+
+std::string WebEngineLibraryInfo::getApplicationLocale()
+{
+    CommandLine *parsedCommandLine = CommandLine::ForCurrentProcess();
+    if (!parsedCommandLine->HasSwitch(switches::kLang))
+        return QLocale().bcp47Name().toStdString();
+
+    return parsedCommandLine->GetSwitchValueASCII(switches::kLang);
 }

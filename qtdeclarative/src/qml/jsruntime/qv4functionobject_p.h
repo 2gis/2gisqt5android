@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -33,94 +33,96 @@
 #ifndef QV4FUNCTIONOBJECT_H
 #define QV4FUNCTIONOBJECT_H
 
-#include "qv4global_p.h"
-#include "qv4runtime_p.h"
-#include "qv4engine_p.h"
-#include "qv4context_p.h"
 #include "qv4object_p.h"
-#include "qv4string_p.h"
-#include "qv4managed_p.h"
-#include "qv4property_p.h"
 #include "qv4function_p.h"
-#include "qv4objectiterator_p.h"
+#include "qv4context_p.h"
 #include "qv4mm_p.h"
-
-#include <QtCore/QString>
-#include <QtCore/QHash>
-#include <QtCore/QScopedPointer>
-#include <cstdio>
-#include <cassert>
 
 QT_BEGIN_NAMESPACE
 
+struct QQmlSourceLocation;
+
 namespace QV4 {
 
-struct Function;
-struct Object;
-struct BooleanObject;
-struct NumberObject;
-struct StringObject;
-struct ArrayObject;
-struct DateObject;
-struct FunctionObject;
-struct ErrorObject;
-struct ArgumentsObject;
-struct ExecutionContext;
-struct ExecutionEngine;
-class MemoryManager;
+namespace Heap {
 
-struct ObjectPrototype;
-struct StringPrototype;
-struct NumberPrototype;
-struct BooleanPrototype;
-struct ArrayPrototype;
-struct FunctionPrototype;
-struct DatePrototype;
-struct ErrorPrototype;
-struct EvalErrorPrototype;
-struct RangeErrorPrototype;
-struct ReferenceErrorPrototype;
-struct SyntaxErrorPrototype;
-struct TypeErrorPrototype;
-struct URIErrorPrototype;
-struct InternalClass;
-struct Lookup;
-
-struct Q_QML_EXPORT FunctionObject: Object {
-    struct Q_QML_PRIVATE_EXPORT Data : Object::Data {
-        Data(ExecutionContext *scope, String *name, bool createProto = false);
-        Data(ExecutionContext *scope, const QString &name = QString(), bool createProto = false);
-        Data(ExecutionContext *scope, const ReturnedValue name);
-        Data(InternalClass *ic);
-        ~Data();
-
-        ExecutionContext *scope;
-        Function *function;
-    };
-    V4_OBJECT(Object)
-    Q_MANAGED_TYPE(FunctionObject)
-    enum {
-        IsFunctionObject = true
-    };
-    // Used with Managed::subType
-    enum FunctionType {
-        RegularFunction = 0,
-        WrappedQtMethod = 1,
-        BoundFunction
-    };
-
+struct Q_QML_PRIVATE_EXPORT FunctionObject : Object {
     enum {
         Index_Prototype = 0,
         Index_ProtoConstructor = 0
     };
 
+    FunctionObject(QV4::ExecutionContext *scope, QV4::String *name, bool createProto = false);
+    FunctionObject(QV4::ExecutionContext *scope, QV4::Function *function, bool createProto = false);
+    FunctionObject(QV4::ExecutionContext *scope, const QString &name = QString(), bool createProto = false);
+    FunctionObject(ExecutionContext *scope, const QString &name = QString(), bool createProto = false);
+    FunctionObject(QV4::ExecutionContext *scope, const ReturnedValue name);
+    FunctionObject(ExecutionContext *scope, const ReturnedValue name);
+    FunctionObject(InternalClass *ic, QV4::Object *prototype);
+    ~FunctionObject();
 
-    ExecutionContext *scope() { return d()->scope; }
-    Function *function() const { return d()->function; }
+    unsigned int formalParameterCount() { return function ? function->compiledFunction->nFormals : 0; }
+    unsigned int varCount() { return function ? function->compiledFunction->nLocals : 0; }
+    bool needsActivation() const { return function ? function->needsActivation() : false; }
+
+    ExecutionContext *scope;
+    Function *function;
+};
+
+struct FunctionCtor : FunctionObject {
+    FunctionCtor(QV4::ExecutionContext *scope);
+};
+
+struct FunctionPrototype : FunctionObject {
+    FunctionPrototype(InternalClass *ic, QV4::Object *prototype);
+};
+
+struct Q_QML_EXPORT BuiltinFunction : FunctionObject {
+    BuiltinFunction(QV4::ExecutionContext *scope, QV4::String *name, ReturnedValue (*code)(QV4::CallContext *));
+    ReturnedValue (*code)(QV4::CallContext *);
+};
+
+struct IndexedBuiltinFunction : FunctionObject {
+    inline IndexedBuiltinFunction(QV4::ExecutionContext *scope, uint index, ReturnedValue (*code)(QV4::CallContext *ctx, uint index));
+    ReturnedValue (*code)(QV4::CallContext *, uint index);
+    uint index;
+};
+
+struct SimpleScriptFunction : FunctionObject {
+    enum {
+        Index_Name = FunctionObject::Index_Prototype + 1,
+        Index_Length
+    };
+    SimpleScriptFunction(QV4::ExecutionContext *scope, Function *function, bool createProto);
+};
+
+struct ScriptFunction : SimpleScriptFunction {
+    ScriptFunction(QV4::ExecutionContext *scope, Function *function);
+};
+
+struct BoundFunction : FunctionObject {
+    BoundFunction(QV4::ExecutionContext *scope, QV4::FunctionObject *target, const Value &boundThis, QV4::MemberData *boundArgs);
+    FunctionObject *target;
+    Value boundThis;
+    MemberData *boundArgs;
+};
+
+}
+
+struct Q_QML_EXPORT FunctionObject: Object {
+    enum {
+        IsFunctionObject = true
+    };
+    V4_OBJECT2(FunctionObject, Object)
+    Q_MANAGED_TYPE(FunctionObject)
+    V4_NEEDS_DESTROY
+
+    Heap::ExecutionContext *scope() { return d()->scope; }
+    Function *function() { return d()->function; }
 
     ReturnedValue name();
-    unsigned int formalParameterCount() { return function() ? function()->compiledFunction->nFormals : 0; }
-    unsigned int varCount() { return function() ? function()->compiledFunction->nLocals : 0; }
+    unsigned int formalParameterCount() { return d()->formalParameterCount(); }
+    unsigned int varCount() { return d()->varCount(); }
 
     void init(String *name, bool createProto);
 
@@ -130,23 +132,23 @@ struct Q_QML_EXPORT FunctionObject: Object {
     using Object::call;
     static ReturnedValue construct(Managed *that, CallData *);
     static ReturnedValue call(Managed *that, CallData *d);
-    static void destroy(Managed *m) {
-        static_cast<FunctionObject *>(m)->d()->~Data();
-    }
 
     static FunctionObject *cast(const Value &v) {
         return v.asFunctionObject();
     }
 
-    static FunctionObject *createScriptFunction(ExecutionContext *scope, Function *function, bool createProto = true);
+    static Heap::FunctionObject *createScriptFunction(ExecutionContext *scope, Function *function, bool createProto = true);
 
-    ReturnedValue protoProperty() { return memberData()[Index_Prototype].asReturnedValue(); }
+    ReturnedValue protoProperty() { return memberData()->data[Heap::FunctionObject::Index_Prototype].asReturnedValue(); }
 
-    bool needsActivation() const { return d()->needsActivation; }
-    bool strictMode() const { return d()->strictMode; }
-    bool bindingKeyFlag() const { return d()->bindingKeyFlag; }
+    bool needsActivation() const { return d()->needsActivation(); }
+    bool strictMode() const { return d()->function ? d()->function->isStrict() : false; }
+    bool isBinding() const;
+    bool isBoundFunction() const;
 
-    static void markObjects(Managed *that, ExecutionEngine *e);
+    QQmlSourceLocation sourceLocation() const;
+
+    static void markObjects(Heap::Base *that, ExecutionEngine *e);
 };
 
 template<>
@@ -156,11 +158,7 @@ inline FunctionObject *value_cast(const Value &v) {
 
 struct FunctionCtor: FunctionObject
 {
-    struct Data : FunctionObject::Data {
-        Data(ExecutionContext *scope);
-    };
-
-    V4_OBJECT(FunctionObject)
+    V4_OBJECT2(FunctionCtor, FunctionObject)
 
     static ReturnedValue construct(Managed *that, CallData *callData);
     static ReturnedValue call(Managed *that, CallData *callData);
@@ -168,10 +166,7 @@ struct FunctionCtor: FunctionObject
 
 struct FunctionPrototype: FunctionObject
 {
-    struct Data : FunctionObject::Data {
-        Data(InternalClass *ic);
-    };
-    V4_OBJECT(FunctionObject)
+    V4_OBJECT2(FunctionPrototype, FunctionObject)
 
     void init(ExecutionEngine *engine, Object *ctor);
 
@@ -182,13 +177,9 @@ struct FunctionPrototype: FunctionObject
 };
 
 struct Q_QML_EXPORT BuiltinFunction: FunctionObject {
-    struct Q_QML_EXPORT Data : FunctionObject::Data {
-        Data(ExecutionContext *scope, String *name, ReturnedValue (*code)(CallContext *));
-        ReturnedValue (*code)(CallContext *);
-    };
-    V4_OBJECT(FunctionObject)
+    V4_OBJECT2(BuiltinFunction, FunctionObject)
 
-    static BuiltinFunction *create(ExecutionContext *scope, String *name, ReturnedValue (*code)(CallContext *))
+    static Heap::BuiltinFunction *create(ExecutionContext *scope, String *name, ReturnedValue (*code)(CallContext *))
     {
         return scope->engine()->memoryManager->alloc<BuiltinFunction>(scope, name, code);
     }
@@ -199,45 +190,36 @@ struct Q_QML_EXPORT BuiltinFunction: FunctionObject {
 
 struct IndexedBuiltinFunction: FunctionObject
 {
-    struct Data : FunctionObject::Data {
-        Data(ExecutionContext *scope, uint index, ReturnedValue (*code)(CallContext *ctx, uint index))
-            : FunctionObject::Data(scope),
-              code(code)
-            , index(index)
-        {
-            setVTable(staticVTable());
-        }
-        ReturnedValue (*code)(CallContext *, uint index);
-        uint index;
-    };
-    V4_OBJECT(FunctionObject)
+    V4_OBJECT2(IndexedBuiltinFunction, FunctionObject)
 
     static ReturnedValue construct(Managed *m, CallData *)
     {
-        return m->engine()->currentContext()->throwTypeError();
+        return static_cast<IndexedBuiltinFunction *>(m)->engine()->throwTypeError();
     }
 
     static ReturnedValue call(Managed *that, CallData *callData);
 };
 
+Heap::IndexedBuiltinFunction::IndexedBuiltinFunction(QV4::ExecutionContext *scope, uint index,
+                                                     ReturnedValue (*code)(QV4::CallContext *ctx, uint index))
+    : Heap::FunctionObject(scope),
+      code(code)
+    , index(index)
+{
+}
+
 
 struct SimpleScriptFunction: FunctionObject {
-    struct Data : FunctionObject::Data {
-        Data(ExecutionContext *scope, Function *function, bool createProto);
-    };
-    V4_OBJECT(FunctionObject)
+    V4_OBJECT2(SimpleScriptFunction, FunctionObject)
 
     static ReturnedValue construct(Managed *, CallData *callData);
     static ReturnedValue call(Managed *that, CallData *callData);
 
-    InternalClass *internalClassForConstructor();
+    Heap::Object *protoForConstructor();
 };
 
 struct ScriptFunction: SimpleScriptFunction {
-    struct Data : SimpleScriptFunction::Data {
-        Data(ExecutionContext *scope, Function *function);
-    };
-    V4_OBJECT(FunctionObject)
+    V4_OBJECT2(ScriptFunction, FunctionObject)
 
     static ReturnedValue construct(Managed *, CallData *callData);
     static ReturnedValue call(Managed *that, CallData *callData);
@@ -245,27 +227,21 @@ struct ScriptFunction: SimpleScriptFunction {
 
 
 struct BoundFunction: FunctionObject {
-    struct Data : FunctionObject::Data {
-        Data(ExecutionContext *scope, FunctionObject *target, const ValueRef boundThis, const Members &boundArgs);
-        FunctionObject *target;
-        Value boundThis;
-        Members boundArgs;
-    };
-    V4_OBJECT(FunctionObject)
+    V4_OBJECT2(BoundFunction, FunctionObject)
 
-    static BoundFunction *create(ExecutionContext *scope, FunctionObject *target, const ValueRef boundThis, const QV4::Members &boundArgs)
+    static Heap::BoundFunction *create(ExecutionContext *scope, FunctionObject *target, const Value &boundThis, QV4::MemberData *boundArgs)
     {
         return scope->engine()->memoryManager->alloc<BoundFunction>(scope, target, boundThis, boundArgs);
     }
 
-    FunctionObject *target() { return d()->target; }
+    Heap::FunctionObject *target() { return d()->target; }
     Value boundThis() const { return d()->boundThis; }
-    Members boundArgs() const { return d()->boundArgs; }
+    Heap::MemberData *boundArgs() const { return d()->boundArgs; }
 
     static ReturnedValue construct(Managed *, CallData *d);
     static ReturnedValue call(Managed *that, CallData *dd);
 
-    static void markObjects(Managed *that, ExecutionEngine *e);
+    static void markObjects(Heap::Base *that, ExecutionEngine *e);
 };
 
 }

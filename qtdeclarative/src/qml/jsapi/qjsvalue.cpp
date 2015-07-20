@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -48,27 +48,6 @@
 #include <private/qv4mm_p.h>
 #include <private/qv4scopedvalue_p.h>
 
-QV4::ReturnedValue QJSValuePrivate::getValue(QV4::ExecutionEngine *e)
-{
-    if (!this->engine) {
-        this->engine = e;
-    } else if (this->engine != e) {
-        qWarning("JSValue can't be reassigned to another engine.");
-        return QV4::Encode::undefined();
-    }
-
-    if (value.isEmpty()) {
-        value = QV4::Encode(engine->v8Engine->fromVariant(unboundData));
-        PersistentValuePrivate **listRoot = &engine->memoryManager->m_persistentValues;
-        prev = listRoot;
-        next = *listRoot;
-        *prev = this;
-        if (next)
-            next->prev = &this->next;
-        unboundData.clear();
-    }
-    return value.asReturnedValue();
-}
 
 /*!
   \since 5.0
@@ -142,61 +121,66 @@ using namespace QV4;
   Constructs a new QJSValue with a boolean \a value.
 */
 QJSValue::QJSValue(bool value)
-    : d(new QJSValuePrivate(Encode(value)))
 {
+    QJSValuePrivate::setVariant(this, QVariant(value));
 }
 
-QJSValue::QJSValue(QJSValuePrivate *dd)
-    : d(dd)
+/*!
+  \internal
+*/
+QJSValue::QJSValue(ExecutionEngine *e, quint64 val)
 {
+    QJSValuePrivate::setValue(this, e, val);
 }
 
 /*!
   Constructs a new QJSValue with a number \a value.
 */
 QJSValue::QJSValue(int value)
-    : d(new QJSValuePrivate(Encode(value)))
 {
+    QJSValuePrivate::setVariant(this, QVariant(value));
 }
 
 /*!
   Constructs a new QJSValue with a number \a value.
 */
 QJSValue::QJSValue(uint value)
-    : d(new QJSValuePrivate(Encode(value)))
 {
+    QJSValuePrivate::setVariant(this, QVariant((double)value));
 }
 
 /*!
   Constructs a new QJSValue with a number \a value.
 */
 QJSValue::QJSValue(double value)
-    : d(new QJSValuePrivate(Encode(value)))
 {
+    QJSValuePrivate::setVariant(this, QVariant(value));
 }
 
 /*!
   Constructs a new QJSValue with a string \a value.
 */
 QJSValue::QJSValue(const QString& value)
-    : d(new QJSValuePrivate(value))
 {
+    QJSValuePrivate::setVariant(this, QVariant(value));
 }
 
 /*!
   Constructs a new QJSValue with a special \a value.
 */
 QJSValue::QJSValue(SpecialValue value)
-    : d(new QJSValuePrivate(value == UndefinedValue ? Encode::undefined() : Encode::null()))
+    : d(0)
 {
+    if (value == NullValue)
+        QJSValuePrivate::setVariant(this, QVariant(QMetaType::VoidStar, (void *)0));
 }
 
 /*!
   Constructs a new QJSValue with a string \a value.
 */
 QJSValue::QJSValue(const QLatin1String &value)
-    : d(new QJSValuePrivate(value))
 {
+    QJSValuePrivate::setVariant(this, QVariant(value));
 }
 
 /*!
@@ -204,8 +188,8 @@ QJSValue::QJSValue(const QLatin1String &value)
 */
 #ifndef QT_NO_CAST_FROM_ASCII
 QJSValue::QJSValue(const char *value)
-    : d(new QJSValuePrivate(QString::fromUtf8(value)))
 {
+    QJSValuePrivate::setVariant(this, QVariant(QString::fromUtf8(value)));
 }
 #endif
 
@@ -217,9 +201,14 @@ QJSValue::QJSValue(const char *value)
   the new script value (i.e., the object itself is not copied).
 */
 QJSValue::QJSValue(const QJSValue& other)
-    : d(other.d)
+    : d(0)
 {
-    d->ref();
+    QV4::Value *v = QJSValuePrivate::getValue(&other);
+    if (v) {
+        QJSValuePrivate::setValue(this, QJSValuePrivate::engine(&other), *v);
+    } else if (QVariant *v = QJSValuePrivate::getVariant(&other)) {
+        QJSValuePrivate::setVariant(this, *v);
+    }
 }
 
 /*!
@@ -227,7 +216,7 @@ QJSValue::QJSValue(const QJSValue& other)
 */
 QJSValue::~QJSValue()
 {
-    d->deref();
+    QJSValuePrivate::free(this);
 }
 
 /*!
@@ -238,7 +227,11 @@ QJSValue::~QJSValue()
 */
 bool QJSValue::isBool() const
 {
-    return d->value.isBoolean();
+    QV4::Value *val = QJSValuePrivate::getValue(this);
+    if (val)
+        return val->isBoolean();
+    QVariant *variant = QJSValuePrivate::getVariant(this);
+    return variant && variant->type() == QVariant::Bool;
 }
 
 /*!
@@ -249,7 +242,27 @@ bool QJSValue::isBool() const
 */
 bool QJSValue::isNumber() const
 {
-    return d->value.isNumber();
+    QV4::Value *val = QJSValuePrivate::getValue(this);
+    if (val)
+        return val->isNumber();
+    QVariant *variant = QJSValuePrivate::getVariant(this);
+    if (!variant)
+        return false;
+
+    switch (variant->userType()) {
+    case QMetaType::Double:
+    case QMetaType::Int:
+    case QMetaType::UInt:
+    case QMetaType::Long:
+    case QMetaType::ULong:
+    case QMetaType::Short:
+    case QMetaType::UShort:
+    case QMetaType::LongLong:
+    case QMetaType::ULongLong:
+        return true;
+    default:
+        return false;
+    }
 }
 
 /*!
@@ -258,7 +271,11 @@ bool QJSValue::isNumber() const
 */
 bool QJSValue::isNull() const
 {
-    return d->value.isNull();
+    QV4::Value *val = QJSValuePrivate::getValue(this);
+    if (val)
+        return val->isNull();
+    QVariant *variant = QJSValuePrivate::getVariant(this);
+    return variant && variant->userType() == QMetaType::VoidStar;
 }
 
 /*!
@@ -269,7 +286,11 @@ bool QJSValue::isNull() const
 */
 bool QJSValue::isString() const
 {
-    return d->value.isEmpty() || d->value.isString();
+    QV4::Value *val = QJSValuePrivate::getValue(this);
+    if (val)
+        return val->isString();
+    QVariant *variant = QJSValuePrivate::getVariant(this);
+    return variant && variant->userType() == QMetaType::QString;
 }
 
 /*!
@@ -278,16 +299,25 @@ bool QJSValue::isString() const
 */
 bool QJSValue::isUndefined() const
 {
-    return d->value.isUndefined();
+    QV4::Value *val = QJSValuePrivate::getValue(this);
+    if (val)
+        return val->isUndefined();
+    QVariant *variant = QJSValuePrivate::getVariant(this);
+    return !variant || variant->userType() == QMetaType::UnknownType || variant->userType() == QMetaType::Void;
 }
 
 /*!
   Returns true if this QJSValue is an object of the Error class;
   otherwise returns false.
+
+  \sa {QJSEngine#Script Exceptions}{QJSEngine - Script Exceptions}
 */
 bool QJSValue::isError() const
 {
-    Object *o = d->value.asObject();
+    QV4::Value *val = QJSValuePrivate::getValue(this);
+    if (!val)
+        return false;
+    Object *o = val->asObject();
     return o && o->asErrorObject();
 }
 
@@ -299,7 +329,10 @@ bool QJSValue::isError() const
 */
 bool QJSValue::isArray() const
 {
-    return d->value.asArrayObject();
+    QV4::Value *val = QJSValuePrivate::getValue(this);
+    if (!val)
+        return false;
+    return val->asArrayObject();
 }
 
 /*!
@@ -313,7 +346,10 @@ bool QJSValue::isArray() const
 */
 bool QJSValue::isObject() const
 {
-    return d->value.asObject();
+    QV4::Value *val = QJSValuePrivate::getValue(this);
+    if (!val)
+        return false;
+    return val->asObject();
 }
 
 /*!
@@ -324,7 +360,10 @@ bool QJSValue::isObject() const
 */
 bool QJSValue::isCallable() const
 {
-    return d->value.asFunctionObject();
+    QV4::Value *val = QJSValuePrivate::getValue(this);
+    if (!val)
+        return false;
+    return val->asFunctionObject();
 }
 
 /*!
@@ -335,8 +374,10 @@ bool QJSValue::isCallable() const
 */
 bool QJSValue::isVariant() const
 {
-    Managed *m = d->value.asManaged();
-    return m ? m->as<QV4::VariantObject>() : 0;
+    QV4::Value *val = QJSValuePrivate::getValue(this);
+    if (!val)
+        return false;
+    return val->as<QV4::VariantObject>();
 }
 
 /*!
@@ -353,11 +394,16 @@ bool QJSValue::isVariant() const
 */
 QString QJSValue::toString() const
 {
-    if (d->value.isEmpty()) {
-        if (d->unboundData.type() == QVariant::Map)
+    QV4::Value scratch;
+    QV4::Value *val = QJSValuePrivate::valueForData(this, &scratch);
+
+    if (!val) {
+        QVariant *variant = QJSValuePrivate::getVariant(this);
+        Q_ASSERT(variant);
+        if (variant->type() == QVariant::Map)
             return QStringLiteral("[object Object]");
-        else if (d->unboundData.type() == QVariant::List) {
-            const QVariantList list = d->unboundData.toList();
+        else if (variant->type() == QVariant::List) {
+            const QVariantList list = variant->toList();
             QString result;
             for (int i = 0; i < list.count(); ++i) {
                 if (i > 0)
@@ -366,9 +412,9 @@ QString QJSValue::toString() const
             }
             return result;
         }
-        return d->unboundData.toString();
+        return variant->toString();
     }
-    return d->value.toQStringNoThrow();
+    return val->toQStringNoThrow();
 }
 
 /*!
@@ -385,19 +431,25 @@ QString QJSValue::toString() const
 */
 double QJSValue::toNumber() const
 {
-    if (d->value.isEmpty()) {
-        if (d->unboundData.type() == QVariant::String)
-            return RuntimeHelpers::stringToNumber(d->unboundData.toString());
-        else if (d->unboundData.canConvert<double>())
-            return d->unboundData.value<double>();
+    QV4::Value scratch;
+    QV4::Value *val = QJSValuePrivate::valueForData(this, &scratch);
+
+    if (!val) {
+        QVariant *variant = QJSValuePrivate::getVariant(this);
+        Q_ASSERT(variant);
+
+        if (variant->type() == QVariant::String)
+            return RuntimeHelpers::stringToNumber(variant->toString());
+        else if (variant->canConvert<double>())
+            return variant->value<double>();
         else
             return std::numeric_limits<double>::quiet_NaN();
     }
 
-    QV4::ExecutionContext *ctx = d->engine ? d->engine->currentContext() : 0;
-    double dbl = d->value.toNumber();
-    if (ctx && ctx->d()->engine->hasException) {
-        ctx->catchException();
+    double dbl = val->toNumber();
+    QV4::ExecutionEngine *engine = QJSValuePrivate::engine(this);
+    if (engine && engine->hasException) {
+        engine->catchException();
         return 0;
     }
     return dbl;
@@ -417,17 +469,21 @@ double QJSValue::toNumber() const
 */
 bool QJSValue::toBool() const
 {
-    if (d->value.isEmpty()) {
-        if (d->unboundData.userType() == QMetaType::QString)
-            return d->unboundData.toString().length() > 0;
+    QV4::Value scratch;
+    QV4::Value *val = QJSValuePrivate::valueForData(this, &scratch);
+
+    if (!val) {
+        QVariant *variant = QJSValuePrivate::getVariant(this);
+        if (variant->userType() == QMetaType::QString)
+            return variant->toString().length() > 0;
         else
-            return d->unboundData.toBool();
+            return variant->toBool();
     }
 
-    QV4::ExecutionContext *ctx = d->engine ? d->engine->currentContext() : 0;
-    bool b = d->value.toBoolean();
-    if (ctx && ctx->d()->engine->hasException) {
-        ctx->catchException();
+    bool b = val->toBoolean();
+    QV4::ExecutionEngine *engine = QJSValuePrivate::engine(this);
+    if (engine && engine->hasException) {
+        engine->catchException();
         return false;
     }
     return b;
@@ -447,17 +503,21 @@ bool QJSValue::toBool() const
 */
 qint32 QJSValue::toInt() const
 {
-    if (d->value.isEmpty()) {
-        if (d->unboundData.userType() == QMetaType::QString)
-            return QV4::Primitive::toInt32(RuntimeHelpers::stringToNumber(d->unboundData.toString()));
+    QV4::Value scratch;
+    QV4::Value *val = QJSValuePrivate::valueForData(this, &scratch);
+
+    if (!val) {
+        QVariant *variant = QJSValuePrivate::getVariant(this);
+        if (variant->userType() == QMetaType::QString)
+            return QV4::Primitive::toInt32(RuntimeHelpers::stringToNumber(variant->toString()));
         else
-            return d->unboundData.toInt();
+            return variant->toInt();
     }
 
-    QV4::ExecutionContext *ctx = d->engine ? d->engine->currentContext() : 0;
-    qint32 i = d->value.toInt32();
-    if (ctx && ctx->d()->engine->hasException) {
-        ctx->catchException();
+    qint32 i = val->toInt32();
+    QV4::ExecutionEngine *engine = QJSValuePrivate::engine(this);
+    if (engine && engine->hasException) {
+        engine->catchException();
         return 0;
     }
     return i;
@@ -477,17 +537,21 @@ qint32 QJSValue::toInt() const
 */
 quint32 QJSValue::toUInt() const
 {
-    if (d->value.isEmpty()) {
-        if (d->unboundData.userType() == QMetaType::QString)
-            return QV4::Primitive::toUInt32(RuntimeHelpers::stringToNumber(d->unboundData.toString()));
+    QV4::Value scratch;
+    QV4::Value *val = QJSValuePrivate::valueForData(this, &scratch);
+
+    if (!val) {
+        QVariant *variant = QJSValuePrivate::getVariant(this);
+        if (variant->userType() == QMetaType::QString)
+            return QV4::Primitive::toUInt32(RuntimeHelpers::stringToNumber(variant->toString()));
         else
-            return d->unboundData.toUInt();
+            return variant->toUInt();
     }
 
-    QV4::ExecutionContext *ctx = d->engine ? d->engine->currentContext() : 0;
-    quint32 u = d->value.toUInt32();
-    if (ctx && ctx->d()->engine->hasException) {
-        ctx->catchException();
+    quint32 u = val->toUInt32();
+    QV4::ExecutionEngine *engine = QJSValuePrivate::engine(this);
+    if (engine && engine->hasException) {
+        engine->catchException();
         return 0;
     }
     return u;
@@ -517,10 +581,30 @@ quint32 QJSValue::toUInt() const
 */
 QVariant QJSValue::toVariant() const
 {
-    if (d->value.isEmpty())
-        return d->unboundData;
+    QVariant *variant = QJSValuePrivate::getVariant(this);
+    if (variant)
+        return *variant;
 
-    return QV4::VariantObject::toVariant(d->value);
+    QV4::Value scratch;
+    QV4::Value *val = QJSValuePrivate::valueForData(this, &scratch);
+    Q_ASSERT(val);
+
+    if (Object *o = val->asObject())
+        return o->engine()->toVariant(*val, /*typeHint*/ -1, /*createJSValueForObjects*/ false);
+
+    if (val->isString())
+        return QVariant(val->stringValue()->toQString());
+    if (val->isBoolean())
+        return QVariant(val->booleanValue());
+    if (val->isNumber()) {
+        if (val->isInt32())
+            return QVariant(val->integerValue());
+        return QVariant(val->asDouble());
+    }
+    if (val->isNull())
+        return QVariant(QMetaType::VoidStar, 0);
+    Q_ASSERT(val->isUndefined());
+    return QVariant();
 }
 
 /*!
@@ -540,31 +624,33 @@ QVariant QJSValue::toVariant() const
 */
 QJSValue QJSValue::call(const QJSValueList &args)
 {
-    FunctionObject *f = d->value.asFunctionObject();
+    QV4::Value *val = QJSValuePrivate::getValue(this);
+    if (!val)
+        return QJSValue();
+
+    FunctionObject *f = val->asFunctionObject();
     if (!f)
         return QJSValue();
 
-    ExecutionEngine *engine = d->engine;
+    QV4::ExecutionEngine *engine = QJSValuePrivate::engine(this);
     Q_ASSERT(engine);
 
     Scope scope(engine);
     ScopedCallData callData(scope, args.length());
-    callData->thisObject = engine->globalObject->asReturnedValue();
+    callData->thisObject = engine->globalObject()->asReturnedValue();
     for (int i = 0; i < args.size(); ++i) {
-        if (!args.at(i).d->checkEngine(engine)) {
+        if (!QJSValuePrivate::checkEngine(engine, args.at(i))) {
             qWarning("QJSValue::call() failed: cannot call function with argument created in a different engine");
             return QJSValue();
         }
-        callData->args[i] = args.at(i).d->getValue(engine);
+        callData->args[i] = QJSValuePrivate::convertedToValue(engine, args.at(i));
     }
 
-    ScopedValue result(scope);
-    QV4::ExecutionContext *ctx = engine->currentContext();
-    result = f->call(callData);
-    if (scope.hasException())
-        result = ctx->catchException();
+    ScopedValue result(scope, f->call(callData));
+    if (engine->hasException)
+        result = engine->catchException();
 
-    return new QJSValuePrivate(engine, result);
+    return QJSValue(engine, result->asReturnedValue());
 }
 
 /*!
@@ -589,36 +675,38 @@ QJSValue QJSValue::call(const QJSValueList &args)
 */
 QJSValue QJSValue::callWithInstance(const QJSValue &instance, const QJSValueList &args)
 {
-    FunctionObject *f = d->value.asFunctionObject();
+    QV4::Value *val = QJSValuePrivate::getValue(this);
+    if (!val)
+        return QJSValue();
+
+    FunctionObject *f = val->asFunctionObject();
     if (!f)
         return QJSValue();
 
-    ExecutionEngine *engine = d->engine;
+    QV4::ExecutionEngine *engine = QJSValuePrivate::engine(this);
     Q_ASSERT(engine);
     Scope scope(engine);
 
-    if (!instance.d->checkEngine(engine)) {
+    if (!QJSValuePrivate::checkEngine(engine, instance)) {
         qWarning("QJSValue::call() failed: cannot call function with thisObject created in a different engine");
         return QJSValue();
     }
 
     ScopedCallData callData(scope, args.size());
-    callData->thisObject = instance.d->getValue(engine);
+    callData->thisObject = QJSValuePrivate::convertedToValue(engine, instance);
     for (int i = 0; i < args.size(); ++i) {
-        if (!args.at(i).d->checkEngine(engine)) {
+        if (!QJSValuePrivate::checkEngine(engine, args.at(i))) {
             qWarning("QJSValue::call() failed: cannot call function with argument created in a different engine");
             return QJSValue();
         }
-        callData->args[i] = args.at(i).d->getValue(engine);
+        callData->args[i] = QJSValuePrivate::convertedToValue(engine, args.at(i));
     }
 
-    ScopedValue result(scope);
-    QV4::ExecutionContext *ctx = engine->currentContext();
-    result = f->call(callData);
-    if (scope.hasException())
-        result = ctx->catchException();
+    ScopedValue result(scope, f->call(callData));
+    if (engine->hasException)
+        result = engine->catchException();
 
-    return new QJSValuePrivate(engine, result);
+    return QJSValue(engine, result->asReturnedValue());
 }
 
 /*!
@@ -641,30 +729,32 @@ QJSValue QJSValue::callWithInstance(const QJSValue &instance, const QJSValueList
 */
 QJSValue QJSValue::callAsConstructor(const QJSValueList &args)
 {
-    FunctionObject *f = d->value.asFunctionObject();
+    QV4::Value *val = QJSValuePrivate::getValue(this);
+    if (!val)
+        return QJSValue();
+
+    FunctionObject *f = val->asFunctionObject();
     if (!f)
         return QJSValue();
 
-    ExecutionEngine *engine = d->engine;
+    QV4::ExecutionEngine *engine = QJSValuePrivate::engine(this);
     Q_ASSERT(engine);
 
     Scope scope(engine);
     ScopedCallData callData(scope, args.size());
     for (int i = 0; i < args.size(); ++i) {
-        if (!args.at(i).d->checkEngine(engine)) {
+        if (!QJSValuePrivate::checkEngine(engine, args.at(i))) {
             qWarning("QJSValue::callAsConstructor() failed: cannot construct function with argument created in a different engine");
             return QJSValue();
         }
-        callData->args[i] = args.at(i).d->getValue(engine);
+        callData->args[i] = QJSValuePrivate::convertedToValue(engine, args.at(i));
     }
 
-    ScopedValue result(scope);
-    QV4::ExecutionContext *ctx = engine->currentContext();
-    result = f->construct(callData);
-    if (scope.hasException())
-        result = ctx->catchException();
+    ScopedValue result(scope, f->construct(callData));
+    if (engine->hasException)
+        result = engine->catchException();
 
-    return new QJSValuePrivate(engine, result);
+    return QJSValue(engine, result->asReturnedValue());
 }
 
 #ifdef QT_DEPRECATED
@@ -678,9 +768,9 @@ QJSValue QJSValue::callAsConstructor(const QJSValueList &args)
 */
 QJSEngine* QJSValue::engine() const
 {
-    QV4::ExecutionEngine *engine = d->engine;
+    QV4::ExecutionEngine *engine = QJSValuePrivate::engine(this);
     if (engine)
-        return engine->v8Engine->publicEngine();
+        return engine->jsEngine();
     return 0;
 }
 
@@ -695,17 +785,17 @@ QJSEngine* QJSValue::engine() const
 */
 QJSValue QJSValue::prototype() const
 {
-    QV4::ExecutionEngine *engine = d->engine;
+    QV4::ExecutionEngine *engine = QJSValuePrivate::engine(this);
     if (!engine)
         return QJSValue();
     QV4::Scope scope(engine);
-    Scoped<Object> o(scope, d->value.asObject());
+    ScopedObject o(scope, QJSValuePrivate::getValue(this)->asObject());
     if (!o)
         return QJSValue();
-    Scoped<Object> p(scope, o->prototype());
+    ScopedObject p(scope, o->prototype());
     if (!p)
         return QJSValue(NullValue);
-    return new QJSValuePrivate(o->internalClass()->engine, p);
+    return QJSValue(o->internalClass()->engine, p.asReturnedValue());
 }
 
 /*!
@@ -722,26 +812,30 @@ QJSValue QJSValue::prototype() const
 */
 void QJSValue::setPrototype(const QJSValue& prototype)
 {
-    ExecutionEngine *v4 = d->engine;
-    if (!v4)
+    QV4::ExecutionEngine *engine = QJSValuePrivate::engine(this);
+    if (!engine)
         return;
-    Scope scope(v4);
-    ScopedObject o(scope, d->value);
+    Scope scope(engine);
+    ScopedObject o(scope, QJSValuePrivate::getValue(this));
     if (!o)
         return;
-    if (prototype.d->value.isNull()) {
+    QV4::Value scratch;
+    QV4::Value *val = QJSValuePrivate::valueForData(&prototype, &scratch);
+    if (!val)
+        return;
+    if (val->isNull()) {
         o->setPrototype(0);
         return;
     }
 
-    ScopedObject p(scope, prototype.d->value);
+    ScopedObject p(scope, val);
     if (!p)
         return;
     if (o->engine() != p->engine()) {
         qWarning("QJSValue::setPrototype() failed: cannot set a prototype created in a different engine");
         return;
     }
-    if (!o->setPrototype(p.getPointer()))
+    if (!o->setPrototype(p))
         qWarning("QJSValue::setPrototype() failed: cyclic prototype value");
 }
 
@@ -754,24 +848,31 @@ void QJSValue::setPrototype(const QJSValue& prototype)
 */
 QJSValue& QJSValue::operator=(const QJSValue& other)
 {
-    if (d != other.d) {
-        d->deref();
-        d = other.d;
-        d->ref();
+    if (d == other.d)
+        return *this;
+
+    QJSValuePrivate::free(this);
+    d = 0;
+
+    QV4::Value *v = QJSValuePrivate::getValue(&other);
+    if (v) {
+        QJSValuePrivate::setValue(this, QJSValuePrivate::engine(&other), *v);
+    } else if (QVariant *v = QJSValuePrivate::getVariant(&other)) {
+        QJSValuePrivate::setVariant(this, *v);
     }
     return *this;
 }
 
-static bool js_equal(const QString &string, QV4::ValueRef value)
+static bool js_equal(const QString &string, const QV4::Value &value)
 {
-    if (value->isString())
-        return string == value->stringValue()->toQString();
-    if (value->isNumber())
-        return RuntimeHelpers::stringToNumber(string) == value->asDouble();
-    if (value->isBoolean())
-        return RuntimeHelpers::stringToNumber(string) == double(value->booleanValue());
-    if (value->isObject()) {
-        Scope scope(value->objectValue()->engine());
+    if (value.isString())
+        return string == value.stringValue()->toQString();
+    if (value.isNumber())
+        return RuntimeHelpers::stringToNumber(string) == value.asDouble();
+    if (value.isBoolean())
+        return RuntimeHelpers::stringToNumber(string) == double(value.booleanValue());
+    if (value.isObject()) {
+        Scope scope(value.objectValue()->engine());
         ScopedValue p(scope, RuntimeHelpers::toPrimitive(value, PREFERREDTYPE_HINT));
         return js_equal(string, p);
     }
@@ -804,17 +905,23 @@ static bool js_equal(const QString &string, QV4::ValueRef value)
 */
 bool QJSValue::equals(const QJSValue& other) const
 {
-    if (d->value.isEmpty()) {
-        if (other.d->value.isEmpty())
-            return d->unboundData == other.d->unboundData;
-        if (d->unboundData.type() == QVariant::Map || d->unboundData.type() == QVariant::List)
+    QV4::Value s1, s2;
+    QV4::Value *v = QJSValuePrivate::valueForData(this, &s1);
+    QV4::Value *ov = QJSValuePrivate::valueForData(&other, &s2);
+
+    if (!v) {
+        QVariant *variant = QJSValuePrivate::getVariant(this);
+        Q_ASSERT(variant);
+        if (!ov)
+            return *variant == *QJSValuePrivate::getVariant(&other);
+        if (variant->type() == QVariant::Map || variant->type() == QVariant::List)
             return false;
-        return js_equal(d->unboundData.toString(), QV4::ValueRef(other.d->value));
-    }
-    if (other.d->value.isEmpty())
+        return js_equal(variant->toString(), *ov);
+        }
+    if (!ov)
         return other.equals(*this);
 
-    return Runtime::compareEqual(QV4::ValueRef(d), QV4::ValueRef(other.d));
+    return Runtime::compareEqual(*v, *ov);
 }
 
 /*!
@@ -841,19 +948,25 @@ bool QJSValue::equals(const QJSValue& other) const
 */
 bool QJSValue::strictlyEquals(const QJSValue& other) const
 {
-    if (d->value.isEmpty()) {
-        if (other.d->value.isEmpty())
-            return d->unboundData == other.d->unboundData;
-        if (d->unboundData.type() == QVariant::Map || d->unboundData.type() == QVariant::List)
+    QV4::Value s1, s2;
+    QV4::Value *v = QJSValuePrivate::valueForData(this, &s1);
+    QV4::Value *ov = QJSValuePrivate::valueForData(&other, &s2);
+
+    if (!v) {
+        QVariant *variant = QJSValuePrivate::getVariant(this);
+        Q_ASSERT(variant);
+        if (!ov)
+            return *variant == *QJSValuePrivate::getVariant(&other);
+        if (variant->type() == QVariant::Map || variant->type() == QVariant::List)
             return false;
-        if (other.d->value.isString())
-            return d->unboundData.toString() == other.d->value.stringValue()->toQString();
+        if (ov->isString())
+            return variant->toString() == ov->stringValue()->toQString();
         return false;
     }
-    if (other.d->value.isEmpty())
+    if (!ov)
         return other.strictlyEquals(*this);
 
-    return RuntimeHelpers::strictEqual(QV4::ValueRef(d), QV4::ValueRef(other.d));
+    return RuntimeHelpers::strictEqual(*v, *ov);
 }
 
 /*!
@@ -871,12 +984,12 @@ bool QJSValue::strictlyEquals(const QJSValue& other) const
 */
 QJSValue QJSValue::property(const QString& name) const
 {
-    ExecutionEngine *engine = d->engine;
+    QV4::ExecutionEngine *engine = QJSValuePrivate::engine(this);
     if (!engine)
         return QJSValue();
-    QV4::Scope scope(engine);
 
-    ScopedObject o(scope, d->value);
+    QV4::Scope scope(engine);
+    ScopedObject o(scope, QJSValuePrivate::getValue(this));
     if (!o)
         return QJSValue();
 
@@ -885,14 +998,12 @@ QJSValue QJSValue::property(const QString& name) const
     if (idx < UINT_MAX)
         return property(idx);
 
-    s->makeIdentifier();
-    QV4::ExecutionContext *ctx = engine->currentContext();
-    QV4::ScopedValue result(scope);
-    result = o->get(s.getPointer());
-    if (scope.hasException())
-        result = ctx->catchException();
+    s->makeIdentifier(engine);
+    QV4::ScopedValue result(scope, o->get(s));
+    if (engine->hasException)
+        result = engine->catchException();
 
-    return new QJSValuePrivate(engine, result);
+    return QJSValue(engine, result->asReturnedValue());
 }
 
 /*!
@@ -909,21 +1020,19 @@ QJSValue QJSValue::property(const QString& name) const
 */
 QJSValue QJSValue::property(quint32 arrayIndex) const
 {
-    ExecutionEngine *engine = d->engine;
+    QV4::ExecutionEngine *engine = QJSValuePrivate::engine(this);
     if (!engine)
         return QJSValue();
 
     QV4::Scope scope(engine);
-    ScopedObject o(scope, d->value);
+    ScopedObject o(scope, QJSValuePrivate::getValue(this));
     if (!o)
         return QJSValue();
 
-    QV4::ExecutionContext *ctx = engine->currentContext();
-    QV4::ScopedValue result(scope);
-    result = arrayIndex == UINT_MAX ? o->get(engine->id_uintMax.getPointer()) : o->getIndexed(arrayIndex);
-    if (scope.hasException())
-        result = ctx->catchException();
-    return new QJSValuePrivate(engine, result);
+    QV4::ScopedValue result(scope, arrayIndex == UINT_MAX ? o->get(engine->id_uintMax) : o->getIndexed(arrayIndex));
+    if (engine->hasException)
+        engine->catchException();
+    return QJSValue(engine, result->asReturnedValue());
 }
 
 /*!
@@ -939,16 +1048,16 @@ QJSValue QJSValue::property(quint32 arrayIndex) const
 */
 void QJSValue::setProperty(const QString& name, const QJSValue& value)
 {
-    ExecutionEngine *engine = d->engine;
+    QV4::ExecutionEngine *engine = QJSValuePrivate::engine(this);
     if (!engine)
         return;
     Scope scope(engine);
 
-    Scoped<Object> o(scope, d->value);
+    ScopedObject o(scope, QJSValuePrivate::getValue(this));
     if (!o)
         return;
 
-    if (!value.d->checkEngine(o->engine())) {
+    if (!QJSValuePrivate::checkEngine(engine, value)) {
         qWarning("QJSValue::setProperty(%s) failed: cannot set value created in a different engine", name.toUtf8().constData());
         return;
     }
@@ -960,12 +1069,11 @@ void QJSValue::setProperty(const QString& name, const QJSValue& value)
         return;
     }
 
-    QV4::ExecutionContext *ctx = engine->currentContext();
-    s->makeIdentifier();
-    QV4::ScopedValue v(scope, value.d->getValue(engine));
-    o->put(s.getPointer(), v);
-    if (scope.hasException())
-        ctx->catchException();
+    s->makeIdentifier(scope.engine);
+    QV4::ScopedValue v(scope, QJSValuePrivate::convertedToValue(engine, value));
+    o->put(s, v);
+    if (engine->hasException)
+        engine->catchException();
 }
 
 /*!
@@ -982,23 +1090,27 @@ void QJSValue::setProperty(const QString& name, const QJSValue& value)
 */
 void QJSValue::setProperty(quint32 arrayIndex, const QJSValue& value)
 {
-    ExecutionEngine *engine = d->engine;
+    QV4::ExecutionEngine *engine = QJSValuePrivate::engine(this);
     if (!engine)
         return;
     Scope scope(engine);
 
-    Scoped<Object> o(scope, d->value);
+    ScopedObject o(scope, QJSValuePrivate::getValue(this));
     if (!o)
         return;
 
-    QV4::ExecutionContext *ctx = engine->currentContext();
-    QV4::ScopedValue v(scope, value.d->getValue(engine));
+    if (!QJSValuePrivate::checkEngine(engine, value)) {
+        qWarning("QJSValue::setProperty(%d) failed: cannot set value created in a different engine", arrayIndex);
+        return;
+    }
+
+    QV4::ScopedValue v(scope, QJSValuePrivate::convertedToValue(engine, value));
     if (arrayIndex != UINT_MAX)
         o->putIndexed(arrayIndex, v);
     else
-        o->put(engine->id_uintMax.getPointer(), v);
-    if (scope.hasException())
-        ctx->catchException();
+        o->put(engine->id_uintMax, v);
+    if (engine->hasException)
+        engine->catchException();
 }
 
 /*!
@@ -1023,17 +1135,16 @@ void QJSValue::setProperty(quint32 arrayIndex, const QJSValue& value)
 */
 bool QJSValue::deleteProperty(const QString &name)
 {
-    ExecutionEngine *engine = d->engine;
-    ExecutionContext *ctx = engine->currentContext();
+    QV4::ExecutionEngine *engine = QJSValuePrivate::engine(this);
     Scope scope(engine);
-    ScopedObject o(scope, d->value.asObject());
+    ScopedObject o(scope, QJSValuePrivate::getValue(this));
     if (!o)
         return false;
 
     ScopedString s(scope, engine->newString(name));
-    bool b = o->deleteProperty(s.getPointer());
-    if (scope.hasException())
-        ctx->catchException();
+    bool b = o->deleteProperty(s);
+    if (engine->hasException)
+        engine->catchException();
     return b;
 }
 
@@ -1045,17 +1156,17 @@ bool QJSValue::deleteProperty(const QString &name)
 */
 bool QJSValue::hasProperty(const QString &name) const
 {
-    ExecutionEngine *engine = d->engine;
+    QV4::ExecutionEngine *engine = QJSValuePrivate::engine(this);
     if (!engine)
         return false;
 
     Scope scope(engine);
-    ScopedObject o(scope, d->value);
+    ScopedObject o(scope, QJSValuePrivate::getValue(this));
     if (!o)
         return false;
 
     ScopedString s(scope, engine->newIdentifier(name));
-    return o->hasProperty(s.getPointer());
+    return o->hasProperty(s);
 }
 
 /*!
@@ -1066,17 +1177,17 @@ bool QJSValue::hasProperty(const QString &name) const
 */
 bool QJSValue::hasOwnProperty(const QString &name) const
 {
-    ExecutionEngine *engine = d->engine;
+    QV4::ExecutionEngine *engine = QJSValuePrivate::engine(this);
     if (!engine)
         return false;
 
     Scope scope(engine);
-    ScopedObject o(scope, d->value);
+    ScopedObject o(scope, QJSValuePrivate::getValue(this));
     if (!o)
         return false;
 
     ScopedString s(scope, engine->newIdentifier(name));
-    return o->hasOwnProperty(s.getPointer());
+    return o->hasOwnProperty(s);
 }
 
 /*!
@@ -1091,11 +1202,15 @@ bool QJSValue::hasOwnProperty(const QString &name) const
  */
 QObject *QJSValue::toQObject() const
 {
-    Returned<QV4::QObjectWrapper> *o = d->value.as<QV4::QObjectWrapper>();
-    if (!o)
+    QV4::ExecutionEngine *engine = QJSValuePrivate::engine(this);
+    if (!engine)
+        return 0;
+    QV4::Scope scope(engine);
+    QV4::Scoped<QV4::QObjectWrapper> wrapper(scope, QJSValuePrivate::getValue(this));
+    if (!wrapper)
         return 0;
 
-    return o->getPointer()->object();
+    return wrapper->object();
 }
 
 /*!
@@ -1107,10 +1222,13 @@ QObject *QJSValue::toQObject() const
 */
 QDateTime QJSValue::toDateTime() const
 {
-    QV4::DateObject *date = d->value.asDateObject();
-    if (!date)
-        return QDateTime();
-    return date->toQDateTime();
+    QV4::Value *val = QJSValuePrivate::getValue(this);
+    if (val) {
+        QV4::DateObject *date = val->asDateObject();
+        if (date)
+            return date->toQDateTime();
+    }
+    return QDateTime();
 }
 
 /*!
@@ -1119,7 +1237,8 @@ QDateTime QJSValue::toDateTime() const
 */
 bool QJSValue::isDate() const
 {
-    return d->value.asDateObject();
+    QV4::Value *val = QJSValuePrivate::getValue(this);
+    return val && val->asDateObject();
 }
 
 /*!
@@ -1128,7 +1247,8 @@ bool QJSValue::isDate() const
 */
 bool QJSValue::isRegExp() const
 {
-    return d->value.as<RegExpObject>();
+    QV4::Value *val = QJSValuePrivate::getValue(this);
+    return val && val->as<RegExpObject>();
 }
 
 /*!
@@ -1142,7 +1262,8 @@ bool QJSValue::isRegExp() const
 */
 bool QJSValue::isQObject() const
 {
-    return d->value.as<QV4::QObjectWrapper>() != 0;
+    QV4::Value *val = QJSValuePrivate::getValue(this);
+    return val && val->as<QV4::QObjectWrapper>() != 0;
 }
 
 QT_END_NAMESPACE

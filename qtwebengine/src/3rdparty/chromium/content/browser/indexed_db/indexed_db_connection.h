@@ -6,6 +6,7 @@
 #define CONTENT_BROWSER_INDEXED_DB_INDEXED_DB_CONNECTION_H_
 
 #include "base/memory/ref_counted.h"
+#include "base/memory/weak_ptr.h"
 #include "content/browser/indexed_db/indexed_db_database.h"
 #include "content/browser/indexed_db/indexed_db_database_callbacks.h"
 
@@ -24,8 +25,10 @@ class CONTENT_EXPORT IndexedDBConnection {
   virtual void Close();
   virtual bool IsConnected();
 
-  IndexedDBDatabase* database() { return database_; }
-  IndexedDBDatabaseCallbacks* callbacks() { return callbacks_; }
+  void VersionChangeIgnored();
+
+  IndexedDBDatabase* database() const { return database_.get(); }
+  IndexedDBDatabaseCallbacks* callbacks() const { return callbacks_.get(); }
 
  private:
   // NULL in some unit tests, and after the connection is closed.
@@ -34,6 +37,8 @@ class CONTENT_EXPORT IndexedDBConnection {
   // The callbacks_ member is cleared when the connection is closed.
   // May be NULL in unit tests.
   scoped_refptr<IndexedDBDatabaseCallbacks> callbacks_;
+
+  base::WeakPtrFactory<IndexedDBConnection> weak_factory_;
 
   DISALLOW_COPY_AND_ASSIGN(IndexedDBConnection);
 };

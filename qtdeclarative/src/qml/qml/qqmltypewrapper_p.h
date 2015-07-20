@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -58,40 +58,45 @@ class QQmlTypeNameCache;
 
 namespace QV4 {
 
+namespace Heap {
+
+struct QmlTypeWrapper : Object {
+    enum TypeNameMode {
+        IncludeEnums,
+        ExcludeEnums
+    };
+
+    QmlTypeWrapper(QV4::ExecutionEngine *engine);
+    ~QmlTypeWrapper();
+    TypeNameMode mode;
+    QPointer<QObject> object;
+
+    QQmlType *type;
+    QQmlTypeNameCache *typeNamespace;
+    const void *importNamespace;
+};
+
+}
+
 struct Q_QML_EXPORT QmlTypeWrapper : Object
 {
-    enum TypeNameMode { IncludeEnums, ExcludeEnums };
-
-    struct Data : Object::Data {
-        Data(QV8Engine *engine);
-        ~Data();
-        QV8Engine *v8;
-        TypeNameMode mode;
-        QPointer<QObject> object;
-
-        QQmlType *type;
-        QQmlTypeNameCache *typeNamespace;
-        const void *importNamespace;
-    };
-    V4_OBJECT(Object)
-private:
-
-public:
+    V4_OBJECT2(QmlTypeWrapper, Object)
+    V4_NEEDS_DESTROY
 
     bool isSingleton() const;
     QObject *singletonObject() const;
 
     QVariant toVariant() const;
 
-    static ReturnedValue create(QV8Engine *, QObject *, QQmlType *, TypeNameMode = IncludeEnums);
-    static ReturnedValue create(QV8Engine *, QObject *, QQmlTypeNameCache *, const void *, TypeNameMode = IncludeEnums);
+    static ReturnedValue create(ExecutionEngine *, QObject *, QQmlType *,
+                                Heap::QmlTypeWrapper::TypeNameMode = Heap::QmlTypeWrapper::IncludeEnums);
+    static ReturnedValue create(ExecutionEngine *, QObject *, QQmlTypeNameCache *, const void *,
+                                Heap::QmlTypeWrapper::TypeNameMode = Heap::QmlTypeWrapper::IncludeEnums);
 
 
     static ReturnedValue get(Managed *m, String *name, bool *hasProperty);
-    static void put(Managed *m, String *name, const ValueRef value);
+    static void put(Managed *m, String *name, const Value &value);
     static PropertyAttributes query(const Managed *, String *name);
-    static void destroy(Managed *that);
-
     static bool isEqualTo(Managed *that, Managed *o);
 
 };

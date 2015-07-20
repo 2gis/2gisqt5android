@@ -3,7 +3,7 @@
 ** Copyright (C) 2012 Denis Shienkov <denis.shienkov@gmail.com>
 ** Copyright (C) 2012 Laszlo Papp <lpapp@kde.org>
 ** Copyright (C) 2012 Andre Hartmann <aha_1980@gmx.de>
-** Contact: http://www.qt-project.org/legal
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtSerialPort module of the Qt Toolkit.
 **
@@ -12,9 +12,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -25,15 +25,15 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
 
-#include "qserialport_unix_p.h"
+#include "qserialport_p.h"
 #include "qserialportinfo_p.h"
 
 #include <errno.h>
@@ -43,7 +43,7 @@
 #include <unistd.h>
 
 #ifdef Q_OS_MAC
-#if defined (MAC_OS_X_VERSION_10_4) && (MAC_OS_X_VERSION_MIN_REQUIRED >= MAC_OS_X_VERSION_10_4)
+#if defined(MAC_OS_X_VERSION_10_4) && (MAC_OS_X_VERSION_MIN_REQUIRED >= MAC_OS_X_VERSION_10_4)
 #include <IOKit/serial/ioss.h>
 #endif
 #endif
@@ -58,6 +58,10 @@
 #include <QtCore/qsocketnotifier.h>
 #include <QtCore/qmap.h>
 
+#ifdef Q_OS_MAC
+#include <QtCore/qstandardpaths.h>
+#endif
+
 QT_BEGIN_NAMESPACE
 
 QString serialPortLockFilePath(const QString &portName)
@@ -68,6 +72,9 @@ QString serialPortLockFilePath(const QString &portName)
         << QStringLiteral("/var/spool/locks")
         << QStringLiteral("/var/spool/uucp")
         << QStringLiteral("/tmp")
+        << QStringLiteral("/var/tmp")
+        << QStringLiteral("/var/lock/lockdev")
+        << QStringLiteral("/run/lock")
 #ifdef Q_OS_ANDROID
         << QStringLiteral("/data/local/tmp")
 #endif
@@ -75,7 +82,7 @@ QString serialPortLockFilePath(const QString &portName)
 
     QString fileName = portName;
     fileName.replace(QLatin1Char('/'), QLatin1Char('_'));
-    fileName.prepend(QStringLiteral("/LCK.."));
+    fileName.prepend(QLatin1String("/LCK.."));
 
     QString lockFilePath;
 
@@ -90,6 +97,13 @@ QString serialPortLockFilePath(const QString &portName)
             }
         }
     }
+
+#ifdef Q_OS_MAC
+    // This is the workaround to specify a temporary directory
+    // on OSX when running the App Sandbox feature.
+    if (lockFilePath.isEmpty())
+        lockFilePath = QStandardPaths::writableLocation(QStandardPaths::TempLocation);
+#endif
 
     if (lockFilePath.isEmpty()) {
         qWarning("The following directories are not readable or writable for detaling with lock files\n");
@@ -144,18 +158,6 @@ private:
 };
 
 #include "qserialport_unix.moc"
-
-QSerialPortPrivate::QSerialPortPrivate(QSerialPort *q)
-    : QSerialPortPrivateData(q)
-    , descriptor(-1)
-    , readNotifier(Q_NULLPTR)
-    , writeNotifier(Q_NULLPTR)
-    , emittedReadyRead(false)
-    , emittedBytesWritten(false)
-    , pendingBytesWritten(0)
-    , writeSequenceStarted(false)
-{
-}
 
 bool QSerialPortPrivate::open(QIODevice::OpenMode mode)
 {
@@ -283,14 +285,14 @@ QSerialPort::PinoutSignals QSerialPortPrivate::pinoutSignals()
 #ifdef TIOCM_CAR
     if (arg & TIOCM_CAR)
         ret |= QSerialPort::DataCarrierDetectSignal;
-#elif defined TIOCM_CD
+#elif defined(TIOCM_CD)
     if (arg & TIOCM_CD)
         ret |= QSerialPort::DataCarrierDetectSignal;
 #endif
 #ifdef TIOCM_RNG
     if (arg & TIOCM_RNG)
         ret |= QSerialPort::RingIndicatorSignal;
-#elif defined TIOCM_RI
+#elif defined(TIOCM_RI)
     if (arg & TIOCM_RI)
         ret |= QSerialPort::RingIndicatorSignal;
 #endif
@@ -372,7 +374,7 @@ bool QSerialPortPrivate::setBreakEnabled(bool set)
 
 qint64 QSerialPortPrivate::readData(char *data, qint64 maxSize)
 {
-    return readBuffer.read(data, maxSize);
+    return buffer.read(data, maxSize);
 }
 
 bool QSerialPortPrivate::waitForReadyRead(int msecs)
@@ -451,6 +453,8 @@ QSerialPortPrivate::setStandardBaudRate(qint32 baudRate, QSerialPort::Directions
 {
     struct serial_struct currentSerialInfo;
 
+    ::memset(&currentSerialInfo, 0, sizeof(currentSerialInfo));
+
     if ((::ioctl(descriptor, TIOCGSERIAL, &currentSerialInfo) != -1)
             && (currentSerialInfo.flags & ASYNC_SPD_CUST)) {
         currentSerialInfo.flags &= ~ASYNC_SPD_CUST;
@@ -480,6 +484,8 @@ QSerialPortPrivate::setCustomBaudRate(qint32 baudRate, QSerialPort::Directions d
     Q_UNUSED(directions);
 
     struct serial_struct currentSerialInfo;
+
+    ::memset(&currentSerialInfo, 0, sizeof(currentSerialInfo));
 
     if (::ioctl(descriptor, TIOCGSERIAL, &currentSerialInfo) == -1)
         return decodeSystemError();
@@ -511,7 +517,7 @@ QSerialPortPrivate::setCustomBaudRate(qint32 baudRate, QSerialPort::Directions d
 {
     Q_UNUSED(directions);
 
-#if defined (MAC_OS_X_VERSION_10_4) && (MAC_OS_X_VERSION_MIN_REQUIRED >= MAC_OS_X_VERSION_10_4)
+#if defined(MAC_OS_X_VERSION_10_4) && (MAC_OS_X_VERSION_MIN_REQUIRED >= MAC_OS_X_VERSION_10_4)
     if (::ioctl(descriptor, IOSSIOSPEED, &baudRate) == -1)
         return decodeSystemError();
 
@@ -521,7 +527,7 @@ QSerialPortPrivate::setCustomBaudRate(qint32 baudRate, QSerialPort::Directions d
     return QSerialPort::UnsupportedOperationError;
 }
 
-#elif defined (Q_OS_QNX)
+#elif defined(Q_OS_QNX)
 
 QSerialPort::SerialPortError
 QSerialPortPrivate::setCustomBaudRate(qint32 baudRate, QSerialPort::Directions directions)
@@ -705,11 +711,11 @@ bool QSerialPortPrivate::readNotification()
     Q_Q(QSerialPort);
 
     // Always buffered, read data from the port into the read buffer
-    qint64 newBytes = readBuffer.size();
+    qint64 newBytes = buffer.size();
     qint64 bytesToRead = policy == QSerialPort::IgnorePolicy ? ReadChunkSize : 1;
 
-    if (readBufferMaxSize && bytesToRead > (readBufferMaxSize - readBuffer.size())) {
-        bytesToRead = readBufferMaxSize - readBuffer.size();
+    if (readBufferMaxSize && bytesToRead > (readBufferMaxSize - buffer.size())) {
+        bytesToRead = readBufferMaxSize - buffer.size();
         if (bytesToRead == 0) {
             // Buffer is full. User must read data from the buffer
             // before we can read more from the port.
@@ -717,7 +723,7 @@ bool QSerialPortPrivate::readNotification()
         }
     }
 
-    char *ptr = readBuffer.reserve(bytesToRead);
+    char *ptr = buffer.reserve(bytesToRead);
     const qint64 readBytes = readFromPort(ptr, bytesToRead);
 
     if (readBytes <= 0) {
@@ -727,16 +733,16 @@ bool QSerialPortPrivate::readNotification()
         else
             setReadNotificationEnabled(false);
         q->setError(error);
-        readBuffer.chop(bytesToRead);
+        buffer.chop(bytesToRead);
         return false;
     }
 
-    readBuffer.chop(bytesToRead - qMax(readBytes, qint64(0)));
+    buffer.chop(bytesToRead - qMax(readBytes, qint64(0)));
 
-    newBytes = readBuffer.size() - newBytes;
+    newBytes = buffer.size() - newBytes;
 
     // If read buffer is full, disable the read port notifier.
-    if (readBufferMaxSize && readBuffer.size() == readBufferMaxSize)
+    if (readBufferMaxSize && buffer.size() == readBufferMaxSize)
         setReadNotificationEnabled(false);
 
     // only emit readyRead() when not recursing, and only if there is data available
@@ -864,8 +870,10 @@ bool QSerialPortPrivate::updateTermios()
     return true;
 }
 
-QSerialPort::SerialPortError QSerialPortPrivate::decodeSystemError() const
+QSerialPort::SerialPortError QSerialPortPrivate::decodeSystemError(int systemErrorCode) const
 {
+    Q_UNUSED(systemErrorCode);
+
     QSerialPort::SerialPortError error;
     switch (errno) {
     case ENODEV:
@@ -998,7 +1006,7 @@ bool QSerialPortPrivate::waitForReadOrWrite(bool *selectForRead, bool *selectFor
 qint64 QSerialPortPrivate::readFromPort(char *data, qint64 maxSize)
 {
     qint64 bytesRead = 0;
-#if defined (CMSPAR)
+#if defined(CMSPAR)
     if (parity == QSerialPort::NoParity
             || policy != QSerialPort::StopReceivingPolicy) {
 #else
@@ -1016,7 +1024,7 @@ qint64 QSerialPortPrivate::readFromPort(char *data, qint64 maxSize)
 qint64 QSerialPortPrivate::writeToPort(const char *data, qint64 maxSize)
 {
     qint64 bytesWritten = 0;
-#if defined (CMSPAR)
+#if defined(CMSPAR)
     bytesWritten = qt_safe_write(descriptor, data, maxSize);
 #else
     if (parity != QSerialPort::MarkParity

@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQuick module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -44,7 +44,7 @@ QT_BEGIN_NAMESPACE
 #ifndef QT_NO_ACCESSIBILITY
 
 QAccessibleQuickItem::QAccessibleQuickItem(QQuickItem *item)
-    : QQmlAccessible(item), m_doc(textDocument())
+    : QAccessibleObject(item), m_doc(textDocument())
 {
 }
 
@@ -178,16 +178,22 @@ QAccessible::State QAccessibleQuickItem::state() const
     if (!attached)
         return QAccessible::State();
 
-    QAccessible::State st = attached->state();
+    QAccessible::State state = attached->state();
 
-    if (!item()->window() || !item()->window()->isVisible() ||!item()->isVisible() || qFuzzyIsNull(item()->opacity()))
-        st.invisible = true;
+    QRect viewRect_ = viewRect();
+    QRect itemRect = rect();
 
-    if (item()->activeFocusOnTab())
-        st.focusable = true;
+    if (viewRect_.isNull() || itemRect.isNull() || !item()->window() || !item()->window()->isVisible() ||!item()->isVisible() || qFuzzyIsNull(item()->opacity()))
+        state.invisible = true;
+    if (!viewRect_.intersects(itemRect))
+        state.offscreen = true;
+    if ((role() == QAccessible::CheckBox || role() == QAccessible::RadioButton) && object()->property("checked").toBool())
+        state.checked = true;
+    if (item()->activeFocusOnTab() || role() == QAccessible::EditableText)
+        state.focusable = true;
     if (item()->hasActiveFocus())
-        st.focused = true;
-    return st;
+        state.focused = true;
+    return state;
 }
 
 QAccessible::Role QAccessibleQuickItem::role() const
@@ -213,11 +219,29 @@ bool QAccessibleQuickItem::isAccessible() const
 
 QStringList QAccessibleQuickItem::actionNames() const
 {
-    QStringList actions = QQmlAccessible::actionNames();
+    QStringList actions;
+    switch (role()) {
+    case QAccessible::PushButton:
+        actions << QAccessibleActionInterface::pressAction();
+        break;
+    case QAccessible::RadioButton:
+    case QAccessible::CheckBox:
+        actions << QAccessibleActionInterface::toggleAction()
+                << QAccessibleActionInterface::pressAction();
+        break;
+    case QAccessible::Slider:
+    case QAccessible::SpinBox:
+    case QAccessible::ScrollBar:
+        actions << QAccessibleActionInterface::increaseAction()
+                << QAccessibleActionInterface::decreaseAction();
+        break;
+    default:
+        break;
+    }
     if (state().focusable)
         actions.append(QAccessibleActionInterface::setFocusAction());
 
-    // ### The following can lead to duplicate action names. We'll fix that when we kill QQmlAccessible
+    // ### The following can lead to duplicate action names.
     if (QQuickAccessibleAttached *attached = QQuickAccessibleAttached::attachedProperties(item()))
         attached->availableActions(&actions);
     return actions;
@@ -232,13 +256,80 @@ void QAccessibleQuickItem::doAction(const QString &actionName)
     }
     if (QQuickAccessibleAttached *attached = QQuickAccessibleAttached::attachedProperties(item()))
         accepted = attached->doAction(actionName);
-    if (!accepted)
-        QQmlAccessible::doAction(actionName);
+
+    if (accepted)
+        return;
+    // Look for and call the accessible[actionName]Action() function on the item.
+    // This allows for overriding the default action handling.
+    const QByteArray functionName = QByteArrayLiteral("accessible") + actionName.toLatin1() + QByteArrayLiteral("Action");
+    if (object()->metaObject()->indexOfMethod(QByteArray(functionName + QByteArrayLiteral("()"))) != -1) {
+        QMetaObject::invokeMethod(object(), functionName);
+        return;
+    }
+
+    // Role-specific default action handling follows. Items are expected to provide
+    // properties according to role conventions. These will then be read and/or updated
+    // by the accessibility system.
+    //   Checkable roles   : checked
+    //   Value-based roles : (via the value interface: value, minimumValue, maximumValue), stepSize
+    switch (role()) {
+    case QAccessible::RadioButton:
+    case QAccessible::CheckBox: {
+        QVariant checked = object()->property("checked");
+        if (checked.isValid()) {
+            if (actionName == QAccessibleActionInterface::toggleAction() ||
+                    actionName == QAccessibleActionInterface::pressAction()) {
+
+                object()->setProperty("checked",  QVariant(!checked.toBool()));
+            }
+        }
+        break;
+    }
+    case QAccessible::Slider:
+    case QAccessible::SpinBox:
+    case QAccessible::Dial:
+    case QAccessible::ScrollBar: {
+        if (actionName != QAccessibleActionInterface::increaseAction() &&
+                actionName != QAccessibleActionInterface::decreaseAction())
+            break;
+
+        // Update the value using QAccessibleValueInterface, respecting
+        // the minimum and maximum value (if set). Also check for and
+        // use the "stepSize" property on the item
+        if (QAccessibleValueInterface *valueIface = valueInterface()) {
+            QVariant valueV = valueIface->currentValue();
+            qreal newValue = valueV.toReal();
+
+            QVariant stepSizeV = object()->property("stepSize");
+            qreal stepSize = stepSizeV.isValid() ? stepSizeV.toReal() : qreal(1.0);
+            if (actionName == QAccessibleActionInterface::increaseAction()) {
+                newValue += stepSize;
+            } else {
+                newValue -= stepSize;
+            }
+
+            QVariant minimumValueV = valueIface->minimumValue();
+            if (minimumValueV.isValid()) {
+                newValue = qMax(newValue, minimumValueV.toReal());
+            }
+            QVariant maximumValueV = valueIface->maximumValue();
+            if (maximumValueV.isValid()) {
+                newValue = qMin(newValue, maximumValueV.toReal());
+            }
+
+            valueIface->setCurrentValue(QVariant(newValue));
+        }
+        break;
+    }
+    default:
+        break;
+    }
 }
 
 QStringList QAccessibleQuickItem::keyBindingsForAction(const QString &actionName) const
 {
-    return QQmlAccessible::keyBindingsForAction(actionName);
+    Q_UNUSED(actionName)
+    return QStringList();
 }
 
 QString QAccessibleQuickItem::text(QAccessible::Text textType) const
@@ -287,6 +378,8 @@ QString QAccessibleQuickItem::text(QAccessible::Text textType) const
 void *QAccessibleQuickItem::interface_cast(QAccessible::InterfaceType t)
 {
     QAccessible::Role r = role();
+    if (t == QAccessible::ActionInterface)
+        return static_cast<QAccessibleActionInterface*>(this);
     if (t == QAccessible::ValueInterface &&
            (r == QAccessible::Slider ||
             r == QAccessible::SpinBox ||
@@ -298,7 +391,7 @@ void *QAccessibleQuickItem::interface_cast(QAccessible::InterfaceType t)
             (r == QAccessible::EditableText))
         return static_cast<QAccessibleTextInterface*>(this);
 
-    return QQmlAccessible::interface_cast(t);
+    return QAccessibleObject::interface_cast(t);
 }
 
 QVariant QAccessibleQuickItem::currentValue() const

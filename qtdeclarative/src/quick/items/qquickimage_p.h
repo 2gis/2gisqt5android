@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQuick module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -53,6 +53,7 @@ class Q_AUTOTEST_EXPORT QQuickImage : public QQuickImageBase
     Q_PROPERTY(HAlignment horizontalAlignment READ horizontalAlignment WRITE setHorizontalAlignment NOTIFY horizontalAlignmentChanged)
     Q_PROPERTY(VAlignment verticalAlignment READ verticalAlignment WRITE setVerticalAlignment NOTIFY verticalAlignmentChanged)
     Q_PROPERTY(bool mipmap READ mipmap WRITE setMipmap NOTIFY mipmapChanged REVISION 1)
+    Q_PROPERTY(bool autoTransform READ autoTransform WRITE setAutoTransform NOTIFY autoTransformChanged REVISION 2)
 
 public:
     QQuickImage(QQuickItem *parent=0);
@@ -73,7 +74,7 @@ public:
     qreal paintedWidth() const;
     qreal paintedHeight() const;
 
-    QRectF boundingRect() const;
+    QRectF boundingRect() const Q_DECL_OVERRIDE;
 
     HAlignment horizontalAlignment() const;
     void setHorizontalAlignment(HAlignment align);
@@ -81,8 +82,8 @@ public:
     VAlignment verticalAlignment() const;
     void setVerticalAlignment(VAlignment align);
 
-    bool isTextureProvider() const { return true; }
-    QSGTextureProvider *textureProvider() const;
+    bool isTextureProvider() const Q_DECL_OVERRIDE { return true; }
+    QSGTextureProvider *textureProvider() const Q_DECL_OVERRIDE;
 
     bool mipmap() const;
     void setMipmap(bool use);
@@ -93,18 +94,19 @@ Q_SIGNALS:
     void horizontalAlignmentChanged(HAlignment alignment);
     void verticalAlignmentChanged(VAlignment alignment);
     Q_REVISION(1) void mipmapChanged(bool);
+    Q_REVISION(2) void autoTransformChanged();
 
 private Q_SLOTS:
     void invalidateSceneGraph();
 
 protected:
     QQuickImage(QQuickImagePrivate &dd, QQuickItem *parent);
-    void pixmapChange();
+    void pixmapChange() Q_DECL_OVERRIDE;
     void updatePaintedGeometry();
     void releaseResources() Q_DECL_OVERRIDE;
 
-    virtual void geometryChanged(const QRectF &newGeometry, const QRectF &oldGeometry);
-    virtual QSGNode *updatePaintNode(QSGNode *, UpdatePaintNodeData *);
+    void geometryChanged(const QRectF &newGeometry, const QRectF &oldGeometry) Q_DECL_OVERRIDE;
+    QSGNode *updatePaintNode(QSGNode *, UpdatePaintNodeData *) Q_DECL_OVERRIDE;
 
 private:
     Q_DISABLE_COPY(QQuickImage)

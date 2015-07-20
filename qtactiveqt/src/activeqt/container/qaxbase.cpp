@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the ActiveQt framework of the Qt Toolkit.
 **
@@ -17,8 +17,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -69,6 +69,7 @@
 #include <ctype.h>
 
 #include "../shared/qaxtypes.h"
+#include "../shared/qaxutils_p.h"
 
 QT_BEGIN_NAMESPACE
 
@@ -304,14 +305,7 @@ public:
         }
 
         sigs.insert(memid, signalname);
-        QMap<DISPID,QByteArray>::ConstIterator it;
-        DISPID id = -1;
-        for (it = propsigs.constBegin(); it!= propsigs.constEnd(); ++it) {
-            if (it.value() == signalname) {
-                id = it.key();
-                break;
-            }
-        }
+        const DISPID id = propsigs.key(signalname, -1);
         if (id != -1)
             propsigs.remove(id);
     }
@@ -586,6 +580,8 @@ public:
 class QAxBasePrivate
 {
 public:
+    typedef QHash<QUuid, QAxEventSink*> UuidEventSinkHash;
+
     QAxBasePrivate()
         : useEventSink(true), useMetaObject(true), useClassInfo(true),
         cachedMetaObject(false), initialized(false), tryCache(false),
@@ -625,8 +621,7 @@ public:
     }
 
     QString ctrl;
-
-    QHash<QUuid, QAxEventSink*> eventSink;
+    UuidEventSinkHash eventSink;
     uint useEventSink       :1;
     uint useMetaObject      :1;
     uint useClassInfo       :1;
@@ -706,7 +701,7 @@ QByteArray QAxEventSink::findProperty(DISPID dispID)
 
     Properties exposed by the object's IDispatch implementation can
     be read and written through the property system provided by the
-    Qt Object Model (both subclasses are QObjects, so you can use
+    Qt Object Model (both subclasses are \l{QObject}s, so you can use
     QObject::setProperty() and QObject::property()). Properties with
     multiple parameters are not supported.
 
@@ -886,9 +881,6 @@ QAxBase::QAxBase(IUnknown *iface)
         d->ptr->AddRef();
         d->initialized = true;
     }
-#if defined(Q_OS_WINCE)
-    CoInitializeEx(0, COINIT_MULTITHREADED);
-#endif
 }
 
 /*!
@@ -898,9 +890,6 @@ QAxBase::QAxBase(IUnknown *iface)
 */
 QAxBase::~QAxBase()
 {
-#if defined(Q_OS_WINCE)
-    CoUninitialize();
-#endif
 
     clear();
 
@@ -996,7 +985,7 @@ QAxMetaObject *QAxBase::internalMetaObject() const
 */
 bool QAxBase::setControl(const QString &c)
 {
-    if (c.toLower() == d->ctrl.toLower())
+    if (!c.compare(d->ctrl, Qt::CaseInsensitive))
         return !d->ctrl.isEmpty();
 
     QString search = c;
@@ -1014,10 +1003,9 @@ bool QAxBase::setControl(const QString &c)
                 search = controls.value(c + QLatin1String("/CLSID/Default")).toString();
                 if (search.isEmpty()) {
                     controls.beginGroup(QLatin1String("/CLSID"));
-                    QStringList clsids = controls.childGroups();
-                    for (QStringList::Iterator it = clsids.begin(); it != clsids.end(); ++it) {
-                        QString clsid = *it;
-                        QString name = controls.value(clsid + QLatin1String("/Default")).toString();
+                    const QStringList clsids = controls.childGroups();
+                    foreach (const QString &clsid, clsids) {
+                        const QString name = controls.value(clsid + QLatin1String("/Default")).toString();
                         if (name == c) {
                             search = clsid;
                             break;
@@ -1031,7 +1019,7 @@ bool QAxBase::setControl(const QString &c)
             search = c;
     }
 
-    if (search.toLower() == d->ctrl.toLower())
+    if (!search.compare(d->ctrl, Qt::CaseInsensitive))
         return !d->ctrl.isEmpty();
 
     clear();
@@ -1116,10 +1104,7 @@ void QAxBase::disableClassInfo()
 */
 void QAxBase::clear()
 {
-    QHash<QUuid, QAxEventSink*>::Iterator it =  d->eventSink.begin();
-    while (it != d->eventSink.end()) {
-        QAxEventSink *eventSink = it.value();
-        ++it;
+    foreach (QAxEventSink *eventSink, d->eventSink) {
         if (eventSink) {
             eventSink->unadvise();
             eventSink->Release();
@@ -1349,17 +1334,12 @@ bool QAxBase::initializeLicensedHelper(void *f, const QString &key, IUnknown **p
 */
 bool QAxBase::initializeActive(IUnknown** ptr)
 {
-#if defined(Q_OS_WINCE)
-    Q_UNUSED(ptr);
-    return false;
-#else
     int at = control().lastIndexOf(QLatin1String("}&"));
     QString clsid(control().left(at));
 
     GetActiveObject(QUuid(clsid), 0, ptr);
 
     return *ptr != 0;
-#endif
 }
 
 #ifdef Q_CC_GNU
@@ -1380,10 +1360,6 @@ bool QAxBase::initializeActive(IUnknown** ptr)
 */
 bool QAxBase::initializeFromFile(IUnknown** ptr)
 {
-#if defined(Q_OS_WINCE)
-    Q_UNUSED(ptr);
-    return false;
-#else
     IStorage *storage = 0;
     ILockBytes * bytes = 0;
     HRESULT hres = ::CreateILockBytesOnHGlobal(0, TRUE, &bytes);
@@ -1395,7 +1371,6 @@ bool QAxBase::initializeFromFile(IUnknown** ptr)
     bytes->Release();
 
     return hres == S_OK;
-#endif
 }
 
 
@@ -1436,7 +1411,7 @@ bool QAxBase::initializeRemote(IUnknown** ptr)
         at = user.indexOf(QChar::fromLatin1(':'));
         if (at != -1) {
             passwd = user.mid(at+1);
-            user = user.left(at);
+            user.truncate(at);
         }
         at = user.indexOf(QChar::fromLatin1('/'));
         if (at != -1) {
@@ -1448,7 +1423,7 @@ bool QAxBase::initializeRemote(IUnknown** ptr)
     at = clsid.lastIndexOf(QLatin1String("}:"));
     if (at != -1) {
         key = clsid.mid(at+2);
-        clsid = clsid.left(at);
+        clsid.truncate(at);
     }
 
     d->ctrl = server + QChar::fromLatin1('/') + clsid;
@@ -1542,6 +1517,10 @@ public:
     }
 
 private:
+    typedef QPair<QByteArray, int> ByteArrayIntPair;
+    typedef QList<ByteArrayIntPair> ByteArrayIntPairList;
+    typedef QMap<QByteArray, ByteArrayIntPairList>::ConstIterator EnumListMapConstIterator;
+
     void init();
 
 
@@ -1706,10 +1685,11 @@ private:
         return property_list.value(name).type;
     }
 
-    QMap<QByteArray, QList<QPair<QByteArray, int> > > enum_list;
+    QMap<QByteArray, ByteArrayIntPairList> enum_list;
+
     inline void addEnumValue(const QByteArray &enumname, const QByteArray &key, int value)
     {
-        enum_list[enumname].append(QPair<QByteArray, int>(key, value));
+        enum_list[enumname].append(ByteArrayIntPair(key, value));
     }
 
     inline bool hasEnum(const QByteArray &enumname)
@@ -1933,20 +1913,20 @@ QByteArray MetaObjectGenerator::usertypeToString(const TYPEDESC &tdesc, ITypeInf
                             userTypeName = "IDispatch";
                         } else {
                             if (typeLibName != current_typelib)
-                                userTypeName = typeLibName + "::" + userTypeName;
+                                userTypeName.prepend(typeLibName + "::");
                             if (!qax_qualified_usertypes.contains(userTypeName))
                                 qax_qualified_usertypes << userTypeName;
                         }
                         break;
                     case TKIND_ENUM:
                         if (typeLibName != current_typelib)
-                            userTypeName = typeLibName + "::" + userTypeName;
+                            userTypeName.prepend(typeLibName + "::");
                         if (!qax_qualified_usertypes.contains("enum " + userTypeName))
                             qax_qualified_usertypes << "enum " + userTypeName;
                         break;
                     case TKIND_INTERFACE:
                         if (typeLibName != current_typelib)
-                            userTypeName = typeLibName + "::" + userTypeName;
+                            userTypeName.prepend(typeLibName + "::");
                         if (!qax_qualified_usertypes.contains(userTypeName))
                             qax_qualified_usertypes << userTypeName;
                         break;
@@ -2182,11 +2162,10 @@ void MetaObjectGenerator::readClassInfo()
         if (!tlid.isEmpty()) {
             controls.beginGroup(QLatin1String("/Classes/TypeLib/") + tlid);
             QStringList versions = controls.childGroups();
-            QStringList::Iterator vit = versions.begin();
-            while (tlfile.isEmpty() && vit != versions.end()) {
-                QString version = *vit;
-                ++vit;
+            foreach (const QString &version, versions) {
                 tlfile = controls.value(QLatin1Char('/') + version + QLatin1String("/0/win32/.")).toString();
+                if (!tlfile.isEmpty())
+                    break;
             }
             controls.endGroup();
         } else {
@@ -2197,11 +2176,13 @@ void MetaObjectGenerator::readClassInfo()
         if (!tlfile.isEmpty()) {
             LoadTypeLib((OLECHAR*)tlfile.utf16(), &typelib);
             if (!typelib) {
-                tlfile = tlfile.left(tlfile.lastIndexOf(QLatin1Char('.'))) + QLatin1String(".tlb");
+                tlfile.truncate(tlfile.lastIndexOf(QLatin1Char('.')));
+                tlfile += QLatin1String(".tlb");
                 LoadTypeLib((OLECHAR*)tlfile.utf16(), &typelib);
             }
             if (!typelib) {
-                tlfile = tlfile.left(tlfile.lastIndexOf(QLatin1Char('.'))) + QLatin1String(".olb");
+                tlfile.truncate(tlfile.lastIndexOf(QLatin1Char('.')));
+                tlfile.append(QLatin1String(".olb"));
                 LoadTypeLib((OLECHAR*)tlfile.utf16(), &typelib);
             }
         }
@@ -2978,11 +2959,7 @@ QMetaObject *MetaObjectGenerator::tryCache()
             IConnectionPointContainer *cpoints = 0;
             d->ptr->QueryInterface(IID_IConnectionPointContainer, (void**)&cpoints);
             if (cpoints) {
-                QList<QUuid>::ConstIterator it = d->metaobj->connectionInterfaces.begin();
-                while (it != d->metaobj->connectionInterfaces.end()) {
-                    QUuid iid = *it;
-                    ++it;
-
+                foreach (const QUuid &iid, d->metaobj->connectionInterfaces) {
                     IConnectionPoint *cpoint = 0;
                     cpoints->FindConnectionPoint(iid, &cpoint);
                     if (cpoint) {
@@ -3068,10 +3045,9 @@ QMetaObject *MetaObjectGenerator::metaObject(const QMetaObject *parentObject, co
     int_data_size += (signal_list.count() + slot_list.count()) * 5 + paramsDataSize;
     int_data_size += property_list.count() * 3;
     int_data_size += enum_list.count() * 4;
-    for (QMap<QByteArray, QList<QPair<QByteArray, int> > >::ConstIterator it = enum_list.begin();
-    it != enum_list.end(); ++it) {
-        int_data_size += (*it).count() * 2;
-    }
+    const EnumListMapConstIterator ecend = enum_list.end();
+    for (EnumListMapConstIterator it = enum_list.begin(); it != ecend; ++it)
+        int_data_size += it.value().count() * 2;
     ++int_data_size; // eod
 
     uint *int_data = new uint[int_data_size];
@@ -3100,7 +3076,9 @@ QMetaObject *MetaObjectGenerator::metaObject(const QMetaObject *parentObject, co
     uint offset = header->classInfoData;
 
     // each class info in form key\0value\0
-    for (QMap<QByteArray, QByteArray>::ConstIterator it = classinfo_list.begin(); it != classinfo_list.end(); ++it) {
+    typedef QMap<QByteArray, QByteArray>::ConstIterator ClassInfoConstIterator;
+    const ClassInfoConstIterator cend = classinfo_list.end();
+    for (ClassInfoConstIterator it = classinfo_list.begin(); it != cend; ++it) {
         QByteArray key(it.key());
         QByteArray value(it.value());
         int_data[offset++] = strings.enter(key);
@@ -3147,7 +3125,9 @@ QMetaObject *MetaObjectGenerator::metaObject(const QMetaObject *parentObject, co
     Q_ASSERT(offset == uint(header->propertyData));
 
     // each property in form name\0type\0
-    for (QMap<QByteArray, Property>::ConstIterator it = property_list.begin(); it != property_list.end(); ++it) {
+    typedef QMap<QByteArray, Property>::ConstIterator PropertyMapConstIterator;
+    const PropertyMapConstIterator pcend = property_list.end();
+    for (PropertyMapConstIterator it = property_list.begin(); it != pcend; ++it) {
         QByteArray name(it.key());
         QByteArray type(it.value().type);
         Q_ASSERT(!type.isEmpty());
@@ -3164,7 +3144,7 @@ QMetaObject *MetaObjectGenerator::metaObject(const QMetaObject *parentObject, co
 
     int value_offset = offset + enum_list.count() * 4;
     // each enum in form name\0
-    for (QMap<QByteArray, QList<QPair<QByteArray, int> > >::ConstIterator it = enum_list.begin(); it != enum_list.end(); ++it) {
+    for (EnumListMapConstIterator it = enum_list.begin(); it != ecend; ++it) {
         QByteArray name(it.key());
         int flags = 0x0; // 0x1 for flag?
         int count = it.value().count();
@@ -3178,8 +3158,9 @@ QMetaObject *MetaObjectGenerator::metaObject(const QMetaObject *parentObject, co
     Q_ASSERT(offset == uint(header->enumeratorData + enum_list.count() * 4));
 
     // each enum value in form key\0
-    for (QMap<QByteArray, QList<QPair<QByteArray, int> > >::ConstIterator it = enum_list.begin(); it != enum_list.end(); ++it) {
-        for (QList<QPair<QByteArray,int> >::ConstIterator it2 = it.value().begin(); it2 != it.value().end(); ++it2) {
+    for (EnumListMapConstIterator it = enum_list.begin(); it != ecend; ++it) {
+        const ByteArrayIntPairList::ConstIterator vcend = it.value().end();
+        for (ByteArrayIntPairList::ConstIterator it2 = it.value().begin(); it2 != vcend; ++it2) {
             QByteArray key((*it2).first);
             int value = (*it2).second;
             int_data[offset++] = strings.enter(key);
@@ -3206,8 +3187,7 @@ QMetaObject *MetaObjectGenerator::metaObject(const QMetaObject *parentObject, co
     if (!cacheKey.isEmpty()) {
         mo_cache.insert(cacheKey, d->metaobj);
         d->cachedMetaObject = true;
-        for (QHash<QUuid, QAxEventSink*>::Iterator it = d->eventSink.begin(); it != d->eventSink.end(); ++it) {
-            QAxEventSink *sink = it.value();
+         foreach (QAxEventSink *sink, d->eventSink) {
             if (sink) {
                 QUuid ciid = sink->connectionInterface();
 
@@ -3660,7 +3640,7 @@ int QAxBase::internalInvoke(QMetaObject::Call call, int index, void **v)
 
     if (dispid == DISPID_UNKNOWN && slotname.toLower().startsWith("set")) {
         // see if we are calling a property set function as a slot
-        slotname = slotname.right(slotname.length() - 3);
+        slotname.remove(0, slotname.length() - 3);
         dispid = d->metaobj->dispIDofName(slotname, disp);
         isProperty = true;
     }
@@ -3684,6 +3664,8 @@ int QAxBase::internalInvoke(QMetaObject::Call call, int index, void **v)
         else
             params.rgvarg = new VARIANTARG[params.cArgs];
     }
+    for (VARIANTARG *vp = params.rgvarg, *vEnd = params.rgvarg + params.cArgs; vp < vEnd; ++vp)
+        VariantInit(vp);
 
     int p;
     for (p = 0; p < (int)params.cArgs; ++p) {
@@ -3695,16 +3677,20 @@ int QAxBase::internalInvoke(QMetaObject::Call call, int index, void **v)
             qvar = QVariant(vt, v[p + 1]);
 
         if (!qvar.isValid()) {
-            if (type == "IDispatch*")
-                qvar.setValue(*(IDispatch**)v[p+1]);
-            else if (type == "IUnknown*")
-                qvar.setValue(*(IUnknown**)v[p+1]);
-            else if (type == "QVariant")
+            if (type == "IDispatch*") {
+                if (out)
+                    qvar.setValue(*(IDispatch***)v[p+1]);
+                else
+                    qvar.setValue(*(IDispatch**)v[p+1]);
+            } else if (type == "IUnknown*") {
+                    qvar.setValue(*(IUnknown**)v[p+1]);
+            } else if (type == "QVariant") {
                 qvar = *(QVariant*)v[p + 1];
-            else if (mo->indexOfEnumerator(type) != -1)
+            } else if (mo->indexOfEnumerator(type) != -1) {
                 qvar = *(int*)v[p + 1];
-            else
+            } else {
                 qvar = QVariant(QMetaType::type(type), v[p + 1]);
+            }
         }
 
         QVariantToVARIANT(qvar, params.rgvarg[params.cArgs - p - 1], type, out);
@@ -3729,8 +3715,12 @@ int QAxBase::internalInvoke(QMetaObject::Call call, int index, void **v)
     for (p = 0; p < (int)params.cArgs; ++p) {
         bool out;
         QByteArray ptype = d->metaobj->paramType(signature, p, &out);
-        if (out)
-            QVariantToVoidStar(VARIANTToQVariant(params.rgvarg[params.cArgs - p - 1], ptype), v[p+1], ptype);
+        if (out) {
+            VARIANTARG &var = params.rgvarg[params.cArgs - p - 1];
+            QVariantToVoidStar(VARIANTToQVariant(var, ptype), v[p+1], ptype);
+            if (var.vt == (VT_DISPATCH | VT_BYREF))
+                VariantInit(&var); // Prevent clearVARIANT() from releasing returned IDispatch* out parameters.
+        }
     }
     // clean up
     for (p = 0; p < (int)params.cArgs; ++p)
@@ -3835,7 +3825,8 @@ static void qax_noSuchFunction(int disptype, const QByteArray &name, const QByte
 
     \a name is already normalized?
 */
-bool QAxBase::dynamicCallHelper(const char *name, void *inout, QList<QVariant> &vars, QByteArray &type)
+bool QAxBase::dynamicCallHelper(const char *name, void *inout, QList<QVariant> &vars,
+                                QByteArray &type, unsigned flags)
 {
     if (isNull()) {
         qWarning("QAxBase::dynamicCallHelper: Object is not initialized, or initialization failed");
@@ -3866,7 +3857,9 @@ bool QAxBase::dynamicCallHelper(const char *name, void *inout, QList<QVariant> &
     bool parse = false;
 
     if (function.contains('(')) {
-        disptype = DISPATCH_METHOD | DISPATCH_PROPERTYGET;
+        disptype = DISPATCH_METHOD;
+        if (!(flags & NoPropertyGet))
+            disptype |= DISPATCH_PROPERTYGET; // Support Excel/VB.
         if (d->useMetaObject)
             id = mo->indexOfSlot(function);
         if (id >= 0) {
@@ -4047,6 +4040,32 @@ bool QAxBase::dynamicCallHelper(const char *name, void *inout, QList<QVariant> &
     return checkHRESULT(hres, &excepinfo, this, QLatin1String(function), varc-argerr-1);
 }
 
+/*!
+    \internal
+*/
+QVariantList QAxBase::argumentsToList(const QVariant &var1, const QVariant &var2,
+                                      const QVariant &var3, const QVariant &var4,
+                                      const QVariant &var5, const QVariant &var6,
+                                      const QVariant &var7, const QVariant &var8)
+{
+    QVariantList vars;
+    QVariant var = var1;
+    int argc = 1;
+    while (var.isValid()) {
+        vars << var;
+        switch (++argc) {
+        case 2: var = var2; break;
+        case 3: var = var3; break;
+        case 4: var = var4; break;
+        case 5: var = var5; break;
+        case 6: var = var6; break;
+        case 7: var = var7; break;
+        case 8: var = var8; break;
+        default:var = QVariant(); break;
+        }
+    }
+    return vars;
+}
 
 /*!
     Calls the COM object's method \a function, passing the
@@ -4107,24 +4126,8 @@ QVariant QAxBase::dynamicCall(const char *function,
                               const QVariant &var7,
                               const QVariant &var8)
 {
-    QList<QVariant> vars;
-    QVariant var = var1;
-    int argc = 1;
-    while(var.isValid()) {
-        vars << var;
-        switch(++argc) {
-        case 2: var = var2; break;
-        case 3: var = var3; break;
-        case 4: var = var4; break;
-        case 5: var = var5; break;
-        case 6: var = var6; break;
-        case 7: var = var7; break;
-        case 8: var = var8; break;
-        default:var = QVariant(); break;
-        }
-    }
-
-    return dynamicCall(function, vars);
+    QVariantList vars = QAxBase::argumentsToList(var1, var2, var3, var4, var5, var6, var7, var8);
+    return dynamicCall(function, vars); // Use overload taking "QVariantList &" to avoid recursion
 }
 
 /*!
@@ -4141,11 +4144,19 @@ QVariant QAxBase::dynamicCall(const char *function,
 */
 QVariant QAxBase::dynamicCall(const char *function, QList<QVariant> &vars)
 {
+    return dynamicCall(function, vars, 0);
+}
+
+/*!
+    \internal
+*/
+QVariant QAxBase::dynamicCall(const char *function, QList<QVariant> &vars, unsigned flags)
+{
     VARIANTARG res;
     VariantInit(&res);
 
     QByteArray rettype;
-    if (!dynamicCallHelper(function, &res, vars, rettype))
+    if (!dynamicCallHelper(function, &res, vars, rettype, flags))
         return QVariant();
 
     QVariant qvar = VARIANTToQVariant(res, rettype);

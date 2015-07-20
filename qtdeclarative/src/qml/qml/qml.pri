@@ -1,12 +1,4 @@
 SOURCES += \
-    $$PWD/qqmldirparser.cpp \
-
-HEADERS += \
-    $$PWD/qqmldirparser_p.h \
-
-!qmldevtools_build {
-
-SOURCES += \
     $$PWD/qqmlopenmetaobject.cpp \
     $$PWD/qqmlvmemetaobject.cpp \
     $$PWD/qqmlengine.cpp \
@@ -49,7 +41,6 @@ SOURCES += \
     $$PWD/qqmlvaluetypeproxybinding.cpp \
     $$PWD/qqmlglobal.cpp \
     $$PWD/qqmlfile.cpp \
-    $$PWD/qqmlbundle.cpp \
     $$PWD/qqmlmemoryprofiler.cpp \
     $$PWD/qqmlplatform.cpp \
     $$PWD/qqmlbinding.cpp \
@@ -60,7 +51,8 @@ SOURCES += \
     $$PWD/qqmlvaluetypewrapper.cpp \
     $$PWD/qqmltypewrapper.cpp \
     $$PWD/qqmlfileselector.cpp \
-    $$PWD/qqmlobjectcreator.cpp
+    $$PWD/qqmlobjectcreator.cpp \
+    $$PWD/qqmldirparser.cpp
 
 HEADERS += \
     $$PWD/qqmlglobal_p.h \
@@ -112,7 +104,6 @@ HEADERS += \
     $$PWD/qqmlextensioninterface.h \
     $$PWD/qqmlimport_p.h \
     $$PWD/qqmlextensionplugin.h \
-    $$PWD/qqmlnullablevalue_p_p.h \
     $$PWD/qqmlscriptstring_p.h \
     $$PWD/qqmllocale_p.h \
     $$PWD/qqmlcomponentattached_p.h \
@@ -121,7 +112,6 @@ HEADERS += \
     $$PWD/qqmlabstractbinding_p.h \
     $$PWD/qqmlvaluetypeproxybinding_p.h \
     $$PWD/qqmlfile.h \
-    $$PWD/qqmlbundle_p.h \
     $$PWD/qqmlmemoryprofiler_p.h \
     $$PWD/qqmlplatform_p.h \
     $$PWD/qqmlbinding_p.h \
@@ -135,9 +125,8 @@ HEADERS += \
     $$PWD/qqmltypewrapper_p.h \
     $$PWD/qqmlfileselector_p.h \
     $$PWD/qqmlfileselector.h \
-    $$PWD/qqmlobjectcreator_p.h
+    $$PWD/qqmlobjectcreator_p.h \
+    $$PWD/qqmldirparser_p.h
 
 include(ftw/ftw.pri)
 include(v8/v8.pri)
-
-}

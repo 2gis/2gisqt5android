@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
@@ -10,15 +10,15 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Free Documentation License Usage
 ** Alternatively, this file may be used under the terms of the GNU Free
 ** Documentation License version 1.3 as published by the Free Software
 ** Foundation and appearing in the file included in the packaging of
-** this file.  Please review the following information to ensure
+** this file. Please review the following information to ensure
 ** the GNU Free Documentation License version 1.3 requirements
 ** will be met: http://www.gnu.org/copyleft/fdl.html.
 ** $QT_END_LICENSE$
@@ -144,14 +144,12 @@ to some graphics memory limitations. Because it requires all the sprites for a s
 texture, attempting to load many different animations can run into texture memory limits on embedded devices. In
 these situations, a warning will be output to the console containing the maximum texture size.
 
-There are several software tools to help turn images into sprite sheets, here are some examples:
-Photoshop plugin:
-http://www.personal.psu.edu/zez1/blogs/my_blog/2011/05/scripts-4-photoshop-file-sequence-to-layers-to-sprite-sheet.html
-Gimp plugin:
-http://registry.gimp.org/node/20943
-Cmd-line tool:
-http://www.imagemagick.org/script/montage.php
-
+There are several tools to help turn a set of images into sprite sheets, here are some examples:
+\list
+ \li Photoshop plugin: \l http://www.johnwordsworth.com/projects/photoshop-sprite-sheet-generator-script
+ \li Gimp plugin: \l http://registry.gimp.org/node/20943
+ \li Cmd-line tool: \l http://www.imagemagick.org/script/montage.php
+\endlist
 
 \section2 QML Types Using the Sprite Engine
 

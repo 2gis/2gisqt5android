@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -45,6 +45,7 @@
 #endif
 
 #include <private/qgstreamerbushelper_p.h>
+#include <private/qgstreamerbufferprobe_p.h>
 #include "qcamera.h"
 
 QT_BEGIN_NAMESPACE
@@ -74,7 +75,6 @@ public:
     virtual GstElement *buildElement() = 0;
 };
 
-
 class CameraBinSession : public QObject,
                          public QGstreamerBusMessageFilter,
                          public QGstreamerSyncMessageFilter
@@ -83,11 +83,6 @@ class CameraBinSession : public QObject,
     Q_PROPERTY(qint64 duration READ duration NOTIFY durationChanged)
     Q_INTERFACES(QGstreamerBusMessageFilter QGstreamerSyncMessageFilter)
 public:
-    enum CameraRole {
-       FrontCamera, // Secondary camera
-       BackCamera // Main photo camera
-    };
-
     CameraBinSession(GstElementFactory *sourceFactory, QObject *parent);
     ~CameraBinSession();
 
@@ -97,8 +92,6 @@ public:
     GstElement *cameraBin() { return m_camerabin; }
     GstElement *cameraSource() { return m_videoSrc; }
     QGstreamerBusHelper *bus() { return m_busHelper; }
-
-    CameraRole cameraRole() const;
 
     QList< QPair<int,int> > supportedFrameRates(const QSize &frameSize, bool *continuous) const;
     QList<QSize> supportedResolutions(QPair<int,int> rate, bool *continuous, QCamera::CaptureModes mode) const;
@@ -121,17 +114,16 @@ public:
     CameraBinImageEncoder *imageEncodeControl() const { return m_imageEncodeControl; }
 
 #ifdef HAVE_GST_PHOTOGRAPHY
-    CameraBinExposure *cameraExposureControl() const  { return m_cameraExposureControl; }
-    CameraBinFlash *cameraFlashControl() const  { return m_cameraFlashControl; }
-    CameraBinFocus *cameraFocusControl() const  { return m_cameraFocusControl; }
-    CameraBinLocks *cameraLocksControl() const { return m_cameraLocksControl; }
-    CameraBinZoom *cameraZoomControl() const { return m_cameraZoomControl; }
+    CameraBinExposure *cameraExposureControl();
+    CameraBinFlash *cameraFlashControl();
+    CameraBinFocus *cameraFocusControl();
+    CameraBinLocks *cameraLocksControl();
 #endif
 
+    CameraBinZoom *cameraZoomControl() const { return m_cameraZoomControl; }
     CameraBinImageProcessing *imageProcessingControl() const { return m_imageProcessingControl; }
     CameraBinCaptureDestination *captureDestinationControl() const { return m_captureDestinationControl; }
     CameraBinCaptureBufferFormat *captureBufferFormatControl() const { return m_captureBufferFormatControl; }
-    CameraBinViewfinderSettings *viewfinderSettingsControl() const { return m_viewfinderSettingsControl; }
 
     CameraBinRecorder *recorderControl() const { return m_recorderControl; }
     CameraBinContainer *mediaContainerControl() const { return m_mediaContainerControl; }
@@ -146,9 +138,13 @@ public:
     QObject *viewfinder() const { return m_viewfinder; }
     void setViewfinder(QObject *viewfinder);
 
+    QList<QCameraViewfinderSettings> supportedViewfinderSettings() const;
+    QCameraViewfinderSettings viewfinderSettings() const;
+    void setViewfinderSettings(const QCameraViewfinderSettings &settings) { m_viewfinderSettings = settings; }
+
     void captureImage(int requestId, const QString &fileName);
 
-    QCamera::State state() const;
+    QCamera::Status status() const;
     QCamera::State pendingState() const;
     bool isBusy() const;
 
@@ -163,7 +159,7 @@ public:
     bool processBusMessage(const QGstreamerMessage &message);
 
 signals:
-    void stateChanged(QCamera::State state);
+    void statusChanged(QCamera::Status status);
     void pendingStateChanged(QCamera::State state);
     void durationChanged(qint64 duration);
     void error(int error, const QString &errorString);
@@ -183,11 +179,22 @@ public slots:
 
 private slots:
     void handleViewfinderChange();
+    void setupCaptureResolution();
 
 private:
+    void load();
+    void unload();
+    void start();
+    void stop();
+
+    void setStatus(QCamera::Status status);
+    void setStateHelper(QCamera::State state);
+    void setError(int error, const QString &errorString);
+
     bool setupCameraBin();
-    void setupCaptureResolution();
     void setAudioCaptureCaps();
+    GstCaps *supportedCaps(QCamera::CaptureModes mode) const;
+    void updateSupportedViewfinderSettings();
     static void updateBusyStatus(GObject *o, GParamSpec *p, gpointer d);
 
     static void elementAdded(GstBin *bin, GstElement *element, CameraBinSession *session);
@@ -197,7 +204,7 @@ private:
     QUrl m_actualSink;
     bool m_recordingActive;
     QString m_captureDevice;
-    QCamera::State m_state;
+    QCamera::Status m_status;
     QCamera::State m_pendingState;
     QString m_inputDevice;
     bool m_muted;
@@ -210,6 +217,9 @@ private:
     QGstreamerElementFactory *m_videoInputFactory;
     QObject *m_viewfinder;
     QGstreamerVideoRendererInterface *m_viewfinderInterface;
+    QList<QCameraViewfinderSettings> m_supportedViewfinderSettings;
+    QCameraViewfinderSettings m_viewfinderSettings;
+    QCameraViewfinderSettings m_actualViewfinderSettings;
 
     CameraBinControl *m_cameraControl;
     CameraBinAudioEncoder *m_audioEncodeControl;
@@ -222,22 +232,35 @@ private:
     CameraBinFlash *m_cameraFlashControl;
     CameraBinFocus *m_cameraFocusControl;
     CameraBinLocks *m_cameraLocksControl;
-    CameraBinZoom *m_cameraZoomControl;
 #endif
-
+    CameraBinZoom *m_cameraZoomControl;
     CameraBinImageProcessing *m_imageProcessingControl;
     CameraBinCaptureDestination *m_captureDestinationControl;
     CameraBinCaptureBufferFormat *m_captureBufferFormatControl;
-    CameraBinViewfinderSettings *m_viewfinderSettingsControl;
 
     QGstreamerBusHelper *m_busHelper;
     GstBus* m_bus;
     GstElement *m_camerabin;
+    GstElement *m_cameraSrc;
     GstElement *m_videoSrc;
     GstElement *m_viewfinderElement;
     GstElementFactory *m_sourceFactory;
     bool m_viewfinderHasChanged;
-    bool m_videoInputHasChanged;
+    bool m_inputDeviceHasChanged;
+    bool m_usingWrapperCameraBinSrc;
+
+    class ViewfinderProbe : public QGstreamerBufferProbe {
+    public:
+        ViewfinderProbe(CameraBinSession *s)
+            : QGstreamerBufferProbe(QGstreamerBufferProbe::ProbeCaps)
+            , session(s)
+        {}
+
+        void probeCaps(GstCaps *caps);
+
+    private:
+        CameraBinSession * const session;
+    } m_viewfinderProbe;
 
     GstElement *m_audioSrc;
     GstElement *m_audioConvert;

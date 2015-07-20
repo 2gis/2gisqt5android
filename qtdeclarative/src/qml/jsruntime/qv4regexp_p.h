@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -56,24 +56,31 @@ namespace QV4 {
 struct ExecutionEngine;
 struct RegExpCacheKey;
 
+namespace Heap {
+
+struct RegExp : Base {
+    RegExp(ExecutionEngine* engine, const QString& pattern, bool ignoreCase, bool multiline);
+    ~RegExp();
+    QString pattern;
+    OwnPtr<JSC::Yarr::BytecodePattern> byteCode;
+#if ENABLE(YARR_JIT)
+    JSC::Yarr::YarrCodeBlock jitCode;
+#endif
+    RegExpCache *cache;
+    int subPatternCount;
+    bool ignoreCase;
+    bool multiLine;
+
+    int captureCount() const { return subPatternCount + 1; }
+};
+
+}
+
 struct RegExp : public Managed
 {
-    struct Data : Managed::Data {
-        Data(ExecutionEngine* engine, const QString& pattern, bool ignoreCase, bool multiline);
-        ~Data();
-        QString pattern;
-        OwnPtr<JSC::Yarr::BytecodePattern> byteCode;
-#if ENABLE(YARR_JIT)
-        JSC::Yarr::YarrCodeBlock jitCode;
-#endif
-        RegExpCache *cache;
-        int subPatternCount;
-        bool ignoreCase;
-        bool multiLine;
-    };
-    V4_MANAGED(Managed)
+    V4_MANAGED(RegExp, Managed)
     Q_MANAGED_TYPE(RegExp)
-
+    V4_NEEDS_DESTROY
 
     QString pattern() const { return d()->pattern; }
     OwnPtr<JSC::Yarr::BytecodePattern> &byteCode() { return d()->byteCode; }
@@ -85,7 +92,7 @@ struct RegExp : public Managed
     bool ignoreCase() const { return d()->ignoreCase; }
     bool multiLine() const { return d()->multiLine; }
 
-    static RegExp* create(ExecutionEngine* engine, const QString& pattern, bool ignoreCase = false, bool multiline = false);
+    static Heap::RegExp *create(ExecutionEngine* engine, const QString& pattern, bool ignoreCase = false, bool multiline = false);
 
     bool isValid() const { return d()->byteCode.get(); }
 
@@ -93,8 +100,7 @@ struct RegExp : public Managed
 
     int captureCount() const { return subPatternCount() + 1; }
 
-    static void destroy(Managed *that);
-    static void markObjects(Managed *that, QV4::ExecutionEngine *e);
+    static void markObjects(Heap::Base *that, QV4::ExecutionEngine *e);
 
     friend class RegExpCache;
 };
@@ -127,7 +133,8 @@ inline RegExpCacheKey::RegExpCacheKey(const RegExp::Data *re)
 inline uint qHash(const RegExpCacheKey& key, uint seed = 0) Q_DECL_NOTHROW
 { return qHash(key.pattern, seed); }
 
-class RegExpCache : public QHash<RegExpCacheKey, RegExp*>
+// ### GC
+class RegExpCache : public QHash<RegExpCacheKey, Heap::RegExp*>
 {
 public:
     ~RegExpCache();

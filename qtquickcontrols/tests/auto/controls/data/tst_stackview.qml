@@ -1,9 +1,9 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
-** This file is part of the Qt Quick Controls module of the Qt Toolkit.
+** This file is part of the test suite of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:BSD$
 ** You may use this file under the terms of the BSD license as follows:
@@ -17,8 +17,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -59,7 +59,7 @@ TestCase {
 
     Component {
         id: stackComponent
-        StackView { anchors.fill: parent }
+        StackView { }
     }
 
     function test_stackview() {
@@ -75,11 +75,16 @@ TestCase {
         verify (stack.depth === 1)
         stack.push(pageComponent)
         verify (stack.depth === 2)
+
+        var w = stack.width
+        testCase.width = w + 333
+        compare(stack.width, w)
+
         stack.destroy()
     }
 
     function test_focus() {
-        var stack = stackComponent.createObject(testCase, {initialItem: anItem})
+        var stack = stackComponent.createObject(testCase, {initialItem: anItem, width: testCase.width, height: testCase.height})
         verify (stack !== null, "stackview created is null")
         compare(stack.currentItem, anItem)
 

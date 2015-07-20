@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -43,7 +43,6 @@
 #include "qv4managed_p.h"
 #include "qv4property_p.h"
 #include "qv4objectiterator_p.h"
-#include "qv4regexp_p.h"
 
 #include <QtCore/QString>
 #include <QtCore/QHash>
@@ -55,16 +54,35 @@ QT_BEGIN_NAMESPACE
 
 namespace QV4 {
 
-struct RegExpObject: Object {
-    struct Data : Object::Data {
-        Data(ExecutionEngine *engine, RegExp *value, bool global);
-        Data(ExecutionEngine *engine, const QRegExp &re);
-        Data(InternalClass *ic);
+namespace Heap {
 
-        RegExp *value;
-        bool global;
-    };
-    V4_OBJECT(Object)
+struct RegExpObject : Object {
+    RegExpObject(InternalClass *ic, QV4::Object *prototype);
+    RegExpObject(QV4::ExecutionEngine *engine, QV4::RegExp *value, bool global);
+    RegExpObject(QV4::ExecutionEngine *engine, const QRegExp &re);
+
+    RegExp *value;
+    bool global;
+};
+
+struct RegExpCtor : FunctionObject {
+    RegExpCtor(QV4::ExecutionContext *scope);
+    Value lastMatch;
+    StringValue lastInput;
+    int lastMatchStart;
+    int lastMatchEnd;
+    void clearLastMatch();
+};
+
+struct RegExpPrototype : RegExpObject
+{
+    inline RegExpPrototype(ExecutionEngine *e);
+};
+
+}
+
+struct RegExpObject: Object {
+    V4_OBJECT2(RegExpObject, Object)
     Q_MANAGED_TYPE(RegExpObject)
 
     // needs to be compatible with the flags in qv4jsir_p.h
@@ -75,36 +93,28 @@ struct RegExpObject: Object {
     };
 
     enum {
-        Index_ArrayIndex = ArrayObject::LengthPropertyIndex + 1,
+        Index_ArrayIndex = Heap::ArrayObject::LengthPropertyIndex + 1,
         Index_ArrayInput = Index_ArrayIndex + 1
     };
 
-    RegExp *value() const { return d()->value; }
+    Heap::RegExp *value() const { return d()->value; }
     bool global() const { return d()->global; }
 
     void init(ExecutionEngine *engine);
 
-    Property *lastIndexProperty(ExecutionContext *ctx);
+    Property *lastIndexProperty();
     QRegExp toQRegExp() const;
     QString toString() const;
     QString source() const;
     uint flags() const;
 
 protected:
-    static void markObjects(Managed *that, ExecutionEngine *e);
+    static void markObjects(Heap::Base *that, ExecutionEngine *e);
 };
 
 struct RegExpCtor: FunctionObject
 {
-    struct Data : FunctionObject::Data {
-        Data(ExecutionContext *scope);
-        Value lastMatch;
-        StringValue lastInput;
-        int lastMatchStart;
-        int lastMatchEnd;
-        void clearLastMatch();
-    };
-    V4_OBJECT(FunctionObject)
+    V4_OBJECT2(RegExpCtor, FunctionObject)
 
     Value lastMatch() { return d()->lastMatch; }
     StringValue lastInput() { return d()->lastInput; }
@@ -113,19 +123,12 @@ struct RegExpCtor: FunctionObject
 
     static ReturnedValue construct(Managed *m, CallData *callData);
     static ReturnedValue call(Managed *that, CallData *callData);
-    static void markObjects(Managed *that, ExecutionEngine *e);
+    static void markObjects(Heap::Base *that, ExecutionEngine *e);
 };
 
 struct RegExpPrototype: RegExpObject
 {
-    struct Data : RegExpObject::Data
-    {
-        Data(InternalClass *ic): RegExpObject::Data(ic)
-        {
-            setVTable(staticVTable());
-        }
-    };
-    V4_OBJECT(RegExpObject)
+    V4_OBJECT2(RegExpPrototype, RegExpObject)
 
     void init(ExecutionEngine *engine, Object *ctor);
 
@@ -141,6 +144,11 @@ struct RegExpPrototype: RegExpObject
     static ReturnedValue method_get_leftContext(CallContext *ctx);
     static ReturnedValue method_get_rightContext(CallContext *ctx);
 };
+
+inline Heap::RegExpPrototype::RegExpPrototype(ExecutionEngine *e)
+    : RegExpObject(e->emptyClass, e->objectPrototype.asObject())
+{
+}
 
 }
 

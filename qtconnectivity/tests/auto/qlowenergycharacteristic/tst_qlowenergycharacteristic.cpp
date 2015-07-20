@@ -1,8 +1,8 @@
 /***************************************************************************
 **
 ** Copyright (C) 2013 BlackBerry Limited all rights reserved
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtBluetooth module of the Qt Toolkit.
 **
@@ -11,9 +11,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -24,8 +24,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -42,7 +42,20 @@
 #include <QLowEnergyController>
 #include <QBluetoothLocalDevice>
 
+Q_DECLARE_METATYPE(QBluetoothDeviceDiscoveryAgent::Error)
+
 QT_USE_NAMESPACE
+
+// This define must be set if the platform provides access to GATT handles
+// otherwise it must not be defined. As of now the two supported platforms
+// (Android and Bluez/Linux) provide access or some notion of it.
+#define HANDLES_PROVIDED_BY_PLATFORM
+
+#ifdef HANDLES_PROVIDED_BY_PLATFORM
+#define HANDLE_VERIFY(stmt) QVERIFY(stmt)
+#else
+#define HANDLE_VERIFY(stmt)
+#endif
 
 class tst_QLowEnergyCharacteristic : public QObject
 {
@@ -62,19 +75,16 @@ private slots:
     void tst_assignCompare();
 
 private:
-    QSet<QString> remoteLeDevices;
+    QList<QBluetoothDeviceInfo> remoteLeDevices;
     QLowEnergyController *globalControl;
     QLowEnergyService *globalService;
 };
-
-Q_DECLARE_METATYPE(QLowEnergyController::ControllerState)
 
 tst_QLowEnergyCharacteristic::tst_QLowEnergyCharacteristic() :
     globalControl(0), globalService(0)
 {
     QLoggingCategory::setFilterRules(QStringLiteral("qt.bluetooth* = true"));
-
-    qRegisterMetaType<QLowEnergyController::ControllerState>();
+    qRegisterMetaType<QBluetoothDeviceDiscoveryAgent::Error>();
 }
 
 tst_QLowEnergyCharacteristic::~tst_QLowEnergyCharacteristic()
@@ -111,9 +121,10 @@ void tst_QLowEnergyCharacteristic::initTestCase()
 
     // find first service with descriptor
     QLowEnergyController *controller = 0;
-    foreach (const QString &remoteDevice, remoteLeDevices.toList()) {
-        controller = new QLowEnergyController(QBluetoothAddress(remoteDevice), this);
-        qDebug() << "Connecting to" << remoteDevice;
+    foreach (const QBluetoothDeviceInfo &remoteDevice, remoteLeDevices) {
+        controller = new QLowEnergyController(remoteDevice, this);
+        qDebug() << "Connecting to" << remoteDevice.name()
+                 << remoteDevice.address() << remoteDevice.deviceUuid();
         controller->connectToDevice();
         QTRY_IMPL(controller->state() != QLowEnergyController::ConnectingState,
                   20000);
@@ -148,7 +159,7 @@ void tst_QLowEnergyCharacteristic::initTestCase()
                 if (!ch.descriptors().isEmpty()) {
                     globalService = leService;
                     globalControl = controller;
-                    qWarning() << "Found service with descriptor" << remoteDevice
+                    qWarning() << "Found service with descriptor" << remoteDevice.address()
                                << globalService->serviceName() << globalService->serviceUuid();
                     break;
                 }
@@ -181,7 +192,7 @@ void tst_QLowEnergyCharacteristic::cleanupTestCase()
 void tst_QLowEnergyCharacteristic::deviceDiscovered(const QBluetoothDeviceInfo &info)
 {
     if (info.coreConfigurations() & QBluetoothDeviceInfo::LowEnergyCoreConfiguration)
-        remoteLeDevices.insert(info.address().toString());
+        remoteLeDevices.append(info);
 }
 
 void tst_QLowEnergyCharacteristic::tst_constructionDefault()
@@ -276,7 +287,7 @@ void tst_QLowEnergyCharacteristic::tst_assignCompare()
     target = chars[indexWithDescriptor];
     QVERIFY(target.isValid());
     QVERIFY(!target.name().isEmpty());
-    QVERIFY(target.handle() > 0);
+    HANDLE_VERIFY(target.handle() > 0);
     QVERIFY(!target.uuid().isNull());
     QVERIFY(target.properties() != QLowEnergyCharacteristic::Unknown);
     if (target.properties() & QLowEnergyCharacteristic::Read)

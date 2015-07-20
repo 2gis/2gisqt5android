@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQuick module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -48,17 +48,17 @@
 
 QT_BEGIN_NAMESPACE
 
-DEFINE_OBJECT_VTABLE(QQuickRootItemMarker);
+DEFINE_OBJECT_VTABLE(QV4::QQuickRootItemMarker);
 
-QQuickRootItemMarker *QQuickRootItemMarker::create(QQmlEngine *engine, QQuickWindow *window)
+QV4::Heap::QQuickRootItemMarker *QV4::QQuickRootItemMarker::create(QQmlEngine *engine, QQuickWindow *window)
 {
     QV4::ExecutionEngine *e = QQmlEnginePrivate::getV4Engine(engine);
     return e->memoryManager->alloc<QQuickRootItemMarker>(e, window);
 }
 
-void QQuickRootItemMarker::markObjects(QV4::Managed *that, QV4::ExecutionEngine *e)
+void QV4::QQuickRootItemMarker::markObjects(QV4::Heap::Base *that, QV4::ExecutionEngine *e)
 {
-    QQuickItem *root = static_cast<QQuickRootItemMarker*>(that)->d()->window->contentItem();
+    QQuickItem *root = static_cast<QQuickRootItemMarker::Data *>(that)->window->contentItem();
     if (root) {
         QQuickItemPrivate *rootPrivate = QQuickItemPrivate::get(root);
         rootPrivate->markObjects(e);
@@ -82,8 +82,8 @@ void QQuickViewPrivate::init(QQmlEngine* e)
     {
         QV4::ExecutionEngine *v4 = QQmlEnginePrivate::getV4Engine(engine.data());
         QV4::Scope scope(v4);
-        QV4::Scoped<QQuickRootItemMarker> v(scope, QQuickRootItemMarker::create(engine.data(), q));
-        rootItemMarker = v;
+        QV4::Scoped<QV4::QQuickRootItemMarker> v(scope, QV4::QQuickRootItemMarker::create(engine.data(), q));
+        rootItemMarker.set(v4, v);
     }
 
     if (QQmlDebugService::isDebuggingEnabled())

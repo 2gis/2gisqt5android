@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -229,6 +229,7 @@ private slots:
     void customParserEvaluateEnum();
     void customParserProperties();
     void customParserWithExtendedObject();
+    void nestedCustomParsers();
 
     void preservePropertyCacheOnGroupObjects();
     void propertyCacheInSync();
@@ -2511,7 +2512,7 @@ void tst_qqmllanguage::basicRemote_data()
     QTest::addColumn<QString>("type");
     QTest::addColumn<QString>("error");
 
-    QString serverdir = "http://127.0.0.1:14447/qtest/qml/qqmllanguage/";
+    QString serverdir = "/qtest/qml/qqmllanguage/";
 
     QTest::newRow("no need for qmldir") << QUrl(serverdir+"Test.qml") << "" << "";
     QTest::newRow("absent qmldir") << QUrl(serverdir+"/noqmldir/Test.qml") << "" << "";
@@ -2525,8 +2526,10 @@ void tst_qqmllanguage::basicRemote()
     QFETCH(QString, error);
 
     TestHTTPServer server;
-    QVERIFY2(server.listen(14447), qPrintable(server.errorString()));
+    QVERIFY2(server.listen(), qPrintable(server.errorString()));
     server.serveDirectory(dataDirectory());
+
+    url = server.baseUrl().resolved(url);
 
     QQmlComponent component(&engine, url);
 
@@ -2547,7 +2550,7 @@ void tst_qqmllanguage::importsRemote_data()
     QTest::addColumn<QString>("type");
     QTest::addColumn<QString>("error");
 
-    QString serverdir = "http://127.0.0.1:14447/qtest/qml/qqmllanguage";
+    QString serverdir = "{{ServerBaseUrl}}/qtest/qml/qqmllanguage";
 
     QTest::newRow("remote import") << "import \""+serverdir+"\"\nTest {}" << "QQuickRectangle"
         << "";
@@ -2570,8 +2573,10 @@ void tst_qqmllanguage::importsRemote()
     QFETCH(QString, error);
 
     TestHTTPServer server;
-    QVERIFY2(server.listen(14447), qPrintable(server.errorString()));
+    QVERIFY2(server.listen(), qPrintable(server.errorString()));
     server.serveDirectory(dataDirectory());
+
+    qml.replace(QStringLiteral("{{ServerBaseUrl}}"), server.baseUrl().toString());
 
     testType(qml,type,error);
 }
@@ -2663,10 +2668,10 @@ void tst_qqmllanguage::importsInstalledRemote()
     QFETCH(QString, error);
 
     TestHTTPServer server;
-    QVERIFY2(server.listen(14447), qPrintable(server.errorString()));
+    QVERIFY2(server.listen(), qPrintable(server.errorString()));
     server.serveDirectory(dataDirectory());
 
-    QString serverdir = "http://127.0.0.1:14447/lib/";
+    QString serverdir = server.urlString("/lib/");
     engine.setImportPathList(QStringList(defaultImportPathList) << serverdir);
 
     testType(qml,type,error);
@@ -2681,43 +2686,43 @@ void tst_qqmllanguage::importsPath_data()
     QTest::addColumn<QString>("value");
 
     QTest::newRow("local takes priority normal")
-        << (QStringList() << testFile("lib") << "http://127.0.0.1:14447/lib2/")
+        << (QStringList() << testFile("lib") << "{{ServerBaseUrl}}/lib2/")
         << "import testModule 1.0\n"
            "Test {}"
         << "foo";
 
     QTest::newRow("local takes priority reversed")
-        << (QStringList() << "http://127.0.0.1:14447/lib/" << testFile("lib2"))
+        << (QStringList() << "{{ServerBaseUrl}}/lib/" << testFile("lib2"))
         << "import testModule 1.0\n"
            "Test {}"
         << "bar";
 
     QTest::newRow("earlier takes priority 1")
-        << (QStringList() << "http://127.0.0.1:14447/lib/" << "http://127.0.0.1:14447/lib2/")
+        << (QStringList() << "{{ServerBaseUrl}}/lib/" << "{{ServerBaseUrl}}/lib2/")
         << "import testModule 1.0\n"
            "Test {}"
         << "foo";
 
     QTest::newRow("earlier takes priority 2")
-        << (QStringList() << "http://127.0.0.1:14447/lib2/" << "http://127.0.0.1:14447/lib/")
+        << (QStringList() << "{{ServerBaseUrl}}/lib2/" << "{{ServerBaseUrl}}/lib/")
         << "import testModule 1.0\n"
            "Test {}"
         << "bar";
 
     QTest::newRow("major version takes priority over unversioned")
-        << (QStringList() << "http://127.0.0.1:14447/lib/" << "http://127.0.0.1:14447/lib3/")
+        << (QStringList() << "{{ServerBaseUrl}}/lib/" << "{{ServerBaseUrl}}/lib3/")
         << "import testModule 1.0\n"
            "Test {}"
         << "baz";
 
     QTest::newRow("major version takes priority over minor")
-        << (QStringList() << "http://127.0.0.1:14447/lib4/" << "http://127.0.0.1:14447/lib3/")
+        << (QStringList() << "{{ServerBaseUrl}}/lib4/" << "{{ServerBaseUrl}}/lib3/")
         << "import testModule 1.0\n"
            "Test {}"
         << "baz";
 
     QTest::newRow("minor version takes priority over unversioned")
-        << (QStringList() << "http://127.0.0.1:14447/lib/" << "http://127.0.0.1:14447/lib4/")
+        << (QStringList() << "{{ServerBaseUrl}}/lib/" << "{{ServerBaseUrl}}/lib4/")
         << "import testModule 1.0\n"
            "Test {}"
         << "qux";
@@ -2730,8 +2735,11 @@ void tst_qqmllanguage::importsPath()
     QFETCH(QString, value);
 
     TestHTTPServer server;
-    QVERIFY2(server.listen(14447), qPrintable(server.errorString()));
+    QVERIFY2(server.listen(), qPrintable(server.errorString()));
     server.serveDirectory(dataDirectory());
+
+    for (int i = 0; i < importPath.count(); ++i)
+        importPath[i].replace(QStringLiteral("{{ServerBaseUrl}}"), server.baseUrl().toString());
 
     engine.setImportPathList(QStringList(defaultImportPathList) << importPath);
 
@@ -2923,6 +2931,11 @@ void tst_qqmllanguage::importJs_data()
     QTest::newRow("namespacedRepeatImport")
         << "importJs.10.qml"
         << "importJs.10.errors.txt"
+        << true;
+
+    QTest::newRow("emptyScript")
+        << "importJs.11.qml"
+        << "importJs.11.errors.txt"
         << true;
 }
 
@@ -3325,11 +3338,11 @@ void tst_qqmllanguage::registeredCompositeType()
 void tst_qqmllanguage::remoteLoadCrash()
 {
     TestHTTPServer server;
-    QVERIFY2(server.listen(14448), qPrintable(server.errorString()));
+    QVERIFY2(server.listen(), qPrintable(server.errorString()));
     server.serveDirectory(dataDirectory());
 
     QQmlComponent component(&engine);
-    component.setData("import QtQuick 2.0; Text {}", QUrl("http://127.0.0.1:14448/remoteLoadCrash.qml"));
+    component.setData("import QtQuick 2.0; Text {}", server.url("/remoteLoadCrash.qml"));
     while (component.isLoading())
         QCoreApplication::processEvents( QEventLoop::ExcludeUserInputEvents | QEventLoop::WaitForMoreEvents, 50);
 
@@ -3816,10 +3829,18 @@ void tst_qqmllanguage::compositeSingletonQmlDirError()
 void tst_qqmllanguage::compositeSingletonRemote()
 {
     TestHTTPServer server;
-    QVERIFY2(server.listen(14447), qPrintable(server.errorString()));
+    QVERIFY2(server.listen(), qPrintable(server.errorString()));
     server.serveDirectory(dataDirectory());
 
-    QQmlComponent component(&engine, testFile("singletonTest15.qml"));
+    QFile f(testFile("singletonTest15.qml"));
+    QVERIFY(f.open(QIODevice::ReadOnly));
+    QByteArray contents = f.readAll();
+    f.close();
+
+    contents.replace(QByteArrayLiteral("{{ServerBaseUrl}}"), server.baseUrl().toString().toUtf8());
+
+    QQmlComponent component(&engine);
+    component.setData(contents, testFileUrl("singletonTest15.qml"));
 
     while (component.isLoading())
         QCoreApplication::processEvents( QEventLoop::ExcludeUserInputEvents | QEventLoop::WaitForMoreEvents, 50);
@@ -3923,6 +3944,20 @@ void tst_qqmllanguage::customParserWithExtendedObject()
     QVariant returnValue;
     QVERIFY(QMetaObject::invokeMethod(o.data(), "getExtendedProperty", Q_RETURN_ARG(QVariant, returnValue)));
     QCOMPARE(returnValue.toInt(), 1584);
+}
+
+void tst_qqmllanguage::nestedCustomParsers()
+{
+    QQmlComponent component(&engine, testFile("nestedCustomParsers.qml"));
+    VERIFY_ERRORS(0);
+    QScopedPointer<QObject> o(component.create());
+    QVERIFY(!o.isNull());
+    SimpleObjectWithCustomParser *testObject = qobject_cast<SimpleObjectWithCustomParser*>(o.data());
+    QVERIFY(testObject);
+    QCOMPARE(testObject->customBindingsCount(), 1);
+    SimpleObjectWithCustomParser *nestedObject = qobject_cast<SimpleObjectWithCustomParser*>(testObject->property("nested").value<QObject*>());
+    QVERIFY(nestedObject);
+    QCOMPARE(nestedObject->customBindingsCount(), 1);
 }
 
 void tst_qqmllanguage::preservePropertyCacheOnGroupObjects()

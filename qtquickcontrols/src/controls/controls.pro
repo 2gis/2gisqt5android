@@ -1,6 +1,6 @@
 TARGET  = qtquickcontrolsplugin
 TARGETPATH = QtQuick/Controls
-IMPORT_VERSION = 1.2
+IMPORT_VERSION = 1.4
 
 QT += qml quick quick-private qml-private gui-private core-private
 
@@ -32,15 +32,19 @@ CONTROLS_QML_FILES = \
     TabView.qml \
     TableView.qml \
     TableViewColumn.qml \
+    TreeView.qml \
     TextArea.qml \
     TextField.qml \
     ToolBar.qml \
     ToolButton.qml
 
-QML_FILES += $$CONTROLS_QML_FILES
+!qtquickcompiler: QML_FILES += $$CONTROLS_QML_FILES
+qtquickcompiler: DEFINES += ALWAYS_LOAD_FROM_RESOURCES
 
 SOURCES += $$PWD/plugin.cpp
 HEADERS += $$PWD/plugin.h
+
+OTHER_FILES += doc/src/*
 
 include(plugin.pri)
 include(Private/private.pri)

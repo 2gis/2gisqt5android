@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the tools applications of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -39,6 +39,7 @@
 #include <QJsonArray>
 #include <QJsonValue>
 #include <QDebug>
+#include <QDataStream>
 #include <QXmlStreamReader>
 #include <QDateTime>
 #include <QStandardPaths>
@@ -667,6 +668,21 @@ QString detectLatestAndroidPlatform(const QString &sdkPath)
     return latestPlatform.baseName();
 }
 
+QString packageNameFromAndroidManifest(const QString &androidManifestPath)
+{
+    QFile androidManifestXml(androidManifestPath);
+    if (androidManifestXml.open(QIODevice::ReadOnly)) {
+        QXmlStreamReader reader(&androidManifestXml);
+        while (!reader.atEnd()) {
+            reader.readNext();
+            if (reader.isStartElement() && reader.name() == QLatin1String("manifest"))
+                return cleanPackageName(
+                            reader.attributes().value(QLatin1String("package")).toString());
+        }
+    }
+    return QString();
+}
+
 bool readInputFile(Options *options)
 {
     QFile file(options->inputFileName);
@@ -820,7 +836,9 @@ bool readInputFile(Options *options)
         options->ndkHost = ndkHost.toString();
     }
 
-    options->packageName = cleanPackageName(QString::fromLatin1("org.qtproject.example.%1").arg(QFileInfo(options->applicationBinary).baseName().mid(sizeof("lib") - 1)));
+    options->packageName = packageNameFromAndroidManifest(options->androidSourceDirectory + QLatin1String("/AndroidManifest.xml"));
+    if (options->packageName.isEmpty())
+        options->packageName = cleanPackageName(QString::fromLatin1("org.qtproject.example.%1").arg(QFileInfo(options->applicationBinary).baseName().mid(sizeof("lib") - 1)));
 
     {
         QJsonValue extraLibs = jsonObject.value("android-extra-libs");
@@ -1053,6 +1071,9 @@ bool updateFile(const QString &fileName, const QHash<QString, QString> &replacem
     bool hasReplacements = false;
     QHash<QString, QString>::const_iterator it;
     for (it = replacements.constBegin(); it != replacements.constEnd(); ++it) {
+        if (it.key() == it.value())
+            continue; // Nothing to actually replace
+
         forever {
             int index = contents.indexOf(it.key().toUtf8());
             if (index >= 0) {
@@ -1794,17 +1815,9 @@ bool readDependencies(Options *options)
     if (!readDependenciesFromElf(options, options->applicationBinary, &usedDependencies, &remainingDependencies))
         return false;
 
-    // Until we have support non-gui applications on Android, always add Qt Gui
-    // as a dependency (otherwise the platform plugin cannot be deployed, and
-    // the application will not run).
-    QLatin1String guiLib("lib/libQt5Gui.so");
-    if (!usedDependencies.contains(guiLib)) {
-        QtDependency dep(guiLib, options->qtInstallDirectory + QLatin1Char('/') + guiLib);
-        options->qtDependencies.append(dep);
-        usedDependencies.insert(guiLib);
-        if (!readAndroidDependencyXml(options, QLatin1String("Qt5Gui"), &usedDependencies, &remainingDependencies))
-            return false;
-    }
+    // Jam in the dependencies of the platform plugin, since the application will crash without it
+    if (!readDependenciesFromElf(options, options->qtInstallDirectory + QLatin1String("/plugins/platforms/android/libqtforandroid.so"), &usedDependencies, &remainingDependencies))
+        return false;
 
     QString qtDir = options->qtInstallDirectory + QLatin1Char('/');
 
@@ -2098,7 +2111,6 @@ bool copyQtFiles(Options *options)
                     relativePath.remove(0, 1);
                 if ((relativePath.startsWith("lib/") && relativePath.endsWith(".so"))
                         || relativePath.startsWith("jar/")
-                        || relativePath.startsWith("plugins/")
                         || relativePath.startsWith("imports/")
                         || relativePath.startsWith("qml/")
                         || relativePath.startsWith("plugins/")) {

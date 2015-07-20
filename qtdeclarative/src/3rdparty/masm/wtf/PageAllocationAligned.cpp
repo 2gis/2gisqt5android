@@ -52,7 +52,7 @@ PageAllocationAligned PageAllocationAligned::allocate(size_t size, size_t alignm
 
     // Resererve with suffcient additional VM to correctly align.
     size_t reservationSize = size + alignmentDelta;
-    void* reservationBase = OSAllocator::reserveUncommitted(reservationSize, usage, writable, false);
+    void* reservationBase = OSAllocator::reserveUncommitted(reservationSize, usage, writable);
 
     // Select an aligned region within the reservation and commit.
     void* alignedBase = reinterpret_cast<uintptr_t>(reservationBase) & alignmentMask
@@ -75,10 +75,11 @@ void PageAllocationAligned::deallocate()
     ASSERT(!*this);
 
 #if OS(DARWIN)
-    vm_deallocate(current_task(), reinterpret_cast<vm_address_t>(tmp.base()), tmp.size());
+    vm_deallocate(current_task(), reinterpret_cast<vm_address_t>(tmp.realBase()), tmp.realSize());
 #else
-    ASSERT(tmp.m_reservation.contains(tmp.base(), tmp.size()));
-    OSAllocator::decommitAndRelease(tmp.m_reservation.base(), tmp.m_reservation.size(), tmp.base(), tmp.size());
+    ASSERT(tmp.m_reservation.contains(tmp.realBase(), tmp.realSize()));
+    OSAllocator::decommitAndRelease(tmp.m_reservation.realBase(), tmp.m_reservation.realSize(),
+                                    tmp.realBase(), tmp.realSize());
 #endif
 }
 

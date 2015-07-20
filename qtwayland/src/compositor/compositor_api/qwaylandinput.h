@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Compositor.
 **
@@ -17,8 +17,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -54,6 +54,7 @@ class QWaylandSurface;
 class QKeyEvent;
 class QTouchEvent;
 class QWaylandSurfaceView;
+class QInputEvent;
 
 namespace QtWayland {
 class InputDevice;
@@ -62,8 +63,8 @@ class InputDevice;
 class Q_COMPOSITOR_EXPORT QWaylandKeymap
 {
 public:
-    QWaylandKeymap(const QString &layout = QLatin1String("us"), const QString &variant = QString(), const QString &options = QString(),
-                   const QString &model = QLatin1String("pc105"), const QString &rules = QLatin1String("evdev"));
+    QWaylandKeymap(const QString &layout = QString(), const QString &variant = QString(), const QString &options = QString(),
+                   const QString &model = QString(), const QString &rules = QString());
 
     inline QString layout() const { return m_layout; }
     inline QString variant() const { return m_variant; }
@@ -93,7 +94,7 @@ public:
     Q_DECLARE_FLAGS(CapabilityFlags, CapabilityFlag)
 
     QWaylandInputDevice(QWaylandCompositor *compositor, CapabilityFlags caps = DefaultCapabilities);
-    ~QWaylandInputDevice();
+    virtual ~QWaylandInputDevice();
 
     void sendMousePressEvent(Qt::MouseButton button, const QPointF &localPos, const QPointF &globalPos = QPointF());
     void sendMouseReleaseEvent(Qt::MouseButton button, const QPointF &localPos, const QPointF &globalPos = QPointF());
@@ -124,6 +125,8 @@ public:
     QtWayland::InputDevice *handle() const;
 
     QWaylandInputDevice::CapabilityFlags capabilities();
+
+    virtual bool isOwner(QInputEvent *inputEvent);
 
 private:
     QtWayland::InputDevice *d;

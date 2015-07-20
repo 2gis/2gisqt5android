@@ -1,7 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-# Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+# Copyright (C) 2015 The Qt Company Ltd.
 # Contact: http://engin.io
 #
 # You may use this file under the terms of the 3-clause BSD license.

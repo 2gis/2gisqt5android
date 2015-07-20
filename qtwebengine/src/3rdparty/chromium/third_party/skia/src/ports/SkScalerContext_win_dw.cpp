@@ -26,7 +26,9 @@
 #include "SkTypeface_win_dw.h"
 
 #include <dwrite.h>
-#include <dwrite_1.h>
+#if SK_HAS_DWRITE_1_H
+#  include <dwrite_1.h>
+#endif
 
 static bool isLCD(const SkScalerContext::Rec& rec) {
     return SkMask::kLCD16_Format == rec.fMaskFormat ||
@@ -74,7 +76,7 @@ static void expand_range_if_gridfit_only(DWriteFontTypeface* typeface, int size,
     if (gasp->version != SkOTTableGridAndScanProcedure::version0 &&
         gasp->version != SkOTTableGridAndScanProcedure::version1)
     {
-        return ;
+        return;
     }
 
     uint16_t numRanges = SkEndianSwap16(gasp->numRanges);
@@ -100,8 +102,6 @@ static void expand_range_if_gridfit_only(DWriteFontTypeface* typeface, int size,
         }
         minPPEM = maxPPEM;
     }
-
-    return;
 }
 
 static bool has_bitmap_strike(DWriteFontTypeface* typeface, PPEMRange range) {
@@ -384,10 +384,6 @@ void SkScalerContext_DW::generateAdvance(SkGlyph* glyph) {
                                        SkIntToScalar(gm.advanceWidth),
                                        SkIntToScalar(dwfm.designUnitsPerEm));
 
-    if (!this->isSubpixel()) {
-        advanceX = SkScalarRoundToScalar(advanceX);
-    }
-
     SkVector vecs[1] = { { advanceX, 0 } };
     if (DWRITE_MEASURING_MODE_GDI_CLASSIC == fMeasuringMode ||
         DWRITE_MEASURING_MODE_GDI_NATURAL == fMeasuringMode)
@@ -498,17 +494,12 @@ void SkScalerContext_DW::generateMetrics(SkGlyph* glyph) {
     // fails, and try DWRITE_TEXTURE_CLEARTYPE_3x1.
 }
 
-void SkScalerContext_DW::generateFontMetrics(SkPaint::FontMetrics* mx,
-                                             SkPaint::FontMetrics* my) {
-    if (!(mx || my))
-      return;
+void SkScalerContext_DW::generateFontMetrics(SkPaint::FontMetrics* metrics) {
+    if (NULL == metrics) {
+        return;
+    }
 
-    if (mx) {
-        sk_bzero(mx, sizeof(*mx));
-    }
-    if (my) {
-        sk_bzero(my, sizeof(*my));
-    }
+    sk_bzero(metrics, sizeof(*metrics));
 
     DWRITE_FONT_METRICS dwfm;
     if (DWRITE_MEASURING_MODE_GDI_CLASSIC == fMeasuringMode ||
@@ -524,58 +515,49 @@ void SkScalerContext_DW::generateFontMetrics(SkPaint::FontMetrics* mx,
     }
 
     SkScalar upem = SkIntToScalar(dwfm.designUnitsPerEm);
-    if (mx) {
-        mx->fTop = -fTextSizeRender * SkIntToScalar(dwfm.ascent) / upem;
-        mx->fAscent = mx->fTop;
-        mx->fDescent = fTextSizeRender * SkIntToScalar(dwfm.descent) / upem;
-        mx->fBottom = mx->fDescent;
-        mx->fLeading = fTextSizeRender * SkIntToScalar(dwfm.lineGap) / upem;
-        mx->fXHeight = fTextSizeRender * SkIntToScalar(dwfm.xHeight) / upem;
-        mx->fUnderlineThickness = fTextSizeRender * SkIntToScalar(dwfm.underlineThickness) / upem;
-        mx->fUnderlinePosition = -(fTextSizeRender * SkIntToScalar(dwfm.underlinePosition) / upem);
 
-        mx->fFlags |= SkPaint::FontMetrics::kUnderlineThinknessIsValid_Flag;
-        mx->fFlags |= SkPaint::FontMetrics::kUnderlinePositionIsValid_Flag;
+    metrics->fAscent = -fTextSizeRender * SkIntToScalar(dwfm.ascent) / upem;
+    metrics->fDescent = fTextSizeRender * SkIntToScalar(dwfm.descent) / upem;
+    metrics->fLeading = fTextSizeRender * SkIntToScalar(dwfm.lineGap) / upem;
+    metrics->fXHeight = fTextSizeRender * SkIntToScalar(dwfm.xHeight) / upem;
+    metrics->fUnderlineThickness = fTextSizeRender * SkIntToScalar(dwfm.underlineThickness) / upem;
+    metrics->fUnderlinePosition = -(fTextSizeRender * SkIntToScalar(dwfm.underlinePosition) / upem);
+
+    metrics->fFlags |= SkPaint::FontMetrics::kUnderlineThinknessIsValid_Flag;
+    metrics->fFlags |= SkPaint::FontMetrics::kUnderlinePositionIsValid_Flag;
+
+#if SK_HAS_DWRITE_1_H
+    if (fTypeface->fDWriteFontFace1.get()) {
+        DWRITE_FONT_METRICS1 dwfm1;
+        fTypeface->fDWriteFontFace1->GetMetrics(&dwfm1);
+        metrics->fTop = -fTextSizeRender * SkIntToScalar(dwfm1.glyphBoxTop) / upem;
+        metrics->fBottom = -fTextSizeRender * SkIntToScalar(dwfm1.glyphBoxBottom) / upem;
+        metrics->fXMin = fTextSizeRender * SkIntToScalar(dwfm1.glyphBoxLeft) / upem;
+        metrics->fXMax = fTextSizeRender * SkIntToScalar(dwfm1.glyphBoxRight) / upem;
+
+        metrics->fMaxCharWidth = metrics->fXMax - metrics->fXMin;
+        return;
+    }
+#else
+#  pragma message("No dwrite_1.h is available, font metrics may be affected.")
+#endif
+
+    AutoTDWriteTable<SkOTTableHead> head(fTypeface->fDWriteFontFace.get());
+    if (head.fExists &&
+        head.fSize >= sizeof(SkOTTableHead) &&
+        head->version == SkOTTableHead::version1)
+    {
+        metrics->fTop = -fTextSizeRender * (int16_t)SkEndian_SwapBE16(head->yMax) / upem;
+        metrics->fBottom = -fTextSizeRender * (int16_t)SkEndian_SwapBE16(head->yMin) / upem;
+        metrics->fXMin = fTextSizeRender * (int16_t)SkEndian_SwapBE16(head->xMin) / upem;
+        metrics->fXMax = fTextSizeRender * (int16_t)SkEndian_SwapBE16(head->xMax) / upem;
+
+        metrics->fMaxCharWidth = metrics->fXMax - metrics->fXMin;
+        return;
     }
 
-    if (my) {
-        my->fAscent = -fTextSizeRender * SkIntToScalar(dwfm.ascent) / upem;
-        my->fDescent = fTextSizeRender * SkIntToScalar(dwfm.descent) / upem;
-        my->fLeading = fTextSizeRender * SkIntToScalar(dwfm.lineGap) / upem;
-        my->fXHeight = fTextSizeRender * SkIntToScalar(dwfm.xHeight) / upem;
-        my->fUnderlineThickness = fTextSizeRender * SkIntToScalar(dwfm.underlineThickness) / upem;
-        my->fUnderlinePosition = -(fTextSizeRender * SkIntToScalar(dwfm.underlinePosition) / upem);
-
-        my->fFlags |= SkPaint::FontMetrics::kUnderlineThinknessIsValid_Flag;
-        my->fFlags |= SkPaint::FontMetrics::kUnderlinePositionIsValid_Flag;
-
-        if (NULL != fTypeface->fDWriteFontFace1.get()) {
-            DWRITE_FONT_METRICS1 dwfm1;
-            fTypeface->fDWriteFontFace1->GetMetrics(&dwfm1);
-            my->fTop = -fTextSizeRender * SkIntToScalar(dwfm1.glyphBoxTop) / upem;
-            my->fBottom = -fTextSizeRender * SkIntToScalar(dwfm1.glyphBoxBottom) / upem;
-            my->fXMin = fTextSizeRender * SkIntToScalar(dwfm1.glyphBoxLeft) / upem;
-            my->fXMax = fTextSizeRender * SkIntToScalar(dwfm1.glyphBoxRight) / upem;
-
-            my->fMaxCharWidth = my->fXMax - my->fXMin;
-        } else {
-            AutoTDWriteTable<SkOTTableHead> head(fTypeface->fDWriteFontFace.get());
-            if (head.fExists &&
-                head.fSize >= sizeof(SkOTTableHead) &&
-                head->version == SkOTTableHead::version1)
-            {
-                my->fTop = -fTextSizeRender * (int16_t)SkEndian_SwapBE16(head->yMax) / upem;
-                my->fBottom = -fTextSizeRender * (int16_t)SkEndian_SwapBE16(head->yMin) / upem;
-                my->fXMin = fTextSizeRender * (int16_t)SkEndian_SwapBE16(head->xMin) / upem;
-                my->fXMax = fTextSizeRender * (int16_t)SkEndian_SwapBE16(head->xMax) / upem;
-
-                my->fMaxCharWidth = my->fXMax - my->fXMin;
-            } else {
-                my->fTop = my->fAscent;
-                my->fBottom = my->fDescent;
-            }
-        }
-    }
+    metrics->fTop = metrics->fAscent;
+    metrics->fBottom = metrics->fDescent;
 }
 
 ///////////////////////////////////////////////////////////////////////////////

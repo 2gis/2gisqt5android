@@ -1,12 +1,15 @@
+requires(contains(QT_CONFIG, accessibility))
+
 TEMPLATE = app
 TARGET = quicknanobrowser
 
-HEADERS = quickwindow.h \
-          util.h
-SOURCES = quickwindow.cpp \
-          main.cpp
+HEADERS = utils.h
+SOURCES = main.cpp
 
-OTHER_FILES += quickwindow.qml
+OTHER_FILES += ApplicationRoot.qml \
+               BrowserDialog.qml \
+               BrowserWindow.qml \
+               DownloadView.qml
 
 RESOURCES += resources.qrc
 

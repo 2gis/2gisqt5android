@@ -1,7 +1,7 @@
 /****************************************************************************
 **
 ** Copyright (C) 2014 Pelagicore AG
-** Contact: http://www.qt-project.org/legal
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -34,6 +34,13 @@
 #include "qsgvivantevideomaterialshader.h"
 #include "qsgvivantevideonode.h"
 #include "qsgvivantevideomaterial.h"
+
+QSGVivanteVideoMaterialShader::QSGVivanteVideoMaterialShader() :
+    mUScale(1),
+    mVScale(1),
+    mNewUVScale(true)
+{
+}
 
 void QSGVivanteVideoMaterialShader::updateState(const RenderState &state,
                                                 QSGMaterial *newMaterial,
@@ -48,6 +55,10 @@ void QSGVivanteVideoMaterialShader::updateState(const RenderState &state,
         mat->setOpacity(state.opacity());
         program()->setUniformValue(mIdOpacity, state.opacity());
     }
+    if (mNewUVScale) {
+        program()->setUniformValue(mIdUVScale, mUScale, mVScale);
+        mNewUVScale = false;
+    }
     if (state.isMatrixDirty())
         program()->setUniformValue(mIdMatrix, state.combinedMatrix());
 }
@@ -59,6 +70,13 @@ const char * const *QSGVivanteVideoMaterialShader::attributeNames() const {
         0
     };
     return names;
+}
+
+void QSGVivanteVideoMaterialShader::setUVScale(float uScale, float vScale)
+{
+    mUScale = uScale;
+    mVScale = vScale;
+    mNewUVScale = true;
 }
 
 const char *QSGVivanteVideoMaterialShader::vertexShader() const {
@@ -78,12 +96,13 @@ const char *QSGVivanteVideoMaterialShader::fragmentShader() const {
     static const char *shader =
             "uniform sampler2D texture;"
             "uniform lowp float opacity;"
+            "uniform highp vec2 uvScale;"
             ""
             "varying highp vec2 qt_TexCoord;"
             ""
             "void main()"
             "{"
-            "  gl_FragColor = vec4(texture2D( texture, qt_TexCoord ).rgb, 1.0) * opacity;\n"
+            "  gl_FragColor = vec4(texture2D( texture, qt_TexCoord * uvScale ).rgb, 1.0) * opacity;\n"
             "}";
     return shader;
 }
@@ -93,4 +112,5 @@ void QSGVivanteVideoMaterialShader::initialize() {
     mIdMatrix = program()->uniformLocation("qt_Matrix");
     mIdTexture = program()->uniformLocation("texture");
     mIdOpacity = program()->uniformLocation("opacity");
+    mIdUVScale = program()->uniformLocation("uvScale");
 }

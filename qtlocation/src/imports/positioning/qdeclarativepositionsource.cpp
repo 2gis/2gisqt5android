@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtPositioning module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -99,13 +99,28 @@ QT_BEGIN_NAMESPACE
     }
     \endcode
 
-    The \l{flickr}{Flickr} example application shows how to use
+    The \l{geoflickr}{GeoFlickr} example application shows how to use
     a PositionSource in your application to retrieve local data for users
     from a REST web service.
 
     \sa {QtPositioning::Position}, {QGeoPositionInfoSource}
 
 */
+
+/*!
+    \qmlsignal PositionSource::updateTimeout()
+
+    If \l update() was called, this signal is emitted if the current position could not be
+    retrieved within a certain amount of time.
+
+    If \l start() was called, this signal is emitted if the position engine determines that
+    it is not able to provide further regular updates.
+
+    \since Qt Positioning 5.5
+
+    \sa QGeoPositionInfoSource::updateTimeout()
+*/
+
 
 QDeclarativePositionSource::QDeclarativePositionSource()
 :   m_positionSource(0), m_preferredPositioningMethods(NoPositioningMethods), m_nmeaFile(0),
@@ -167,6 +182,8 @@ void QDeclarativePositionSource::setName(const QString &newName)
                 this, SLOT(positionUpdateReceived(QGeoPositionInfo)));
         connect(m_positionSource, SIGNAL(error(QGeoPositionInfoSource::Error)),
                 this, SLOT(sourceErrorReceived(QGeoPositionInfoSource::Error)));
+        connect(m_positionSource, SIGNAL(updateTimeout()),
+                this, SLOT(updateTimeoutReceived()));
 
         m_positionSource->setUpdateInterval(m_updateInterval);
         m_positionSource->setPreferredPositioningMethods(
@@ -243,7 +260,7 @@ void QDeclarativePositionSource::setNmeaSource(const QUrl &nmeaSource)
             } else if (localFileName.startsWith("qrc:/")) {
                 localFileName.remove(0, 5);
             }
-            if (!QFile::exists(localFileName) && localFileName.startsWith("/")) {
+            if (!QFile::exists(localFileName) && localFileName.startsWith('/')) {
                 localFileName.remove(0,1);
             }
         }
@@ -277,6 +294,11 @@ void QDeclarativePositionSource::setNmeaSource(const QUrl &nmeaSource)
             (qobject_cast<QNmeaPositionInfoSource *>(m_positionSource))->setDevice(m_nmeaFile);
             connect(m_positionSource, SIGNAL(positionUpdated(QGeoPositionInfo)),
                     this, SLOT(positionUpdateReceived(QGeoPositionInfo)));
+            connect(m_positionSource, SIGNAL(error(QGeoPositionInfoSource::Error)),
+                    this, SLOT(sourceErrorReceived(QGeoPositionInfoSource::Error)));
+            connect(m_positionSource, SIGNAL(updateTimeout()),
+                    this, SLOT(updateTimeoutReceived()));
+
             setPosition(m_positionSource->lastKnownPosition());
             if (m_active && !m_singleUpdate) {
                 // Keep on updating even though source changed
@@ -323,6 +345,10 @@ void QDeclarativePositionSource::socketConnected()
 
     connect(m_positionSource, &QNmeaPositionInfoSource::positionUpdated,
             this, &QDeclarativePositionSource::positionUpdateReceived);
+    connect(m_positionSource, SIGNAL(error(QGeoPositionInfoSource::Error)),
+            this, SLOT(sourceErrorReceived(QGeoPositionInfoSource::Error)));
+    connect(m_positionSource, SIGNAL(updateTimeout()),
+            this, SLOT(updateTimeoutReceived()));
 
     setPosition(m_positionSource->lastKnownPosition());
 
@@ -360,6 +386,24 @@ void QDeclarativePositionSource::socketError(QAbstractSocket::SocketError error)
     }
 
     emit sourceErrorChanged();
+}
+
+
+void QDeclarativePositionSource::updateTimeoutReceived()
+{
+    if (!m_active)
+        return;
+
+    if (m_singleUpdate) {
+        m_singleUpdate = false;
+
+        // only singleUpdate based timeouts change activity
+        // continuous updates may resume again (see QGeoPositionInfoSource::startUpdates())
+        m_active = false;
+        emit activeChanged();
+    }
+
+    emit updateTimeout();
 }
 
 void QDeclarativePositionSource::setPosition(const QGeoPositionInfo &pi)
@@ -663,6 +707,8 @@ void QDeclarativePositionSource::componentComplete()
                     this, SLOT(positionUpdateReceived(QGeoPositionInfo)));
             connect(m_positionSource, SIGNAL(error(QGeoPositionInfoSource::Error)),
                     this, SLOT(sourceErrorReceived(QGeoPositionInfoSource::Error)));
+            connect(m_positionSource, SIGNAL(updateTimeout()),
+                    this, SLOT(updateTimeoutReceived()));
 
             m_positionSource->setUpdateInterval(m_updateInterval);
             m_positionSource->setPreferredPositioningMethods(

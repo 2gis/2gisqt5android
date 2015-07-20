@@ -1,8 +1,8 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2015 The Qt Company Ltd.
 ** Copyright (C) 2013 Klarälvdalens Datakonsult AB (KDAB).
-** Contact: http://www.qt-project.org/legal
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Compositor.
 **
@@ -18,8 +18,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -201,6 +201,11 @@ void Keyboard::keyboard_destroy_resource(wl_keyboard::Resource *resource)
 {
     if (m_focusResource == resource)
         m_focusResource = 0;
+}
+
+void Keyboard::keyboard_release(wl_keyboard::Resource *resource)
+{
+    wl_resource_destroy(resource->handle);
 }
 
 void Keyboard::key(uint32_t serial, uint32_t time, uint32_t key, uint32_t state)

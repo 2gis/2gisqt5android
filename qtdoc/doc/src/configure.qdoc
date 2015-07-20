@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
@@ -10,15 +10,15 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Free Documentation License Usage
 ** Alternatively, this file may be used under the terms of the GNU Free
 ** Documentation License version 1.3 as published by the Free Software
 ** Foundation and appearing in the file included in the packaging of
-** this file.  Please review the following information to ensure
+** this file. Please review the following information to ensure
 ** the GNU Free Documentation License version 1.3 requirements
 ** will be met: http://www.gnu.org/copyleft/fdl.html.
 ** $QT_END_LICENSE$
@@ -186,8 +186,8 @@
 
     The \c -platform option sets the host platform and the compiler for building
     the Qt sources. The list of supported platforms and compilers is found in
-    the \l{Supported Platforms} page while the full list is listed in
-    \e{qtbase/mkspecs}.
+    the \l{Community Supported Platforms}{supported platforms} page while the
+    full list is available in \e{qtbase/mkspecs} directory.
 
     For example, on Ubuntu Linux systems, Qt can be compiled by several
     compilers such as clang or g++:
@@ -220,7 +220,7 @@
     \li \c -xplatform - the target platform. Valid xplatform options are the same
     as the \c -platform options which are found in \e{qtbase/mkspecs}.
     \li \c -device - a specific device or chipsets. The list of devices that configure is compatible with are
-    found in \e{qtbase/mkspecs/devices}. For more information, visit the \l{http://qt-project.org/wiki/Category:Devices}{Devices}
+    found in \e{qtbase/mkspecs/devices}. For more information, visit the \l{http://wiki.qt.io/Category:Devices}{Devices}
     Wiki page.
     \li \c -device-option - sets additional qmake variables. For example, \c{-device-option CROSS_COMPILE=}\e{<path-to-toolchain>} provides
     the environment variable, \c{CROSS_COMPILE}, as needed by certain devices.
@@ -240,28 +240,28 @@
     \li \l{Qt for BlackBerry} - a community-driven site for BlackBerry and
     QNX devices
     \li \l{Qt for Embedded Linux#Configuring for a Specific Device}{Qt for Embedded Linux - Building from Source}
-    \li \l{http://qt-project.org/wiki/Qt-RaspberryPi}{Qt for Raspberry Pi} - a community-driven site for
+    \li \l{http://wiki.qt.io/Qt_RaspberryPi}{Qt for Raspberry Pi} - a community-driven site for
     Raspberry devices
-    \li \l{http://qt-project.org/wiki/Category:Devices}{Devices} - a list of other devices and chipsets
+    \li \l{http://wiki.qt.io/Category:Devices}{Devices} - a list of other devices and chipsets
     \endlist
 
     \section1 OpenGL Options for Windows
 
     On Windows, Qt can be configured with the system OpenGL or with \l{ANGLE}.
-    By default, configure uses ANGLE, which is bundled with the Qt
-    sources, but requires the DirectX SDK. Through ANGLE, OpenGL ES 2.0 is
-    mapped to DirectX APIs. OpenGL applications can then be deployed to Windows
-    computers with older OpenGL APIs, without requiring that the latest
-    OpenGL version be installed in the system.
+    By default, Qt is configured to use ANGLE, which is bundled with Qt and
+    depends on the DirectX SDK. ANGLE enables running Qt applications that
+    depend on OpenGL, without installing the latest OpenGL libraries.
 
-    The \c -opengl option configures Qt to use the OpenGL in the target system
-    or a different version of OpenGL ES.
+    The \c -opengl option can be used to configure Qt to use
+    the OpenGL in the target system, a different version of OpenGL ES (with or
+    without ANGLE), or dynamically switch between the available OpenGL
+    implementations.
 
     \code
     configure.bat -opengl desktop
     \endcode
 
-    With the \c desktop option, Qt uses the OpenGL installed in Windows,
+    With the \c desktop option, Qt uses the OpenGL installed on Windows,
     requiring that the OpenGL in the target Windows machine is compatible with
     the application. The \c -opengl option accepts two versions of OpenGL ES, \c
     es2 for OpenGL ES 2.0 or \c es1 for OpenGL ES Common Profile.
@@ -270,4 +270,8 @@
     configure.bat -opengl es2
     \endcode
 
+    You can also use \c{-opengl dynamic}, which enable applications to
+    dynamically switch between the available options at runtime. For more
+    details about the benefits of using dynamic GL-switching, see
+    \l{Graphics Drivers}.
 */

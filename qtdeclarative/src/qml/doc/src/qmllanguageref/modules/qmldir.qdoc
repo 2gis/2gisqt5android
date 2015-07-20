@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
@@ -10,15 +10,15 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Free Documentation License Usage
 ** Alternatively, this file may be used under the terms of the GNU Free
 ** Documentation License version 1.3 as published by the Free Software
 ** Foundation and appearing in the file included in the packaging of
-** this file.  Please review the following information to ensure
+** this file. Please review the following information to ensure
 ** the GNU Free Documentation License version 1.3 requirements
 ** will be met: http://www.gnu.org/copyleft/fdl.html.
 ** $QT_END_LICENSE$
@@ -43,17 +43,14 @@ documentation about
 
 \section1 Contents of a Module Definition qmldir File
 
-A \c qmldir file which defines a module is a plain-text file which consists
-of the following commands:
+A \c qmldir file is a plain-text file that contains
+the following commands:
 
 \table
     \header
-        \li Command
         \li Syntax
         \li Usage
-
     \row
-        \li Module Identifier Directive
         \li
             \code
 module <ModuleIdentifier>
@@ -73,14 +70,14 @@ module ExampleModule
             \endcode
 
     \row
-        \li Object Type Declaration
         \li
             \code
-<TypeName> <InitialVersion> <File>
+[singleton] <TypeName> <InitialVersion> <File>
             \endcode
         \li Declares a \l{qtqml-typesystem-objecttypes.html}{QML object type}
             to be made available by the module.
                 \list
+                \li \c [singleton] Optional. Used to declare a singleton type.
                 \li \c <TypeName> is the type being made available
                 \li \c <InitialVersion> is the module version for which the type is to be made available
                 \li \c <File> is the (relative) file name of the QML file that defines the type
@@ -89,14 +86,36 @@ module ExampleModule
             Zero or more object type declarations may exist in the \c qmldir
             file, however each object type must have a unique type name within
             any particular version of the module.
+            \note To declare a \c singleton type, the QML file defining the
+            type must include the \c {pragma Singleton} statement.
 
             Example:
             \code
-MyCustomType 1.0 MyCustomType.qml
+//Style.qml with custom singleton type definition
+pragma Singleton
+import QtQuick 2.0
+
+QtObject {
+    property int textSize: 20
+    property color textColor: "green"
+}
+
+// qmldir declaring the singleton type
+module CustomStyles
+singleton Style 1.0 Style.qml
+
+// singleton type in use
+import QtQuick 2.0
+import CustomStyles 1.0
+
+Text {
+    font.pixelSize: Style.textSize
+    color: Style.textColor
+    text: "Hello World"
+}
             \endcode
 
     \row
-        \li Internal Object Type Declaration
         \li
             \code
 internal <TypeName> <File>
@@ -119,7 +138,6 @@ internal MyPrivateType MyPrivateType.qml
             load the non-exported type.
 
     \row
-        \li JavaScript Resource Declaration
         \li
             \code
 <ResourceIdentifier> <InitialVersion> <File>
@@ -143,7 +161,6 @@ MyScript 1.0 MyScript.js
             {Importing JavaScript Resources In QML} for more information.
 
     \row
-        \li C++ Plugin Declaration
         \li
             \code
 plugin <Name> [<Path>]
@@ -178,7 +195,6 @@ plugin <Name> [<Path>]
 plugin MyPluginLibrary
            \endcode
     \row
-        \li C++ Plugin Class
         \li
             \code
 classname <C++ plugin class>
@@ -191,7 +207,6 @@ classname <C++ plugin class>
             this information.
 
     \row
-        \li Type Information Description File Declaration
         \li
             \code
 typeinfo <File>
@@ -210,7 +225,6 @@ typeinfo mymodule.qmltypes
             as code completion for the types defined in your plugins.
 
     \row
-        \li Dependency Declaration
         \li
             \code
 depends <ModuleIdentifier> <InitialVersion>
@@ -229,7 +243,6 @@ depends MyOtherModule 1.0
             to include the other modules in application packages.
 
     \row
-        \li Comment
         \li
             \code
 # <Comment>
@@ -242,10 +255,9 @@ depends MyOtherModule 1.0
             \endcode
 
     \row
-    \li designersupported
     \li
-        \code
-          designersupported
+         \code
+designersupported
          \endcode
 
      \li Set this property if the plugin is supported by Qt Quick Designer.

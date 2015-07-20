@@ -2,7 +2,7 @@
 **
 ** Copyright (C) 2012 Denis Shienkov <denis.shienkov@gmail.com>
 ** Copyright (C) 2013 Laszlo Papp <lpapp@kde.org>
-** Contact: http://www.qt-project.org/legal
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtSerialPort module of the Qt Toolkit.
 **
@@ -11,9 +11,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -24,8 +24,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -63,6 +63,7 @@ class Q_SERIALPORT_EXPORT QSerialPort : public QIODevice
 #if QT_DEPRECATED_SINCE(5, 3)
     Q_PROPERTY(bool settingsRestoredOnClose READ settingsRestoredOnClose WRITE setSettingsRestoredOnClose NOTIFY settingsRestoredOnCloseChanged)
 #endif
+    Q_PROPERTY(bool breakEnabled READ isBreakEnabled WRITE setBreakEnabled NOTIFY breakEnabledChanged)
 
     Q_ENUMS(BaudRate DataBits Parity StopBits FlowControl DataErrorPolicy SerialPortError)
     Q_FLAGS(Directions PinoutSignals)
@@ -141,7 +142,7 @@ public:
     Q_DECLARE_FLAGS(PinoutSignals, PinoutSignal)
 
 #if QT_DEPRECATED_SINCE(5, 2)
-#if defined _MSC_VER
+#if defined(_MSC_VER)
 #pragma deprecated(UnknownBaud)
 #pragma deprecated(UnknownDataBits)
 #pragma deprecated(UnknownParity)
@@ -244,8 +245,11 @@ public:
     bool waitForReadyRead(int msecs) Q_DECL_OVERRIDE;
     bool waitForBytesWritten(int msecs) Q_DECL_OVERRIDE;
 
-    bool sendBreak(int duration = 0);
+#if QT_DEPRECATED_SINCE(5, 5)
+    QT_DEPRECATED bool sendBreak(int duration = 0);
+#endif
     bool setBreakEnabled(bool set = true);
+    bool isBreakEnabled() const;
 
     Handle handle() const;
 
@@ -255,11 +259,16 @@ Q_SIGNALS:
     void parityChanged(QSerialPort::Parity parity);
     void stopBitsChanged(QSerialPort::StopBits stopBits);
     void flowControlChanged(QSerialPort::FlowControl flowControl);
-    void dataErrorPolicyChanged(QSerialPort::DataErrorPolicy policy);
+#if QT_DEPRECATED_SINCE(5, 5)
+    QT_DEPRECATED void dataErrorPolicyChanged(QSerialPort::DataErrorPolicy policy);
+#endif
     void dataTerminalReadyChanged(bool set);
     void requestToSendChanged(bool set);
     void error(QSerialPort::SerialPortError serialPortError);
-    void settingsRestoredOnCloseChanged(bool restore);
+#if QT_DEPRECATED_SINCE(5, 5)
+    QT_DEPRECATED void settingsRestoredOnCloseChanged(bool restore);
+#endif
+    void breakEnabledChanged(bool set);
 
 protected:
     qint64 readData(char *data, qint64 maxSize) Q_DECL_OVERRIDE;
@@ -269,15 +278,14 @@ protected:
 private:
     void setError(QSerialPort::SerialPortError error, const QString &errorString = QString());
 
-    QSerialPortPrivate * const d_ptr;
+    // ### Qt6: remove me.
+    QSerialPortPrivate * const d_dummy;
 
     Q_DISABLE_COPY(QSerialPort)
 
-#if defined (Q_OS_WIN32)
-    Q_PRIVATE_SLOT(d_func(), bool _q_completeAsyncCommunication())
-    Q_PRIVATE_SLOT(d_func(), bool _q_completeAsyncRead())
-    Q_PRIVATE_SLOT(d_func(), bool _q_completeAsyncWrite())
+#if defined(Q_OS_WIN32)
     Q_PRIVATE_SLOT(d_func(), bool _q_startAsyncWrite())
+    Q_PRIVATE_SLOT(d_func(), void _q_notified(quint32, quint32, OVERLAPPED*))
 #endif
 };
 

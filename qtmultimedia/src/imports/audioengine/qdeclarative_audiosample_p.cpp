@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the plugins of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -106,6 +106,11 @@ void QDeclarativeAudioSample::componentComplete()
     m_complete = true;
 }
 
+/*!
+    \qmlproperty url QtAudioEngine::AudioSample::source
+
+    This property holds the source URL of the audio sample.
+*/
 QUrl QDeclarativeAudioSample::source() const
 {
     return m_url;
@@ -114,7 +119,7 @@ QUrl QDeclarativeAudioSample::source() const
 void QDeclarativeAudioSample::setSource(const QUrl& url)
 {
     if (m_complete) {
-        qWarning("AudioSample: source not changable after initialization.");
+        qWarning("AudioSample: source not changeable after initialization.");
         return;
     }
     m_url = url;
@@ -148,7 +153,7 @@ bool QDeclarativeAudioSample::isLoaded() const
 {
     if (!m_soundBuffer)
         return false;
-    return m_soundBuffer->isReady();
+    return m_soundBuffer->state() == QSoundBuffer::Ready;
 }
 
 /*!
@@ -158,19 +163,18 @@ bool QDeclarativeAudioSample::isLoaded() const
 */
 void QDeclarativeAudioSample::load()
 {
-    if (isLoaded())
-        return;
     if (!m_soundBuffer) {
         m_preloaded = true;
         return;
     }
-    m_soundBuffer->load();
+    if (m_soundBuffer->state() != QSoundBuffer::Loading && m_soundBuffer->state() != QSoundBuffer::Ready)
+        m_soundBuffer->load();
 }
 
 void QDeclarativeAudioSample::setPreloaded(bool preloaded)
 {
     if (m_complete) {
-        qWarning("AudioSample: preloaded not changable after initialization.");
+        qWarning("AudioSample: preloaded not changeable after initialization.");
         return;
     }
     m_preloaded = preloaded;
@@ -179,7 +183,7 @@ void QDeclarativeAudioSample::setPreloaded(bool preloaded)
 void QDeclarativeAudioSample::setStreaming(bool streaming)
 {
     if (m_complete) {
-        qWarning("AudioSample: streaming not changable after initialization.");
+        qWarning("AudioSample: streaming not changeable after initialization.");
         return;
     }
     m_streaming = streaming;
@@ -199,7 +203,7 @@ QString QDeclarativeAudioSample::name() const
 void QDeclarativeAudioSample::setName(const QString& name)
 {
     if (m_complete) {
-        qWarning("AudioSample: name not changable after initialization.");
+        qWarning("AudioSample: name not changeable after initialization.");
         return;
     }
     m_name = name;
@@ -213,7 +217,7 @@ void QDeclarativeAudioSample::init()
     } else {
         m_soundBuffer =
             qobject_cast<QDeclarativeAudioEngine*>(parent())->engine()->getStaticSoundBuffer(m_url);
-        if (m_soundBuffer->isReady()) {
+        if (m_soundBuffer->state() == QSoundBuffer::Ready) {
             emit loadedChanged();
         } else {
             connect(m_soundBuffer, SIGNAL(ready()), this, SIGNAL(loadedChanged()));

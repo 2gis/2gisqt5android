@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the plugins of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,24 +23,23 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
 
+#include "qaudioengine_openal_p.h"
+
+#include <QtCore/QMutex>
 #include <QtCore/QThread>
 #include <QtNetwork/QNetworkRequest>
 #include <QtNetwork/QNetworkReply>
 #include <QtNetwork/QNetworkAccessManager>
-#include <QtCore/QUrl>
-#include <QtCore/QThread>
-#include <QtCore/QMutex>
 
 #include "qsamplecache_p.h"
-#include "qaudioengine_openal_p.h"
 
 #include "qdebug.h"
 
@@ -48,152 +47,143 @@
 
 QT_USE_NAMESPACE
 
-class StaticSoundBufferAL : public QSoundBufferPrivateAL
-{
-    Q_OBJECT
-public:
-    StaticSoundBufferAL(QObject *parent, const QUrl& url, QSampleCache *sampleLoader)
-        : QSoundBufferPrivateAL(parent)
-        , m_ref(1)
-        , m_url(url)
-        , m_alBuffer(0)
-        , m_isReady(false)
-        , m_sample(0)
-        , m_sampleLoader(sampleLoader)
-    {
-#ifdef DEBUG_AUDIOENGINE
-        qDebug() << "creating new StaticSoundBufferOpenAL";
-#endif
-    }
-
-    void load()
-    {
-        if (m_sample)
-            return;
-        m_sample = m_sampleLoader->requestSample(m_url);
-        connect(m_sample, SIGNAL(error()), this, SLOT(decoderError()));
-        connect(m_sample, SIGNAL(ready()), this, SLOT(sampleReady()));
-        switch (m_sample->state()) {
-        case QSample::Ready:
-            sampleReady();
-            break;
-        case QSample::Error:
-            decoderError();
-            break;
-        default:
-            break;
-        }
-    }
-
-    ~StaticSoundBufferAL()
-    {
-        if (m_sample)
-            m_sample->release();
-        alDeleteBuffers(1, &m_alBuffer);
-    }
-
-    void bindToSource(ALuint alSource)
-    {
-        Q_ASSERT(m_alBuffer != 0);
-        alSourcei(alSource, AL_BUFFER, m_alBuffer);
-    }
-
-    void unbindFromSource(ALuint alSource)
-    {
-        alSourcei(alSource, AL_BUFFER, 0);
-    }
-
-    //called in application
-    bool isReady() const
-    {
-        return m_isReady;
-    }
-
-    long addRef()
-    {
-        return ++m_ref;
-    }
-
-    long release()
-    {
-        return --m_ref;
-    }
-
-    long refCount() const
-    {
-        return m_ref;
-    }
-
-public Q_SLOTS:
-    void sampleReady()
-    {
-#ifdef DEBUG_AUDIOENGINE
-        qDebug() << "StaticSoundBufferOpenAL:sample[" << m_url << "] loaded";
-#endif
-
-        disconnect(m_sample, SIGNAL(error()), this, SLOT(decoderError()));
-        disconnect(m_sample, SIGNAL(ready()), this, SLOT(sampleReady()));
-
-        if (m_sample->data().size() > 1024 * 1024 * 4) {
-            qWarning() << "source [" << m_url << "] size too large!";
-            decoderError();
-            return;
-        }
-
-        if (m_sample->format().channelCount() > 2) {
-            qWarning() << "source [" << m_url << "] channel > 2!";
-            decoderError();
-            return;
-        }
-
-        ALenum alFormat = 0;
-        if (m_sample->format().sampleSize() == 8) {
-            alFormat = m_sample->format().channelCount() == 1 ? AL_FORMAT_MONO8 : AL_FORMAT_STEREO8;
-        } else if (m_sample->format().sampleSize() == 16) {
-            alFormat = m_sample->format().channelCount() == 1 ? AL_FORMAT_MONO16 : AL_FORMAT_STEREO16;
-        } else {
-            qWarning() << "source [" << m_url << "] invalid sample size:"
-                       << m_sample->format().sampleSize() << "(should be 8 or 16)";
-            decoderError();
-            return;
-        }
-
-        alGenBuffers(1, &m_alBuffer);
-        if (!QAudioEnginePrivate::checkNoError("create buffer")) {
-            return;
-        }
-        alBufferData(m_alBuffer, alFormat, m_sample->data().data(),
-                     m_sample->data().size(), m_sample->format().sampleRate());
-
-        if (!QAudioEnginePrivate::checkNoError("fill buffer")) {
-            return;
-        }
-        m_isReady = true;
-        emit ready();
-
-        m_sample->release();
-        m_sample = 0;
-    }
-
-    void decoderError()
-    {
-        qWarning() << "loading [" << m_url << "] failed";
-        disconnect(m_sample, SIGNAL(error()), this, SLOT(decoderError()));
-        emit error();
-    }
-
-private:
-    long m_ref;
-    QUrl m_url;
-    ALuint m_alBuffer;
-    bool m_isReady;
-    QSample *m_sample;
-    QSampleCache *m_sampleLoader;
-};
-
 QSoundBufferPrivateAL::QSoundBufferPrivateAL(QObject *parent)
     : QSoundBuffer(parent)
 {
+}
+
+
+StaticSoundBufferAL::StaticSoundBufferAL(QObject *parent, const QUrl &url, QSampleCache *sampleLoader)
+    : QSoundBufferPrivateAL(parent),
+      m_ref(1),
+      m_url(url),
+      m_alBuffer(0),
+      m_state(Creating),
+      m_sample(0),
+      m_sampleLoader(sampleLoader)
+{
+#ifdef DEBUG_AUDIOENGINE
+    qDebug() << "creating new StaticSoundBufferOpenAL";
+#endif
+}
+
+StaticSoundBufferAL::~StaticSoundBufferAL()
+{
+    if (m_sample)
+        m_sample->release();
+
+    if (m_alBuffer != 0) {
+        alGetError(); // clear error
+        alDeleteBuffers(1, &m_alBuffer);
+        QAudioEnginePrivate::checkNoError("delete buffer");
+    }
+}
+
+QSoundBuffer::State StaticSoundBufferAL::state() const
+{
+    return m_state;
+}
+
+void StaticSoundBufferAL::load()
+{
+    if (m_state == Loading || m_state == Ready)
+        return;
+
+    m_state = Loading;
+    emit stateChanged(m_state);
+
+    m_sample = m_sampleLoader->requestSample(m_url);
+    connect(m_sample, SIGNAL(error()), this, SLOT(decoderError()));
+    connect(m_sample, SIGNAL(ready()), this, SLOT(sampleReady()));
+    switch (m_sample->state()) {
+    case QSample::Ready:
+        sampleReady();
+        break;
+    case QSample::Error:
+        decoderError();
+        break;
+    default:
+        break;
+    }
+}
+
+void StaticSoundBufferAL::bindToSource(ALuint alSource)
+{
+    Q_ASSERT(m_alBuffer != 0);
+    alSourcei(alSource, AL_BUFFER, m_alBuffer);
+}
+
+void StaticSoundBufferAL::unbindFromSource(ALuint alSource)
+{
+    alSourcei(alSource, AL_BUFFER, 0);
+}
+
+void StaticSoundBufferAL::sampleReady()
+{
+#ifdef DEBUG_AUDIOENGINE
+    qDebug() << "StaticSoundBufferOpenAL:sample[" << m_url << "] loaded";
+#endif
+
+    disconnect(m_sample, SIGNAL(error()), this, SLOT(decoderError()));
+    disconnect(m_sample, SIGNAL(ready()), this, SLOT(sampleReady()));
+
+    if (m_sample->data().size() > 1024 * 1024 * 4) {
+        qWarning() << "source [" << m_url << "] size too large!";
+        decoderError();
+        return;
+    }
+
+    if (m_sample->format().channelCount() > 2) {
+        qWarning() << "source [" << m_url << "] channel > 2!";
+        decoderError();
+        return;
+    }
+
+    ALenum alFormat = 0;
+    if (m_sample->format().sampleSize() == 8) {
+        alFormat = m_sample->format().channelCount() == 1 ? AL_FORMAT_MONO8 : AL_FORMAT_STEREO8;
+    } else if (m_sample->format().sampleSize() == 16) {
+        alFormat = m_sample->format().channelCount() == 1 ? AL_FORMAT_MONO16 : AL_FORMAT_STEREO16;
+    } else {
+        qWarning() << "source [" << m_url << "] invalid sample size:"
+                   << m_sample->format().sampleSize() << "(should be 8 or 16)";
+        decoderError();
+        return;
+    }
+
+    alGenBuffers(1, &m_alBuffer);
+    if (!QAudioEnginePrivate::checkNoError("create buffer")) {
+        decoderError();
+        return;
+    }
+    alBufferData(m_alBuffer, alFormat, m_sample->data().data(),
+                 m_sample->data().size(), m_sample->format().sampleRate());
+    if (!QAudioEnginePrivate::checkNoError("fill buffer")) {
+        decoderError();
+        return;
+    }
+
+    m_sample->release();
+    m_sample = 0;
+
+    m_state = Ready;
+    emit stateChanged(m_state);
+    emit ready();
+}
+
+void StaticSoundBufferAL::decoderError()
+{
+    qWarning() << "loading [" << m_url << "] failed";
+
+    disconnect(m_sample, SIGNAL(error()), this, SLOT(decoderError()));
+    disconnect(m_sample, SIGNAL(ready()), this, SLOT(sampleReady()));
+
+    m_sample->release();
+    m_sample = 0;
+
+    m_state = Error;
+    emit stateChanged(m_state);
+    emit error();
 }
 
 
@@ -245,7 +235,6 @@ QAudioEnginePrivate::~QAudioEnginePrivate()
 #ifdef DEBUG_AUDIOENGINE
     qDebug() << "QAudioEnginePrivate::dtor";
 #endif
-    delete m_sampleLoader;
     QObjectList children = this->children();
     foreach (QObject *child, children) {
         QSoundSourcePrivate* s = qobject_cast<QSoundSourcePrivate*>(child);
@@ -258,6 +247,8 @@ QAudioEnginePrivate::~QAudioEnginePrivate()
         delete buffer;
     }
     m_staticBufferPool.clear();
+
+    delete m_sampleLoader;
 
     ALCcontext* context = alcGetCurrentContext();
     ALCdevice *device = alcGetContextsDevice(context);
@@ -319,8 +310,7 @@ void QAudioEnginePrivate::releaseSoundBuffer(QSoundBuffer *buffer)
 #ifdef DEBUG_AUDIOENGINE
     qDebug() << "QAudioEnginePrivate: recycle sound buffer";
 #endif
-    if (buffer->inherits("StaticSoundBufferAL")) {
-        StaticSoundBufferAL *staticBuffer = static_cast<StaticSoundBufferAL*>(buffer);
+    if (StaticSoundBufferAL *staticBuffer = qobject_cast<StaticSoundBufferAL *>(buffer)) {
         //decrement the reference count, still kept in memory for reuse
         staticBuffer->release();
         //TODO implement some resource recycle strategy
@@ -435,6 +425,3 @@ void QAudioEnginePrivate::updateSoundSources()
         m_updateTimer.stop();
     }
 }
-
-#include "qaudioengine_openal_p.moc"
-//#include "moc_qaudioengine_openal_p.cpp"

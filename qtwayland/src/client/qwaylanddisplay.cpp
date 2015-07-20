@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the plugins of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -76,6 +68,8 @@
 
 QT_BEGIN_NAMESPACE
 
+namespace QtWaylandClient {
+
 struct wl_surface *QWaylandDisplay::createSurface(void *handle)
 {
     struct wl_surface *surface = mCompositor.create_surface();
@@ -95,6 +89,16 @@ QWaylandShellSurface *QWaylandDisplay::createShellSurface(QWaylandWindow *window
     }
 
     return Q_NULLPTR;
+}
+
+struct ::wl_region *QWaylandDisplay::createRegion(const QRegion &qregion)
+{
+    struct ::wl_region *region = mCompositor.create_region();
+
+    Q_FOREACH (const QRect &rect, qregion.rects())
+        wl_region_add(region, rect.x(), rect.y(), rect.width(), rect.height());
+
+    return region;
 }
 
 QWaylandClientBufferIntegration * QWaylandDisplay::clientBufferIntegration() const
@@ -128,6 +132,9 @@ QWaylandDisplay::QWaylandDisplay(QWaylandIntegration *waylandIntegration)
     , mQtKeyExtension(0)
     , mTextInputManager(0)
     , mHardwareIntegration(0)
+    , mLastInputSerial(0)
+    , mLastInputDevice(0)
+    , mLastInputWindow(0)
 {
     qRegisterMetaType<uint32_t>("uint32_t");
 
@@ -158,7 +165,9 @@ QWaylandDisplay::QWaylandDisplay(QWaylandIntegration *waylandIntegration)
 
 QWaylandDisplay::~QWaylandDisplay(void)
 {
-    qDeleteAll(mScreens);
+    foreach (QWaylandScreen *screen, mScreens) {
+        mWaylandIntegration->destroyScreen(screen);
+    }
     mScreens.clear();
     delete mDndSelectionHandler.take();
     mEventThread->quit();
@@ -230,6 +239,7 @@ void QWaylandDisplay::registry_global(uint32_t id, const QString &interface, uin
         mScreens.append(screen);
         // We need to get the output events before creating surfaces
         forceRoundTrip();
+        screen->init();
         mWaylandIntegration->screenAdded(screen);
     } else if (interface == QStringLiteral("wl_compositor")) {
         mCompositorVersion = qMin((int)version, 3);
@@ -242,7 +252,7 @@ void QWaylandDisplay::registry_global(uint32_t id, const QString &interface, uin
     } else if (interface == QStringLiteral("wl_shell")){
         mShell.reset(new QtWayland::wl_shell(registry, id, 1));
     } else if (interface == QStringLiteral("wl_seat")) {
-        QWaylandInputDevice *inputDevice = new QWaylandInputDevice(this, version, id);
+        QWaylandInputDevice *inputDevice = mWaylandIntegration->createInputDevice(this, version, id);
         mInputDevices.append(inputDevice);
     } else if (interface == QStringLiteral("wl_data_device_manager")) {
         mDndSelectionHandler.reset(new QWaylandDataDeviceManager(this, id));
@@ -281,8 +291,8 @@ void QWaylandDisplay::registry_global_remove(uint32_t id)
             if (global.interface == QStringLiteral("wl_output")) {
                 foreach (QWaylandScreen *screen, mScreens) {
                     if (screen->outputId() == id) {
-                        delete screen;
                         mScreens.removeOne(screen);
+                        mWaylandIntegration->destroyScreen(screen);
                         break;
                     }
                 }
@@ -335,8 +345,15 @@ void QWaylandDisplay::forceRoundTrip()
     wl_proxy_set_queue((struct wl_proxy *)callback, mEventQueue);
     wl_callback_add_listener(callback, &sync_listener, &done);
     flushRequests();
-    while (!done && ret >= 0)
-        ret = wl_display_dispatch_queue(mDisplay, mEventQueue);
+    if (QThread::currentThread()->eventDispatcher()) {
+        while (!done && ret >= 0) {
+            QThread::currentThread()->eventDispatcher()->processEvents(QEventLoop::WaitForMoreEvents);
+            ret = wl_display_dispatch_queue_pending(mDisplay, mEventQueue);
+        }
+    } else {
+        while (!done && ret >= 0)
+            ret = wl_display_dispatch_queue(mDisplay, mEventQueue);
+    }
 
     if (ret == -1 && !done)
         wl_callback_destroy(callback);
@@ -357,6 +374,20 @@ bool QWaylandDisplay::supportsWindowDecoration() const
 
     static bool integrationSupport = clientBufferIntegration() && clientBufferIntegration()->supportsWindowDecoration();
     return integrationSupport;
+}
+
+QWaylandWindow *QWaylandDisplay::lastInputWindow() const
+{
+    return mLastInputWindow.data();
+}
+
+void QWaylandDisplay::setLastInputDevice(QWaylandInputDevice *device, uint32_t serial, QWaylandWindow *win)
+{
+    mLastInputDevice = device;
+    mLastInputSerial = serial;
+    mLastInputWindow = win;
+}
+
 }
 
 QT_END_NAMESPACE

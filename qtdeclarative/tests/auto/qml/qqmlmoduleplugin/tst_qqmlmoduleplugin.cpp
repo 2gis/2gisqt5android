@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -43,9 +43,6 @@
 
 #include "../../shared/testhttpserver.h"
 #include "../../shared/util.h"
-
-#define SERVER_ADDR "http://127.0.0.1:14456"
-#define SERVER_PORT 14456
 
 // Note: this test does not use module identifier directives in the qmldir files, because
 // it would result in repeated attempts to insert types into the same namespace.
@@ -240,12 +237,13 @@ void tst_qqmlmoduleplugin::importPluginWithQmlFile()
 void tst_qqmlmoduleplugin::remoteImportWithQuotedUrl()
 {
     TestHTTPServer server;
-    QVERIFY2(server.listen(SERVER_PORT), qPrintable(server.errorString()));
+    QVERIFY2(server.listen(), qPrintable(server.errorString()));
     server.serveDirectory(m_dataImportsDirectory);
 
     QQmlEngine engine;
     QQmlComponent component(&engine);
-    component.setData("import \"" SERVER_ADDR "/org/qtproject/PureQmlModule\" \nComponentA { width: 300; ComponentB{} }", QUrl());
+    const QString qml = "import \"" + server.urlString("/org/qtproject/PureQmlModule") + "\" \nComponentA { width: 300; ComponentB{} }";
+    component.setData(qml.toUtf8(), QUrl());
 
     QTRY_COMPARE(component.status(), QQmlComponent::Ready);
     QObject *object = component.create();
@@ -261,7 +259,7 @@ void tst_qqmlmoduleplugin::remoteImportWithQuotedUrl()
 void tst_qqmlmoduleplugin::remoteImportWithUnquotedUri()
 {
     TestHTTPServer server;
-    QVERIFY2(server.listen(SERVER_PORT), qPrintable(server.errorString()));
+    QVERIFY2(server.listen(), qPrintable(server.errorString()));
     server.serveDirectory(m_dataImportsDirectory);
 
     QQmlEngine engine;
@@ -505,6 +503,27 @@ void tst_qqmlmoduleplugin::importStrictModule_data()
     QTest::newRow("success")
         << "import org.qtproject.StrictModule 1.0\n"
            "MyPluginType {}"
+        << QString()
+        << QString();
+
+    QTest::newRow("two strict modules with different major version")
+        << "import org.qtproject.StrictModule 1.0\n"
+           "import org.qtproject.StrictModule 2.0\n"
+           "MyPluginType {}"
+        << QString()
+        << QString();
+
+    QTest::newRow("old namespaced strict module")
+        << "import org.qtproject.StrictModule 1.0 as Old\n"
+           "import org.qtproject.StrictModule 2.0 as New\n"
+           "Old.MyPluginType {}"
+        << QString()
+        << QString();
+
+    QTest::newRow("new namespaced strict modules")
+        << "import org.qtproject.StrictModule 1.0 as Old\n"
+           "import org.qtproject.StrictModule 2.0 as New\n"
+           "New.MyPluginType {}"
         << QString()
         << QString();
 

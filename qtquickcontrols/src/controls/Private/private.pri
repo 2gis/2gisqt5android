@@ -9,7 +9,9 @@ HEADERS += \
     $$PWD/qquickwheelarea_p.h \
     $$PWD/qquickabstractstyle_p.h \
     $$PWD/qquickpadding_p.h \
-    $$PWD/qquickcontrolsprivate_p.h
+    $$PWD/qquickcontrolsprivate_p.h \
+    $$PWD/qquicktreemodeladaptor_p.h \
+    $$PWD/qquicksceneposlistener_p.h
 
 SOURCES += \
     $$PWD/qquickcalendarmodel.cpp \
@@ -19,8 +21,10 @@ SOURCES += \
     $$PWD/qquickrangeddate.cpp \
     $$PWD/qquickcontrolsettings.cpp \
     $$PWD/qquickwheelarea.cpp \
-    $$PWD/qquickabstractstyle.cpp
-
+    $$PWD/qquickabstractstyle.cpp \
+    $$PWD/qquicktreemodeladaptor.cpp \
+    $$PWD/qquickcontrolsprivate.cpp \
+    $$PWD/qquicksceneposlistener.cpp
 
 !no_desktop {
     QT += widgets
@@ -61,6 +65,9 @@ PRIVATE_QML_FILES += \
     $$PWD/EditMenu_base.qml \
     $$PWD/EditMenu_ios.qml \
     $$PWD/ToolMenuButton.qml \
+    $$PWD/BasicTableView.qml \
+    $$PWD/TableViewItemDelegateLoader.qml \
+    $$PWD/TreeViewItemDelegateLoader.qml \
     $$PWD/qmldir
 
-QML_FILES += $$PRIVATE_QML_FILES
+!qtquickcompiler: QML_FILES += $$PRIVATE_QML_FILES

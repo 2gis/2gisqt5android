@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the tools applications of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -85,8 +85,8 @@ MainWindow::MainWindow(QWidget *parent)
     layout->addWidget(mdiArea);
     layout->setMargin(0);
 
-    connect(mdiArea, SIGNAL(subWindowActivated(QMdiSubWindow*)), this, SLOT(updateGUI()));
-    connect(actionFileExit, SIGNAL(triggered()), qApp, SLOT(quit()));
+    connect(mdiArea, &QMdiArea::subWindowActivated, this, &MainWindow::updateGUI);
+    connect(actionFileExit, &QAction::triggered, QCoreApplication::quit);
 }
 
 MainWindow::~MainWindow()
@@ -340,8 +340,7 @@ void MainWindow::on_actionScriptingLoad_triggered()
 
     QAxScript *script = scripts->load(file, file);
     if (script) {
-        connect(script, SIGNAL(error(int,QString,int,QString)),
-                this,   SLOT(logMacro(int,QString,int,QString)));
+        connect(script, &QAxScript::error, this, &MainWindow::logMacro);
         actionScriptingRun->setEnabled(true);
     }
 #else
@@ -403,20 +402,15 @@ void MainWindow::logSignal(const QString &signal, int argc, void *argv)
     if (!container)
         return;
 
-    QString paramlist;
+    QString paramlist = QLatin1String(" - {");
     VARIANT *params = (VARIANT*)argv;
     for (int a = argc-1; a >= 0; --a) {
-        if (a == argc-1)
-            paramlist = QLatin1String(" - {");
-        QVariant qvar = VARIANTToQVariant(params[a], 0);
-        paramlist += QLatin1String(" ") + qvar.toString();
-        if (a > 0)
-            paramlist += QLatin1String(",");
-        else
-            paramlist += QLatin1String(" ");
+        paramlist += QLatin1Char(' ');
+        paramlist += VARIANTToQVariant(params[a], 0).toString();
+        paramlist += a > 0 ? QLatin1Char(',') : QLatin1Char(' ');
     }
     if (argc)
-        paramlist += QLatin1String("}");
+        paramlist += QLatin1Char('}');
     logSignals->append(container->windowTitle() + QLatin1String(": ") + signal + paramlist);
 }
 
@@ -444,12 +438,14 @@ void MainWindow::logMacro(int code, const QString &description, int sourcePositi
      * that it can be translated in a sane way. */
     QString message = tr("Script: ");
     if (code)
-        message += QString::number(code) + QLatin1String(" ");
-    message += QLatin1String("'") + description + QLatin1String("'");
+        message += QString::number(code) + QLatin1Char(' ');
+
+    const QChar singleQuote = QLatin1Char('\'');
+    message += singleQuote + description + singleQuote;
     if (sourcePosition)
         message += tr(" at position ") + QString::number(sourcePosition);
     if (!sourceText.isEmpty())
-        message += QLatin1String(" '") + sourceText + QLatin1String("'");
+        message += QLatin1String(" '") + sourceText + singleQuote;
 
     logMacros->append(message);
 }

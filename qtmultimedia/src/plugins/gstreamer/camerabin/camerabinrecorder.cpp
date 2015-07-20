@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -49,7 +49,7 @@ CameraBinRecorder::CameraBinRecorder(CameraBinSession *session)
      m_state(QMediaRecorder::StoppedState),
      m_status(QMediaRecorder::UnloadedStatus)
 {
-    connect(m_session, SIGNAL(stateChanged(QCamera::State)), SLOT(updateStatus()));
+    connect(m_session, SIGNAL(statusChanged(QCamera::Status)), SLOT(updateStatus()));
     connect(m_session, SIGNAL(pendingStateChanged(QCamera::State)), SLOT(updateStatus()));
     connect(m_session, SIGNAL(busyChanged(bool)), SLOT(updateStatus()));
 
@@ -86,12 +86,12 @@ QMediaRecorder::Status CameraBinRecorder::status() const
 
 void CameraBinRecorder::updateStatus()
 {
-    QCamera::State sessionState = m_session->state();
+    QCamera::Status sessionStatus = m_session->status();
 
     QMediaRecorder::State oldState = m_state;
     QMediaRecorder::Status oldStatus = m_status;
 
-    if (sessionState == QCamera::ActiveState &&
+    if (sessionStatus == QCamera::ActiveStatus &&
             m_session->captureMode().testFlag(QCamera::CaptureVideo)) {
 
         if (!m_session->cameraControl()->resourcePolicy()->canCapture()) {
@@ -110,9 +110,10 @@ void CameraBinRecorder::updateStatus()
             m_state = QMediaRecorder::StoppedState;
             m_session->stopVideoRecording();
         }
-        m_status = m_session->pendingState() == QCamera::ActiveState ?
-                    QMediaRecorder::LoadingStatus :
-                    QMediaRecorder::UnloadedStatus;
+        m_status = m_session->pendingState() == QCamera::ActiveState
+                    && m_session->captureMode().testFlag(QCamera::CaptureVideo)
+                ? QMediaRecorder::LoadingStatus
+                : QMediaRecorder::UnloadedStatus;
     }
 
     if (m_state != oldState)
@@ -161,8 +162,6 @@ void CameraBinRecorder::applySettings()
 
                 QVideoEncoderSettings videoSettings = videoEncoderControl->videoSettings();
                 videoSettings.setCodec(candidate[1]);
-                if (videoSettings.resolution().isEmpty())
-                    videoSettings.setResolution(640, 480);
                 videoEncoderControl->setActualVideoSettings(videoSettings);
 
                 QAudioEncoderSettings audioSettings = audioEncoderControl->audioSettings();
@@ -215,7 +214,7 @@ void CameraBinRecorder::setState(QMediaRecorder::State state)
         break;
     case QMediaRecorder::RecordingState:
 
-        if (m_session->state() != QCamera::ActiveState) {
+        if (m_session->status() != QCamera::ActiveStatus) {
             emit error(QMediaRecorder::ResourceError, tr("Service has not been started"));
         } else if (!m_session->cameraControl()->resourcePolicy()->canCapture()) {
             emit error(QMediaRecorder::ResourceError, tr("Recording permissions are not available"));

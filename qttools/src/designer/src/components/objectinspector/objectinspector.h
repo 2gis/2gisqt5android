@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Designer of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -53,10 +53,10 @@ public:
     explicit ObjectInspector(QDesignerFormEditorInterface *core, QWidget *parent = 0);
     virtual ~ObjectInspector();
 
-    virtual QDesignerFormEditorInterface *core() const;
+    QDesignerFormEditorInterface *core() const Q_DECL_OVERRIDE;
 
-    virtual void getSelection(Selection &s) const;
-    virtual bool selectObject(QObject *o);
+    void getSelection(Selection &s) const Q_DECL_OVERRIDE;
+    bool selectObject(QObject *o) Q_DECL_OVERRIDE;
     virtual void clearSelection();
 
     void setFormWindow(QDesignerFormWindowInterface *formWindow);
@@ -70,10 +70,10 @@ private slots:
     void slotHeaderDoubleClicked(int column);
 
 protected:
-    virtual void dragEnterEvent (QDragEnterEvent * event);
-    virtual void dragMoveEvent(QDragMoveEvent * event);
-    virtual void dragLeaveEvent(QDragLeaveEvent * event);
-    virtual void dropEvent (QDropEvent * event);
+    void dragEnterEvent (QDragEnterEvent * event) Q_DECL_OVERRIDE;
+    void dragMoveEvent(QDragMoveEvent * event) Q_DECL_OVERRIDE;
+    void dragLeaveEvent(QDragLeaveEvent * event) Q_DECL_OVERRIDE;
+    void dropEvent (QDropEvent * event) Q_DECL_OVERRIDE;
 
 private:
     class ObjectInspectorPrivate;

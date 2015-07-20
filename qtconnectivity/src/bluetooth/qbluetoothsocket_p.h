@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtBluetooth module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -52,8 +52,10 @@
 #endif
 #ifdef QT_ANDROID_BLUETOOTH
 #include <QtAndroidExtras/QAndroidJniObject>
+#include <QtCore/QPointer>
 #include "android/inputstreamthread_p.h"
 #include <jni.h>
+class WorkerThread;
 #endif
 
 #ifndef QPRIVATELINEARBUFFER_BUFFERSIZE
@@ -81,6 +83,7 @@ public:
 class QBluetoothSocket;
 class QBluetoothServiceDiscoveryAgent;
 
+#ifndef QT_OSX_BLUETOOTH
 class QBluetoothSocketPrivate : public QObject
 {
     Q_OBJECT
@@ -93,18 +96,14 @@ public:
     ~QBluetoothSocketPrivate();
 
 //On QNX and Android we connect using the uuid not the port
-#if defined(QT_QNX_BLUETOOTH)
-    void connectToService(const QBluetoothAddress &address, const QBluetoothUuid &uuid, QIODevice::OpenMode openMode);
-#elif defined(QT_ANDROID_BLUETOOTH)
+#if defined(QT_QNX_BLUETOOTH) || defined(QT_ANDROID_BLUETOOTH)
     void connectToService(const QBluetoothAddress &address, const QBluetoothUuid &uuid,
-                          QIODevice::OpenMode openMode, int fallbackServiceChannel = 1);
-    bool fallBackConnect(QAndroidJniObject uuid, int channel);
+                          QIODevice::OpenMode openMode);
 #else
     void connectToService(const QBluetoothAddress &address, quint16 port, QIODevice::OpenMode openMode);
 #endif
 #ifdef QT_ANDROID_BLUETOOTH
-    void connectToServiceConc(const QBluetoothAddress &address, const QBluetoothUuid &uuid,
-                              QIODevice::OpenMode openMode, int fallbackServiceChannel = 1);
+    bool fallBackConnect(QAndroidJniObject uuid, int channel);
 #endif
 
 
@@ -166,8 +165,17 @@ public:
     QAndroidJniObject outputStream;
     InputStreamThread *inputThread;
 
-private slots:
+public slots:
+    void socketConnectSuccess(const QAndroidJniObject &socket);
+    void defaultSocketConnectFailed(const QAndroidJniObject & socket,
+                                    const QAndroidJniObject &targetUuid);
+    void fallbackSocketConnectFailed(const QAndroidJniObject &socket,
+                                     const QAndroidJniObject &targetUuid);
     void inputThreadError(int errorCode);
+
+signals:
+    void connectJavaSocket();
+    void closeJavaSocket();
 
 #endif
 
@@ -197,6 +205,21 @@ public:
 #endif
 };
 
+#else // QT_OSX_BLUETOOTH
+
+// QBluetoothSocketPrivate on OS X can not contain
+// Q_OBJECT (moc does not parse Objective-C syntax).
+// But QBluetoothSocket still requires QMetaObject::invokeMethod
+// to work. Here's the trick:
+class QBluetoothSocketPrivateBase : public QObject
+{
+// The most important part of it:
+    Q_OBJECT
+public slots:
+    virtual void _q_writeNotify() = 0;
+};
+
+#endif // QT_OSX_BLUETOOTH
 
 static inline void convertAddress(quint64 from, quint8 (&to)[6])
 {
@@ -219,5 +242,6 @@ static inline void convertAddress(quint8 (&from)[6], quint64 &to)
 }
 
 QT_END_NAMESPACE
+
 
 #endif

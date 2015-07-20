@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -46,14 +46,17 @@ Item {
     property variant boundingBox1: QtPositioning.rectangle()
     property variant boundingBox2: QtPositioning.rectangle()
 
-    Component.onCompleted: {
-        boundingBox1.topLeft = coordinate1;
-        boundingBox1.bottomRight = coordinate2;
-        boundingBox1.width = 10;
+    property variant circle1: QtPositioning.circle()
+    property variant circle2: QtPositioning.circle(tr, 4000)
 
-        boundingBox2.topLeft = coordinate2;
-        boundingBox2.bottomLeft = coordinate1;
-        boundingBox2.width = 20;
+    Component.onCompleted: {
+        boundingBox1.topLeft = bl
+        boundingBox1.bottomRight = bl
+        boundingBox1.width = 10
+
+        boundingBox2.topLeft = bl
+        boundingBox2.bottomRight = bl
+        boundingBox2.width = 20
     }
 
     property variant bl: QtPositioning.coordinate(0, 0)

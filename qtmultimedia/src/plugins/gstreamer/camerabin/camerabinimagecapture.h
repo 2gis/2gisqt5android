@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -37,6 +37,14 @@
 
 #include <qcameraimagecapturecontrol.h>
 #include "camerabinsession.h"
+
+#include <qvideosurfaceformat.h>
+
+#include <private/qgstreamerbufferprobe_p.h>
+
+#if GST_CHECK_VERSION(1,0,0)
+#include <gst/video/video.h>
+#endif
 
 QT_BEGIN_NAMESPACE
 
@@ -61,15 +69,47 @@ private slots:
     void updateState();
 
 private:
-    static gboolean metadataEventProbe(GstPad *pad, GstEvent *event, CameraBinImageCapture *);
-    static gboolean uncompressedBufferProbe(GstPad *pad, GstBuffer *buffer, CameraBinImageCapture *);
-    static gboolean jpegBufferProbe(GstPad *pad, GstBuffer *buffer, CameraBinImageCapture *);
+#if GST_CHECK_VERSION(1,0,0)
+    static GstPadProbeReturn encoderEventProbe(GstPad *, GstPadProbeInfo *info, gpointer user_data);
+#else
+    static gboolean encoderEventProbe(GstElement *, GstEvent *event, gpointer user_data);
+#endif
 
+    class EncoderProbe : public QGstreamerBufferProbe
+    {
+    public:
+        EncoderProbe(CameraBinImageCapture *capture) : capture(capture) {}
+        void probeCaps(GstCaps *caps);
+        bool probeBuffer(GstBuffer *buffer);
+
+    private:
+        CameraBinImageCapture * const capture;
+    } m_encoderProbe;
+
+    class MuxerProbe : public QGstreamerBufferProbe
+    {
+    public:
+        MuxerProbe(CameraBinImageCapture *capture) : capture(capture) {}
+        void probeCaps(GstCaps *caps);
+        bool probeBuffer(GstBuffer *buffer);
+
+    private:
+        CameraBinImageCapture * const capture;
+
+    } m_muxerProbe;
+
+    QVideoSurfaceFormat m_bufferFormat;
+    QSize m_jpegResolution;
     CameraBinSession *m_session;
-    bool m_ready;
-    int m_requestId;
     GstElement *m_jpegEncoderElement;
     GstElement *m_metadataMuxerElement;
+#if GST_CHECK_VERSION(1,0,0)
+    GstVideoInfo m_videoInfo;
+#else
+    int m_bytesPerLine;
+#endif
+    int m_requestId;
+    bool m_ready;
 };
 
 QT_END_NAMESPACE

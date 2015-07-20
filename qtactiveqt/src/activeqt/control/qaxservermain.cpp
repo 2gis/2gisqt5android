@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the ActiveQt framework of the Qt Toolkit.
 **
@@ -17,8 +17,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -128,17 +128,18 @@ bool qax_startServer(QAxFactory::ServerType type)
         return true;
 
     const QStringList keys = qAxFactory()->featureList();
-    if (!keys.count())
+    const int keyCount = keys.count();
+    if (!keyCount)
         return false;
 
     if (!qAxFactory()->isService())
         StartMonitor();
 
-    classRegistration = new DWORD[keys.count()];
+    classRegistration = new DWORD[keyCount];
     int object = 0;
-    for (QStringList::ConstIterator key = keys.begin(); key != keys.end(); ++key, ++object) {
+    for (object = 0; object < keyCount; ++object) {
         IUnknown* p = 0;
-        CLSID clsid = qAxFactory()->classID(*key);
+        CLSID clsid = qAxFactory()->classID(keys.at(object));
 
         // Create a QClassFactory (implemented in qaxserverbase.cpp)
         HRESULT hRes = GetClassObject(clsid, IID_IClassFactory, (void**)&p);
@@ -164,9 +165,8 @@ bool qax_stopServer()
 
     qAxIsServer = false;
 
-    const QStringList keys = qAxFactory()->featureList();
-    int object = 0;
-    for (QStringList::ConstIterator key = keys.begin(); key != keys.end(); ++key, ++object)
+    const int keyCount = qAxFactory()->featureList().size();
+    for (int object = 0; object < keyCount; ++object)
         CoRevokeClassObject(classRegistration[object]);
 
     delete []classRegistration;
@@ -177,11 +177,7 @@ bool qax_stopServer()
     return true;
 }
 
-#if defined(Q_OS_WINCE)
-extern void __cdecl qWinMain(HINSTANCE, HINSTANCE, LPSTR, int, int &, QVector<char *> &);
-#else
 extern void qWinMain(HINSTANCE, HINSTANCE, LPSTR, int, int &, QVector<char *> &);
-#endif
 
 QT_END_NAMESPACE
 
@@ -189,11 +185,7 @@ QT_END_NAMESPACE
 int qMain(int, char **);
 #define main qMain
 #else
-#if defined(Q_OS_WINCE)
-extern "C" int __cdecl main(int, char **);
-#else
 extern "C" int main(int, char **);
-#endif
 #endif
 
 

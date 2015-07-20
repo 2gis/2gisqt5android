@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -35,10 +35,8 @@
 #define QV4GC_H
 
 #include "qv4global_p.h"
-#include "qv4context_p.h"
 #include "qv4value_inl_p.h"
-
-#include <QScopedPointer>
+#include "qv4scopedvalue_p.h"
 
 //#define DETAILED_MM_STATS
 
@@ -46,15 +44,11 @@ QT_BEGIN_NAMESPACE
 
 namespace QV4 {
 
-struct ExecutionEngine;
-struct ExecutionContext;
-struct Managed;
 struct GCDeletable;
 
 class Q_QML_EXPORT MemoryManager
 {
-    MemoryManager(const MemoryManager &);
-    MemoryManager &operator=(const MemoryManager&);
+    Q_DISABLE_COPY(MemoryManager);
 
 public:
     struct Data;
@@ -80,7 +74,7 @@ public:
     };
 
 public:
-    MemoryManager();
+    MemoryManager(ExecutionEngine *engine);
     ~MemoryManager();
 
     // TODO: this is only for 64bit (and x86 with SSE/AVX), so exend it for other architectures to be slightly more efficient (meaning, align on 8-byte boundaries).
@@ -88,66 +82,74 @@ public:
     static inline std::size_t align(std::size_t size)
     { return (size + 15) & ~0xf; }
 
-    inline Managed *allocManaged(std::size_t size)
+    template<typename ManagedType>
+    inline typename ManagedType::Data *allocManaged(std::size_t size)
     {
         size = align(size);
-        Managed *o = allocData(size);
-        return o;
+        Heap::Base *o = allocData(size);
+        o->vtable = ManagedType::staticVTable();
+        return static_cast<typename ManagedType::Data *>(o);
     }
 
     template <typename ManagedType>
-    ManagedType *alloc()
+    typename ManagedType::Data *alloc()
     {
-        ManagedType *t = static_cast<ManagedType*>(allocManaged(sizeof(typename ManagedType::Data)));
+        Scope scope(engine());
+        Scoped<ManagedType> t(scope, allocManaged<ManagedType>(sizeof(typename ManagedType::Data)));
         (void)new (t->d()) typename ManagedType::Data();
-        return t;
+        return t->d();
     }
 
     template <typename ManagedType, typename Arg1>
-    ManagedType *alloc(Arg1 arg1)
+    typename ManagedType::Data *alloc(Arg1 arg1)
     {
-        ManagedType *t = static_cast<ManagedType*>(allocManaged(sizeof(typename ManagedType::Data)));
+        Scope scope(engine());
+        Scoped<ManagedType> t(scope, allocManaged<ManagedType>(sizeof(typename ManagedType::Data)));
         (void)new (t->d()) typename ManagedType::Data(arg1);
-        return t;
+        return t->d();
     }
 
     template <typename ManagedType, typename Arg1, typename Arg2>
-    ManagedType *alloc(Arg1 arg1, Arg2 arg2)
+    typename ManagedType::Data *alloc(Arg1 arg1, Arg2 arg2)
     {
-        ManagedType *t = static_cast<ManagedType*>(allocManaged(sizeof(typename ManagedType::Data)));
+        Scope scope(engine());
+        Scoped<ManagedType> t(scope, allocManaged<ManagedType>(sizeof(typename ManagedType::Data)));
         (void)new (t->d()) typename ManagedType::Data(arg1, arg2);
-        return t;
+        return t->d();
     }
 
     template <typename ManagedType, typename Arg1, typename Arg2, typename Arg3>
-    ManagedType *alloc(Arg1 arg1, Arg2 arg2, Arg3 arg3)
+    typename ManagedType::Data *alloc(Arg1 arg1, Arg2 arg2, Arg3 arg3)
     {
-        ManagedType *t = static_cast<ManagedType*>(allocManaged(sizeof(typename ManagedType::Data)));
+        Scope scope(engine());
+        Scoped<ManagedType> t(scope, allocManaged<ManagedType>(sizeof(typename ManagedType::Data)));
         (void)new (t->d()) typename ManagedType::Data(arg1, arg2, arg3);
-        return t;
+        return t->d();
     }
 
     template <typename ManagedType, typename Arg1, typename Arg2, typename Arg3, typename Arg4>
-    ManagedType *alloc(Arg1 arg1, Arg2 arg2, Arg3 arg3, Arg4 arg4)
+    typename ManagedType::Data *alloc(Arg1 arg1, Arg2 arg2, Arg3 arg3, Arg4 arg4)
     {
-        ManagedType *t = static_cast<ManagedType*>(allocManaged(sizeof(typename ManagedType::Data)));
+        Scope scope(engine());
+        Scoped<ManagedType> t(scope, allocManaged<ManagedType>(sizeof(typename ManagedType::Data)));
         (void)new (t->d()) typename ManagedType::Data(arg1, arg2, arg3, arg4);
-        return t;
+        return t->d();
     }
 
     template <typename ManagedType, typename Arg1, typename Arg2, typename Arg3, typename Arg4, typename Arg5>
-    ManagedType *alloc(Arg1 arg1, Arg2 arg2, Arg3 arg3, Arg4 arg4, Arg5 arg5)
+    typename ManagedType::Data *alloc(Arg1 arg1, Arg2 arg2, Arg3 arg3, Arg4 arg4, Arg5 arg5)
     {
-        ManagedType *t = static_cast<ManagedType*>(allocManaged(sizeof(typename ManagedType::Data)));
+        Scope scope(engine());
+        Scoped<ManagedType> t(scope, allocManaged<ManagedType>(sizeof(typename ManagedType::Data)));
         (void)new (t->d()) typename ManagedType::Data(arg1, arg2, arg3, arg4, arg5);
-        return t;
+        return t->d();
     }
 
     bool isGCBlocked() const;
     void setGCBlocked(bool blockGC);
     void runGC();
 
-    void setExecutionEngine(ExecutionEngine *engine);
+    ExecutionEngine *engine() const;
 
     void dumpStats() const;
 
@@ -160,7 +162,7 @@ public:
 protected:
     /// expects size to be aligned
     // TODO: try to inline
-    Managed *allocData(std::size_t size);
+    Heap::Base *allocData(std::size_t size);
 
 #ifdef DETAILED_MM_STATS
     void willAllocate(std::size_t size);
@@ -170,13 +172,12 @@ private:
     void collectFromJSStack() const;
     void mark();
     void sweep(bool lastSweep = false);
-    void sweep(char *chunkStart, std::size_t chunkSize, size_t size);
 
 protected:
     QScopedPointer<Data> m_d;
 public:
-    PersistentValuePrivate *m_persistentValues;
-    PersistentValuePrivate *m_weakValues;
+    PersistentValueStorage *m_persistentValues;
+    PersistentValueStorage *m_weakValues;
 };
 
 }

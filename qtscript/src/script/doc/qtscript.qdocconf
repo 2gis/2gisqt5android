@@ -16,7 +16,7 @@ headerdirs += ..
 imagedirs += images
 sourcedirs += ..
 
-depends += qtcore qtlinguist qtscripttools qtdoc
+depends += qtcore qtlinguist qtscripttools qtdoc qtqml qtwidgets qmake
 
 # The following parameters are for creating a qhp file, the qhelpgenerator
 # program can convert the qhp file into a qch file which can be opened in

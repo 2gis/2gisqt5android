@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtPositioning module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -74,6 +74,9 @@ bool QGeoShapePrivate::operator==(const QGeoShapePrivate &other) const
     For the sake of consistency, subclasses should describe the specific
     details of the associated areas in terms of QGeoCoordinate instances
     and distances in meters.
+
+    This class is a \l Q_GADGET since Qt 5.5. It can be
+    \l{Cpp_value_integration_positioning}{directly used from C++ and QML}.
 */
 
 /*!
@@ -86,6 +89,42 @@ bool QGeoShapePrivate::operator==(const QGeoShapePrivate &other) const
     \value CircleType       A circular shape.
 */
 
+/*!
+    \property QGeoShape::type
+    \brief This property holds the type of this geo shape.
+
+    While this property is introduced in Qt 5.5, the related accessor functions
+    exist since the first version of this class.
+
+    \since 5.5
+*/
+
+/*!
+    \property QGeoShape::isValid
+    \brief This property holds the validity of the geo shape.
+
+    A geo shape is considered to be invalid if some of the data that is required to
+    unambiguously describe the geo shape has not been set or has been set to an
+    unsuitable value depending on the subclass of this object. The default constructed
+    objects of this type are invalid.
+
+    While this property is introduced in Qt 5.5, the related accessor functions
+    exist since the first version of this class.
+
+    \since 5.5
+*/
+
+/*!
+    \property QGeoShape::isEmpty
+    \brief This property defines whether this geo shape is empty.
+
+    An empty geo shape is a region which has a geometrical area of 0.
+
+    While this property is introduced in Qt 5.5, the related accessor functions
+    exist since the first version of this class.
+
+    \since 5.5
+*/
 inline QGeoShapePrivate *QGeoShape::d_func()
 {
     return static_cast<QGeoShapePrivate *>(d_ptr.data());
@@ -142,9 +181,6 @@ QGeoShape::ShapeType QGeoShape::type() const
 /*!
     Returns whether this geo shape is valid.
 
-    An geo shape is considered to be invalid if some of the data that is required to
-    unambiguously describe the geo shape has not been set or has been set to an
-    unsuitable value.
 */
 bool QGeoShape::isValid() const
 {
@@ -182,6 +218,21 @@ bool QGeoShape::contains(const QGeoCoordinate &coordinate) const
         return d->contains(coordinate);
     else
         return false;
+}
+
+/*!
+    Returns the coordinate located at the geometric center of the geo shape.
+
+    \since 5.5
+*/
+QGeoCoordinate QGeoShape::center() const
+{
+    Q_D(const QGeoShape);
+
+    if (d)
+        return d->center();
+    else
+        return QGeoCoordinate();
 }
 
 /*!
@@ -234,23 +285,33 @@ QGeoShape &QGeoShape::operator=(const QGeoShape &other)
     return *this;
 }
 
+/*!
+    Returns a string representation of this geo shape.
+
+    \since 5.5
+*/
+QString QGeoShape::toString() const
+{
+    return QStringLiteral("QGeoShape(%1)").arg(type());
+}
+
 #ifndef QT_NO_DEBUG_STREAM
 QDebug operator<<(QDebug dbg, const QGeoShape &shape)
 {
-    //dbg << *shape.d_func();
+    QDebugStateSaver saver(dbg);
     dbg.nospace() << "QGeoShape(";
     switch (shape.type()) {
     case QGeoShape::UnknownType:
-        dbg.nospace() << "Unknown";
+        dbg << "Unknown";
         break;
     case QGeoShape::RectangleType:
-        dbg.nospace() << "Rectangle";
+        dbg << "Rectangle";
         break;
     case QGeoShape::CircleType:
-        dbg.nospace() << "Circle";
+        dbg << "Circle";
     }
 
-    dbg.nospace() << ')';
+    dbg << ')';
 
     return dbg;
 }

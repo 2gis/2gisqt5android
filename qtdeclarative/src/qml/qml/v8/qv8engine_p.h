@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -78,13 +78,13 @@ namespace QV4 {
 // #define QML_GLOBAL_HANDLE_DEBUGGING
 
 #define V4THROW_ERROR(string) \
-    return ctx->throwError(QString::fromUtf8(string));
+    return ctx->engine()->throwError(QString::fromUtf8(string));
 
 #define V4THROW_TYPE(string) \
-    return ctx->throwTypeError(QStringLiteral(string));
+    return ctx->engine()->throwTypeError(QStringLiteral(string));
 
-#define V8_DEFINE_EXTENSION(dataclass, datafunction) \
-    static inline dataclass *datafunction(QV8Engine *engine) \
+#define V4_DEFINE_EXTENSION(dataclass, datafunction) \
+    static inline dataclass *datafunction(QV4::ExecutionEngine *engine) \
     { \
         static int extensionId = -1; \
         if (extensionId == -1) { \
@@ -93,10 +93,10 @@ namespace QV4 {
                 extensionId = QV8Engine::registerExtension(); \
             QV8Engine::registrationMutex()->unlock(); \
         } \
-        dataclass *rv = (dataclass *)engine->extensionData(extensionId); \
+        dataclass *rv = (dataclass *)engine->v8Engine->extensionData(extensionId); \
         if (!rv) { \
             rv = new dataclass(engine); \
-            engine->setExtensionData(extensionId, rv); \
+            engine->v8Engine->setExtensionData(extensionId, rv); \
         } \
         return rv; \
     } \
@@ -121,33 +121,32 @@ public:
     QV4::ReturnedValue operator[](int idx) { return (idx < callData->argc ? callData->args[idx].asReturnedValue() : QV4::Encode::undefined()); }
     QQmlContextData *context() { return ctx; }
     QV4::ReturnedValue qmlGlobal() { return callData->thisObject.asReturnedValue(); }
-    void setReturnValue(QV4::ReturnedValue rv) { retVal = rv; }
-    QV8Engine *engine() const { return e; }
-    QV4::ExecutionEngine *v4engine() const;
+    void setReturnValue(QV4::ReturnedValue rv) { *retVal = rv; }
+    QV4::ExecutionEngine *v4engine() const { return e; }
 private:
     friend struct QV4::QObjectMethod;
     QQmlV4Function();
     QQmlV4Function(const QQmlV4Function &);
     QQmlV4Function &operator=(const QQmlV4Function &);
 
-    QQmlV4Function(QV4::CallData *callData, QV4::ValueRef retVal,
-                   const QV4::ValueRef global, QQmlContextData *c, QV8Engine *e)
+    QQmlV4Function(QV4::CallData *callData, QV4::Value *retVal,
+                   const QV4::Value &global, QQmlContextData *c, QV4::ExecutionEngine *e)
         : callData(callData), retVal(retVal), ctx(c), e(e)
     {
         callData->thisObject.val = global.asReturnedValue();
     }
 
     QV4::CallData *callData;
-    QV4::ValueRef retVal;
+    QV4::Value *retVal;
     QQmlContextData *ctx;
-    QV8Engine *e;
+    QV4::ExecutionEngine *e;
 };
 
 class Q_QML_PRIVATE_EXPORT QQmlV4Handle
 {
 public:
     QQmlV4Handle() : d(QV4::Encode::undefined()) {}
-    explicit QQmlV4Handle(QV4::ValueRef v) : d(v.asReturnedValue()) {}
+    explicit QQmlV4Handle(const QV4::Value &v) : d(v.asReturnedValue()) {}
     explicit QQmlV4Handle(QV4::ReturnedValue v) : d(v) {}
 
     operator QV4::ReturnedValue() const { return d; }
@@ -158,14 +157,14 @@ private:
 
 class QObject;
 class QQmlEngine;
-class QQmlValueType;
 class QNetworkAccessManager;
 class QQmlContextData;
 
 class Q_QML_PRIVATE_EXPORT QV8Engine
 {
     friend class QJSEngine;
-    typedef QSet<QV4::Object *> V8ObjectSet;
+    // ### GC
+    typedef QSet<QV4::Heap::Object *> V8ObjectSet;
 public:
     static QV8Engine* get(QJSEngine* q) { Q_ASSERT(q); return q->handle(); }
 //    static QJSEngine* get(QV8Engine* d) { Q_ASSERT(d); return d->q; }
@@ -195,17 +194,7 @@ public:
 
     QQmlContextData *callingContext();
 
-    void freezeObject(const QV4::ValueRef value);
-
-    QVariant toVariant(const QV4::ValueRef value, int typeHint, bool createJSValueForObjects = true, V8ObjectSet *visitedObjects = 0);
-    QVariant objectToVariant(QV4::Object *o, V8ObjectSet *visitedObjects = 0);
-    QV4::ReturnedValue fromVariant(const QVariant &);
-
-    QVariantMap variantMapFromJS(QV4::Object *o)
-    { return objectToVariant(o).toMap(); }
-
-    // Return a JS string for the given QString \a string
-    QV4::ReturnedValue toString(const QString &string);
+    void freezeObject(const QV4::Value &value);
 
     // Return the network access manager for this engine.  By default this returns the network
     // access manager of the QQmlEngine.  It is overridden in the case of a threaded v8
@@ -221,25 +210,13 @@ public:
     inline Deletable *extensionData(int) const;
     void setExtensionData(int, Deletable *);
 
-    QV4::ReturnedValue variantListToJS(const QVariantList &lst);
-    QV4::ReturnedValue variantMapToJS(const QVariantMap &vmap);
-    QV4::ReturnedValue variantToJS(const QVariant &value);
-
-    QV4::ReturnedValue metaTypeToJS(int type, const void *data);
-    bool metaTypeFromJS(const QV4::ValueRef value, int type, void *data);
-
-    bool convertToNativeQObject(const QV4::ValueRef value,
-                                const QByteArray &targetType,
-                                void **result);
-
+public:
     // used for console.time(), console.timeEnd()
     void startTimer(const QString &timerName);
     qint64 stopTimer(const QString &timerName, bool *wasRunning);
 
     // used for console.count()
     int consoleCountHelper(const QString &file, quint16 line, quint16 column);
-
-    QObject *qtObjectFromJS(const QV4::ValueRef value);
 
 protected:
     QJSEngine* q;
@@ -275,10 +252,6 @@ inline QV8Engine::Deletable *QV8Engine::extensionData(int index) const
         return 0;
 }
 
-inline QV4::ExecutionEngine *QQmlV4Function::v4engine() const
-{
-    return QV8Engine::getV4(e);
-}
 
 QT_END_NAMESPACE
 

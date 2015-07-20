@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -495,6 +495,8 @@ void tst_QCameraBackend::testCaptureToBuffer()
         QCOMPARE(imageCapture.bufferFormat(), QVideoFrame::Format_Jpeg);
     }
 
+    QTRY_VERIFY(imageCapture.isReadyForCapture());
+
     //Try to capture to both buffer and file
 #ifdef Q_WS_MAEMO_6
     QVERIFY(imageCapture.isCaptureDestinationSupported(QCameraImageCapture::CaptureToBuffer | QCameraImageCapture::CaptureToFile));
@@ -651,11 +653,11 @@ void tst_QCameraBackend::testVideoRecording()
 {
     QFETCH(QByteArray, device);
 
-    QCamera *camera = device.isEmpty() ? new QCamera : new QCamera(device);
+    QScopedPointer<QCamera> camera(device.isEmpty() ? new QCamera : new QCamera(device));
 
-    QMediaRecorder recorder(camera);
+    QMediaRecorder recorder(camera.data());
 
-    QSignalSpy errorSignal(camera, SIGNAL(error(QCamera::Error)));
+    QSignalSpy errorSignal(camera.data(), SIGNAL(error(QCamera::Error)));
     QSignalSpy recorderErrorSignal(&recorder, SIGNAL(error(QMediaRecorder::Error)));
     QSignalSpy recorderStatusSignal(&recorder, SIGNAL(statusChanged(QMediaRecorder::Status)));
 
@@ -702,8 +704,6 @@ void tst_QCameraBackend::testVideoRecording()
     camera->setCaptureMode(QCamera::CaptureStillImage);
     QTRY_COMPARE(recorder.status(), QMediaRecorder::UnloadedStatus);
     QCOMPARE(recorderStatusSignal.last().first().value<QMediaRecorder::Status>(), recorder.status());
-
-    delete camera;
 }
 
 QTEST_MAIN(tst_QCameraBackend)

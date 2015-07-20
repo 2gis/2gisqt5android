@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the demonstration applications of the Qt Toolkit.
 **
@@ -10,27 +10,27 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
 ** General Public License version 2.1 as published by the Free Software
 ** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
+** packaging of this file. Please review the following information to
 ** ensure the GNU Lesser General Public License version 2.1 requirements
 ** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
 ** General Public License version 3.0 as published by the Free Software
 ** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
+** packaging of this file. Please review the following information to
 ** ensure the GNU General Public License version 3.0 requirements will be
 ** met: http://www.gnu.org/copyleft/gpl.html.
 **
@@ -68,6 +68,7 @@
 #include <QtWidgets/QInputDialog>
 
 #include <QWebEngineHistory>
+#include <QWebEngineProfile>
 #include <QWebEngineSettings>
 
 #include <QtCore/QDebug>
@@ -269,6 +270,12 @@ bool BrowserMainWindow::restoreState(const QByteArray &state)
     return true;
 }
 
+void BrowserMainWindow::runScriptOnOpenViews(const QString &source)
+{
+    for (int i =0; i < tabWidget()->count(); ++i)
+        tabWidget()->webView(i)->page()->runJavaScript(source);
+}
+
 void BrowserMainWindow::setupMenu()
 {
     new QShortcut(QKeySequence(Qt::Key_F6), this, SLOT(slotSwapFocus()));
@@ -284,7 +291,7 @@ void BrowserMainWindow::setupMenu()
     fileMenu->addSeparator();
     fileMenu->addAction(m_tabWidget->closeTabAction());
     fileMenu->addSeparator();
-#if defined(QWEBENGINEPAGE_SETNETWORKACCESSMANAGER)
+#if defined(QWEBENGINE_SAVE_AS_FILE)
     fileMenu->addAction(tr("&Save As..."), this,
                 SLOT(slotFileSaveAs()), QKeySequence(QKeySequence::Save));
     fileMenu->addSeparator();
@@ -298,11 +305,11 @@ void BrowserMainWindow::setupMenu()
     fileMenu->addAction(tr("&Print..."), this, SLOT(slotFilePrint()), QKeySequence::Print);
     fileMenu->addSeparator();
 #endif
-#if defined(QTWEBENGINE_PRIVATEBROWSING)
     QAction *action = fileMenu->addAction(tr("Private &Browsing..."), this, SLOT(slotPrivateBrowsing()));
     action->setCheckable(true);
+    action->setChecked(BrowserApplication::instance()->privateBrowsing());
+    connect(BrowserApplication::instance(), SIGNAL(privateBrowsingChanged(bool)), action, SLOT(setChecked(bool)));
     fileMenu->addSeparator();
-#endif
 
 #if defined(Q_OS_OSX)
     fileMenu->addAction(tr("&Quit"), BrowserApplication::instance(), SLOT(quitBrowser()), QKeySequence(Qt::CTRL | Qt::Key_Q));
@@ -603,7 +610,7 @@ void BrowserMainWindow::slotSelectLineEdit()
 
 void BrowserMainWindow::slotFileSaveAs()
 {
-    BrowserApplication::downloadManager()->download(currentTab()->url(), true);
+    // not implemented yet.
 }
 
 void BrowserMainWindow::slotPreferences()
@@ -697,12 +704,11 @@ void BrowserMainWindow::printRequested(QWebEngineFrame *frame)
 
 void BrowserMainWindow::slotPrivateBrowsing()
 {
-#if defined(QTWEBENGINE_PRIVATEBROWSING)
-    QWebEngineSettings *settings = QWebEngineSettings::globalSettings();
-    bool pb = settings->testAttribute(QWebEngineSettings::PrivateBrowsingEnabled);
-    if (!pb) {
+    if (!BrowserApplication::instance()->privateBrowsing()) {
         QString title = tr("Are you sure you want to turn on private browsing?");
-        QString text = tr("<b>%1</b><br><br>When private browsing in turned on,"
+        QString text = tr("<b>%1</b><br><br>"
+            "This action will reload all open tabs.<br>"
+            "When private browsing in turned on,"
             " webpages are not added to the history,"
             " items are automatically removed from the Downloads window," \
             " new cookies are not stored, current cookies can't be accessed," \
@@ -714,20 +720,13 @@ void BrowserMainWindow::slotPrivateBrowsing()
         QMessageBox::StandardButton button = QMessageBox::question(this, QString(), text,
                                QMessageBox::Ok | QMessageBox::Cancel,
                                QMessageBox::Ok);
-        if (button == QMessageBox::Ok) {
-            settings->setAttribute(QWebEngineSettings::PrivateBrowsingEnabled, true);
-        }
-    } else {
-        settings->setAttribute(QWebEngineSettings::PrivateBrowsingEnabled, false);
 
-        QList<BrowserMainWindow*> windows = BrowserApplication::instance()->mainWindows();
-        for (int i = 0; i < windows.count(); ++i) {
-            BrowserMainWindow *window = windows.at(i);
-            window->m_lastSearch = QString::null;
-            window->tabWidget()->clear();
-        }
+        if (button == QMessageBox::Ok)
+            BrowserApplication::instance()->setPrivateBrowsing(true);
+    } else {
+        // TODO: Also ask here
+        BrowserApplication::instance()->setPrivateBrowsing(false);
     }
-#endif
 }
 
 void BrowserMainWindow::closeEvent(QCloseEvent *event)
@@ -940,10 +939,8 @@ void BrowserMainWindow::slotAboutToShowWindowMenu()
     m_windowMenu->addAction(m_tabWidget->nextTabAction());
     m_windowMenu->addAction(m_tabWidget->previousTabAction());
     m_windowMenu->addSeparator();
-#if defined(QWEBENGINEPAGE_SETNETWORKACCESSMANAGER)
     m_windowMenu->addAction(tr("Downloads"), this, SLOT(slotDownloadManager()), QKeySequence(tr("Alt+Ctrl+L", "Download Manager")));
     m_windowMenu->addSeparator();
-#endif
 
     QList<BrowserMainWindow*> windows = BrowserApplication::instance()->mainWindows();
     for (int i = 0; i < windows.count(); ++i) {

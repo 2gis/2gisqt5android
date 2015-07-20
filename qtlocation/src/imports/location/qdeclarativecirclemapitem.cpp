@@ -1,31 +1,34 @@
 /***************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtLocation module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL21$
+** $QT_BEGIN_LICENSE:LGPL3$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 or version 3 as published by the Free
-** Software Foundation and appearing in the file LICENSE.LGPLv21 and
-** LICENSE.LGPLv3 included in the packaging of this file. Please review the
-** following information to ensure the GNU Lesser General Public License
-** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
-** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPLv3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** GNU General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU
+** General Public License version 2.0 or later as published by the Free
+** Software Foundation and appearing in the file LICENSE.GPL included in
+** the packaging of this file. Please review the following information to
+** ensure the GNU General Public License version 2.0 requirements will be
+** met: http://www.gnu.org/licenses/gpl-2.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -56,7 +59,7 @@ QT_BEGIN_NAMESPACE
     \instantiates QDeclarativeCircleMapItem
     \inqmlmodule QtLocation
     \ingroup qml-QtLocation5-maps
-    \since Qt Location 5.0
+    \since Qt Location 5.5
 
     \brief The MapCircle type displays a geographic circle on a Map.
 
@@ -145,7 +148,7 @@ void QGeoMapCircleGeometry::updateScreenPointsInvert(const QGeoMap &map)
         return;
     }
 
-    QPointF origin = map.coordinateToScreenPosition(srcOrigin_, false).toPointF();
+    QPointF origin = map.coordinateToItemPosition(srcOrigin_, false).toPointF();
 
     QPainterPath ppi = srcPath_;
 
@@ -164,9 +167,9 @@ void QGeoMapCircleGeometry::updateScreenPointsInvert(const QGeoMap &map)
 
     // calculate actual width of map on screen in pixels
     QGeoCoordinate mapCenter(0, map.cameraData().center().longitude());
-    QDoubleVector2D midPoint = map.coordinateToScreenPosition(mapCenter, false);
+    QDoubleVector2D midPoint = map.coordinateToItemPosition(mapCenter, false);
     QDoubleVector2D midPointPlusOne = QDoubleVector2D(midPoint.x() + 1.0, midPoint.y());
-    QGeoCoordinate coord1 = map.screenPositionToCoordinate(midPointPlusOne, false);
+    QGeoCoordinate coord1 = map.itemPositionToCoordinate(midPointPlusOne, false);
     double geoDistance = coord1.longitude() - map.cameraData().center().longitude();
     if ( geoDistance < 0 )
         geoDistance += 360.0;
@@ -268,20 +271,20 @@ static void calculatePeripheralPoints(QList<QGeoCoordinate> &path, const QGeoCoo
     // pre-calculate
     qreal latRad = qgeocoordinate_degToRad(center.latitude());
     qreal lonRad = qgeocoordinate_degToRad(center.longitude());
-    qreal cosLatRad = cos(latRad);
-    qreal sinLatRad = sin(latRad);
+    qreal cosLatRad = std::cos(latRad);
+    qreal sinLatRad = std::sin(latRad);
     qreal ratio = (distance / (qgeocoordinate_EARTH_MEAN_RADIUS * 1000.0));
-    qreal cosRatio = cos(ratio);
-    qreal sinRatio = sin(ratio);
+    qreal cosRatio = std::cos(ratio);
+    qreal sinRatio = std::sin(ratio);
     qreal sinLatRad_x_cosRatio = sinLatRad * cosRatio;
     qreal cosLatRad_x_sinRatio = cosLatRad * sinRatio;
 
     for (int i = 0; i < steps; ++i) {
         qreal azimuthRad = 2 * M_PI * i / steps;
-        qreal resultLatRad = asin(sinLatRad_x_cosRatio
-                                   + cosLatRad_x_sinRatio * cos(azimuthRad));
-        qreal resultLonRad = lonRad + atan2(sin(azimuthRad) * cosLatRad_x_sinRatio,
-                                       cosRatio - sinLatRad * sin(resultLatRad));
+        qreal resultLatRad = std::asin(sinLatRad_x_cosRatio
+                                   + cosLatRad_x_sinRatio * std::cos(azimuthRad));
+        qreal resultLonRad = lonRad + std::atan2(std::sin(azimuthRad) * cosLatRad_x_sinRatio,
+                                       cosRatio - sinLatRad * std::sin(resultLatRad));
         qreal lat2 = qgeocoordinate_radToDeg(resultLatRad);
         qreal lon2 = qgeocoordinate_radToDeg(resultLonRad);
         if (lon2 < -180.0) {
@@ -560,7 +563,7 @@ void QDeclarativeCircleMapItem::geometryChanged(const QRectF &newGeometry, const
     }
 
     QDoubleVector2D newPoint = QDoubleVector2D(x(),y()) + QDoubleVector2D(width(), height()) / 2;
-    QGeoCoordinate newCoordinate = map()->screenPositionToCoordinate(newPoint, false);
+    QGeoCoordinate newCoordinate = map()->itemPositionToCoordinate(newPoint, false);
     if (newCoordinate.isValid())
         setCenter(newCoordinate);
 
@@ -605,19 +608,19 @@ void QDeclarativeCircleMapItem::updateCirclePathForRendering(QList<QGeoCoordinat
         return;
     QList<int> wrapPathIndex;
     // calculate actual width of map on screen in pixels
-    QDoubleVector2D midPoint = map()->coordinateToScreenPosition(map()->cameraData().center(), false);
+    QDoubleVector2D midPoint = map()->coordinateToItemPosition(map()->cameraData().center(), false);
     QDoubleVector2D midPointPlusOne(midPoint.x() + 1.0, midPoint.y());
-    QGeoCoordinate coord1 = map()->screenPositionToCoordinate(midPointPlusOne, false);
+    QGeoCoordinate coord1 = map()->itemPositionToCoordinate(midPointPlusOne, false);
     qreal geoDistance = coord1.longitude() - map()->cameraData().center().longitude();
     if ( geoDistance < 0 )
         geoDistance += 360;
     qreal mapWidth = 360.0 / geoDistance;
     mapWidth = qMin(static_cast<int>(mapWidth), map()->width());
-    QDoubleVector2D prev = map()->coordinateToScreenPosition(path.at(0), false);
+    QDoubleVector2D prev = map()->coordinateToItemPosition(path.at(0), false);
     // find the points in path where wrapping occurs
     for (int i = 1; i <= path.count(); ++i) {
         int index = i % path.count();
-        QDoubleVector2D point = map()->coordinateToScreenPosition(path.at(index), false);
+        QDoubleVector2D point = map()->coordinateToItemPosition(path.at(index), false);
         if ( (qAbs(point.x() - prev.x())) >= mapWidth/2.0 ) {
             wrapPathIndex << index;
             if (wrapPathIndex.size() == 2 || !(crossNorthPole && crossSouthPole))

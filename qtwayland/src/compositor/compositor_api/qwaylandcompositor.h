@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Compositor.
 **
@@ -17,8 +17,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -51,15 +51,19 @@ struct wl_display;
 
 QT_BEGIN_NAMESPACE
 
+class QInputEvent;
+
 class QMimeData;
 class QUrl;
 class QOpenGLContext;
+class QWaylandClient;
 class QWaylandSurface;
 class QWaylandInputDevice;
 class QWaylandInputPanel;
 class QWaylandDrag;
 class QWaylandGlobalInterface;
 class QWaylandSurfaceView;
+class QWaylandOutput;
 
 namespace QtWayland
 {
@@ -83,7 +87,7 @@ public:
     };
     Q_DECLARE_FLAGS(ExtensionFlags, ExtensionFlag)
 
-    QWaylandCompositor(QWindow *window = 0, const char *socketName = 0, ExtensionFlags extensions = DefaultExtensions);
+    QWaylandCompositor(const char *socketName = 0, ExtensionFlags extensions = DefaultExtensions);
     virtual ~QWaylandCompositor();
 
     void addGlobalInterface(QWaylandGlobalInterface *interface);
@@ -94,12 +98,16 @@ public:
     void sendFrameCallbacks(QList<QWaylandSurface *> visibleSurfaces);
 
     void destroyClientForSurface(QWaylandSurface *surface);
-    void destroyClient(WaylandClient *client);
+    void destroyClient(QWaylandClient *client);
 
-    QList<QWaylandSurface *> surfacesForClient(WaylandClient* client) const;
+    QList<QWaylandSurface *> surfacesForClient(QWaylandClient* client) const;
     QList<QWaylandSurface *> surfaces() const;
 
-    QWindow *window()const;
+    QList<QWaylandOutput *> outputs() const;
+    QWaylandOutput *output(QWindow *window);
+
+    QWaylandOutput *primaryOutput() const;
+    void setPrimaryOutput(QWaylandOutput *output);
 
     virtual void surfaceCreated(QWaylandSurface *surface) = 0;
     virtual void surfaceAboutToBeDestroyed(QWaylandSurface *surface);
@@ -107,7 +115,7 @@ public:
     virtual QWaylandSurfaceView *pickView(const QPointF &globalPosition) const;
     virtual QPointF mapToView(QWaylandSurfaceView *view, const QPointF &surfacePosition) const;
 
-    virtual bool openUrl(WaylandClient *client, const QUrl &url);
+    virtual bool openUrl(QWaylandClient *client, const QUrl &url);
 
     QtWayland::Compositor *handle() const;
 
@@ -119,6 +127,7 @@ public:
 
     const char *socketName() const;
 
+#if QT_DEPRECATED_SINCE(5, 5)
     void setScreenOrientation(Qt::ScreenOrientation orientation);
 
     void setOutputGeometry(const QRect &outputGeometry);
@@ -126,6 +135,7 @@ public:
 
     void setOutputRefreshRate(int refreshRate);
     int outputRefreshRate() const;
+#endif
 
     QWaylandInputDevice *defaultInputDevice() const;
 
@@ -148,15 +158,18 @@ public:
 
     virtual QWaylandSurfaceView *createView(QWaylandSurface *surface);
 
+    QWaylandInputDevice *inputDeviceFor(QInputEvent *inputEvent);
+
 protected:
-    QWaylandCompositor(QWindow *window, const char *socketName, QtWayland::Compositor *dptr);
+    QWaylandCompositor(const char *socketName, QtWayland::Compositor *dptr);
     virtual void retainedSelectionReceived(QMimeData *mimeData);
+
+    virtual QWaylandOutput *createOutput(QWindow *window,
+                                         const QString &manufacturer,
+                                         const QString &model);
 
     friend class QtWayland::Compositor;
     QtWayland::Compositor *m_compositor;
-
-private:
-    QWindow  *m_toplevel_window;
 };
 
 Q_DECLARE_OPERATORS_FOR_FLAGS(QWaylandCompositor::ExtensionFlags)

@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the V4VM module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -64,10 +64,10 @@ using namespace QV4;
 
 struct Print: FunctionObject
 {
-    struct Data : FunctionObject::Data {
+    struct Data : Heap::FunctionObject {
         Data(ExecutionContext *scope)
-            : FunctionObject::Data(scope, QStringLiteral("print")) {
-            setVTable(staticVTable());
+            : Heap::FunctionObject(scope, QStringLiteral("print"))
+        {
         }
     };
     V4_OBJECT(FunctionObject)
@@ -89,11 +89,10 @@ DEFINE_OBJECT_VTABLE(Print);
 
 struct GC: public FunctionObject
 {
-    struct Data : FunctionObject::Data {
+    struct Data : Heap::FunctionObject {
         Data(ExecutionContext *scope)
-            : FunctionObject::Data(scope, QStringLiteral("gc"))
+            : Heap::FunctionObject(scope, QStringLiteral("gc"))
         {
-            setVTable(staticVTable());
         }
 
     };
@@ -101,7 +100,7 @@ struct GC: public FunctionObject
 
     static ReturnedValue call(Managed *m, CallData *)
     {
-        m->engine()->memoryManager->runGC();
+        static_cast<GC *>(m)->engine()->memoryManager->runGC();
         return Encode::undefined();
     }
 };
@@ -110,16 +109,16 @@ DEFINE_OBJECT_VTABLE(GC);
 
 } // builtins
 
-static void showException(QV4::ExecutionContext *ctx, const QV4::ValueRef exception, const QV4::StackTrace &trace)
+static void showException(QV4::ExecutionContext *ctx, const QV4::Value &exception, const QV4::StackTrace &trace)
 {
     QV4::Scope scope(ctx);
-    QV4::ScopedValue ex(scope, *exception);
+    QV4::ScopedValue ex(scope, exception);
     QV4::ErrorObject *e = ex->asErrorObject();
     if (!e) {
-        std::cerr << "Uncaught exception: " << qPrintable(ex->toString(ctx)->toQString()) << std::endl;
+        std::cerr << "Uncaught exception: " << qPrintable(ex->toQString()) << std::endl;
     } else {
         QV4::ScopedString m(scope, scope.engine->newString(QStringLiteral("message")));
-        QV4::ScopedValue message(scope, e->get(m.getPointer()));
+        QV4::ScopedValue message(scope, e->get(m));
         std::cerr << "Uncaught exception: " << qPrintable(message->toQStringNoThrow()) << std::endl;
     }
 
@@ -185,10 +184,10 @@ int main(int argc, char *argv[])
 
         QV4::ExecutionEngine vm(iSelFactory);
 
-        QV4::ExecutionContext *ctx = vm.rootContext;
-        QV4::Scope scope(ctx);
+        QV4::Scope scope(&vm);
+        QV4::ScopedContext ctx(scope, vm.rootContext());
 
-        QV4::ScopedObject globalObject(scope, vm.globalObject);
+        QV4::ScopedObject globalObject(scope, vm.globalObject());
         QV4::ScopedObject print(scope, vm.memoryManager->alloc<builtins::Print>(ctx));
         globalObject->put(QV4::ScopedString(scope, vm.newIdentifier(QStringLiteral("print"))).getPointer(), print);
         QV4::ScopedObject gc(scope, vm.memoryManager->alloc<builtins::GC>(ctx));
@@ -208,13 +207,13 @@ int main(int argc, char *argv[])
                     result = script.run();
                 if (scope.engine->hasException) {
                     QV4::StackTrace trace;
-                    QV4::ScopedValue ex(scope, ctx->catchException(&trace));
+                    QV4::ScopedValue ex(scope, scope.engine->catchException(&trace));
                     showException(ctx, ex, trace);
                     return EXIT_FAILURE;
                 }
                 if (!result->isUndefined()) {
                     if (! qgetenv("SHOW_EXIT_VALUE").isEmpty())
-                        std::cout << "exit value: " << qPrintable(result->toString(ctx)->toQString()) << std::endl;
+                        std::cout << "exit value: " << qPrintable(result->toQString()) << std::endl;
                 }
             } else {
                 std::cerr << "Error: cannot open file " << fn.toUtf8().constData() << std::endl;

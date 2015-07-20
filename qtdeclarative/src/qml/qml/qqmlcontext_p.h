@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -144,8 +144,9 @@ public:
     // Compilation unit for contexts that belong to a compiled type.
     QQmlRefPointer<QV4::CompiledData::CompilationUnit> typeCompilationUnit;
 
-    // Property name cache
-    QV4::IdentifierHash<int> propertyNames;
+    mutable QHash<int, int> objectIndexToId;
+    mutable QV4::IdentifierHash<int> propertyNameCache;
+    QV4::IdentifierHash<int> &propertyNames() const;
 
     // Context object
     QObject *contextObject;
@@ -153,9 +154,11 @@ public:
     // Any script blocks that exist on this context
     QV4::PersistentValue importedScripts; // This is a JS Array
 
-    // Context base url
-    QUrl url;
-    QString urlString;
+    QUrl baseUrl;
+    QString baseUrlString;
+
+    QUrl url() const;
+    QString urlString() const;
 
     // List of imports that apply to this context
     QQmlTypeNameCache *imports;
@@ -188,17 +191,10 @@ public:
         QFlagPointer<QQmlContextData> context;
         QQmlNotifier bindings;
     };
-    struct ObjectIdMapping {
-        ObjectIdMapping() : id(-1) {}
-        ObjectIdMapping(const QString &name, int id)
-            : name(name), id(id) {}
-        QString name;
-        int id;
-    };
     ContextGuard *idValues;
     int idValueCount;
     void setIdProperty(int, QObject *);
-    void setIdPropertyData(const QVector<ObjectIdMapping> &);
+    void setIdPropertyData(const QHash<int, int> &);
 
     // Linked contexts. this owns linkedContext.
     QQmlContextData *linkedContext;

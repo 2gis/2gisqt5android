@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQuick module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -74,13 +74,9 @@ class Q_QUICK_PRIVATE_EXPORT QQuickTextInput : public QQuickImplicitSizeItem
     Q_PROPERTY(QString selectedText READ selectedText NOTIFY selectedTextChanged)
 
     Q_PROPERTY(int maximumLength READ maxLength WRITE setMaxLength NOTIFY maximumLengthChanged)
-#ifndef QT_NO_VALIDATOR
     Q_PROPERTY(QValidator* validator READ validator WRITE setValidator NOTIFY validatorChanged)
-#endif
     Q_PROPERTY(QString inputMask READ inputMask WRITE setInputMask NOTIFY inputMaskChanged)
-#ifndef QT_NO_IM
     Q_PROPERTY(Qt::InputMethodHints inputMethodHints READ inputMethodHints WRITE setInputMethodHints NOTIFY inputMethodHintsChanged)
-#endif
 
     Q_PROPERTY(bool acceptableInput READ hasAcceptableInput NOTIFY acceptableInputChanged)
     Q_PROPERTY(EchoMode echoMode READ echoMode WRITE setEchoMode NOTIFY echoModeChanged)
@@ -95,9 +91,7 @@ class Q_QUICK_PRIVATE_EXPORT QQuickTextInput : public QQuickImplicitSizeItem
     Q_PROPERTY(bool canPaste READ canPaste NOTIFY canPasteChanged)
     Q_PROPERTY(bool canUndo READ canUndo NOTIFY canUndoChanged)
     Q_PROPERTY(bool canRedo READ canRedo NOTIFY canRedoChanged)
-#ifndef QT_NO_IM
     Q_PROPERTY(bool inputMethodComposing READ isInputMethodComposing NOTIFY inputMethodComposingChanged)
-#endif
     Q_PROPERTY(qreal contentWidth READ contentWidth NOTIFY contentSizeChanged)
     Q_PROPERTY(qreal contentHeight READ contentHeight NOTIFY contentSizeChanged)
     Q_PROPERTY(RenderType renderType READ renderType WRITE setRenderType NOTIFY renderTypeChanged)
@@ -106,7 +100,7 @@ public:
     QQuickTextInput(QQuickItem * parent=0);
     ~QQuickTextInput();
 
-    void componentComplete();
+    void componentComplete() Q_DECL_OVERRIDE;
 
     enum EchoMode {//To match QLineEdit::EchoMode
         Normal,
@@ -205,10 +199,9 @@ public:
     int maxLength() const;
     void setMaxLength(int ml);
 
-#ifndef QT_NO_VALIDATOR
     QValidator * validator() const;
     void setValidator(QValidator* v);
-#endif
+
     QString inputMask() const;
     void setInputMask(const QString &im);
 
@@ -245,24 +238,22 @@ public:
     bool hasAcceptableInput() const;
 
 #ifndef QT_NO_IM
-    QVariant inputMethodQuery(Qt::InputMethodQuery property) const;
+    QVariant inputMethodQuery(Qt::InputMethodQuery property) const Q_DECL_OVERRIDE;
     Q_REVISION(3) Q_INVOKABLE QVariant inputMethodQuery(Qt::InputMethodQuery query, QVariant argument) const;
 #endif
 
-    QRectF boundingRect() const;
-    QRectF clipRect() const;
+    QRectF boundingRect() const Q_DECL_OVERRIDE;
+    QRectF clipRect() const Q_DECL_OVERRIDE;
 
     bool canPaste() const;
 
     bool canUndo() const;
     bool canRedo() const;
 
-#ifndef QT_NO_IM
     bool isInputMethodComposing() const;
 
     Qt::InputMethodHints inputMethodHints() const;
     void setInputMethodHints(Qt::InputMethodHints hints);
-#endif
 
     Q_INVOKABLE QString getText(int start, int end) const;
 
@@ -304,38 +295,35 @@ Q_SIGNALS:
     void canPasteChanged();
     void canUndoChanged();
     void canRedoChanged();
-#ifndef QT_NO_IM
     void inputMethodComposingChanged();
-#endif
     void effectiveHorizontalAlignmentChanged();
     void contentSizeChanged();
-#ifndef QT_NO_IM
     void inputMethodHintsChanged();
-#endif
     void renderTypeChanged();
 
 private:
     void invalidateFontCaches();
+    void ensureActiveFocus();
 
 protected:
-    virtual void geometryChanged(const QRectF &newGeometry,
-                                 const QRectF &oldGeometry);
+    void geometryChanged(const QRectF &newGeometry,
+                                 const QRectF &oldGeometry) Q_DECL_OVERRIDE;
 
-    void mousePressEvent(QMouseEvent *event);
-    void mouseMoveEvent(QMouseEvent *event);
-    void mouseReleaseEvent(QMouseEvent *event);
-    void mouseDoubleClickEvent(QMouseEvent *event);
-    void keyPressEvent(QKeyEvent* ev);
+    void mousePressEvent(QMouseEvent *event) Q_DECL_OVERRIDE;
+    void mouseMoveEvent(QMouseEvent *event) Q_DECL_OVERRIDE;
+    void mouseReleaseEvent(QMouseEvent *event) Q_DECL_OVERRIDE;
+    void mouseDoubleClickEvent(QMouseEvent *event) Q_DECL_OVERRIDE;
+    void keyPressEvent(QKeyEvent* ev) Q_DECL_OVERRIDE;
 #ifndef QT_NO_IM
-    void inputMethodEvent(QInputMethodEvent *);
+    void inputMethodEvent(QInputMethodEvent *) Q_DECL_OVERRIDE;
 #endif
-    void mouseUngrabEvent();
-    bool event(QEvent *e);
-    void focusOutEvent(QFocusEvent *event);
-    void focusInEvent(QFocusEvent *event);
-    void timerEvent(QTimerEvent *event);
-    QSGNode *updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData *data);
-    void updatePolish();
+    void mouseUngrabEvent() Q_DECL_OVERRIDE;
+    bool event(QEvent *e) Q_DECL_OVERRIDE;
+    void focusOutEvent(QFocusEvent *event) Q_DECL_OVERRIDE;
+    void focusInEvent(QFocusEvent *event) Q_DECL_OVERRIDE;
+    void timerEvent(QTimerEvent *event) Q_DECL_OVERRIDE;
+    QSGNode *updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData *data) Q_DECL_OVERRIDE;
+    void updatePolish() Q_DECL_OVERRIDE;
 
 public Q_SLOTS:
     void selectAll();

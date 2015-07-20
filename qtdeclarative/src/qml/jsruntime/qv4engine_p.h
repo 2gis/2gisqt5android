@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -35,8 +35,8 @@
 
 #include "qv4global_p.h"
 #include "private/qv4isel_p.h"
-#include "qv4util_p.h"
-#include "qv4property_p.h"
+#include "qv4managed_p.h"
+#include "qv4context_p.h"
 #include <private/qintrusivelist_p.h>
 
 namespace WTF {
@@ -48,6 +48,8 @@ QT_BEGIN_NAMESPACE
 
 class QV8Engine;
 class QQmlError;
+class QJSEngine;
+class QQmlEngine;
 
 namespace QV4 {
 namespace Debugging {
@@ -59,61 +61,11 @@ class Profiler;
 namespace CompiledData {
 struct CompilationUnit;
 }
-}
-
-namespace QV4 {
-
-struct Function;
-struct Object;
-struct BooleanObject;
-struct NumberObject;
-struct StringObject;
-struct ArrayObject;
-struct DateObject;
-struct FunctionObject;
-struct BoundFunction;
-struct RegExpObject;
-struct ErrorObject;
-struct SyntaxErrorObject;
-struct ArgumentsObject;
-struct ExecutionContext;
-struct ExecutionEngine;
-struct Members;
-class MemoryManager;
-class ExecutableAllocator;
-
-struct ObjectPrototype;
-struct StringPrototype;
-struct NumberPrototype;
-struct BooleanPrototype;
-struct ArrayPrototype;
-struct FunctionPrototype;
-struct DatePrototype;
-struct RegExpPrototype;
-struct ErrorPrototype;
-struct EvalErrorPrototype;
-struct RangeErrorPrototype;
-struct ReferenceErrorPrototype;
-struct SyntaxErrorPrototype;
-struct TypeErrorPrototype;
-struct URIErrorPrototype;
-struct VariantPrototype;
-struct SequencePrototype;
-struct EvalFunction;
-struct IdentifierTable;
-struct InternalClass;
-struct InternalClassPool;
-class MultiplyWrappedQObjectMap;
-struct RegExp;
-class RegExpCache;
-struct QmlExtensions;
-struct Exception;
-struct ExecutionContextSaver;
 
 #define CHECK_STACK_LIMITS(v4) \
     if ((v4->jsStackTop <= v4->jsStackLimit) && (reinterpret_cast<quintptr>(&v4) >= v4->cStackLimit || v4->recheckCStackLimits())) {}  \
     else \
-        return v4->currentContext()->throwRangeError(QStringLiteral("Maximum call stack size exceeded."))
+        return v4->throwRangeError(QStringLiteral("Maximum call stack size exceeded."))
 
 
 struct Q_QML_EXPORT ExecutionEngine
@@ -121,13 +73,15 @@ struct Q_QML_EXPORT ExecutionEngine
 private:
     friend struct ExecutionContextSaver;
     friend struct ExecutionContext;
-    ExecutionContext *current;
+    friend struct Heap::ExecutionContext;
 public:
-    ExecutionContext *currentContext() const { return current; }
+    Heap::ExecutionContext *current;
+    Heap::ExecutionContext *currentContext() const { return current; }
 
     Value *jsStackTop;
     quint32 hasException;
-    GlobalContext *rootContext;
+    Heap::GlobalContext *m_rootContext;
+    Heap::GlobalContext *rootContext() const { return m_rootContext; }
 
     MemoryManager *memoryManager;
     ExecutableAllocator *executableAllocator;
@@ -144,22 +98,13 @@ public:
     WTF::PageAllocation *jsStack;
     Value *jsStackBase;
 
-    Value *stackPush(uint nValues) {
-        Value *ptr = jsStackTop;
-        jsStackTop = ptr + nValues;
-        return ptr;
-    }
-    void stackPop(uint nValues) {
-        jsStackTop -= nValues;
-    }
-
-    void pushForGC(Managed *m) {
-        *jsStackTop = Value::fromManaged(m);
+    void pushForGC(Heap::Base *m) {
+        *jsStackTop = m;
         ++jsStackTop;
     }
-    Managed *popForGC() {
+    Heap::Base *popForGC() {
         --jsStackTop;
-        return jsStackTop->managed();
+        return jsStackTop->heapObject();
     }
 
     IdentifierTable *identifierTable;
@@ -167,10 +112,13 @@ public:
     QV4::Debugging::Debugger *debugger;
     QV4::Profiling::Profiler *profiler;
 
-    Object *globalObject;
+    Value m_globalObject;
+    Object *globalObject() { return reinterpret_cast<Object *>(&m_globalObject); }
 
     Function *globalCode;
 
+    QJSEngine *jsEngine() const;
+    QQmlEngine *qmlEngine() const;
     QV8Engine *v8Engine;
 
     Value objectCtor;
@@ -188,44 +136,49 @@ public:
     Value syntaxErrorCtor;
     Value typeErrorCtor;
     Value uRIErrorCtor;
+    Value arrayBufferCtor;
+    Value dataViewCtor;
+    enum { NTypedArrayTypes = 9 }; // avoid header dependency
+    Value typedArrayCtors[NTypedArrayTypes];
+
+    Value objectPrototype;
+    Value arrayPrototype;
+    Value stringPrototype;
+    Value numberPrototype;
+    Value booleanPrototype;
+    Value datePrototype;
+    Value functionPrototype;
+    Value regExpPrototype;
+    Value errorPrototype;
+    Value evalErrorPrototype;
+    Value rangeErrorPrototype;
+    Value referenceErrorPrototype;
+    Value syntaxErrorPrototype;
+    Value typeErrorPrototype;
+    Value uRIErrorPrototype;
+    Value variantPrototype;
     Value sequencePrototype;
+
+    Value arrayBufferPrototype;
+    Value dataViewPrototype;
+    Value typedArrayPrototype[NTypedArrayTypes]; // TypedArray::NValues, avoid including the header here
 
     InternalClassPool *classPool;
     InternalClass *emptyClass;
-    InternalClass *executionContextClass;
-    InternalClass *constructClass;
-    InternalClass *stringClass;
 
-    InternalClass *objectClass;
     InternalClass *arrayClass;
-    InternalClass *simpleArrayDataClass;
-    InternalClass *stringObjectClass;
-    InternalClass *booleanClass;
-    InternalClass *numberClass;
-    InternalClass *dateClass;
 
     InternalClass *functionClass;
+    InternalClass *simpleScriptFunctionClass;
     InternalClass *protoClass;
 
-    InternalClass *regExpClass;
     InternalClass *regExpExecArrayClass;
-    InternalClass *regExpValueClass;
 
-    InternalClass *errorClass;
-    InternalClass *evalErrorClass;
-    InternalClass *rangeErrorClass;
-    InternalClass *referenceErrorClass;
-    InternalClass *syntaxErrorClass;
-    InternalClass *typeErrorClass;
-    InternalClass *uriErrorClass;
     InternalClass *argumentsObjectClass;
     InternalClass *strictArgumentsObjectClass;
 
-    InternalClass *variantClass;
-    InternalClass *memberDataClass;
-
-    EvalFunction *evalFunction;
-    FunctionObject *thrower;
+    Heap::EvalFunction *evalFunction;
+    Heap::FunctionObject *thrower;
 
     Property *argumentsAccessors;
     int nArgumentsAccessors;
@@ -262,6 +215,10 @@ public:
     StringValue id_toString;
     StringValue id_destroy;
     StringValue id_valueOf;
+    StringValue id_byteLength;
+    StringValue id_byteOffset;
+    StringValue id_buffer;
+    StringValue id_lastIndex;
 
     QSet<CompiledData::CompilationUnit*> compilationUnits;
 
@@ -294,45 +251,47 @@ public:
     void enableDebugger();
     void enableProfiler();
 
-    ExecutionContext *pushGlobalContext();
+    Heap::ExecutionContext *pushGlobalContext();
     void pushContext(CallContext *context);
-    ExecutionContext *popContext();
+    Heap::ExecutionContext *popContext();
 
-    Returned<Object> *newObject();
-    Returned<Object> *newObject(InternalClass *internalClass);
+    Heap::Object *newObject();
+    Heap::Object *newObject(InternalClass *internalClass, Object *prototype);
 
-    Returned<String> *newString(const QString &s);
-    String *newIdentifier(const QString &text);
+    Heap::String *newString(const QString &s = QString());
+    Heap::String *newIdentifier(const QString &text);
 
-    Returned<Object> *newStringObject(const ValueRef value);
-    Returned<Object> *newNumberObject(const ValueRef value);
-    Returned<Object> *newBooleanObject(const ValueRef value);
+    Heap::Object *newStringObject(const Value &value);
+    Heap::Object *newNumberObject(double value);
+    Heap::Object *newBooleanObject(bool b);
 
-    Returned<ArrayObject> *newArrayObject(int count = 0);
-    Returned<ArrayObject> *newArrayObject(const QStringList &list);
-    Returned<ArrayObject> *newArrayObject(InternalClass *ic);
+    Heap::ArrayObject *newArrayObject(int count = 0);
+    Heap::ArrayObject *newArrayObject(const QStringList &list);
+    Heap::ArrayObject *newArrayObject(InternalClass *ic, Object *prototype);
 
-    Returned<DateObject> *newDateObject(const ValueRef value);
-    Returned<DateObject> *newDateObject(const QDateTime &dt);
+    Heap::ArrayBuffer *newArrayBuffer(const QByteArray &array);
 
-    Returned<RegExpObject> *newRegExpObject(const QString &pattern, int flags);
-    Returned<RegExpObject> *newRegExpObject(RegExp *re, bool global);
-    Returned<RegExpObject> *newRegExpObject(const QRegExp &re);
+    Heap::DateObject *newDateObject(const Value &value);
+    Heap::DateObject *newDateObject(const QDateTime &dt);
 
-    Returned<Object> *newErrorObject(const ValueRef value);
-    Returned<Object> *newSyntaxErrorObject(const QString &message, const QString &fileName, int line, int column);
-    Returned<Object> *newSyntaxErrorObject(const QString &message);
-    Returned<Object> *newReferenceErrorObject(const QString &message);
-    Returned<Object> *newReferenceErrorObject(const QString &message, const QString &fileName, int lineNumber, int columnNumber);
-    Returned<Object> *newTypeErrorObject(const QString &message);
-    Returned<Object> *newRangeErrorObject(const QString &message);
-    Returned<Object> *newURIErrorObject(const ValueRef message);
+    Heap::RegExpObject *newRegExpObject(const QString &pattern, int flags);
+    Heap::RegExpObject *newRegExpObject(RegExp *re, bool global);
+    Heap::RegExpObject *newRegExpObject(const QRegExp &re);
 
-    Returned<Object> *newVariantObject(const QVariant &v);
+    Heap::Object *newErrorObject(const Value &value);
+    Heap::Object *newSyntaxErrorObject(const QString &message, const QString &fileName, int line, int column);
+    Heap::Object *newSyntaxErrorObject(const QString &message);
+    Heap::Object *newReferenceErrorObject(const QString &message);
+    Heap::Object *newReferenceErrorObject(const QString &message, const QString &fileName, int lineNumber, int columnNumber);
+    Heap::Object *newTypeErrorObject(const QString &message);
+    Heap::Object *newRangeErrorObject(const QString &message);
+    Heap::Object *newURIErrorObject(const Value &message);
 
-    Returned<Object> *newForEachIteratorObject(ExecutionContext *ctx, Object *o);
+    Heap::Object *newVariantObject(const QVariant &v);
 
-    Returned<Object> *qmlContextObject() const;
+    Heap::Object *newForEachIteratorObject(Object *o);
+
+    Heap::Object *qmlContextObject() const;
 
     StackTrace stackTrace(int frameLimit = -1) const;
     StackFrame currentStackFrame() const;
@@ -354,23 +313,91 @@ public:
     Value exceptionValue;
     StackTrace exceptionStackTrace;
 
-    ReturnedValue throwException(const ValueRef value);
-    ReturnedValue catchException(ExecutionContext *catchingContext, StackTrace *trace);
+    ReturnedValue throwError(const Value &value);
+    ReturnedValue catchException(StackTrace *trace = 0);
+
+    ReturnedValue throwError(const QString &message);
+    ReturnedValue throwSyntaxError(const QString &message);
+    ReturnedValue throwSyntaxError(const QString &message, const QString &fileName, int lineNumber, int column);
+    ReturnedValue throwTypeError();
+    ReturnedValue throwTypeError(const QString &message);
+    ReturnedValue throwReferenceError(const Value &value);
+    ReturnedValue throwReferenceError(const QString &value, const QString &fileName, int lineNumber, int column);
+    ReturnedValue throwRangeError(const Value &value);
+    ReturnedValue throwRangeError(const QString &message);
+    ReturnedValue throwURIError(const Value &msg);
+    ReturnedValue throwUnimplemented(const QString &message);
 
     // Use only inside catch(...) -- will re-throw if no JS exception
-    static QQmlError catchExceptionAsQmlError(QV4::ExecutionContext *context);
+    QQmlError catchExceptionAsQmlError();
+
+    // variant conversions
+    QVariant toVariant(const QV4::Value &value, int typeHint, bool createJSValueForObjects = true);
+    QV4::ReturnedValue fromVariant(const QVariant &);
+
+    QVariantMap variantMapFromJS(QV4::Object *o);
+
+    bool metaTypeFromJS(const Value &value, int type, void *data);
+    QV4::ReturnedValue metaTypeToJS(int type, const void *data);
+
+    void assertObjectBelongsToEngine(const Value &v);
 
 private:
     QmlExtensions *m_qmlExtensions;
 };
 
+inline void ExecutionEngine::pushContext(CallContext *context)
+{
+    Q_ASSERT(current && context && context->d());
+    context->d()->parent = current;
+    current = context->d();
+}
+
+inline Heap::ExecutionContext *ExecutionEngine::popContext()
+{
+    Q_ASSERT(current->parent);
+    current = current->parent;
+    Q_ASSERT(current);
+    return current;
+}
+
+inline
+Heap::ExecutionContext::ExecutionContext(ExecutionEngine *engine, ContextType t)
+    : engine(engine)
+    , parent(engine->currentContext())
+    , outer(0)
+    , lookups(0)
+    , compilationUnit(0)
+    , type(t)
+    , strictMode(false)
+    , lineNumber(-1)
+{
+    engine->current = this;
+}
+
+
+// ### Remove me
 inline
 void Managed::mark(QV4::ExecutionEngine *engine)
 {
     Q_ASSERT(inUse());
     if (markBit())
         return;
-    d()->markBit = 1;
+#ifndef QT_NO_DEBUG
+    engine->assertObjectBelongsToEngine(*this);
+#endif
+    d()->setMarkBit();
+    engine->pushForGC(d());
+}
+
+
+inline
+void Heap::Base::mark(QV4::ExecutionEngine *engine)
+{
+    Q_ASSERT(inUse());
+    if (isMarked())
+        return;
+    setMarkBit();
     engine->pushForGC(this);
 }
 

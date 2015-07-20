@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQuick module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -45,127 +45,126 @@
 
 QT_BEGIN_NAMESPACE
 
-class QQuickWindowQmlImpl : public QQuickWindow, public QQmlParserStatus
+class QQuickWindowQmlImplPrivate : public QQuickWindowPrivate
 {
-    Q_INTERFACES(QQmlParserStatus)
-    Q_OBJECT
-
-    Q_PROPERTY(bool visible READ isVisible WRITE setVisible NOTIFY visibleChanged)
-    Q_PROPERTY(Visibility visibility READ visibility WRITE setVisibility NOTIFY visibilityChanged)
-
 public:
-    QQuickWindowQmlImpl(QWindow *parent = 0)
-        : QQuickWindow(parent)
-        , m_complete(false)
-        , m_visible(isVisible())
-        , m_visibility(AutomaticVisibility)
+    QQuickWindowQmlImplPrivate()
+        : complete(false)
+        , visible(false)
+        , visibility(QQuickWindow::AutomaticVisibility)
     {
-        connect(this, &QWindow::visibleChanged, this, &QQuickWindowQmlImpl::visibleChanged);
-        connect(this, &QWindow::visibilityChanged, this, &QQuickWindowQmlImpl::visibilityChanged);
     }
 
-    void setVisible(bool visible) {
-        if (!m_complete)
-            m_visible = visible;
-        else if (!transientParent() || transientParent()->isVisible())
-            QQuickWindow::setVisible(visible);
-    }
-
-    void setVisibility(Visibility visibility)
-    {
-        if (!m_complete)
-            m_visibility = visibility;
-        else
-            QQuickWindow::setVisibility(visibility);
-    }
-
-    static QQuickWindowAttached *qmlAttachedProperties(QObject *object)
-    {
-        return new QQuickWindowAttached(object);
-    }
-
-Q_SIGNALS:
-    void visibleChanged(bool arg);
-    void visibilityChanged(QWindow::Visibility visibility);
-
-protected:
-    void classBegin() {
-        QQmlEngine* e = qmlEngine(this);
-        //Give QQuickView behavior when created from QML with QQmlApplicationEngine
-        if (QCoreApplication::instance()->property("__qml_using_qqmlapplicationengine") == QVariant(true)) {
-            if (e && !e->incubationController())
-                e->setIncubationController(incubationController());
-        }
-        Q_ASSERT(e);
-        {
-            QV4::ExecutionEngine *v4 = QQmlEnginePrivate::getV4Engine(e);
-            QV4::Scope scope(v4);
-            QV4::ScopedObject v(scope, QQuickRootItemMarker::create(e, this));
-            rootItemMarker = v;
-        }
-    }
-
-    void componentComplete() {
-        m_complete = true;
-        if (transientParent() && !transientParent()->isVisible()) {
-            connect(transientParent(), &QQuickWindow::visibleChanged, this,
-                    &QQuickWindowQmlImpl::setWindowVisibility, Qt::QueuedConnection);
-        } else {
-            setWindowVisibility();
-        }
-    }
-
-private Q_SLOTS:
-    void setWindowVisibility()
-    {
-        if (transientParent() && !transientParent()->isVisible())
-            return;
-
-        if (sender()) {
-            disconnect(transientParent(), &QWindow::visibleChanged, this,
-                       &QQuickWindowQmlImpl::setWindowVisibility);
-        }
-
-        // We have deferred window creation until we have the full picture of what
-        // the user wanted in terms of window state, geometry, visibility, etc.
-
-        if ((m_visibility == Hidden && m_visible) || (m_visibility > AutomaticVisibility && !m_visible)) {
-            QQmlData *data = QQmlData::get(this);
-            Q_ASSERT(data && data->context);
-
-            QQmlError error;
-            error.setObject(this);
-
-            const QQmlContextData* urlContext = data->context;
-            while (urlContext && urlContext->url.isEmpty())
-                urlContext = urlContext->parent;
-            error.setUrl(urlContext ? urlContext->url : QUrl());
-
-            QString objectId = data->context->findObjectId(this);
-            if (!objectId.isEmpty())
-                error.setDescription(QCoreApplication::translate("QQuickWindowQmlImpl",
-                    "Conflicting properties 'visible' and 'visibility' for Window '%1'").arg(objectId));
-            else
-                error.setDescription(QCoreApplication::translate("QQuickWindowQmlImpl",
-                    "Conflicting properties 'visible' and 'visibility'"));
-
-            QQmlEnginePrivate::get(data->context->engine)->warning(error);
-        }
-
-        if (m_visibility == AutomaticVisibility) {
-            setWindowState(QGuiApplicationPrivate::platformIntegration()->defaultWindowState(flags()));
-            setVisible(m_visible);
-        } else {
-            setVisibility(m_visibility);
-        }
-    }
-
-private:
-    bool m_complete;
-    bool m_visible;
-    Visibility m_visibility;
+    bool complete;
+    bool visible;
+    QQuickWindow::Visibility visibility;
     QV4::PersistentValue rootItemMarker;
 };
+
+QQuickWindowQmlImpl::QQuickWindowQmlImpl(QWindow *parent)
+    : QQuickWindow(*(new QQuickWindowQmlImplPrivate), parent)
+{
+    connect(this, &QWindow::visibleChanged, this, &QQuickWindowQmlImpl::visibleChanged);
+    connect(this, &QWindow::visibilityChanged, this, &QQuickWindowQmlImpl::visibilityChanged);
+}
+
+void QQuickWindowQmlImpl::setVisible(bool visible)
+{
+    Q_D(QQuickWindowQmlImpl);
+    if (!d->complete)
+        d->visible = visible;
+    else if (!transientParent() || transientParent()->isVisible())
+        QQuickWindow::setVisible(visible);
+}
+
+void QQuickWindowQmlImpl::setVisibility(Visibility visibility)
+{
+    Q_D(QQuickWindowQmlImpl);
+    if (!d->complete)
+        d->visibility = visibility;
+    else
+        QQuickWindow::setVisibility(visibility);
+}
+
+QQuickWindowAttached *QQuickWindowQmlImpl::qmlAttachedProperties(QObject *object)
+{
+    return new QQuickWindowAttached(object);
+}
+
+void QQuickWindowQmlImpl::classBegin()
+{
+    Q_D(QQuickWindowQmlImpl);
+    QQmlEngine* e = qmlEngine(this);
+    //Give QQuickView behavior when created from QML with QQmlApplicationEngine
+    if (QCoreApplication::instance()->property("__qml_using_qqmlapplicationengine") == QVariant(true)) {
+        if (e && !e->incubationController())
+            e->setIncubationController(incubationController());
+    }
+    Q_ASSERT(e);
+    {
+        QV4::ExecutionEngine *v4 = QQmlEnginePrivate::getV4Engine(e);
+        QV4::Scope scope(v4);
+        QV4::ScopedObject v(scope, QV4::QQuickRootItemMarker::create(e, this));
+        d->rootItemMarker = v;
+    }
+}
+
+void QQuickWindowQmlImpl::componentComplete()
+{
+    Q_D(QQuickWindowQmlImpl);
+    d->complete = true;
+    if (transientParent() && !transientParent()->isVisible()) {
+        connect(transientParent(), &QQuickWindow::visibleChanged, this,
+                &QQuickWindowQmlImpl::setWindowVisibility, Qt::QueuedConnection);
+    } else {
+        setWindowVisibility();
+    }
+}
+
+void QQuickWindowQmlImpl::setWindowVisibility()
+{
+    Q_D(QQuickWindowQmlImpl);
+    if (transientParent() && !transientParent()->isVisible())
+        return;
+
+    if (sender()) {
+        disconnect(transientParent(), &QWindow::visibleChanged, this,
+                   &QQuickWindowQmlImpl::setWindowVisibility);
+    }
+
+    // We have deferred window creation until we have the full picture of what
+    // the user wanted in terms of window state, geometry, visibility, etc.
+
+    if ((d->visibility == Hidden && d->visible) || (d->visibility > AutomaticVisibility && !d->visible)) {
+        QQmlData *data = QQmlData::get(this);
+        Q_ASSERT(data && data->context);
+
+        QQmlError error;
+        error.setObject(this);
+
+        const QQmlContextData* urlContext = data->context;
+        while (urlContext && urlContext->url().isEmpty())
+            urlContext = urlContext->parent;
+        error.setUrl(urlContext ? urlContext->url() : QUrl());
+
+        QString objectId = data->context->findObjectId(this);
+        if (!objectId.isEmpty())
+            error.setDescription(QCoreApplication::translate("QQuickWindowQmlImpl",
+                "Conflicting properties 'visible' and 'visibility' for Window '%1'").arg(objectId));
+        else
+            error.setDescription(QCoreApplication::translate("QQuickWindowQmlImpl",
+                "Conflicting properties 'visible' and 'visibility'"));
+
+        QQmlEnginePrivate::get(data->context->engine)->warning(error);
+    }
+
+    if (d->visibility == AutomaticVisibility) {
+        setWindowState(QGuiApplicationPrivate::platformIntegration()->defaultWindowState(flags()));
+        setVisible(d->visible);
+    } else {
+        setVisibility(d->visibility);
+    }
+}
 
 void QQuickWindowModule::defineModule()
 {
@@ -180,8 +179,6 @@ void QQuickWindowModule::defineModule()
     qmlRegisterType<QQuickWindowQmlImpl,1>(uri, 2, 2, "Window");
     qmlRegisterUncreatableType<QQuickScreen>(uri, 2, 0, "Screen", QStringLiteral("Screen can only be used via the attached property."));
 }
-
-#include "qquickwindowmodule.moc"
 
 QT_END_NAMESPACE
 

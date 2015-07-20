@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -34,7 +34,6 @@
 #include <QDebug>
 
 #include "qgstappsrc_p.h"
-#include <QtNetwork>
 
 QGstAppSrc::QGstAppSrc(QObject *parent)
     :QObject(parent)
@@ -147,11 +146,23 @@ void QGstAppSrc::pushDataToAppSrc()
             size = qMin(m_stream->bytesAvailable(), (qint64)m_dataRequestSize);
 
         if (size) {
-            void *data = g_malloc(size);
-            GstBuffer* buffer = gst_app_buffer_new(data, size, g_free, data);
+            GstBuffer* buffer = gst_buffer_new_and_alloc(size);
+
+#if GST_CHECK_VERSION(1,0,0)
+            GstMapInfo mapInfo;
+            gst_buffer_map(buffer, &mapInfo, GST_MAP_WRITE);
+            void* bufferData = mapInfo.data;
+#else
+            void* bufferData = GST_BUFFER_DATA(buffer);
+#endif
+
             buffer->offset = m_stream->pos();
-            qint64 bytesRead = m_stream->read((char*)GST_BUFFER_DATA(buffer), size);
+            qint64 bytesRead = m_stream->read((char*)bufferData, size);
             buffer->offset_end =  buffer->offset + bytesRead - 1;
+
+#if GST_CHECK_VERSION(1,0,0)
+            gst_buffer_unmap(buffer, &mapInfo);
+#endif
 
             if (bytesRead > 0) {
                 m_dataRequested = false;
@@ -159,11 +170,20 @@ void QGstAppSrc::pushDataToAppSrc()
                 GstFlowReturn ret = gst_app_src_push_buffer (GST_APP_SRC (element()), buffer);
                 if (ret == GST_FLOW_ERROR) {
                     qWarning()<<"appsrc: push buffer error";
+#if GST_CHECK_VERSION(1,0,0)
+                } else if (ret == GST_FLOW_FLUSHING) {
+                    qWarning()<<"appsrc: push buffer wrong state";
+                }
+#else
                 } else if (ret == GST_FLOW_WRONG_STATE) {
                     qWarning()<<"appsrc: push buffer wrong state";
-                } else if (ret == GST_FLOW_RESEND) {
+                }
+#endif
+#if GST_VERSION_MAJOR < 1
+                else if (ret == GST_FLOW_RESEND) {
                     qWarning()<<"appsrc: push buffer resend";
                 }
+#endif
             }
         } else {
             sendEOS();

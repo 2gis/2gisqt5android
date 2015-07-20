@@ -187,6 +187,17 @@
     </message>
 </context>
 <context>
+    <name>DSCameraSession</name>
+    <message>
+        <source>Camera not ready for capture</source>
+        <translation>Камера не готова для захоплення</translation>
+    </message>
+    <message>
+        <source>Could not save image to file.</source>
+        <translation>Не вдалось зберегти зображення до файлу.</translation>
+    </message>
+</context>
+<context>
     <name>MFPlayerSession</name>
     <message>
         <source>Invalid stream source.</source>
@@ -281,27 +292,27 @@
     <name>PLSParser</name>
     <message>
         <source>Error parsing playlist: %1, expected count = %2</source>
-        <translation>Помилка розбору списку відтворення: %1, очікувана кількість = %2</translation>
+        <translation type="vanished">Помилка розбору списку відтворення: %1, очікувана кількість = %2</translation>
     </message>
     <message>
         <source>Error parsing playlist at line[%1], expected version = 2</source>
-        <translation>Помилка розбору списку відтворення в рядку [%1], очікувана версія = 2</translation>
+        <translation type="vanished">Помилка розбору списку відтворення в рядку [%1], очікувана версія = 2</translation>
     </message>
     <message>
         <source>Error parsing playlist at line[%1]:%2</source>
-        <translation>Помилка розбору списку відтворення в рядку [%1]:%2</translation>
+        <translation type="vanished">Помилка розбору списку відтворення в рядку [%1]:%2</translation>
     </message>
     <message>
         <source>File%1</source>
-        <translation>Файл%1</translation>
+        <translation type="vanished">Файл%1</translation>
     </message>
     <message>
         <source>Title%1</source>
-        <translation>Назва%1</translation>
+        <translation type="vanished">Назва%1</translation>
     </message>
     <message>
         <source>Length%1</source>
-        <translation>Довжина%1</translation>
+        <translation type="vanished">Довжина%1</translation>
     </message>
 </context>
 <context>
@@ -321,6 +332,10 @@
 </context>
 <context>
     <name>QAndroidCameraSession</name>
+    <message>
+        <source>Camera cannot be started without a viewfinder.</source>
+        <translation>Неможливо запустити камеру без видошукача.</translation>
+    </message>
     <message>
         <source>Camera not ready</source>
         <translation>Камера не готова</translation>
@@ -468,7 +483,7 @@
     <name>QGstreamerPlayerControl</name>
     <message>
         <source>Attempting to play invalid Qt resource</source>
-        <translation>Спроба відтворити неправильний ресурс Qt</translation>
+        <translation type="vanished">Спроба відтворити неправильний ресурс Qt</translation>
     </message>
     <message>
         <source>Attempting to play invalid user stream</source>
@@ -514,6 +529,10 @@
 </context>
 <context>
     <name>QMediaPlayer</name>
+    <message>
+        <source>Attempting to play invalid Qt resource</source>
+        <translation>Спроба відтворити неправильний ресурс Qt</translation>
+    </message>
     <message>
         <source>The QMediaPlayer object does not have a valid service</source>
         <translation>Об&apos;єкт QMediaPlayer не має правильного сервісу</translation>
@@ -564,6 +583,25 @@
         <source>CameraImageProcessing is provided by Camera</source>
         <translation>Камера надає CameraImageProcessing</translation>
     </message>
+    <message>
+        <source>CameraViewfinder is provided by Camera</source>
+        <translation>Камера надає CameraViewfinder</translation>
+    </message>
+</context>
+<context>
+    <name>QObject</name>
+    <message>
+        <source>%1 playlist type is unknown</source>
+        <translation>Невідомий тип списку відтворення %1</translation>
+    </message>
+    <message>
+        <source>invalid line in playlist file</source>
+        <translation>неправильний рядок в файлі списку відтворення</translation>
+    </message>
+    <message>
+        <source>Empty file provided</source>
+        <translation>Надано порожній файл</translation>
+    </message>
 </context>
 <context>
     <name>QPlaylistFileParser</name>
@@ -576,15 +614,30 @@
     <name>QPlaylistFileParserPrivate</name>
     <message>
         <source>%1 playlist type is unknown</source>
-        <translation>Невідомий тип списку відтворення %1</translation>
+        <translation type="vanished">Невідомий тип списку відтворення %1</translation>
     </message>
     <message>
         <source>invalid line in playlist file</source>
-        <translation>неправильний рядок в файлі списку відтворення</translation>
+        <translation type="vanished">неправильний рядок в файлі списку відтворення</translation>
     </message>
     <message>
         <source>Empty file provided</source>
-        <translation>Надано порожній файл</translation>
+        <translation type="vanished">Надано порожній файл</translation>
+    </message>
+</context>
+<context>
+    <name>QWinRTCameraImageCaptureControl</name>
+    <message>
+        <source>Camera not ready</source>
+        <translation>Камера не готова</translation>
+    </message>
+    <message>
+        <source>Invalid photo data length.</source>
+        <translation>Неправильна довжина даних фото.</translation>
+    </message>
+    <message>
+        <source>Image saving failed</source>
+        <translation>Збій збереження зображення</translation>
     </message>
 </context>
 </TS>

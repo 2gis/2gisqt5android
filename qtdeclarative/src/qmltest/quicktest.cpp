@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -215,9 +215,11 @@ int quick_test_main(int argc, char **argv, const char *name, const char *sourceD
 
     // Look for QML-specific command-line options.
     //      -import dir         Specify an import directory.
+    //      -plugins dir        Specify a directory where to search for plugins.
     //      -input dir          Specify the input directory for test cases.
     //      -translation file   Specify the translation file.
     QStringList imports;
+    QStringList pluginPaths;
     QString testPath;
     QString translationFile;
     int index = 1;
@@ -227,6 +229,9 @@ int quick_test_main(int argc, char **argv, const char *name, const char *sourceD
     while (index < argc) {
         if (strcmp(argv[index], "-import") == 0 && (index + 1) < argc) {
             imports += stripQuotes(QString::fromLocal8Bit(argv[index + 1]));
+            index += 2;
+        } else if (strcmp(argv[index], "-plugins") == 0 && (index + 1) < argc) {
+            pluginPaths += stripQuotes(QString::fromLocal8Bit(argv[index + 1]));
             index += 2;
         } else if (strcmp(argv[index], "-input") == 0 && (index + 1) < argc) {
             testPath = stripQuotes(QString::fromLocal8Bit(argv[index + 1]));
@@ -327,6 +332,8 @@ int quick_test_main(int argc, char **argv, const char *name, const char *sourceD
         (QLatin1String("qtest"), QTestRootObject::instance()); // Deprecated. Use QTestRootObject from Qt.test.qtestroot instead
     foreach (const QString &path, imports)
         view->engine()->addImportPath(path);
+    foreach (const QString &path, pluginPaths)
+        view->engine()->addPluginPath(path);
     foreach (const QString &file, files) {
         const QFileInfo fi(file);
         if (!fi.exists())
@@ -343,6 +350,8 @@ int quick_test_main(int argc, char **argv, const char *name, const char *sourceD
 
         if (QTest::printAvailableFunctions)
             continue;
+        while (view->status() == QQuickView::Loading)
+            QTest::qWait(10);
         if (view->status() == QQuickView::Error) {
             handleCompileErrors(fi, view);
             continue;
@@ -361,10 +370,22 @@ int quick_test_main(int argc, char **argv, const char *name, const char *sourceD
                 view->resize(200, 200);
             }
             view->show();
+            if (!QTest::qWaitForWindowExposed(view)) {
+                qWarning().nospace()
+                    << "Test '" << QDir::toNativeSeparators(path) << "' window not exposed after show().";
+            }
             view->requestActivate();
-            QTest::qWaitForWindowActive(view);
-            if (view->isExposed())
+            if (!QTest::qWaitForWindowActive(view)) {
+                qWarning().nospace()
+                    << "Test '" << QDir::toNativeSeparators(path) << "' window not active after requestActivate().";
+            }
+            if (view->isExposed()) {
                 QTestRootObject::instance()->setWindowShown(true);
+            } else {
+                qWarning().nospace()
+                    << "Test '" << QDir::toNativeSeparators(path) << "' window was never exposed! "
+                    << "If the test case was expecting windowShown, it will hang.";
+            }
             if (!QTestRootObject::instance()->hasQuit && QTestRootObject::instance()->hasTestCase())
                 eventLoop.exec();
             // view->hide(); Causes a crash in Qt 3D due to deletion of the GL context, see QTBUG-27696

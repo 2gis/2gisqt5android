@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQuick module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -54,45 +46,45 @@ public:
     QSGDefaultLayer(QSGRenderContext *context);
     ~QSGDefaultLayer();
 
-    virtual bool updateTexture();
+    bool updateTexture() Q_DECL_OVERRIDE;
 
     // The item's "paint node", not effect node.
     QSGNode *item() const { return m_item; }
-    void setItem(QSGNode *item);
+    void setItem(QSGNode *item) Q_DECL_OVERRIDE;
 
     QRectF rect() const { return m_rect; }
-    void setRect(const QRectF &rect);
+    void setRect(const QRectF &rect) Q_DECL_OVERRIDE;
 
     QSize size() const { return m_size; }
-    void setSize(const QSize &size);
+    void setSize(const QSize &size) Q_DECL_OVERRIDE;
 
-    void setHasMipmaps(bool mipmap);
+    void setHasMipmaps(bool mipmap) Q_DECL_OVERRIDE;
 
-    void bind();
+    void bind() Q_DECL_OVERRIDE;
 
-    bool hasAlphaChannel() const;
-    bool hasMipmaps() const;
-    int textureId() const;
-    QSize textureSize() const { return m_size; }
+    bool hasAlphaChannel() const Q_DECL_OVERRIDE;
+    bool hasMipmaps() const Q_DECL_OVERRIDE;
+    int textureId() const Q_DECL_OVERRIDE;
+    QSize textureSize() const Q_DECL_OVERRIDE { return m_size; }
 
     GLenum format() const { return m_format; }
-    void setFormat(GLenum format);
+    void setFormat(GLenum format) Q_DECL_OVERRIDE;
 
     bool live() const { return bool(m_live); }
-    void setLive(bool live);
+    void setLive(bool live) Q_DECL_OVERRIDE;
 
     bool recursive() const { return bool(m_recursive); }
-    void setRecursive(bool recursive);
+    void setRecursive(bool recursive) Q_DECL_OVERRIDE;
 
-    void setDevicePixelRatio(qreal ratio) { m_device_pixel_ratio = ratio; }
+    void setDevicePixelRatio(qreal ratio) Q_DECL_OVERRIDE { m_device_pixel_ratio = ratio; }
 
-    void scheduleUpdate();
+    void scheduleUpdate() Q_DECL_OVERRIDE;
 
-    QImage toImage() const;
+    QImage toImage() const Q_DECL_OVERRIDE;
 
 public Q_SLOTS:
-    void markDirtyTexture();
-    void invalidated();
+    void markDirtyTexture() Q_DECL_OVERRIDE;
+    void invalidated() Q_DECL_OVERRIDE;
 
 private:
     void grab();

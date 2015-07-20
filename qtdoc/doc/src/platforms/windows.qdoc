@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
@@ -10,15 +10,15 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Free Documentation License Usage
 ** Alternatively, this file may be used under the terms of the GNU Free
 ** Documentation License version 1.3 as published by the Free Software
 ** Foundation and appearing in the file included in the packaging of
-** this file.  Please review the following information to ensure
+** this file. Please review the following information to ensure
 ** the GNU Free Documentation License version 1.3 requirements
 ** will be met: http://www.gnu.org/copyleft/fdl.html.
 ** $QT_END_LICENSE$
@@ -35,8 +35,9 @@
     Before you get started, ensure that your development environment fulfills
     the \l{Qt for Windows Requirements}{requirements}.
 
-    The \e{Reference Configuration} section of the \l{Supported Platforms} page
-    contains the list of Windows version and the compiler tested to work with
+    The \e{Reference Configuration} section of the
+    \l{Community Supported Platforms#Reference Configurations}{supported platforms}
+    page contains a list of Windows versions and compilers tested to work with
     Qt.
 
     \section1 Downloading and Installing Qt
@@ -90,7 +91,7 @@
 
     \section2 Visual Studio Add-in
 
-    The Qt Visual Studio Add-in allows programmers to create, build, debug
+    The \l {Qt Visual Studio Add-in} allows programmers to create, build, debug
     and run Qt applications from within non-Express versions of Microsoft Visual Studio
     2008, 2010, and 2012. The add-in contains project wizards, Qt project import/export
     support, integrated Qt resource manager and automated build setup for
@@ -208,6 +209,14 @@
     configure -opengl dynamic
     \endcode
 
+    \note As of Qt 5.5 this is the configuration used by the official, pre-built
+    binary packages of Qt. It is strongly recommended to use it also in custom
+    builds, especially for Qt binaries that are deployed alongside applications.
+
+    \note Combining \c{-opengl dynamic} with \c{-static} is also possible, but
+    be aware that ANGLE will not be statically linked into the applications in
+    this case, it will still be built as a shared library.
+
     This configuration is the most flexible because no dependencies or
     assumptions are hardcoded about the OpenGL implementation during build
     time. It allows robust application deployment. When a given environment
@@ -268,6 +277,54 @@
     \l{http://www.mesa3d.org/llvmpipe.html}{Mesa with llvmpipe}, under this
     name. If necessary, the filename can be overridden by setting the
     \c{QT_OPENGL_DLL} environment variable.
+
+    It is possible to provide a JSON-format configuration file specifying which
+    OpenGL implementation to use depending on the graphics card and driver version.
+    The location is given by the environment variable \c{QT_OPENGL_BUGLIST}. Relative
+    paths are resolved using \c {QLibraryInfo::SettingsPath} or
+    \c {QStandardPaths::ConfigLocation}. The file utilizes the format of the
+    driver bug list used in \l{The Chromium Projects}. It consists of a list of
+    entries each of which specifies a set of conditions and a list of feature keywords.
+    Typically, device id and vendor id are used to match a specific graphics card.
+    They can be found in the output of the \c qtdiag or \c dxdiag tool.
+
+    The following feature keywords are relevant for choosing the OpenGL implementation:
+
+    \list
+        \li \c disable_desktopgl - Disables Desktop OpenGL
+        \li \c disable_angle - Disables ANGLE
+        \li \c disable_d3d11 - Disables the D3D11 rasterizer in ANGLE
+        \li \c disable_d3d9 - Disables the D3D9 rasterizer in ANGLE
+    \endlist
+
+    A sample file looks like:
+
+    \badcode
+    {
+    "entries": [
+    {
+      "id": 1,
+      "description": "Disable D3D11 on older nVidia drivers",
+      "os": {
+        "type": "win"
+      },
+      "vendor_id": "0x10de",
+      "device_id": ["0x0DE9"],
+      "driver_version": {
+        "op": "<=",
+        "value": "8.17.12.6973"
+      },
+      "features": [
+        "disable_d3d11"
+      ]
+    },
+    ...
+    \endcode
+
+    When \c{QT_OPENGL_BUGLIST} is not specified, a built-in list will be
+    used. This typically includes some older, less-capable graphics cards with
+    \c disable_desktopgl set, in order to prevent Qt from using their unstable
+    desktop OpenGL implementations and instead fall back to ANGLE right away.
 
     \section1 Building from Source
 
@@ -347,8 +404,7 @@
     \title Qt for Windows - Specific Issues
     \brief A description of issues with Qt that are specific to Windows.
 
-    This page contains information about the \l{Qt for Windows}{Windows}
-    platforms Qt.
+    This page contains information about \l{Qt for Windows}.
 
     \section1 Windows XP
 
@@ -403,7 +459,9 @@
     to build Qt including Qt WebKit.
 
     For more information about the MinGW builds, visit the
-    \e{Reference Configuration} section of the \l{Supported Platforms} page.
+    \e{Reference Configuration} section of the
+    \l{Community Supported Platforms#Reference Configurations}{supported platforms}
+    page.
 
     \section1 Intel C++ Compiler (Windows, Altix)
 
@@ -539,23 +597,40 @@
     as well as the executable to the same directory tree in the \c release
     subdirectory.
 
-    In contrast to user plugins, Qt plugins have to be put into subdirectories
+    In contrast to user plugins, Qt plugins must be put into subdirectories
     matching the plugin type. The correct location for the platform plugin
     is a subdirectory named \c {platforms}. \l{Qt Plugins} section has
     additional information about plugins and how Qt searches for them.
 
-    Qt relies on the \l{ICU} library for unicode support. Therefore, you must
+    Qt relies on the \l{ICU} library for unicode support. You must
     include the ICU DLLs that are located in the \c bin directory of your Qt
     installation if Qt was configured to use ICU. The Qt version bundled in
     the Qt5 package uses ICU, so deployment is needed there. The ICU DLLs are
     version dependent and have to match the ones your Qt version was linked
     against.
 
-    If you are using \l{ANGLE} (the default) then you additionally
-    need to include both libEGL.dll and libGLESv2.dll from Qt's 'lib'
-    directory as well as the HLSL compiler from DirectX. The HLSL
-    compiler library is called d3dcompiler_XX.dll where XX is the
-    version number that ANGLE (libGLESv2) was linked against.
+    If \l{ANGLE} (the default) is used, you additionally need to include both
+    \c libEGL.dll and \c libGLESv2.dll from Qt's 'lib' directory as well as
+    the HLSL compiler from DirectX. The HLSL compiler library,
+    d3dcompiler_XX.dll, where XX is the version number that ANGLE (libGLESv2)
+    was linked against.
+
+    If your application depends on Qt WebEngine, you must deploy
+    \c{<Qt install path>/bin/QtWebEngineProcess.exe} to the application install
+    path. If you chose to deploy the binary to a different path, set the
+    \c QTWEBENGINEPROCESS_PATH environment variable to the binary's absolute
+    path (including its file name). This enables the application to find the
+    binary and execute it for every instance of QWebEngineView or
+    WebEngineView created. For example, a browser application with two tabs
+    open should have two separate processes of \c QtWebEngineProcess.exe
+    running. This is a common approach used by most modern web engines to
+    provide a stable browsing experience.
+
+    \note To support HTML5 videos, you must additionally deploy
+    \c ffmpegsumo.dll (WebM codec plugin) into the \c qtwebengine directory
+    under the application install path or under the path that the
+    \c PluginsPath variable was set to in
+    \c{<Qt install path>/<Qt version>/msvc2013/qt.conf}.
 
     Remember that if your application depends on compiler specific
     libraries, these must be redistributed along with your
@@ -867,7 +942,7 @@
 
     \list
     \li \c{C:/customPath/plugins}
-    \li \c{C:/Qt/5.4.1/plugins}
+    \li \c{C:/Qt/5.5.0/plugins}
     \li \c{E:/myApplication/directory}
     \endlist
 
@@ -979,7 +1054,7 @@ Arguments:
     \section1 Step 2: Unpack the Archive
 
         Uncompress the files into the directory you want Qt installed;
-        e.g. \c{C:\Qt\5.4.1}.
+        e.g. \c{C:\Qt\5.5.0}.
 
         \note The install path must not contain any spaces or Windows specific
         file system characters.

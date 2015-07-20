@@ -11,7 +11,6 @@
 #include "base/system_monitor/system_monitor.h"
 #include "content/browser/udev_linux.h"
 #include "content/public/browser/browser_thread.h"
-#include "device/udev_linux/udev.h"
 
 namespace {
 

@@ -1,31 +1,34 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtLocation module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL21$
+** $QT_BEGIN_LICENSE:LGPL3$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 or version 3 as published by the Free
-** Software Foundation and appearing in the file LICENSE.LGPLv21 and
-** LICENSE.LGPLv3 included in the packaging of this file. Please review the
-** following information to ensure the GNU Lesser General Public License
-** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
-** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPLv3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** GNU General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU
+** General Public License version 2.0 or later as published by the Free
+** Software Foundation and appearing in the file LICENSE.GPL included in
+** the packaging of this file. Please review the following information to
+** ensure the GNU General Public License version 2.0 requirements will be
+** met: http://www.gnu.org/licenses/gpl-2.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -53,7 +56,7 @@ QT_USE_NAMESPACE
     \inqmlmodule QtLocation
     \ingroup qml-QtLocation5-places
     \ingroup qml-QtLocation5-places-models
-    \since Qt Location 5.0
+    \since Qt Location 5.5
 
     \brief Provides access to place search results.
 
@@ -257,7 +260,7 @@ QT_USE_NAMESPACE
 */
 
 /*!
-    \qmlmethod PlaceSearchModel::update()
+    \qmlmethod void PlaceSearchModel::update()
 
     Updates the model based on the provided query parameters.  The model will be populated with a
     list of places matching the search parameters specified by the type's properties.  Search
@@ -294,7 +297,7 @@ QT_USE_NAMESPACE
 */
 
 /*!
-    \qmlmethod PlaceSearchModel::cancel()
+    \qmlmethod void PlaceSearchModel::cancel()
 
     Cancels an ongoing search operation immediately and sets the model
     status to PlaceSearchModel.Ready.  The model retains any search
@@ -306,7 +309,7 @@ QT_USE_NAMESPACE
 */
 
 /*!
-    \qmlmethod PlaceSearchModel::reset()
+    \qmlmethod void PlaceSearchModel::reset()
 
     Resets the model.  All search results are cleared, any outstanding requests are aborted and
     possible errors are cleared.  Model status will be set to PlaceSearchModel.Null.
@@ -315,22 +318,22 @@ QT_USE_NAMESPACE
 /*!
     \qmlmethod string PlaceSearchModel::errorString() const
 
-    This read-only property holds the textual presentation of latest place search model error.
-    If no error has occurred or if the model was cleared an empty string is returned.
+    This read-only property holds the textual presentation of the latest place search model error.
+    If no error has occurred or if the model was cleared, an empty string is returned.
 
     An empty string may also be returned if an error occurred which has no associated
     textual representation.
 */
 
 /*!
-    \qmlmethod PlaceSearchModel::previousPage()
+    \qmlmethod void PlaceSearchModel::previousPage()
 
     Updates the model to display the previous page of search results. If there is no previous page
     then this method does nothing.
 */
 
 /*!
-    \qmlmethod PlaceSearchModel::nextPage()
+    \qmlmethod void PlaceSearchModel::nextPage()
 
     Updates the model to display the next page of search results. If there is no next page then
     this method does nothing.
@@ -661,7 +664,7 @@ QHash<int, QByteArray> QDeclarativeSearchResultModel::roleNames() const
 }
 
 /*!
-    \qmlmethod PlaceSearchModel::updateWith(int proposedSearchIndex)
+    \qmlmethod void PlaceSearchModel::updateWith(int proposedSearchIndex)
 
     Updates the model based on the ProposedSearchResult at index \a proposedSearchIndex. The model
     will be populated with a list of places matching the proposed search. Model status will be set
@@ -734,6 +737,7 @@ void QDeclarativeSearchResultModel::queryFinished()
         updateLayout();
         setStatus(Error, reply->errorString());
         reply->deleteLater();
+        return;
     }
 
     if (reply->type() == QPlaceReply::SearchReply) {
@@ -796,7 +800,7 @@ void QDeclarativeSearchResultModel::queryFinished()
 }
 
 /*!
-    \qmlmethod PlaceSearchModel::data(int index, string role)
+    \qmlmethod void PlaceSearchModel::data(int index, string role)
 
     Returns the data for a given \a role at the specified row \a index.
 */

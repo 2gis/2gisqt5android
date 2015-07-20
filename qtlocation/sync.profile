@@ -13,8 +13,7 @@
 #
 %dependencies = (
     "qtbase" => "",
-    "qtsvg" => "",
     "qtxmlpatterns" => "",
     "qtdeclarative" => "",
-    "qtmultimedia" => ""
+    "qtquickcontrols" => "",
 );

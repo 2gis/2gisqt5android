@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtWebEngine module of the Qt Toolkit.
 **
@@ -10,15 +10,15 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
 ** General Public License version 3 as published by the Free Software
 ** Foundation and appearing in the file LICENSE.LGPLv3 included in the
-** packaging of this file.  Please review the following information to
+** packaging of this file. Please review the following information to
 ** ensure the GNU Lesser General Public License version 3 requirements
 ** will be met: https://www.gnu.org/licenses/lgpl.html.
 **
@@ -26,7 +26,7 @@
 ** Alternatively, this file may be used under the terms of the GNU
 ** General Public License version 2.0 or later as published by the Free
 ** Software Foundation and appearing in the file LICENSE.GPL included in
-** the packaging of this file.  Please review the following information to
+** the packaging of this file. Please review the following information to
 ** ensure the GNU General Public License version 2.0 requirements will be
 ** met: http://www.gnu.org/licenses/gpl-2.0.html.
 **
@@ -48,10 +48,6 @@
 #include <QScreen>
 #include <QWindow>
 
-#if defined(OS_ANDROID)
-#include "media/video/capture/fake_video_capture_device.h"
-#endif
-
 #if defined(USE_X11)
 #include "ui/gfx/x/x11_types.h"
 #endif
@@ -63,6 +59,7 @@
 #include "ui/gfx/platform_font.h"
 #endif
 
+namespace QtWebEngineCore {
 void GetScreenInfoFromNativeWindow(QWindow* window, blink::WebScreenInfo* results)
 {
     QScreen* screen = window->screen();
@@ -79,6 +76,8 @@ void GetScreenInfoFromNativeWindow(QWindow* window, blink::WebScreenInfo* result
     r.availableRect = blink::WebRect(available.x(), available.y(), available.width(), available.height());
     *results = r;
 }
+
+} // namespace QtWebEngineCore
 
 #if defined(USE_X11)
 XDisplay* GetQtXDisplay()
@@ -97,7 +96,7 @@ WebContentsView* CreateWebContentsView(WebContentsImpl *web_contents,
     WebContentsViewDelegate *,
     RenderViewHostDelegateView **render_view_host_delegate_view)
 {
-    WebContentsViewQt* rv = new WebContentsViewQt(web_contents);
+    QtWebEngineCore::WebContentsViewQt* rv = new QtWebEngineCore::WebContentsViewQt(web_contents);
     *render_view_host_delegate_view = rv;
     return rv;
 }
@@ -105,10 +104,10 @@ WebContentsView* CreateWebContentsView(WebContentsImpl *web_contents,
 // static
 void RenderWidgetHostViewBase::GetDefaultScreenInfo(blink::WebScreenInfo* results) {
     QWindow dummy;
-    GetScreenInfoFromNativeWindow(&dummy, results);
+    QtWebEngineCore::GetScreenInfoFromNativeWindow(&dummy, results);
 }
 
-}
+} // namespace content
 
 #if defined(USE_AURA) && !defined(USE_OZONE)
 namespace content {
@@ -156,6 +155,7 @@ RenderText* RenderText::CreateNativeInstance()
     return 0;
 }
 
+#if defined(OS_LINUX)
 PlatformFont* PlatformFont::CreateDefault()
 {
     QT_NOT_USED;
@@ -173,24 +173,8 @@ PlatformFont* PlatformFont::CreateFromNameAndSize(const std::string&, int)
     QT_NOT_USED;
     return 0;
 }
+#endif
 
 } // namespace gfx
 
 #endif // defined(USE_AURA) && !defined(USE_OZONE)
-
-#if defined(OS_ANDROID)
-namespace ui {
-bool GrabViewSnapshot(gfx::NativeView /*view*/, std::vector<unsigned char>* /*png_representation*/, const gfx::Rect& /*snapshot_bounds*/)
-{
-    NOTIMPLEMENTED();
-    return false;
-}
-}
-
-namespace media {
-const std::string FakeVideoCaptureDevice::Name::GetModel() const
-{
-    return "";
-}
-}
-#endif

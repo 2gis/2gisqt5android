@@ -1,7 +1,7 @@
 /****************************************************************************
 **
 ** Copyright (C) 2014 Klarälvdalens Datakonsult AB, a KDAB Group company, info@kdab.com, author Milian Wolff <milian.wolff@kdab.com>
-** Contact: http://www.qt-project.org/legal
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtWebChannel module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -93,7 +93,7 @@ void TestWebChannel::testDeregisterObjects()
     channel.registerObject(testObject.objectName(), &testObject);
 
     channel.connectTo(m_dummyTransport);
-    channel.d_func()->publisher->initializeClients();
+    channel.d_func()->publisher->initializeClient(m_dummyTransport);
 
     QJsonObject connectMessage =
             QJsonDocument::fromJson(("{\"type\": 7,"
@@ -113,7 +113,7 @@ void TestWebChannel::testInfoForObject()
     obj.setObjectName("myTestObject");
 
     QWebChannel channel;
-    const QJsonObject info = channel.d_func()->publisher->classInfoForObject(&obj);
+    const QJsonObject info = channel.d_func()->publisher->classInfoForObject(&obj, m_dummyTransport);
 
     QCOMPARE(info.keys(), QStringList() << "enums" << "methods" << "properties" << "signals");
 
@@ -291,7 +291,7 @@ void TestWebChannel::benchClassInfo()
 
     QBENCHMARK {
         foreach (const QObject *object, objects) {
-            channel.d_func()->publisher->classInfoForObject(object);
+            channel.d_func()->publisher->classInfoForObject(object, m_dummyTransport);
         }
     }
 }
@@ -306,7 +306,7 @@ void TestWebChannel::benchInitializeClients()
 
     QMetaObjectPublisher *publisher = channel.d_func()->publisher;
     QBENCHMARK {
-        publisher->initializeClients();
+        publisher->initializeClient(m_dummyTransport);
 
         publisher->propertyUpdatesInitialized = false;
         publisher->signalToPropertyMap.clear();
@@ -328,7 +328,7 @@ void TestWebChannel::benchPropertyUpdates()
     }
 
     channel.registerObjects(objects);
-    channel.d_func()->publisher->initializeClients();
+    channel.d_func()->publisher->initializeClient(m_dummyTransport);
 
     QBENCHMARK {
         foreach (BenchObject *obj, objectList) {

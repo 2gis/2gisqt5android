@@ -1,39 +1,34 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd and/or its subsidiary(-ies).
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL3$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPLv3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or later as published by the Free
+** Software Foundation and appearing in the file LICENSE.GPL included in
+** the packaging of this file. Please review the following information to
+** ensure the GNU General Public License version 2.0 requirements will be
+** met: http://www.gnu.org/licenses/gpl-2.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -56,6 +51,11 @@
 #include <windows.media.capture.h>
 #include <windows.storage.streams.h>
 
+#ifdef Q_OS_WINPHONE
+#include <Windows.Security.ExchangeActiveSyncProvisioning.h>
+using namespace ABI::Windows::Security::ExchangeActiveSyncProvisioning;
+#endif
+
 using namespace Microsoft::WRL;
 using namespace Microsoft::WRL::Wrappers;
 using namespace ABI::Windows::Devices::Enumeration;
@@ -67,7 +67,7 @@ using namespace ABI::Windows::Media::Devices;
 using namespace ABI::Windows::Media::MediaProperties;
 using namespace ABI::Windows::Storage::Streams;
 
-QT_USE_NAMESPACE
+QT_BEGIN_NAMESPACE
 
 #define RETURN_VOID_AND_EMIT_ERROR(msg) \
     if (FAILED(hr)) { \
@@ -93,9 +93,21 @@ private:
 
 class MediaStream : public RuntimeClass<RuntimeClassFlags<WinRtClassicComMix>, IMFStreamSink, IMFMediaEventGenerator, IMFMediaTypeHandler>
 {
+    enum Flags { NoFlag = 0, BufferLockRequired = 1 };
+
+    template <int n>
+    static Flags bufferLockRequired(const wchar_t (&blackListName)[n], const HString &deviceModel)
+    {
+        quint32 deviceNameLength;
+        const wchar_t *deviceName = deviceModel.GetRawBuffer(&deviceNameLength);
+        if (n - 1 <= deviceNameLength && !wmemcmp(blackListName, deviceName, n - 1))
+            return BufferLockRequired;
+        return NoFlag;
+    }
+
 public:
     MediaStream(IMFMediaType *type, IMFMediaSink *mediaSink, QWinRTCameraVideoRendererControl *videoRenderer)
-        : m_type(type), m_sink(mediaSink), m_videoRenderer(videoRenderer)
+        : m_type(type), m_sink(mediaSink), m_videoRenderer(videoRenderer), m_flags(NoFlag)
     {
         Q_ASSERT(m_videoRenderer);
 
@@ -106,6 +118,19 @@ public:
         Q_ASSERT_SUCCEEDED(hr);
         hr = MFAllocateSerialWorkQueue(MFASYNC_CALLBACK_QUEUE_STANDARD, &m_workQueueId);
         Q_ASSERT_SUCCEEDED(hr);
+
+#ifdef Q_OS_WINPHONE
+        // Workaround for certain devices which fail to blit software buffers without first mapping them
+        ComPtr<IEasClientDeviceInformation> deviceInfo;
+        hr = RoActivateInstance(HString::MakeReference(RuntimeClass_Windows_Security_ExchangeActiveSyncProvisioning_EasClientDeviceInformation).Get(),
+                                &deviceInfo);
+        Q_ASSERT_SUCCEEDED(hr);
+        HString deviceModel;
+        hr = deviceInfo->get_SystemSku(deviceModel.GetAddressOf());
+        Q_ASSERT_SUCCEEDED(hr);
+        m_flags |= bufferLockRequired(L"NOKIA RM-976", deviceModel);
+        m_flags |= bufferLockRequired(L"NOKIA RM-1019", deviceModel);
+#endif
     }
 
     ~MediaStream()
@@ -179,6 +204,16 @@ public:
         hr = buffer.As(&buffer2d);
         RETURN_HR_IF_FAILED("Failed to cast camera sample buffer to 2D buffer");
 
+#ifdef Q_OS_WINPHONE
+        if (m_flags & BufferLockRequired) {
+            BYTE *bytes;
+            LONG stride;
+            hr = buffer2d->Lock2D(&bytes, &stride);
+            RETURN_HR_IF_FAILED("Failed to lock camera frame buffer");
+            hr = buffer2d->Unlock2D();
+            RETURN_HR_IF_FAILED("Failed to unlock camera frame buffer");
+        }
+#endif
         m_pendingSamples.deref();
         m_videoRenderer->queueBuffer(buffer2d.Get());
 
@@ -252,6 +287,7 @@ private:
 
     QWinRTCameraVideoRendererControl *m_videoRenderer;
     QAtomicInt m_pendingSamples;
+    quint32 m_flags;
 };
 
 class MediaSink : public RuntimeClass<RuntimeClassFlags<WinRtClassicComMix>, IMediaExtension, IMFMediaSink, IMFClockStateSink>
@@ -797,3 +833,5 @@ HRESULT QWinRTCameraControl::onRecordLimitationExceeded(IMediaCapture *)
     setState(QCamera::LoadedState);
     return S_OK;
 }
+
+QT_END_NAMESPACE

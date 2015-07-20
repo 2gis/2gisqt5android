@@ -3,7 +3,7 @@
 ** Copyright (C) 2011-2012 Denis Shienkov <denis.shienkov@gmail.com>
 ** Copyright (C) 2011 Sergey Belyashov <Sergey.Belyashov@gmail.com>
 ** Copyright (C) 2012 Laszlo Papp <lpapp@kde.org>
-** Contact: http://www.qt-project.org/legal
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtSerialPort module of the Qt Toolkit.
 **
@@ -12,9 +12,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -25,8 +25,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -35,7 +35,7 @@
 
 #include "qserialportinfo.h"
 #include "qserialportinfo_p.h"
-#include "qserialport_win_p.h"
+#include "qserialport_p.h"
 
 #include <QtCore/quuid.h>
 #include <QtCore/qpair.h>
@@ -258,13 +258,13 @@ static QString parseDeviceSerialNumber(const QString &instanceIdentifier)
 {
     int firstbound = instanceIdentifier.lastIndexOf(QLatin1Char('\\'));
     int lastbound = instanceIdentifier.indexOf(QLatin1Char('_'), firstbound);
-    if (instanceIdentifier.startsWith(QStringLiteral("USB\\"))) {
+    if (instanceIdentifier.startsWith(QLatin1String("USB\\"))) {
         if (lastbound != instanceIdentifier.size() - 3)
             lastbound = instanceIdentifier.size();
         int ampersand = instanceIdentifier.indexOf(QLatin1Char('&'), firstbound);
         if (ampersand != -1 && ampersand < lastbound)
             return QString();
-    } else if (instanceIdentifier.startsWith(QStringLiteral("FTDIBUS\\"))) {
+    } else if (instanceIdentifier.startsWith(QLatin1String("FTDIBUS\\"))) {
         firstbound = instanceIdentifier.lastIndexOf(QLatin1Char('+'));
         lastbound = instanceIdentifier.indexOf(QLatin1Char('\\'), firstbound);
         if (lastbound == -1)
@@ -304,7 +304,7 @@ QList<QSerialPortInfo> QSerialPortInfo::availablePorts()
         DWORD index = 0;
         while (::SetupDiEnumDeviceInfo(deviceInfoSet, index++, &deviceInfoData)) {
             const QString portName = devicePortName(deviceInfoSet, &deviceInfoData);
-            if (portName.isEmpty() || portName.contains(QStringLiteral("LPT")))
+            if (portName.isEmpty() || portName.contains(QLatin1String("LPT")))
                 continue;
 
             if (std::find_if(serialPortInfoList.begin(), serialPortInfoList.end(),
@@ -381,14 +381,14 @@ bool QSerialPortInfo::isValid() const
 
 QString QSerialPortInfoPrivate::portNameToSystemLocation(const QString &source)
 {
-    return source.startsWith(QStringLiteral("COM"))
-            ? (QStringLiteral("\\\\.\\") + source) : source;
+    return source.startsWith(QLatin1String("COM"))
+            ? (QLatin1String("\\\\.\\") + source) : source;
 }
 
 QString QSerialPortInfoPrivate::portNameFromSystemLocation(const QString &source)
 {
-    return (source.startsWith(QStringLiteral("\\\\.\\"))
-            || source.startsWith(QStringLiteral("//./")))
+    return (source.startsWith(QLatin1String("\\\\.\\"))
+            || source.startsWith(QLatin1String("//./")))
             ? source.mid(4) : source;
 }
 

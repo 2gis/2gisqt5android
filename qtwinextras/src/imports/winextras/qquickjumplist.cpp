@@ -1,8 +1,8 @@
 /****************************************************************************
  **
  ** Copyright (C) 2013 Ivan Vizir <define-true-false@yandex.com>
- ** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
- ** Contact: http://www.qt-project.org/legal
+ ** Copyright (C) 2015 The Qt Company Ltd.
+ ** Contact: http://www.qt.io/licensing/
  **
  ** This file is part of the QtWinExtras module of the Qt Toolkit.
  **
@@ -11,9 +11,9 @@
  ** Licensees holding valid commercial Qt licenses may use this file in
  ** accordance with the commercial license agreement provided with the
  ** Software or, alternatively, in accordance with the terms contained in
- ** a written agreement between you and Digia. For licensing terms and
- ** conditions see http://qt.digia.com/licensing. For further information
- ** use the contact form at http://qt.digia.com/contact-us.
+ ** a written agreement between you and The Qt Company. For licensing terms
+ ** and conditions see http://www.qt.io/terms-conditions. For further
+ ** information use the contact form at http://www.qt.io/contact-us.
  **
  ** GNU Lesser General Public License Usage
  ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -24,8 +24,8 @@
  ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
  ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
  **
- ** In addition, as a special exception, Digia gives you certain additional
- ** rights. These rights are described in the Digia Qt LGPL Exception
+ ** As a special exception, The Qt Company gives you certain additional
+ ** rights. These rights are described in The Qt Company LGPL Exception
  ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
  **
  ** $QT_END_LICENSE$
@@ -78,7 +78,7 @@ QQuickJumpListCategory *QQuickJumpList::recent() const
     if (!m_recent) {
         QQuickJumpList *that = const_cast<QQuickJumpList *>(this);
         that->m_recent = new QQuickJumpListCategory(that);
-        connect(m_recent, SIGNAL(visibilityChanged()), that, SLOT(rebuild()));
+        connect(m_recent, &QQuickJumpListCategory::visibilityChanged, that, &QQuickJumpList::rebuild);
         m_recent->setVisible(false);
     }
     return m_recent;
@@ -95,7 +95,7 @@ QQuickJumpListCategory *QQuickJumpList::frequent() const
     if (!m_frequent) {
         QQuickJumpList *that = const_cast<QQuickJumpList *>(this);
         that->m_frequent = new QQuickJumpListCategory(that);
-        connect(m_frequent, SIGNAL(visibilityChanged()), that, SLOT(rebuild()));
+        connect(m_frequent, &QQuickJumpListCategory::visibilityChanged, that, &QQuickJumpList::rebuild);
         m_frequent->setVisible(false);
     }
     return m_frequent;
@@ -111,7 +111,7 @@ QQuickJumpListCategory *QQuickJumpList::tasks() const
     if (!m_tasks) {
         QQuickJumpList *that = const_cast<QQuickJumpList *>(this);
         that->m_tasks = new QQuickJumpListCategory(that);
-        connect(m_tasks, SIGNAL(visibilityChanged()), that, SLOT(rebuild()));
+        connect(m_tasks, &QQuickJumpListCategory::visibilityChanged, that, &QQuickJumpList::rebuild);
     }
     return m_tasks;
 }
@@ -120,11 +120,11 @@ void QQuickJumpList::setTasks(QQuickJumpListCategory *tasks)
 {
     if (m_tasks != tasks) {
         if (m_tasks)
-            disconnect(m_tasks, SIGNAL(visibilityChanged()), this, SLOT(rebuild()));
+            disconnect(m_tasks, &QQuickJumpListCategory::visibilityChanged, this, &QQuickJumpList::rebuild);
         delete m_tasks;
         m_tasks = tasks;
         if (m_tasks)
-            connect(m_tasks, SIGNAL(visibilityChanged()), this, SLOT(rebuild()));
+            connect(m_tasks, &QQuickJumpListCategory::visibilityChanged, this, &QQuickJumpList::rebuild);
         emit tasksChanged();
     }
 }
@@ -177,7 +177,7 @@ void QQuickJumpList::data_append(QQmlListProperty<QObject> *property, QObject *o
 {
     if (QQuickJumpListCategory *category = qobject_cast<QQuickJumpListCategory *>(object)) {
         QQuickJumpList *jumpList = static_cast<QQuickJumpList *>(property->object);
-        connect(category, SIGNAL(visibilityChanged()), jumpList, SLOT(rebuild()));
+        connect(category, &QQuickJumpListCategory::visibilityChanged, jumpList, &QQuickJumpList::rebuild);
         jumpList->m_categories.append(category);
         emit jumpList->categoriesChanged();
     }

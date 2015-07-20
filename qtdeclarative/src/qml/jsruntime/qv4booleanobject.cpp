@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -38,18 +38,16 @@ using namespace QV4;
 DEFINE_OBJECT_VTABLE(BooleanCtor);
 DEFINE_OBJECT_VTABLE(BooleanObject);
 
-BooleanCtor::Data::Data(ExecutionContext *scope)
-    : FunctionObject::Data(scope, QStringLiteral("Boolean"))
+Heap::BooleanCtor::BooleanCtor(QV4::ExecutionContext *scope)
+    : Heap::FunctionObject(scope, QStringLiteral("Boolean"))
 {
-    setVTable(staticVTable());
 }
 
 ReturnedValue BooleanCtor::construct(Managed *m, CallData *callData)
 {
-    Scope scope(m->engine());
+    Scope scope(static_cast<BooleanCtor *>(m)->engine());
     bool n = callData->argc ? callData->args[0].toBoolean() : false;
-    ScopedValue b(scope, QV4::Primitive::fromBoolean(n));
-    return Encode(m->engine()->newBooleanObject(b));
+    return Encode(scope.engine->newBooleanObject(n));
 }
 
 ReturnedValue BooleanCtor::call(Managed *, CallData *callData)
@@ -72,14 +70,13 @@ void BooleanPrototype::init(ExecutionEngine *engine, Object *ctor)
 ReturnedValue BooleanPrototype::method_toString(CallContext *ctx)
 {
     bool result;
-    if (ctx->d()->callData->thisObject.isBoolean()) {
-        result = ctx->d()->callData->thisObject.booleanValue();
+    if (ctx->thisObject().isBoolean()) {
+        result = ctx->thisObject().booleanValue();
     } else {
-        Scope scope(ctx);
-        Scoped<BooleanObject> thisObject(scope, ctx->d()->callData->thisObject);
+        BooleanObject *thisObject = ctx->thisObject().as<BooleanObject>();
         if (!thisObject)
-            return ctx->throwTypeError();
-        result = thisObject->value().booleanValue();
+            return ctx->engine()->throwTypeError();
+        result = thisObject->value();
     }
 
     return Encode(ctx->d()->engine->newString(QLatin1String(result ? "true" : "false")));
@@ -87,13 +84,12 @@ ReturnedValue BooleanPrototype::method_toString(CallContext *ctx)
 
 ReturnedValue BooleanPrototype::method_valueOf(CallContext *ctx)
 {
-    if (ctx->d()->callData->thisObject.isBoolean())
-        return ctx->d()->callData->thisObject.asReturnedValue();
+    if (ctx->thisObject().isBoolean())
+        return ctx->thisObject().asReturnedValue();
 
-    Scope scope(ctx);
-    Scoped<BooleanObject> thisObject(scope, ctx->d()->callData->thisObject);
+    BooleanObject *thisObject = ctx->thisObject().as<BooleanObject>();
     if (!thisObject)
-        return ctx->throwTypeError();
+        return ctx->engine()->throwTypeError();
 
-    return thisObject->value().asReturnedValue();
+    return Encode(thisObject->value());
 }

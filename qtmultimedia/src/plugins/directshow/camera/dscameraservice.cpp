@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -40,6 +40,7 @@
 #include "dsvideorenderer.h"
 #include "dsvideodevicecontrol.h"
 #include "dsimagecapturecontrol.h"
+#include "dscameraviewfindersettingscontrol.h"
 
 QT_BEGIN_NAMESPACE
 
@@ -51,11 +52,13 @@ DSCameraService::DSCameraService(QObject *parent):
     m_control = new DSCameraControl(m_session);
     m_videoDevice = new DSVideoDeviceControl(m_session);
     m_imageCapture = new DSImageCaptureControl(m_session);
+    m_viewfinderSettings = new DSCameraViewfinderSettingsControl(m_session);
 }
 
 DSCameraService::~DSCameraService()
 {
     delete m_control;
+    delete m_viewfinderSettings;
     delete m_videoDevice;
     delete m_videoRenderer;
     delete m_imageCapture;
@@ -79,6 +82,9 @@ QMediaControl* DSCameraService::requestControl(const char *name)
 
     if (qstrcmp(name,QVideoDeviceSelectorControl_iid) == 0)
         return m_videoDevice;
+
+    if (qstrcmp(name, QCameraViewfinderSettingsControl2_iid) == 0)
+        return m_viewfinderSettings;
 
     return 0;
 }

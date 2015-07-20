@@ -29,31 +29,31 @@
 #ifndef HRTFDatabaseLoader_h
 #define HRTFDatabaseLoader_h
 
+#include "platform/WebThreadSupportingGC.h"
 #include "platform/audio/HRTFDatabase.h"
-#include "public/platform/WebThread.h"
+#include "platform/heap/Handle.h"
 #include "wtf/HashMap.h"
-#include "wtf/PassRefPtr.h"
-#include "wtf/RefCounted.h"
-#include "wtf/RefPtr.h"
 #include "wtf/ThreadingPrimitives.h"
 
-namespace WebCore {
+namespace blink {
+
+class TaskSynchronizer;
 
 // HRTFDatabaseLoader will asynchronously load the default HRTFDatabase in a new thread.
 
-class PLATFORM_EXPORT HRTFDatabaseLoader : public RefCounted<HRTFDatabaseLoader> {
+class PLATFORM_EXPORT HRTFDatabaseLoader final : public GarbageCollectedFinalized<HRTFDatabaseLoader> {
 public:
     // Lazily creates a HRTFDatabaseLoader (if not already created) for the given sample-rate
     // and starts loading asynchronously (when created the first time).
     // Returns the HRTFDatabaseLoader.
     // Must be called from the main thread.
-    static PassRefPtr<HRTFDatabaseLoader> createAndLoadAsynchronouslyIfNecessary(float sampleRate);
+    static HRTFDatabaseLoader* createAndLoadAsynchronouslyIfNecessary(float sampleRate);
 
     // Both constructor and destructor must be called from the main thread.
     ~HRTFDatabaseLoader();
 
     // Returns true once the default database has been completely loaded.
-    bool isLoaded() const;
+    bool isLoaded();
 
     // waitForLoaderThreadCompletion() may be called more than once and is thread-safe.
     void waitForLoaderThreadCompletion();
@@ -62,8 +62,7 @@ public:
 
     float databaseSampleRate() const { return m_databaseSampleRate; }
 
-    // Called in asynchronous loading thread.
-    void load();
+    void trace(Visitor*) { }
 
 private:
     // Both constructor and destructor must be called from the main thread.
@@ -73,21 +72,19 @@ private:
     // This must be called from the main thread.
     void loadAsynchronously();
 
-    // Map from sample-rate to loader.
-    typedef HashMap<double, HRTFDatabaseLoader*> LoaderMap;
+    // Called in asynchronous loading thread.
+    void loadTask();
+    void cleanupTask(TaskSynchronizer*);
 
-    // Keeps track of loaders on a per-sample-rate basis.
-    static LoaderMap* s_loaderMap; // singleton
-
+    // Holding a m_lock is required when accessing m_hrtfDatabase since we access it from multiple threads.
+    Mutex m_lock;
     OwnPtr<HRTFDatabase> m_hrtfDatabase;
 
-    // Holding a m_threadLock is required when accessing m_databaseLoaderThread since we access it from multiple threads.
-    Mutex m_threadLock;
-    OwnPtr<blink::WebThread> m_databaseLoaderThread;
+    OwnPtr<WebThreadSupportingGC> m_thread;
 
     float m_databaseSampleRate;
 };
 
-} // namespace WebCore
+} // namespace blink
 
 #endif // HRTFDatabaseLoader_h

@@ -1,38 +1,34 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Quick Controls module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:BSD$
-** You may use this file under the terms of the BSD license as follows:
+** $QT_BEGIN_LICENSE:LGPL3$
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
-** "Redistribution and use in source and binary forms, with or without
-** modification, are permitted provided that the following conditions are
-** met:
-**   * Redistributions of source code must retain the above copyright
-**     notice, this list of conditions and the following disclaimer.
-**   * Redistributions in binary form must reproduce the above copyright
-**     notice, this list of conditions and the following disclaimer in
-**     the documentation and/or other materials provided with the
-**     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
-**     from this software without specific prior written permission.
+** GNU Lesser General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU Lesser
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPLv3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl.html.
 **
-**
-** THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-** "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-** LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
-** A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
-** OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
-** SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
-** LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
-** DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
-** THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-** (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-** OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE."
+** GNU General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU
+** General Public License version 2.0 or later as published by the Free
+** Software Foundation and appearing in the file LICENSE.GPL included in
+** the packaging of this file. Please review the following information to
+** ensure the GNU General Public License version 2.0 requirements will be
+** met: http://www.gnu.org/licenses/gpl-2.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -103,7 +99,7 @@ import QtQuick.Controls.Private 1.0
 
 
     You can create a custom appearance for a ComboBox by
-    assigning a \l {QtQuick.Controls.Styles::ComboBoxStyle}{ComboBoxStyle}.
+    assigning a \l {ComboBoxStyle}.
 */
 
 Control {
@@ -170,7 +166,8 @@ Control {
     */
     readonly property alias count: popupItems.count
 
-    /*! Returns the text for a given \a index.
+    /*! \qmlmethod string ComboBox::textAt(int index)
+        Returns the text for a given \a index.
         If an invalid index is provided, \c null is returned
         \since QtQuick.Controls 1.1
     */
@@ -180,7 +177,8 @@ Control {
         return popupItems.objectAt(index).text;
     }
 
-    /*! Finds and returns the index of a given \a text
+    /*! \qmlmethod int ComboBox::find(string text)
+        Finds and returns the index of a given \a text
         If no match is found, \c -1 is returned. The search is case sensitive.
         \since QtQuick.Controls 1.1
     */
@@ -198,8 +196,8 @@ Control {
         an intermediate state. The accepted signal will only be sent
         if the text is in an acceptable state when enter is pressed.
 
-        Currently supported validators are \l{QtQuick::}{IntValidator},
-        \l{QtQuick::}{DoubleValidator}, and \l{QtQuick::}{RegExpValidator}. An
+        Currently supported validators are \l[QtQuick]{IntValidator},
+        \l[QtQuick]{DoubleValidator}, and \l[QtQuick]{RegExpValidator}. An
         example of using validators is shown below, which allows input of
         integers between 11 and 31 into the text field:
 
@@ -302,7 +300,7 @@ Control {
     signal activated(int index)
 
     /*!
-        \qmlmethod ComboBox::selectAll()
+        \qmlmethod void ComboBox::selectAll()
         \since QtQuick.Controls 1.1
 
         Causes all \l editText to be selected.
@@ -336,7 +334,7 @@ Control {
     /*! \internal */
     property var __popup: popup
 
-    style: Qt.createComponent(Settings.style + "/ComboBoxStyle.qml", comboBox)
+    style: Settings.styleComponent(Settings.style, "ComboBoxStyle.qml", comboBox)
 
     activeFocusOnTab: true
 
@@ -349,7 +347,7 @@ Control {
         property bool overridePressed: false
         readonly property bool effectivePressed: (pressed || overridePressed) && containsMouse
         anchors.fill: parent
-        hoverEnabled: true
+        hoverEnabled: Settings.hoverEnabled
         onPressed: {
             if (comboBox.activeFocusOnPress)
                 forceActiveFocus()
@@ -628,6 +626,7 @@ Control {
         function toggleShow() {
             if (popup.__popupVisible) {
                 popup.__dismissMenu()
+                popup.__destroyAllMenuPopups()
             } else {
                 if (items[__selectedIndex])
                     items[__selectedIndex].checked = true
@@ -653,7 +652,10 @@ Control {
     // The key bindings below will only be in use when popup is
     // not visible. Otherwise, native popup key handling will take place:
     Keys.onSpacePressed: {
-        popup.toggleShow()
+        if (!editable)
+            popup.toggleShow()
+        else
+            event.accepted = false
     }
 
     Keys.onUpPressed: __selectPrevItem()

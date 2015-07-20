@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the examples of the Qt Toolkit.
 **
@@ -17,8 +17,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -56,12 +56,15 @@ MusicPlayer::MusicPlayer(QWidget *parent) : QWidget(parent),
     createTaskbar();
     createThumbnailToolBar();
 
-    connect(&mediaPlayer, SIGNAL(positionChanged(qint64)), this, SLOT(updatePosition(qint64)));
-    connect(&mediaPlayer, SIGNAL(durationChanged(qint64)), this, SLOT(updateDuration(qint64)));
-    connect(&mediaPlayer, SIGNAL(metaDataAvailableChanged(bool)), this, SLOT(updateInfo()));
-    connect(&mediaPlayer, SIGNAL(error(QMediaPlayer::Error)), this, SLOT(handleError()));
-    connect(&mediaPlayer, SIGNAL(stateChanged(QMediaPlayer::State)),
-            this, SLOT(updateState(QMediaPlayer::State)));
+    connect(&mediaPlayer, &QMediaPlayer::positionChanged, this, &MusicPlayer::updatePosition);
+    connect(&mediaPlayer, &QMediaPlayer::durationChanged, this, &MusicPlayer::updateDuration);
+    connect(&mediaPlayer, &QMediaObject::metaDataAvailableChanged, this, &MusicPlayer::updateInfo);
+
+    typedef void(QMediaPlayer::*ErrorSignal)(QMediaPlayer::Error);
+    connect(&mediaPlayer, static_cast<ErrorSignal>(&QMediaPlayer::error),
+            this, &MusicPlayer::handleError);
+    connect(&mediaPlayer, &QMediaPlayer::stateChanged,
+            this, &MusicPlayer::updateState);
 
     stylize();
 }
@@ -247,23 +250,23 @@ void MusicPlayer::createWidgets()
     playButton->setEnabled(false);
     playButton->setToolTip(tr("Play"));
     playButton->setIcon(style()->standardIcon(QStyle::SP_MediaPlay));
-    connect(playButton, SIGNAL(clicked()), this, SLOT(togglePlayback()));
+    connect(playButton, &QAbstractButton::clicked, this, &MusicPlayer::togglePlayback);
 
     QAbstractButton *openButton = new QToolButton(this);
     openButton->setText(tr("..."));
     openButton->setToolTip(tr("Open a file..."));
     openButton->setFixedSize(playButton->sizeHint());
-    connect(openButton, SIGNAL(clicked()), this, SLOT(openFile()));
+    connect(openButton, &QAbstractButton::clicked, this, &MusicPlayer::openFile);
 
     volumeButton = new VolumeButton(this);
     volumeButton->setToolTip(tr("Adjust volume"));
     volumeButton->setVolume(mediaPlayer.volume());
-    connect(volumeButton, SIGNAL(volumeChanged(int)), &mediaPlayer, SLOT(setVolume(int)));
+    connect(volumeButton, &VolumeButton::volumeChanged, &mediaPlayer, &QMediaPlayer::setVolume);
 
     positionSlider = new QSlider(Qt::Horizontal, this);
     positionSlider->setEnabled(false);
     positionSlider->setToolTip(tr("Seek"));
-    connect(positionSlider, SIGNAL(valueChanged(int)), this, SLOT(setPosition(int)));
+    connect(positionSlider, &QAbstractSlider::valueChanged, this, &MusicPlayer::setPosition);
 
     infoLabel = new QLabel(this);
     positionLabel = new QLabel(tr("00:00"), this);
@@ -285,25 +288,25 @@ void MusicPlayer::createWidgets()
 void MusicPlayer::createShortcuts()
 {
     QShortcut *quitShortcut = new QShortcut(QKeySequence::Quit, this);
-    connect(quitShortcut, SIGNAL(activated()), qApp, SLOT(quit()));
+    connect(quitShortcut, &QShortcut::activated, QCoreApplication::quit);
 
     QShortcut *openShortcut = new QShortcut(QKeySequence::Open, this);
-    connect(openShortcut, SIGNAL(activated()), this, SLOT(openFile()));
+    connect(openShortcut, &QShortcut::activated, this, &MusicPlayer::openFile);
 
     QShortcut *toggleShortcut = new QShortcut(Qt::Key_Space, this);
-    connect(toggleShortcut, SIGNAL(activated()), this, SLOT(togglePlayback()));
+    connect(toggleShortcut, &QShortcut::activated, this, &MusicPlayer::togglePlayback);
 
     QShortcut *forwardShortcut = new QShortcut(Qt::Key_Right, this);
-    connect(forwardShortcut, SIGNAL(activated()), this, SLOT(seekForward()));
+    connect(forwardShortcut, &QShortcut::activated, this, &MusicPlayer::seekForward);
 
     QShortcut *backwardShortcut = new QShortcut(Qt::Key_Left, this);
-    connect(backwardShortcut, SIGNAL(activated()), this, SLOT(seekBackward()));
+    connect(backwardShortcut, &QShortcut::activated, this, &MusicPlayer::seekBackward);
 
     QShortcut *increaseShortcut = new QShortcut(Qt::Key_Up, this);
-    connect(increaseShortcut, SIGNAL(activated()), volumeButton, SLOT(increaseVolume()));
+    connect(increaseShortcut, &QShortcut::activated, volumeButton, &VolumeButton::increaseVolume);
 
     QShortcut *decreaseShortcut = new QShortcut(Qt::Key_Down, this);
-    connect(decreaseShortcut, SIGNAL(activated()), volumeButton, SLOT(descreaseVolume()));
+    connect(decreaseShortcut, &QShortcut::activated, volumeButton, &VolumeButton::descreaseVolume);
 }
 
 //! [4]
@@ -321,10 +324,10 @@ void MusicPlayer::createTaskbar()
     taskbarButton->setWindow(windowHandle());
 
     taskbarProgress = taskbarButton->progress();
-    connect(positionSlider, SIGNAL(valueChanged(int)), taskbarProgress, SLOT(setValue(int)));
-    connect(positionSlider, SIGNAL(rangeChanged(int,int)), taskbarProgress, SLOT(setRange(int,int)));
+    connect(positionSlider, &QAbstractSlider::valueChanged, taskbarProgress, &QWinTaskbarProgress::setValue);
+    connect(positionSlider, &QAbstractSlider::rangeChanged, taskbarProgress, &QWinTaskbarProgress::setRange);
 
-    connect(&mediaPlayer, SIGNAL(stateChanged(QMediaPlayer::State)), this, SLOT(updateTaskbar()));
+    connect(&mediaPlayer, &QMediaPlayer::stateChanged, this, &MusicPlayer::updateTaskbar);
 }
 //! [5]
 
@@ -338,26 +341,26 @@ void MusicPlayer::createThumbnailToolBar()
     playToolButton->setEnabled(false);
     playToolButton->setToolTip(tr("Play"));
     playToolButton->setIcon(style()->standardIcon(QStyle::SP_MediaPlay));
-    connect(playToolButton, SIGNAL(clicked()), this, SLOT(togglePlayback()));
+    connect(playToolButton, &QWinThumbnailToolButton::clicked, this, &MusicPlayer::togglePlayback);
 
     forwardToolButton = new QWinThumbnailToolButton(thumbnailToolBar);
     forwardToolButton->setEnabled(false);
     forwardToolButton->setToolTip(tr("Fast forward"));
     forwardToolButton->setIcon(style()->standardIcon(QStyle::SP_MediaSeekForward));
-    connect(forwardToolButton, SIGNAL(clicked()), this, SLOT(seekForward()));
+    connect(forwardToolButton, &QWinThumbnailToolButton::clicked, this, &MusicPlayer::seekForward);
 
     backwardToolButton = new QWinThumbnailToolButton(thumbnailToolBar);
     backwardToolButton->setEnabled(false);
     backwardToolButton->setToolTip(tr("Rewind"));
     backwardToolButton->setIcon(style()->standardIcon(QStyle::SP_MediaSeekBackward));
-    connect(backwardToolButton, SIGNAL(clicked()), this, SLOT(seekBackward()));
+    connect(backwardToolButton, &QWinThumbnailToolButton::clicked, this, &MusicPlayer::seekBackward);
 
     thumbnailToolBar->addButton(backwardToolButton);
     thumbnailToolBar->addButton(playToolButton);
     thumbnailToolBar->addButton(forwardToolButton);
 
-    connect(&mediaPlayer, SIGNAL(positionChanged(qint64)), this, SLOT(updateThumbnailToolBar()));
-    connect(&mediaPlayer, SIGNAL(durationChanged(qint64)), this, SLOT(updateThumbnailToolBar()));
-    connect(&mediaPlayer, SIGNAL(stateChanged(QMediaPlayer::State)), this, SLOT(updateThumbnailToolBar()));
+    connect(&mediaPlayer, &QMediaPlayer::positionChanged, this, &MusicPlayer::updateThumbnailToolBar);
+    connect(&mediaPlayer, &QMediaPlayer::durationChanged, this, &MusicPlayer::updateThumbnailToolBar);
+    connect(&mediaPlayer, &QMediaPlayer::stateChanged, this, &MusicPlayer::updateThumbnailToolBar);
 }
 //! [6]

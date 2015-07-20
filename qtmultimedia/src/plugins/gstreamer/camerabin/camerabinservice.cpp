@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -55,11 +55,12 @@
 #include "camerabincapturebufferformat.h"
 #include "camerabincapturedestination.h"
 #include "camerabinviewfindersettings.h"
+#include "camerabinviewfindersettings2.h"
 #include <private/qgstreamerbushelper_p.h>
+#include <private/qgstutils_p.h>
 
 #include <private/qgstreameraudioinputselector_p.h>
 #include <private/qgstreamervideoinputdevicecontrol_p.h>
-
 
 #if defined(HAVE_WIDGETS)
 #include <private/qgstreamervideowidget_p.h>
@@ -84,7 +85,9 @@ QT_BEGIN_NAMESPACE
 
 CameraBinService::CameraBinService(GstElementFactory *sourceFactory, QObject *parent):
     QMediaService(parent),
-    m_cameraInfoControl(0)
+    m_cameraInfoControl(0),
+    m_viewfinderSettingsControl(0),
+    m_viewfinderSettingsControl2(0)
 {
     m_captureSession = 0;
     m_metaDataControl = 0;
@@ -121,9 +124,22 @@ CameraBinService::CameraBinService(GstElementFactory *sourceFactory, QObject *pa
 #else
     m_videoWindow = new QGstreamerVideoWindow(this);
 #endif
-
+    // If the GStreamer sink element is not available (xvimagesink), don't provide
+    // the video window control since it won't work anyway.
+    if (!m_videoWindow->videoSink()) {
+        delete m_videoWindow;
+        m_videoWindow = 0;
+    }
 #if defined(HAVE_WIDGETS)
     m_videoWidgetControl = new QGstreamerVideoWidgetControl(this);
+
+    // If the GStreamer sink element is not available (xvimagesink or ximagesink), don't provide
+    // the video widget control since it won't work anyway.
+    // QVideoWidget will fall back to QVideoRendererControl in that case.
+    if (!m_videoWidgetControl->videoSink()) {
+        delete m_videoWidgetControl;
+        m_videoWidgetControl = 0;
+    }
 #endif
 
     m_audioInputSelector = new QGstreamerAudioInputSelector(this);
@@ -149,8 +165,6 @@ QMediaControl *CameraBinService::requestControl(const char *name)
 {
     if (!m_captureSession)
         return 0;
-
-    //qDebug() << "Request control" << name;
 
     if (!m_videoOutput) {
         if (qstrcmp(name, QVideoRendererControl_iid) == 0) {
@@ -227,8 +241,17 @@ QMediaControl *CameraBinService::requestControl(const char *name)
     if (qstrcmp(name, QCameraCaptureBufferFormatControl_iid) == 0)
         return m_captureSession->captureBufferFormatControl();
 
-    if (qstrcmp(name, QCameraViewfinderSettingsControl_iid) == 0)
-        return m_captureSession->viewfinderSettingsControl();
+    if (qstrcmp(name, QCameraViewfinderSettingsControl_iid) == 0) {
+        if (!m_viewfinderSettingsControl)
+            m_viewfinderSettingsControl = new CameraBinViewfinderSettings(m_captureSession);
+        return m_viewfinderSettingsControl;
+    }
+
+    if (qstrcmp(name, QCameraViewfinderSettingsControl2_iid) == 0) {
+        if (!m_viewfinderSettingsControl2)
+            m_viewfinderSettingsControl2 = new CameraBinViewfinderSettings2(m_captureSession);
+        return m_viewfinderSettingsControl2;
+    }
 
     if (qstrcmp(name, QCameraInfoControl_iid) == 0) {
         if (!m_cameraInfoControl)
@@ -249,7 +272,7 @@ void CameraBinService::releaseControl(QMediaControl *control)
 
 bool CameraBinService::isCameraBinAvailable()
 {
-    GstElementFactory *factory = gst_element_factory_find("camerabin2");
+    GstElementFactory *factory = gst_element_factory_find(QT_GSTREAMER_CAMERABIN_ELEMENT_NAME);
     if (factory) {
         gst_object_unref(GST_OBJECT(factory));
         return true;

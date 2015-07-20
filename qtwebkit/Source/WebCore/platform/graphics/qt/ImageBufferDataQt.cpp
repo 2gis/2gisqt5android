@@ -3,7 +3,7 @@
  * Copyright (C) 2008 Holger Hans Peter Freyther
  * Copyright (C) 2009 Dirk Schulze <krit@webkit.org>
  * Copyright (C) 2010 Torch Mobile (Beijing) Co. Ltd. All rights reserved.
- * Copyright (C) 2014 Digia Plc. and/or its subsidiary(-ies)
+ * Copyright (C) 2015 The Qt Company Ltd
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -202,6 +202,7 @@ void ImageBufferDataPrivateAccelerated::draw(GraphicsContext* destContext, Color
                                              const FloatRect& srcRect, CompositeOperator op, BlendMode blendMode,
                                              bool useLowQualityScale, bool /*ownContext*/)
 {
+#if !defined(QT_NO_DYNAMIC_CAST)
     if (destContext->isAcceleratedContext()) {
         invalidateState();
 
@@ -240,6 +241,7 @@ void ImageBufferDataPrivateAccelerated::draw(GraphicsContext* destContext, Color
             return;
         }
     }
+#endif
     RefPtr<Image> image = StillImage::create(QPixmap::fromImage(toQImage()));
     destContext->drawImage(image.get(), styleColorSpace, destRect, srcRect, op, blendMode,
                            DoNotRespectImageOrientation, useLowQualityScale);

@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Compositor.
 **
@@ -17,8 +17,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -48,6 +48,7 @@
 #include "qwlsubsurface_p.h"
 #include "qwlsurfacebuffer_p.h"
 #include "qwaylandsurfaceview.h"
+#include "qwaylandoutput.h"
 
 #include <QtCore/QDebug>
 #include <QTouchEvent>
@@ -104,16 +105,23 @@ public:
     bool canSend;
 };
 
+static QRegion infiniteRegion() {
+    return QRegion(QRect(QPoint(std::numeric_limits<int>::min(), std::numeric_limits<int>::min()),
+                         QPoint(std::numeric_limits<int>::max(), std::numeric_limits<int>::max())));
+}
+
 Surface::Surface(struct wl_client *client, uint32_t id, int version, QWaylandCompositor *compositor, QWaylandSurface *surface)
     : QtWaylandServer::wl_surface(client, id, version)
     , m_compositor(compositor->handle())
     , m_waylandSurface(surface)
+    , m_mainOutput(0)
     , m_buffer(0)
     , m_surfaceMapped(false)
     , m_attacher(0)
     , m_extendedSurface(0)
     , m_subSurface(0)
     , m_inputPanelSurface(0)
+    , m_inputRegion(infiniteRegion())
     , m_transientParent(0)
     , m_transientInactive(false)
     , m_transientOffset(QPointF(0, 0))
@@ -124,6 +132,7 @@ Surface::Surface(struct wl_client *client, uint32_t id, int version, QWaylandCom
 {
     m_pending.buffer = 0;
     m_pending.newlyAttached = false;
+    m_pending.inputRegion = infiniteRegion();
 }
 
 Surface::~Surface()
@@ -190,7 +199,6 @@ void Surface::setSize(const QSize &size)
 {
     if (size != m_size) {
         m_opaqueRegion = QRegion();
-        m_inputRegion = QRegion(QRect(QPoint(), size));
         m_size = size;
         m_waylandSurface->sizeChanged();
     }
@@ -270,6 +278,68 @@ Compositor *Surface::compositor() const
     return m_compositor;
 }
 
+Output *Surface::mainOutput() const
+{
+    if (!m_mainOutput)
+        return m_compositor->primaryOutput()->handle();
+    return m_mainOutput;
+}
+
+void Surface::setMainOutput(Output *output)
+{
+    m_mainOutput = output;
+}
+
+QList<Output *> Surface::outputs() const
+{
+    return m_outputs;
+}
+
+void Surface::addToOutput(Output *output)
+{
+    if (!output)
+        return;
+
+    if (!m_mainOutput)
+        m_mainOutput = output;
+
+    if (m_outputs.contains(output))
+        return;
+
+    m_outputs.append(output);
+
+    QWaylandSurfaceEnterEvent event(output->waylandOutput());
+    QCoreApplication::sendEvent(waylandSurface(), &event);
+
+    // Send surface enter event
+    Q_FOREACH (Resource *resource, resourceMap().values()) {
+        QList<Output::Resource *> outputs = output->resourceMap().values();
+        for (int i = 0; i < outputs.size(); i++)
+            send_enter(resource->handle, outputs.at(i)->handle);
+    }
+}
+
+void Surface::removeFromOutput(Output *output)
+{
+    if (!output)
+        return;
+
+    m_outputs.removeOne(output);
+
+    if (m_outputs.size() == 0)
+        m_mainOutput = m_compositor->primaryOutput()->handle();
+
+    QWaylandSurfaceLeaveEvent event(output->waylandOutput());
+    QCoreApplication::sendEvent(waylandSurface(), &event);
+
+    // Send surface leave event
+    Q_FOREACH (Resource *resource, resourceMap().values()) {
+        QList<Output::Resource *> outputs = output->resourceMap().values();
+        for (int i = 0; i < outputs.size(); i++)
+            send_leave(resource->handle, outputs.at(i)->handle);
+    }
+}
+
 /*!
  * Sets the backbuffer for this surface. The back buffer is not yet on
  * screen and will become live during the next swapBuffers().
@@ -288,11 +358,7 @@ void Surface::setBackBuffer(SurfaceBuffer *buffer)
         m_damage = m_damage.intersected(QRect(QPoint(), m_size));
         emit m_waylandSurface->damaged(m_damage);
     } else {
-        InputDevice *inputDevice = m_compositor->defaultInputDevice();
-        if (inputDevice->keyboardFocus() == this)
-            inputDevice->setKeyboardFocus(0);
-        if (inputDevice->mouseFocus() && inputDevice->mouseFocus()->surface() == waylandSurface())
-            inputDevice->setMouseFocus(0, QPointF(), QPointF());
+        m_compositor->resetInputDevice(this);
     }
     m_damage = QRegion();
 }
@@ -379,7 +445,11 @@ void Surface::surface_set_opaque_region(Resource *, struct wl_resource *region)
 
 void Surface::surface_set_input_region(Resource *, struct wl_resource *region)
 {
-    m_inputRegion = region ? Region::fromResource(region)->region() : QRegion(QRect(QPoint(), size()));
+    if (region) {
+        m_pending.inputRegion = Region::fromResource(region)->region();
+    } else {
+        m_pending.inputRegion = infiniteRegion();
+    }
 }
 
 void Surface::surface_commit(Resource *)
@@ -405,6 +475,8 @@ void Surface::surface_commit(Resource *)
 
     m_frameCallbacks << m_pendingFrameCallbacks;
     m_pendingFrameCallbacks.clear();
+
+    m_inputRegion = m_pending.inputRegion.intersected(QRect(QPoint(), m_size));
 
     emit m_waylandSurface->redraw();
 }

@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQuick module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -39,6 +39,7 @@
 #include <QtGui/QGuiApplication>
 #include <QtGui/qdesktopservices.h>
 #include <QtGui/qfontdatabase.h>
+#include <QtGui/qstylehints.h>
 
 #include <private/qv4engine_p.h>
 #include <private/qv4object_p.h>
@@ -95,6 +96,11 @@ public:
     QVariant fromHslF(double h, double s, double l, double a)
     {
         return QVariant(QColor::fromHslF(h, s, l, a));
+    }
+
+    QVariant fromHsvF(double h, double s, double v, double a)
+    {
+        return QVariant(QColor::fromHsvF(h, s, v, a));
     }
 
     QVariant lighter(const QVariant &var, qreal factor)
@@ -261,13 +267,11 @@ public:
         return QMatrix4x4();
     }
 
-    static QFont fontFromObject(QQmlV4Handle object, QV8Engine *e, bool *ok)
+    static QFont fontFromObject(QQmlV4Handle object, QV4::ExecutionEngine *v4, bool *ok)
     {
-        Q_UNUSED(e);
-
-        if (ok) *ok = false;
+        if (ok)
+            *ok = false;
         QFont retn;
-        QV4::ExecutionEngine *v4 = QV8Engine::getV4(e);
         QV4::Scope scope(v4);
         QV4::ScopedObject obj(scope, object);
         if (!obj) {
@@ -278,17 +282,17 @@ public:
 
         QV4::ScopedString s(scope);
 
-        QV4::ScopedValue vbold(scope, obj->get((s = v4->newString(QStringLiteral("bold"))).getPointer()));
-        QV4::ScopedValue vcap(scope, obj->get((s = v4->newString(QStringLiteral("capitalization"))).getPointer()));
-        QV4::ScopedValue vfam(scope, obj->get((s = v4->newString(QStringLiteral("family"))).getPointer()));
-        QV4::ScopedValue vital(scope, obj->get((s = v4->newString(QStringLiteral("italic"))).getPointer()));
-        QV4::ScopedValue vlspac(scope, obj->get((s = v4->newString(QStringLiteral("letterSpacing"))).getPointer()));
-        QV4::ScopedValue vpixsz(scope, obj->get((s = v4->newString(QStringLiteral("pixelSize"))).getPointer()));
-        QV4::ScopedValue vpntsz(scope, obj->get((s = v4->newString(QStringLiteral("pointSize"))).getPointer()));
-        QV4::ScopedValue vstrk(scope, obj->get((s = v4->newString(QStringLiteral("strikeout"))).getPointer()));
-        QV4::ScopedValue vundl(scope, obj->get((s = v4->newString(QStringLiteral("underline"))).getPointer()));
-        QV4::ScopedValue vweight(scope, obj->get((s = v4->newString(QStringLiteral("weight"))).getPointer()));
-        QV4::ScopedValue vwspac(scope, obj->get((s = v4->newString(QStringLiteral("wordSpacing"))).getPointer()));
+        QV4::ScopedValue vbold(scope, obj->get((s = v4->newString(QStringLiteral("bold")))));
+        QV4::ScopedValue vcap(scope, obj->get((s = v4->newString(QStringLiteral("capitalization")))));
+        QV4::ScopedValue vfam(scope, obj->get((s = v4->newString(QStringLiteral("family")))));
+        QV4::ScopedValue vital(scope, obj->get((s = v4->newString(QStringLiteral("italic")))));
+        QV4::ScopedValue vlspac(scope, obj->get((s = v4->newString(QStringLiteral("letterSpacing")))));
+        QV4::ScopedValue vpixsz(scope, obj->get((s = v4->newString(QStringLiteral("pixelSize")))));
+        QV4::ScopedValue vpntsz(scope, obj->get((s = v4->newString(QStringLiteral("pointSize")))));
+        QV4::ScopedValue vstrk(scope, obj->get((s = v4->newString(QStringLiteral("strikeout")))));
+        QV4::ScopedValue vundl(scope, obj->get((s = v4->newString(QStringLiteral("underline")))));
+        QV4::ScopedValue vweight(scope, obj->get((s = v4->newString(QStringLiteral("weight")))));
+        QV4::ScopedValue vwspac(scope, obj->get((s = v4->newString(QStringLiteral("wordSpacing")))));
 
         // pull out the values, set ok to true if at least one valid field is given.
         if (vbold->isBoolean()) {
@@ -339,10 +343,10 @@ public:
         return retn;
     }
 
-    static QMatrix4x4 matrix4x4FromObject(QQmlV4Handle object, QV8Engine *e, bool *ok)
+    static QMatrix4x4 matrix4x4FromObject(QQmlV4Handle object, QV4::ExecutionEngine *v4, bool *ok)
     {
-        if (ok) *ok = false;
-        QV4::ExecutionEngine *v4 = QV8Engine::getV4(e);
+        if (ok)
+            *ok = false;
         QV4::Scope scope(v4);
         QV4::ScopedArrayObject array(scope, object);
         if (!array)
@@ -364,35 +368,28 @@ public:
         return QMatrix4x4(matVals);
     }
 
-    template<typename T>
-    bool typedCreate(QQmlValueType *&v)
-    {
-        v = new T;
-        return true;
-    }
-
-    bool create(int type, QQmlValueType *&v)
+    const QMetaObject *getMetaObjectForMetaType(int type)
     {
         switch (type) {
         case QMetaType::QColor:
-            return typedCreate<QQuickColorValueType>(v);
+            return &QQuickColorValueType::staticMetaObject;
         case QMetaType::QFont:
-            return typedCreate<QQuickFontValueType>(v);
+            return &QQuickFontValueType::staticMetaObject;
         case QMetaType::QVector2D:
-            return typedCreate<QQuickVector2DValueType>(v);
+            return &QQuickVector2DValueType::staticMetaObject;
         case QMetaType::QVector3D:
-            return typedCreate<QQuickVector3DValueType>(v);
+            return &QQuickVector3DValueType::staticMetaObject;
         case QMetaType::QVector4D:
-            return typedCreate<QQuickVector4DValueType>(v);
+            return &QQuickVector4DValueType::staticMetaObject;
         case QMetaType::QQuaternion:
-            return typedCreate<QQuickQuaternionValueType>(v);
+            return &QQuickQuaternionValueType::staticMetaObject;
         case QMetaType::QMatrix4x4:
-            return typedCreate<QQuickMatrix4x4ValueType>(v);
+            return &QQuickMatrix4x4ValueType::staticMetaObject;
         default:
             break;
         }
 
-        return false;
+        return 0;
     }
 
     template<typename T>
@@ -711,9 +708,8 @@ public:
         return false;
     }
 
-    bool variantFromJsObject(int type, QQmlV4Handle object, QV8Engine *e, QVariant *v)
+    bool variantFromJsObject(int type, QQmlV4Handle object, QV4::ExecutionEngine *v4, QVariant *v)
     {
-        QV4::ExecutionEngine *v4 = QV8Engine::getV4(e);
         QV4::Scope scope(v4);
 #ifndef QT_NO_DEBUG
         QV4::ScopedObject obj(scope, object);
@@ -722,10 +718,10 @@ public:
         bool ok = false;
         switch (type) {
         case QMetaType::QFont:
-            *v = QVariant::fromValue(fontFromObject(object, e, &ok));
+            *v = QVariant::fromValue(fontFromObject(object, v4, &ok));
             break;
         case QMetaType::QMatrix4x4:
-            *v = QVariant::fromValue(matrix4x4FromObject(object, e, &ok));
+            *v = QVariant::fromValue(matrix4x4FromObject(object, v4, &ok));
         default: break;
         }
 
@@ -936,9 +932,18 @@ public:
 #ifndef QT_NO_IM
     QInputMethod *inputMethod()
     {
-        return qGuiApp->inputMethod();
+        QInputMethod *im = qGuiApp->inputMethod();
+        QQmlEngine::setObjectOwnership(im, QQmlEngine::CppOwnership);
+        return im;
     }
 #endif
+
+    QStyleHints *styleHints()
+    {
+        QStyleHints *sh = qGuiApp->styleHints();
+        QQmlEngine::setObjectOwnership(sh, QQmlEngine::CppOwnership);
+        return sh;
+    }
 
     QStringList fontFamilies()
     {

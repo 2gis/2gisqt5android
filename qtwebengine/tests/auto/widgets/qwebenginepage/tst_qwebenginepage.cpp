@@ -107,11 +107,11 @@ private Q_SLOTS:
     void contextMenuCopy();
     void contextMenuPopulatedOnce();
     void acceptNavigationRequest();
+    void acceptNavigationRequestNavigationType();
     void geolocationRequestJS();
     void loadFinished();
     void actionStates();
     void popupFormSubmission();
-    void acceptNavigationRequestWithNewWindow();
     void userStyleSheet();
     void userStyleSheetFromLocalFileUrl();
     void userStyleSheetFromQrcUrl();
@@ -133,8 +133,6 @@ private Q_SLOTS:
     void textEditing();
     void backActionUpdate();
     void frameAt();
-    void requestCache();
-    void loadCachedPage();
     void protectBindingsRuntimeObjectsFromCollector();
     void localURLSchemes();
     void testOptionalJSObjects();
@@ -240,7 +238,6 @@ void tst_QWebEnginePage::cleanupTestCase()
     cleanupFiles(); // Be nice
 }
 
-#if defined(QWEBENGINEPAGE_ACCEPTNAVIGATIONREQUEST)
 class NavigationRequestOverride : public QWebEnginePage
 {
 public:
@@ -248,21 +245,18 @@ public:
 
     bool m_acceptNavigationRequest;
 protected:
-    virtual bool acceptNavigationRequest(QWebEngineFrame* frame, const QNetworkRequest &request, QWebEnginePage::NavigationType type) {
-        Q_UNUSED(frame);
-        Q_UNUSED(request);
+    virtual bool acceptNavigationRequest(const QUrl &url, NavigationType type, bool isMainFrame)
+    {
+        Q_UNUSED(url);
         Q_UNUSED(type);
+        Q_UNUSED(isMainFrame);
 
         return m_acceptNavigationRequest;
     }
 };
-#endif
 
 void tst_QWebEnginePage::acceptNavigationRequest()
 {
-#if !defined(QWEBENGINEPAGE_ACCEPTNAVIGATIONREQUEST)
-    QSKIP("QWEBENGINEPAGE_ACCEPTNAVIGATIONREQUEST");
-#else
     QSignalSpy loadSpy(m_view, SIGNAL(loadFinished(bool)));
 
     NavigationRequestOverride* newPage = new NavigationRequestOverride(m_view, false);
@@ -278,11 +272,10 @@ void tst_QWebEnginePage::acceptNavigationRequest()
     evaluateJavaScriptSync(m_view->page(), "tstform.submit();");
     QTRY_COMPARE(loadSpy.count(), 2);
 
-    QCOMPARE(m_view->page()->toPlainText(), QString("foo?"));
+    QCOMPARE(toPlainTextSync(m_view->page()), QString("foo?"));
 
     // Restore default page
     m_view->setPage(0);
-#endif
 }
 
 #if defined(QWEBENGINEPAGE_SETFEATUREPERMISSION)
@@ -439,23 +432,22 @@ public:
         connect(this, SIGNAL(geometryChangeRequested(QRect)), this, SLOT(slotGeometryChangeRequested(QRect)));
     }
 
-#if defined(QWEBENGINEPAGE_ACCEPTNAVIGATIONREQUEST)
     struct Navigation {
-        QWebEngineFrame *frame;
-        QNetworkRequest request;
         NavigationType type;
+        QUrl url;
+        bool isMainFrame;
     };
     QList<Navigation> navigations;
 
-    virtual bool acceptNavigationRequest(QWebEngineFrame* frame, const QNetworkRequest &request, NavigationType type) {
+    virtual bool acceptNavigationRequest(const QUrl &url, NavigationType type, bool isMainFrame)
+    {
         Navigation n;
-        n.frame = frame;
-        n.request = request;
+        n.url = url;
         n.type = type;
+        n.isMainFrame = isMainFrame;
         navigations.append(n);
         return true;
     }
-#endif
 
     QList<TestPage*> createdWindows;
     virtual QWebEnginePage* createWindow(WebWindowType) {
@@ -470,6 +462,42 @@ private Q_SLOTS:
         requestedGeometry = geom;
     }
 };
+
+void tst_QWebEnginePage::acceptNavigationRequestNavigationType()
+{
+
+    TestPage page;
+    QSignalSpy loadSpy(&page, SIGNAL(loadFinished(bool)));
+
+    page.load(QUrl("qrc:///resources/script.html"));
+    QTRY_COMPARE(loadSpy.count(), 1);
+    QTRY_COMPARE(page.navigations.count(), 1);
+
+    page.load(QUrl("qrc:///resources/content.html"));
+    QTRY_COMPARE(loadSpy.count(), 2);
+    QTRY_COMPARE(page.navigations.count(), 2);
+
+    page.triggerAction(QWebEnginePage::Stop);
+    QVERIFY(page.history()->canGoBack());
+    page.triggerAction(QWebEnginePage::Back);
+
+    QTRY_COMPARE(loadSpy.count(), 3);
+    QTRY_COMPARE(page.navigations.count(), 3);
+
+    page.triggerAction(QWebEnginePage::Reload);
+    QTRY_COMPARE(loadSpy.count(), 4);
+    QTRY_COMPARE(page.navigations.count(), 4);
+
+    QList<QWebEnginePage::NavigationType> expectedList;
+    expectedList << QWebEnginePage::NavigationTypeTyped
+        << QWebEnginePage::NavigationTypeTyped
+        << QWebEnginePage::NavigationTypeBackForward
+        << QWebEnginePage::NavigationTypeReload;
+    QVERIFY(expectedList.count() == page.navigations.count());
+    for (int i = 0; i < expectedList.count(); ++i) {
+        QCOMPARE(page.navigations[i].type, expectedList[i]);
+    }
+}
 
 void tst_QWebEnginePage::popupFormSubmission()
 {
@@ -489,38 +517,6 @@ void tst_QWebEnginePage::popupFormSubmission()
     // Check if the form submission was OK.
     QEXPECT_FAIL("", "https://bugs.webkit.org/show_bug.cgi?id=118597", Continue);
     QVERIFY(url.contains("?foo=bar"));
-}
-
-void tst_QWebEnginePage::acceptNavigationRequestWithNewWindow()
-{
-#if !defined(QWEBENGINESETTINGS)
-    QSKIP("QWEBENGINESETTINGS");
-#else
-    TestPage* page = new TestPage(m_view);
-    page->settings()->setAttribute(QWebEngineSettings::LinksIncludedInFocusChain, true);
-    m_page = page;
-    m_view->setPage(m_page);
-
-    m_view->setUrl(QString("data:text/html,<a href=\"data:text/html,Reached\" target=\"_blank\">Click me</a>"));
-    QVERIFY(::waitForSignal(m_view, SIGNAL(loadFinished(bool))));
-
-    QFocusEvent fe(QEvent::FocusIn);
-    m_page->event(&fe);
-
-    QVERIFY(m_page->focusNextPrevChild(/*next*/ true));
-
-    QKeyEvent keyEnter(QEvent::KeyPress, Qt::Key_Enter, Qt::NoModifier);
-    m_page->event(&keyEnter);
-
-    QCOMPARE(page->navigations.count(), 2);
-
-    TestPage::Navigation n = page->navigations.at(1);
-    QVERIFY(!n.frame);
-    QCOMPARE(n.request.url().toString(), QString("data:text/html,Reached"));
-    QVERIFY(n.type == QWebEnginePage::NavigationTypeLinkClicked);
-
-    QCOMPARE(page->createdWindows.count(), 1);
-#endif
 }
 
 class TestNetworkManager : public QNetworkAccessManager
@@ -1606,72 +1602,6 @@ void tst_QWebEnginePage::textEditing()
 #endif
 }
 
-void tst_QWebEnginePage::requestCache()
-{
-#if !defined(ACCEPTNAVIGATIONREQUEST)
-    QSKIP("ACCEPTNAVIGATIONREQUEST");
-#else
-    TestPage page;
-    QSignalSpy loadSpy(&page, SIGNAL(loadFinished(bool)));
-
-    page.setUrl(QString("data:text/html,<a href=\"data:text/html,Reached\" target=\"_blank\">Click me</a>"));
-    QTRY_COMPARE(loadSpy.count(), 1);
-    QTRY_COMPARE(page.navigations.count(), 1);
-
-    page.setUrl(QString("data:text/html,<a href=\"data:text/html,Reached\" target=\"_blank\">Click me2</a>"));
-    QTRY_COMPARE(loadSpy.count(), 2);
-    QTRY_COMPARE(page.navigations.count(), 2);
-
-    page.triggerAction(QWebEnginePage::Stop);
-    QVERIFY(page.history()->canGoBack());
-    page.triggerAction(QWebEnginePage::Back);
-
-    QTRY_COMPARE(loadSpy.count(), 3);
-    QTRY_COMPARE(page.navigations.count(), 3);
-    QCOMPARE(page.navigations.at(0).request.attribute(QNetworkRequest::CacheLoadControlAttribute, QNetworkRequest::PreferNetwork).toInt(),
-             (int)QNetworkRequest::PreferNetwork);
-    QCOMPARE(page.navigations.at(1).request.attribute(QNetworkRequest::CacheLoadControlAttribute, QNetworkRequest::PreferNetwork).toInt(),
-             (int)QNetworkRequest::PreferNetwork);
-    QCOMPARE(page.navigations.at(2).request.attribute(QNetworkRequest::CacheLoadControlAttribute, QNetworkRequest::PreferNetwork).toInt(),
-             (int)QNetworkRequest::PreferCache);
-#endif
-}
-
-void tst_QWebEnginePage::loadCachedPage()
-{
-#if !defined(QWEBENGINESETTINGS)
-    QSKIP("QWEBENGINESETTINGS");
-#else
-    TestPage page;
-    QSignalSpy loadSpy(&page, SIGNAL(loadFinished(bool)));
-    page.settings()->setMaximumPagesInCache(3);
-
-    page.load(QUrl("data:text/html,This is first page"));
-
-    QTRY_COMPARE(loadSpy.count(), 1);
-    QTRY_COMPARE(page.navigations.count(), 1);
-
-    QUrl firstPageUrl = page.url();
-    page.load(QUrl("data:text/html,This is second page"));
-
-    QTRY_COMPARE(loadSpy.count(), 2);
-    QTRY_COMPARE(page.navigations.count(), 2);
-
-    page.triggerAction(QWebEnginePage::Stop);
-    QVERIFY(page.history()->canGoBack());
-
-    QSignalSpy urlSpy(&page, SIGNAL(urlChanged(QUrl)));
-    QVERIFY(urlSpy.isValid());
-
-    page.triggerAction(QWebEnginePage::Back);
-    ::waitForSignal(&page, SIGNAL(urlChanged(QUrl)));
-    QCOMPARE(urlSpy.size(), 1);
-
-    QList<QVariant> arguments1 = urlSpy.takeFirst();
-    QCOMPARE(arguments1.at(0).toUrl(), firstPageUrl);
-#endif
-}
-
 void tst_QWebEnginePage::backActionUpdate()
 {
     QWebEngineView view;
@@ -1731,6 +1661,7 @@ void tst_QWebEnginePage::inputMethods_data()
     QTest::newRow("QGraphicsWebView") << "QGraphicsWebView";
 }
 
+#if defined(QWEBENGINEPAGE_INPUTMETHODQUERY)
 static Qt::InputMethodHints inputMethodHints(QObject* object)
 {
     if (QGraphicsObject* o = qobject_cast<QGraphicsObject*>(object))
@@ -1756,6 +1687,7 @@ static void clickOnPage(QWebEnginePage* page, const QPoint& position)
     QMouseEvent evrel(QEvent::MouseButtonRelease, position, Qt::LeftButton, Qt::NoButton, Qt::NoModifier);
     page->event(&evrel);
 }
+#endif
 
 void tst_QWebEnginePage::inputMethods()
 {
@@ -2897,6 +2829,7 @@ public:
 protected:
     virtual QString userAgentForUrl(const QUrl& url) const
     {
+        Q_UNUSED(url);
         return QString("My User Agent\nX-New-Http-Header: Oh Noes!");
     }
 };
@@ -3248,6 +3181,7 @@ void tst_QWebEnginePage::findTextSuccessiveShouldCallAllCallbacks()
     QVERIFY(spy5.wasCalled());
 }
 
+#if defined(QWEBENGINEPAGE_SUPPORTEDCONTENTTYPES)
 static QString getMimeTypeForExtension(const QString &ext)
 {
     QMimeType mimeType = QMimeDatabase().mimeTypeForFile(QStringLiteral("filename.") + ext.toLower(), QMimeDatabase::MatchExtension);
@@ -3256,6 +3190,7 @@ static QString getMimeTypeForExtension(const QString &ext)
 
     return QString();
 }
+#endif
 
 void tst_QWebEnginePage::supportedContentType()
 {
@@ -3658,22 +3593,23 @@ void tst_QWebEnginePage::openWindowDefaultSize()
     page.settings()->setAttribute(QWebEngineSettings::JavascriptCanOpenWindows, true);
     // Open a default window.
     page.runJavaScript("window.open()");
+    QTest::qWait(200);
     // Open a too small window.
-    evaluateJavaScriptSync(&page, "window.open('', '', 'width=10,height=10')");
+    evaluateJavaScriptSync(&page, "window.open('','about:blank','width=10,height=10')");
 
-    QTest::qWait(500);
+    QTest::qWait(200);
     // The number of popups created should be two.
-    QVERIFY(page.createdWindows.size() == 2);
+    QCOMPARE(page.createdWindows.size(), 2);
 
     QRect requestedGeometry = page.createdWindows[0]->requestedGeometry;
     // Check default size has been requested.
-    QVERIFY(requestedGeometry.width() == 0);
-    QVERIFY(requestedGeometry.height() == 0);
+    QCOMPARE(requestedGeometry.width(), 0);
+    QCOMPARE(requestedGeometry.height(), 0);
 
     requestedGeometry = page.createdWindows[1]->requestedGeometry;
     // Check minimum size has been requested.
-    QVERIFY(requestedGeometry.width() == 100);
-    QVERIFY(requestedGeometry.height() == 100);
+    QCOMPARE(requestedGeometry.width(), 100);
+    QCOMPARE(requestedGeometry.height(), 100);
 }
 
 void tst_QWebEnginePage::cssMediaTypeGlobalSetting()

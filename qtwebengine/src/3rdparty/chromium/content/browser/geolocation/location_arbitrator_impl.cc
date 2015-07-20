@@ -28,9 +28,9 @@ const int64 LocationArbitratorImpl::kFixStaleTimeoutMilliseconds =
 
 LocationArbitratorImpl::LocationArbitratorImpl(
     const LocationUpdateCallback& callback)
-    : callback_(callback),
-      provider_callback_(
-          base::Bind(&LocationArbitratorImpl::LocationUpdateAvailable,
+    : arbitrator_update_callback_(callback),
+      provider_update_callback_(
+          base::Bind(&LocationArbitratorImpl::OnLocationUpdate,
                      base::Unretained(this))),
       position_provider_(NULL),
       is_permission_granted_(false),
@@ -116,15 +116,14 @@ void LocationArbitratorImpl::RegisterProvider(
     LocationProvider* provider) {
   if (!provider)
     return;
-  provider->SetUpdateCallback(provider_callback_);
+  provider->SetUpdateCallback(provider_update_callback_);
   if (is_permission_granted_)
     provider->OnPermissionGranted();
   providers_.push_back(provider);
 }
 
-void LocationArbitratorImpl::LocationUpdateAvailable(
-    const LocationProvider* provider,
-    const Geoposition& new_position) {
+void LocationArbitratorImpl::OnLocationUpdate(const LocationProvider* provider,
+                                              const Geoposition& new_position) {
   DCHECK(new_position.Validate() ||
          new_position.error_code != Geoposition::ERROR_CODE_NONE);
   providers_polled_.insert(provider);
@@ -135,7 +134,7 @@ void LocationArbitratorImpl::LocationUpdateAvailable(
   }
   // Don't fail until all providers had their say.
   if (position_.Validate() || (providers_polled_.size() == providers_.size()))
-      callback_.Run(position_);
+      arbitrator_update_callback_.Run(position_);
 }
 
 AccessTokenStore* LocationArbitratorImpl::NewAccessTokenStore() {

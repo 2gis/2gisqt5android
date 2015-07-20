@@ -49,7 +49,7 @@ TEST_F(LayerTreeHostFiltersPixelTest, BackgroundFilterBlur) {
       small_error_allowed));
 #endif
 
-  RunPixelTest(GL_WITH_BITMAP,
+  RunPixelTest(PIXEL_TEST_GL,
                background,
                base::FilePath(FILE_PATH_LITERAL("background_filter_blur.png")));
 }
@@ -90,10 +90,10 @@ TEST_F(LayerTreeHostFiltersPixelTest, BackgroundFilterBlurOutsets) {
       small_error_allowed));
 #endif
 
-  RunPixelTest(GL_WITH_BITMAP,
-               background,
-               base::FilePath(FILE_PATH_LITERAL(
-                   "background_filter_blur_outsets.png")));
+  RunPixelTest(
+      PIXEL_TEST_GL,
+      background,
+      base::FilePath(FILE_PATH_LITERAL("background_filter_blur_outsets.png")));
 }
 
 TEST_F(LayerTreeHostFiltersPixelTest, BackgroundFilterBlurOffAxis) {
@@ -136,8 +136,8 @@ TEST_F(LayerTreeHostFiltersPixelTest, BackgroundFilterBlurOffAxis) {
   blur->SetBackgroundFilters(filters);
 
 #if defined(OS_WIN)
-  // Windows has 153 pixels off by at most 2: crbug.com/225027
-  float percentage_pixels_large_error = 0.3825f;  // 153px / (200*200)
+  // Windows has 116 pixels off by at most 2: crbug.com/225027
+  float percentage_pixels_large_error = 0.3f;  // 116px / (200*200), rounded up
   float percentage_pixels_small_error = 0.0f;
   float average_error_allowed_in_bad_pixels = 1.f;
   int large_error_allowed = 2;
@@ -151,10 +151,76 @@ TEST_F(LayerTreeHostFiltersPixelTest, BackgroundFilterBlurOffAxis) {
       small_error_allowed));
 #endif
 
-  RunPixelTest(GL_WITH_BITMAP,
-               background,
-               base::FilePath(FILE_PATH_LITERAL(
-                   "background_filter_blur_off_axis.png")));
+  RunPixelTest(
+      PIXEL_TEST_GL,
+      background,
+      base::FilePath(FILE_PATH_LITERAL("background_filter_blur_off_axis.png")));
+}
+
+class LayerTreeHostFiltersScaledPixelTest
+    : public LayerTreeHostFiltersPixelTest {
+  void InitializeSettings(LayerTreeSettings* settings) override {
+    // Required so that device scale is inherited by content scale.
+    settings->layer_transforms_should_scale_layer_contents = true;
+  }
+
+  void SetupTree() override {
+    layer_tree_host()->SetDeviceScaleFactor(device_scale_factor_);
+    LayerTreePixelTest::SetupTree();
+  }
+
+ protected:
+  void RunPixelTestType(int content_size,
+                        float device_scale_factor,
+                        PixelTestType test_type) {
+    int half_content = content_size / 2;
+
+    scoped_refptr<SolidColorLayer> root = CreateSolidColorLayer(
+        gfx::Rect(0, 0, content_size, content_size), SK_ColorWHITE);
+
+    scoped_refptr<SolidColorLayer> background = CreateSolidColorLayer(
+        gfx::Rect(0, 0, content_size, content_size), SK_ColorGREEN);
+    root->AddChild(background);
+
+    // Add a blue layer that completely covers the green layer.
+    scoped_refptr<SolidColorLayer> foreground = CreateSolidColorLayer(
+        gfx::Rect(0, 0, content_size, content_size), SK_ColorBLUE);
+    background->AddChild(foreground);
+
+    // Add an alpha threshold filter to the blue layer which will filter out
+    // everything except the lower right corner.
+    FilterOperations filters;
+    SkRegion alpha_region;
+    alpha_region.setRect(
+        half_content, half_content, content_size, content_size);
+    filters.Append(
+        FilterOperation::CreateAlphaThresholdFilter(alpha_region, 1.f, 0.f));
+    foreground->SetFilters(filters);
+
+    device_scale_factor_ = device_scale_factor;
+    RunPixelTest(
+        test_type,
+        background,
+        base::FilePath(FILE_PATH_LITERAL("green_small_with_blue_corner.png")));
+  }
+
+  float device_scale_factor_;
+};
+
+TEST_F(LayerTreeHostFiltersScaledPixelTest, StandardDpi_GL) {
+  RunPixelTestType(100, 1.f, PIXEL_TEST_GL);
+}
+
+TEST_F(LayerTreeHostFiltersScaledPixelTest, StandardDpi_Software) {
+  RunPixelTestType(100, 1.f, PIXEL_TEST_SOFTWARE);
+}
+
+TEST_F(LayerTreeHostFiltersScaledPixelTest, HiDpi_GL) {
+  RunPixelTestType(50, 2.f, PIXEL_TEST_GL);
+}
+
+TEST_F(LayerTreeHostFiltersScaledPixelTest, HiDpi_Software) {
+  RunPixelTestType(50, 2.f, PIXEL_TEST_SOFTWARE);
 }
 
 class ImageFilterClippedPixelTest : public LayerTreeHostFiltersPixelTest {
@@ -204,11 +270,11 @@ class ImageFilterClippedPixelTest : public LayerTreeHostFiltersPixelTest {
 };
 
 TEST_F(ImageFilterClippedPixelTest, ImageFilterClipped_GL) {
-  RunPixelTestType(GL_WITH_BITMAP);
+  RunPixelTestType(PIXEL_TEST_GL);
 }
 
 TEST_F(ImageFilterClippedPixelTest, ImageFilterClipped_Software) {
-  RunPixelTestType(SOFTWARE_WITH_BITMAP);
+  RunPixelTestType(PIXEL_TEST_SOFTWARE);
 }
 
 }  // namespace

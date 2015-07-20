@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtBluetooth module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -93,6 +93,7 @@ QT_BEGIN_NAMESPACE
      only made discoverable for a limited period of time. This can speed up discovery between gaming devices,
      as service discovery can be skipped on devices not in LimitedInquiry mode. In this mode, the device will
      be connectable and powered on, if required. This mode is is not supported on Android.
+     On OS X, it is not possible to set the \l hostMode() to HostConnectable or HostPoweredOff.
 
 */
 
@@ -102,12 +103,15 @@ class LocalDeviceRegisterMetaTypes
 public:
     LocalDeviceRegisterMetaTypes()
     {
-        qRegisterMetaType<QBluetoothLocalDevice::HostMode>("QBluetoothLocalDevice::HostMode");
-        qRegisterMetaType<QBluetoothLocalDevice::Pairing>("QBluetoothLocalDevice::Pairing");
-        qRegisterMetaType<QBluetoothLocalDevice::Error>("QBluetoothLocalDevice::Error");
+        qRegisterMetaType<QBluetoothLocalDevice::HostMode>();
+        qRegisterMetaType<QBluetoothLocalDevice::Pairing>();
+        qRegisterMetaType<QBluetoothLocalDevice::Error>();
     }
 } _registerLocalDeviceMetaTypes;
 }
+
+
+#ifndef QT_OSX_BLUETOOTH
 
 /*!
     Destroys the QBluetoothLocalDevice.
@@ -136,6 +140,8 @@ bool QBluetoothLocalDevice::isValid() const
     return false;
 }
 
+#endif
+
 /*!
     \fn void QBluetoothLocalDevice::setHostMode(QBluetoothLocalDevice::HostMode mode)
 
@@ -144,13 +150,16 @@ bool QBluetoothLocalDevice::isValid() const
     \note Due to varying security policies on the supported platforms, this method may have
     differing behaviors on the various platforms. For example the system may ask the user for
     confirmation before turning Bluetooth on or off and not all host modes may be supported.
+    On OS X, it is not possbile to programmatically change the \l hostMode().
+    A user can only switch Bluetooth on/off in the System Preferences.
     Please refer to the platform specific Bluetooth documentation for details.
 */
 
 /*!
     \fn QBluetoothLocalDevice::HostMode QBluetoothLocalDevice::hostMode() const
 
-    Returns the current host mode of this local Bluetooth device.
+    Returns the current host mode of this local Bluetooth device. On OS X, it is either
+    HostPoweredOff or HostConnectable.
 */
 
 /*!
@@ -168,7 +177,8 @@ bool QBluetoothLocalDevice::isValid() const
 /*!
     \fn QList<QBluetoothLocalDevice> QBluetoothLocalDevice::allDevices()
 
-    Returns a list of all available local Bluetooth devices.
+    Returns a list of all available local Bluetooth devices. On OS X, there is
+    only the "default" local device.
 */
 
 /*!
@@ -179,6 +189,7 @@ bool QBluetoothLocalDevice::isValid() const
   \note Due to varying security policies on the supported platforms, this method may have
   differing behaviors on the various platforms. For example
   the system may ask the user for confirmation before turning Bluetooth on or off.
+  On OS X it is not possible to power on/off Bluetooth.
   Please refer to the platform specific Bluetooth documentation for details.
 */
 
@@ -219,7 +230,7 @@ bool QBluetoothLocalDevice::isValid() const
   Returns the list of connected devices. This list is different from the list of currently
   paired devices.
 
-  On Android it is not possible to retrieve a list of connected devices. It is only possible to
+  On Android and OS X, it is not possible to retrieve a list of connected devices. It is only possible to
   listen to (dis)connect changes. For convenience, this class monitors all connect
   and disconnect events since its instanciation and returns the current list when calling this function.
   Therefore it is possible that this function returns an empty list shortly after creating an
@@ -242,6 +253,8 @@ bool QBluetoothLocalDevice::isValid() const
   must be called to indicate if the user accepts or rejects the displayed pin.
 
   This signal is only emitted for pairing requests issues by calling \l requestPairing().
+  On OS X, this method never gets called - there is a callback with a PIN (IOBluetooth),
+  but it expects immediate reply yes/no - and there is no time to show any dialog or compare PINs.
 
   \sa pairingConfirmation()
 */
@@ -269,6 +282,11 @@ bool QBluetoothLocalDevice::isValid() const
 
   Set the \a pairing status with \a address.  The results are returned by the signal, pairingFinished().
   On BlackBerry AuthorizedPaired is not possible and will have the same behavior as Paired.
+
+  On OS X, it is not possible to unpair a device. If Unpaired is requested, \l pairingFinished()
+  is immediately emitted although the device remains paired. It is possible to request the pairing
+  for a previously unpaired device. In addition \l AuthorizedPaired has the same behavior as \l Paired.
+
   Caution: creating a pairing may take minutes, and may require the user to acknowledge.
 */
 

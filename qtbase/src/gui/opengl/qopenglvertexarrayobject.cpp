@@ -1,7 +1,7 @@
 /****************************************************************************
 **
 ** Copyright (C) 2014 Klarälvdalens Datakonsult AB, a KDAB Group company, info@kdab.com, author Sean Harmer <sean.harmer@kdab.com>
-** Contact: http://www.qt-project.org/legal
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -144,6 +144,11 @@ bool QOpenGLVertexArrayObjectPrivate::create()
         qWarning("QOpenGLVertexArrayObject::create() requires a valid current OpenGL context");
         return false;
     }
+
+    //Fail early, if context is the same as ctx, it means we have tried to initialize for this context and failed
+    if (ctx == context)
+        return false;
+
     context = ctx;
     QObject::connect(context, SIGNAL(aboutToBeDestroyed()), q, SLOT(_q_contextAboutToBeDestroyed()));
 
@@ -161,12 +166,10 @@ bool QOpenGLVertexArrayObjectPrivate::create()
         if (format.version() >= qMakePair<int, int>(3,2)) {
             vaoFuncs.core_3_2 = ctx->versionFunctions<QOpenGLFunctions_3_2_Core>();
             vaoFuncsType = Core_3_2;
-            vaoFuncs.core_3_2->initializeOpenGLFunctions();
             vaoFuncs.core_3_2->glGenVertexArrays(1, &vao);
         } else if (format.majorVersion() >= 3) {
             vaoFuncs.core_3_0 = ctx->versionFunctions<QOpenGLFunctions_3_0>();
             vaoFuncsType = Core_3_0;
-            vaoFuncs.core_3_0->initializeOpenGLFunctions();
             vaoFuncs.core_3_0->glGenVertexArrays(1, &vao);
         } else
 #endif
@@ -186,10 +189,15 @@ bool QOpenGLVertexArrayObjectPrivate::create()
 
 void QOpenGLVertexArrayObjectPrivate::destroy()
 {
+    Q_Q(QOpenGLVertexArrayObject);
+
+    if (context) {
+        QObject::disconnect(context, SIGNAL(aboutToBeDestroyed()), q, SLOT(_q_contextAboutToBeDestroyed()));
+        context = 0;
+    }
+
     if (!vao)
         return;
-
-    Q_Q(QOpenGLVertexArrayObject);
 
     switch (vaoFuncsType) {
 #ifndef QT_OPENGL_ES_2
@@ -208,10 +216,6 @@ void QOpenGLVertexArrayObjectPrivate::destroy()
     default:
         break;
     }
-
-    Q_ASSERT(context);
-    QObject::disconnect(context, SIGNAL(aboutToBeDestroyed()), q, SLOT(_q_contextAboutToBeDestroyed()));
-    context = 0;
 
     vao = 0;
 }

@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -43,13 +43,13 @@
 #include <QDebug>
 #include <QDataStream>
 
-#include <qgeoareamonitorinfo.h>
-#include <qgeoareamonitorsource.h>
-#include <qgeopositioninfo.h>
-#include <qgeopositioninfosource.h>
-#include <qnmeapositioninfosource.h>
-#include <qgeocircle.h>
-#include <qgeorectangle.h>
+#include <QtPositioning/qgeoareamonitorinfo.h>
+#include <QtPositioning/qgeoareamonitorsource.h>
+#include <QtPositioning/qgeopositioninfo.h>
+#include <QtPositioning/qgeopositioninfosource.h>
+#include <QtPositioning/qnmeapositioninfosource.h>
+#include <QtPositioning/qgeocircle.h>
+#include <QtPositioning/qgeorectangle.h>
 
 #include "logfilepositionsource.h"
 
@@ -59,6 +59,21 @@ QT_USE_NAMESPACE
 
 Q_DECLARE_METATYPE(QGeoPositionInfo)
 Q_DECLARE_METATYPE(QGeoAreaMonitorInfo)
+
+QString tst_qgeoareamonitorinfo_debug;
+
+void tst_qgeoareamonitorinfo_messageHandler(QtMsgType type,
+                                            const QMessageLogContext &,
+                                            const QString &msg)
+{
+    switch (type) {
+        case QtDebugMsg :
+            tst_qgeoareamonitorinfo_debug = msg;
+            break;
+        default:
+            break;
+    }
+}
 
 class tst_QGeoAreaMonitorSource : public QObject
 {
@@ -692,6 +707,51 @@ private slots:
 
         //obj was deleted when setting new source
         delete obj2;
+    }
+
+    void debug_data()
+    {
+        QTest::addColumn<QGeoAreaMonitorInfo>("info");
+        QTest::addColumn<int>("nextValue");
+        QTest::addColumn<QString>("debugString");
+
+        QGeoAreaMonitorInfo info;
+        QTest::newRow("uninitialized") << info << 45
+                << QString("QGeoAreaMonitorInfo(\"\", QGeoShape(Unknown), "
+                              "persistent: false, expiry: QDateTime( Qt::TimeSpec(LocalTime))) 45");
+
+        info.setArea(QGeoRectangle());
+        info.setPersistent(true);
+        info.setName("RectangleAreaMonitor");
+        QTest::newRow("Rectangle Test") << info  << 45
+                << QString("QGeoAreaMonitorInfo(\"RectangleAreaMonitor\", QGeoShape(Rectangle), "
+                              "persistent: true, expiry: QDateTime( Qt::TimeSpec(LocalTime))) 45");
+
+        info = QGeoAreaMonitorInfo();
+        info.setArea(QGeoCircle());
+        info.setPersistent(false);
+        info.setName("CircleAreaMonitor");
+        QVariantMap map;
+        map.insert(QString("foobarKey"), QVariant(45)); //should be ignored
+        info.setNotificationParameters(map);
+        QTest::newRow("Circle Test") << info  << 45
+                << QString("QGeoAreaMonitorInfo(\"CircleAreaMonitor\", QGeoShape(Circle), "
+                              "persistent: false, expiry: QDateTime( Qt::TimeSpec(LocalTime))) 45");
+
+        // we ignore any further QDateTime related changes to avoid depending on QDateTime related
+        // failures in case its QDebug string changes
+    }
+
+    void debug()
+    {
+        QFETCH(QGeoAreaMonitorInfo, info);
+        QFETCH(int, nextValue);
+        QFETCH(QString, debugString);
+
+        qInstallMessageHandler(tst_qgeoareamonitorinfo_messageHandler);
+        qDebug() << info << nextValue;
+        qInstallMessageHandler(0);
+        QCOMPARE(tst_qgeoareamonitorinfo_debug, debugString);
     }
 };
 

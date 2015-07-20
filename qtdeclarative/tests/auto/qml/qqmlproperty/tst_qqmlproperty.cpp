@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -47,8 +47,12 @@
 class MyQmlObject : public QObject
 {
     Q_OBJECT
+    Q_PROPERTY(QPoint pointProperty MEMBER m_point)
 public:
     MyQmlObject(QObject *parent = 0) : QObject(parent) {}
+
+private:
+    QPoint m_point;
 };
 
 QML_DECLARE_TYPE(MyQmlObject);
@@ -141,6 +145,7 @@ private slots:
     void assignEmptyVariantMap();
     void warnOnInvalidBinding();
     void registeredCompositeTypeProperty();
+    void deeplyNestedObject();
 
     void copy();
 private:
@@ -321,10 +326,16 @@ class PropertyObject : public QObject
     Q_PROPERTY(int propertyWithNotify READ propertyWithNotify WRITE setPropertyWithNotify NOTIFY oddlyNamedNotifySignal)
     Q_PROPERTY(MyQmlObject *qmlObject READ qmlObject)
     Q_PROPERTY(MyQObject *qObject READ qObject WRITE setQObject NOTIFY qObjectChanged)
+    Q_PROPERTY(QString stringProperty READ stringProperty WRITE setStringProperty)
+    Q_PROPERTY(char charProperty READ charProperty WRITE setCharProperty)
+    Q_PROPERTY(QChar qcharProperty READ qcharProperty WRITE setQcharProperty)
+    Q_PROPERTY(QChar constQChar READ constQChar STORED false CONSTANT FINAL)
+    Q_PROPERTY(char constChar READ constChar STORED false CONSTANT FINAL)
+    Q_PROPERTY(int constInt READ constInt STORED false CONSTANT FINAL)
 
     Q_CLASSINFO("DefaultProperty", "defaultProperty")
 public:
-    PropertyObject() : m_resetProperty(9), m_qObject(0) {}
+    PropertyObject() : m_resetProperty(9), m_qObject(0), m_stringProperty("foo") {}
 
     int defaultProperty() { return 10; }
     QRect rectProperty() { return QRect(10, 10, 1, 209); }
@@ -356,6 +367,18 @@ public:
         }
     }
 
+    QString stringProperty() const { return m_stringProperty;}
+    char charProperty() const { return m_charProperty; }
+    QChar qcharProperty() const { return m_qcharProperty; }
+
+    QChar constQChar() const { return 0x25cf; /* Unicode: black circle */ }
+    char constChar() const { return 'A'; }
+    int constInt() const { return 123456; }
+
+    void setStringProperty(QString arg) { m_stringProperty = arg; }
+    void setCharProperty(char arg) { m_charProperty = arg; }
+    void setQcharProperty(QChar arg) { m_qcharProperty = arg; }
+
 signals:
     void clicked();
     void oddlyNamedNotifySignal();
@@ -369,6 +392,9 @@ private:
     int m_propertyWithNotify;
     MyQmlObject m_qmlObject;
     MyQObject *m_qObject;
+    QString m_stringProperty;
+    char m_charProperty;
+    QChar m_qcharProperty;
 };
 
 QML_DECLARE_TYPE(PropertyObject);
@@ -1377,6 +1403,71 @@ void tst_qqmlproperty::write()
         QCOMPARE(o.url(), result);
     }
 
+    // Char/string-property
+    {
+        PropertyObject o;
+        QQmlProperty charProperty(&o, "charProperty");
+        QQmlProperty qcharProperty(&o, "qcharProperty");
+        QQmlProperty stringProperty(&o, "stringProperty");
+
+        const int black_circle = 0x25cf;
+
+        QCOMPARE(charProperty.write(QString("foo")), false);
+        QCOMPARE(charProperty.write('Q'), true);
+        QCOMPARE(charProperty.read(), QVariant('Q'));
+        QCOMPARE(charProperty.write(QString("t")), true);
+        QCOMPARE(charProperty.read(), QVariant('t'));
+
+        QCOMPARE(qcharProperty.write(QString("foo")), false);
+        QCOMPARE(qcharProperty.write('Q'), true);
+        QCOMPARE(qcharProperty.read(), QVariant('Q'));
+        QCOMPARE(qcharProperty.write(QString("t")), true);
+        QCOMPARE(qcharProperty.read(), QVariant('t'));
+        QCOMPARE(qcharProperty.write(QChar(black_circle)), true);
+        QCOMPARE(qcharProperty.read(), QVariant(QChar(black_circle)));
+
+        QCOMPARE(o.stringProperty(), QString("foo")); // Default value
+        QCOMPARE(stringProperty.write(QString("bar")), true);
+        QCOMPARE(o.stringProperty(), QString("bar"));
+        QCOMPARE(stringProperty.write(QVariant(1234)), true);
+        QCOMPARE(stringProperty.read().toString(), QString::number(1234));
+        QCOMPARE(stringProperty.write(QChar(black_circle)), true);
+        QCOMPARE(stringProperty.read(), QVariant(QString(QChar(black_circle))));
+
+        { // char -> QString
+            QQmlComponent component(&engine);
+            component.setData("import Test 1.0\nPropertyObject { stringProperty: constChar }", QUrl());
+            PropertyObject *obj = qobject_cast<PropertyObject*>(component.create());
+            QVERIFY(obj != 0);
+            if (obj) {
+                QQmlProperty stringProperty(obj, "stringProperty");
+                QCOMPARE(stringProperty.read(), QVariant(QString(obj->constChar())));
+            }
+        }
+
+        { // QChar -> QString
+            QQmlComponent component(&engine);
+            component.setData("import Test 1.0\nPropertyObject { stringProperty: constQChar }", QUrl());
+            PropertyObject *obj = qobject_cast<PropertyObject*>(component.create());
+            QVERIFY(obj != 0);
+            if (obj) {
+                QQmlProperty stringProperty(obj, "stringProperty");
+                QCOMPARE(stringProperty.read(), QVariant(QString(obj->constQChar())));
+            }
+        }
+
+        { // int -> QString
+            QQmlComponent component(&engine);
+            component.setData("import Test 1.0\nPropertyObject { stringProperty: constInt }", QUrl());
+            PropertyObject *obj = qobject_cast<PropertyObject*>(component.create());
+            QVERIFY(obj != 0);
+            if (obj) {
+                QQmlProperty stringProperty(obj, "stringProperty");
+                QCOMPARE(stringProperty.read(), QVariant(QString::number(obj->constInt())));
+            }
+        }
+    }
+
     // VariantMap-property
     QVariantMap vm;
     vm.insert("key", "value");
@@ -1936,6 +2027,16 @@ void tst_qqmlproperty::warnOnInvalidBinding()
     QObject *obj = component.create();
     QVERIFY(obj);
     delete obj;
+}
+
+void tst_qqmlproperty::deeplyNestedObject()
+{
+    PropertyObject o;
+    QQmlProperty p(&o, "qmlObject.pointProperty.x");
+    QCOMPARE(p.isValid(), true);
+
+    p.write(14);
+    QCOMPARE(p.read(), QVariant(14));
 }
 
 void tst_qqmlproperty::initTestCase()

@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the demonstration applications of the Qt Toolkit.
 **
@@ -10,27 +10,27 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
 ** General Public License version 2.1 as published by the Free Software
 ** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
+** packaging of this file. Please review the following information to
 ** ensure the GNU Lesser General Public License version 2.1 requirements
 ** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
 ** General Public License version 3.0 as published by the Free Software
 ** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
+** packaging of this file. Please review the following information to
 ** ensure the GNU General Public License version 3.0 requirements will be
 ** met: http://www.gnu.org/copyleft/gpl.html.
 **
@@ -52,6 +52,7 @@
 
 #include <QtGui/QClipboard>
 #include <QtNetwork/QAuthenticator>
+#include <QtNetwork/QNetworkReply>
 #include <QtWidgets/QMenu>
 #include <QtWidgets/QMessageBox>
 #include <QtGui/QMouseEvent>
@@ -67,8 +68,8 @@
 #include <QtCore/QDebug>
 #include <QtCore/QBuffer>
 
-WebPage::WebPage(QObject *parent)
-    : QWebEnginePage(parent)
+WebPage::WebPage(QWebEngineProfile *profile, QObject *parent)
+    : QWebEnginePage(profile, parent)
     , m_keyboardModifiers(Qt::NoModifier)
     , m_pressedButtons(Qt::NoButton)
     , m_openInNewTab(false)
@@ -97,37 +98,15 @@ BrowserMainWindow *WebPage::mainWindow()
     return BrowserApplication::instance()->mainWindow();
 }
 
-#if defined(QWEBENGINEPAGE_ACCEPTNAVIGATIONREQUEST)
-bool WebPage::acceptNavigationRequest(QWebEngineFrame *frame, const QNetworkRequest &request, NavigationType type)
+bool WebPage::acceptNavigationRequest(const QUrl &url, NavigationType type, bool isMainFrame)
 {
-    // ctrl open in new tab
-    // ctrl-shift open in new tab and select
-    // ctrl-alt open in new window
-    if (type == QWebEnginePage::NavigationTypeLinkClicked
-        && (m_keyboardModifiers & Qt::ControlModifier
-            || m_pressedButtons == Qt::MidButton)) {
-        bool newWindow = (m_keyboardModifiers & Qt::AltModifier);
-        WebView *webView;
-        if (newWindow) {
-            BrowserApplication::instance()->newMainWindow();
-            BrowserMainWindow *newMainWindow = BrowserApplication::instance()->mainWindow();
-            webView = newMainWindow->currentTab();
-            newMainWindow->raise();
-            newMainWindow->activateWindow();
-            webView->setFocus();
-        } else {
-            bool selectNewTab = (m_keyboardModifiers & Qt::ShiftModifier);
-            webView = mainWindow()->tabWidget()->newTab(selectNewTab);
-        }
-        webView->load(request);
-        m_keyboardModifiers = Qt::NoModifier;
-        m_pressedButtons = Qt::NoButton;
-        return false;
+    Q_UNUSED(type);
+    if (isMainFrame) {
+        m_loadingUrl = url;
+        emit loadingUrl(m_loadingUrl);
     }
-    m_loadingUrl = request.url();
-    emit loadingUrl(m_loadingUrl);
+    return true;
 }
-#endif
 
 bool WebPage::certificateError(const QWebEngineCertificateError &error)
 {
@@ -150,10 +129,11 @@ bool WebPage::certificateError(const QWebEngineCertificateError &error)
 class PopupWindow : public QWidget {
     Q_OBJECT
 public:
-    PopupWindow()
+    PopupWindow(QWebEngineProfile *profile)
         : m_addressBar(new QLineEdit(this))
         , m_view(new WebView(this))
     {
+        m_view->setPage(new WebPage(profile, m_view));
         QVBoxLayout *layout = new QVBoxLayout;
         layout->setMargin(0);
         setLayout(layout);
@@ -203,7 +183,7 @@ QWebEnginePage *WebPage::createWindow(QWebEnginePage::WebWindowType type)
         BrowserMainWindow *mainWindow = BrowserApplication::instance()->mainWindow();
         return mainWindow->currentTab()->page();
     } else {
-        PopupWindow *popup = new PopupWindow;
+        PopupWindow *popup = new PopupWindow(profile());
         popup->setAttribute(Qt::WA_DeleteOnClose);
         popup->show();
         return popup->page();
@@ -327,31 +307,33 @@ void WebPage::proxyAuthenticationRequired(const QUrl &requestUrl, QAuthenticator
 WebView::WebView(QWidget* parent)
     : QWebEngineView(parent)
     , m_progress(0)
-    , m_page(new WebPage(this))
+    , m_page(0)
     , m_iconReply(0)
 {
-    setPage(m_page);
-#if defined(QWEBENGINEPAGE_STATUSBARMESSAGE)
-    connect(page(), SIGNAL(statusBarMessage(QString)),
-            SLOT(setStatusBarText(QString)));
-#endif
     connect(this, SIGNAL(loadProgress(int)),
             this, SLOT(setProgress(int)));
     connect(this, SIGNAL(loadFinished(bool)),
             this, SLOT(loadFinished(bool)));
+}
+
+void WebView::setPage(WebPage *_page)
+{
+    if (m_page)
+        m_page->deleteLater();
+    m_page = _page;
+    QWebEngineView::setPage(_page);
+#if defined(QWEBENGINEPAGE_STATUSBARMESSAGE)
+    connect(page(), SIGNAL(statusBarMessage(QString)),
+            SLOT(setStatusBarText(QString)));
+#endif
     connect(page(), SIGNAL(loadingUrl(QUrl)),
             this, SIGNAL(urlChanged(QUrl)));
     connect(page(), SIGNAL(iconUrlChanged(QUrl)),
             this, SLOT(onIconUrlChanged(QUrl)));
-#if defined(QWEBENGINEPAGE_DOWNLOADREQUESTED)
-    connect(page(), SIGNAL(downloadRequested(QNetworkRequest)),
-            this, SLOT(downloadRequested(QNetworkRequest)));
-#endif
     connect(page(), &WebPage::featurePermissionRequested, this, &WebView::onFeaturePermissionRequested);
 #if defined(QWEBENGINEPAGE_UNSUPPORTEDCONTENT)
     page()->setForwardUnsupportedContent(true);
 #endif
-
 }
 
 void WebView::contextMenuEvent(QContextMenuEvent *event)
@@ -493,9 +475,4 @@ void WebView::mouseReleaseEvent(QMouseEvent *event)
 void WebView::setStatusBarText(const QString &string)
 {
     m_statusBarText = string;
-}
-
-void WebView::downloadRequested(const QNetworkRequest &request)
-{
-    BrowserApplication::downloadManager()->download(request);
 }

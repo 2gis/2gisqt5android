@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -75,14 +75,11 @@ void QQmlAbstractBinding::addToObject()
     QObject *obj = object();
     Q_ASSERT(obj);
 
-    int index = propertyIndex();
-
     QQmlData *data = QQmlData::get(obj, true);
 
-    if (index & 0xFFFF0000) {
+    int coreIndex;
+    if (QQmlPropertyData::decodeValueTypePropertyIndex(propertyIndex(), &coreIndex) != -1) {
         // Value type
-
-        int coreIndex = index & 0x0000FFFF;
 
         // Find the value type proxy (if there is one)
         QQmlValueTypeProxyBinding *proxy = 0;
@@ -110,7 +107,7 @@ void QQmlAbstractBinding::addToObject()
         setNextBinding(data->bindings);
         data->bindings = this;
 
-        data->setBindingBit(obj, index);
+        data->setBindingBit(obj, coreIndex);
     }
 
     setAddedToObject(true);
@@ -123,16 +120,15 @@ void QQmlAbstractBinding::removeFromObject()
 {
     if (isAddedToObject()) {
         QObject *obj = object();
-        int index = propertyIndex();
-
         QQmlData *data = QQmlData::get(obj, false);
         Q_ASSERT(data);
 
-        if (index & 0xFFFF0000) {
+        int coreIndex;
+        if (QQmlPropertyData::decodeValueTypePropertyIndex(propertyIndex(), &coreIndex) != -1) {
 
             // Find the value type binding
             QQmlAbstractBinding *vtbinding = data->bindings;
-            while (vtbinding->propertyIndex() != (index & 0x0000FFFF)) {
+            while (vtbinding->propertyIndex() != coreIndex) {
                 vtbinding = vtbinding->nextBinding();
                 Q_ASSERT(vtbinding);
             }
@@ -169,7 +165,7 @@ void QQmlAbstractBinding::removeFromObject()
                 binding->setNextBinding(nextBinding());
             }
 
-            data->clearBindingBit(index);
+            data->clearBindingBit(coreIndex);
         }
 
         setNextBinding(0);

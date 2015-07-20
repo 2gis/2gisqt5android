@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQuick module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -54,17 +54,16 @@ void registerValueTypes();
 
 }
 
-class Q_AUTOTEST_EXPORT QQuickColorValueType : public QQmlValueTypeBase<QColor>
+class QQuickColorValueType
 {
+    QColor v;
     Q_PROPERTY(qreal r READ r WRITE setR FINAL)
     Q_PROPERTY(qreal g READ g WRITE setG FINAL)
     Q_PROPERTY(qreal b READ b WRITE setB FINAL)
     Q_PROPERTY(qreal a READ a WRITE setA FINAL)
-    Q_OBJECT
+    Q_GADGET
 public:
-    QQuickColorValueType(QObject *parent = 0);
-
-    virtual QString toString() const;
+    Q_INVOKABLE QString toString() const;
 
     qreal r() const;
     qreal g() const;
@@ -76,16 +75,14 @@ public:
     void setA(qreal);
 };
 
-class Q_AUTOTEST_EXPORT QQuickVector2DValueType : public QQmlValueTypeBase<QVector2D>
+class QQuickVector2DValueType
 {
+    QVector2D v;
     Q_PROPERTY(qreal x READ x WRITE setX FINAL)
     Q_PROPERTY(qreal y READ y WRITE setY FINAL)
-    Q_OBJECT
+    Q_GADGET
 public:
-    QQuickVector2DValueType(QObject *parent = 0);
-
-    virtual QString toString() const;
-    virtual bool isEqual(const QVariant &other) const;
+    Q_INVOKABLE QString toString() const;
 
     qreal x() const;
     qreal y() const;
@@ -105,17 +102,15 @@ public:
     Q_INVOKABLE bool fuzzyEquals(const QVector2D &vec) const;
 };
 
-class Q_AUTOTEST_EXPORT QQuickVector3DValueType : public QQmlValueTypeBase<QVector3D>
+class QQuickVector3DValueType
 {
+    QVector3D v;
     Q_PROPERTY(qreal x READ x WRITE setX FINAL)
     Q_PROPERTY(qreal y READ y WRITE setY FINAL)
     Q_PROPERTY(qreal z READ z WRITE setZ FINAL)
-    Q_OBJECT
+    Q_GADGET
 public:
-    QQuickVector3DValueType(QObject *parent = 0);
-
-    virtual QString toString() const;
-    virtual bool isEqual(const QVariant &other) const;
+    Q_INVOKABLE QString toString() const;
 
     qreal x() const;
     qreal y() const;
@@ -139,18 +134,16 @@ public:
     Q_INVOKABLE bool fuzzyEquals(const QVector3D &vec) const;
 };
 
-class Q_AUTOTEST_EXPORT QQuickVector4DValueType : public QQmlValueTypeBase<QVector4D>
+class QQuickVector4DValueType
 {
+    QVector4D v;
     Q_PROPERTY(qreal x READ x WRITE setX FINAL)
     Q_PROPERTY(qreal y READ y WRITE setY FINAL)
     Q_PROPERTY(qreal z READ z WRITE setZ FINAL)
     Q_PROPERTY(qreal w READ w WRITE setW FINAL)
-    Q_OBJECT
+    Q_GADGET
 public:
-    QQuickVector4DValueType(QObject *parent = 0);
-
-    virtual QString toString() const;
-    virtual bool isEqual(const QVariant &other) const;
+    Q_INVOKABLE QString toString() const;
 
     qreal x() const;
     qreal y() const;
@@ -175,17 +168,16 @@ public:
     Q_INVOKABLE bool fuzzyEquals(const QVector4D &vec) const;
 };
 
-class Q_AUTOTEST_EXPORT QQuickQuaternionValueType : public QQmlValueTypeBase<QQuaternion>
+class QQuickQuaternionValueType
 {
+    QQuaternion v;
     Q_PROPERTY(qreal scalar READ scalar WRITE setScalar)
     Q_PROPERTY(qreal x READ x WRITE setX)
     Q_PROPERTY(qreal y READ y WRITE setY)
     Q_PROPERTY(qreal z READ z WRITE setZ)
-    Q_OBJECT
+    Q_GADGET
 public:
-    QQuickQuaternionValueType(QObject *parent = 0);
-
-    virtual QString toString() const;
+    Q_INVOKABLE QString toString() const;
 
     qreal scalar() const;
     qreal x() const;
@@ -197,8 +189,9 @@ public:
     void setZ(qreal);
 };
 
-class Q_AUTOTEST_EXPORT QQuickMatrix4x4ValueType : public QQmlValueTypeBase<QMatrix4x4>
+class QQuickMatrix4x4ValueType
 {
+    QMatrix4x4 v;
     Q_PROPERTY(qreal m11 READ m11 WRITE setM11 FINAL)
     Q_PROPERTY(qreal m12 READ m12 WRITE setM12 FINAL)
     Q_PROPERTY(qreal m13 READ m13 WRITE setM13 FINAL)
@@ -215,13 +208,8 @@ class Q_AUTOTEST_EXPORT QQuickMatrix4x4ValueType : public QQmlValueTypeBase<QMat
     Q_PROPERTY(qreal m42 READ m42 WRITE setM42 FINAL)
     Q_PROPERTY(qreal m43 READ m43 WRITE setM43 FINAL)
     Q_PROPERTY(qreal m44 READ m44 WRITE setM44 FINAL)
-    Q_OBJECT
+    Q_GADGET
 public:
-    QQuickMatrix4x4ValueType(QObject *parent = 0);
-
-    virtual QString toString() const;
-    virtual bool isEqual(const QVariant &other) const;
-
     qreal m11() const { return v(0, 0); }
     qreal m12() const { return v(0, 1); }
     qreal m13() const { return v(0, 2); }
@@ -274,9 +262,10 @@ public:
     Q_INVOKABLE bool fuzzyEquals(const QMatrix4x4 &m) const;
 };
 
-class Q_AUTOTEST_EXPORT QQuickFontValueType : public QQmlValueTypeBase<QFont>
+class QQuickFontValueType
 {
-    Q_OBJECT
+    QFont v;
+    Q_GADGET
     Q_ENUMS(FontWeight)
     Q_ENUMS(Capitalization)
 
@@ -294,20 +283,22 @@ class Q_AUTOTEST_EXPORT QQuickFontValueType : public QQmlValueTypeBase<QFont>
     Q_PROPERTY(qreal wordSpacing READ wordSpacing WRITE setWordSpacing FINAL)
 
 public:
-    enum FontWeight { Light = QFont::Light,
-                       Normal = QFont::Normal,
-                       DemiBold = QFont::DemiBold,
-                       Bold = QFont::Bold,
-                       Black = QFont::Black };
+    enum FontWeight { Thin = QFont::Thin,
+                      ExtraLight = QFont::ExtraLight,
+                      Light = QFont::Light,
+                      Normal = QFont::Normal,
+                      Medium = QFont::Medium,
+                      DemiBold = QFont::DemiBold,
+                      Bold = QFont::Bold,
+                      ExtraBold = QFont::ExtraBold,
+                      Black = QFont::Black };
     enum Capitalization { MixedCase = QFont::MixedCase,
                            AllUppercase = QFont::AllUppercase,
                            AllLowercase = QFont::AllLowercase,
                            SmallCaps = QFont::SmallCaps,
                            Capitalize = QFont::Capitalize };
 
-    QQuickFontValueType(QObject *parent = 0);
-
-    virtual QString toString() const;
+    Q_INVOKABLE QString toString() const;
 
     QString family() const;
     void setFamily(const QString &);
@@ -344,13 +335,6 @@ public:
 
     qreal wordSpacing() const;
     void setWordSpacing(qreal spacing);
-
-    void onLoad();
-
-private:
-    bool pixelSizeSet;
-    bool pointSizeSet;
-    mutable QQmlNullableValue<int> dpi;
 };
 
 QT_END_NAMESPACE

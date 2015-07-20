@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtNetwork module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -249,6 +241,12 @@ QSslKey QSslCertificate::publicKey() const
         key.d->dsa = q_EVP_PKEY_get1_DSA(pkey);
         key.d->algorithm = QSsl::Dsa;
         key.d->isNull = false;
+#ifndef OPENSSL_NO_EC
+    } else if (q_EVP_PKEY_type(pkey->type) == EVP_PKEY_EC) {
+        key.d->ec = q_EVP_PKEY_get1_EC_KEY(pkey);
+        key.d->algorithm = QSsl::Ec;
+        key.d->isNull = false;
+#endif
     } else if (q_EVP_PKEY_type(pkey->type) == EVP_PKEY_DH) {
         // DH unsupported
     } else {
@@ -667,11 +665,7 @@ QList<QSslCertificate> QSslCertificatePrivate::certificatesFromPem(const QByteAr
 
         QByteArray decoded = QByteArray::fromBase64(
             QByteArray::fromRawData(pem.data() + startPos, endPos - startPos));
-#if OPENSSL_VERSION_NUMBER >= 0x00908000L
         const unsigned char *data = (const unsigned char *)decoded.data();
-#else
-        unsigned char *data = (unsigned char *)decoded.data();
-#endif
 
         if (X509 *x509 = q_d2i_X509(0, &data, decoded.size())) {
             certificates << QSslCertificate_from_X509(x509);
@@ -687,12 +681,7 @@ QList<QSslCertificate> QSslCertificatePrivate::certificatesFromDer(const QByteAr
     QList<QSslCertificate> certificates;
     QSslSocketPrivate::ensureInitialized();
 
-
-#if OPENSSL_VERSION_NUMBER >= 0x00908000L
-        const unsigned char *data = (const unsigned char *)der.data();
-#else
-        unsigned char *data = (unsigned char *)der.data();
-#endif
+    const unsigned char *data = (const unsigned char *)der.data();
     int size = der.size();
 
     while (size > 0 && (count == -1 || certificates.size() < count)) {
@@ -702,7 +691,7 @@ QList<QSslCertificate> QSslCertificatePrivate::certificatesFromDer(const QByteAr
         } else {
             break;
         }
-        size -= ((char *)data - der.data());
+        size -= ((const char *)data - der.data());
     }
 
     return certificates;

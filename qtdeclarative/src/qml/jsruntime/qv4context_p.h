@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -34,20 +34,11 @@
 #define QMLJS_ENVIRONMENT_H
 
 #include "qv4global_p.h"
-#include "qv4scopedvalue_p.h"
 #include "qv4managed_p.h"
-#include "qv4engine_p.h"
 
 QT_BEGIN_NAMESPACE
 
 namespace QV4 {
-
-struct Object;
-struct ExecutionEngine;
-struct DeclarativeEnvironment;
-struct Lookup;
-struct Function;
-struct ValueRef;
 
 namespace CompiledData {
 struct CompilationUnit;
@@ -58,12 +49,27 @@ struct CallContext;
 struct CatchContext;
 struct WithContext;
 
-struct Q_QML_EXPORT ExecutionContext : public Managed
+struct CallData
 {
-    enum {
-        IsExecutionContext = true
-    };
+    // below is to be compatible with Value. Initialize tag to 0
+#if Q_BYTE_ORDER != Q_LITTLE_ENDIAN
+    uint tag;
+#endif
+    int argc;
+#if Q_BYTE_ORDER == Q_LITTLE_ENDIAN
+    uint tag;
+#endif
+    inline ReturnedValue argument(int i) const {
+        return i < argc ? args[i].asReturnedValue() : Primitive::undefinedValue().asReturnedValue();
+    }
 
+    Value thisObject;
+    Value args[1];
+};
+
+namespace Heap {
+
+struct ExecutionContext : Base {
     enum ContextType {
         Type_GlobalContext = 0x1,
         Type_CatchContext = 0x2,
@@ -73,112 +79,109 @@ struct Q_QML_EXPORT ExecutionContext : public Managed
         Type_QmlContext = 0x6
     };
 
-    struct Data : Managed::Data {
-        Data(ExecutionEngine *engine, ContextType t)
-            : Managed::Data(engine->executionContextClass)
-            , type(t)
-            , strictMode(false)
-            , engine(engine)
-            , parent(engine->currentContext())
-            , outer(0)
-            , lookups(0)
-            , compilationUnit(0)
-            , lineNumber(-1)
-        {
-            engine->current = reinterpret_cast<ExecutionContext *>(this);
-        }
-        ContextType type;
-        bool strictMode;
+    inline ExecutionContext(ExecutionEngine *engine, ContextType t);
 
-        CallData *callData;
+    CallData *callData;
 
-        ExecutionEngine *engine;
-        ExecutionContext *parent;
-        ExecutionContext *outer;
-        Lookup *lookups;
-        CompiledData::CompilationUnit *compilationUnit;
+    ExecutionEngine *engine;
+    ExecutionContext *parent;
+    ExecutionContext *outer;
+    Lookup *lookups;
+    CompiledData::CompilationUnit *compilationUnit;
 
-        int lineNumber;
+    ContextType type : 8;
+    bool strictMode : 8;
+    int lineNumber;
+};
 
+struct CallContext : ExecutionContext {
+    CallContext(ExecutionEngine *engine, ContextType t = Type_SimpleCallContext)
+        : ExecutionContext(engine, t)
+    {
+        function = 0;
+        locals = 0;
+        activation = 0;
+    }
+    CallContext(ExecutionEngine *engine, QV4::Object *qml, QV4::FunctionObject *function);
+
+    FunctionObject *function;
+    Value *locals;
+    Object *activation;
+};
+
+struct GlobalContext : ExecutionContext {
+    GlobalContext(ExecutionEngine *engine);
+    Object *global;
+};
+
+struct CatchContext : ExecutionContext {
+    CatchContext(ExecutionEngine *engine, QV4::String *exceptionVarName, const Value &exceptionValue);
+    StringValue exceptionVarName;
+    Value exceptionValue;
+};
+
+struct WithContext : ExecutionContext {
+    WithContext(ExecutionEngine *engine, QV4::Object *with);
+    Object *withObject;
+};
+
+
+}
+
+struct Q_QML_EXPORT ExecutionContext : public Managed
+{
+    enum {
+        IsExecutionContext = true
     };
-    V4_MANAGED(Managed)
+
+    V4_MANAGED(ExecutionContext, Managed)
     Q_MANAGED_TYPE(ExecutionContext)
 
-    ExecutionContext(ExecutionEngine *engine, ContextType t)
-        : Managed(engine->executionContextClass)
-    {
-        d()->type = t;
-        d()->strictMode = false;
-        d()->engine = engine;
-        d()->parent = engine->currentContext();
-        d()->outer = 0;
-        d()->lookups = 0;
-        d()->compilationUnit = 0;
-        d()->lineNumber = -1;
-        engine->current = this;
-    }
+    ExecutionEngine *engine() const { return d()->engine; }
 
-    HeapObject *newCallContext(FunctionObject *f, CallData *callData);
-    WithContext *newWithContext(Object *with);
-    CatchContext *newCatchContext(String *exceptionVarName, const ValueRef exceptionValue);
-    CallContext *newQmlContext(FunctionObject *f, Object *qml);
+    Heap::CallContext *newCallContext(FunctionObject *f, CallData *callData);
+    Heap::WithContext *newWithContext(Object *with);
+    Heap::CatchContext *newCatchContext(String *exceptionVarName, const Value &exceptionValue);
+    Heap::CallContext *newQmlContext(FunctionObject *f, Object *qml);
 
     void createMutableBinding(String *name, bool deletable);
 
-    ReturnedValue throwError(const QV4::ValueRef value);
-    ReturnedValue throwError(const QString &message);
-    ReturnedValue throwSyntaxError(const QString &message);
-    ReturnedValue throwSyntaxError(const QString &message, const QString &fileName, int lineNumber, int column);
-    ReturnedValue throwTypeError();
-    ReturnedValue throwTypeError(const QString &message);
-    ReturnedValue throwReferenceError(const ValueRef value);
-    ReturnedValue throwReferenceError(const QString &value, const QString &fileName, int lineNumber, int column);
-    ReturnedValue throwRangeError(const ValueRef value);
-    ReturnedValue throwRangeError(const QString &message);
-    ReturnedValue throwURIError(const ValueRef msg);
-    ReturnedValue throwUnimplemented(const QString &message);
-
-    void setProperty(String *name, const ValueRef value);
+    void setProperty(String *name, const Value &value);
     ReturnedValue getProperty(String *name);
-    ReturnedValue getPropertyAndBase(String *name, Object *&base);
+    ReturnedValue getPropertyAndBase(String *name, Heap::Object **base);
     bool deleteProperty(String *name);
-
-    // Can only be called from within catch(...), rethrows if no JS exception.
-    ReturnedValue catchException(StackTrace *trace = 0);
 
     inline CallContext *asCallContext();
     inline const CallContext *asCallContext() const;
     inline const CatchContext *asCatchContext() const;
     inline const WithContext *asWithContext() const;
 
-    inline FunctionObject *getFunctionObject() const;
+    Heap::FunctionObject *getFunctionObject() const;
 
-    static void markObjects(Managed *m, ExecutionEngine *e);
+    static void markObjects(Heap::Base *m, ExecutionEngine *e);
+
+    const Value &thisObject() const {
+        return d()->callData->thisObject;
+    }
+    int argc() const {
+        return d()->callData->argc;
+    }
+    const Value *args() const {
+        return d()->callData->args;
+    }
+    ReturnedValue argument(int i) const {
+        return d()->callData->argument(i);
+    }
 };
 
 struct CallContext : public ExecutionContext
 {
-    struct Data : ExecutionContext::Data {
-        Data(ExecutionEngine *engine, ContextType t = Type_SimpleCallContext)
-            : ExecutionContext::Data(engine, t)
-        {
-            function = 0;
-            locals = 0;
-            activation = 0;
-        }
-        Data(ExecutionEngine *engine, Object *qml, QV4::FunctionObject *function);
-
-        FunctionObject *function;
-        int realArgumentCount;
-        Value *locals;
-        Object *activation;
-    };
-    V4_MANAGED(ExecutionContext)
+    V4_MANAGED(CallContext, ExecutionContext)
 
     // formals are in reverse order
-    String * const *formals() const;
+    Identifier * const *formals() const;
     unsigned int formalCount() const;
-    String * const *variables() const;
+    Identifier * const *variables() const;
     unsigned int variableCount() const;
 
     inline ReturnedValue argument(int i);
@@ -186,108 +189,43 @@ struct CallContext : public ExecutionContext
 };
 
 inline ReturnedValue CallContext::argument(int i) {
-    return i < d()->callData->argc ? d()->callData->args[i].asReturnedValue() : Primitive::undefinedValue().asReturnedValue();
+    return i < argc() ? args()[i].asReturnedValue() : Primitive::undefinedValue().asReturnedValue();
 }
 
 struct GlobalContext : public ExecutionContext
 {
-    struct Data : ExecutionContext::Data {
-        Data(ExecutionEngine *engine);
-        Object *global;
-    };
-    V4_MANAGED(ExecutionContext)
+    V4_MANAGED(GlobalContext, ExecutionContext)
 
 };
 
 struct CatchContext : public ExecutionContext
 {
-    struct Data : ExecutionContext::Data {
-        Data(ExecutionEngine *engine, String *exceptionVarName, const ValueRef exceptionValue);
-        StringValue exceptionVarName;
-        Value exceptionValue;
-    };
-    V4_MANAGED(ExecutionContext)
+    V4_MANAGED(CatchContext, ExecutionContext)
 };
 
 struct WithContext : public ExecutionContext
 {
-    struct Data : ExecutionContext::Data {
-        Data(ExecutionEngine *engine, Object *with);
-        Object *withObject;
-    };
-    V4_MANAGED(ExecutionContext)
+    V4_MANAGED(WithContext, ExecutionContext)
 };
 
 inline CallContext *ExecutionContext::asCallContext()
 {
-    return d()->type >= Type_SimpleCallContext ? static_cast<CallContext *>(this) : 0;
+    return d()->type >= Heap::ExecutionContext::Type_SimpleCallContext ? static_cast<CallContext *>(this) : 0;
 }
 
 inline const CallContext *ExecutionContext::asCallContext() const
 {
-    return d()->type >= Type_SimpleCallContext ? static_cast<const CallContext *>(this) : 0;
+    return d()->type >= Heap::ExecutionContext::Type_SimpleCallContext ? static_cast<const CallContext *>(this) : 0;
 }
 
 inline const CatchContext *ExecutionContext::asCatchContext() const
 {
-    return d()->type == Type_CatchContext ? static_cast<const CatchContext *>(this) : 0;
+    return d()->type == Heap::ExecutionContext::Type_CatchContext ? static_cast<const CatchContext *>(this) : 0;
 }
 
 inline const WithContext *ExecutionContext::asWithContext() const
 {
-    return d()->type == Type_WithContext ? static_cast<const WithContext *>(this) : 0;
-}
-
-inline FunctionObject *ExecutionContext::getFunctionObject() const
-{
-    for (const ExecutionContext *it = this; it; it = it->d()->parent) {
-        if (const CallContext *callCtx = it->asCallContext())
-            return callCtx->d()->function;
-        else if (it->asCatchContext() || it->asWithContext())
-            continue; // look in the parent context for a FunctionObject
-        else
-            break;
-    }
-
-    return 0;
-}
-
-inline void ExecutionEngine::pushContext(CallContext *context)
-{
-    context->d()->parent = current;
-    current = context;
-}
-
-inline ExecutionContext *ExecutionEngine::popContext()
-{
-    Q_ASSERT(current->d()->parent);
-    current = current->d()->parent;
-    return current;
-}
-
-struct ExecutionContextSaver
-{
-    ExecutionEngine *engine;
-    ExecutionContext *savedContext;
-
-    ExecutionContextSaver(ExecutionContext *context)
-        : engine(context->d()->engine)
-        , savedContext(context)
-    {
-    }
-    ~ExecutionContextSaver()
-    {
-        engine->current = savedContext;
-    }
-};
-
-inline Scope::Scope(ExecutionContext *ctx)
-    : engine(ctx->d()->engine)
-#ifndef QT_NO_DEBUG
-    , size(0)
-#endif
-{
-    mark = engine->jsStackTop;
+    return d()->type == Heap::ExecutionContext::Type_WithContext ? static_cast<const WithContext *>(this) : 0;
 }
 
 /* Function *f, int argc */

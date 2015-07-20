@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -49,9 +49,6 @@
 #include "testhttpserver.h"
 
 DEFINE_BOOL_CONFIG_OPTION(qmlDisableDistanceField, QML_DISABLE_DISTANCEFIELD)
-
-#define SERVER_PORT 14459
-#define SERVER_ADDR "http://127.0.0.1:14459"
 
 Q_DECLARE_METATYPE(QQuickText::TextFormat)
 
@@ -109,6 +106,7 @@ private slots:
 
     void implicitSize_data();
     void implicitSize();
+    void dependentImplicitSizes();
     void contentSize();
     void implicitSizeBinding_data();
     void implicitSizeBinding();
@@ -147,6 +145,8 @@ private slots:
     void elideBeforeMaximumLineCount();
 
     void hover();
+
+    void growFromZeroWidth();
 
 private:
     QStringList standard;
@@ -2047,7 +2047,7 @@ void tst_qquicktext::embeddedImages_data()
     QTest::newRow("local") << testFileUrl("embeddedImagesLocalRelative.qml") << "";
     QTest::newRow("remote") << testFileUrl("embeddedImagesRemote.qml") << "";
     QTest::newRow("remote-error") << testFileUrl("embeddedImagesRemoteError.qml")
-                                  << testFileUrl("embeddedImagesRemoteError.qml").toString()+":3:1: QML Text: Error downloading " SERVER_ADDR "/notexists.png - server replied: Not found";
+                                  << testFileUrl("embeddedImagesRemoteError.qml").toString()+":3:1: QML Text: Error downloading {{ServerBaseUrl}}/notexists.png - server replied: Not found";
     QTest::newRow("remote") << testFileUrl("embeddedImagesRemoteRelative.qml") << "";
 }
 
@@ -2059,13 +2059,16 @@ void tst_qquicktext::embeddedImages()
     QFETCH(QString, error);
 
     TestHTTPServer server;
-    QVERIFY2(server.listen(SERVER_PORT), qPrintable(server.errorString()));
+    QVERIFY2(server.listen(), qPrintable(server.errorString()));
     server.serveDirectory(testFile("http"));
+    error.replace(QStringLiteral("{{ServerBaseUrl}}"), server.baseUrl().toString());
 
     if (!error.isEmpty())
         QTest::ignoreMessage(QtWarningMsg, error.toLatin1());
 
-    QQuickView *view = new QQuickView(qmlfile);
+    QQuickView *view = new QQuickView;
+    view->rootContext()->setContextProperty(QStringLiteral("serverBaseUrl"), server.baseUrl());
+    view->setSource(qmlfile);
     view->show();
     view->requestActivate();
     QVERIFY(QTest::qWaitForWindowActive(view));
@@ -2202,6 +2205,62 @@ void tst_qquicktext::implicitSize()
     QVERIFY(textObject->height() == textObject->implicitHeight());
 
     delete textObject;
+}
+
+void tst_qquicktext::dependentImplicitSizes()
+{
+    QQmlComponent component(&engine, testFile("implicitSizes.qml"));
+    QScopedPointer<QObject> object(component.create());
+    QVERIFY(object.data());
+
+    QQuickText *reference = object->findChild<QQuickText *>("reference");
+    QQuickText *fixedWidthAndHeight = object->findChild<QQuickText *>("fixedWidthAndHeight");
+    QQuickText *implicitWidthFixedHeight = object->findChild<QQuickText *>("implicitWidthFixedHeight");
+    QQuickText *fixedWidthImplicitHeight = object->findChild<QQuickText *>("fixedWidthImplicitHeight");
+    QQuickText *cappedWidthAndHeight = object->findChild<QQuickText *>("cappedWidthAndHeight");
+    QQuickText *cappedWidthFixedHeight = object->findChild<QQuickText *>("cappedWidthFixedHeight");
+    QQuickText *fixedWidthCappedHeight = object->findChild<QQuickText *>("fixedWidthCappedHeight");
+
+    QVERIFY(reference);
+    QVERIFY(fixedWidthAndHeight);
+    QVERIFY(implicitWidthFixedHeight);
+    QVERIFY(fixedWidthImplicitHeight);
+    QVERIFY(cappedWidthAndHeight);
+    QVERIFY(cappedWidthFixedHeight);
+    QVERIFY(fixedWidthCappedHeight);
+
+    QCOMPARE(reference->width(), reference->implicitWidth());
+    QCOMPARE(reference->height(), reference->implicitHeight());
+
+    QVERIFY(fixedWidthAndHeight->width() < fixedWidthAndHeight->implicitWidth());
+    QVERIFY(fixedWidthAndHeight->height() < fixedWidthAndHeight->implicitHeight());
+    QCOMPARE(fixedWidthAndHeight->implicitWidth(), reference->implicitWidth());
+    QVERIFY(fixedWidthAndHeight->implicitHeight() > reference->implicitHeight());
+
+    QCOMPARE(implicitWidthFixedHeight->width(), implicitWidthFixedHeight->implicitWidth());
+    QVERIFY(implicitWidthFixedHeight->height() < implicitWidthFixedHeight->implicitHeight());
+    QCOMPARE(implicitWidthFixedHeight->implicitWidth(), reference->implicitWidth());
+    QCOMPARE(implicitWidthFixedHeight->implicitHeight(), reference->implicitHeight());
+
+    QVERIFY(fixedWidthImplicitHeight->width() < fixedWidthImplicitHeight->implicitWidth());
+    QCOMPARE(fixedWidthImplicitHeight->height(), fixedWidthImplicitHeight->implicitHeight());
+    QCOMPARE(fixedWidthImplicitHeight->implicitWidth(), reference->implicitWidth());
+    QCOMPARE(fixedWidthImplicitHeight->implicitHeight(), fixedWidthAndHeight->implicitHeight());
+
+    QVERIFY(cappedWidthAndHeight->width() < cappedWidthAndHeight->implicitWidth());
+    QVERIFY(cappedWidthAndHeight->height() < cappedWidthAndHeight->implicitHeight());
+    QCOMPARE(cappedWidthAndHeight->implicitWidth(), reference->implicitWidth());
+    QCOMPARE(cappedWidthAndHeight->implicitHeight(), fixedWidthAndHeight->implicitHeight());
+
+    QVERIFY(cappedWidthFixedHeight->width() < cappedWidthAndHeight->implicitWidth());
+    QVERIFY(cappedWidthFixedHeight->height() < cappedWidthFixedHeight->implicitHeight());
+    QCOMPARE(cappedWidthFixedHeight->implicitWidth(), reference->implicitWidth());
+    QCOMPARE(cappedWidthFixedHeight->implicitHeight(), fixedWidthAndHeight->implicitHeight());
+
+    QVERIFY(fixedWidthCappedHeight->width() < fixedWidthCappedHeight->implicitWidth());
+    QVERIFY(fixedWidthCappedHeight->height() < fixedWidthCappedHeight->implicitHeight());
+    QCOMPARE(fixedWidthCappedHeight->implicitWidth(), reference->implicitWidth());
+    QCOMPARE(fixedWidthCappedHeight->implicitHeight(), fixedWidthAndHeight->implicitHeight());
 }
 
 void tst_qquicktext::contentSize()
@@ -2775,20 +2834,31 @@ void tst_qquicktext::imgTagsBaseUrl_data()
             << 181.;
 
     QTest::newRow("absolute remote")
-            << QUrl(SERVER_ADDR "/images/heart200.png")
+            << QUrl("http://testserver/images/heart200.png")
             << QUrl()
             << QUrl()
             << 181.;
     QTest::newRow("relative remote base 1")
             << QUrl("images/heart200.png")
-            << QUrl(SERVER_ADDR "/")
+            << QUrl("http://testserver/")
             << testFileUrl("nonexistant/app.qml")
             << 181.;
     QTest::newRow("relative remote base 2")
             << QUrl("heart200.png")
-            << QUrl(SERVER_ADDR "/images/")
+            << QUrl("http://testserver/images/")
             << testFileUrl("nonexistant/app.qml")
             << 181.;
+}
+
+static QUrl substituteTestServerUrl(const QUrl &serverUrl, const QUrl &testUrl)
+{
+    QUrl result = testUrl;
+    if (result.host() == QStringLiteral("testserver")) {
+        result.setScheme(serverUrl.scheme());
+        result.setHost(serverUrl.host());
+        result.setPort(serverUrl.port());
+    }
+    return result;
 }
 
 void tst_qquicktext::imgTagsBaseUrl()
@@ -2799,8 +2869,12 @@ void tst_qquicktext::imgTagsBaseUrl()
     QFETCH(qreal, imgHeight);
 
     TestHTTPServer server;
-    QVERIFY2(server.listen(SERVER_PORT), qPrintable(server.errorString()));
+    QVERIFY2(server.listen(), qPrintable(server.errorString()));
     server.serveDirectory(testFile(""));
+
+    src = substituteTestServerUrl(server.baseUrl(), src);
+    baseUrl = substituteTestServerUrl(server.baseUrl(), baseUrl);
+    contextUrl = substituteTestServerUrl(server.baseUrl(), contextUrl);
 
     QByteArray baseUrlFragment;
     if (!baseUrl.isEmpty())
@@ -2871,7 +2945,7 @@ void tst_qquicktext::imgTagsMultipleImages()
 
     QQuickTextPrivate *textPrivate = QQuickTextPrivate::get(textObject);
     QVERIFY(textPrivate != 0);
-    QVERIFY(textPrivate->visibleImgTags.count() == 2);
+    QVERIFY(textPrivate->extra->visibleImgTags.count() == 2);
 
     delete textObject;
 }
@@ -2884,9 +2958,9 @@ void tst_qquicktext::imgTagsElide()
 
     QQuickTextPrivate *textPrivate = QQuickTextPrivate::get(myText);
     QVERIFY(textPrivate != 0);
-    QVERIFY(textPrivate->visibleImgTags.count() == 0);
+    QVERIFY(textPrivate->extra->visibleImgTags.count() == 0);
     myText->setMaximumLineCount(20);
-    QTRY_VERIFY(textPrivate->visibleImgTags.count() == 1);
+    QTRY_VERIFY(textPrivate->extra->visibleImgTags.count() == 1);
 
     delete myText;
     delete window;
@@ -2904,12 +2978,12 @@ void tst_qquicktext::imgTagsUpdates()
     QVERIFY(textPrivate != 0);
 
     myText->setText("This is a heart<img src=\"images/heart200.png\">.");
-    QVERIFY(textPrivate->visibleImgTags.count() == 1);
+    QVERIFY(textPrivate->extra->visibleImgTags.count() == 1);
     QVERIFY(spy.count() == 1);
 
     myText->setMaximumLineCount(2);
     myText->setText("This is another heart<img src=\"images/heart200.png\">.");
-    QTRY_VERIFY(textPrivate->visibleImgTags.count() == 1);
+    QTRY_VERIFY(textPrivate->extra->visibleImgTags.count() == 1);
 
     // if maximumLineCount is set and the img tag doesn't have an explicit size
     // we relayout twice.
@@ -3879,6 +3953,23 @@ void tst_qquicktext::hover()
     QTest::mouseMove(window, center + delta);
 
     QVERIFY(mouseArea->property("wasHovered").toBool());
+}
+
+void tst_qquicktext::growFromZeroWidth()
+{
+    QQmlComponent component(&engine, testFile("growFromZeroWidth.qml"));
+
+    QScopedPointer<QObject> object(component.create());
+
+    QQuickText *text = qobject_cast<QQuickText *>(object.data());
+    QVERIFY(text);
+
+    QCOMPARE(text->lineCount(), 3);
+
+    text->setWidth(80);
+
+    // the new width should force our contents to wrap
+    QVERIFY(text->lineCount() > 3);
 }
 
 QTEST_MAIN(tst_qquicktext)

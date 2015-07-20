@@ -3,7 +3,7 @@
 ** Copyright (C) 2011-2012 Denis Shienkov <denis.shienkov@gmail.com>
 ** Copyright (C) 2011 Sergey Belyashov <Sergey.Belyashov@gmail.com>
 ** Copyright (C) 2012 Laszlo Papp <lpapp@kde.org>
-** Contact: http://www.qt-project.org/legal
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtSerialPort module of the Qt Toolkit.
 **
@@ -12,9 +12,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -25,8 +25,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -35,7 +35,7 @@
 
 #include "qserialportinfo.h"
 #include "qserialportinfo_p.h"
-#include "qserialport_unix_p.h"
+#include "qserialport_p.h"
 
 #include "private/qcore_mac_p.h"
 
@@ -87,11 +87,6 @@ static bool isCompleteInfo(const QSerialPortInfoPrivate &priv)
             && !priv.serialNumber.isEmpty()
             && priv.hasProductIdentifier
             && priv.hasVendorIdentifier;
-}
-
-static QString devicePortName(io_registry_entry_t ioRegistryEntry)
-{
-    return searchStringProperty(ioRegistryEntry, QCFString(kIOTTYDeviceKey));
 }
 
 static QString deviceSystemLocation(io_registry_entry_t ioRegistryEntry)
@@ -163,11 +158,11 @@ QList<QSerialPortInfo> QSerialPortInfo::availablePorts()
         QSerialPortInfoPrivate priv;
 
         forever {
-            if (priv.portName.isEmpty())
-                priv.portName = devicePortName(serialPortService);
-
-            if (priv.device.isEmpty())
+            if (priv.device.isEmpty()) {
                 priv.device = deviceSystemLocation(serialPortService);
+                if (!priv.device.isEmpty())
+                    priv.portName = QSerialPortInfoPrivate::portNameFromSystemLocation(priv.device);
+            }
 
             if (priv.description.isEmpty())
                 priv.description = deviceDescription(serialPortService);
@@ -245,14 +240,14 @@ bool QSerialPortInfo::isValid() const
 QString QSerialPortInfoPrivate::portNameToSystemLocation(const QString &source)
 {
     return (source.startsWith(QLatin1Char('/'))
-            || source.startsWith(QStringLiteral("./"))
-            || source.startsWith(QStringLiteral("../")))
-            ? source : (QStringLiteral("/dev/") + source);
+            || source.startsWith(QLatin1String("./"))
+            || source.startsWith(QLatin1String("../")))
+            ? source : (QLatin1String("/dev/") + source);
 }
 
 QString QSerialPortInfoPrivate::portNameFromSystemLocation(const QString &source)
 {
-    return source.startsWith(QStringLiteral("/dev/"))
+    return source.startsWith(QLatin1String("/dev/"))
             ? source.mid(5) : source;
 }
 

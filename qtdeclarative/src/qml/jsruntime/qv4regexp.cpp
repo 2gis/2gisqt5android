@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -42,7 +42,7 @@ RegExpCache::~RegExpCache()
 {
     for (RegExpCache::Iterator it = begin(), e = end();
          it != e; ++it)
-        it.value()->d()->cache = 0;
+        it.value()->cache = 0;
     clear();
 }
 
@@ -57,40 +57,39 @@ uint RegExp::match(const QString &string, int start, uint *matchOffsets)
 
 #if ENABLE(YARR_JIT)
     if (!jitCode().isFallBack() && jitCode().has16BitCode())
-        return jitCode().execute(s.characters16(), start, s.length(), (int*)matchOffsets).start;
+        return uint(jitCode().execute(s.characters16(), start, s.length(), (int*)matchOffsets).start);
 #endif
 
     return JSC::Yarr::interpret(byteCode().get(), s.characters16(), string.length(), start, matchOffsets);
 }
 
-RegExp* RegExp::create(ExecutionEngine* engine, const QString& pattern, bool ignoreCase, bool multiline)
+Heap::RegExp *RegExp::create(ExecutionEngine* engine, const QString& pattern, bool ignoreCase, bool multiline)
 {
     RegExpCacheKey key(pattern, ignoreCase, multiline);
 
     RegExpCache *cache = engine->regExpCache;
     if (cache) {
-        if (RegExp *result = cache->value(key))
+        if (Heap::RegExp *result = cache->value(key))
             return result;
     }
 
-    RegExp *result = engine->memoryManager->alloc<RegExp>(engine, pattern, ignoreCase, multiline);
+    Scope scope(engine);
+    Scoped<RegExp> result(scope, engine->memoryManager->alloc<RegExp>(engine, pattern, ignoreCase, multiline));
 
     if (!cache)
         cache = engine->regExpCache = new RegExpCache;
 
     result->d()->cache = cache;
-    cache->insert(key, result);
+    cache->insert(key, result->d());
 
-    return result;
+    return result->d();
 }
 
-RegExp::Data::Data(ExecutionEngine* engine, const QString &pattern, bool ignoreCase, bool multiline)
-    : Managed::Data(engine->regExpValueClass)
-    , pattern(pattern)
+Heap::RegExp::RegExp(ExecutionEngine* engine, const QString &pattern, bool ignoreCase, bool multiline)
+    : pattern(pattern)
     , ignoreCase(ignoreCase)
     , multiLine(multiline)
 {
-    setVTable(staticVTable());
     const char* error = 0;
     JSC::Yarr::YarrPattern yarrPattern(WTF::String(pattern), ignoreCase, multiline, &error);
     if (error)
@@ -105,7 +104,7 @@ RegExp::Data::Data(ExecutionEngine* engine, const QString &pattern, bool ignoreC
 #endif
 }
 
-RegExp::Data::~Data()
+Heap::RegExp::~RegExp()
 {
     if (cache) {
         RegExpCacheKey key(this);
@@ -113,12 +112,7 @@ RegExp::Data::~Data()
     }
 }
 
-void RegExp::destroy(Managed *that)
-{
-    static_cast<RegExp*>(that)->d()->~Data();
-}
-
-void RegExp::markObjects(Managed *that, ExecutionEngine *e)
+void RegExp::markObjects(Heap::Base *that, ExecutionEngine *e)
 {
     Q_UNUSED(that);
     Q_UNUSED(e);

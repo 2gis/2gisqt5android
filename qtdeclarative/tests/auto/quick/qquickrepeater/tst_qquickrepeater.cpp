@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -40,6 +40,7 @@
 #include <QtQml/qqmlincubator.h>
 #include <private/qquickrepeater_p.h>
 #include <QtQuick/private/qquicktext_p.h>
+#include <QtQml/private/qqmllistmodel_p.h>
 
 #include "../../shared/util.h"
 #include "../shared/viewtestutil.h"
@@ -73,6 +74,8 @@ private slots:
     void visualItemModelCrash();
     void invalidContextCrash();
     void jsArrayChange();
+    void clearRemovalOrder();
+    void destroyCount();
 };
 
 class TestObject : public QObject
@@ -290,6 +293,18 @@ void tst_QQuickRepeater::dataModel_adding()
     QCOMPARE(addedSpy.at(0).at(0).toInt(), 2);
     QCOMPARE(addedSpy.at(0).at(1).value<QQuickItem*>(), container->childItems().at(2));
     addedSpy.clear();
+
+    //insert in middle multiple
+    int childItemsSize = container->childItems().size();
+    QList<QPair<QString, QString> > multiData;
+    multiData << qMakePair(QStringLiteral("five"), QStringLiteral("5")) << qMakePair(QStringLiteral("six"), QStringLiteral("6")) << qMakePair(QStringLiteral("seven"), QStringLiteral("7"));
+    testModel.insertItems(1, multiData);
+    QCOMPARE(countSpy.count(), 1);
+    QCOMPARE(addedSpy.count(), 3);
+    QCOMPARE(container->childItems().size(), childItemsSize + 3);
+    QCOMPARE(repeater->itemAt(2), container->childItems().at(2));
+    addedSpy.clear();
+    countSpy.clear();
 
     delete testObject;
     addedSpy.clear();
@@ -674,7 +689,8 @@ void tst_QQuickRepeater::asynchronous()
     }
 
     // items will be created one at a time
-    for (int i = 0; i < 10; ++i) {
+    // the order is incubator/model specific
+    for (int i = 9; i >= 0; --i) {
         QString name("delegate");
         name += QString::number(i);
         QVERIFY(findItem<QQuickItem>(container, name) == 0);
@@ -805,6 +821,77 @@ void tst_QQuickRepeater::jsArrayChange()
     // no change
     repeater->setModel(QVariant::fromValue(array2));
     QCOMPARE(spy.count(), 1);
+}
+
+void tst_QQuickRepeater::clearRemovalOrder()
+{
+    // Here, we're going to test that when the model is cleared, item removal
+    // signals are sent in a sensible order that gives us correct indices.
+    // (QTBUG-42243)
+    QQmlEngine engine;
+    QQmlComponent component(&engine, testFileUrl("clearremovalorder.qml"));
+
+    QQuickItem *rootObject = qobject_cast<QQuickItem*>(component.create());
+    QVERIFY(rootObject);
+
+    QQuickRepeater *repeater = findItem<QQuickRepeater>(rootObject, "repeater");
+    QVERIFY(repeater);
+    QCOMPARE(repeater->count(), 3);
+
+    QQmlListModel *model = rootObject->findChild<QQmlListModel*>("secondModel");
+    QVERIFY(model);
+    QCOMPARE(model->count(), 0);
+
+    // Now change the model
+    QSignalSpy removedSpy(repeater, &QQuickRepeater::itemRemoved);
+    repeater->setModel(QVariant::fromValue(model));
+
+    // we should have 0 items, and 3 removal signals.
+    QCOMPARE(repeater->count(), 0);
+    QCOMPARE(removedSpy.count(), 3);
+
+    // column 1 is for the items, we won't bother verifying these. just look at
+    // the indices and make sure they're sane.
+    QCOMPARE(removedSpy.at(0).at(0).toInt(), 2);
+    QCOMPARE(removedSpy.at(1).at(0).toInt(), 1);
+    QCOMPARE(removedSpy.at(2).at(0).toInt(), 0);
+
+    delete rootObject;
+}
+
+void tst_QQuickRepeater::destroyCount()
+{
+    QQmlEngine engine;
+    QQmlComponent component(&engine, testFileUrl("destroycount.qml"));
+
+    QQuickItem *rootObject = qobject_cast<QQuickItem*>(component.create());
+    QVERIFY(rootObject);
+
+    QQuickRepeater *repeater = findItem<QQuickRepeater>(rootObject, "repeater");
+    QVERIFY(repeater);
+
+    repeater->setProperty("model", qVariantFromValue<int>(3));
+    QCOMPARE(repeater->property("componentCount").toInt(), 3);
+    repeater->setProperty("model", qVariantFromValue<int>(0));
+    QCOMPARE(repeater->property("componentCount").toInt(), 0);
+    repeater->setProperty("model", qVariantFromValue<int>(4));
+    QCOMPARE(repeater->property("componentCount").toInt(), 4);
+
+    QStringListModel model;
+    repeater->setProperty("model", qVariantFromValue<QStringListModel *>(&model));
+    QCOMPARE(repeater->property("componentCount").toInt(), 0);
+    QStringList list;
+    list << "1" << "2" << "3" << "4";
+    model.setStringList(list);
+    QCOMPARE(repeater->property("componentCount").toInt(), 4);
+    model.insertRows(2,1);
+    QModelIndex index = model.index(2);
+    model.setData(index, qVariantFromValue<QString>(QStringLiteral("foobar")));
+    QCOMPARE(repeater->property("componentCount").toInt(), 5);
+
+    model.removeRows(2,1);
+    QCOMPARE(model.rowCount(), 4);
+    QCOMPARE(repeater->property("componentCount").toInt(), 4);
 }
 
 QTEST_MAIN(tst_QQuickRepeater)

@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQuick module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -427,11 +427,11 @@ void QQuickParticleGroupData::prepareRecycler(QQuickParticleData* d)
 }
 
 QQuickParticleData::QQuickParticleData(QQuickParticleSystem* sys)
-    : group(0)
-    , e(0)
+    : e(0)
     , system(sys)
     , index(0)
     , systemIndex(-1)
+    , group(0)
     , colorOwner(0)
     , rotationOwner(0)
     , deformationOwner(0)
@@ -931,19 +931,26 @@ void QQuickParticleSystem::emittersChanged()
     if (!m_componentComplete)
         return;
 
-    m_emitters.removeAll(0);
-
-
-    QList<int> previousSizes;
-    QList<int> newSizes;
+    QVector<int> previousSizes;
+    QVector<int> newSizes;
+    previousSizes.reserve(m_nextGroupId);
+    newSizes.reserve(m_nextGroupId);
     for (int i=0; i<m_nextGroupId; i++) {
         previousSizes << groupData[i]->size();
         newSizes << 0;
     }
 
-    foreach (QQuickParticleEmitter* e, m_emitters) {//Populate groups and set sizes.
-        if (!groupIds.contains(e->group())
-                || (!e->group().isEmpty() && !groupIds[e->group()])) {//or it was accidentally inserted by a failed lookup earlier
+    // Populate groups and set sizes.
+    for (int i = 0; i < m_emitters.count(); ++i) {
+        QQuickParticleEmitter *e = m_emitters.at(i);
+        if (!e) {
+            m_emitters.removeAt(i);
+            i--;
+            continue;
+        }
+
+        if (!e->group().isEmpty() &&
+            !groupIds.contains(e->group())) {
             int id = m_nextGroupId++;
             QQuickParticleGroupData* gd = new QQuickParticleGroupData(id, this);
             groupIds.insert(e->group(), id);

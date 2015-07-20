@@ -29,12 +29,11 @@
 
 #include "core/html/canvas/WebGLRenderingContextBase.h"
 
-namespace WebCore {
+namespace blink {
 
 WebGLLoseContext::WebGLLoseContext(WebGLRenderingContextBase* context)
     : WebGLExtension(context)
 {
-    ScriptWrappable::init(this);
 }
 
 WebGLLoseContext::~WebGLLoseContext()
@@ -52,21 +51,23 @@ WebGLExtensionName WebGLLoseContext::name() const
     return WebGLLoseContextName;
 }
 
-PassRefPtr<WebGLLoseContext> WebGLLoseContext::create(WebGLRenderingContextBase* context)
+PassRefPtrWillBeRawPtr<WebGLLoseContext> WebGLLoseContext::create(WebGLRenderingContextBase* context)
 {
-    return adoptRef(new WebGLLoseContext(context));
+    return adoptRefWillBeNoop(new WebGLLoseContext(context));
 }
 
 void WebGLLoseContext::loseContext()
 {
-    if (!isLost())
-        m_context->forceLostContext(WebGLRenderingContextBase::SyntheticLostContext);
+    WebGLExtensionScopedContext scoped(this);
+    if (!scoped.isLost())
+        scoped.context()->forceLostContext(WebGLRenderingContextBase::WebGLLoseContextLostContext, WebGLRenderingContextBase::Manual);
 }
 
 void WebGLLoseContext::restoreContext()
 {
-    if (!isLost())
-        m_context->forceRestoreContext();
+    WebGLExtensionScopedContext scoped(this);
+    if (!scoped.isLost())
+        scoped.context()->forceRestoreContext();
 }
 
 bool WebGLLoseContext::supported(WebGLRenderingContextBase*)
@@ -79,4 +80,4 @@ const char* WebGLLoseContext::extensionName()
     return "WEBGL_lose_context";
 }
 
-} // namespace WebCore
+} // namespace blink

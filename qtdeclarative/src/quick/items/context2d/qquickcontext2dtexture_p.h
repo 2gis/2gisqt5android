@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQuick module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -165,21 +165,21 @@ class QQuickContext2DFBOTexture : public QQuickContext2DTexture
 public:
     QQuickContext2DFBOTexture();
     ~QQuickContext2DFBOTexture();
-    virtual QQuickContext2DTile* createTile() const;
-    virtual QPaintDevice* beginPainting();
-    virtual void endPainting();
+    QQuickContext2DTile* createTile() const Q_DECL_OVERRIDE;
+    QPaintDevice* beginPainting() Q_DECL_OVERRIDE;
+    void endPainting() Q_DECL_OVERRIDE;
     QRectF normalizedTextureSubRect() const;
-    virtual QQuickCanvasItem::RenderTarget renderTarget() const;
-    virtual void compositeTile(QQuickContext2DTile* tile);
-    QSize adjustedTileSize(const QSize &ts);
+    QQuickCanvasItem::RenderTarget renderTarget() const Q_DECL_OVERRIDE;
+    void compositeTile(QQuickContext2DTile* tile) Q_DECL_OVERRIDE;
+    QSize adjustedTileSize(const QSize &ts) Q_DECL_OVERRIDE;
 
-    QSGTexture *textureForNextFrame(QSGTexture *, QQuickWindow *window);
+    QSGTexture *textureForNextFrame(QSGTexture *, QQuickWindow *window) Q_DECL_OVERRIDE;
 
 protected:
     QVector2D scaleFactor() const Q_DECL_OVERRIDE;
 
 public Q_SLOTS:
-    virtual void grabImage(const QRectF& region = QRectF());
+    void grabImage(const QRectF& region = QRectF()) Q_DECL_OVERRIDE;
 
 private:
     bool doMultisampling() const;

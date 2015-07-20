@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -43,6 +43,8 @@
 #include <QtCore/qdebug.h>
 #include <QtCore/qset.h>
 #include <cmath>
+
+#include <vector>
 
 #ifdef CONST
 #undef CONST
@@ -152,7 +154,7 @@ AluOp binaryOperator(int op)
 struct RemoveSharedExpressions: IR::StmtVisitor, IR::ExprVisitor
 {
     CloneExpr clone;
-    QSet<Expr *> subexpressions; // contains all the non-cloned subexpressions in the given function
+    std::vector<Expr *> subexpressions; // contains all the non-cloned subexpressions in the given function. sorted using std::lower_bound.
     Expr *uniqueExpr;
 
     RemoveSharedExpressions(): uniqueExpr(0) {}
@@ -176,18 +178,19 @@ struct RemoveSharedExpressions: IR::StmtVisitor, IR::ExprVisitor
     template <typename _Expr>
     _Expr *cleanup(_Expr *expr)
     {
-        if (subexpressions.contains(expr)) {
-             // the cloned expression is unique by definition
-            // so we don't need to add it to `subexpressions'.
-            return clone(expr);
+        std::vector<Expr *>::iterator it = std::lower_bound(subexpressions.begin(), subexpressions.end(), expr);
+        if (it == subexpressions.end() || *it != expr) {
+            subexpressions.insert(it, expr);
+            IR::Expr *e = expr;
+            qSwap(uniqueExpr, e);
+            expr->accept(this);
+            qSwap(uniqueExpr, e);
+            return static_cast<_Expr *>(e);
         }
 
-        subexpressions.insert(expr);
-        IR::Expr *e = expr;
-        qSwap(uniqueExpr, e);
-        expr->accept(this);
-        qSwap(uniqueExpr, e);
-        return static_cast<_Expr *>(e);
+        // the cloned expression is unique by definition
+        // so we don't need to add it to `subexpressions'.
+        return clone(expr);
     }
 
     // statements
@@ -508,8 +511,11 @@ void Function::setStatementCount(int cnt)
 
 BasicBlock::~BasicBlock()
 {
-    foreach (Stmt *s, _statements)
-        s->destroyData();
+    foreach (Stmt *s, _statements) {
+        Phi *p = s->asPhi();
+        if (p)
+            p->destroyData();
+    }
 }
 
 unsigned BasicBlock::newTemp()
@@ -763,8 +769,12 @@ void BasicBlock::setStatements(const QVector<Stmt *> &newStatements)
     Q_ASSERT(newStatements.size() >= _statements.size());
     // FIXME: this gets quite inefficient for large basic-blocks, so this function/case should be re-worked.
     foreach (Stmt *s, _statements) {
-        if (!newStatements.contains(s))
-            s->destroyData();
+        Phi *p = s->asPhi();
+        if (!p)
+            continue;
+
+        if (!newStatements.contains(p))
+            p->destroyData();
     }
     _statements = newStatements;
 }
@@ -813,21 +823,27 @@ void BasicBlock::insertStatementBeforeTerminator(Stmt *stmt)
 void BasicBlock::replaceStatement(int index, Stmt *newStmt)
 {
     Q_ASSERT(!isRemoved());
-    _statements[index]->destroyData();
+    Phi *p = _statements[index]->asPhi();
+    if (p)
+        p->destroyData();
     _statements[index] = newStmt;
 }
 
 void BasicBlock::removeStatement(Stmt *stmt)
 {
     Q_ASSERT(!isRemoved());
-    stmt->destroyData();
+    Phi *p = stmt->asPhi();
+    if (p)
+        p->destroyData();
     _statements.remove(_statements.indexOf(stmt));
 }
 
 void BasicBlock::removeStatement(int idx)
 {
     Q_ASSERT(!isRemoved());
-    _statements[idx]->destroyData();
+    Phi *p = _statements[idx]->asPhi();
+    if (p)
+        p->destroyData();
     _statements.remove(idx);
 }
 

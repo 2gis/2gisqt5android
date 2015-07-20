@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -199,6 +199,8 @@ public:
     bool operator==(const TestValue &other) const { return (m_p1 == other.m_p1) && (m_p2 == other.m_p2); }
     bool operator!=(const TestValue &other) const { return !operator==(other); }
 
+    bool operator<(const TestValue &other) const { if (m_p1 < other.m_p1) return true; return m_p2 < other.m_p2; }
+
 private:
     int m_p1;
     double m_p2;
@@ -210,16 +212,14 @@ Q_DECLARE_METATYPE(TestValue);
 
 namespace {
 
-class TestValueType : public QQmlValueTypeBase<TestValue>
+class TestValueType
 {
-    Q_OBJECT
+    TestValue v;
+    Q_GADGET
     Q_PROPERTY(int property1 READ property1 WRITE setProperty1)
     Q_PROPERTY(double property2 READ property2 WRITE setProperty2)
 public:
-    TestValueType(QObject *parent = 0) : QQmlValueTypeBase<TestValue>(qMetaTypeId<TestValue>(), parent) {}
-
-    virtual QString toString() const { return QString::number(property1()) + QLatin1Char(',') + QString::number(property2()); }
-    virtual bool isEqual(const QVariant &other) const { return (other.userType() == qMetaTypeId<TestValue>()) && (v == other.value<TestValue>()); }
+    Q_INVOKABLE QString toString() const { return QString::number(property1()) + QLatin1Char(',') + QString::number(property2()); }
 
     int property1() const { return v.property1(); }
     void setProperty1(int p1) { v.setProperty1(p1); }
@@ -231,14 +231,12 @@ public:
 class TestValueTypeProvider : public QQmlValueTypeProvider
 {
 public:
-    bool create(int type, QQmlValueType *&v)
+    const QMetaObject *getMetaObjectForMetaType(int type)
     {
-        if (type == qMetaTypeId<TestValue>()) {
-            v = new TestValueType;
-            return true;
-        }
+        if (type == qMetaTypeId<TestValue>())
+            return &TestValueType::staticMetaObject;
 
-        return false;
+        return 0;
     }
 
 };
@@ -279,6 +277,7 @@ void tst_qqmlvaluetypeproviders::userType()
     Q_ASSERT(qMetaTypeId<TestValue>() >= QMetaType::User);
 
     qRegisterMetaType<TestValue>();
+    QMetaType::registerComparators<TestValue>();
     qmlRegisterType<TestValueExporter>("Test", 1, 0, "TestValueExporter");
 
     TestValueExporter exporter;

@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -40,8 +40,13 @@
 #include <QtGui/qpainter.h>
 
 #include <gst/gst.h>
+
+#if !GST_CHECK_VERSION(1,0,0)
 #include <gst/interfaces/xoverlay.h>
 #include <gst/interfaces/propertyprobe.h>
+#else
+#include <gst/video/videooverlay.h>
+#endif
 
 QT_BEGIN_NAMESPACE
 
@@ -93,6 +98,22 @@ QGstreamerVideoWidgetControl::QGstreamerVideoWidgetControl(QObject *parent)
     , m_widget(0)
     , m_fullScreen(false)
 {
+    // The QWidget needs to have a native X window handle to be able to use xvimagesink.
+    // Bail out if Qt is not using xcb (the control will then be ignored by the plugin)
+    if (QGuiApplication::platformName().compare(QLatin1String("xcb"), Qt::CaseInsensitive) == 0)
+        m_videoSink = gst_element_factory_make ("xvimagesink", NULL);
+
+    if (m_videoSink) {
+        // Check if the xv sink is usable
+        if (gst_element_set_state(m_videoSink, GST_STATE_READY) != GST_STATE_CHANGE_SUCCESS) {
+            gst_object_unref(GST_OBJECT(m_videoSink));
+            m_videoSink = 0;
+        } else {
+            gst_element_set_state(m_videoSink, GST_STATE_NULL);
+            g_object_set(G_OBJECT(m_videoSink), "force-aspect-ratio", 1, (const char*)NULL);
+            qt_gst_object_ref_sink(GST_OBJECT (m_videoSink)); //Take ownership
+        }
+    }
 }
 
 QGstreamerVideoWidgetControl::~QGstreamerVideoWidgetControl()
@@ -105,38 +126,17 @@ QGstreamerVideoWidgetControl::~QGstreamerVideoWidgetControl()
 
 void QGstreamerVideoWidgetControl::createVideoWidget()
 {
-    if (m_widget)
+    if (!m_videoSink || m_widget)
         return;
 
     m_widget = new QGstreamerVideoWidget;
 
     m_widget->installEventFilter(this);
     m_windowId = m_widget->winId();
-
-    m_videoSink = gst_element_factory_make ("xvimagesink", NULL);
-    if (m_videoSink) {
-        // Check if the xv sink is usable
-        if (gst_element_set_state(m_videoSink, GST_STATE_READY) != GST_STATE_CHANGE_SUCCESS) {
-            gst_object_unref(GST_OBJECT(m_videoSink));
-            m_videoSink = 0;
-        } else {
-            gst_element_set_state(m_videoSink, GST_STATE_NULL);
-
-            g_object_set(G_OBJECT(m_videoSink), "force-aspect-ratio", 1, (const char*)NULL);
-        }
-    }
-
-    if (!m_videoSink)
-        m_videoSink = gst_element_factory_make ("ximagesink", NULL);
-
-    qt_gst_object_ref_sink(GST_OBJECT (m_videoSink)); //Take ownership
-
-
 }
 
 GstElement *QGstreamerVideoWidgetControl::videoSink()
 {
-    createVideoWidget();
     return m_videoSink;
 }
 
@@ -169,9 +169,13 @@ bool QGstreamerVideoWidgetControl::processSyncMessage(const QGstreamerMessage &m
 {
     GstMessage* gm = message.rawMessage();
 
+#if !GST_CHECK_VERSION(1,0,0)
     if (gm && (GST_MESSAGE_TYPE(gm) == GST_MESSAGE_ELEMENT) &&
             gst_structure_has_name(gm->structure, "prepare-xwindow-id")) {
-
+#else
+      if (gm && (GST_MESSAGE_TYPE(gm) == GST_MESSAGE_ELEMENT) &&
+              gst_structure_has_name(gst_message_get_structure(gm), "prepare-window-handle")) {
+#endif
         setOverlay();
         QMetaObject::invokeMethod(this, "updateNativeVideoSize", Qt::QueuedConnection);
         return true;
@@ -199,17 +203,24 @@ bool QGstreamerVideoWidgetControl::processBusMessage(const QGstreamerMessage &me
 
 void QGstreamerVideoWidgetControl::setOverlay()
 {
+#if !GST_CHECK_VERSION(1,0,0)
     if (m_videoSink && GST_IS_X_OVERLAY(m_videoSink)) {
         gst_x_overlay_set_xwindow_id(GST_X_OVERLAY(m_videoSink), m_windowId);
     }
+#else
+    if (m_videoSink && GST_IS_VIDEO_OVERLAY(m_videoSink)) {
+        gst_video_overlay_set_window_handle(GST_VIDEO_OVERLAY(m_videoSink), m_windowId);
+    }
+#endif
 }
 
 void QGstreamerVideoWidgetControl::updateNativeVideoSize()
 {
     if (m_videoSink) {
         //find video native size to update video widget size hint
-        GstPad *pad = gst_element_get_static_pad(m_videoSink,"sink");
-        GstCaps *caps = gst_pad_get_negotiated_caps(pad);
+        GstPad *pad = gst_element_get_static_pad(m_videoSink, "sink");
+        GstCaps *caps = qt_gst_pad_get_current_caps(pad);
+
         gst_object_unref(GST_OBJECT(pad));
 
         if (caps) {
@@ -225,8 +236,13 @@ void QGstreamerVideoWidgetControl::updateNativeVideoSize()
 
 void QGstreamerVideoWidgetControl::windowExposed()
 {
+#if !GST_CHECK_VERSION(1,0,0)
     if (m_videoSink && GST_IS_X_OVERLAY(m_videoSink))
         gst_x_overlay_expose(GST_X_OVERLAY(m_videoSink));
+#else
+    if (m_videoSink && GST_IS_VIDEO_OVERLAY(m_videoSink))
+        gst_video_overlay_expose(GST_VIDEO_OVERLAY(m_videoSink));
+#endif
 }
 
 QWidget *QGstreamerVideoWidgetControl::videoWidget()

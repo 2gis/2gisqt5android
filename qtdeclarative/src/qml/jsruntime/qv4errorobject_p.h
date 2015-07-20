@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -42,11 +42,9 @@ namespace QV4 {
 
 struct SyntaxErrorObject;
 
-struct ErrorObject: Object {
-    enum {
-        IsErrorObject = true
-    };
+namespace Heap {
 
+struct ErrorObject : Object {
     enum ErrorType {
         Error,
         EvalError,
@@ -56,22 +54,90 @@ struct ErrorObject: Object {
         TypeError,
         URIError
     };
-    struct Data : Object::Data {
-        Data(InternalClass *ic);
-        Data(InternalClass *ic, const ValueRef message, ErrorType t = Error);
-        Data(InternalClass *ic, const QString &message, ErrorType t = Error);
-        Data(InternalClass *ic, const QString &message, const QString &fileName, int line, int column, ErrorType t = Error);
-        StackTrace stackTrace;
-        String *stack;
+
+    ErrorObject(InternalClass *ic, QV4::Object *prototype);
+    ErrorObject(InternalClass *ic, QV4::Object *prototype, const Value &message, ErrorType t = Error);
+    ErrorObject(InternalClass *ic, QV4::Object *prototype, const QString &message, ErrorType t = Error);
+    ErrorObject(InternalClass *ic, QV4::Object *prototype, const QString &message, const QString &fileName, int line, int column, ErrorType t = Error);
+
+    ErrorType errorType;
+    StackTrace stackTrace;
+    String *stack;
+};
+
+struct EvalErrorObject : ErrorObject {
+    EvalErrorObject(ExecutionEngine *engine, const Value &message);
+};
+
+struct RangeErrorObject : ErrorObject {
+    RangeErrorObject(ExecutionEngine *engine, const Value &message);
+    RangeErrorObject(ExecutionEngine *engine, const QString &msg);
+};
+
+struct ReferenceErrorObject : ErrorObject {
+    ReferenceErrorObject(ExecutionEngine *engine, const Value &message);
+    ReferenceErrorObject(ExecutionEngine *engine, const QString &msg);
+    ReferenceErrorObject(ExecutionEngine *engine, const QString &msg, const QString &fileName, int lineNumber, int columnNumber);
+};
+
+struct SyntaxErrorObject : ErrorObject {
+    SyntaxErrorObject(ExecutionEngine *engine, const Value &message);
+    SyntaxErrorObject(ExecutionEngine *engine, const QString &msg, const QString &fileName, int lineNumber, int columnNumber);
+};
+
+struct TypeErrorObject : ErrorObject {
+    TypeErrorObject(ExecutionEngine *engine, const Value &message);
+    TypeErrorObject(ExecutionEngine *engine, const QString &msg);
+};
+
+struct URIErrorObject : ErrorObject {
+    URIErrorObject(ExecutionEngine *engine, const Value &message);
+};
+
+struct ErrorCtor : Heap::FunctionObject {
+    ErrorCtor(QV4::ExecutionContext *scope);
+    ErrorCtor(QV4::ExecutionContext *scope, const QString &name);
+};
+
+struct EvalErrorCtor : ErrorCtor {
+    EvalErrorCtor(QV4::ExecutionContext *scope);
+};
+
+struct RangeErrorCtor : ErrorCtor {
+    RangeErrorCtor(QV4::ExecutionContext *scope);
+};
+
+struct ReferenceErrorCtor : ErrorCtor {
+    ReferenceErrorCtor(QV4::ExecutionContext *scope);
+};
+
+struct SyntaxErrorCtor : ErrorCtor {
+    SyntaxErrorCtor(QV4::ExecutionContext *scope);
+};
+
+struct TypeErrorCtor : ErrorCtor {
+    TypeErrorCtor(QV4::ExecutionContext *scope);
+};
+
+struct URIErrorCtor : ErrorCtor {
+    URIErrorCtor(QV4::ExecutionContext *scope);
+};
+
+}
+
+struct ErrorObject: Object {
+    enum {
+        IsErrorObject = true
     };
-    V4_OBJECT(Object)
+
+    V4_OBJECT2(ErrorObject, Object)
     Q_MANAGED_TYPE(ErrorObject)
+    V4_NEEDS_DESTROY
 
     SyntaxErrorObject *asSyntaxError();
 
     static ReturnedValue method_get_stack(CallContext *ctx);
-    static void markObjects(Managed *that, ExecutionEngine *e);
-    static void destroy(Managed *that) { static_cast<ErrorObject *>(that)->d()->~Data(); }
+    static void markObjects(Heap::Base *that, ExecutionEngine *e);
 };
 
 template<>
@@ -80,55 +146,42 @@ inline ErrorObject *value_cast(const Value &v) {
 }
 
 struct EvalErrorObject: ErrorObject {
-    struct Data : ErrorObject::Data {
-        Data(ExecutionEngine *engine, const ValueRef message);
-    };
+    typedef Heap::EvalErrorObject Data;
+    const Data *d() const { return static_cast<const Data *>(ErrorObject::d()); }
+    Data *d() { return static_cast<Data *>(ErrorObject::d()); }
 };
 
 struct RangeErrorObject: ErrorObject {
-    struct Data : ErrorObject::Data {
-        Data(ExecutionEngine *engine, const ValueRef message);
-        Data(ExecutionEngine *engine, const QString &msg);
-    };
+    typedef Heap::RangeErrorObject Data;
+    const Data *d() const { return static_cast<const Data *>(ErrorObject::d()); }
+    Data *d() { return static_cast<Data *>(ErrorObject::d()); }
 };
 
 struct ReferenceErrorObject: ErrorObject {
-    struct Data : ErrorObject::Data {
-        Data(ExecutionEngine *engine, const ValueRef message);
-        Data(ExecutionEngine *engine, const QString &msg);
-        Data(ExecutionEngine *engine, const QString &msg, const QString &fileName, int lineNumber, int columnNumber);
-    };
+    typedef Heap::ReferenceErrorObject Data;
+    const Data *d() const { return static_cast<const Data *>(ErrorObject::d()); }
+    Data *d() { return static_cast<Data *>(ErrorObject::d()); }
 };
 
 struct SyntaxErrorObject: ErrorObject {
-    struct Data : ErrorObject::Data {
-        Data(ExecutionEngine *engine, const ValueRef message);
-        Data(ExecutionEngine *engine, const QString &msg, const QString &fileName, int lineNumber, int columnNumber);
-    };
-    V4_OBJECT(ErrorObject)
+    V4_OBJECT2(SyntaxErrorObject, ErrorObject)
 };
 
 struct TypeErrorObject: ErrorObject {
-    struct Data : ErrorObject::Data {
-        Data(ExecutionEngine *engine, const ValueRef message);
-        Data(ExecutionEngine *engine, const QString &msg);
-    };
+    typedef Heap::TypeErrorObject Data;
+    const Data *d() const { return static_cast<const Data *>(ErrorObject::d()); }
+    Data *d() { return static_cast<Data *>(ErrorObject::d()); }
 };
 
 struct URIErrorObject: ErrorObject {
-    struct Data : ErrorObject::Data {
-        Data(ExecutionEngine *engine, const ValueRef message);
-    };
+    typedef Heap::URIErrorObject Data;
+    const Data *d() const { return static_cast<const Data *>(ErrorObject::d()); }
+    Data *d() { return static_cast<Data *>(ErrorObject::d()); }
 };
 
 struct ErrorCtor: FunctionObject
 {
-    struct Data : FunctionObject::Data {
-        Data(ExecutionContext *scope);
-        Data(ExecutionContext *scope, const QString &name);
-    };
-
-    V4_OBJECT(FunctionObject)
+    V4_OBJECT2(ErrorCtor, FunctionObject)
 
     static ReturnedValue construct(Managed *, CallData *callData);
     static ReturnedValue call(Managed *that, CallData *callData);
@@ -136,60 +189,42 @@ struct ErrorCtor: FunctionObject
 
 struct EvalErrorCtor: ErrorCtor
 {
-    struct Data : ErrorCtor::Data {
-        Data(ExecutionContext *scope);
-    };
-    V4_OBJECT(ErrorCtor)
+    V4_OBJECT2(EvalErrorCtor, ErrorCtor)
 
     static ReturnedValue construct(Managed *m, CallData *callData);
 };
 
 struct RangeErrorCtor: ErrorCtor
 {
-    struct Data : ErrorCtor::Data {
-        Data(ExecutionContext *scope);
-    };
-    V4_OBJECT(ErrorCtor)
+    V4_OBJECT2(RangeErrorCtor, ErrorCtor)
 
     static ReturnedValue construct(Managed *m, CallData *callData);
 };
 
 struct ReferenceErrorCtor: ErrorCtor
 {
-    struct Data : ErrorCtor::Data {
-        Data(ExecutionContext *scope);
-    };
-    V4_OBJECT(ErrorCtor)
+    V4_OBJECT2(ReferenceErrorCtor, ErrorCtor)
 
     static ReturnedValue construct(Managed *m, CallData *callData);
 };
 
 struct SyntaxErrorCtor: ErrorCtor
 {
-    struct Data : ErrorCtor::Data {
-        Data(ExecutionContext *scope);
-    };
-    V4_OBJECT(ErrorCtor)
+    V4_OBJECT2(SyntaxErrorCtor, ErrorCtor)
 
     static ReturnedValue construct(Managed *m, CallData *callData);
 };
 
 struct TypeErrorCtor: ErrorCtor
 {
-    struct Data : ErrorCtor::Data {
-        Data(ExecutionContext *scope);
-    };
-    V4_OBJECT(ErrorCtor)
+    V4_OBJECT2(TypeErrorCtor, ErrorCtor)
 
     static ReturnedValue construct(Managed *m, CallData *callData);
 };
 
 struct URIErrorCtor: ErrorCtor
 {
-    struct Data : ErrorCtor::Data {
-        Data(ExecutionContext *scope);
-    };
-    V4_OBJECT(ErrorCtor)
+    V4_OBJECT2(URIErrorCtor, ErrorCtor)
 
     static ReturnedValue construct(Managed *m, CallData *callData);
 };
@@ -236,7 +271,7 @@ struct URIErrorPrototype : ErrorObject
 
 inline SyntaxErrorObject *ErrorObject::asSyntaxError()
 {
-    return subtype() == SyntaxError ? static_cast<SyntaxErrorObject *>(this) : 0;
+    return d()->errorType == QV4::Heap::ErrorObject::SyntaxError ? static_cast<SyntaxErrorObject *>(this) : 0;
 }
 
 }

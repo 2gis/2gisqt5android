@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -53,9 +53,8 @@
 
 #include <QStringList>
 #include <private/qmetaobject_p.h>
+#include <private/qqmlvaluetypewrapper_p.h>
 #include <QtCore/qdebug.h>
-
-#include <math.h>
 
 Q_DECLARE_METATYPE(QList<int>)
 Q_DECLARE_METATYPE(QList<qreal>)
@@ -276,7 +275,7 @@ void QQmlPropertyPrivate::initProperty(QObject *obj, const QString &name)
 
         QQmlPropertyData local;
         QQmlPropertyData *property =
-            QQmlPropertyCache::property(engine, obj, pathName, context, local);
+            QQmlPropertyCache::property(engine, currentObject, pathName, context, local);
 
         if (!property) return; // Not a property
         if (property->isFunction())
@@ -284,13 +283,13 @@ void QQmlPropertyPrivate::initProperty(QObject *obj, const QString &name)
 
         if (ii == (path.count() - 2) && QQmlValueTypeFactory::isValueType(property->propType)) {
             // We're now at a value type property
-            QObject *typeObject = QQmlValueTypeFactory::valueType(property->propType);
-            if (!typeObject) return; // Not a value type
+            const QMetaObject *valueTypeMetaObject = QQmlValueTypeFactory::metaObjectForMetaType(property->propType);
+            if (!valueTypeMetaObject) return; // Not a value type
 
-            int idx = typeObject->metaObject()->indexOfProperty(path.last().toUtf8().constData());
+            int idx = valueTypeMetaObject->indexOfProperty(path.last().toUtf8().constData());
             if (idx == -1) return; // Value type property does not exist
 
-            QMetaProperty vtProp = typeObject->metaObject()->property(idx);
+            QMetaProperty vtProp = valueTypeMetaObject->property(idx);
 
             Q_ASSERT(QQmlPropertyData::flagsForProperty(vtProp) <= QQmlPropertyData::ValueTypeFlagMask);
             Q_ASSERT(vtProp.userType() <= 0x0000FFFF);
@@ -463,9 +462,9 @@ const char *QQmlProperty::propertyTypeName() const
     if (!d)
         return 0;
     if (d->isValueType()) {
-        QQmlValueType *valueType = QQmlValueTypeFactory::valueType(d->core.propType);
-        Q_ASSERT(valueType);
-        return valueType->metaObject()->property(d->core.valueTypeCoreIndex).typeName();
+        const QMetaObject *valueTypeMetaObject = QQmlValueTypeFactory::metaObjectForMetaType(d->core.propType);
+        Q_ASSERT(valueTypeMetaObject);
+        return valueTypeMetaObject->property(d->core.valueTypeCoreIndex).typeName();
     } else if (d->object && type() & Property && d->core.isValid()) {
         return d->object->metaObject()->property(d->core.coreIndex).typeName();
     } else {
@@ -642,10 +641,10 @@ QString QQmlProperty::name() const
         } else if (d->isValueType()) {
             QString rv = d->core.name(d->object) + QLatin1Char('.');
 
-            QQmlValueType *valueType = QQmlValueTypeFactory::valueType(d->core.propType);
-            Q_ASSERT(valueType);
+            const QMetaObject *valueTypeMetaObject = QQmlValueTypeFactory::metaObjectForMetaType(d->core.propType);
+            Q_ASSERT(valueTypeMetaObject);
 
-            const char *vtName = valueType->metaObject()->property(d->core.valueTypeCoreIndex).name();
+            const char *vtName = valueTypeMetaObject->property(d->core.valueTypeCoreIndex).name();
             rv += QString::fromUtf8(vtName);
 
             d->nameCache = rv;
@@ -734,8 +733,8 @@ QQmlPropertyPrivate::setBinding(const QQmlProperty &that,
         QObject *object = newBinding->object();
         int pi = newBinding->propertyIndex();
 
-        int core = pi & 0x0000FFFF;
-        int vt = (pi & 0xFFFF0000)?(pi >> 16):-1;
+        int core;
+        int vt = QQmlPropertyData::decodeValueTypePropertyIndex(pi, &core);
 
         return setBinding(object, core, vt, newBinding, flags);
     } else {
@@ -776,7 +775,7 @@ QQmlPropertyPrivate::binding(QObject *object, int coreIndex, int valueTypeIndex)
 
     if (binding && valueTypeIndex != -1) {
         if (binding->bindingType() == QQmlAbstractBinding::ValueTypeProxy) {
-            int index = coreIndex | (valueTypeIndex << 16);
+            int index = QQmlPropertyData::encodeValueTypePropertyIndex(coreIndex, valueTypeIndex);
             binding = static_cast<QQmlValueTypeProxyBinding *>(binding)->binding(index);
         }
     }
@@ -787,8 +786,8 @@ QQmlPropertyPrivate::binding(QObject *object, int coreIndex, int valueTypeIndex)
 void QQmlPropertyPrivate::findAliasTarget(QObject *object, int bindingIndex,
                                                   QObject **targetObject, int *targetBindingIndex)
 {
-    int coreIndex = bindingIndex & 0x0000FFFF;
-    int valueTypeIndex = (bindingIndex & 0xFFFF0000)?(bindingIndex >> 16):-1;
+    int coreIndex;
+    int valueTypeIndex = QQmlPropertyData::decodeValueTypePropertyIndex(bindingIndex, &coreIndex);
 
     QQmlData *data = QQmlData::get(object, false);
     if (data) {
@@ -804,9 +803,9 @@ void QQmlPropertyPrivate::findAliasTarget(QObject *object, int bindingIndex,
 
                 int aBindingIndex = aCoreIndex;
                 if (aValueTypeIndex != -1)
-                    aBindingIndex |= aValueTypeIndex << 16;
+                    aBindingIndex = QQmlPropertyData::encodeValueTypePropertyIndex(aBindingIndex, aValueTypeIndex);
                 else if (valueTypeIndex != -1)
-                    aBindingIndex |= valueTypeIndex << 16;
+                    aBindingIndex = QQmlPropertyData::encodeValueTypePropertyIndex(aBindingIndex, valueTypeIndex);
 
                 findAliasTarget(aObject, aBindingIndex, targetObject, targetBindingIndex);
                 return;
@@ -853,7 +852,7 @@ QQmlPropertyPrivate::setBinding(QObject *object, int coreIndex, int valueTypeInd
 
     int index = coreIndex;
     if (valueTypeIndex != -1)
-        index |= (valueTypeIndex << 16);
+        index = QQmlPropertyData::encodeValueTypePropertyIndex(index, valueTypeIndex);
 
     if (binding && valueTypeIndex != -1 && binding->bindingType() == QQmlAbstractBinding::ValueTypeProxy)
         binding = static_cast<QQmlValueTypeProxyBinding *>(binding)->binding(index);
@@ -912,7 +911,7 @@ QQmlPropertyPrivate::setBindingNoEnable(QObject *object, int coreIndex, int valu
 
     int index = coreIndex;
     if (valueTypeIndex != -1)
-        index |= (valueTypeIndex << 16);
+        index = QQmlPropertyData::encodeValueTypePropertyIndex(index, valueTypeIndex);
 
     if (binding && valueTypeIndex != -1 && binding->bindingType() == QQmlAbstractBinding::ValueTypeProxy)
         binding = static_cast<QQmlValueTypeProxyBinding *>(binding)->binding(index);
@@ -1389,8 +1388,30 @@ bool QQmlPropertyPrivate::write(QObject *object,
 
         bool ok = false;
         QVariant v;
-        if (variantType == QVariant::String)
-            v = QQmlStringConverters::variantFromString(value.toString(), propertyType, &ok);
+        if (variantType == QVariant::String) {
+            const QString &str = value.toString();
+            const bool targetIsChar = (propertyType == qMetaTypeId<QChar>()
+                                       || propertyType == qMetaTypeId<char>()
+                                       || propertyType == qMetaTypeId<unsigned char>());
+            // If the string contains only one character and the target is a char, try converting it.
+            if (targetIsChar) {
+                if (str.size() != 1)
+                    return false; // We can only convert if the string contains exactly one character.
+
+                const QChar &qChar = str.at(0);
+                if (propertyType == qMetaTypeId<QChar>()) {
+                    v = qChar;
+                    ok = true;
+                } else if (propertyType == qMetaTypeId<char>() || propertyType == qMetaTypeId<unsigned char>()) {
+                    const char c = qChar.toLatin1();
+                    v = c;
+                    ok = (qChar == c);
+                }
+            } else {
+                v = QQmlStringConverters::variantFromString(str, propertyType, &ok);
+            }
+        }
+
         if (!ok) {
             v = value;
             if (v.convert(propertyType)) {
@@ -1459,7 +1480,7 @@ bool QQmlPropertyPrivate::writeBinding(QObject *object,
                                                const QQmlPropertyData &core,
                                                QQmlContextData *context,
                                                QQmlJavaScriptExpression *expression,
-                                               const QV4::ValueRef result, bool isUndefined,
+                                               const QV4::Value &result, bool isUndefined,
                                                WriteFlags flags)
 {
     Q_ASSERT(object);
@@ -1481,24 +1502,29 @@ bool QQmlPropertyPrivate::writeBinding(QObject *object,
     if (!isUndefined && !core.isValueTypeVirtual()) {
         switch (core.propType) {
         case QMetaType::Int:
-            if (result->isInteger())
-                QUICK_STORE(int, result->integerValue())
-            else if (result->isNumber())
-                QUICK_STORE(int, result->doubleValue())
+            if (result.isInteger())
+                QUICK_STORE(int, result.integerValue())
+            else if (result.isNumber())
+                QUICK_STORE(int, result.doubleValue())
             break;
         case QMetaType::Double:
-            if (result->isNumber())
-                QUICK_STORE(double, result->asDouble())
+            if (result.isNumber())
+                QUICK_STORE(double, result.asDouble())
             break;
         case QMetaType::Float:
-            if (result->isNumber())
-                QUICK_STORE(float, result->asDouble())
+            if (result.isNumber())
+                QUICK_STORE(float, result.asDouble())
             break;
         case QMetaType::QString:
-            if (result->isString())
-                QUICK_STORE(QString, result->toQStringNoThrow())
+            if (result.isString())
+                QUICK_STORE(QString, result.toQStringNoThrow())
             break;
         default:
+            if (const QV4::QQmlValueTypeWrapper *vtw = result.as<const QV4::QQmlValueTypeWrapper>()) {
+                if (vtw->d()->valueType->typeId == core.propType) {
+                    return vtw->write(object, core.coreIndex);
+                }
+            }
             break;
         }
     }
@@ -1513,20 +1539,20 @@ bool QQmlPropertyPrivate::writeBinding(QObject *object,
 
     if (isUndefined) {
     } else if (core.isQList()) {
-        value = v8engine->toVariant(result, qMetaTypeId<QList<QObject *> >());
-    } else if (result->isNull() && core.isQObject()) {
+        value = QV8Engine::getV4(v8engine)->toVariant(result, qMetaTypeId<QList<QObject *> >());
+    } else if (result.isNull() && core.isQObject()) {
         value = QVariant::fromValue((QObject *)0);
     } else if (core.propType == qMetaTypeId<QList<QUrl> >()) {
-        value = resolvedUrlSequence(v8engine->toVariant(result, qMetaTypeId<QList<QUrl> >()), context);
+        value = resolvedUrlSequence(QV8Engine::getV4(v8engine)->toVariant(result, qMetaTypeId<QList<QUrl> >()), context);
     } else if (!isVarProperty && type != qMetaTypeId<QJSValue>()) {
-        value = v8engine->toVariant(result, type);
+        value = QV8Engine::getV4(v8engine)->toVariant(result, type);
     }
 
     if (expression->hasError()) {
         return false;
     } else if (isVarProperty) {
-        QV4::FunctionObject *f = result->asFunctionObject();
-        if (f && f->bindingKeyFlag()) {
+        QV4::FunctionObject *f = result.asFunctionObject();
+        if (f && f->isBinding()) {
             // we explicitly disallow this case to avoid confusion.  Users can still store one
             // in an array in a var property if they need to, but the common case is user error.
             expression->delayedError()->setErrorDescription(QLatin1String("Invalid use of Qt.binding() in a binding declaration."));
@@ -1543,14 +1569,14 @@ bool QQmlPropertyPrivate::writeBinding(QObject *object,
     } else if (isUndefined && type == qMetaTypeId<QVariant>()) {
         writeValueProperty(object, core, QVariant(), context, flags);
     } else if (type == qMetaTypeId<QJSValue>()) {
-        QV4::FunctionObject *f = result->asFunctionObject();
-        if (f && f->bindingKeyFlag()) {
+        QV4::FunctionObject *f = result.asFunctionObject();
+        if (f && f->isBinding()) {
             expression->delayedError()->setErrorDescription(QLatin1String("Invalid use of Qt.binding() in a binding declaration."));
             expression->delayedError()->setErrorObject(object);
             return false;
         }
         writeValueProperty(object, core, QVariant::fromValue(
-                               QJSValue(new QJSValuePrivate(QV8Engine::getV4(v8engine), result))),
+                               QJSValue(QV8Engine::getV4(v8engine), result.asReturnedValue())),
                            context, flags);
     } else if (isUndefined) {
         QString errorStr = QLatin1String("Unable to assign [undefined] to ");
@@ -1561,8 +1587,8 @@ bool QQmlPropertyPrivate::writeBinding(QObject *object,
         expression->delayedError()->setErrorDescription(errorStr);
         expression->delayedError()->setErrorObject(object);
         return false;
-    } else if (QV4::FunctionObject *f = result->asFunctionObject()) {
-        if (f->bindingKeyFlag())
+    } else if (QV4::FunctionObject *f = result.asFunctionObject()) {
+        if (f->isBinding())
             expression->delayedError()->setErrorDescription(QLatin1String("Invalid use of Qt.binding() in a binding declaration."));
         else
             expression->delayedError()->setErrorDescription(QLatin1String("Unable to assign a function to a property of any type other than var."));

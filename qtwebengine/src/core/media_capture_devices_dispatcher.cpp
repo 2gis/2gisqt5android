@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtWebEngine module of the Qt Toolkit.
 **
@@ -10,15 +10,15 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
 ** General Public License version 3 as published by the Free Software
 ** Foundation and appearing in the file LICENSE.LGPLv3 included in the
-** packaging of this file.  Please review the following information to
+** packaging of this file. Please review the following information to
 ** ensure the GNU Lesser General Public License version 3 requirements
 ** will be met: https://www.gnu.org/licenses/lgpl.html.
 **
@@ -26,7 +26,7 @@
 ** Alternatively, this file may be used under the terms of the GNU
 ** General Public License version 2.0 or later as published by the Free
 ** Software Foundation and appearing in the file LICENSE.GPL included in
-** the packaging of this file.  Please review the following information to
+** the packaging of this file. Please review the following information to
 ** ensure the GNU General Public License version 2.0 requirements will be
 ** met: http://www.gnu.org/licenses/gpl-2.0.html.
 **
@@ -57,6 +57,8 @@
 #include "content/public/common/media_stream_request.h"
 #include "media/audio/audio_manager_base.h"
 #include "ui/base/l10n/l10n_util.h"
+
+namespace QtWebEngineCore {
 
 using content::BrowserThread;
 using content::MediaStreamDevices;
@@ -254,14 +256,20 @@ void MediaCaptureDevicesDispatcher::processDesktopCaptureAccessRequest(content::
     return;
   }
 
-  // The extension name that the stream is registered with.
-  std::string originalExtensionName;
-  // Resolve DesktopMediaID for the specified device id.
-  content::DesktopMediaID mediaId =
-      getDesktopStreamsRegistry()->RequestMediaForStreamId(
-          request.requested_video_device_id, request.render_process_id,
-          request.render_view_id, request.security_origin,
-          &originalExtensionName);
+  content::WebContents* const web_contents_for_stream = content::WebContents::FromRenderFrameHost(
+                                                          content::RenderFrameHost::FromID(request.render_process_id, request.render_frame_id));
+  content::RenderFrameHost* const main_frame = web_contents_for_stream ? web_contents_for_stream->GetMainFrame() : NULL;
+
+  content::DesktopMediaID mediaId;
+  if (main_frame) {
+    // The extension name that the stream is registered with.
+    std::string originalExtensionName;
+    // Resolve DesktopMediaID for the specified device id.
+    mediaId = getDesktopStreamsRegistry()->RequestMediaForStreamId(
+                    request.requested_video_device_id, main_frame->GetProcess()->GetID(),
+                    main_frame->GetRoutingID(), request.security_origin,
+                    &originalExtensionName);
+  }
 
   // Received invalid device id.
   if (mediaId.type == content::DesktopMediaID::TYPE_NONE) {
@@ -391,37 +399,36 @@ DesktopStreamsRegistry *MediaCaptureDevicesDispatcher::getDesktopStreamsRegistry
   return m_desktopStreamsRegistry.get();
 }
 
-void MediaCaptureDevicesDispatcher::OnMediaRequestStateChanged(int renderProcessId, int renderViewId, int pageRequestId, const GURL& securityOrigin
-                                                               , const content::MediaStreamDevice &device, content::MediaRequestState state)
+void MediaCaptureDevicesDispatcher::OnMediaRequestStateChanged(int render_process_id, int render_frame_id, int page_request_id, const GURL& security_origin, content::MediaStreamType stream_type, content::MediaRequestState state)
 {
   DCHECK(BrowserThread::CurrentlyOn(BrowserThread::IO));
   BrowserThread::PostTask(
       BrowserThread::UI, FROM_HERE,
       base::Bind(
           &MediaCaptureDevicesDispatcher::updateMediaRequestStateOnUIThread,
-          base::Unretained(this), renderProcessId, renderViewId,
-          pageRequestId, device, state));
+          base::Unretained(this), render_process_id, render_frame_id,
+          page_request_id, security_origin, stream_type, state));
 }
 
-void MediaCaptureDevicesDispatcher::updateMediaRequestStateOnUIThread(int renderProcessId, int renderViewId, int pageRequestId
-                                                                      , const content::MediaStreamDevice &device, content::MediaRequestState state)
+void MediaCaptureDevicesDispatcher::updateMediaRequestStateOnUIThread(int render_process_id, int render_frame_id, int page_request_id
+                                                                      , const GURL& security_origin, content::MediaStreamType stream_type, content::MediaRequestState state)
 {
   // Track desktop capture sessions.  Tracking is necessary to avoid unbalanced
   // session counts since not all requests will reach MEDIA_REQUEST_STATE_DONE,
   // but they will all reach MEDIA_REQUEST_STATE_CLOSING.
-  if (device.type == content::MEDIA_DESKTOP_VIDEO_CAPTURE) {
+  if (stream_type == content::MEDIA_DESKTOP_VIDEO_CAPTURE) {
     if (state == content::MEDIA_REQUEST_STATE_DONE) {
-      DesktopCaptureSession session = { renderProcessId, renderViewId,
-                                        pageRequestId };
+      DesktopCaptureSession session = { render_process_id, render_frame_id,
+                                        page_request_id };
       m_desktopCaptureSessions.push_back(session);
     } else if (state == content::MEDIA_REQUEST_STATE_CLOSING) {
       for (DesktopCaptureSessions::iterator it =
                m_desktopCaptureSessions.begin();
            it != m_desktopCaptureSessions.end();
            ++it) {
-        if (it->render_process_id == renderProcessId &&
-            it->render_view_id == renderViewId &&
-            it->page_request_id == pageRequestId) {
+        if (it->render_process_id == render_process_id &&
+            it->render_view_id == render_frame_id &&
+            it->page_request_id == page_request_id) {
           m_desktopCaptureSessions.erase(it);
           break;
         }
@@ -437,9 +444,9 @@ void MediaCaptureDevicesDispatcher::updateMediaRequestStateOnUIThread(int render
       RequestsQueue &queue = rqs_it->second;
       for (RequestsQueue::iterator it = queue.begin();
            it != queue.end(); ++it) {
-        if (it->request.render_process_id == renderProcessId &&
-            it->request.render_view_id == renderViewId &&
-            it->request.page_request_id == pageRequestId) {
+        if (it->request.render_process_id == render_process_id &&
+            it->request.render_frame_id == render_frame_id &&
+            it->request.page_request_id == page_request_id) {
           queue.erase(it);
           found = true;
           break;
@@ -450,3 +457,5 @@ void MediaCaptureDevicesDispatcher::updateMediaRequestStateOnUIThread(int render
     }
   }
 }
+
+} // namespace QtWebEngineCore

@@ -1,7 +1,7 @@
 /****************************************************************************
 **
 ** Copyright (C) 2014 Denis Shienkov <denis.shienkov@gmail.com>
-** Contact: http://www.qt-project.org/legal
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtSerialPort module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -56,12 +56,7 @@ public:
     static void enterLoopMsecs(int msecs)
     {
         ++loopLevel;
-#if (QT_VERSION >= QT_VERSION_CHECK(5, 0, 0))
         QTestEventLoop::instance().enterLoopMSecs(msecs);
-#else
-        Q_UNUSED(msecs);
-        QTestEventLoop::instance().enterLoop(1);
-#endif
         --loopLevel;
     }
 
@@ -111,6 +106,8 @@ private slots:
     void readBufferOverflow();
     void readAfterInputClear();
 #endif
+
+    void controlBreak();
 
 protected slots:
     void handleBytesWrittenAndExitLoopSlot(qint64 bytesWritten);
@@ -174,11 +171,7 @@ void tst_QSerialPort::initTestCase()
               "\n";
 #endif
 
-#if (QT_VERSION >= QT_VERSION_CHECK(5, 0, 0))
         QSKIP(message);
-#else
-        QSKIP(message, SkipAll);
-#endif
     } else {
         m_availablePortNames << m_senderPortName << m_receiverPortName;
     }
@@ -241,11 +234,7 @@ void tst_QSerialPort::constructByInfo()
         static const char message[] =
                 "Test doesn't work because the specified serial ports aren't"
                 " found in system and can't be constructed by QSerialPortInfo.\n";
-#if (QT_VERSION >= QT_VERSION_CHECK(5, 0, 0))
         QSKIP(message);
-#else
-        QSKIP(message, SkipAll);
-#endif
     }
 #endif
 
@@ -332,11 +321,7 @@ void tst_QSerialPort::handleBytesWrittenAndExitLoopSlot(qint64 bytesWritten)
 void tst_QSerialPort::flush()
 {
 #ifdef Q_OS_WIN
-#if (QT_VERSION >= QT_VERSION_CHECK(5, 0, 0))
     QSKIP("flush() does not work on Windows");
-#else
-    QSKIP("flush() does not work on Windows", SkipAll);
-#endif
 #endif
 
     QSerialPort serialPort(m_senderPortName);
@@ -367,11 +352,7 @@ void tst_QSerialPort::handleBytesWrittenAndExitLoopSlot2(qint64 bytesWritten)
 void tst_QSerialPort::doubleFlush()
 {
 #ifdef Q_OS_WIN
-#if (QT_VERSION >= QT_VERSION_CHECK(5, 0, 0))
     QSKIP("flush() does not work on Windows");
-#else
-    QSKIP("flush() does not work on Windows", SkipAll);
-#endif
 #endif
 
     QSerialPort serialPort(m_senderPortName);
@@ -759,6 +740,63 @@ void tst_QSerialPort::readAfterInputClear()
     QVERIFY(receiverPort.bytesAvailable() == 0);
 }
 #endif
+
+class BreakReader : public QObject
+{
+    Q_OBJECT
+public:
+    explicit BreakReader(QSerialPort &port)
+        : serialPort(port)
+    {
+        connect(&serialPort, SIGNAL(readyRead()), this, SLOT(receive()));
+    }
+
+private slots:
+    void receive()
+    {
+        tst_QSerialPort::exitLoop();
+    }
+
+private:
+    QSerialPort &serialPort;
+};
+
+void tst_QSerialPort::controlBreak()
+{
+#ifdef Q_OS_WIN
+    clearReceiver();
+#endif
+
+    QSerialPort senderPort(m_senderPortName);
+    QVERIFY(senderPort.open(QSerialPort::WriteOnly));
+    QCOMPARE(senderPort.isBreakEnabled(), false);
+
+    QSignalSpy breakSpy(&senderPort, SIGNAL(breakEnabledChanged(bool)));
+    QVERIFY(breakSpy.isValid());
+
+    QSerialPort receiverPort(m_receiverPortName);
+    QVERIFY(receiverPort.open(QSerialPort::ReadOnly));
+
+    BreakReader reader(receiverPort);
+
+    QVERIFY(senderPort.setBreakEnabled(true));
+    QCOMPARE(senderPort.isBreakEnabled(), true);
+
+    enterLoop(1);
+    QVERIFY2(!timeout(), "Timed out when waiting for the read of break state.");
+    QVERIFY(receiverPort.bytesAvailable() > 0);
+
+    foreach (const char c, receiverPort.readAll()) {
+        QCOMPARE(c, char(0));
+    }
+
+    QVERIFY(senderPort.setBreakEnabled(false));
+    QCOMPARE(senderPort.isBreakEnabled(), false);
+
+    QCOMPARE(breakSpy.count(), 2);
+    QCOMPARE(qvariant_cast<bool>(breakSpy.at(0).at(0)), true);
+    QCOMPARE(qvariant_cast<bool>(breakSpy.at(1).at(0)), false);
+}
 
 QTEST_MAIN(tst_QSerialPort)
 #include "tst_qserialport.moc"

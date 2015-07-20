@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -68,10 +68,6 @@ class QQmlType;
 class QQmlPropertyData;
 class QQmlPropertyCache;
 class QQmlEnginePrivate;
-
-namespace QV4 {
-struct ExecutionContext;
-}
 
 namespace QV4 {
 
@@ -230,7 +226,7 @@ struct MemberExpressionResolver
     typedef Type (*ResolveFunction)(QQmlEnginePrivate *engine, MemberExpressionResolver *resolver, Member *member);
 
     MemberExpressionResolver()
-        : resolveMember(0), data(0), extraData(0), flags(0), isQObjectResolver(false) {}
+        : resolveMember(0), data(0), extraData(0), flags(0) {}
 
     bool isValid() const { return !!resolveMember; }
     void clear() { *this = MemberExpressionResolver(); }
@@ -238,8 +234,7 @@ struct MemberExpressionResolver
     ResolveFunction resolveMember;
     void *data; // Could be pointer to meta object, importNameSpace, etc. - depends on resolveMember implementation
     void *extraData; // Could be QQmlTypeNameCache
-    unsigned int flags : 31;
-    unsigned int isQObjectResolver; // neede for IR dump helpers
+    unsigned int flags;
 };
 
 struct Q_AUTOTEST_EXPORT Expr {
@@ -373,23 +368,25 @@ struct Q_AUTOTEST_EXPORT Temp: Expr {
         StackSlot
     };
 
-    unsigned index      : 28;
-    unsigned kind       :  3;
-    unsigned isReadOnly :  1;
     // Used when temp is used as base in member expression
-    MemberExpressionResolver memberResolver;
+    MemberExpressionResolver *memberResolver;
+
+    unsigned index      : 28;
+    unsigned isReadOnly :  1;
+    unsigned kind       :  3;
 
     Temp()
-        : index((1 << 28) - 1)
-        , kind(Invalid)
+        : memberResolver(0)
+        , index((1 << 28) - 1)
         , isReadOnly(0)
+        , kind(Invalid)
     {}
 
     void init(unsigned kind, unsigned index)
     {
-        this->kind = kind;
         this->index = index;
         this->isReadOnly = false;
+        this->kind = kind;
     }
 
     bool isInvalid() const { return kind == Invalid; }
@@ -605,16 +602,11 @@ struct Member: Expr {
 };
 
 struct Stmt {
-    struct Data {
-        QVector<Expr *> incoming; // used by Phi nodes
-    };
-
     enum { InvalidId = -1 };
 
-    Data *d;
     QQmlJS::AST::SourceLocation location;
 
-    explicit Stmt(int id): d(0), _id(id) {}
+    explicit Stmt(int id): _id(id) {}
 
     virtual ~Stmt()
     {
@@ -638,10 +630,6 @@ struct Stmt {
 
 private: // For memory management in BasicBlock
     friend struct BasicBlock;
-    void destroyData() {
-        delete d;
-        d = 0;
-    }
 
 private:
     friend struct Function;
@@ -738,11 +726,21 @@ struct Ret: Stmt {
 
 struct Phi: Stmt {
     Temp *targetTemp;
+    struct Data {
+        QVector<Expr *> incoming; // used by Phi nodes
+    };
 
-    Phi(int id): Stmt(id) {}
+    Data *d;
+
+    Phi(int id): Stmt(id), d(0) {}
 
     virtual void accept(StmtVisitor *v) { v->visitPhi(this); }
     virtual Phi *asPhi() { return this; }
+
+    void destroyData() {
+        delete d;
+        d = 0;
+    }
 };
 
 struct Q_QML_PRIVATE_EXPORT Module {

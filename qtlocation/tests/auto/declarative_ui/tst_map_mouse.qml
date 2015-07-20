@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -97,13 +97,6 @@ Item {
         }
 
         plugin: testPlugin;
-
-        property real lastWheelAngleDeltaX: 0
-        property real lastWheelAngleDeltaY: 0
-        onWheelAngleChanged: {
-            lastWheelAngleDeltaX = angleDelta.x;
-            lastWheelAngleDeltaY = angleDelta.y;
-        }
 
         MouseArea {
             id: mouseUpper
@@ -208,11 +201,7 @@ Item {
 
         SignalSpy {id: mouseOverlapperEnabledChangedSpy; target: mouseOverlapper; signalName: "enabledChanged"}
 
-        SignalSpy {id: mapWheelSpy; target: map; signalName: "wheelAngleChanged"}
-
         function clear_data() {
-            map.lastWheelAngleDeltaX = 0
-            map.lastWheelAngleDeltaY = 0
             mouseUpperClickedSpy.clear()
             mouseLowerClickedSpy.clear()
             mouseOverlapperClickedSpy.clear()
@@ -305,24 +294,29 @@ Item {
             clear_data()
             wait(500);
             // on map but without mouse area
+            var startZoomLevel = 6
+            map.zoomLevel = startZoomLevel
             mouseWheel(map, 5, 5, 15, 5, Qt.LeftButton, Qt.NoModifiers)
-            compare(mapWheelSpy.count, 1)
-            compare(map.lastWheelAngleDeltaX, 15)
-            compare(map.lastWheelAngleDeltaY, 5)
+            //see QDeclarativeGeoMapGestureArea::handleWheelEvent
+            var endZoomLevel = startZoomLevel + 5 * 0.001
+            compare(map.zoomLevel,endZoomLevel)
+
+            map.zoomLevel = startZoomLevel
             mouseWheel(map, 5, 5, -15, -5, Qt.LeftButton, Qt.NoModifiers)
-            compare(mapWheelSpy.count, 2)
-            compare(map.lastWheelAngleDeltaX, -15)
-            compare(map.lastWheelAngleDeltaY, -5)
+            //see QDeclarativeGeoMapGestureArea::handleWheelEvent
+            endZoomLevel = startZoomLevel - 5 * 0.001
+            compare(map.zoomLevel,endZoomLevel)
+
             // on map on top of mouse area
+            map.zoomLevel = startZoomLevel
             mouseWheel(map, 55, 75, -30, -2, Qt.LeftButton, Qt.NoModifiers)
-            compare(mapWheelSpy.count, 3)
-            compare(map.lastWheelAngleDeltaX, -30)
-            compare(map.lastWheelAngleDeltaY, -2)
+            endZoomLevel = startZoomLevel - 2 * 0.001
+            compare(map.zoomLevel,endZoomLevel)
+
             // outside of map
+            map.zoomLevel = startZoomLevel
             mouseWheel(map, -100, -100, 40, 4, Qt.LeftButton, Qt.NoModifiers)
-            compare(mapWheelSpy.count, 3)
-            compare(map.lastWheelAngleDeltaX, -30)
-            compare(map.lastWheelAngleDeltaY, -2)
+            compare(map.zoomLevel,startZoomLevel)
         }
 
         function test_aaa_basic_properties() // _aaa_ to ensure execution first
@@ -494,14 +488,21 @@ Item {
             compare(mouseUpper.lastWasHeld, false)
             compare(mouseUpper.lastX, 5)
             compare(mouseUpper.lastY, 5) // remember 20 offset of the mouse area
-            mousePress(map, 5, 26)
+
+            mouseRelease(map, 5, 25)
             compare(mouseUpperPressedSpy.count, 1)
+            compare(mouseUpperReleasedSpy.count, 1)
+            compare(mouseLowerPressedSpy.count, 0)
+            compare(mouseLowerReleasedSpy.count, 0)
+
+            mousePress(map, 5, 26)
+            compare(mouseUpperPressedSpy.count, 2)
             compare(mouseLowerPressedSpy.count, 0)
             compare(mouseOverlapperPressedSpy.count, 0)
 
             mouseRelease(map, 5, 26)
-            compare(mouseUpperPressedSpy.count, 1)
-            compare(mouseUpperReleasedSpy.count, 1)
+            compare(mouseUpperPressedSpy.count, 2)
+            compare(mouseUpperReleasedSpy.count, 2)
             compare(mouseLowerPressedSpy.count, 0)
             compare(mouseLowerReleasedSpy.count, 0)
             compare(mouseUpper.lastAccepted, true)
@@ -512,7 +513,7 @@ Item {
             compare(mouseUpper.lastY, 6) // remember 20 offset of the mouse area
 
             mousePress(map, 5, 75)
-            compare(mouseUpperPressedSpy.count, 1)
+            compare(mouseUpperPressedSpy.count, 2)
             compare(mouseLowerPressedSpy.count, 1)
             compare(mouseOverlapperPressedSpy.count, 0)
             compare(mouseLower.lastAccepted, true)
@@ -523,21 +524,25 @@ Item {
             compare(mouseLower.lastY, 25) // remember 50 offset of the mouse area
 
             mouseRelease(map, 5, 75)
-            compare(mouseUpperPressedSpy.count, 1)
-            compare(mouseUpperReleasedSpy.count, 1)
+            compare(mouseUpperPressedSpy.count, 2)
+            compare(mouseUpperReleasedSpy.count, 2)
             compare(mouseLowerPressedSpy.count, 1)
             compare(mouseLowerReleasedSpy.count, 1)
+
+
+            compare(mouseOverlapperPressedSpy.count, 0)
             mousePress(map, 55, 75)
-            compare(mouseUpperPressedSpy.count, 1)
+            compare(mouseUpperPressedSpy.count, 2)
             compare(mouseLowerPressedSpy.count, 1)
             compare(mouseOverlapperPressedSpy.count, 1)
             compare(mouseOverlapperReleasedSpy.count, 0)
             mouseRelease(map, 55, 25)
-            compare(mouseUpperPressedSpy.count, 1)
-            compare(mouseUpperReleasedSpy.count, 1)
+            compare(mouseUpperPressedSpy.count, 2)
+            compare(mouseUpperReleasedSpy.count, 2)
             compare(mouseLowerPressedSpy.count, 1)
             compare(mouseLowerReleasedSpy.count, 1)
-            compare(mouseOverlapperReleasedSpy.count, 1)
+            //this should follow the same logic as Flickable
+            compare(mouseOverlapperReleasedSpy.count, 0)
         }
 
         function test_basic_click() {

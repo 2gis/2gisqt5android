@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
@@ -10,15 +10,15 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Free Documentation License Usage
 ** Alternatively, this file may be used under the terms of the GNU Free
 ** Documentation License version 1.3 as published by the Free Software
 ** Foundation and appearing in the file included in the packaging of
-** this file.  Please review the following information to ensure
+** this file. Please review the following information to ensure
 ** the GNU Free Documentation License version 1.3 requirements
 ** will be met: http://www.gnu.org/copyleft/fdl.html.
 ** $QT_END_LICENSE$
@@ -108,25 +108,12 @@
     recognized as a plugin by Qt by using the Q_PLUGIN_METADATA() macro to
     export the relevant widget information.
 
-    The \c CONFIG variable contains two values, \c designer and \c
-    plugin:
+    The \c CONFIG variable is set to \c plugin, which ensures that \c qmake
+    considers the custom widget a plugin library.
 
-    \list
-        \li \c designer: Since custom widgets plugins rely on components
-           supplied with \QD, this value ensures that our plugin links against
-           \QD's library (\c libQtDesigner.so).
-
-        \li \c plugin: We also need to ensure that \c qmake considers the
-           custom widget a \e plugin library.
-    \endlist
-
-    When Qt is configured to build in both debug and release modes,
-    \QD will be built in release mode.  When this occurs, it is
-    necessary to ensure that plugins are also built in release
-    mode. For that reason we add the \c debug_and_release value to
-    the \c CONFIG variable. Otherwise, if a plugin is built in a mode
-    that is incompatible with \QD, it won't be loaded and
-    installed.
+    The \c QT variable contains the value \c designer. Since the plugin uses
+    components supplied with \QD that require linkage, this value ensures
+    that our plugin links against \QD's library (\c libQtDesigner.so).
 
     The header and source files for the widget are declared in the
     usual way:

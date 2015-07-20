@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -41,7 +41,7 @@ using namespace QV4;
 void qt_add_domexceptions(ExecutionEngine *e)
 {
     Scope scope(e);
-    Scoped<Object> domexception(scope, e->newObject());
+    ScopedObject domexception(scope, e->newObject());
     domexception->defineReadonlyProperty(QStringLiteral("INDEX_SIZE_ERR"), Primitive::fromInt32(DOMEXCEPTION_INDEX_SIZE_ERR));
     domexception->defineReadonlyProperty(QStringLiteral("DOMSTRING_SIZE_ERR"), Primitive::fromInt32(DOMEXCEPTION_DOMSTRING_SIZE_ERR));
     domexception->defineReadonlyProperty(QStringLiteral("HIERARCHY_REQUEST_ERR"), Primitive::fromInt32(DOMEXCEPTION_HIERARCHY_REQUEST_ERR));
@@ -59,7 +59,7 @@ void qt_add_domexceptions(ExecutionEngine *e)
     domexception->defineReadonlyProperty(QStringLiteral("INVALID_ACCESS_ERR"), Primitive::fromInt32(DOMEXCEPTION_INVALID_ACCESS_ERR));
     domexception->defineReadonlyProperty(QStringLiteral("VALIDATION_ERR"), Primitive::fromInt32(DOMEXCEPTION_VALIDATION_ERR));
     domexception->defineReadonlyProperty(QStringLiteral("TYPE_MISMATCH_ERR"), Primitive::fromInt32(DOMEXCEPTION_TYPE_MISMATCH_ERR));
-    e->globalObject->defineDefaultProperty(QStringLiteral("DOMException"), domexception);
+    e->globalObject()->defineDefaultProperty(QStringLiteral("DOMException"), domexception);
 }
 
 QT_END_NAMESPACE

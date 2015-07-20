@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the plugins of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -50,6 +42,13 @@
 #include <QtCore/QDebug>
 
 QT_BEGIN_NAMESPACE
+
+namespace QtWaylandClient {
+
+static QString utf8Text()
+{
+    return QStringLiteral("text/plain;charset=utf-8");
+}
 
 QWaylandDataOffer::QWaylandDataOffer(QWaylandDisplay *display, struct ::wl_data_offer *offer)
     : QtWayland::wl_data_offer(offer)
@@ -100,7 +99,13 @@ void QWaylandMimeData::appendFormat(const QString &mimeType)
 
 bool QWaylandMimeData::hasFormat_sys(const QString &mimeType) const
 {
-    return m_types.contains(mimeType);
+    if (m_types.contains(mimeType))
+        return true;
+
+    if (mimeType == QStringLiteral("text/plain") && m_types.contains(utf8Text()))
+        return true;
+
+    return false;
 }
 
 QStringList QWaylandMimeData::formats_sys() const
@@ -115,8 +120,14 @@ QVariant QWaylandMimeData::retrieveData_sys(const QString &mimeType, QVariant::T
     if (m_data.contains(mimeType))
         return m_data.value(mimeType);
 
-    if (!m_types.contains(mimeType))
-        return QVariant();
+    QString mime = mimeType;
+
+    if (!m_types.contains(mimeType)) {
+        if (mimeType == QStringLiteral("text/plain") && m_types.contains(utf8Text()))
+            mime = utf8Text();
+        else
+            return QVariant();
+    }
 
     int pipefd[2];
     if (::pipe2(pipefd, O_CLOEXEC|O_NONBLOCK) == -1) {
@@ -124,7 +135,7 @@ QVariant QWaylandMimeData::retrieveData_sys(const QString &mimeType, QVariant::T
         return QVariant();
     }
 
-    m_dataOffer->receive(mimeType, pipefd[1]);
+    m_dataOffer->receive(mime, pipefd[1]);
     m_display->flushRequests();
 
     close(pipefd[1]);
@@ -159,6 +170,8 @@ int QWaylandMimeData::readData(int fd, QByteArray &data) const
         n = readData(fd, data);
     }
     return n;
+}
+
 }
 
 QT_END_NAMESPACE

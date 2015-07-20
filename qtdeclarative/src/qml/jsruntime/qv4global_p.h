@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -34,10 +34,19 @@
 #ifndef QV4GLOBAL_H
 #define QV4GLOBAL_H
 
+#if defined(QT_BUILD_QMLDEVTOOLS_LIB) || defined(QT_QMLDEVTOOLS_LIB)
+#define V4_BOOTSTRAP
+#endif
+
 #include <QtCore/qglobal.h>
 #include <QString>
+
+#ifdef V4_BOOTSTRAP
+#include <private/qtqmldevtoolsglobal_p.h>
+#else
 #include <qtqmlglobal.h>
 #include <private/qtqmlglobal_p.h>
+#endif
 
 #if defined(Q_CC_MSVC)
 #include <float.h>
@@ -59,19 +68,17 @@ inline double trunc(double d) { return d > 0 ? floor(d) : ceil(d); }
 
 #define qOffsetOf(s, m) ((size_t)((((char *)&(((s *)64)->m)) - 64)))
 
-#if defined(QT_BUILD_QMLDEVTOOLS_LIB) || defined(QT_QMLDEVTOOLS_LIB)
-#define V4_BOOTSTRAP
-#endif
-
 // Decide whether to enable or disable the JIT
 
 // White list architectures
 //
 // NOTE: This should match the logic in qv4targetplatform_p.h!
 
-#if defined(Q_PROCESSOR_X86) && (defined(Q_OS_WIN) || defined(Q_OS_LINUX) || defined(Q_OS_QNX) || defined(Q_OS_FREEBSD))
+#if defined(Q_PROCESSOR_X86) && !defined(__ILP32__) \
+    && (defined(Q_OS_WIN) || defined(Q_OS_LINUX) || defined(Q_OS_QNX) || defined(Q_OS_FREEBSD))
 #define V4_ENABLE_JIT
-#elif defined(Q_PROCESSOR_X86_64) && (defined(Q_OS_WIN) || defined(Q_OS_LINUX) || defined(Q_OS_MAC) || defined(Q_OS_FREEBSD))
+#elif defined(Q_PROCESSOR_X86_64) && !defined(__ILP32__) \
+    && (defined(Q_OS_WIN) || defined(Q_OS_LINUX) || defined(Q_OS_MAC) || defined(Q_OS_FREEBSD))
 #define V4_ENABLE_JIT
 #elif defined(Q_PROCESSOR_ARM_32)
 
@@ -114,6 +121,39 @@ QT_BEGIN_NAMESPACE
 
 namespace QV4 {
 
+namespace Heap {
+    struct Base;
+    struct MemberData;
+    struct ArrayData;
+
+    struct String;
+    struct Object;
+    struct ObjectPrototype;
+
+    struct ExecutionContext;
+    struct GlobalContext;
+    struct CallContext;
+    struct ScriptFunction;
+
+    struct BooleanObject;
+    struct NumberObject;
+    struct StringObject;
+    struct ArrayObject;
+    struct DateObject;
+    struct FunctionObject;
+    struct ErrorObject;
+    struct ArgumentsObject;
+    struct QObjectWrapper;
+    struct RegExpObject;
+    struct RegExp;
+    struct EvalFunction;
+
+    struct ArrayBuffer;
+    struct DataView;
+    struct TypedArray;
+
+}
+
 class MemoryManager;
 struct String;
 struct Object;
@@ -126,6 +166,9 @@ struct ScriptFunction;
 struct InternalClass;
 struct Property;
 struct Value;
+struct Lookup;
+struct ArrayData;
+struct ManagedVTable;
 
 struct BooleanObject;
 struct NumberObject;
@@ -136,9 +179,15 @@ struct FunctionObject;
 struct ErrorObject;
 struct ArgumentsObject;
 struct Managed;
-struct Lookup;
 struct ExecutionEngine;
 struct QObjectWrapper;
+struct RegExpObject;
+struct RegExp;
+struct EvalFunction;
+
+struct ArrayBuffer;
+struct DataView;
+struct TypedArray;
 
 // ReturnedValue is used to return values from runtime methods
 // the type has to be a primitive type (no struct or union), so that the compiler
@@ -146,22 +195,23 @@ struct QObjectWrapper;
 // It will be returned in rax on x64, [eax,edx] on x86 and [r0,r1] on arm
 typedef quint64 ReturnedValue;
 struct CallData;
+struct Scope;
 struct ScopedValue;
-struct ValueRef;
 template<typename T> struct Scoped;
 typedef Scoped<String> ScopedString;
 typedef Scoped<Object> ScopedObject;
 typedef Scoped<ArrayObject> ScopedArrayObject;
 typedef Scoped<FunctionObject> ScopedFunctionObject;
-template<typename T> struct Returned;
-typedef Returned<String> ReturnedString;
-typedef Returned<Object> ReturnedObject;
-typedef Returned<FunctionObject> ReturnedFunctionObject;
+typedef Scoped<ExecutionContext> ScopedContext;
 
-struct PersistentValuePrivate;
+struct PersistentValueStorage;
 class PersistentValue;
 class WeakValue;
 
+struct IdentifierTable;
+class RegExpCache;
+class MultiplyWrappedQObjectMap;
+struct QmlExtensions;
 
 namespace Global {
     enum {

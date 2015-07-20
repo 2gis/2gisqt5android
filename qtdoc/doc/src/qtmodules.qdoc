@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
@@ -10,15 +10,15 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Free Documentation License Usage
 ** Alternatively, this file may be used under the terms of the GNU Free
 ** Documentation License version 1.3 as published by the Free Software
 ** Foundation and appearing in the file included in the packaging of
-** this file.  Please review the following information to ensure
+** this file. Please review the following information to ensure
 ** the GNU Free Documentation License version 1.3 requirements
 ** will be met: http://www.gnu.org/copyleft/fdl.html.
 ** $QT_END_LICENSE$
@@ -92,11 +92,11 @@
         \li \l[QtTestLib]{Qt Test}
         \li Classes for unit testing Qt applications and libraries.
     \row
-        \li \l[QtWebKit]{Qt WebKit}
-        \li Classes for a WebKit2 based implementation and a new QML API.
-            See also Qt WebKit Widgets in the add-on modules.
+        \li \l[QtWebKit]{Qt WebKit} (Deprecated)
+        \li Classes for a WebKit2 based implementation and a QML API.
+            Deprecated in favor of \l[QtWebEngine]{Qt WebEngine}.
     \row
-        \li \l[QtWebKit]{Qt WebKit Widgets}
+        \li \l[QtWebKit]{Qt WebKit Widgets} (Deprecated)
         \li WebKit1 and QWidget-based classes from Qt 4.
     \row
         \li \l[QtWidgets]{Qt Widgets}
@@ -153,8 +153,15 @@
     \row
         \li \l[QtBluetooth]{Qt Bluetooth}
         \li All
-        \li \l{Qt for Android}{Android}, \l{Qt for Linux/X11}{Linux}, \l{Qt for BlackBerry}{Blackberry}
+        \li \l{Qt for Android}{Android}, \l{Qt for BlackBerry}{BlackBerry},
+        \l{Qt for iOS}{iOS}, \l{Qt for Linux/X11}{Linux} and \l{Qt for OS X}{OS X}
         \li Provides access to Bluetooth hardware.
+    \row
+        \li \l[QtCanvas3D]{Qt Canvas 3D}
+        \li All
+        \li
+        \li Enables OpenGL-like 3D drawing calls from Qt Quick applications
+            using JavaScript.
     \row
         \li \l[QtConcurrent]{Qt Concurrent}
         \li
@@ -184,7 +191,7 @@
     \row
         \li \l[QtNfc]{Qt NFC}
         \li All
-        \li \l{Qt for BlackBerry}{Blackberry}
+        \li \l{Qt for BlackBerry}{BlackBerry} and \l{Qt for Linux/X11}{Linux}
         \li Provides access to Near-Field communication (NFC) hardware.
     \row
         \li \l[QtOpenGL]{Qt OpenGL}
@@ -211,14 +218,25 @@
         \li
         \li Classes to make printing easier and more portable.
     \row
-        \li \l{Qt Quick 1 Reference Documentation}{Qt Declarative}
+        \li \l{Qt Quick 1 Reference Documentation}{Qt Declarative} (Deprecated)
         \li All
         \li
         \li Qt Declarative is provided for \l{Qt 4.8 Reference Documentation}{Qt 4}
         compatibility. The documentation is available through the Qt 4.8
         \l{Qt Quick 1 Reference Documentation}{Qt Quick} documentation.
     \row
-        \li \l[QtScript]{Qt Script}
+        \li \l[QtQuickExtras]{Qt Quick Extras}
+        \li All
+        \li
+        \li Provides a specialized set of controls that can be used to build
+            interfaces in Qt Quick.
+    \row
+        \li \l{Qt Quick Widgets C++ Classes}{Qt Quick Widgets}
+        \li All
+        \li
+        \li Provides a C++ widget class for displaying a Qt Quick user interface.
+    \row
+        \li \l[QtScript]{Qt Script} (Deprecated)
         \li All
         \li
         \li Classes for making Qt applications scriptable. Provided for Qt 4.x
@@ -311,8 +329,6 @@
     \row \li \l{Qt Quick Compiler}
          \li Enables compiling .qml source files into application binaries, improving load times
              and security for code assets.
-    \row \li \l{Qt Quick Enterprise Controls}
-         \li A set of advanced UI controls with an industry-specific look-and-feel.
     \row \li \l{Qt Data Visualization}
          \li UI Components for creating stunning 3D data visualizations.
     \row \li \l{Qt Purchasing}
@@ -333,11 +349,14 @@
         \li Module
         \li Description
 
+    \row \li \l{Qt Location}
+         \li Displays map, navigation, and place content in a QML application.
     \row \li \l{Qt WebView}
          \li Displays web content in a QML application by using APIs native to the platform,
              without the need to include a full web browser stack.
-    \row \li \l{Qt Canvas 3D}
-         \li Enables OpenGL-like 3D drawing calls from Qt Quick applications using JavaScript.
+    \row \li \l[Qt3DCore]{Qt3D Module}{Qt3D}
+         \li Functionality for near-realtime simulation systems with support
+             for 2D and 3D rendering.
     \endtable
 
     \section1 Qt Tools

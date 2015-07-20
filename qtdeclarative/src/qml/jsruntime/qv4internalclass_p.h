@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -33,9 +33,9 @@
 #ifndef QV4INTERNALCLASS_H
 #define QV4INTERNALCLASS_H
 
-#include <QHash>
-#include <QVector>
 #include "qv4global_p.h"
+
+#include <QHash>
 #include <private/qqmljsmemorypool_p.h>
 
 QT_BEGIN_NAMESPACE
@@ -189,49 +189,47 @@ private:
 
 struct InternalClassTransition
 {
-    union {
-        Identifier *id;
-        Object *prototype;
-        const ManagedVTable *vtable;
-    };
+    Identifier *id;
+    InternalClass *lookup;
     int flags;
     enum {
         // range 0-0xff is reserved for attribute changes
-        ProtoChange = 0x100,
-        VTableChange = 0x200
+        NotExtensible = 0x100
     };
 
     bool operator==(const InternalClassTransition &other) const
     { return id == other.id && flags == other.flags; }
+
+    bool operator<(const InternalClassTransition &other) const
+    { return id < other.id; }
 };
-uint qHash(const QV4::InternalClassTransition &t, uint = 0);
 
 struct InternalClass : public QQmlJS::Managed {
     ExecutionEngine *engine;
-    Object *prototype;
-    const ManagedVTable *vtable;
 
     PropertyHash propertyTable; // id to valueIndex
-    SharedInternalClassData<String *> nameMap;
+    SharedInternalClassData<Identifier *> nameMap;
     SharedInternalClassData<PropertyAttributes> propertyData;
 
     typedef InternalClassTransition Transition;
-    QHash<Transition, InternalClass *> transitions; // id to next class, positive means add, negative delete
+    std::vector<Transition> transitions;
+    InternalClassTransition &lookupOrInsertTransition(const InternalClassTransition &t);
 
     InternalClass *m_sealed;
     InternalClass *m_frozen;
 
     uint size;
+    bool extensible;
 
-    static InternalClass *create(ExecutionEngine *engine, const ManagedVTable *vtable, Object *proto);
-    InternalClass *changePrototype(Object *proto);
-    InternalClass *changeVTable(const ManagedVTable *vt);
+    InternalClass *nonExtensible();
     static void addMember(Object *object, String *string, PropertyAttributes data, uint *index);
     InternalClass *addMember(String *string, PropertyAttributes data, uint *index = 0);
-    InternalClass *changeMember(String *string, PropertyAttributes data, uint *index = 0);
+    InternalClass *addMember(Identifier *identifier, PropertyAttributes data, uint *index = 0);
+    InternalClass *changeMember(Identifier *identifier, PropertyAttributes data, uint *index = 0);
     static void changeMember(Object *object, String *string, PropertyAttributes data, uint *index = 0);
     static void removeMember(Object *object, Identifier *id);
     uint find(const String *s);
+    uint find(const Identifier *id);
 
     InternalClass *sealed();
     InternalClass *frozen();
@@ -239,7 +237,7 @@ struct InternalClass : public QQmlJS::Managed {
     void destroy();
 
 private:
-    InternalClass *addMemberImpl(String *string, PropertyAttributes data, uint *index);
+    InternalClass *addMemberImpl(Identifier *identifier, PropertyAttributes data, uint *index);
     friend struct ExecutionEngine;
     InternalClass(ExecutionEngine *engine);
     InternalClass(const InternalClass &other);

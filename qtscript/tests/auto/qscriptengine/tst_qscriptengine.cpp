@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -5795,6 +5795,20 @@ void tst_QScriptEngine::qRegExpInport()
     }
 }
 
+static QByteArray msgDateRoundtripJSQtJS(int i, uint secs,
+                                         const QScriptValue &jsDate2,
+                                         const QScriptValue &jsDate)
+{
+    QString result;
+    const qsreal diff = jsDate.toNumber() - jsDate2.toNumber();
+    QTextStream(&result) << "jsDate2=\"" << jsDate2.toString()
+        << "\" (" << jsDate2.toNumber() << "), jsDate=\""
+        << jsDate.toString() << "\" (" << jsDate.toNumber()
+        << "), diff=" << diff << "\", i=" << i << ", secs=" << secs
+        << ", TZ=\"" << qgetenv("TZ") << '"';
+    return result.toLocal8Bit();
+}
+
 // QScriptValue::toDateTime() returns a local time, whereas JS dates
 // are always stored as UTC. Qt Script must respect the current time
 // zone, and correctly adjust for daylight saving time that may be in
@@ -5807,8 +5821,8 @@ void tst_QScriptEngine::dateRoundtripJSQtJS()
         QScriptValue jsDate = eng.evaluate(QString::fromLatin1("new Date(%0 * 1000.0)").arg(secs));
         QDateTime qtDate = jsDate.toDateTime();
         QScriptValue jsDate2 = eng.newDate(qtDate);
-        if (jsDate2.toNumber() != jsDate.toNumber())
-            QFAIL(qPrintable(jsDate.toString()));
+        QVERIFY2(jsDate2.toNumber() == jsDate.toNumber(),
+                 msgDateRoundtripJSQtJS(i, secs, jsDate2, jsDate));
         secs += 2*60*60;
     }
 }
@@ -5826,6 +5840,19 @@ void tst_QScriptEngine::dateRoundtripQtJSQt()
     }
 }
 
+static QByteArray msgDateConversionJSQt(int i, uint secs,
+                                        const QString &qtUTCDateStr,
+                                        const QString &jsUTCDateStr,
+                                        const QScriptValue &jsDate)
+{
+    QString result;
+    QTextStream(&result) << "qtUTCDateStr=\"" << qtUTCDateStr
+        << "\", jsUTCDateStr=\"" << jsUTCDateStr << "\", jsDate=\""
+        << jsDate.toString() << "\", i=" << i << ", secs=" << secs
+        << ", TZ=\"" << qgetenv("TZ") << '"';
+    return result.toLocal8Bit();
+}
+
 void tst_QScriptEngine::dateConversionJSQt()
 {
     uint secs = QDateTime(QDate(2009, 1, 1)).toUTC().toTime_t();
@@ -5836,8 +5863,8 @@ void tst_QScriptEngine::dateConversionJSQt()
         QString qtUTCDateStr = qtDate.toUTC().toString(Qt::ISODate);
         QString jsUTCDateStr = jsDate.property("toISOString").call(jsDate).toString();
         jsUTCDateStr.remove(jsUTCDateStr.length() - 5, 4); // get rid of milliseconds (".000")
-        if (qtUTCDateStr != jsUTCDateStr)
-            QFAIL(qPrintable(jsDate.toString()));
+        QVERIFY2(qtUTCDateStr == jsUTCDateStr,
+                 msgDateConversionJSQt(i, secs, qtUTCDateStr, jsUTCDateStr, jsDate));
         secs += 2*60*60;
     }
 }

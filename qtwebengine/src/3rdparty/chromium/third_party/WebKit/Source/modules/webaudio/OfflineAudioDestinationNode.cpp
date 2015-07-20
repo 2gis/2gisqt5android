@@ -28,17 +28,15 @@
 
 #include "modules/webaudio/OfflineAudioDestinationNode.h"
 
-#include <algorithm>
-#include "platform/audio/AudioBus.h"
-#include "platform/audio/HRTFDatabaseLoader.h"
+#include "core/dom/CrossThreadTask.h"
 #include "modules/webaudio/AudioContext.h"
 #include "platform/Task.h"
+#include "platform/audio/AudioBus.h"
+#include "platform/audio/HRTFDatabaseLoader.h"
 #include "public/platform/Platform.h"
-#include "wtf/MainThread.h"
+#include <algorithm>
 
-using namespace std;
-
-namespace WebCore {
+namespace blink {
 
 const size_t renderQuantumSize = 128;
 
@@ -52,7 +50,13 @@ OfflineAudioDestinationNode::OfflineAudioDestinationNode(AudioContext* context, 
 
 OfflineAudioDestinationNode::~OfflineAudioDestinationNode()
 {
+    ASSERT(!isInitialized());
+}
+
+void OfflineAudioDestinationNode::dispose()
+{
     uninitialize();
+    AudioDestinationNode::dispose();
 }
 
 void OfflineAudioDestinationNode::initialize()
@@ -77,23 +81,30 @@ void OfflineAudioDestinationNode::uninitialize()
 void OfflineAudioDestinationNode::startRendering()
 {
     ASSERT(isMainThread());
-    ASSERT(m_renderTarget.get());
-    if (!m_renderTarget.get())
+    ASSERT(m_renderTarget);
+    if (!m_renderTarget)
         return;
 
     if (!m_startedRendering) {
         m_startedRendering = true;
-        ref(); // See corresponding deref() call in notifyCompleteDispatch().
+        context()->notifyNodeStartedProcessing(this);
         m_renderThread = adoptPtr(blink::Platform::current()->createThread("Offline Audio Renderer"));
-        m_renderThread->postTask(new Task(WTF::bind(&OfflineAudioDestinationNode::offlineRender, this)));
+        m_renderThread->postTask(new Task(bind(&OfflineAudioDestinationNode::offlineRender, this)));
     }
 }
 
 void OfflineAudioDestinationNode::offlineRender()
 {
+    offlineRenderInternal();
+    context()->notifyNodeFinishedProcessing(this);
+    context()->handlePostRenderTasks();
+}
+
+void OfflineAudioDestinationNode::offlineRenderInternal()
+{
     ASSERT(!isMainThread());
-    ASSERT(m_renderBus.get());
-    if (!m_renderBus.get())
+    ASSERT(m_renderBus);
+    if (!m_renderBus)
         return;
 
     bool isAudioContextInitialized = context()->isInitialized();
@@ -121,7 +132,7 @@ void OfflineAudioDestinationNode::offlineRender()
         // Render one render quantum.
         render(0, m_renderBus.get(), renderQuantumSize);
 
-        size_t framesAvailableToCopy = min(framesToProcess, renderQuantumSize);
+        size_t framesAvailableToCopy = std::min(framesToProcess, renderQuantumSize);
 
         for (unsigned channelIndex = 0; channelIndex < numberOfChannels; ++channelIndex) {
             const float* source = m_renderBus->channel(channelIndex)->data();
@@ -134,18 +145,8 @@ void OfflineAudioDestinationNode::offlineRender()
     }
 
     // Our work is done. Let the AudioContext know.
-    callOnMainThread(notifyCompleteDispatch, this);
-}
-
-void OfflineAudioDestinationNode::notifyCompleteDispatch(void* userData)
-{
-    OfflineAudioDestinationNode* destinationNode = static_cast<OfflineAudioDestinationNode*>(userData);
-    ASSERT(destinationNode);
-    if (!destinationNode)
-        return;
-
-    destinationNode->notifyComplete();
-    destinationNode->deref();
+    if (context()->executionContext())
+        context()->executionContext()->postTask(createCrossThreadTask(&OfflineAudioDestinationNode::notifyComplete, this));
 }
 
 void OfflineAudioDestinationNode::notifyComplete()
@@ -159,6 +160,6 @@ void OfflineAudioDestinationNode::trace(Visitor* visitor)
     AudioDestinationNode::trace(visitor);
 }
 
-} // namespace WebCore
+} // namespace blink
 
 #endif // ENABLE(WEB_AUDIO)

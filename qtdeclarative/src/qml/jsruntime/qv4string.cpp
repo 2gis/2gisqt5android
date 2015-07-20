@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -43,9 +43,8 @@
 
 using namespace QV4;
 
-static uint toArrayIndex(const QChar *ch, const QChar *end, bool *ok)
+static uint toArrayIndex(const QChar *ch, const QChar *end)
 {
-    *ok = false;
     uint i = ch->unicode() - '0';
     if (i > 9)
         return UINT_MAX;
@@ -65,15 +64,13 @@ static uint toArrayIndex(const QChar *ch, const QChar *end, bool *ok)
         i = n;
         ++ch;
     }
-    *ok = true;
     return i;
 }
 
 #ifndef V4_BOOTSTRAP
 
-static uint toArrayIndex(const char *ch, const char *end, bool *ok)
+static uint toArrayIndex(const char *ch, const char *end)
 {
-    *ok = false;
     uint i = *ch - '0';
     if (i > 9)
         return UINT_MAX;
@@ -93,133 +90,19 @@ static uint toArrayIndex(const char *ch, const char *end, bool *ok)
         i = n;
         ++ch;
     }
-    *ok = true;
     return i;
 }
 
 
-const ObjectVTable String::static_vtbl =
-{
-    DEFINE_MANAGED_VTABLE_INT(String, 0),
-    0,
-    0,
-    get,
-    getIndexed,
-    put,
-    putIndexed,
-    query,
-    queryIndexed,
-    deleteProperty,
-    deleteIndexedProperty,
-    0 /*getLookup*/,
-    0 /*setLookup*/,
-    0,
-    0 /*advanceIterator*/,
-};
+DEFINE_MANAGED_VTABLE(String);
 
-void String::destroy(Managed *that)
+void String::markObjects(Heap::Base *that, ExecutionEngine *e)
 {
-    static_cast<String*>(that)->d()->~Data();
-}
-
-void String::markObjects(Managed *that, ExecutionEngine *e)
-{
-    String *s = static_cast<String *>(that);
-    if (s->d()->largestSubLength) {
-        s->d()->left->mark(e);
-        s->d()->right->mark(e);
+    String::Data *s = static_cast<String::Data *>(that);
+    if (s->largestSubLength) {
+        s->left->mark(e);
+        s->right->mark(e);
     }
-}
-
-ReturnedValue String::get(Managed *m, String *name, bool *hasProperty)
-{
-    ExecutionEngine *v4 = m->engine();
-    Scope scope(v4);
-    ScopedString that(scope, static_cast<String *>(m));
-
-    if (name->equals(v4->id_length)) {
-        if (hasProperty)
-            *hasProperty = true;
-        return Primitive::fromInt32(that->d()->text->size).asReturnedValue();
-    }
-    PropertyAttributes attrs;
-    Property *pd = v4->stringObjectClass->prototype->__getPropertyDescriptor__(name, &attrs);
-    if (!pd || attrs.isGeneric()) {
-        if (hasProperty)
-            *hasProperty = false;
-        return Primitive::undefinedValue().asReturnedValue();
-    }
-    if (hasProperty)
-        *hasProperty = true;
-    return v4->stringObjectClass->prototype->getValue(that, pd, attrs);
-}
-
-ReturnedValue String::getIndexed(Managed *m, uint index, bool *hasProperty)
-{
-    ExecutionEngine *engine = m->engine();
-    Scope scope(engine);
-    ScopedString that(scope, static_cast<String *>(m));
-
-    if (index < static_cast<uint>(that->d()->text->size)) {
-        if (hasProperty)
-            *hasProperty = true;
-        return Encode(engine->newString(that->toQString().mid(index, 1)));
-    }
-    PropertyAttributes attrs;
-    Property *pd = engine->stringObjectClass->prototype->__getPropertyDescriptor__(index, &attrs);
-    if (!pd || attrs.isGeneric()) {
-        if (hasProperty)
-            *hasProperty = false;
-        return Primitive::undefinedValue().asReturnedValue();
-    }
-    if (hasProperty)
-        *hasProperty = true;
-    return engine->stringObjectClass->prototype->getValue(that, pd, attrs);
-}
-
-void String::put(Managed *m, String *name, const ValueRef value)
-{
-    Scope scope(m->engine());
-    if (scope.hasException())
-        return;
-    ScopedString that(scope, static_cast<String *>(m));
-    Scoped<Object> o(scope, that->engine()->newStringObject(that));
-    o->put(name, value);
-}
-
-void String::putIndexed(Managed *m, uint index, const ValueRef value)
-{
-    Scope scope(m->engine());
-    if (scope.hasException())
-        return;
-
-    ScopedString that(scope, static_cast<String *>(m));
-    Scoped<Object> o(scope, that->engine()->newStringObject(that));
-    o->putIndexed(index, value);
-}
-
-PropertyAttributes String::query(const Managed *m, String *name)
-{
-    uint idx = name->asArrayIndex();
-    if (idx != UINT_MAX)
-        return queryIndexed(m, idx);
-    return Attr_Invalid;
-}
-
-PropertyAttributes String::queryIndexed(const Managed *m, uint index)
-{
-    const String *that = static_cast<const String *>(m);
-    return (index < static_cast<uint>(that->d()->text->size)) ? Attr_NotConfigurable|Attr_NotWritable : Attr_Invalid;
-}
-
-bool String::deleteProperty(Managed *, String *)
-{
-    return false;
-}
-
-bool String::deleteIndexedProperty(Managed *, uint)
-{
-    return false;
 }
 
 bool String::isEqualTo(Managed *t, Managed *o)
@@ -227,26 +110,16 @@ bool String::isEqualTo(Managed *t, Managed *o)
     if (t == o)
         return true;
 
-    if (!o->internalClass()->vtable->isString)
+    if (!o->d()->vtable->isString)
         return false;
 
-    String *that = static_cast<String *>(t);
-    String *other = static_cast<String *>(o);
-    if (that->hashValue() != other->hashValue())
-        return false;
-    if (that->identifier() && that->identifier() == other->identifier())
-        return true;
-    if (that->subtype() >= StringType_UInt && that->subtype() == other->subtype())
-        return true;
-
-    return that->toQString() == other->toQString();
+    return static_cast<String *>(t)->isEqualTo(static_cast<String *>(o));
 }
 
 
-String::Data::Data(ExecutionEngine *engine, const QString &t)
-    : Managed::Data(engine->stringClass)
+Heap::String::String(const QString &t)
 {
-    subtype = StringType_Unknown;
+    subtype = String::StringType_Unknown;
 
     text = const_cast<QString &>(t).data_ptr();
     text->ref.ref();
@@ -256,21 +129,20 @@ String::Data::Data(ExecutionEngine *engine, const QString &t)
     len = text->size;
 }
 
-String::Data::Data(ExecutionEngine *engine, String *l, String *r)
-    : Managed::Data(engine->stringClass)
+Heap::String::String(String *l, String *r)
 {
-    subtype = StringType_Unknown;
+    subtype = String::StringType_Unknown;
 
     left = l;
     right = r;
     stringHash = UINT_MAX;
-    largestSubLength = qMax(l->d()->largestSubLength, r->d()->largestSubLength);
-    len = l->d()->len + r->d()->len;
+    largestSubLength = qMax(l->largestSubLength, r->largestSubLength);
+    len = l->len + r->len;
 
-    if (!l->d()->largestSubLength && l->d()->len > largestSubLength)
-        largestSubLength = l->d()->len;
-    if (!r->d()->largestSubLength && r->d()->len > largestSubLength)
-        largestSubLength = r->d()->len;
+    if (!l->largestSubLength && l->len > largestSubLength)
+        largestSubLength = l->len;
+    if (!r->largestSubLength && r->len > largestSubLength)
+        largestSubLength = r->len;
 
     // make sure we don't get excessive depth in our strings
     if (len > 256 && len >= 2*largestSubLength)
@@ -281,12 +153,12 @@ uint String::toUInt(bool *ok) const
 {
     *ok = true;
 
-    if (subtype() == StringType_Unknown)
-        createHashValue();
-    if (subtype() >= StringType_UInt)
+    if (subtype() == Heap::String::StringType_Unknown)
+        d()->createHashValue();
+    if (subtype() == Heap::String::StringType_ArrayIndex)
         return d()->stringHash;
 
-    // ### this conversion shouldn't be required
+    // required for UINT_MAX or numbers starting with a leading 0
     double d = RuntimeHelpers::stringToNumber(toQString());
     uint l = (uint)d;
     if (d == l)
@@ -295,29 +167,15 @@ uint String::toUInt(bool *ok) const
     return UINT_MAX;
 }
 
-bool String::equals(String *other) const
-{
-    if (this == other)
-        return true;
-    if (hashValue() != other->hashValue())
-        return false;
-    if (identifier() && identifier() == other->identifier())
-        return true;
-    if (subtype() >= StringType_UInt && subtype() == other->subtype())
-        return true;
-
-    return toQString() == other->toQString();
-}
-
-void String::makeIdentifierImpl() const
+void String::makeIdentifierImpl(ExecutionEngine *e) const
 {
     if (d()->largestSubLength)
         d()->simplifyString();
     Q_ASSERT(!d()->largestSubLength);
-    engine()->identifierTable->identifier(this);
+    e->identifierTable->identifier(this);
 }
 
-void String::Data::simplifyString() const
+void Heap::String::simplifyString() const
 {
     Q_ASSERT(largestSubLength);
 
@@ -331,40 +189,18 @@ void String::Data::simplifyString() const
     largestSubLength = 0;
 }
 
-void String::Data::append(const String::Data *data, QChar *ch)
+void Heap::String::createHashValue() const
 {
-    std::vector<const String::Data *> worklist;
-    worklist.reserve(32);
-    worklist.push_back(data);
-
-    while (!worklist.empty()) {
-        const String::Data *item = worklist.back();
-        worklist.pop_back();
-
-        if (item->largestSubLength) {
-            worklist.push_back(item->right->d());
-            worklist.push_back(item->left->d());
-        } else {
-            memcpy(ch, item->text->data(), item->text->size * sizeof(QChar));
-            ch += item->text->size;
-        }
-    }
-}
-
-
-void String::createHashValue() const
-{
-    if (d()->largestSubLength)
-        d()->simplifyString();
-    Q_ASSERT(!d()->largestSubLength);
-    const QChar *ch = reinterpret_cast<const QChar *>(d()->text->data());
-    const QChar *end = ch + d()->text->size;
+    if (largestSubLength)
+        simplifyString();
+    Q_ASSERT(!largestSubLength);
+    const QChar *ch = reinterpret_cast<const QChar *>(text->data());
+    const QChar *end = ch + text->size;
 
     // array indices get their number as hash value
-    bool ok;
-    d()->stringHash = ::toArrayIndex(ch, end, &ok);
-    if (ok) {
-        setSubtype((d()->stringHash == UINT_MAX) ? StringType_UInt : StringType_ArrayIndex);
+    stringHash = ::toArrayIndex(ch, end);
+    if (stringHash != UINT_MAX) {
+        subtype = Heap::String::StringType_ArrayIndex;
         return;
     }
 
@@ -374,18 +210,40 @@ void String::createHashValue() const
         ++ch;
     }
 
-    d()->stringHash = h;
-    setSubtype(StringType_Regular);
+    stringHash = h;
+    subtype = Heap::String::StringType_Regular;
 }
+
+void Heap::String::append(const String *data, QChar *ch)
+{
+    std::vector<const String *> worklist;
+    worklist.reserve(32);
+    worklist.push_back(data);
+
+    while (!worklist.empty()) {
+        const String *item = worklist.back();
+        worklist.pop_back();
+
+        if (item->largestSubLength) {
+            worklist.push_back(item->right);
+            worklist.push_back(item->left);
+        } else {
+            memcpy(ch, item->text->data(), item->text->size * sizeof(QChar));
+            ch += item->text->size;
+        }
+    }
+}
+
+
+
 
 uint String::createHashValue(const QChar *ch, int length)
 {
     const QChar *end = ch + length;
 
     // array indices get their number as hash value
-    bool ok;
-    uint stringHash = ::toArrayIndex(ch, end, &ok);
-    if (ok)
+    uint stringHash = ::toArrayIndex(ch, end);
+    if (stringHash != UINT_MAX)
         return stringHash;
 
     uint h = 0xffffffff;
@@ -402,9 +260,8 @@ uint String::createHashValue(const char *ch, int length)
     const char *end = ch + length;
 
     // array indices get their number as hash value
-    bool ok;
-    uint stringHash = ::toArrayIndex(ch, end, &ok);
-    if (ok)
+    uint stringHash = ::toArrayIndex(ch, end);
+    if (stringHash != UINT_MAX)
         return stringHash;
 
     uint h = 0xffffffff;
@@ -427,7 +284,6 @@ uint String::getLength(const Managed *m)
 
 uint String::toArrayIndex(const QString &str)
 {
-    bool ok;
-    return ::toArrayIndex(str.constData(), str.constData() + str.length(), &ok);
+    return ::toArrayIndex(str.constData(), str.constData() + str.length());
 }
 

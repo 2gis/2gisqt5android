@@ -1,8 +1,8 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2015 The Qt Company Ltd.
 ** Copyright (C) 2012 Research In Motion
-** Contact: http://www.qt-project.org/legal
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Toolkit.
 **
@@ -11,9 +11,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -24,8 +24,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -40,6 +40,7 @@
 #include <QtQuick/qquickitem.h>
 #include <QtCore/qpointer.h>
 #include <QtMultimedia/qcamerainfo.h>
+#include <QtMultimedia/qabstractvideofilter.h>
 
 #include <private/qtmultimediaquickdefs_p.h>
 
@@ -60,6 +61,7 @@ class Q_MULTIMEDIAQUICK_EXPORT QDeclarativeVideoOutput : public QQuickItem
     Q_PROPERTY(bool autoOrientation READ autoOrientation WRITE setAutoOrientation NOTIFY autoOrientationChanged REVISION 2)
     Q_PROPERTY(QRectF sourceRect READ sourceRect NOTIFY sourceRectChanged)
     Q_PROPERTY(QRectF contentRect READ contentRect NOTIFY contentRectChanged)
+    Q_PROPERTY(QQmlListProperty<QAbstractVideoFilter> filters READ filters);
     Q_ENUMS(FillMode)
 
 public:
@@ -104,6 +106,8 @@ public:
     };
     SourceType sourceType() const;
 
+    QQmlListProperty<QAbstractVideoFilter> filters();
+
 Q_SIGNALS:
     void sourceChanged();
     void fillModeChanged(QDeclarativeVideoOutput::FillMode);
@@ -116,6 +120,7 @@ protected:
     QSGNode *updatePaintNode(QSGNode *, UpdatePaintNodeData *);
     void itemChange(ItemChange change, const ItemChangeData &changeData);
     void geometryChanged(const QRectF &newGeometry, const QRectF &oldGeometry);
+    void releaseResources();
 
 private Q_SLOTS:
     void _q_updateMediaObject();
@@ -123,9 +128,15 @@ private Q_SLOTS:
     void _q_updateNativeSize();
     void _q_updateGeometry();
     void _q_screenOrientationChanged(int);
+    void _q_invalidateSceneGraph();
 
 private:
     bool createBackend(QMediaService *service);
+
+    static void filter_append(QQmlListProperty<QAbstractVideoFilter> *property, QAbstractVideoFilter *value);
+    static int filter_count(QQmlListProperty<QAbstractVideoFilter> *property);
+    static QAbstractVideoFilter *filter_at(QQmlListProperty<QAbstractVideoFilter> *property, int index);
+    static void filter_clear(QQmlListProperty<QAbstractVideoFilter> *property);
 
     SourceType m_sourceType;
 
@@ -145,6 +156,8 @@ private:
     QVideoOutputOrientationHandler *m_screenOrientationHandler;
 
     QScopedPointer<QDeclarativeVideoBackend> m_backend;
+
+    QList<QAbstractVideoFilter *> m_filters;
 };
 
 QT_END_NAMESPACE

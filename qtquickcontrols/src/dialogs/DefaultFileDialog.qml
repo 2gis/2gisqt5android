@@ -1,42 +1,38 @@
-/*****************************************************************************
+/****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
-** This file is part of the QtQuick.Dialogs module of the Qt Toolkit.
+** This file is part of the Qt Quick Dialogs module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:BSD$
-** You may use this file under the terms of the BSD license as follows:
+** $QT_BEGIN_LICENSE:LGPL3$
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
-** "Redistribution and use in source and binary forms, with or without
-** modification, are permitted provided that the following conditions are
-** met:
-**   * Redistributions of source code must retain the above copyright
-**     notice, this list of conditions and the following disclaimer.
-**   * Redistributions in binary form must reproduce the above copyright
-**     notice, this list of conditions and the following disclaimer in
-**     the documentation and/or other materials provided with the
-**     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
-**     from this software without specific prior written permission.
+** GNU Lesser General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU Lesser
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPLv3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl.html.
 **
-**
-** THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-** "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-** LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
-** A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
-** OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
-** SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
-** LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
-** DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
-** THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-** (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-** OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE."
+** GNU General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU
+** General Public License version 2.0 or later as published by the Free
+** Software Foundation and appearing in the file LICENSE.GPL included in
+** the packaging of this file. Please review the following information to
+** ensure the GNU General Public License version 2.0 requirements will be
+** met: http://www.gnu.org/licenses/gpl-2.0.html.
 **
 ** $QT_END_LICENSE$
 **
-*****************************************************************************/
+****************************************************************************/
 
 import QtQuick 2.2
 import QtQuick.Controls 1.2
@@ -51,6 +47,9 @@ import "qml"
 
 AbstractFileDialog {
     id: root
+
+    folder: view.model.folder
+
     onVisibleChanged: {
         if (visible) {
             view.needsWidthAdjustment = true
@@ -63,7 +62,6 @@ AbstractFileDialog {
         view.model.nameFilters = root.selectedNameFilterExtensions
         filterField.currentIndex = root.selectedNameFilterIndex
         root.favoriteFolders = settings.favoriteFolders
-        root.folder = view.model.folder
     }
 
     Component.onDestruction: {
@@ -75,7 +73,7 @@ AbstractFileDialog {
         property alias width: root.width
         property alias height: root.height
         property alias sidebarWidth: sidebar.width
-        property alias sidebarSplit: shortcuts.height
+        property alias sidebarSplit: shortcutsScroll.height
         property alias sidebarVisible: root.sidebarVisible
         property variant favoriteFolders: []
     }
@@ -126,11 +124,6 @@ AbstractFileDialog {
         color: root.palette.window
 
         Binding {
-            target: root
-            property: "folder"
-            value: view.model.folder
-        }
-        Binding {
             target: view.model
             property: "folder"
             value: root.folder
@@ -176,7 +169,7 @@ AbstractFileDialog {
                     height: parent.height - favoritesButtons.height
 
                     ScrollView {
-                        id: shortcuts
+                        id: shortcutsScroll
                         Component.onCompleted: {
                             if (height < 1)
                                 height = sidebarSplitter.rowHeight * 4.65
@@ -185,7 +178,7 @@ AbstractFileDialog {
                         height: 0 // initial width only; settings and onCompleted will override it
                         ListView {
                             id: shortcutsView
-                            model: root.shortcuts
+                            model: __shortcuts.length
                             anchors.bottomMargin: ControlsPrivate.Settings.hasTouchScreen ? Screen.pixelDensity * 3.5 : anchors.margins
                             implicitHeight: model.count * sidebarSplitter.rowHeight
                             delegate: Item {
@@ -194,7 +187,7 @@ AbstractFileDialog {
                                 height: shortcutLabel.implicitHeight * 1.5
                                 Text {
                                     id: shortcutLabel
-                                    text: shortcutsView.model[index]["name"]
+                                    text: __shortcuts[index].name
                                     anchors {
                                         verticalCenter: parent.verticalCenter
                                         left: parent.left
@@ -211,7 +204,7 @@ AbstractFileDialog {
                                 }
                                 MouseArea {
                                     anchors.fill: parent
-                                    onClicked: root.folder = shortcutsView.model[index]["url"]
+                                    onClicked: root.folder = __shortcuts[index].url
                                 }
                             }
                         }
@@ -452,7 +445,7 @@ AbstractFileDialog {
                 }
                 Button {
                     id: okButton
-                    text: qsTr("OK")
+                    text: root.selectFolder ? qsTr("Choose") : (selectExisting ? qsTr("Open") : qsTr("Save"))
                     onClicked: {
                         if (view.model.isFolder(view.currentIndex) && !selectFolder)
                             dirDown(view.model.get(view.currentIndex, "filePath"))

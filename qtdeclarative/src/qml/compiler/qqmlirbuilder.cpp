@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the tools applications of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -216,60 +216,6 @@ static void replaceWithSpace(QString &str, int idx, int n)
         *data++ = space;
 }
 
-#define CHECK_LINE if (l.tokenStartLine() != startLine) return;
-#define CHECK_TOKEN(t) if (token != QQmlJSGrammar:: t) return;
-
-static const int uriTokens[] = {
-    QQmlJSGrammar::T_IDENTIFIER,
-    QQmlJSGrammar::T_PROPERTY,
-    QQmlJSGrammar::T_SIGNAL,
-    QQmlJSGrammar::T_READONLY,
-    QQmlJSGrammar::T_ON,
-    QQmlJSGrammar::T_BREAK,
-    QQmlJSGrammar::T_CASE,
-    QQmlJSGrammar::T_CATCH,
-    QQmlJSGrammar::T_CONTINUE,
-    QQmlJSGrammar::T_DEFAULT,
-    QQmlJSGrammar::T_DELETE,
-    QQmlJSGrammar::T_DO,
-    QQmlJSGrammar::T_ELSE,
-    QQmlJSGrammar::T_FALSE,
-    QQmlJSGrammar::T_FINALLY,
-    QQmlJSGrammar::T_FOR,
-    QQmlJSGrammar::T_FUNCTION,
-    QQmlJSGrammar::T_IF,
-    QQmlJSGrammar::T_IN,
-    QQmlJSGrammar::T_INSTANCEOF,
-    QQmlJSGrammar::T_NEW,
-    QQmlJSGrammar::T_NULL,
-    QQmlJSGrammar::T_RETURN,
-    QQmlJSGrammar::T_SWITCH,
-    QQmlJSGrammar::T_THIS,
-    QQmlJSGrammar::T_THROW,
-    QQmlJSGrammar::T_TRUE,
-    QQmlJSGrammar::T_TRY,
-    QQmlJSGrammar::T_TYPEOF,
-    QQmlJSGrammar::T_VAR,
-    QQmlJSGrammar::T_VOID,
-    QQmlJSGrammar::T_WHILE,
-    QQmlJSGrammar::T_CONST,
-    QQmlJSGrammar::T_DEBUGGER,
-    QQmlJSGrammar::T_RESERVED_WORD,
-    QQmlJSGrammar::T_WITH,
-
-    QQmlJSGrammar::EOF_SYMBOL
-};
-static inline bool isUriToken(int token)
-{
-    const int *current = uriTokens;
-    while (*current != QQmlJSGrammar::EOF_SYMBOL) {
-        if (*current == token)
-            return true;
-        ++current;
-    }
-    return false;
-}
-
 void Document::collectTypeReferences()
 {
     foreach (Object *obj, objects) {
@@ -294,198 +240,6 @@ void Document::collectTypeReferences()
                 typeReferences.add(binding->propertyNameIndex, binding->location);
         }
     }
-}
-
-void Document::extractScriptMetaData(QString &script, QQmlJS::DiagnosticMessage *error)
-{
-    Q_ASSERT(error);
-
-    const QString js(QLatin1String(".js"));
-    const QString library(QLatin1String("library"));
-
-    QQmlJS::MemoryPool *pool = jsParserEngine.pool();
-
-    QQmlJS::Lexer l(0);
-    l.setCode(script, 0);
-
-    int token = l.lex();
-
-    while (true) {
-        if (token != QQmlJSGrammar::T_DOT)
-            return;
-
-        int startOffset = l.tokenOffset();
-        int startLine = l.tokenStartLine();
-        int startColumn = l.tokenStartColumn();
-
-        error->loc.startLine = startLine + 1; // 0-based, adjust to be 1-based
-
-        token = l.lex();
-
-        CHECK_LINE;
-
-        if (token == QQmlJSGrammar::T_IMPORT) {
-
-            // .import <URI> <Version> as <Identifier>
-            // .import <file.js> as <Identifier>
-
-            token = l.lex();
-
-            CHECK_LINE;
-            QV4::CompiledData::Import *import = pool->New<QV4::CompiledData::Import>();
-
-            if (token == QQmlJSGrammar::T_STRING_LITERAL) {
-
-                QString file = l.tokenText();
-
-                if (!file.endsWith(js)) {
-                    error->message = QCoreApplication::translate("QQmlParser","Imported file must be a script");
-                    error->loc.startColumn = l.tokenStartColumn();
-                    return;
-                }
-
-                bool invalidImport = false;
-
-                token = l.lex();
-
-                if ((token != QQmlJSGrammar::T_AS) || (l.tokenStartLine() != startLine)) {
-                    invalidImport = true;
-                } else {
-                    token = l.lex();
-
-                    if ((token != QQmlJSGrammar::T_IDENTIFIER) || (l.tokenStartLine() != startLine))
-                        invalidImport = true;
-                }
-
-
-                if (invalidImport) {
-                    error->message = QCoreApplication::translate("QQmlParser","File import requires a qualifier");
-                    error->loc.startColumn = l.tokenStartColumn();
-                    return;
-                }
-
-                int endOffset = l.tokenLength() + l.tokenOffset();
-
-                QString importId = script.mid(l.tokenOffset(), l.tokenLength());
-
-                token = l.lex();
-
-                if (!importId.at(0).isUpper() || (l.tokenStartLine() == startLine)) {
-                    error->message = QCoreApplication::translate("QQmlParser","Invalid import qualifier");
-                    error->loc.startColumn = l.tokenStartColumn();
-                    return;
-                }
-
-                replaceWithSpace(script, startOffset, endOffset - startOffset);
-
-                import->type = QV4::CompiledData::Import::ImportScript;
-                import->uriIndex = registerString(file);
-                import->qualifierIndex = registerString(importId);
-                import->location.line = startLine;
-                import->location.column = startColumn;
-                imports << import;
-            } else {
-                // URI
-                QString uri;
-
-                while (true) {
-                    if (!isUriToken(token)) {
-                        error->message = QCoreApplication::translate("QQmlParser","Invalid module URI");
-                        error->loc.startColumn = l.tokenStartColumn();
-                        return;
-                    }
-
-                    uri.append(l.tokenText());
-
-                    token = l.lex();
-                    CHECK_LINE;
-                    if (token != QQmlJSGrammar::T_DOT)
-                        break;
-
-                    uri.append(QLatin1Char('.'));
-
-                    token = l.lex();
-                    CHECK_LINE;
-                }
-
-                if (token != QQmlJSGrammar::T_NUMERIC_LITERAL) {
-                    error->message = QCoreApplication::translate("QQmlParser","Module import requires a version");
-                    error->loc.startColumn = l.tokenStartColumn();
-                    return;
-                }
-
-                int vmaj, vmin;
-                IRBuilder::extractVersion(QStringRef(&script, l.tokenOffset(), l.tokenLength()),
-                                          &vmaj, &vmin);
-
-                bool invalidImport = false;
-
-                token = l.lex();
-
-                if ((token != QQmlJSGrammar::T_AS) || (l.tokenStartLine() != startLine)) {
-                    invalidImport = true;
-                } else {
-                    token = l.lex();
-
-                    if ((token != QQmlJSGrammar::T_IDENTIFIER) || (l.tokenStartLine() != startLine))
-                        invalidImport = true;
-                }
-
-
-                if (invalidImport) {
-                    error->message = QCoreApplication::translate("QQmlParser","Module import requires a qualifier");
-                    error->loc.startColumn = l.tokenStartColumn();
-                    return;
-                }
-
-                int endOffset = l.tokenLength() + l.tokenOffset();
-
-                QString importId = script.mid(l.tokenOffset(), l.tokenLength());
-
-                token = l.lex();
-
-                if (!importId.at(0).isUpper() || (l.tokenStartLine() == startLine)) {
-                    error->message = QCoreApplication::translate("QQmlParser","Invalid import qualifier");
-                    error->loc.startColumn = l.tokenStartColumn();
-                    return;
-                }
-
-                replaceWithSpace(script, startOffset, endOffset - startOffset);
-
-                import->type = QV4::CompiledData::Import::ImportLibrary;
-                import->uriIndex = registerString(uri);
-                import->majorVersion = vmaj;
-                import->minorVersion = vmin;
-                import->qualifierIndex = registerString(importId);
-                import->location.line = startLine;
-                import->location.column = startColumn;
-                imports << import;
-            }
-        } else if (token == QQmlJSGrammar::T_PRAGMA) {
-            token = l.lex();
-
-            CHECK_TOKEN(T_IDENTIFIER);
-            CHECK_LINE;
-
-            QString pragmaValue = script.mid(l.tokenOffset(), l.tokenLength());
-            int endOffset = l.tokenLength() + l.tokenOffset();
-
-            if (pragmaValue == library) {
-                unitFlags |= QV4::CompiledData::Unit::IsSharedLibrary;
-                replaceWithSpace(script, startOffset, endOffset - startOffset);
-            } else {
-                return;
-            }
-
-            token = l.lex();
-            if (l.tokenStartLine() == startLine)
-                return;
-
-        } else {
-            return;
-        }
-    }
-    return;
 }
 
 void Document::removeScriptPragmas(QString &script)
@@ -536,9 +290,49 @@ void Document::removeScriptPragmas(QString &script)
 Document::Document(bool debugMode)
     : jsModule(debugMode)
     , program(0)
+    , indexOfRootObject(0)
     , jsGenerator(&jsModule)
     , unitFlags(0)
 {
+}
+
+ScriptDirectivesCollector::ScriptDirectivesCollector(QQmlJS::Engine *engine, QV4::Compiler::JSUnitGenerator *unitGenerator)
+    : engine(engine)
+    , jsGenerator(unitGenerator)
+    , hasPragmaLibrary(false)
+{
+}
+
+void ScriptDirectivesCollector::pragmaLibrary()
+{
+    hasPragmaLibrary = true;
+}
+
+void ScriptDirectivesCollector::importFile(const QString &jsfile, const QString &module, int lineNumber, int column)
+{
+    QV4::CompiledData::Import *import = engine->pool()->New<QV4::CompiledData::Import>();
+    import->type = QV4::CompiledData::Import::ImportScript;
+    import->uriIndex = jsGenerator->registerString(jsfile);
+    import->qualifierIndex = jsGenerator->registerString(module);
+    import->location.line = lineNumber;
+    import->location.column = column;
+    imports << import;
+}
+
+void ScriptDirectivesCollector::importModule(const QString &uri, const QString &version, const QString &module, int lineNumber, int column)
+{
+    QV4::CompiledData::Import *import = engine->pool()->New<QV4::CompiledData::Import>();
+    import->type = QV4::CompiledData::Import::ImportLibrary;
+    import->uriIndex = jsGenerator->registerString(uri);
+    int vmaj;
+    int vmin;
+    IRBuilder::extractVersion(QStringRef(&version), &vmaj, &vmin);
+    import->majorVersion = vmaj;
+    import->minorVersion = vmin;
+    import->qualifierIndex = jsGenerator->registerString(module);
+    import->location.line = lineNumber;
+    import->location.column = column;
+    imports << import;
 }
 
 IRBuilder::IRBuilder(const QSet<QString> &illegalNames)
@@ -1525,6 +1319,7 @@ QV4::CompiledData::Unit *QmlUnitGenerator::generate(Document &output)
     const int totalSize = unitSize + importSize + objectOffsetTableSize + objectsSize + output.jsGenerator.stringTable.sizeOfTableAndData();
     char *data = (char*)malloc(totalSize);
     memcpy(data, jsUnit, unitSize);
+    memset(data + unitSize, 0, totalSize - unitSize);
     if (jsUnit != compilationUnit->data)
         free(jsUnit);
     jsUnit = 0;
@@ -1780,8 +1575,6 @@ QQmlPropertyData *JSCodeGen::lookupQmlCompliantProperty(QQmlPropertyCache *cache
     return pd;
 }
 
-static void initMetaObjectResolver(QV4::IR::MemberExpressionResolver *resolver, QQmlPropertyCache *metaObject);
-
 enum MetaObjectResolverFlags {
     AllPropertiesAreFinal      = 0x1,
     LookupsIncludeEnums        = 0x2,
@@ -1837,6 +1630,8 @@ static QV4::IR::Type resolveQmlType(QQmlEnginePrivate *qmlEngine, QV4::IR::Membe
 
 static void initQmlTypeResolver(QV4::IR::MemberExpressionResolver *resolver, QQmlType *qmlType)
 {
+    Q_ASSERT(resolver);
+
     resolver->resolveMember = &resolveQmlType;
     resolver->data = qmlType;
     resolver->extraData = 0;
@@ -1941,8 +1736,8 @@ static QV4::IR::Type resolveMetaObjectProperty(QQmlEnginePrivate *qmlEngine, QV4
                         initMetaObjectResolver(resolver, cache);
                         return QV4::IR::QObjectType;
                     }
-                } else if (QQmlValueType *valueType = QQmlValueTypeFactory::valueType(property->propType)) {
-                    if (QQmlPropertyCache *cache = qmlEngine->cache(valueType->metaObject())) {
+                } else if (const QMetaObject *valueTypeMetaObject = QQmlValueTypeFactory::metaObjectForMetaType(property->propType)) {
+                    if (QQmlPropertyCache *cache = qmlEngine->cache(valueTypeMetaObject)) {
                         initMetaObjectResolver(resolver, cache);
                         resolver->flags |= ResolveTypeInformationOnly;
                         return QV4::IR::QObjectType;
@@ -1958,10 +1753,11 @@ static QV4::IR::Type resolveMetaObjectProperty(QQmlEnginePrivate *qmlEngine, QV4
 
 static void initMetaObjectResolver(QV4::IR::MemberExpressionResolver *resolver, QQmlPropertyCache *metaObject)
 {
+    Q_ASSERT(resolver);
+
     resolver->resolveMember = &resolveMetaObjectProperty;
     resolver->data = metaObject;
     resolver->flags = 0;
-    resolver->isQObjectResolver = true;
 }
 
 #endif // V4_BOOTSTRAP
@@ -1975,11 +1771,13 @@ void JSCodeGen::beginFunctionBodyHook()
 
 #ifndef V4_BOOTSTRAP
     QV4::IR::Temp *temp = _block->TEMP(_contextObjectTemp);
-    initMetaObjectResolver(&temp->memberResolver, _contextObject);
+    temp->memberResolver = _function->New<QV4::IR::MemberExpressionResolver>();
+    initMetaObjectResolver(temp->memberResolver, _contextObject);
     move(temp, _block->NAME(QV4::IR::Name::builtin_qml_context_object, 0, 0));
 
     temp = _block->TEMP(_scopeObjectTemp);
-    initMetaObjectResolver(&temp->memberResolver, _scopeObject);
+    temp->memberResolver = _function->New<QV4::IR::MemberExpressionResolver>();
+    initMetaObjectResolver(temp->memberResolver, _scopeObject);
     move(temp, _block->NAME(QV4::IR::Name::builtin_qml_scope_object, 0, 0));
 
     move(_block->TEMP(_importedScriptsTemp), _block->NAME(QV4::IR::Name::builtin_qml_imported_scripts_object, 0, 0));
@@ -2014,8 +1812,9 @@ QV4::IR::Expr *JSCodeGen::fallbackNameLookup(const QString &name, int line, int 
             _block->MOVE(result, s);
             result = _block->TEMP(result->index);
             if (mapping.type) {
-                initMetaObjectResolver(&result->memberResolver, mapping.type);
-                result->memberResolver.flags |= AllPropertiesAreFinal;
+                result->memberResolver = _function->New<QV4::IR::MemberExpressionResolver>();
+                initMetaObjectResolver(result->memberResolver, mapping.type);
+                result->memberResolver->flags |= AllPropertiesAreFinal;
             }
             result->isReadOnly = true; // don't allow use as lvalue
             return result;
@@ -2035,14 +1834,16 @@ QV4::IR::Expr *JSCodeGen::fallbackNameLookup(const QString &name, int line, int 
                 _block->MOVE(result, typeName);
 
                 result = _block->TEMP(result->index);
-                initQmlTypeResolver(&result->memberResolver, r.type);
+                result->memberResolver = _function->New<QV4::IR::MemberExpressionResolver>();
+                initQmlTypeResolver(result->memberResolver, r.type);
                 return result;
             } else {
                 Q_ASSERT(r.importNamespace);
                 QV4::IR::Name *namespaceName = _block->NAME(name, line, col);
                 namespaceName->freeOfSideEffects = true;
                 QV4::IR::Temp *result = _block->TEMP(_block->newTemp());
-                initImportNamespaceResolver(&result->memberResolver, imports, r.importNamespace);
+                result->memberResolver = _function->New<QV4::IR::MemberExpressionResolver>();
+                initImportNamespaceResolver(result->memberResolver, imports, r.importNamespace);
 
                 _block->MOVE(result, namespaceName);
                 return _block->TEMP(result->index);
@@ -2057,7 +1858,8 @@ QV4::IR::Expr *JSCodeGen::fallbackNameLookup(const QString &name, int line, int 
             return 0;
         if (pd) {
             QV4::IR::Temp *base = _block->TEMP(_scopeObjectTemp);
-            initMetaObjectResolver(&base->memberResolver, _scopeObject);
+            base->memberResolver = _function->New<QV4::IR::MemberExpressionResolver>();
+            initMetaObjectResolver(base->memberResolver, _scopeObject);
             return _block->MEMBER(base, _function->newString(name), pd, QV4::IR::Member::MemberOfQmlScopeObject);
         }
     }
@@ -2069,7 +1871,8 @@ QV4::IR::Expr *JSCodeGen::fallbackNameLookup(const QString &name, int line, int 
             return 0;
         if (pd) {
             QV4::IR::Temp *base = _block->TEMP(_contextObjectTemp);
-            initMetaObjectResolver(&base->memberResolver, _contextObject);
+            base->memberResolver = _function->New<QV4::IR::MemberExpressionResolver>();
+            initMetaObjectResolver(base->memberResolver, _contextObject);
             return _block->MEMBER(base, _function->newString(name), pd, QV4::IR::Member::MemberOfQmlContextObject);
         }
     }

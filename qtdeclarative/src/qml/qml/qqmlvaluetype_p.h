@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -48,7 +48,7 @@
 #include "qqml.h"
 #include "qqmlproperty.h"
 #include "qqmlproperty_p.h"
-#include "qqmlnullablevalue_p_p.h"
+#include <private/qqmlnullablevalue_p.h>
 
 #include <QtCore/qobject.h>
 #include <QtCore/qrect.h>
@@ -57,97 +57,29 @@
 
 QT_BEGIN_NAMESPACE
 
-class Q_QML_PRIVATE_EXPORT QQmlValueType : public QObject
+class Q_QML_PRIVATE_EXPORT QQmlValueType : public QObject, public QAbstractDynamicMetaObject
 {
-    Q_OBJECT
 public:
-    QQmlValueType(int userType, QObject *parent = 0);
-    virtual void read(QObject *, int) = 0;
-    virtual void readVariantValue(QObject *, int, QVariant *) = 0;
-    virtual void write(QObject *, int, QQmlPropertyPrivate::WriteFlags flags) = 0;
-    virtual void writeVariantValue(QObject *, int, QQmlPropertyPrivate::WriteFlags, QVariant *) = 0;
-    virtual QVariant value() = 0;
-    virtual void setValue(const QVariant &) = 0;
+    QQmlValueType(int userType, const QMetaObject *metaObject);
+    ~QQmlValueType();
+    void read(QObject *, int);
+    void write(QObject *, int, QQmlPropertyPrivate::WriteFlags flags);
+    QVariant value();
+    void setValue(const QVariant &);
 
-    virtual QString toString() const = 0;
-    virtual bool isEqual(const QVariant &value) const = 0;
-
-    virtual void onLoad() {}
-
-    inline int userType() const
-    {
-        return m_userType;
-    }
-
-protected:
-    inline void readProperty(QObject *obj, int idx, void *p)
-    {
-        void *a[] = { p, 0 };
-        QMetaObject::metacall(obj, QMetaObject::ReadProperty, idx, a);
-        onLoad();
-    }
-
-    inline void writeProperty(QObject *obj, int idx, QQmlPropertyPrivate::WriteFlags flags, void *p)
-    {
-        int status = -1;
-        void *a[] = { p, 0, &status, &flags };
-        QMetaObject::metacall(obj, QMetaObject::WriteProperty, idx, a);
-    }
+    // ---- dynamic meta object data interface
+    virtual QAbstractDynamicMetaObject *toDynamicMetaObject(QObject *);
+    virtual void objectDestroyed(QObject *);
+    virtual int metaCall(QObject *obj, QMetaObject::Call type, int _id, void **argv);
+    // ----
 
 private:
-    int m_userType;
-};
+    const QMetaObject *_metaObject;
+    void *gadgetPtr;
 
-template <typename T>
-class QQmlValueTypeBase : public QQmlValueType
-{
 public:
-    typedef T ValueType;
-
-    QQmlValueTypeBase(int userType, QObject *parent)
-        : QQmlValueType(userType, parent)
-    {
-    }
-
-    virtual void read(QObject *obj, int idx)
-    {
-        readProperty(obj, idx, &v);
-    }
-
-    virtual void readVariantValue(QObject *obj, int idx, QVariant *into)
-    {
-        // important: must not change the userType of the variant
-        readProperty(obj, idx, into);
-    }
-
-    virtual void write(QObject *obj, int idx, QQmlPropertyPrivate::WriteFlags flags)
-    {
-        writeProperty(obj, idx, flags, &v);
-    }
-
-    virtual void writeVariantValue(QObject *obj, int idx, QQmlPropertyPrivate::WriteFlags flags, QVariant *from)
-    {
-        writeProperty(obj, idx, flags, from);
-    }
-
-    virtual QVariant value()
-    {
-        return QVariant::fromValue(v);
-    }
-
-    virtual void setValue(const QVariant &value)
-    {
-        v = qvariant_cast<T>(value);
-        onLoad();
-    }
-
-    virtual bool isEqual(const QVariant &other) const
-    {
-        return QVariant::fromValue(v) == other;
-    }
-
-protected:
-    ValueType v;
+    int typeId;
+    QMetaType metaType;
 };
 
 class Q_QML_PRIVATE_EXPORT QQmlValueTypeFactory
@@ -155,86 +87,79 @@ class Q_QML_PRIVATE_EXPORT QQmlValueTypeFactory
 public:
     static bool isValueType(int);
     static QQmlValueType *valueType(int idx);
+    static const QMetaObject *metaObjectForMetaType(int type);
 
     static void registerValueTypes(const char *uri, int versionMajor, int versionMinor);
 };
 
-class Q_QML_PRIVATE_EXPORT QQmlPointFValueType : public QQmlValueTypeBase<QPointF>
+struct QQmlPointFValueType
 {
+    QPointF v;
     Q_PROPERTY(qreal x READ x WRITE setX FINAL)
     Q_PROPERTY(qreal y READ y WRITE setY FINAL)
-    Q_OBJECT
+    Q_GADGET
 public:
-    QQmlPointFValueType(QObject *parent = 0);
-
-    virtual QString toString() const;
-
+    Q_INVOKABLE QString toString() const;
     qreal x() const;
     qreal y() const;
     void setX(qreal);
     void setY(qreal);
 };
 
-class Q_QML_PRIVATE_EXPORT QQmlPointValueType : public QQmlValueTypeBase<QPoint>
+struct QQmlPointValueType
 {
+    QPoint v;
     Q_PROPERTY(int x READ x WRITE setX FINAL)
     Q_PROPERTY(int y READ y WRITE setY FINAL)
-    Q_OBJECT
+    Q_GADGET
 public:
-    QQmlPointValueType(QObject *parent = 0);
-
-    virtual QString toString() const;
-
     int x() const;
     int y() const;
     void setX(int);
     void setY(int);
 };
 
-class Q_QML_PRIVATE_EXPORT QQmlSizeFValueType : public QQmlValueTypeBase<QSizeF>
+struct QQmlSizeFValueType
 {
+    QSizeF v;
     Q_PROPERTY(qreal width READ width WRITE setWidth FINAL)
     Q_PROPERTY(qreal height READ height WRITE setHeight FINAL)
-    Q_OBJECT
+    Q_GADGET
 public:
-    QQmlSizeFValueType(QObject *parent = 0);
-
-    virtual QString toString() const;
-
+    Q_INVOKABLE QString toString() const;
     qreal width() const;
     qreal height() const;
     void setWidth(qreal);
     void setHeight(qreal);
 };
 
-class Q_QML_PRIVATE_EXPORT QQmlSizeValueType : public QQmlValueTypeBase<QSize>
+struct QQmlSizeValueType
 {
+    QSize v;
     Q_PROPERTY(int width READ width WRITE setWidth FINAL)
     Q_PROPERTY(int height READ height WRITE setHeight FINAL)
-    Q_OBJECT
+    Q_GADGET
 public:
-    QQmlSizeValueType(QObject *parent = 0);
-
-    virtual QString toString() const;
-
     int width() const;
     int height() const;
     void setWidth(int);
     void setHeight(int);
 };
 
-class Q_QML_PRIVATE_EXPORT QQmlRectFValueType : public QQmlValueTypeBase<QRectF>
+struct QQmlRectFValueType
 {
+    QRectF v;
     Q_PROPERTY(qreal x READ x WRITE setX FINAL)
     Q_PROPERTY(qreal y READ y WRITE setY FINAL)
     Q_PROPERTY(qreal width READ width WRITE setWidth FINAL)
     Q_PROPERTY(qreal height READ height WRITE setHeight FINAL)
-    Q_OBJECT
+    Q_PROPERTY(qreal left READ left DESIGNABLE false FINAL)
+    Q_PROPERTY(qreal right READ right DESIGNABLE false FINAL)
+    Q_PROPERTY(qreal top READ top DESIGNABLE false FINAL)
+    Q_PROPERTY(qreal bottom READ bottom DESIGNABLE false FINAL)
+    Q_GADGET
 public:
-    QQmlRectFValueType(QObject *parent = 0);
-
-    virtual QString toString() const;
-
+    Q_INVOKABLE QString toString() const;
     qreal x() const;
     qreal y() const;
     void setX(qreal);
@@ -244,20 +169,26 @@ public:
     qreal height() const;
     void setWidth(qreal);
     void setHeight(qreal);
+
+    qreal left() const;
+    qreal right() const;
+    qreal top() const;
+    qreal bottom() const;
 };
 
-class Q_QML_PRIVATE_EXPORT QQmlRectValueType : public QQmlValueTypeBase<QRect>
+struct QQmlRectValueType
 {
+    QRect v;
     Q_PROPERTY(int x READ x WRITE setX FINAL)
     Q_PROPERTY(int y READ y WRITE setY FINAL)
     Q_PROPERTY(int width READ width WRITE setWidth FINAL)
     Q_PROPERTY(int height READ height WRITE setHeight FINAL)
-    Q_OBJECT
+    Q_PROPERTY(int left READ left DESIGNABLE false FINAL)
+    Q_PROPERTY(int right READ right DESIGNABLE false FINAL)
+    Q_PROPERTY(int top READ top DESIGNABLE false FINAL)
+    Q_PROPERTY(int bottom READ bottom DESIGNABLE false FINAL)
+    Q_GADGET
 public:
-    QQmlRectValueType(QObject *parent = 0);
-
-    virtual QString toString() const;
-
     int x() const;
     int y() const;
     void setX(int);
@@ -267,11 +198,17 @@ public:
     int height() const;
     void setWidth(int);
     void setHeight(int);
+
+    int left() const;
+    int right() const;
+    int top() const;
+    int bottom() const;
 };
 
-class Q_QML_PRIVATE_EXPORT QQmlEasingValueType : public QQmlValueTypeBase<QEasingCurve>
+struct QQmlEasingValueType
 {
-    Q_OBJECT
+    QEasingCurve v;
+    Q_GADGET
     Q_ENUMS(Type)
 
     Q_PROPERTY(QQmlEasingValueType::Type type READ type WRITE setType FINAL)
@@ -306,10 +243,6 @@ public:
         SineCurve = QEasingCurve::SineCurve, CosineCurve = QEasingCurve::CosineCurve,
         Bezier = QEasingCurve::BezierSpline
     };
-
-    QQmlEasingValueType(QObject *parent = 0);
-
-    virtual QString toString() const;
 
     Type type() const;
     qreal amplitude() const;

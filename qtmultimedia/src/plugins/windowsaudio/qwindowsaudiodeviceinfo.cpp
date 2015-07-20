@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -44,8 +44,10 @@
 
 
 #include <QtCore/qt_windows.h>
+#include <QtCore/QDataStream>
 #include <mmsystem.h>
 #include "qwindowsaudiodeviceinfo.h"
+#include "qwindowsaudioutils.h"
 
 #if defined(Q_CC_MINGW) && !defined(__MINGW64_VERSION_MAJOR)
 struct IBaseFilter; // Needed for strmif.h from stock MinGW.
@@ -166,8 +168,7 @@ QString QWindowsAudioDeviceInfo::deviceName() const
 
 QStringList QWindowsAudioDeviceInfo::supportedCodecs()
 {
-    updateLists();
-    return codecz;
+    return QStringList() << QStringLiteral("audio/pcm");
 }
 
 QList<int> QWindowsAudioDeviceInfo::supportedSampleRates()
@@ -190,8 +191,7 @@ QList<int> QWindowsAudioDeviceInfo::supportedSampleSizes()
 
 QList<QAudioFormat::Endian> QWindowsAudioDeviceInfo::supportedByteOrders()
 {
-    updateLists();
-    return byteOrderz;
+    return QList<QAudioFormat::Endian>() << QAudioFormat::LittleEndian;
 }
 
 QList<QAudioFormat::SampleType> QWindowsAudioDeviceInfo::supportedSampleTypes()
@@ -212,118 +212,50 @@ void QWindowsAudioDeviceInfo::close()
 
 bool QWindowsAudioDeviceInfo::testSettings(const QAudioFormat& format) const
 {
-    // Set nearest to closest settings that do work.
-    // See if what is in settings will work (return value).
-
-    bool failed = false;
-    bool match = false;
-
-    // check codec
-    for( int i = 0; i < codecz.count(); i++) {
-        if (format.codec() == codecz.at(i))
-            match = true;
-    }
-    if (!match) failed = true;
-
-    // check channel
-    match = false;
-    if (!failed) {
-        for (int i = 0; i < channelz.count(); i++) {
-            if (format.channelCount() == channelz.at(i)) {
-                match = true;
-                break;
-            }
+    WAVEFORMATEXTENSIBLE wfx;
+    if (qt_convertFormat(format, &wfx)) {
+        // query only, do not open device
+        if (mode == QAudio::AudioOutput) {
+            return (waveOutOpen(NULL, UINT_PTR(devId), &wfx.Format, NULL, NULL,
+                                WAVE_FORMAT_QUERY) == MMSYSERR_NOERROR);
+        } else { // AudioInput
+            return (waveInOpen(NULL, UINT_PTR(devId), &wfx.Format, NULL, NULL,
+                                WAVE_FORMAT_QUERY) == MMSYSERR_NOERROR);
         }
-        if (!match)
-            failed = true;
     }
 
-    // check sampleRate
-    match = false;
-    if (!failed) {
-        for (int i = 0; i < sampleRatez.count(); i++) {
-            if (format.sampleRate() == sampleRatez.at(i)) {
-                match = true;
-                break;
-            }
-        }
-        if (!match)
-            failed = true;
-    }
-
-    // check sample size
-    match = false;
-    if (!failed) {
-        for( int i = 0; i < sizez.count(); i++) {
-            if (format.sampleSize() == sizez.at(i)) {
-                match = true;
-                break;
-            }
-        }
-        if (!match)
-            failed = true;
-    }
-
-    // check byte order
-    match = false;
-    if (!failed) {
-        for( int i = 0; i < byteOrderz.count(); i++) {
-            if (format.byteOrder() == byteOrderz.at(i)) {
-                match = true;
-                break;
-            }
-        }
-        if (!match)
-            failed = true;
-    }
-
-    // check sample type
-    match = false;
-    if (!failed) {
-        for( int i = 0; i < typez.count(); i++) {
-            if (format.sampleType() == typez.at(i)) {
-                match = true;
-                break;
-            }
-        }
-        if (!match)
-            failed = true;
-    }
-
-    if(!failed) {
-        // settings work
-        return true;
-    }
     return false;
 }
 
 void QWindowsAudioDeviceInfo::updateLists()
 {
-    // redo all lists based on current settings
-    bool match = false;
+    if (!sizez.isEmpty())
+        return;
+
+    bool hasCaps = false;
     DWORD fmt = 0;
 
     if(mode == QAudio::AudioOutput) {
         WAVEOUTCAPS woc;
         if (waveOutGetDevCaps(devId, &woc, sizeof(WAVEOUTCAPS)) == MMSYSERR_NOERROR) {
-            match = true;
+            hasCaps = true;
             fmt = woc.dwFormats;
         }
     } else {
         WAVEINCAPS woc;
         if (waveInGetDevCaps(devId, &woc, sizeof(WAVEINCAPS)) == MMSYSERR_NOERROR) {
-            match = true;
+            hasCaps = true;
             fmt = woc.dwFormats;
         }
     }
+
     sizez.clear();
     sampleRatez.clear();
     channelz.clear();
-    byteOrderz.clear();
     typez.clear();
-    codecz.clear();
 
-    if(match) {
+    if (hasCaps) {
+        // Check sample size
         if ((fmt & WAVE_FORMAT_1M08)
             || (fmt & WAVE_FORMAT_1S08)
             || (fmt & WAVE_FORMAT_2M08)
@@ -333,8 +265,7 @@ void QWindowsAudioDeviceInfo::updateLists()
             || (fmt & WAVE_FORMAT_48M08)
             || (fmt & WAVE_FORMAT_48S08)
             || (fmt & WAVE_FORMAT_96M08)
-            || (fmt & WAVE_FORMAT_96S08)
-       ) {
+            || (fmt & WAVE_FORMAT_96S08)) {
             sizez.append(8);
         }
         if ((fmt & WAVE_FORMAT_1M16)
@@ -346,10 +277,11 @@ void QWindowsAudioDeviceInfo::updateLists()
             || (fmt & WAVE_FORMAT_48M16)
             || (fmt & WAVE_FORMAT_48S16)
             || (fmt & WAVE_FORMAT_96M16)
-            || (fmt & WAVE_FORMAT_96S16)
-       ) {
+            || (fmt & WAVE_FORMAT_96S16)) {
             sizez.append(16);
         }
+
+        // Check sample rate
         if ((fmt & WAVE_FORMAT_1M08)
            || (fmt & WAVE_FORMAT_1S08)
            || (fmt & WAVE_FORMAT_1M16)
@@ -380,23 +312,81 @@ void QWindowsAudioDeviceInfo::updateLists()
            || (fmt & WAVE_FORMAT_96S16)) {
             sampleRatez.append(96000);
         }
-        channelz.append(1);
-        channelz.append(2);
-        if (mode == QAudio::AudioOutput) {
-            channelz.append(4);
-            channelz.append(6);
-            channelz.append(8);
-        }
 
-        byteOrderz.append(QAudioFormat::LittleEndian);
+        // Check channel count
+        if (fmt & WAVE_FORMAT_1M08
+                || fmt & WAVE_FORMAT_1M16
+                || fmt & WAVE_FORMAT_2M08
+                || fmt & WAVE_FORMAT_2M16
+                || fmt & WAVE_FORMAT_4M08
+                || fmt & WAVE_FORMAT_4M16
+                || fmt & WAVE_FORMAT_48M08
+                || fmt & WAVE_FORMAT_48M16
+                || fmt & WAVE_FORMAT_96M08
+                || fmt & WAVE_FORMAT_96M16) {
+            channelz.append(1);
+        }
+        if (fmt & WAVE_FORMAT_1S08
+                || fmt & WAVE_FORMAT_1S16
+                || fmt & WAVE_FORMAT_2S08
+                || fmt & WAVE_FORMAT_2S16
+                || fmt & WAVE_FORMAT_4S08
+                || fmt & WAVE_FORMAT_4S16
+                || fmt & WAVE_FORMAT_48S08
+                || fmt & WAVE_FORMAT_48S16
+                || fmt & WAVE_FORMAT_96S08
+                || fmt & WAVE_FORMAT_96S16) {
+            channelz.append(2);
+        }
 
         typez.append(QAudioFormat::SignedInt);
         typez.append(QAudioFormat::UnSignedInt);
 
-        codecz.append(QLatin1String("audio/pcm"));
+        // WAVEOUTCAPS and WAVEINCAPS contains information only for the previously tested parameters.
+        // WaveOut and WaveInt might actually support more formats, the only way to know is to try
+        // opening the device with it.
+        QAudioFormat testFormat;
+        testFormat.setCodec(QStringLiteral("audio/pcm"));
+        testFormat.setByteOrder(QAudioFormat::LittleEndian);
+        testFormat.setSampleType(QAudioFormat::SignedInt);
+        testFormat.setChannelCount(channelz.first());
+        testFormat.setSampleRate(sampleRatez.at(sampleRatez.size() / 2));
+        testFormat.setSampleSize(sizez.last());
+        const QAudioFormat defaultTestFormat(testFormat);
+
+        // Check if float samples are supported
+        testFormat.setSampleType(QAudioFormat::Float);
+        testFormat.setSampleSize(32);
+        if (testSettings(testFormat))
+            typez.append(QAudioFormat::Float);
+
+        // Check channel counts > 2
+        testFormat = defaultTestFormat;
+        for (int i = 3; i < 19; ++i) { // <mmreg.h> defines 18 different channels
+            testFormat.setChannelCount(i);
+            if (testSettings(testFormat))
+                channelz.append(i);
+        }
+
+        // Check more sample sizes
+        testFormat = defaultTestFormat;
+        QList<int> testSampleSizes = QList<int>() << 24 << 32 << 48 << 64;
+        Q_FOREACH (int s, testSampleSizes) {
+            testFormat.setSampleSize(s);
+            if (testSettings(testFormat))
+                sizez.append(s);
+        }
+
+        // Check more sample rates
+        testFormat = defaultTestFormat;
+        QList<int> testSampleRates = QList<int>() << 8000 << 16000 << 32000 << 88200 << 192000;
+        Q_FOREACH (int r, testSampleRates) {
+            testFormat.setSampleRate(r);
+            if (testSettings(testFormat))
+                sampleRatez.append(r);
+        }
+        std::sort(sampleRatez.begin(), sampleRatez.end());
     }
-    if (sampleRatez.count() > 0)
-        sampleRatez.prepend(8000);
 }
 
 QList<QByteArray> QWindowsAudioDeviceInfo::availableDevices(QAudio::Mode mode)
@@ -453,7 +443,9 @@ QList<QByteArray> QWindowsAudioDeviceInfo::availableDevices(QAudio::Mode mode)
                 pPropBag->Release();
                 pMoniker->Release();
             }
+            pEnum->Release();
         }
+        pDevEnum->Release();
     }
     CoUninitialize();
 #else // Q_OS_WINCE

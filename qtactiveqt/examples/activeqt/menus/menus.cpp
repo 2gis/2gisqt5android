@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the examples of the Qt Toolkit.
 **
@@ -17,8 +17,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -58,12 +58,12 @@ QMenus::QMenus(QWidget *parent)
 
     action = new QAction(QPixmap((const char**)fileopen), "&Open", this);
     action->setShortcut(tr("CTRL+O"));
-    connect(action, SIGNAL(triggered()), this, SLOT(fileOpen()));
+    connect(action, &QAction::triggered, this, &QMenus::fileOpen);
     file->addAction(action);
 
     action = new QAction(QPixmap((const char**)filesave),"&Save", this);
     action->setShortcut(tr("CTRL+S"));
-    connect(action, SIGNAL(triggered()), this, SLOT(fileSave()));
+    connect(action, &QAction::triggered, this, &QMenus::fileSave);
     file->addAction(action);
 
     QMenu *edit = new QMenu(this);
@@ -73,28 +73,28 @@ QMenus::QMenus(QWidget *parent)
     action->setToolTip("Normal");
     action->setStatusTip("Toggles Normal");
     action->setCheckable(true);
-    connect(action, SIGNAL(triggered()), this, SLOT(editNormal()));
+    connect(action, &QAction::triggered, this, &QMenus::editNormal);
     edit->addAction(action);
 
     action = new QAction("&Bold", this);
     action->setShortcut(tr("CTRL+B"));
     action->setCheckable(true);
-    connect(action, SIGNAL(triggered()), this, SLOT(editBold()));
+    connect(action, &QAction::triggered, this, &QMenus::editBold);
     edit->addAction(action);
 
     action = new QAction("&Underline", this);
     action->setShortcut(tr("CTRL+U"));
     action->setCheckable(true);
-    connect(action, SIGNAL(triggered()), this, SLOT(editUnderline()));
+    connect(action, &QAction::triggered, this, &QMenus::editUnderline);
     edit->addAction(action);
 
     QMenu *advanced = new QMenu(this);
     action = new QAction("&Font...", this);
-    connect(action, SIGNAL(triggered()), this, SLOT(editAdvancedFont()));
+    connect(action, &QAction::triggered, this, &QMenus::editAdvancedFont);
     advanced->addAction(action);
 
     action = new QAction("&Style...", this);
-    connect(action, SIGNAL(triggered()), this, SLOT(editAdvancedStyle()));
+    connect(action, &QAction::triggered, this, &QMenus::editAdvancedStyle);
     advanced->addAction(action);
 
     edit->addMenu(advanced)->setText("&Advanced");
@@ -105,18 +105,18 @@ QMenus::QMenus(QWidget *parent)
     action->setShortcut(tr("CTRL+V"));
     action->setCheckable(true);
     action->setEnabled(false);
-    connect(action, SIGNAL(triggered()), this, SLOT(editUnderline()));
+    connect(action, &QAction::triggered, this, &QMenus::editUnderline);
     edit->addAction(action);
 
     QMenu *help = new QMenu(this);
 
     action = new QAction("&About...", this);
     action->setShortcut(tr("F1"));
-    connect(action, SIGNAL(triggered()), this, SLOT(helpAbout()));
+    connect(action, &QAction::triggered, this, &QMenus::helpAbout);
     help->addAction(action);
 
     action = new QAction("&About Qt...", this);
-    connect(action, SIGNAL(triggered()), this, SLOT(helpAboutQt()));
+    connect(action, &QAction::triggered, this, &QMenus::helpAboutQt);
     help->addAction(action);
 
     if (!QAxFactory::isServer())

@@ -1,7 +1,7 @@
 /****************************************************************************
 **
 ** Copyright (C) 2014 Ford Motor Company
-** Contact: http://www.qt-project.org/legal
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -221,15 +221,15 @@ QQmlListProperty<QObject> State::children()
 
     \brief The type of history that this history state records.
 
-    The default value of this property is QHistoryState.ShallowHistory.
+    The default value of this property is HistoryState.ShallowHistory.
 
-    This enum specifies the type of history that a QHistoryState records.
+    This enum specifies the type of history that a HistoryState records.
     \list
-    \li QHistoryState.ShallowHistory Only the immediate child states of the
+    \li HistoryState.ShallowHistory Only the immediate child states of the
         parent state are recorded.  In this case, a transition with the history
         state as its target will end up in the immediate child state that the
         parent was in the last time it was exited.  This is the default.
-    \li QHistoryState.DeepHistory Nested states are recorded.  In this case
+    \li HistoryState.DeepHistory Nested states are recorded.  In this case
         a transition with the history state as its target will end up in the
         most deeply nested descendant state the parent was in the last time
         it was exited.

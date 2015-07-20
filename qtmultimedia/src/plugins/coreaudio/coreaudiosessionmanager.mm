@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd and/or its subsidiary(-ies).
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -43,6 +35,10 @@
 
 #import <AVFoundation/AVAudioSession.h>
 #import <Foundation/Foundation.h>
+
+#if QT_IOS_DEPLOYMENT_TARGET_BELOW(__IPHONE_6_0)
+#include <AudioToolbox/AudioToolbox.h>
+#endif
 
 QT_BEGIN_NAMESPACE
 
@@ -79,19 +75,24 @@ QT_BEGIN_NAMESPACE
         self->m_sessionManager = sessionManager;
         self->m_audioSession = [AVAudioSession sharedInstance];
 
-        //Set up observers
-        [[NSNotificationCenter defaultCenter] addObserver:self
-                                                 selector:@selector(audioSessionInterruption:)
-                                                     name:AVAudioSessionInterruptionNotification
-                                                   object:self->m_audioSession];
-        [[NSNotificationCenter defaultCenter] addObserver:self
-                                                 selector:@selector(audioSessionMediaServicesWereReset:)
-                                                     name:AVAudioSessionMediaServicesWereResetNotification
-                                                   object:self->m_audioSession];
-        [[NSNotificationCenter defaultCenter] addObserver:self
-                                                 selector:@selector(audioSessionRouteChange:)
-                                                     name:AVAudioSessionRouteChangeNotification
-                                                   object:self->m_audioSession];
+#if QT_IOS_DEPLOYMENT_TARGET_BELOW(__IPHONE_6_0)
+        if (QSysInfo::MacintoshVersion >= QSysInfo::MV_IOS_6_0)
+#endif
+        {
+            //Set up observers
+            [[NSNotificationCenter defaultCenter] addObserver:self
+                                                     selector:@selector(audioSessionInterruption:)
+                                                         name:AVAudioSessionInterruptionNotification
+                                                       object:self->m_audioSession];
+            [[NSNotificationCenter defaultCenter] addObserver:self
+                                                     selector:@selector(audioSessionMediaServicesWereReset:)
+                                                         name:AVAudioSessionMediaServicesWereResetNotification
+                                                       object:self->m_audioSession];
+            [[NSNotificationCenter defaultCenter] addObserver:self
+                                                     selector:@selector(audioSessionRouteChange:)
+                                                         name:AVAudioSessionRouteChangeNotification
+                                                       object:self->m_audioSession];
+        }
 
         return self;
 }
@@ -101,15 +102,22 @@ QT_BEGIN_NAMESPACE
 #ifdef QT_DEBUG_COREAUDIO
     qDebug() << Q_FUNC_INFO;
 #endif
-    [[NSNotificationCenter defaultCenter] removeObserver:self
-                                                    name:AVAudioSessionInterruptionNotification
-                                                  object:self->m_audioSession];
-    [[NSNotificationCenter defaultCenter] removeObserver:self
-                                                    name:AVAudioSessionMediaServicesWereResetNotification
-                                                  object:self->m_audioSession];
-    [[NSNotificationCenter defaultCenter] removeObserver:self
-                                                    name:AVAudioSessionRouteChangeNotification
-                                                  object:self->m_audioSession];
+
+#if QT_IOS_DEPLOYMENT_TARGET_BELOW(__IPHONE_6_0)
+    if (QSysInfo::MacintoshVersion >= QSysInfo::MV_IOS_6_0)
+#endif
+    {
+        [[NSNotificationCenter defaultCenter] removeObserver:self
+                                                        name:AVAudioSessionInterruptionNotification
+                                                      object:self->m_audioSession];
+        [[NSNotificationCenter defaultCenter] removeObserver:self
+                                                        name:AVAudioSessionMediaServicesWereResetNotification
+                                                      object:self->m_audioSession];
+        [[NSNotificationCenter defaultCenter] removeObserver:self
+                                                        name:AVAudioSessionRouteChangeNotification
+                                                      object:self->m_audioSession];
+    }
+
     [super dealloc];
 }
 
@@ -269,6 +277,9 @@ bool CoreAudioSessionManager::setCategory(CoreAudioSessionManager::AudioSessionC
         targetCategory = AVAudioSessionCategoryAudioProcessing;
         break;
     case CoreAudioSessionManager::MultiRoute:
+#if QT_IOS_DEPLOYMENT_TARGET_BELOW(__IPHONE_6_0)
+        if (QSysInfo::MacintoshVersion >= QSysInfo::MV_IOS_6_0)
+#endif
         targetCategory = AVAudioSessionCategoryMultiRoute;
         break;
     }
@@ -276,9 +287,16 @@ bool CoreAudioSessionManager::setCategory(CoreAudioSessionManager::AudioSessionC
     if (targetCategory == nil)
         return false;
 
-    return [[m_sessionObserver audioSession] setCategory:targetCategory
-                                             withOptions:(AVAudioSessionCategoryOptions)options
-                                                   error:nil];
+#if QT_IOS_DEPLOYMENT_TARGET_BELOW(__IPHONE_6_0)
+    if (QSysInfo::MacintoshVersion < QSysInfo::MV_IOS_6_0) {
+        return [[m_sessionObserver audioSession] setCategory:targetCategory error:nil];
+    } else
+#endif
+    {
+        return [[m_sessionObserver audioSession] setCategory:targetCategory
+                                                 withOptions:(AVAudioSessionCategoryOptions)options
+                                                       error:nil];
+    }
 }
 
 bool CoreAudioSessionManager::setMode(CoreAudioSessionManager::AudioSessionModes mode)
@@ -301,6 +319,9 @@ bool CoreAudioSessionManager::setMode(CoreAudioSessionManager::AudioSessionModes
         targetMode = AVAudioSessionModeMeasurement;
         break;
     case CoreAudioSessionManager::MoviePlayback:
+#if QT_IOS_DEPLOYMENT_TARGET_BELOW(__IPHONE_6_0)
+        if (QSysInfo::MacintoshVersion >= QSysInfo::MV_IOS_6_0)
+#endif
         targetMode = AVAudioSessionModeMoviePlayback;
         break;
     }
@@ -329,7 +350,11 @@ CoreAudioSessionManager::AudioSessionCategorys CoreAudioSessionManager::category
         localCategory = PlayAndRecord;
     } else if (category == AVAudioSessionCategoryAudioProcessing) {
         localCategory = AudioProcessing;
-    } else if (category == AVAudioSessionCategoryMultiRoute) {
+    } else if (
+#if QT_IOS_DEPLOYMENT_TARGET_BELOW(__IPHONE_6_0)
+               QSysInfo::MacintoshVersion >= QSysInfo::MV_IOS_6_0 &&
+#endif
+               category == AVAudioSessionCategoryMultiRoute) {
         localCategory = MultiRoute;
     }
 
@@ -351,7 +376,11 @@ CoreAudioSessionManager::AudioSessionModes CoreAudioSessionManager::mode()
         localMode = VideoRecording;
     } else if (mode == AVAudioSessionModeMeasurement) {
         localMode = Measurement;
-    } else if (mode == AVAudioSessionModeMoviePlayback) {
+    } else if (
+#if QT_IOS_DEPLOYMENT_TARGET_BELOW(__IPHONE_6_0)
+               QSysInfo::MacintoshVersion >= QSysInfo::MV_IOS_6_0 &&
+#endif
+               mode == AVAudioSessionModeMoviePlayback) {
         localMode = MoviePlayback;
     }
 
@@ -380,12 +409,32 @@ QList<QByteArray> CoreAudioSessionManager::outputDevices()
 
 float CoreAudioSessionManager::currentIOBufferDuration()
 {
-    return [[m_sessionObserver audioSession] IOBufferDuration];
+#if QT_IOS_DEPLOYMENT_TARGET_BELOW(__IPHONE_6_0)
+    if (QSysInfo::MacintoshVersion < QSysInfo::MV_IOS_6_0) {
+        Float32 duration;
+        UInt32 size = sizeof(duration);
+        AudioSessionGetProperty(kAudioSessionProperty_CurrentHardwareIOBufferDuration, &size, &duration);
+        return duration;
+    } else
+#endif
+    {
+        return [[m_sessionObserver audioSession] IOBufferDuration];
+    }
 }
 
 float CoreAudioSessionManager::preferredSampleRate()
 {
-    return [[m_sessionObserver audioSession] preferredSampleRate];
+#if QT_IOS_DEPLOYMENT_TARGET_BELOW(__IPHONE_6_0)
+    if (QSysInfo::MacintoshVersion < QSysInfo::MV_IOS_6_0) {
+        Float64 sampleRate;
+        UInt32 size = sizeof(sampleRate);
+        AudioSessionGetProperty(kAudioSessionProperty_PreferredHardwareSampleRate, &size, &sampleRate);
+        return sampleRate;
+    } else
+#endif
+    {
+        return [[m_sessionObserver audioSession] preferredSampleRate];
+    }
 }
 
 #ifdef QT_DEBUG_COREAUDIO

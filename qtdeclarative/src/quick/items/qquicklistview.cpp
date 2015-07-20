@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQuick module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -39,8 +39,8 @@
 #include <QtQml/qqmlengine.h>
 #include <QtQml/qqmlinfo.h>
 #include <QtGui/qevent.h>
-#include <QtCore/qmath.h>
 #include <QtCore/qcoreapplication.h>
+#include <QtCore/qmath.h>
 
 #include <private/qquicksmoothedanimation_p_p.h>
 #include "qplatformdefs.h"
@@ -59,49 +59,49 @@ class QQuickListViewPrivate : public QQuickItemViewPrivate
 public:
     static QQuickListViewPrivate* get(QQuickListView *item) { return item->d_func(); }
 
-    virtual Qt::Orientation layoutOrientation() const;
-    virtual bool isContentFlowReversed() const;
+    Qt::Orientation layoutOrientation() const Q_DECL_OVERRIDE;
+    bool isContentFlowReversed() const Q_DECL_OVERRIDE;
     bool isRightToLeft() const;
     bool isBottomToTop() const;
 
-    virtual qreal positionAt(int index) const;
-    virtual qreal endPositionAt(int index) const;
-    virtual qreal originPosition() const;
-    virtual qreal lastPosition() const;
+    qreal positionAt(int index) const Q_DECL_OVERRIDE;
+    qreal endPositionAt(int index) const Q_DECL_OVERRIDE;
+    qreal originPosition() const Q_DECL_OVERRIDE;
+    qreal lastPosition() const Q_DECL_OVERRIDE;
 
     FxViewItem *itemBefore(int modelIndex) const;
     QString sectionAt(int modelIndex);
     qreal snapPosAt(qreal pos);
     FxViewItem *snapItemAt(qreal pos);
 
-    virtual void init();
-    virtual void clear();
+    void init() Q_DECL_OVERRIDE;
+    void clear() Q_DECL_OVERRIDE;
 
-    virtual bool addVisibleItems(qreal fillFrom, qreal fillTo, qreal bufferFrom, qreal bufferTo, bool doBuffer);
-    virtual bool removeNonVisibleItems(qreal bufferFrom, qreal bufferTo);
-    virtual void visibleItemsChanged();
+    bool addVisibleItems(qreal fillFrom, qreal fillTo, qreal bufferFrom, qreal bufferTo, bool doBuffer) Q_DECL_OVERRIDE;
+    bool removeNonVisibleItems(qreal bufferFrom, qreal bufferTo) Q_DECL_OVERRIDE;
+    void visibleItemsChanged() Q_DECL_OVERRIDE;
 
-    virtual FxViewItem *newViewItem(int index, QQuickItem *item);
-    virtual void initializeViewItem(FxViewItem *item);
-    virtual bool releaseItem(FxViewItem *item);
-    virtual void repositionItemAt(FxViewItem *item, int index, qreal sizeBuffer);
-    virtual void repositionPackageItemAt(QQuickItem *item, int index);
-    virtual void resetFirstItemPosition(qreal pos = 0.0);
-    virtual void adjustFirstItem(qreal forwards, qreal backwards, int);
-    virtual void updateSizeChangesBeforeVisiblePos(FxViewItem *item, ChangeResult *removeResult);
+    FxViewItem *newViewItem(int index, QQuickItem *item) Q_DECL_OVERRIDE;
+    void initializeViewItem(FxViewItem *item) Q_DECL_OVERRIDE;
+    bool releaseItem(FxViewItem *item) Q_DECL_OVERRIDE;
+    void repositionItemAt(FxViewItem *item, int index, qreal sizeBuffer) Q_DECL_OVERRIDE;
+    void repositionPackageItemAt(QQuickItem *item, int index) Q_DECL_OVERRIDE;
+    void resetFirstItemPosition(qreal pos = 0.0) Q_DECL_OVERRIDE;
+    void adjustFirstItem(qreal forwards, qreal backwards, int) Q_DECL_OVERRIDE;
+    void updateSizeChangesBeforeVisiblePos(FxViewItem *item, ChangeResult *removeResult) Q_DECL_OVERRIDE;
 
-    virtual void createHighlight();
-    virtual void updateHighlight();
-    virtual void resetHighlightPosition();
+    void createHighlight() Q_DECL_OVERRIDE;
+    void updateHighlight() Q_DECL_OVERRIDE;
+    void resetHighlightPosition() Q_DECL_OVERRIDE;
 
-    virtual void setPosition(qreal pos);
-    virtual void layoutVisibleItems(int fromModelIndex = 0);
+    void setPosition(qreal pos) Q_DECL_OVERRIDE;
+    void layoutVisibleItems(int fromModelIndex = 0) Q_DECL_OVERRIDE;
 
-    virtual bool applyInsertionChange(const QQmlChangeSet::Change &insert, ChangeResult *changeResult, QList<FxViewItem *> *addedItems, QList<MovedItem> *movingIntoView);
-    virtual void translateAndTransitionItemsAfter(int afterIndex, const ChangeResult &insertionResult, const ChangeResult &removalResult);
+    bool applyInsertionChange(const QQmlChangeSet::Change &insert, ChangeResult *changeResult, QList<FxViewItem *> *addedItems, QList<MovedItem> *movingIntoView) Q_DECL_OVERRIDE;
+    void translateAndTransitionItemsAfter(int afterIndex, const ChangeResult &insertionResult, const ChangeResult &removalResult) Q_DECL_OVERRIDE;
 
-    virtual void updateSectionCriteria();
-    virtual void updateSections();
+    void updateSectionCriteria() Q_DECL_OVERRIDE;
+    void updateSections() Q_DECL_OVERRIDE;
     QQuickItem *getSectionItem(const QString &section);
     void releaseSectionItem(QQuickItem *item);
     void releaseSectionItems();
@@ -109,25 +109,25 @@ public:
     void updateCurrentSection();
     void updateStickySections();
 
-    virtual qreal headerSize() const;
-    virtual qreal footerSize() const;
-    virtual bool showHeaderForIndex(int index) const;
-    virtual bool showFooterForIndex(int index) const;
-    virtual void updateHeader();
-    virtual void updateFooter();
+    qreal headerSize() const Q_DECL_OVERRIDE;
+    qreal footerSize() const Q_DECL_OVERRIDE;
+    bool showHeaderForIndex(int index) const Q_DECL_OVERRIDE;
+    bool showFooterForIndex(int index) const Q_DECL_OVERRIDE;
+    void updateHeader() Q_DECL_OVERRIDE;
+    void updateFooter() Q_DECL_OVERRIDE;
     bool hasStickyHeader() const;
     bool hasStickyFooter() const;
 
-    virtual void changedVisibleIndex(int newIndex);
-    virtual void initializeCurrentItem();
+    void changedVisibleIndex(int newIndex) Q_DECL_OVERRIDE;
+    void initializeCurrentItem() Q_DECL_OVERRIDE;
 
     void updateAverage();
 
-    void itemGeometryChanged(QQuickItem *item, const QRectF &newGeometry, const QRectF &oldGeometry);
-    virtual void fixupPosition();
-    virtual void fixup(AxisData &data, qreal minExtent, qreal maxExtent);
-    virtual bool flick(QQuickItemViewPrivate::AxisData &data, qreal minExtent, qreal maxExtent, qreal vSize,
-                        QQuickTimeLineCallback::Callback fixupCallback, qreal velocity);
+    void itemGeometryChanged(QQuickItem *item, const QRectF &newGeometry, const QRectF &oldGeometry) Q_DECL_OVERRIDE;
+    void fixupPosition() Q_DECL_OVERRIDE;
+    void fixup(AxisData &data, qreal minExtent, qreal maxExtent) Q_DECL_OVERRIDE;
+    bool flick(QQuickItemViewPrivate::AxisData &data, qreal minExtent, qreal maxExtent, qreal vSize,
+               QQuickTimeLineCallback::Callback fixupCallback, qreal velocity) Q_DECL_OVERRIDE;
 
     QQuickListView::Orientation orient;
     qreal visiblePos;
@@ -319,7 +319,7 @@ public:
         else
             item->setWidth(size);
     }
-    bool contains(qreal x, qreal y) const {
+    bool contains(qreal x, qreal y) const Q_DECL_OVERRIDE {
         return (x >= itemX() && x < itemX() + item->width() &&
                 y >= itemY() && y < itemY() + item->height());
     }
@@ -1572,7 +1572,7 @@ bool QQuickListViewPrivate::flick(AxisData &data, qreal minExtent, qreal maxExte
         if (snapMode == QQuickListView::NoSnap && highlightRange != QQuickListView::StrictlyEnforceRange)
             data.flickTarget = maxExtent;
     }
-    bool overShoot = boundsBehavior == QQuickFlickable::DragAndOvershootBounds;
+    bool overShoot = boundsBehavior & QQuickFlickable::OvershootBounds;
     if (maxDistance > 0 || overShoot) {
         // These modes require the list to stop exactly on an item boundary.
         // The initial flick will estimate the boundary to stop on.
@@ -1603,10 +1603,10 @@ bool QQuickListViewPrivate::flick(AxisData &data, qreal minExtent, qreal maxExte
                 }
                 data.flickTarget = isContentFlowReversed() ? -data.flickTarget+size() : data.flickTarget;
                 if (overShoot) {
-                    if (data.flickTarget >= minExtent) {
+                    if (data.flickTarget > minExtent) {
                         overshootDist = overShootDistance(vSize);
                         data.flickTarget += overshootDist;
-                    } else if (data.flickTarget <= maxExtent) {
+                    } else if (data.flickTarget < maxExtent) {
                         overshootDist = overShootDistance(vSize);
                         data.flickTarget -= overshootDist;
                     }
@@ -1626,10 +1626,10 @@ bool QQuickListViewPrivate::flick(AxisData &data, qreal minExtent, qreal maxExte
                 accel = v2 / (2.0f * qAbs(dist));
             } else if (overShoot) {
                 data.flickTarget = data.move.value() - dist;
-                if (data.flickTarget >= minExtent) {
+                if (data.flickTarget > minExtent) {
                     overshootDist = overShootDistance(vSize);
                     data.flickTarget += overshootDist;
-                } else if (data.flickTarget <= maxExtent) {
+                } else if (data.flickTarget < maxExtent) {
                     overshootDist = overShootDistance(vSize);
                     data.flickTarget -= overshootDist;
                 }

@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQuick module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -71,7 +71,7 @@ public:
     ~QQuickViewPrivate();
 
     void execute();
-    void itemGeometryChanged(QQuickItem *item, const QRectF &newGeometry, const QRectF &oldGeometry);
+    void itemGeometryChanged(QQuickItem *item, const QRectF &newGeometry, const QRectF &oldGeometry) Q_DECL_OVERRIDE;
     void initResize();
     void updateSize();
     void setRootObject(QObject *);
@@ -94,25 +94,35 @@ public:
     QV4::PersistentValue rootItemMarker;
 };
 
-struct QQuickRootItemMarker : public QV4::Object
+namespace QV4 {
+namespace Heap {
+
+struct QQuickRootItemMarker : Object {
+    inline QQuickRootItemMarker(QV4::ExecutionEngine *engine, QQuickWindow *window);
+
+    QQuickWindow *window;
+};
+
+}
+
+struct QQuickRootItemMarker : public Object
 {
-    struct Data : QV4::Object::Data {
-        Data(QV4::ExecutionEngine *engine, QQuickWindow *window)
-            : Object::Data(engine)
-            , window(window)
-        {
-            setVTable(staticVTable());
-        }
+    V4_OBJECT2(QQuickRootItemMarker, Object)
 
-        QQuickWindow *window;
-    };
-    V4_OBJECT(QV4::Object)
+    static Heap::QQuickRootItemMarker *create(QQmlEngine *engine, QQuickWindow *window);
 
-    static QQuickRootItemMarker *create(QQmlEngine *engine, QQuickWindow *window);
-
-    static void markObjects(Managed *that, QV4::ExecutionEngine *e);
+    static void markObjects(QV4::Heap::Base *that, QV4::ExecutionEngine *e);
 
 };
+
+inline
+Heap::QQuickRootItemMarker::QQuickRootItemMarker(QV4::ExecutionEngine *engine, QQuickWindow *window)
+    : Heap::Object(engine)
+    , window(window)
+{
+}
+
+}
 
 QT_END_NAMESPACE
 

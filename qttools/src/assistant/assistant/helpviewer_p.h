@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Assistant of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -39,12 +39,12 @@
 #include "openpagesmanager.h"
 
 #include <QtCore/QObject>
-#ifdef QT_NO_WEBKIT
-#include <QtWidgets/QTextBrowser>
-#else
-#include <QtGui/QGuiApplication>
-#include <QtGui/QScreen>
-#endif
+#if defined(BROWSER_QTEXTBROWSER)
+#  include <QtWidgets/QTextBrowser>
+#elif defined(BROWSER_QTWEBKIT)
+#  include <QtGui/QGuiApplication>
+#  include <QtGui/QScreen>
+#endif // BROWSER_QTWEBKIT
 
 QT_BEGIN_NAMESPACE
 
@@ -53,14 +53,14 @@ class HelpViewer::HelpViewerPrivate : public QObject
     Q_OBJECT
 
 public:
-#ifdef QT_NO_WEBKIT
+#if defined(BROWSER_QTEXTBROWSER)
     HelpViewerPrivate(int zoom)
         : zoomCount(zoom)
         , forceFont(false)
         , lastAnchor(QString())
         , m_loadFinished(false)
     { }
-#else
+#elif defined(BROWSER_QTWEBKIT)
     HelpViewerPrivate()
         : m_loadFinished(false)
     {
@@ -73,9 +73,9 @@ public:
         if (webDpiRatio < 1.25)
             webDpiRatio = 1.0;
     }
-#endif
+#endif // BROWSER_QTWEBKIT
 
-#ifdef QT_NO_WEBKIT
+#if defined(BROWSER_QTEXTBROWSER)
     bool hasAnchorAt(QTextBrowser *browser, const QPoint& pos)
     {
         lastAnchor = browser->anchorAt(pos);
@@ -117,9 +117,9 @@ public:
     int zoomCount;
     bool forceFont;
     QString lastAnchor;
-#else
+#elif defined(BROWSER_QTWEBKIT)
     qreal webDpiRatio;
-#endif // QT_NO_WEBKIT
+#endif // BROWSER_QTWEBKIT
 
 public:
     bool m_loadFinished;

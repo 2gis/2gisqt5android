@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
+ * Copyright (C) 2015 The Qt Company Ltd.
  * Copyright (C) 2011 Nokia Corporation and/or its subsidiary(-ies)
  * Copyright (c) 2012 Hewlett-Packard Development Company, L.P.
  *
@@ -176,6 +176,16 @@
 */
 
 /*!
+    \qmlproperty bool WebEngineView::isFullScreen
+    \since QtWebEngine 1.1
+    \readonly
+
+    Returns \c{true} if the web view is in fullscreen mode, \c{false} otherwise.
+
+    \sa WebEngineView::fullScreenRequested(), WebEngineView::fullScreenCancelled()
+*/
+
+/*!
     \qmlmethod void WebEngineView::loadHtml(string html, url baseUrl)
     \brief Loads the specified \a html as the content of the web view.
 
@@ -203,6 +213,86 @@
     runJavaScript("document.title", function(result) { console.log(result); });
     \endcode
 
+*/
+
+/*!
+    \qmlmethod void WebEngineView::findText(string subString)
+    \since QtWebEngine 1.1
+    Finds the specified string, \a subString, in the page.
+
+    To clear the selection, just pass an empty string.
+*/
+
+/*!
+    \qmlmethod void WebEngineView::findText(string subString, FindFlags options)
+    \since QtWebEngine 1.1
+    Finds the specified string, \a subString, in the page, using the given \a options.
+
+    To clear the selection, just pass an empty string.
+
+    \code
+    findText("Qt", WebEngineView.FindBackward | WebEngineView.FindCaseSensitively);
+    \endcode
+*/
+
+/*!
+    \qmlmethod void WebEngineView::findText(string subString, FindFlags options, variant resultCallback)
+    \since QtWebEngine 1.1
+    Finds the specified string, \a subString, in the page, using the given \a options.
+
+    To clear the selection, just pass an empty string.
+
+    The \a resultCallback must take a boolean parameter. It will be called with
+    a value of true if the \a subString was found; otherwise the callback value
+    will be false.
+
+    \code
+    findText("Qt", WebEngineView.FindCaseSensitively, function(success) {
+        if (success)
+            console.log("Qt was found!");
+    });
+    \endcode
+*/
+
+/*!
+    \qmlmethod void WebEngineView::grantFeaturePermission(url securityOrigin, WebEngineView::Feature feature, bool granted)
+
+    Sets the permission for the web site identified by \a securityOrigin to use \a feature.
+
+    \sa featurePermissionRequested()
+*/
+
+/*!
+    \qmlmethod void WebEngineView::fullScreenCancelled()
+    \since QtWebEngine 1.1
+
+    Immediately sets \c{isFullScreen} property to \c{false}. It can be used to notify the
+    browser engine when the windowing system forces the application to leave fullscreen mode.
+
+    \code
+    ApplicationWindow {
+        onVisibilityChanged: {
+            if (webEngineView.isFullScreen && visibility != Window.FullScreen)
+                webEngineView.fullScreenCancelled()
+        }
+
+        WebEngineView {
+            id: webEngineView
+            ...
+        }
+    }
+    \endcode
+
+    \sa WebEngineView::isFullScreen, WebEngineView::fullScreenRequested()
+*/
+
+/*!
+    \qmlsignal void WebEngineView::featurePermissionRequested(url securityOrigin, WebEngineView::Feature feature)
+
+    This is signal is emitted when the web site identified by \a securityOrigin requests
+    to make use of the resource or device identified by \a feature.
+
+    \sa grantFeaturePermission()
 */
 
 /*!
@@ -245,16 +335,79 @@
 */
 
 /*!
-    \qmlsignal WebEngineView::linkHovered(hoveredUrl, hoveredTitle)
+    \qmlsignal WebEngineView::certificateError(error)
+
+    This signal is emitted when an invalid certificate error is raised while loading a given request.
+
+    The certificate error can be rejected by calling WebEngineCertificateError::rejectCertificate,
+    which will stop loading the request.
+
+    The certificate error can be ignored  by calling WebEngineCertificateError::ignoreCertificateError
+    which will resume loading the request.
+
+    It is possible to defer the decision of rejecting the given certificate by calling
+    WebEngineCertificateError::defer, which is useful when waiting for user input.
+    By default the invalid certificate will be automatically rejected.
+
+    The corresponding handler is onCertificateError.
+
+    \sa WebEngineCertificateError
+*/
+
+/*!
+    \qmlsignal WebEngineView::linkHovered(hoveredUrl)
 
     Within a mouse-driven interface, this signal is emitted when a mouse
     pointer passes over a link, corresponding to the \c{mouseover} DOM
     event. This event may also occur in touch interfaces for \c{mouseover}
     events that are not cancelled with \c{preventDefault()}. \a{hoveredUrl}
-    provides the link's location, and \a{hoveredTitle} is any available
-    link text.
+    provides the link's location.
 
     The corresponding handler is onLinkHovered.
+*/
+
+/*!
+    \qmlsignal WebEngineView::javaScriptConsoleMessage(JavaScriptConsoleMessageLevel level, message, lineNumber, sourceID)
+    This signal is emitted when a JavaScript program tries to print a \a message to the web browser's console.
+
+    For example in case of evaluation errors the source URL may be provided in \a sourceID as well as the \a lineNumber.
+
+    \a level indicates the severity of the event that triggered the message, i.e. if it
+    was triggered by an error or a less severe event.
+
+    The corresponding handler is onJavaScriptConsoleMessage.
+*/
+
+/*!
+    \qmlsignal WebEngineView::newViewRequested(request)
+
+    This signal is emitted when a page load is requested to happen in a separate
+    WebEngineView. This can either be because the current page requested it explicitly
+    through a JavaScript call to window.open, or because the user clicked on a link
+    while holding Shift, Ctrl or a built-in combination that triggers the page to open
+    in a new window.
+
+    If this signal isn't handled the requested load will fail.
+
+    An example implementation:
+
+    \snippet snippets/qtwebengine_webengineview_newviewrequested.qml 0
+
+    The corresponding handler is onNewViewRequested.
+
+    \sa WebEngineNewViewRequest, WebEngineView::NewViewDestination, {WebEngine Quick Nano Browser}
+*/
+
+/*!
+    \qmlsignal WebEngineView::fullScreenRequested(request)
+    \since QtWebEngine 1.1
+
+    This signal is emitted when the web page requests fullscreen mode through the
+    JavaScript API.
+
+    The corresponding handler is onFullScreenRequested.
+
+    \sa WebEngineFullScreenRequest, WebEngineView::isFullScreen
 */
 
 /*!
@@ -327,4 +480,94 @@
     \li Page has failed to load, and is not currently loading.
 
     \endtable
+*/
+
+/*!
+    \qmlproperty enumeration WebEngineView::NewViewDestination
+
+    This enumeration details the format in which a new view request should be opened.
+
+    \value WebEngineView::NewViewInWindow
+            The page expects to be opened in a separate Window.
+    \value WebEngineView::NewViewInTab
+            The page expects to be opened in a tab of the same window.
+    \value WebEngineView::NewViewInDialog
+            The page expects to be opened in a Window without any tab, tool or URL bar.
+    \value WebEngineView::NewViewInBackgroundTab
+            The page expects to be opened in a tab of the same window, without hiding the currently visible WebEngineView.
+
+    \sa WebEngineNewViewRequest::destination
+*/
+
+/*!
+    \qmlproperty enumeration WebEngineView::FindFlags
+
+    This enum describes the options available to the findText() function. The options
+    can be OR-ed together from the following list:
+
+    \value FindBackward Searches backwards instead of forwards.
+    \value FindCaseSensitively By default findText() works case insensitive. Specifying
+            this option changes the behavior to a case sensitive find operation.
+
+    \sa WebEngineView::findText()
+*/
+
+/*!
+    \qmlproperty enumeration WebEngineView::Feature
+
+    This enum describes the platform feature access categories that the user may be asked to grant or deny access to.
+
+    \value Geolocation Access to location hardware or service
+    \value MediaAudioCapture Audio capture devices such a microphones
+    \value MediaVideoCapture Video devices, e.g. cameras
+    \value MediaAudioVideoCapture Both Audio and Video capture devices.
+
+    \sa featurePermissionRequested(), grantFeaturePermission()
+
+*/
+
+/*!
+    \qmltype WebEngineFullScreenRequest
+    \instantiates QQuickWebEngineFullScreenRequest
+    \inqmlmodule QtWebEngine 1.1
+    \since QtWebEngine 1.1
+
+    \brief A utility class for the WebEngineView::fullScreenRequested signal.
+
+    \sa WebEngineView::fullScreenRequested
+*/
+
+/*!
+    \qmlproperty bool WebEngineFullScreenRequest::toggleOn
+    \since QtWebEngine 1.1
+    \readonly
+
+    Returns \c{true} if the application should toggle fullscreen mode on, \c{false} otherwise.
+
+    \sa WebEngineFullScreenRequest::accept()
+*/
+
+/*!
+    \qmlmethod void WebEngineFullScreenRequest::accept()
+    \since QtWebEngine 1.1
+
+    Call this method to accept the fullscreen request. It sets the WebEngineView::isFullScreen
+    property to be equal to WebEngineFullScreenRequest::toggleOn.
+
+    \code
+    ApplicationWindow {
+        id: window
+        WebEngineView {
+            onFullScreenRequested: {
+                if (request.toggleOn)
+                    window.showFullScreen()
+                else
+                    window.showNormal()
+                request.accept()
+            }
+        }
+    }
+    \endcode
+
+    \sa WebEngineFullScreenRequest::toggleOn()
 */

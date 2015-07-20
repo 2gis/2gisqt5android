@@ -1,7 +1,7 @@
 /****************************************************************************
 **
 ** Copyright (C) 2013 Research In Motion
-** Contact: http://www.qt-project.org/legal
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -83,7 +83,6 @@ static QString errorToString(camera_error_t error)
         return QLatin1String("Callback registration failed");
     case CAMERA_EMICINUSE:
         return QLatin1String("Microphone in use already");
-#ifndef Q_OS_BLACKBERRY_TABLET
     case CAMERA_ENODATA:
         return QLatin1String("Data does not exist");
     case CAMERA_EBUSY:
@@ -98,7 +97,6 @@ static QString errorToString(camera_error_t error)
         return QLatin1String("3A have been locked");
 //  case CAMERA_EVIEWFINDERFROZEN: // not yet available in 10.2 NDK
 //      return QLatin1String("Freeze flag set");
-#endif
     default:
         return QLatin1String("Unknown error");
     }
@@ -561,7 +559,6 @@ void BbCameraSession::applyVideoSettings()
 
     const QSize resolution = m_videoEncoderSettings.resolution();
 
-#ifndef Q_OS_BLACKBERRY_TABLET
     QString videoCodec = m_videoEncoderSettings.codec();
     if (videoCodec.isEmpty())
         videoCodec = QLatin1String("h264");
@@ -599,11 +596,6 @@ void BbCameraSession::applyVideoSettings()
                                        CAMERA_IMGPROP_ROTATION, rotationAngle,
                                        CAMERA_IMGPROP_VIDEOCODEC, cameraVideoCodec,
                                        CAMERA_IMGPROP_AUDIOCODEC, cameraAudioCodec);
-#else
-    result = camera_set_video_property(m_handle,
-                                       CAMERA_IMGPROP_WIDTH, resolution.width(),
-                                       CAMERA_IMGPROP_HEIGHT, resolution.height());
-#endif
 
     if (result != CAMERA_EOK) {
         qWarning() << "Unable to apply video settings:" << result;
@@ -864,13 +856,10 @@ static void viewFinderStatusCallback(camera_handle_t handle, camera_devstatus_t 
         BbCameraSession *session = static_cast<BbCameraSession*>(context);
         QMetaObject::invokeMethod(session, "focusStatusChanged", Qt::QueuedConnection, Q_ARG(int, value));
         return;
-    }
-#ifndef Q_OS_BLACKBERRY_TABLET
-    else if (status == CAMERA_STATUS_POWERUP) {
+    } else if (status == CAMERA_STATUS_POWERUP) {
         BbCameraSession *session = static_cast<BbCameraSession*>(context);
         QMetaObject::invokeMethod(session, "handleCameraPowerUp", Qt::QueuedConnection);
     }
-#endif
 }
 
 bool BbCameraSession::startViewFinder()
@@ -1027,7 +1016,6 @@ static void videoRecordingStatusCallback(camera_handle_t handle, camera_devstatu
     Q_UNUSED(handle)
     Q_UNUSED(value)
 
-#ifndef Q_OS_BLACKBERRY_TABLET
     if (status == CAMERA_STATUS_VIDEO_PAUSE) {
         BbCameraSession *session = static_cast<BbCameraSession*>(context);
         QMetaObject::invokeMethod(session, "handleVideoRecordingPaused", Qt::QueuedConnection);
@@ -1035,7 +1023,6 @@ static void videoRecordingStatusCallback(camera_handle_t handle, camera_devstatu
         BbCameraSession *session = static_cast<BbCameraSession*>(context);
         QMetaObject::invokeMethod(session, "handleVideoRecordingResumed", Qt::QueuedConnection);
     }
-#endif
 }
 
 bool BbCameraSession::startVideoRecording()

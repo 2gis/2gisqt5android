@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -91,6 +91,12 @@ public:
 
     void setSurface(QAbstractVideoSurface* surface);
 
+    QCameraViewfinderSettings viewfinderSettings() const;
+    void setViewfinderSettings(const QCameraViewfinderSettings &settings);
+
+    QList<QCameraViewfinderSettings> supportedViewfinderSettings() const
+    { return m_supportedViewfinderSettings; }
+
 Q_SIGNALS:
     void statusChanged(QCamera::Status);
     void imageExposed(int id);
@@ -105,7 +111,6 @@ private Q_SLOTS:
 
 private:
     void setStatus(QCamera::Status status);
-    void populateCommonResolutions();
 
     void onFrameAvailable(const char *frameData, long len);
     void saveCapturedImage(int id, const QImage &image, const QString &path);
@@ -126,9 +131,10 @@ private:
     // Source (camera)
     QString m_sourceDeviceName;
     IBaseFilter* m_sourceFilter;
-    AM_MEDIA_TYPE m_sourcePreferredFormat;
-    QSize m_sourcePreferredResolution;
     bool m_needsHorizontalMirroring;
+    QList<AM_MEDIA_TYPE> m_supportedFormats;
+    QList<QCameraViewfinderSettings> m_supportedViewfinderSettings;
+    AM_MEDIA_TYPE m_sourceFormat;
 
     // Preview
     IBaseFilter *m_previewFilter;
@@ -140,6 +146,8 @@ private:
     QVideoSurfaceFormat m_previewSurfaceFormat;
     QVideoFrame::PixelFormat m_previewPixelFormat;
     QSize m_previewSize;
+    QCameraViewfinderSettings m_viewfinderSettings;
+    QCameraViewfinderSettings m_actualViewfinderSettings;
 
     // Image capture
     QString m_imageCaptureFileName;

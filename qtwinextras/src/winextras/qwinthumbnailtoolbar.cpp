@@ -1,8 +1,8 @@
 /****************************************************************************
  **
  ** Copyright (C) 2013 Ivan Vizir <define-true-false@yandex.com>
- ** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
- ** Contact: http://www.qt-project.org/legal
+ ** Copyright (C) 2015 The Qt Company Ltd.
+ ** Contact: http://www.qt.io/licensing/
  **
  ** This file is part of the QtWinExtras module of the Qt Toolkit.
  **
@@ -11,9 +11,9 @@
  ** Licensees holding valid commercial Qt licenses may use this file in
  ** accordance with the commercial license agreement provided with the
  ** Software or, alternatively, in accordance with the terms contained in
- ** a written agreement between you and Digia. For licensing terms and
- ** conditions see http://qt.digia.com/licensing. For further information
- ** use the contact form at http://qt.digia.com/contact-us.
+ ** a written agreement between you and The Qt Company. For licensing terms
+ ** and conditions see http://www.qt.io/terms-conditions. For further
+ ** information use the contact form at http://www.qt.io/contact-us.
  **
  ** GNU Lesser General Public License Usage
  ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -24,8 +24,8 @@
  ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
  ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
  **
- ** In addition, as a special exception, Digia gives you certain additional
- ** rights. These rights are described in the Digia Qt LGPL Exception
+ ** As a special exception, The Qt Company gives you certain additional
+ ** rights. These rights are described in The Qt Company LGPL Exception
  ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
  **
  ** $QT_END_LICENSE$
@@ -161,7 +161,8 @@ void QWinThumbnailToolBar::addButton(QWinThumbnailToolButton *button)
             button->d_func()->toolbar->removeButton(button);
         }
         button->d_func()->toolbar = this;
-        connect(button, SIGNAL(changed()), this, SLOT(_q_scheduleUpdate()));
+        connect(button, &QWinThumbnailToolButton::changed,
+                d, &QWinThumbnailToolBarPrivate::_q_scheduleUpdate);
         d->buttonList.append(button);
         d->_q_scheduleUpdate();
     }
@@ -175,7 +176,9 @@ void QWinThumbnailToolBar::removeButton(QWinThumbnailToolButton *button)
     Q_D(QWinThumbnailToolBar);
     if (button && d->buttonList.contains(button)) {
         button->d_func()->toolbar = 0;
-        disconnect(button, SIGNAL(changed()), this, SLOT(_q_scheduleUpdate()));
+        disconnect(button, &QWinThumbnailToolButton::changed,
+                   d, &QWinThumbnailToolBarPrivate::_q_scheduleUpdate);
+
         d->buttonList.removeAll(button);
         d->_q_scheduleUpdate();
     }
@@ -530,9 +533,8 @@ void QWinThumbnailToolBarPrivate::_q_scheduleUpdate()
 {
     if (updateScheduled)
         return;
-    Q_Q(QWinThumbnailToolBar);
     updateScheduled = true;
-    QTimer::singleShot(0, q, SLOT(_q_updateToolbar()));
+    QTimer::singleShot(0, this, &QWinThumbnailToolBarPrivate::_q_updateToolbar);
 }
 
 bool QWinThumbnailToolBarPrivate::eventFilter(QObject *object, QEvent *event)

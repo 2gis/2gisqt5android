@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -49,6 +49,7 @@ QT_BEGIN_NAMESPACE
 static void qRegisterCameraImageProcessingMetaTypes()
         {
             qRegisterMetaType<QCameraImageProcessing::WhiteBalanceMode>();
+            qRegisterMetaType<QCameraImageProcessing::ColorFilter>();
         }
 
 Q_CONSTRUCTOR_FUNCTION(qRegisterCameraImageProcessingMetaTypes)
@@ -316,6 +317,64 @@ void QCameraImageProcessing::setDenoisingLevel(qreal level)
     \value WhiteBalanceSunset       Sunset white balance mode.
     \value WhiteBalanceVendor       Base value for vendor defined white balance modes.
 */
+
+/*!
+    \enum QCameraImageProcessing::Filter
+
+    \value ColorFilterNone               No filter is applied to images.
+    \value ColorFilterGrayscale          A grayscale filter.
+    \value ColorFilterNegative           A negative filter.
+    \value ColorFilterSolarize           A solarize filter.
+    \value ColorFilterSepia              A sepia filter.
+    \value ColorFilterPosterize          A posterize filter.
+    \value ColorFilterWhiteboard         A whiteboard filter.
+    \value ColorFilterBlackboard         A blackboard filter.
+    \value ColorFilterAqua               An aqua filter.
+    \value ColorFilterVendor             The base value for vendor defined filters.
+
+    \since 5.5
+*/
+
+/*!
+    Returns the color filter which will be applied to image data captured by the camera.
+
+    \since 5.5
+*/
+
+QCameraImageProcessing::ColorFilter QCameraImageProcessing::colorFilter() const
+{
+    return d_func()->imageControl->parameter(QCameraImageProcessingControl::ColorFilter)
+            .value<QCameraImageProcessing::ColorFilter>();
+}
+
+
+/*!
+    Sets the color \a filter which will be applied to image data captured by the camera.
+
+    \since 5.5
+*/
+
+void QCameraImageProcessing::setColorFilter(QCameraImageProcessing::ColorFilter filter)
+{
+    d_func()->imageControl->setParameter(
+                QCameraImageProcessingControl::ColorFilter,
+                QVariant::fromValue<QCameraImageProcessing::ColorFilter>(filter));
+}
+
+/*!
+    Returns true if a color \a filter is supported.
+
+    \since 5.5
+*/
+
+bool QCameraImageProcessing::isColorFilterSupported(QCameraImageProcessing::ColorFilter filter) const
+{
+    return d_func()->imageControl->isParameterValueSupported(
+                QCameraImageProcessingControl::ColorFilter,
+                QVariant::fromValue<QCameraImageProcessing::ColorFilter>(filter));
+
+}
+
 
 #include "moc_qcameraimageprocessing.cpp"
 QT_END_NAMESPACE

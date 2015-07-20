@@ -1,9 +1,9 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
-** This file is part of the Qt Quick Controls module of the Qt Toolkit.
+** This file is part of the test suite of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:BSD$
 ** You may use this file under the terms of the BSD license as follows:
@@ -17,8 +17,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -39,6 +39,8 @@
 ****************************************************************************/
 
 import QtQuick 2.2
+import QtQuick.Controls 1.3
+import QtQuick.Controls.Styles 1.3
 import QtQuick.Controls.Private 1.0
 import QtTest 1.0
 
@@ -51,8 +53,8 @@ Item {
         id: testcase
         name: "Tests_Calendar"
         when: windowShown
-        readonly property int navigationBarHeight: calendar !== undefined ? calendar.__panel.navigationBarItem.height : 0
-        readonly property int dayOfWeekHeaderRowHeight: calendar !== undefined ? calendar.__panel.dayOfWeekHeaderRow.height : 0
+        readonly property int navigationBarHeight: calendar ? calendar.__panel.navigationBarItem.height : 0
+        readonly property int dayOfWeekHeaderRowHeight: calendar ? calendar.__panel.dayOfWeekHeaderRow.height : 0
         readonly property int firstDateCellX: 0
         readonly property int firstDateCellY: navigationBarHeight + dayOfWeekHeaderRowHeight
         readonly property int previousMonthButtonX: navigationBarHeight / 2
@@ -96,6 +98,9 @@ Item {
             clickedSignalSpy.clear();
             releasedSignalSpy.clear();
             pressAndHoldSignalSpy.clear();
+
+            if (calendar)
+                calendar.destroy();
         }
 
         function toPixelsX(cellPosX) {
@@ -893,6 +898,48 @@ Item {
             compare(pressedSignalSpy.count, 1);
             compare(releasedSignalSpy.count, 1);
             compare(pressAndHoldSignalSpy.count, 1);
+        }
+
+        property var aysncDelegatesConstructed: []
+        property var aysncDelegatesDestructed: []
+
+        Loader {
+            id: asyncCalendarLoader
+            active: false
+            asynchronous: true
+
+            sourceComponent: Calendar {
+
+                style: CalendarStyle {
+                    dayOfWeekDelegate: Component {
+                        Text {
+                            text: styleData.dayOfWeek
+                            Component.onCompleted: testcase.aysncDelegatesConstructed[styleData.index] = true
+                            Component.onDestruction: testcase.aysncDelegatesDestructed[styleData.index] = true
+                        }
+                    }
+                }
+            }
+        }
+
+        function test_asynchronous() {
+            verify(!asyncCalendarLoader.item);
+            asyncCalendarLoader.active = true;
+            tryCompare(asyncCalendarLoader, "status", Component.Ready);
+
+            var asyncCalendar = asyncCalendarLoader.item;
+            asyncCalendar.parent = container;
+            waitForRendering(asyncCalendar);
+
+            for (var i = 0; i < testcase.aysncDelegatesConstructed.length; ++i) {
+                tryCompare(testcase.aysncDelegatesConstructed, i, true);
+            }
+
+            asyncCalendarLoader.active = false;
+
+            for (i = 0; i < testcase.aysncDelegatesDestructed.length; ++i) {
+                tryCompare(testcase.aysncDelegatesDestructed, i, true);
+            }
         }
     }
 }

@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
@@ -10,15 +10,15 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Free Documentation License Usage
 ** Alternatively, this file may be used under the terms of the GNU Free
 ** Documentation License version 1.3 as published by the Free Software
 ** Foundation and appearing in the file included in the packaging of
-** this file.  Please review the following information to ensure
+** this file. Please review the following information to ensure
 ** the GNU Free Documentation License version 1.3 requirements
 ** will be met: http://www.gnu.org/copyleft/fdl.html.
 ** $QT_END_LICENSE$
@@ -131,6 +131,25 @@
     it to a string using the locale-aware functions can yield a result incorrect by one
     hour, if DST is currently in effect, while it was not for the time specified, or
     vice versa.
+
+    Note: There are different date formats with different understandings of negative years. Common
+    human language does not have a year 0. The year after 1BC is 1AD. This understanding is
+    reflected when printing or parsing dates in one of the formats not standardized by ECMAScript.
+    That is: toString(), toLocaleString(), toUTCString() and friends. ECMAScript does standardize
+    one format: ISO 8601. This is what you get when you call toISOString(). This format does include
+    a year 0, which is 1BC in other formats. Thus you get different years when printing negative
+    dates with toISOString() and toString().
+
+    When setting the year using the Date constructor or set(UTC)FullYear(), the convention set by
+    ISO 8601 is used and 0 is a valid year. This means negative years set with the constructor or
+    set(UTC)FullYear() are zero-based and thus offset by one year from what is printed with
+    toString() and friends. Parsing the output of any of the to*String() methods will yield the same
+    date value you printed from. Date.parse() will recognize the different formats and their
+    convention on the existence of year 0.
+
+    Note that all this is different from what you get in other JavaScript implementations which
+    usually treat year 0 as valid in all string representations. As the date formats are
+    "implementation-dependent" in the ECMAScript standard, this is still valid, though.
 
     \sa {QtQml::Locale}{Locale}
 */

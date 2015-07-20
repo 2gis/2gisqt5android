@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -68,7 +68,7 @@ void CompilationUnit::linkBackendToEngine(ExecutionEngine *engine)
         const CompiledData::Function *compiledFunction = data->functionAt(i);
 
         QV4::Function *runtimeFunction = new QV4::Function(engine, this, compiledFunction,
-                                                           (ReturnedValue (*)(QV4::ExecutionContext *, const uchar *)) codeRefs[i].code().executableAddress());
+                                                           (ReturnedValue (*)(QV4::ExecutionEngine *, const uchar *)) codeRefs[i].code().executableAddress());
         runtimeFunctions[i] = runtimeFunction;
     }
 }
@@ -182,25 +182,24 @@ Assembler::Pointer Assembler::loadArgLocalAddress(RegisterID baseReg, IR::ArgLoc
 {
     int32_t offset = 0;
     int scope = al->scope;
-    RegisterID context = ContextRegister;
+    loadPtr(Address(EngineRegister, qOffsetOf(ExecutionEngine, current)), baseReg);
     if (scope) {
-        loadPtr(Address(ContextRegister, qOffsetOf(ExecutionContext::Data, outer)), baseReg);
+        loadPtr(Address(baseReg, qOffsetOf(ExecutionContext::Data, outer)), baseReg);
         --scope;
-        context = baseReg;
         while (scope) {
-            loadPtr(Address(context, qOffsetOf(ExecutionContext::Data, outer)), context);
+            loadPtr(Address(baseReg, qOffsetOf(ExecutionContext::Data, outer)), baseReg);
             --scope;
         }
     }
     switch (al->kind) {
     case IR::ArgLocal::Formal:
     case IR::ArgLocal::ScopedFormal: {
-        loadPtr(Address(context, qOffsetOf(ExecutionContext::Data, callData)), baseReg);
+        loadPtr(Address(baseReg, qOffsetOf(ExecutionContext::Data, callData)), baseReg);
         offset = sizeof(CallData) + (al->index - 1) * sizeof(Value);
     } break;
     case IR::ArgLocal::Local:
     case IR::ArgLocal::ScopedLocal: {
-        loadPtr(Address(context, qOffsetOf(CallContext::Data, locals)), baseReg);
+        loadPtr(Address(baseReg, qOffsetOf(CallContext::Data, locals)), baseReg);
         offset = al->index * sizeof(Value);
     } break;
     default:
@@ -211,18 +210,17 @@ Assembler::Pointer Assembler::loadArgLocalAddress(RegisterID baseReg, IR::ArgLoc
 
 Assembler::Pointer Assembler::loadStringAddress(RegisterID reg, const QString &string)
 {
-    loadPtr(Address(Assembler::ContextRegister, qOffsetOf(QV4::ExecutionContext::Data, compilationUnit)), Assembler::ScratchRegister);
+    loadPtr(Address(Assembler::EngineRegister, qOffsetOf(QV4::ExecutionEngine, current)), Assembler::ScratchRegister);
+    loadPtr(Address(Assembler::ScratchRegister, qOffsetOf(QV4::Heap::ExecutionContext, compilationUnit)), Assembler::ScratchRegister);
     loadPtr(Address(Assembler::ScratchRegister, qOffsetOf(QV4::CompiledData::CompilationUnit, runtimeStrings)), reg);
     const int id = _isel->registerString(string);
-    return Pointer(reg, id * sizeof(QV4::StringValue));
+    return Pointer(reg, id * sizeof(QV4::String*));
 }
 
 void Assembler::loadStringRef(RegisterID reg, const QString &string)
 {
-    loadPtr(Address(Assembler::ContextRegister, qOffsetOf(QV4::ExecutionContext::Data, compilationUnit)), reg);
-    loadPtr(Address(reg, qOffsetOf(QV4::CompiledData::CompilationUnit, runtimeStrings)), reg);
     const int id = _isel->registerString(string);
-    loadPtr(Address(reg, id * sizeof(QV4::StringValue)), reg);
+    move(TrustedImm32(id), reg);
 }
 
 void Assembler::storeValue(QV4::Primitive value, IR::Expr *destination)

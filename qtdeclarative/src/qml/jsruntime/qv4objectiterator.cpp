@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -38,8 +38,9 @@
 
 using namespace QV4;
 
-ObjectIterator::ObjectIterator(Value *scratch1, Value *scratch2, Object *o, uint flags)
-    : object(scratch1)
+ObjectIterator::ObjectIterator(ExecutionEngine *e, Value *scratch1, Value *scratch2, Object *o, uint flags)
+    : engine(e)
+    , object(scratch1)
     , current(scratch2)
     , arrayNode(0)
     , arrayIndex(0)
@@ -50,7 +51,8 @@ ObjectIterator::ObjectIterator(Value *scratch1, Value *scratch2, Object *o, uint
 }
 
 ObjectIterator::ObjectIterator(Scope &scope, Object *o, uint flags)
-    : object(scope.alloc(1))
+    : engine(scope.engine)
+    , object(scope.alloc(1))
     , current(scope.alloc(1))
     , arrayNode(0)
     , arrayIndex(0)
@@ -60,23 +62,10 @@ ObjectIterator::ObjectIterator(Scope &scope, Object *o, uint flags)
     init(o);
 }
 
-ObjectIterator::ObjectIterator(Value *scratch1, Value *scratch2, uint flags)
-    : object(scratch1)
-    , current(scratch2)
-    , arrayNode(0)
-    , arrayIndex(0)
-    , memberIndex(0)
-    , flags(flags)
-{
-    object->o = (Object*)0;
-    current->o = (Object*)0;
-    // Caller needs to call init!
-}
-
 void ObjectIterator::init(Object *o)
 {
-    object->o = o;
-    current->o = o;
+    object->m = o ? o->m : 0;
+    current->m = o ? o->m : 0;
 
 #if QT_POINTER_SIZE == 4
     object->tag = QV4::Value::Managed_Type;
@@ -84,20 +73,23 @@ void ObjectIterator::init(Object *o)
 #endif
 
     if (object->as<ArgumentsObject>()) {
-        Scope scope(object->engine());
+        Scope scope(engine);
         Scoped<ArgumentsObject> (scope, object->asReturnedValue())->fullyCreate();
     }
 }
 
-void ObjectIterator::next(String *&name, uint *index, Property *pd, PropertyAttributes *attrs)
+void ObjectIterator::next(Heap::String **name, uint *index, Property *pd, PropertyAttributes *attrs)
 {
-    name = (String *)0;
+    *name = 0;
     *index = UINT_MAX;
 
     if (!object->asObject()) {
         *attrs = PropertyAttributes();
         return;
     }
+    Scope scope(engine);
+    ScopedObject o(scope);
+    ScopedString n(scope);
 
     while (1) {
         if (!current->asObject())
@@ -108,11 +100,12 @@ void ObjectIterator::next(String *&name, uint *index, Property *pd, PropertyAttr
             if (attrs->isEmpty())
                 break;
             // check the property is not already defined earlier in the proto chain
-            if (current->asObject() != object->asObject()) {
-                Object *o = object->asObject();
+            if (current->heapObject() != object->heapObject()) {
+                o = object->asObject();
+                n = *name;
                 bool shadowed = false;
-                while (o != current->asObject()) {
-                    if ((!!name && o->hasOwnProperty(name)) ||
+                while (o->asObject()->d() != current->heapObject()) {
+                    if ((!!n && o->hasOwnProperty(n)) ||
                         (*index != UINT_MAX && o->hasOwnProperty(*index))) {
                         shadowed = true;
                         break;
@@ -126,9 +119,9 @@ void ObjectIterator::next(String *&name, uint *index, Property *pd, PropertyAttr
         }
 
         if (flags & WithProtoChain)
-            current->o = current->objectValue()->prototype();
+            current->m = current->objectValue()->prototype();
         else
-            current->o = (Object *)0;
+            current->m = (Heap::Base *)0;
 
         arrayIndex = 0;
         memberIndex = 0;
@@ -136,23 +129,21 @@ void ObjectIterator::next(String *&name, uint *index, Property *pd, PropertyAttr
     *attrs = PropertyAttributes();
 }
 
-ReturnedValue ObjectIterator::nextPropertyName(ValueRef value)
+ReturnedValue ObjectIterator::nextPropertyName(Value *value)
 {
     if (!object->asObject())
         return Encode::null();
 
     PropertyAttributes attrs;
-    Property p;
     uint index;
-    Scope scope(object->engine());
+    Scope scope(engine);
+    ScopedProperty p(scope);
     ScopedString name(scope);
-    String *n;
-    next(n, &index, &p, &attrs);
-    name = n;
+    next(name.getRef(), &index, p, &attrs);
     if (attrs.isEmpty())
         return Encode::null();
 
-    value = object->objectValue()->getValue(&p, attrs);
+    *value = object->objectValue()->getValue(p, attrs);
 
     if (!!name)
         return name->asReturnedValue();
@@ -160,28 +151,26 @@ ReturnedValue ObjectIterator::nextPropertyName(ValueRef value)
     return Encode(index);
 }
 
-ReturnedValue ObjectIterator::nextPropertyNameAsString(ValueRef value)
+ReturnedValue ObjectIterator::nextPropertyNameAsString(Value *value)
 {
     if (!object->asObject())
         return Encode::null();
 
     PropertyAttributes attrs;
-    Property p;
     uint index;
-    Scope scope(object->engine());
+    Scope scope(engine);
+    ScopedProperty p(scope);
     ScopedString name(scope);
-    String *n;
-    next(n, &index, &p, &attrs);
-    name = n;
+    next(name.getRef(), &index, p, &attrs);
     if (attrs.isEmpty())
         return Encode::null();
 
-    value = object->objectValue()->getValue(&p, attrs);
+    *value = object->objectValue()->getValue(p, attrs);
 
     if (!!name)
         return name->asReturnedValue();
     assert(index < UINT_MAX);
-    return Encode(object->engine()->newString(QString::number(index)));
+    return Encode(engine->newString(QString::number(index)));
 }
 
 ReturnedValue ObjectIterator::nextPropertyNameAsString()
@@ -190,29 +179,27 @@ ReturnedValue ObjectIterator::nextPropertyNameAsString()
         return Encode::null();
 
     PropertyAttributes attrs;
-    Property p;
     uint index;
-    Scope scope(object->engine());
+    Scope scope(engine);
+    ScopedProperty p(scope);
     ScopedString name(scope);
-    String *n;
-    next(n, &index, &p, &attrs);
-    name = n;
+    next(name.getRef(), &index, p, &attrs);
     if (attrs.isEmpty())
         return Encode::null();
 
     if (!!name)
         return name->asReturnedValue();
-    assert(index < UINT_MAX);
-    return Encode(object->engine()->newString(QString::number(index)));
+    Q_ASSERT(index < UINT_MAX);
+    return Encode(engine->newString(QString::number(index)));
 }
 
 
 DEFINE_OBJECT_VTABLE(ForEachIteratorObject);
 
-void ForEachIteratorObject::markObjects(Managed *that, ExecutionEngine *e)
+void ForEachIteratorObject::markObjects(Heap::Base *that, ExecutionEngine *e)
 {
-    ForEachIteratorObject *o = static_cast<ForEachIteratorObject *>(that);
-    o->d()->workArea[0].mark(e);
-    o->d()->workArea[1].mark(e);
+    ForEachIteratorObject::Data *o = static_cast<ForEachIteratorObject::Data *>(that);
+    o->workArea[0].mark(e);
+    o->workArea[1].mark(e);
     Object::markObjects(that, e);
 }

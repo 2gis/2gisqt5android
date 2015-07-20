@@ -19,7 +19,7 @@
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
 #include "content/browser/udev_linux.h"
-#include "device/udev_linux/udev.h"
+#include "device/udev_linux/scoped_udev.h"
 
 namespace {
 
@@ -126,9 +126,7 @@ void GamepadPlatformDataFetcherLinux::RefreshDevice(udev_device* dev) {
     // hardware, get the parent device that is also in the "input" subsystem.
     // This function should just walk up the tree one level.
     dev = libudev.udev_device_get_parent_with_subsystem_devtype(
-        dev,
-        kInputSubsystem,
-        NULL);
+        dev, kInputSubsystem, NULL);
     if (!dev) {
       // Unable to get device information, don't use this device.
       device_fd = -1;
@@ -156,10 +154,8 @@ void GamepadPlatformDataFetcherLinux::RefreshDevice(udev_device* dev) {
     // as good as the information that the device bus has, walk up further
     // to the subsystem/device type "usb"/"usb_device" and if this device
     // has the same vendor/product id, prefer the description from that.
-    struct udev_device *usb_dev = libudev.udev_device_get_parent_with_subsystem_devtype(
-        dev,
-        kUsbSubsystem,
-        kUsbDeviceType);
+    struct udev_device* usb_dev = libudev.udev_device_get_parent_with_subsystem_devtype(
+        dev, kUsbSubsystem, kUsbDeviceType);
     if (usb_dev) {
       const char* usb_vendor_id =
           libudev.udev_device_get_sysattr_value(usb_dev, "idVendor");
@@ -181,11 +177,11 @@ void GamepadPlatformDataFetcherLinux::RefreshDevice(udev_device* dev) {
 
     // Append the vendor and product information then convert the utf-8
     // id string to WebUChar.
-    std::string id = name_string + base::StringPrintf(
-        " (%sVendor: %s Product: %s)",
-        mapper ? "STANDARD GAMEPAD " : "",
-        vendor_id,
-        product_id);
+    std::string id =
+        name_string + base::StringPrintf(" (%sVendor: %s Product: %s)",
+                                         mapper ? "STANDARD GAMEPAD " : "",
+                                         vendor_id,
+                                         product_id);
     base::TruncateUTF8ToByteSize(id, WebGamepad::idLengthCap - 1, &id);
     base::string16 tmp16 = base::UTF8ToUTF16(id);
     memset(pad.id, 0, sizeof(pad.id));
@@ -193,8 +189,8 @@ void GamepadPlatformDataFetcherLinux::RefreshDevice(udev_device* dev) {
 
     if (mapper) {
       std::string mapping = "standard";
-      base::TruncateUTF8ToByteSize(mapping, WebGamepad::mappingLengthCap - 1,
-          &mapping);
+      base::TruncateUTF8ToByteSize(
+          mapping, WebGamepad::mappingLengthCap - 1, &mapping);
       tmp16 = base::UTF8ToUTF16(mapping);
       memset(pad.mapping, 0, sizeof(pad.mapping));
       tmp16.copy(pad.mapping, arraysize(pad.mapping) - 1);
@@ -207,31 +203,31 @@ void GamepadPlatformDataFetcherLinux::RefreshDevice(udev_device* dev) {
 }
 
 void GamepadPlatformDataFetcherLinux::EnumerateDevices() {
-  udev_enumerate* enumerate = libudev.udev_enumerate_new(udev_->udev_handle());
+  device::ScopedUdevEnumeratePtr enumerate(
+      libudev.udev_enumerate_new(udev_->udev_handle()));
   if (!enumerate)
     return;
-  int ret = libudev.udev_enumerate_add_match_subsystem(enumerate, kInputSubsystem);
+  int ret =
+      libudev.udev_enumerate_add_match_subsystem(enumerate.get(), kInputSubsystem);
   if (ret != 0)
     return;
-  ret = libudev.udev_enumerate_scan_devices(enumerate);
+  ret = libudev.udev_enumerate_scan_devices(enumerate.get());
   if (ret != 0)
     return;
 
-  udev_list_entry* devices = libudev.udev_enumerate_get_list_entry(enumerate);
-  for (udev_list_entry* dev_list_entry = devices;
-       dev_list_entry != NULL;
+  udev_list_entry* devices = libudev.udev_enumerate_get_list_entry(enumerate.get());
+  for (udev_list_entry* dev_list_entry = devices; dev_list_entry != NULL;
        dev_list_entry = libudev.udev_list_entry_get_next(dev_list_entry)) {
     // Get the filename of the /sys entry for the device and create a
     // udev_device object (dev) representing it
     const char* path = libudev.udev_list_entry_get_name(dev_list_entry);
-    udev_device* dev = libudev.udev_device_new_from_syspath(udev_->udev_handle(), path);
+    device::ScopedUdevDevicePtr dev(
+        libudev.udev_device_new_from_syspath(udev_->udev_handle(), path));
     if (!dev)
       continue;
-    RefreshDevice(dev);
-    libudev.udev_device_unref(dev);
+    RefreshDevice(dev.get());
+    libudev.udev_device_unref(dev.get());
   }
-  // Free the enumerator object
-  libudev.udev_enumerate_unref(enumerate);
 }
 
 void GamepadPlatformDataFetcherLinux::ReadDeviceData(size_t index) {

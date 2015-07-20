@@ -2,8 +2,8 @@
 
 #############################################################################
 #
-# Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
-# Contact: http://www.qt-project.org/legal
+# Copyright (C) 2015 The Qt Company Ltd.
+# Contact: http://www.qt.io/licensing/
 #
 # This file is part of the QtWebEngine module of the Qt Toolkit.
 #
@@ -12,27 +12,27 @@
 # Licensees holding valid commercial Qt licenses may use this file in
 # accordance with the commercial license agreement provided with the
 # Software or, alternatively, in accordance with the terms contained in
-# a written agreement between you and Digia.  For licensing terms and
-# conditions see http://qt.digia.com/licensing.  For further information
-# use the contact form at http://qt.digia.com/contact-us.
+# a written agreement between you and The Qt Company. For licensing terms
+# and conditions see http://www.qt.io/terms-conditions. For further
+# information use the contact form at http://www.qt.io/contact-us.
 #
 # GNU Lesser General Public License Usage
 # Alternatively, this file may be used under the terms of the GNU Lesser
 # General Public License version 2.1 as published by the Free Software
 # Foundation and appearing in the file LICENSE.LGPL included in the
-# packaging of this file.  Please review the following information to
+# packaging of this file. Please review the following information to
 # ensure the GNU Lesser General Public License version 2.1 requirements
 # will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 #
-# In addition, as a special exception, Digia gives you certain additional
-# rights.  These rights are described in the Digia Qt LGPL Exception
+# As a special exception, The Qt Company gives you certain additional
+# rights. These rights are described in The Qt Company LGPL Exception
 # version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 #
 # GNU General Public License Usage
 # Alternatively, this file may be used under the terms of the GNU
 # General Public License version 3.0 as published by the Free Software
 # Foundation and appearing in the file LICENSE.GPL included in the
-# packaging of this file.  Please review the following information to
+# packaging of this file. Please review the following information to
 # ensure the GNU General Public License version 3.0 requirements will be
 # met: http://www.gnu.org/copyleft/gpl.html.
 #
@@ -61,6 +61,7 @@ def isInGitBlacklist(file_path):
         False
     if ( '.gitignore' in file_path
         or '.gitmodules' in file_path
+        or '.gitattributes' in file_path
         or '.DEPS' in file_path ):
         return True
 
@@ -74,8 +75,7 @@ def isInChromiumBlacklist(file_path):
     if ( '_jni' in file_path
         or 'jni_' in file_path
         or 'testdata/' in file_path
-        or (file_path.startswith('third_party/android_tools') and
-            not 'android/cpufeatures' in file_path)
+        or file_path.startswith('third_party/android_tools')
         or '/tests/' in file_path
         or ('/test/' in file_path and
             not '/webrtc/test/testsupport/' in file_path and
@@ -102,19 +102,22 @@ def isInChromiumBlacklist(file_path):
             not 'media/desktop_media_list.h' in file_path and
             not 'media/desktop_streams_registry.cc' in file_path and
             not 'media/desktop_streams_registry.h' in file_path and
-            not 'net/net_error_info' in file_path and
             not 'common/localized_error' in file_path and
             not file_path.endswith('cf_resources.rc') and
             not file_path.endswith('version.py') and
             not file_path.endswith('.grd') and
             not file_path.endswith('.grdp') and
-            not file_path.endswith('.json'))
+            not file_path.endswith('.json') and
+            not file_path.endswith('chrome_version.rc.version'))
         or file_path.startswith('chrome_frame')
         or file_path.startswith('chromeos')
         or file_path.startswith('cloud_print')
         or (file_path.startswith('components') and
             not file_path.startswith('components/tracing') and
-            not file_path.startswith('components/visitedlink'))
+            not file_path.startswith('components/visitedlink') and
+            not file_path.startswith('components/error_page') and
+            not file_path.endswith('.grdp') and
+            not 'components_strings' in file_path)
         or file_path.startswith('content/public/android/java')
         or file_path.startswith('content/shell')
         or file_path.startswith('courgette')
@@ -157,9 +160,11 @@ def isInChromiumBlacklist(file_path):
         or file_path.startswith('third_party/cros_dbus_cplusplus')
         or file_path.startswith('third_party/cros_system_api')
         or file_path.startswith('third_party/cygwin')
+        or file_path.startswith('third_party/cython')
         or file_path.startswith('third_party/elfutils')
         or file_path.startswith('third_party/eyesfree')
         or file_path.startswith('third_party/findbugs')
+        or file_path.startswith('third_party/google_input_tools')
         or file_path.startswith('third_party/gperf')
         or file_path.startswith('third_party/gnu_binutils')
         or file_path.startswith('third_party/gtk+')
@@ -173,6 +178,7 @@ def isInChromiumBlacklist(file_path):
         or file_path.startswith('third_party/instrumented_libraries')
         or file_path.startswith('third_party/jarjar')
         or file_path.startswith('third_party/jsr-305/src')
+        or file_path.startswith('third_party/junit')
         or file_path.startswith('third_party/libphonenumber')
         or file_path.startswith('third_party/libaddressinput')
         or file_path.startswith('third_party/libc++')
@@ -182,6 +188,7 @@ def isInChromiumBlacklist(file_path):
         or file_path.startswith('third_party/markdown')
         or file_path.startswith('third_party/mingw-w64')
         or file_path.startswith('third_party/nacl_sdk_binaries')
+        or file_path.startswith('third_party/polymer')
         or file_path.startswith('third_party/pdfsqueeze')
         or file_path.startswith('third_party/pefile')
         or file_path.startswith('third_party/perl')
@@ -248,7 +255,7 @@ def clearDirectory(directory):
     os.chdir(directory)
     print 'clearing the directory:' + directory
     for direntry in os.listdir(directory):
-        if not direntry == '.git':
+        if not direntry == '.git' and os.path.isdir(direntry):
             print 'clearing:' + direntry
             shutil.rmtree(direntry)
     os.chdir(currentDir)
@@ -303,6 +310,12 @@ if not commandNotFound:
 
 if commandNotFound or dos2unixVersion < StrictVersion('6.0.6'):
     raise Exception("You need dos2unix version 6.0.6 minimum.")
+
+os.chdir(third_party)
+ignore_case_setting = subprocess.Popen(['git', 'config', '--get', 'core.ignorecase'], stdout=subprocess.PIPE).communicate()[0]
+if 'true' in ignore_case_setting:
+    raise Exception("Your 3rdparty repository is configured to ignore case. "
+                    "A snapshot created with these settings would cause problems on case sensitive file systems.")
 
 clearDirectory(third_party)
 

@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQuick module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -38,23 +38,34 @@
 #include <QtQuick/private/qsgrenderer_p.h>
 #include <QtQuick/private/qsgshadersourcebuilder_p.h>
 #include <QtQuick/private/qsgtexture_p.h>
+#include <QtCore/qmutex.h>
 
 QT_BEGIN_NAMESPACE
+
+static bool hasAtlasTexture(const QVector<QSGTextureProvider *> &textureProviders)
+{
+    for (int i = 0; i < textureProviders.size(); ++i) {
+        QSGTextureProvider *t = textureProviders.at(i);
+        if (t->texture() && t->texture()->isAtlasTexture())
+            return true;
+    }
+    return false;
+}
 
 class QQuickCustomMaterialShader : public QSGMaterialShader
 {
 public:
     QQuickCustomMaterialShader(const QQuickShaderEffectMaterialKey &key, const QVector<QByteArray> &attributes);
-    virtual void deactivate();
-    virtual void updateState(const RenderState &state, QSGMaterial *newEffect, QSGMaterial *oldEffect);
-    virtual char const *const *attributeNames() const;
+    void deactivate() Q_DECL_OVERRIDE;
+    void updateState(const RenderState &state, QSGMaterial *newEffect, QSGMaterial *oldEffect) Q_DECL_OVERRIDE;
+    char const *const *attributeNames() const Q_DECL_OVERRIDE;
 
 protected:
     friend class QQuickShaderEffectNode;
 
-    virtual void compile();
-    virtual const char *vertexShader() const;
-    virtual const char *fragmentShader() const;
+    void compile() Q_DECL_OVERRIDE;
+    const char *vertexShader() const Q_DECL_OVERRIDE;
+    const char *fragmentShader() const Q_DECL_OVERRIDE;
 
     const QQuickShaderEffectMaterialKey m_key;
     QVector<QByteArray> m_attributes;
@@ -137,7 +148,7 @@ void QQuickCustomMaterialShader::updateState(const RenderState &state, QSGMateri
                         if (loc >= 0) {
                             QRectF r = texture->normalizedTextureSubRect();
                             program()->setUniformValue(loc, r.x(), r.y(), r.width(), r.height());
-                        } else if (texture->isAtlasTexture() && (idx != 0 || !material->supportsAtlasTextures)) {
+                        } else if (texture->isAtlasTexture() && !material->geometryUsesTextureSubRect) {
                             texture = texture->removedFromAtlas();
                         }
                         texture->bind();
@@ -330,7 +341,7 @@ bool QQuickShaderEffectMaterialKey::operator != (const QQuickShaderEffectMateria
 
 uint qHash(const QQuickShaderEffectMaterialKey &key)
 {
-    uint hash = qHash((void *)key.className);
+    uint hash = qHash((const void *)key.className);
     typedef QQuickShaderEffectMaterialKey Key;
     for (int shaderType = 0; shaderType < Key::ShaderTypeCount; ++shaderType)
         hash = hash * 31337 + qHash(key.sourceCode[shaderType]);
@@ -338,11 +349,14 @@ uint qHash(const QQuickShaderEffectMaterialKey &key)
 }
 
 
-QHash<QQuickShaderEffectMaterialKey, QSharedPointer<QSGMaterialType> > QQuickShaderEffectMaterial::materialMap;
+typedef QHash<QQuickShaderEffectMaterialKey, QWeakPointer<QSGMaterialType> > MaterialHash;
+
+Q_GLOBAL_STATIC(MaterialHash, materialHash)
+Q_GLOBAL_STATIC(QMutex, materialHashMutex)
 
 QQuickShaderEffectMaterial::QQuickShaderEffectMaterial(QQuickShaderEffectNode *node)
     : cullMode(NoCulling)
-    , supportsAtlasTextures(false)
+    , geometryUsesTextureSubRect(false)
     , m_node(node)
     , m_emittedLogChanged(false)
 {
@@ -367,11 +381,10 @@ bool QQuickShaderEffectMaterial::UniformData::operator == (const UniformData &ot
         return false;
 
     if (specialType == UniformData::Sampler) {
-        QQuickItem *source = qobject_cast<QQuickItem *>(qvariant_cast<QObject *>(value));
-        QQuickItem *otherSource = qobject_cast<QQuickItem *>(qvariant_cast<QObject *>(other.value));
-        if (!source || !otherSource || !source->isTextureProvider() || !otherSource->isTextureProvider())
-            return false;
-        return source->textureProvider()->texture()->textureId() == otherSource->textureProvider()->texture()->textureId();
+        // We can't check the source objects as these live in the GUI thread,
+        // so return true here and rely on the textureProvider check for
+        // equality of these..
+        return true;
     } else {
         return value == other.value;
     }
@@ -380,16 +393,29 @@ bool QQuickShaderEffectMaterial::UniformData::operator == (const UniformData &ot
 int QQuickShaderEffectMaterial::compare(const QSGMaterial *o) const
 {
     const QQuickShaderEffectMaterial *other = static_cast<const QQuickShaderEffectMaterial *>(o);
-    if (!supportsAtlasTextures || !other->supportsAtlasTextures)
-        return 1;
-    if (bool(flags() & QSGMaterial::RequiresFullMatrix) || bool(other->flags() & QSGMaterial::RequiresFullMatrix))
+    if ((hasAtlasTexture(textureProviders) && !geometryUsesTextureSubRect) || (hasAtlasTexture(other->textureProviders) && !other->geometryUsesTextureSubRect))
         return 1;
     if (cullMode != other->cullMode)
         return 1;
-    if (m_source != other->m_source)
-        return 1;
     for (int shaderType = 0; shaderType < QQuickShaderEffectMaterialKey::ShaderTypeCount; ++shaderType) {
         if (uniforms[shaderType] != other->uniforms[shaderType])
+            return 1;
+    }
+
+    // Check the texture providers..
+    if (textureProviders.size() != other->textureProviders.size())
+        return 1;
+    for (int i=0; i<textureProviders.size(); ++i) {
+        QSGTextureProvider *tp1 = textureProviders.at(i);
+        QSGTextureProvider *tp2 = other->textureProviders.at(i);
+        if (!tp1 || !tp2)
+            return tp1 == tp2 ? 0 : 1;
+        QSGTexture *t1 = tp1->texture();
+        QSGTexture *t2 = tp2->texture();
+        if (!t1 || !t2)
+            return t1 == t2 ? 0 : 1;
+        // Check texture id's as textures may be in the same atlas.
+        if (t1->textureId() != t2->textureId())
             return 1;
     }
     return 0;
@@ -397,12 +423,30 @@ int QQuickShaderEffectMaterial::compare(const QSGMaterial *o) const
 
 void QQuickShaderEffectMaterial::setProgramSource(const QQuickShaderEffectMaterialKey &source)
 {
+    QMutexLocker locker(materialHashMutex);
+    Q_UNUSED(locker);
+
     m_source = source;
     m_emittedLogChanged = false;
-    m_type = materialMap.value(m_source);
+    QWeakPointer<QSGMaterialType> weakPtr = materialHash->value(m_source);
+    m_type = weakPtr.toStrongRef();
+
     if (m_type.isNull()) {
         m_type = QSharedPointer<QSGMaterialType>(new QSGMaterialType);
-        materialMap.insert(m_source, m_type);
+        materialHash->insert(m_source, m_type.toWeakRef());
+    }
+}
+
+void QQuickShaderEffectMaterial::cleanupMaterialCache()
+{
+    QMutexLocker locker(materialHashMutex);
+    Q_UNUSED(locker);
+
+    for (MaterialHash::iterator it = materialHash->begin(); it != materialHash->end(); ) {
+        if (!it.value().toStrongRef())
+            it = materialHash->erase(it);
+        else
+            ++it;
     }
 }
 

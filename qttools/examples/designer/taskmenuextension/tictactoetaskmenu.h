@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the examples of the Qt Toolkit.
 **
@@ -17,8 +17,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -57,10 +57,10 @@ class TicTacToeTaskMenu : public QObject, public QDesignerTaskMenuExtension
     Q_INTERFACES(QDesignerTaskMenuExtension)
 
 public:
-    TicTacToeTaskMenu(TicTacToe *tic, QObject *parent);
+    explicit TicTacToeTaskMenu(TicTacToe *tic, QObject *parent);
 
-    QAction *preferredEditAction() const;
-    QList<QAction *> taskActions() const;
+    QAction *preferredEditAction() const Q_DECL_OVERRIDE;
+    QList<QAction *> taskActions() const Q_DECL_OVERRIDE;
 
 private slots:
     void editState();
@@ -77,10 +77,10 @@ class TicTacToeTaskMenuFactory : public QExtensionFactory
     Q_OBJECT
 
 public:
-    TicTacToeTaskMenuFactory(QExtensionManager *parent = 0);
+    explicit TicTacToeTaskMenuFactory(QExtensionManager *parent = 0);
 
 protected:
-    QObject *createExtension(QObject *object, const QString &iid, QObject *parent) const;
+    QObject *createExtension(QObject *object, const QString &iid, QObject *parent) const Q_DECL_OVERRIDE;
 };
 //! [1]
 

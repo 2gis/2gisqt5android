@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd and/or its subsidiary(-ies).
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -41,26 +33,40 @@
 
 #include "avfvideorenderercontrol.h"
 #include "avfdisplaylink.h"
+
+#if defined(Q_OS_IOS)
+#include "avfvideoframerenderer_ios.h"
+#else
 #include "avfvideoframerenderer.h"
+#endif
 
 #include <QtMultimedia/qabstractvideobuffer.h>
 #include <QtMultimedia/qabstractvideosurface.h>
 #include <QtMultimedia/qvideosurfaceformat.h>
+
+#include <private/qimagevideobuffer_p.h>
+
 #include <QtCore/qdebug.h>
 
 #import <AVFoundation/AVFoundation.h>
 
 QT_USE_NAMESPACE
 
-class TextureVideoBuffer : public QAbstractVideoBuffer
+#if defined(Q_OS_IOS)
+class TextureCacheVideoBuffer : public QAbstractVideoBuffer
 {
 public:
-    TextureVideoBuffer(GLuint textureId)
+    TextureCacheVideoBuffer(CVOGLTextureRef texture)
         : QAbstractVideoBuffer(GLTextureHandle)
-        , m_textureId(textureId)
+        , m_texture(texture)
     {}
 
-    virtual ~TextureVideoBuffer() {}
+    virtual ~TextureCacheVideoBuffer()
+    {
+        // absolutely critical that we drop this
+        // reference of textures will stay in the cache
+        CFRelease(m_texture);
+    }
 
     MapMode mapMode() const { return NotMapped; }
     uchar *map(MapMode, int*, int*) { return 0; }
@@ -68,41 +74,39 @@ public:
 
     QVariant handle() const
     {
-        return QVariant::fromValue<unsigned int>(m_textureId);
+        GLuint texId = CVOGLTextureGetName(m_texture);
+        return QVariant::fromValue<unsigned int>(texId);
     }
 
 private:
-    GLuint m_textureId;
+    CVOGLTextureRef m_texture;
 };
-
-class QImageVideoBuffer : public QAbstractVideoBuffer
+#else
+class TextureVideoBuffer : public QAbstractVideoBuffer
 {
 public:
-    QImageVideoBuffer(const QImage &image)
-        : QAbstractVideoBuffer(NoHandle)
-        , m_image(image)
-        , m_mode(NotMapped)
+    TextureVideoBuffer(GLuint  tex)
+        : QAbstractVideoBuffer(GLTextureHandle)
+        , m_texture(tex)
+    {}
+
+    virtual ~TextureVideoBuffer()
     {
-
     }
 
-    MapMode mapMode() const { return m_mode; }
-    uchar *map(MapMode mode, int *numBytes, int *bytesPerLine)
+    MapMode mapMode() const { return NotMapped; }
+    uchar *map(MapMode, int*, int*) { return 0; }
+    void unmap() {}
+
+    QVariant handle() const
     {
-        if (mode != NotMapped && m_mode == NotMapped) {
-            m_mode = mode;
-            return m_image.bits();
-        } else
-            return 0;
+        return QVariant::fromValue<unsigned int>(m_texture);
     }
 
-    void unmap() {
-        m_mode = NotMapped;
-    }
 private:
-    QImage m_image;
-    MapMode m_mode;
+    GLuint m_texture;
 };
+#endif
 
 AVFVideoRendererControl::AVFVideoRendererControl(QObject *parent)
     : QVideoRendererControl(parent)
@@ -122,8 +126,7 @@ AVFVideoRendererControl::~AVFVideoRendererControl()
     qDebug() << Q_FUNC_INFO;
 #endif
     m_displayLink->stop();
-    if (m_playerLayer)
-        [(AVPlayerLayer*)m_playerLayer release];
+    [(AVPlayerLayer*)m_playerLayer release];
 }
 
 QAbstractVideoSurface *AVFVideoRendererControl::surface() const
@@ -150,8 +153,8 @@ void AVFVideoRendererControl::setSurface(QAbstractVideoSurface *surface)
     m_surface = surface;
 
     //If the surface changed, then the current frame renderer is no longer valid
-    if (m_frameRenderer)
-        delete m_frameRenderer;
+    delete m_frameRenderer;
+    m_frameRenderer = 0;
 
     //If there is now no surface to render too
     if (m_surface == 0) {
@@ -161,6 +164,11 @@ void AVFVideoRendererControl::setSurface(QAbstractVideoSurface *surface)
 
     //Surface changed, so we need a new frame renderer
     m_frameRenderer = new AVFVideoFrameRenderer(m_surface, this);
+#if defined(Q_OS_IOS)
+    if (m_playerLayer) {
+        m_frameRenderer->setPlayerLayer(static_cast<AVPlayerLayer*>(m_playerLayer));
+    }
+#endif
 
     //Check for needed formats to render as OpenGL Texture
     m_enableOpenGL = m_surface->supportedPixelFormats(QAbstractVideoBuffer::GLTextureHandle).contains(QVideoFrame::Format_BGR32);
@@ -186,6 +194,12 @@ void AVFVideoRendererControl::setLayer(void *playerLayer)
     //we can update it's state with the new content.
     if (m_surface && m_surface->isActive())
         m_surface->stop();
+
+#if defined(Q_OS_IOS)
+    if (m_frameRenderer) {
+        m_frameRenderer->setPlayerLayer(static_cast<AVPlayerLayer*>(playerLayer));
+    }
+#endif
 
     //If there is no layer to render, stop scheduling updates
     if (m_playerLayer == 0) {
@@ -216,16 +230,22 @@ void AVFVideoRendererControl::updateVideoFrame(const CVTimeStamp &ts)
         return;
 
     if (m_enableOpenGL) {
-
-        GLuint textureId = m_frameRenderer->renderLayerToTexture(playerLayer);
+#if defined(Q_OS_IOS)
+        CVOGLTextureRef tex = m_frameRenderer->renderLayerToTexture(playerLayer);
 
         //Make sure we got a valid texture
-        if (textureId == 0) {
-            qWarning("renderLayerToTexture failed");
+        if (tex == 0)
             return;
-        }
 
-        QAbstractVideoBuffer *buffer = new TextureVideoBuffer(textureId);
+        QAbstractVideoBuffer *buffer = new TextureCacheVideoBuffer(tex);
+#else
+        GLuint tex = m_frameRenderer->renderLayerToTexture(playerLayer);
+        //Make sure we got a valid texture
+        if (tex == 0)
+            return;
+
+        QAbstractVideoBuffer *buffer = new TextureVideoBuffer(tex);
+#endif
         QVideoFrame frame = QVideoFrame(buffer, m_nativeSize, QVideoFrame::Format_BGR32);
 
         if (m_surface && frame.isValid()) {
@@ -234,8 +254,11 @@ void AVFVideoRendererControl::updateVideoFrame(const CVTimeStamp &ts)
 
             if (!m_surface->isActive()) {
                 QVideoSurfaceFormat format(frame.size(), frame.pixelFormat(), QAbstractVideoBuffer::GLTextureHandle);
+#if defined(Q_OS_IOS)
+                format.setScanLineDirection(QVideoSurfaceFormat::TopToBottom);
+#else
                 format.setScanLineDirection(QVideoSurfaceFormat::BottomToTop);
-
+#endif
                 if (!m_surface->start(format)) {
                     //Surface doesn't support GLTextureHandle
                     qWarning("Failed to activate video surface");
@@ -250,13 +273,11 @@ void AVFVideoRendererControl::updateVideoFrame(const CVTimeStamp &ts)
         QImage frameData = m_frameRenderer->renderLayerToImage(playerLayer);
 
         if (frameData.isNull()) {
-            qWarning("renterLayerToImage failed");
             return;
         }
 
         QAbstractVideoBuffer *buffer = new QImageVideoBuffer(frameData);
-        QVideoFrame frame = QVideoFrame(buffer, m_nativeSize, QVideoFrame::Format_ARGB32_Premultiplied);
-
+        QVideoFrame frame = QVideoFrame(buffer, m_nativeSize, QVideoFrame::Format_ARGB32);
         if (m_surface && frame.isValid()) {
             if (m_surface->isActive() && m_surface->surfaceFormat().pixelFormat() != frame.pixelFormat())
                 m_surface->stop();

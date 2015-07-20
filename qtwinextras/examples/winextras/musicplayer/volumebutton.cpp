@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the examples of the Qt Toolkit.
 **
@@ -17,8 +17,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -53,13 +53,15 @@ VolumeButton::VolumeButton(QWidget *parent) :
 
     slider = new QSlider(Qt::Horizontal, popup);
     slider->setRange(0, 100);
-    connect(slider, SIGNAL(valueChanged(int)), this, SIGNAL(volumeChanged(int)));
+    connect(slider, &QAbstractSlider::valueChanged, this, &VolumeButton::volumeChanged);
 
     label = new QLabel(popup);
     label->setAlignment(Qt::AlignCenter);
     label->setNum(100);
     label->setMinimumWidth(label->sizeHint().width());
-    connect(slider, SIGNAL(valueChanged(int)), label, SLOT(setNum(int)));
+
+    typedef void(QLabel::*IntSlot)(int);
+    connect(slider, &QAbstractSlider::valueChanged, label, static_cast<IntSlot>(&QLabel::setNum));
 
     QBoxLayout *popupLayout = new QHBoxLayout(popup);
     popupLayout->setMargin(2);

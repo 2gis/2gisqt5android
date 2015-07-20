@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQuick module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -104,7 +104,13 @@ QQuickPixmap* QQuickAnimatedImagePrivate::infoForCurrentFrame(QQmlEngine *engine
     about its state, such as the current frame and total number of frames.
     The result is an animated image with a simple progress indicator underneath it.
 
-    \b Note: Unlike images, animated images are not cached or shared internally.
+    \b Note: When animated images are cached, every frame of the animation will be cached.
+
+    Set cache to false if you are playing a long or large animation and you
+    want to conserve memory.
+
+    If the image data comes from a sequential device (e.g. a socket),
+    AnimatedImage can only loop if cache is set to true.
 
     \clearfloat
     \snippet qml/animatedimage.qml document
@@ -126,6 +132,7 @@ QQuickPixmap* QQuickAnimatedImagePrivate::infoForCurrentFrame(QQmlEngine *engine
 QQuickAnimatedImage::QQuickAnimatedImage(QQuickItem *parent)
     : QQuickImage(*(new QQuickAnimatedImagePrivate), parent)
 {
+    QObject::connect(this, &QQuickImageBase::cacheChanged, this, &QQuickAnimatedImage::onCacheChanged);
 }
 
 QQuickAnimatedImage::~QQuickAnimatedImage()
@@ -372,7 +379,8 @@ void QQuickAnimatedImage::movieRequestFinished()
             this, SLOT(playingStatusChanged()));
     connect(d->_movie, SIGNAL(frameChanged(int)),
             this, SLOT(movieUpdate()));
-    d->_movie->setCacheMode(QMovie::CacheAll);
+    if (d->cache)
+        d->_movie->setCacheMode(QMovie::CacheAll);
 
     d->status = Ready;
     emit statusChanged(d->status);
@@ -406,6 +414,11 @@ void QQuickAnimatedImage::movieUpdate()
 {
     Q_D(QQuickAnimatedImage);
 
+    if (!d->cache) {
+        qDeleteAll(d->frameMap);
+        d->frameMap.clear();
+    }
+
     if (d->_movie) {
         d->setPixmap(*d->infoForCurrentFrame(qmlEngine(this)));
         emit frameChanged();
@@ -423,6 +436,22 @@ void QQuickAnimatedImage::playingStatusChanged()
     if ((d->_movie->state() == QMovie::Paused) != d->paused) {
         d->paused = (d->_movie->state() == QMovie::Paused);
         emit pausedChanged();
+    }
+}
+
+void QQuickAnimatedImage::onCacheChanged()
+{
+    Q_D(QQuickAnimatedImage);
+    if (!cache()) {
+        qDeleteAll(d->frameMap);
+        d->frameMap.clear();
+        if (d->_movie) {
+            d->_movie->setCacheMode(QMovie::CacheNone);
+        }
+    } else {
+        if (d->_movie) {
+            d->_movie->setCacheMode(QMovie::CacheAll);
+        }
     }
 }
 

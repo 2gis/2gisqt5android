@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -37,6 +37,12 @@
 #include <qcamera.h>
 #include <qcamerafocuscontrol.h>
 
+#include <private/qgstreamerbufferprobe_p.h>
+
+#include <qbasictimer.h>
+#include <qmutex.h>
+#include <qvector.h>
+
 #include <gst/gst.h>
 #include <glib.h>
 
@@ -44,7 +50,11 @@ QT_BEGIN_NAMESPACE
 
 class CameraBinSession;
 
-class CameraBinFocus  : public QCameraFocusControl
+class CameraBinFocus
+    : public QCameraFocusControl
+#if GST_CHECK_VERSION(1,0,0)
+    , QGstreamerBufferProbe
+#endif
 {
     Q_OBJECT
 
@@ -76,16 +86,30 @@ public Q_SLOTS:
 
     void setViewfinderResolution(const QSize &resolution);
 
+#if GST_CHECK_VERSION(1,0,0)
+protected:
+    void timerEvent(QTimerEvent *event);
+#endif
+
 private Q_SLOTS:
     void _q_setFocusStatus(QCamera::LockStatus status, QCamera::LockChangeReason reason);
-    void _q_handleCameraStateChange(QCamera::State state);
+    void _q_handleCameraStatusChange(QCamera::Status status);
+
+#if GST_CHECK_VERSION(1,0,0)
+    void _q_updateFaces();
+#endif
 
 private:
     void resetFocusPoint();
-    void updateRegionOfInterest(const QRectF &focusRect, int priority);
+    void updateRegionOfInterest(const QRectF &rectangle);
+    void updateRegionOfInterest(const QVector<QRect> &rectangles);
+
+#if GST_CHECK_VERSION(1,0,0)
+    bool probeBuffer(GstBuffer *buffer);
+#endif
 
     CameraBinSession *m_session;
-    QCamera::State m_cameraState;
+    QCamera::Status m_cameraStatus;
     QCameraFocus::FocusModes m_focusMode;
     QCameraFocus::FocusPointMode m_focusPointMode;
     QCamera::LockStatus m_focusStatus;
@@ -93,6 +117,10 @@ private:
     QPointF m_focusPoint;
     QRectF m_focusRect;
     QSize m_viewfinderResolution;
+    QVector<QRect> m_faces;
+    QVector<QRect> m_faceFocusRects;
+    QBasicTimer m_faceResetTimer;
+    mutable QMutex m_mutex;
 };
 
 QT_END_NAMESPACE

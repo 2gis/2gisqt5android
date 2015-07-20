@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -40,6 +40,7 @@
 #include <private/qv4script_p.h>
 #include <private/qv4errorobject_p.h>
 #include <private/qv4scopedvalue_p.h>
+#include <private/qqmlglobal_p.h>
 
 QT_BEGIN_NAMESPACE
 
@@ -59,11 +60,11 @@ bool QQmlDelayedError::addError(QQmlEnginePrivate *e)
     return true;
 }
 
-void QQmlDelayedError::setErrorLocation(const QUrl &url, quint16 line, quint16 column)
+void QQmlDelayedError::setErrorLocation(const QQmlSourceLocation &sourceLocation)
 {
-    m_error.setUrl(url);
-    m_error.setLine(line);
-    m_error.setColumn(column);
+    m_error.setUrl(QUrl(sourceLocation.sourceFile));
+    m_error.setLine(sourceLocation.line);
+    m_error.setColumn(sourceLocation.column);
 }
 
 void QQmlDelayedError::setErrorDescription(const QString &description)
@@ -76,9 +77,9 @@ void QQmlDelayedError::setErrorObject(QObject *object)
     m_error.setObject(object);
 }
 
-void QQmlDelayedError::catchJavaScriptException(QV4::ExecutionContext *context)
+void QQmlDelayedError::catchJavaScriptException(QV4::ExecutionEngine *engine)
 {
-    m_error = QV4::ExecutionEngine::catchExceptionAsQmlError(context);
+    m_error = engine->catchExceptionAsQmlError();
 }
 
 
@@ -106,23 +107,23 @@ void QQmlJavaScriptExpression::resetNotifyOnValueChanged()
 }
 
 QV4::ReturnedValue QQmlJavaScriptExpression::evaluate(QQmlContextData *context,
-                                   const QV4::ValueRef function, bool *isUndefined)
+                                   const QV4::Value &function, bool *isUndefined)
 {
     QV4::ExecutionEngine *v4 = QV8Engine::getV4(context->engine);
     QV4::Scope scope(v4);
-    QV4::ScopedCallData callData(scope, 0);
+    QV4::ScopedCallData callData(scope);
 
     return evaluate(context, function, callData, isUndefined);
 }
 
 QV4::ReturnedValue QQmlJavaScriptExpression::evaluate(QQmlContextData *context,
-                                   const QV4::ValueRef function,
+                                   const QV4::Value &function,
                                    QV4::CallData *callData,
                                    bool *isUndefined)
 {
     Q_ASSERT(context && context->engine);
 
-    if (function->isUndefined()) {
+    if (function.isUndefined()) {
         if (isUndefined)
             *isUndefined = true;
         return QV4::Encode::undefined();
@@ -147,20 +148,19 @@ QV4::ReturnedValue QQmlJavaScriptExpression::evaluate(QQmlContextData *context,
     QV4::ExecutionEngine *v4 = QV8Engine::getV4(ep->v8engine());
     QV4::Scope scope(v4);
     QV4::ScopedValue result(scope, QV4::Primitive::undefinedValue());
-    QV4::ExecutionContext *ctx = v4->currentContext();
-    callData->thisObject = v4->globalObject;
+    callData->thisObject = v4->globalObject();
     if (scopeObject()) {
-        QV4::ScopedValue value(scope, QV4::QObjectWrapper::wrap(ctx->d()->engine, scopeObject()));
+        QV4::ScopedValue value(scope, QV4::QObjectWrapper::wrap(v4, scopeObject()));
         if (value->isObject())
             callData->thisObject = value;
     }
 
-    result = function->asFunctionObject()->call(callData);
+    result = function.asFunctionObject()->call(callData);
     if (scope.hasException()) {
         if (watcher.wasDeleted())
-            ctx->catchException(); // ignore exception
+            scope.engine->catchException(); // ignore exception
         else
-            delayedError()->catchJavaScriptException(ctx);
+            delayedError()->catchJavaScriptException(scope.engine);
         if (isUndefined)
             *isUndefined = true;
     } else {
@@ -183,7 +183,7 @@ QV4::ReturnedValue QQmlJavaScriptExpression::evaluate(QQmlContextData *context,
 
     ep->propertyCapture = lastPropertyCapture;
 
-    return result.asReturnedValue();
+    return result->asReturnedValue();
 }
 
 void QQmlJavaScriptExpression::GuardCapture::captureProperty(QQmlNotifier *n)
@@ -288,17 +288,16 @@ QQmlJavaScriptExpression::evalFunction(QQmlContextData *ctxt, QObject *scopeObje
     QQmlEnginePrivate *ep = QQmlEnginePrivate::get(engine);
 
     QV4::ExecutionEngine *v4 = QV8Engine::getV4(ep->v8engine());
-    QV4::ExecutionContext *ctx = v4->currentContext();
     QV4::Scope scope(v4);
 
-    QV4::ScopedObject qmlScopeObject(scope, QV4::QmlContextWrapper::qmlScope(ep->v8engine(), ctxt, scopeObject));
+    QV4::ScopedObject qmlScopeObject(scope, QV4::QmlContextWrapper::qmlScope(v4, ctxt, scopeObject));
     QV4::Script script(v4, qmlScopeObject, code, filename, line);
     QV4::ScopedValue result(scope);
     script.parse();
     if (!v4->hasException)
         result = script.run();
     if (v4->hasException) {
-        QQmlError error = QV4::ExecutionEngine::catchExceptionAsQmlError(ctx);
+        QQmlError error = v4->catchExceptionAsQmlError();
         if (error.description().isEmpty())
             error.setDescription(QLatin1String("Exception occurred during function evaluation"));
         if (error.line() == -1)
@@ -310,8 +309,8 @@ QQmlJavaScriptExpression::evalFunction(QQmlContextData *ctxt, QObject *scopeObje
         return QV4::Encode::undefined();
     }
     if (qmlscope)
-        *qmlscope = qmlScopeObject;
-    return result.asReturnedValue();
+        qmlscope->set(v4, qmlScopeObject);
+    return result->asReturnedValue();
 }
 
 QV4::ReturnedValue QQmlJavaScriptExpression::qmlBinding(QQmlContextData *ctxt, QObject *qmlScope,
@@ -322,17 +321,16 @@ QV4::ReturnedValue QQmlJavaScriptExpression::qmlBinding(QQmlContextData *ctxt, Q
     QQmlEnginePrivate *ep = QQmlEnginePrivate::get(engine);
 
     QV4::ExecutionEngine *v4 = QV8Engine::getV4(ep->v8engine());
-    QV4::ExecutionContext *ctx = v4->currentContext();
     QV4::Scope scope(v4);
 
-    QV4::ScopedObject qmlScopeObject(scope, QV4::QmlContextWrapper::qmlScope(ep->v8engine(), ctxt, qmlScope));
+    QV4::ScopedObject qmlScopeObject(scope, QV4::QmlContextWrapper::qmlScope(v4, ctxt, qmlScope));
     QV4::Script script(v4, qmlScopeObject, code, filename, line);
     QV4::ScopedValue result(scope);
     script.parse();
     if (!v4->hasException)
         result = script.qmlBinding();
     if (v4->hasException) {
-        QQmlError error = QV4::ExecutionEngine::catchExceptionAsQmlError(ctx);
+        QQmlError error = v4->catchExceptionAsQmlError();
         if (error.description().isEmpty())
             error.setDescription(QLatin1String("Exception occurred during function evaluation"));
         if (error.line() == -1)
@@ -344,8 +342,8 @@ QV4::ReturnedValue QQmlJavaScriptExpression::qmlBinding(QQmlContextData *ctxt, Q
         return QV4::Encode::undefined();
     }
     if (qmlscope)
-        *qmlscope = qmlScopeObject;
-    return result.asReturnedValue();
+        qmlscope->set(v4, qmlScopeObject);
+    return result->asReturnedValue();
 }
 
 

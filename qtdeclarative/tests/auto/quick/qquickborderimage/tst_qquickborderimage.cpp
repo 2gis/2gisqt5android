@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -49,9 +49,6 @@
 
 #include "../../shared/testhttpserver.h"
 #include "../../shared/util.h"
-
-#define SERVER_PORT 14446
-#define SERVER_ADDR "http://127.0.0.1:14446"
 
 Q_DECLARE_METATYPE(QQuickImageBase::Status)
 
@@ -124,9 +121,9 @@ void tst_qquickborderimage::imageSource_data()
     QTest::newRow("local") << testFileUrl("colors.png").toString() << false << "";
     QTest::newRow("local not found") << testFileUrl("no-such-file.png").toString() << false
         << "<Unknown File>:2:1: QML BorderImage: Cannot open: " + testFileUrl("no-such-file.png").toString();
-    QTest::newRow("remote") << SERVER_ADDR "/colors.png" << true << "";
-    QTest::newRow("remote not found") << SERVER_ADDR "/no-such-file.png" << true
-        << "<Unknown File>:2:1: QML BorderImage: Error downloading " SERVER_ADDR "/no-such-file.png - server replied: Not found";
+    QTest::newRow("remote") << "/colors.png" << true << "";
+    QTest::newRow("remote not found") << "/no-such-file.png" << true
+        << "<Unknown File>:2:1: QML BorderImage: Error downloading {{ServerBaseUrl}}/no-such-file.png - server replied: Not found";
 }
 
 void tst_qquickborderimage::imageSource()
@@ -137,8 +134,10 @@ void tst_qquickborderimage::imageSource()
 
     TestHTTPServer server;
     if (remote) {
-        QVERIFY2(server.listen(SERVER_PORT), qPrintable(server.errorString()));
+        QVERIFY2(server.listen(), qPrintable(server.errorString()));
         server.serveDirectory(dataDirectory());
+        source = server.urlString(source);
+        error.replace(QStringLiteral("{{ServerBaseUrl}}"), server.baseUrl().toString());
     }
 
     if (!error.isEmpty())
@@ -280,13 +279,14 @@ void tst_qquickborderimage::sciSource()
 {
     QFETCH(QString, source);
     QFETCH(bool, valid);
-
-    bool remote = source.startsWith("http");
+    QFETCH(bool, remote);
 
     TestHTTPServer server;
     if (remote) {
-        QVERIFY2(server.listen(SERVER_PORT), qPrintable(server.errorString()));
+        QVERIFY2(server.listen(), qPrintable(server.errorString()));
         server.serveDirectory(dataDirectory());
+        source = server.urlString(source);
+        server.registerFileNameForContentSubstitution(QUrl(source).path());
     }
 
     QString componentStr = "import QtQuick 2.0\nBorderImage { source: \"" + source + "\"; width: 300; height: 300 }";
@@ -321,14 +321,15 @@ void tst_qquickborderimage::sciSource_data()
 {
     QTest::addColumn<QString>("source");
     QTest::addColumn<bool>("valid");
+    QTest::addColumn<bool>("remote");
 
-    QTest::newRow("local") << testFileUrl("colors-round.sci").toString() << true;
-    QTest::newRow("local quoted filename") << testFileUrl("colors-round-quotes.sci").toString() << true;
-    QTest::newRow("local not found") << testFileUrl("no-such-file.sci").toString() << false;
-    QTest::newRow("remote") << SERVER_ADDR "/colors-round.sci" << true;
-    QTest::newRow("remote filename quoted") << SERVER_ADDR "/colors-round-quotes.sci" << true;
-    QTest::newRow("remote image") << SERVER_ADDR "/colors-round-remote.sci" << true;
-    QTest::newRow("remote not found") << SERVER_ADDR "/no-such-file.sci" << false;
+    QTest::newRow("local") << testFileUrl("colors-round.sci").toString() << true << /*remote*/false;
+    QTest::newRow("local quoted filename") << testFileUrl("colors-round-quotes.sci").toString() << true << /*remote*/false;
+    QTest::newRow("local not found") << testFileUrl("no-such-file.sci").toString() << false << /*remote*/false;
+    QTest::newRow("remote") << "/colors-round.sci" << true << /*remote*/true;
+    QTest::newRow("remote filename quoted") << "/colors-round-quotes.sci" << true << /*remote*/true;
+    QTest::newRow("remote image") << "/colors-round-remote.sci" << true << /*remote*/true;
+    QTest::newRow("remote not found") << "/no-such-file.sci" << false << /*remote*/true;
 }
 
 void tst_qquickborderimage::invalidSciFile()
@@ -414,7 +415,7 @@ void tst_qquickborderimage::statusChanges_data()
     QTest::newRow("nofile") << "" << 0 << false << QQuickImageBase::Null;
     QTest::newRow("nonexistent") << testFileUrl("thisfiledoesnotexist.png").toString() << 1 << false << QQuickImageBase::Error;
     QTest::newRow("noprotocol") << QString("thisfiledoesnotexisteither.png") << 2 << false << QQuickImageBase::Error;
-    QTest::newRow("remote") << "http://localhost:14446/colors.png" << 2 << true << QQuickImageBase::Ready;
+    QTest::newRow("remote") << "/colors.png" << 2 << true << QQuickImageBase::Ready;
 }
 
 void tst_qquickborderimage::statusChanges()
@@ -426,8 +427,9 @@ void tst_qquickborderimage::statusChanges()
 
     TestHTTPServer server;
     if (remote) {
-        QVERIFY2(server.listen(SERVER_PORT), qPrintable(server.errorString()));
+        QVERIFY2(server.listen(), qPrintable(server.errorString()));
         server.serveDirectory(dataDirectory());
+        source = server.urlString(source);
     }
 
     QString componentStr = "import QtQuick 2.0\nBorderImage { width: 300; height: 300 }";
@@ -450,7 +452,7 @@ void tst_qquickborderimage::statusChanges()
 void tst_qquickborderimage::sourceSizeChanges()
 {
     TestHTTPServer server;
-    QVERIFY2(server.listen(14449), qPrintable(server.errorString()));
+    QVERIFY2(server.listen(), qPrintable(server.errorString()));
     server.serveDirectory(dataDirectory());
 
     QQmlEngine engine;
@@ -490,19 +492,19 @@ void tst_qquickborderimage::sourceSizeChanges()
     QTRY_COMPARE(sourceSizeSpy.count(), 3);
 
     // Remote
-    ctxt->setContextProperty("srcImage", QUrl("http://127.0.0.1:14449/heart200.png"));
+    ctxt->setContextProperty("srcImage", server.url("/heart200.png"));
     QTRY_COMPARE(obj->status(), QQuickBorderImage::Ready);
     QTRY_COMPARE(sourceSizeSpy.count(), 4);
 
-    ctxt->setContextProperty("srcImage", QUrl("http://127.0.0.1:14449/heart200.png"));
+    ctxt->setContextProperty("srcImage", server.url("/heart200.png"));
     QTRY_COMPARE(obj->status(), QQuickBorderImage::Ready);
     QTRY_COMPARE(sourceSizeSpy.count(), 4);
 
-    ctxt->setContextProperty("srcImage", QUrl("http://127.0.0.1:14449/heart200_copy.png"));
+    ctxt->setContextProperty("srcImage", server.url("/heart200_copy.png"));
     QTRY_COMPARE(obj->status(), QQuickBorderImage::Ready);
     QTRY_COMPARE(sourceSizeSpy.count(), 4);
 
-    ctxt->setContextProperty("srcImage", QUrl("http://127.0.0.1:14449/colors.png"));
+    ctxt->setContextProperty("srcImage", server.url("/colors.png"));
     QTRY_COMPARE(obj->status(), QQuickBorderImage::Ready);
     QTRY_COMPARE(sourceSizeSpy.count(), 5);
 
@@ -516,7 +518,7 @@ void tst_qquickborderimage::sourceSizeChanges()
 void tst_qquickborderimage::progressAndStatusChanges()
 {
     TestHTTPServer server;
-    QVERIFY2(server.listen(14449), qPrintable(server.errorString()));
+    QVERIFY2(server.listen(), qPrintable(server.errorString()));
     server.serveDirectory(dataDirectory());
 
     QQmlEngine engine;
@@ -552,7 +554,7 @@ void tst_qquickborderimage::progressAndStatusChanges()
     QTRY_COMPARE(statusSpy.count(), 1);
 
     // Loading remote file
-    ctxt->setContextProperty("srcImage", "http://127.0.0.1:14449/heart200.png");
+    ctxt->setContextProperty("srcImage", server.url("/heart200.png"));
     QTRY_VERIFY(obj->status() == QQuickBorderImage::Loading);
     QTRY_VERIFY(obj->progress() == 0.0);
     QTRY_VERIFY(obj->status() == QQuickBorderImage::Ready);

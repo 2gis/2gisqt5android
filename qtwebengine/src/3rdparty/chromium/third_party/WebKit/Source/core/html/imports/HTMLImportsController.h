@@ -41,17 +41,15 @@
 #include "wtf/PassOwnPtr.h"
 #include "wtf/Vector.h"
 
-namespace WebCore {
+namespace blink {
 
 class FetchRequest;
-class ExecutionContext;
-class ResourceFetcher;
 class HTMLImportChild;
 class HTMLImportChildClient;
 class HTMLImportLoader;
 class HTMLImportTreeRoot;
 
-class HTMLImportsController FINAL : public NoBaseWillBeGarbageCollectedFinalized<HTMLImportsController>, public DocumentSupplement {
+class HTMLImportsController final : public NoBaseWillBeGarbageCollectedFinalized<HTMLImportsController>, public DocumentSupplement {
     WILL_BE_USING_GARBAGE_COLLECTED_MIXIN(HTMLImportsController);
     WTF_MAKE_FAST_ALLOCATED_WILL_BE_REMOVED;
 public:
@@ -82,10 +80,10 @@ private:
     HTMLImportChild* createChild(const KURL&, HTMLImportLoader*, HTMLImport* parent, HTMLImportChildClient*);
 
     OwnPtrWillBeMember<HTMLImportTreeRoot> m_root;
-    typedef WillBeHeapVector<OwnPtrWillBeMember<HTMLImportLoader> > LoaderList;
+    typedef WillBeHeapVector<OwnPtrWillBeMember<HTMLImportLoader>> LoaderList;
     LoaderList m_loaders;
 };
 
-} // namespace WebCore
+} // namespace blink
 
 #endif // HTMLImportsController_h

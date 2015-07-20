@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQuick module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -72,6 +72,7 @@
 QT_BEGIN_NAMESPACE
 
 Q_LOGGING_CATEGORY(DBG_TOUCH, "qt.quick.touch");
+Q_LOGGING_CATEGORY(DBG_TOUCH_TARGET, "qt.quick.touch.target");
 Q_LOGGING_CATEGORY(DBG_MOUSE, "qt.quick.mouse");
 Q_LOGGING_CATEGORY(DBG_FOCUS, "qt.quick.focus");
 Q_LOGGING_CATEGORY(DBG_DIRTY, "qt.quick.dirty");
@@ -85,10 +86,10 @@ void QQuickWindowPrivate::updateFocusItemTransform()
     Q_Q(QQuickWindow);
 #ifndef QT_NO_IM
     QQuickItem *focus = q->activeFocusItem();
-    if (focus && qApp->focusObject() == focus) {
+    if (focus && QGuiApplication::focusObject() == focus) {
         QQuickItemPrivate *focusPrivate = QQuickItemPrivate::get(focus);
-        qApp->inputMethod()->setInputItemTransform(focusPrivate->itemToWindowTransform());
-        qApp->inputMethod()->setInputItemRectangle(QRectF(0, 0, focusPrivate->width, focusPrivate->height));
+        QGuiApplication::inputMethod()->setInputItemTransform(focusPrivate->itemToWindowTransform());
+        QGuiApplication::inputMethod()->setInputItemRectangle(QRectF(0, 0, focusPrivate->width, focusPrivate->height));
     }
 #endif
 }
@@ -143,7 +144,7 @@ public slots:
     void animationStopped() { incubate(); }
 
 protected:
-    virtual void incubatingObjectCountChanged(int count)
+    void incubatingObjectCountChanged(int count) Q_DECL_OVERRIDE
     {
         if (count && !m_renderLoop->interleaveIncubation())
             incubateAgain();
@@ -249,20 +250,22 @@ void QQuickWindow::focusInEvent(QFocusEvent *ev)
 
 void QQuickWindowPrivate::polishItems()
 {
-    int maxPolishCycles = 100000;
-
-    while (!itemsToPolish.isEmpty() && --maxPolishCycles > 0) {
-        QSet<QQuickItem *> itms = itemsToPolish;
-        itemsToPolish.clear();
-
-        for (QSet<QQuickItem *>::iterator it = itms.begin(); it != itms.end(); ++it) {
-            QQuickItem *item = *it;
-            QQuickItemPrivate::get(item)->polishScheduled = false;
-            item->updatePolish();
-        }
+    // An item can trigger polish on another item, or itself for that matter,
+    // during its updatePolish() call. Because of this, we cannot simply
+    // iterate through the set, we must continue pulling items out until it
+    // is empty.
+    // In the case where polish is called from updatePolish() either directly
+    // or indirectly, we use a recursionSafeguard to print a warning to
+    // the user.
+    int recursionSafeguard = INT_MAX;
+    while (!itemsToPolish.isEmpty() && --recursionSafeguard > 0) {
+        QQuickItem *item = *itemsToPolish.begin();
+        itemsToPolish.remove(item);
+        QQuickItemPrivate::get(item)->polishScheduled = false;
+        item->updatePolish();
     }
 
-    if (maxPolishCycles == 0)
+    if (recursionSafeguard == 0)
         qWarning("QQuickWindow: possible QQuickItem::polish() loop");
 
     updateFocusItemTransform();
@@ -364,19 +367,21 @@ void QQuickWindowPrivate::renderSceneGraph(const QSize &size)
     animationController->advance();
     emit q->beforeRendering();
     runAndClearJobs(&beforeRenderingJobs);
-    int fboId = 0;
-    const qreal devicePixelRatio = q->effectiveDevicePixelRatio();
-    renderer->setDeviceRect(QRect(QPoint(0, 0), size * devicePixelRatio));
-    if (renderTargetId) {
-        fboId = renderTargetId;
-        renderer->setViewportRect(QRect(QPoint(0, 0), renderTargetSize));
-    } else {
-        renderer->setViewportRect(QRect(QPoint(0, 0), size * devicePixelRatio));
-    }
-    renderer->setProjectionMatrixToRect(QRect(QPoint(0, 0), size));
-    renderer->setDevicePixelRatio(devicePixelRatio);
+    if (!customRenderStage || !customRenderStage->render()) {
+        int fboId = 0;
+        const qreal devicePixelRatio = q->effectiveDevicePixelRatio();
+        renderer->setDeviceRect(QRect(QPoint(0, 0), size * devicePixelRatio));
+        if (renderTargetId) {
+            fboId = renderTargetId;
+            renderer->setViewportRect(QRect(QPoint(0, 0), renderTargetSize));
+        } else {
+            renderer->setViewportRect(QRect(QPoint(0, 0), size * devicePixelRatio));
+        }
+        renderer->setProjectionMatrixToRect(QRect(QPoint(0, 0), size));
+        renderer->setDevicePixelRatio(devicePixelRatio);
 
-    context->renderNextFrame(renderer, fboId);
+        context->renderNextFrame(renderer, fboId);
+    }
     emit q->afterRendering();
     runAndClearJobs(&afterRenderingJobs);
 }
@@ -399,6 +404,7 @@ QQuickWindowPrivate::QQuickWindowPrivate()
     , windowManager(0)
     , renderControl(0)
     , touchRecursionGuard(0)
+    , customRenderStage(0)
     , clearColor(Qt::white)
     , clearBeforeRendering(true)
     , persistentGLContext(true)
@@ -418,6 +424,7 @@ QQuickWindowPrivate::QQuickWindowPrivate()
 
 QQuickWindowPrivate::~QQuickWindowPrivate()
 {
+    delete customRenderStage;
 }
 
 void QQuickWindowPrivate::init(QQuickWindow *c, QQuickRenderControl *control)
@@ -459,8 +466,6 @@ void QQuickWindowPrivate::init(QQuickWindow *c, QQuickRenderControl *control)
     q->setFormat(sg->defaultSurfaceFormat());
 
     animationController = new QQuickAnimatorController(q);
-
-    delayedTouch = 0;
 
     QObject::connect(context, SIGNAL(initialized()), q, SIGNAL(sceneGraphInitialized()), Qt::DirectConnection);
     QObject::connect(context, SIGNAL(invalidated()), q, SIGNAL(sceneGraphInvalidated()), Qt::DirectConnection);
@@ -513,7 +518,7 @@ bool QQuickWindowPrivate::checkIfDoubleClicked(ulong newPressEventTimestamp)
         doubleClicked = false;
     } else {
         ulong timeBetweenPresses = newPressEventTimestamp - touchMousePressTimestamp;
-        ulong doubleClickInterval = static_cast<ulong>(qApp->styleHints()->
+        ulong doubleClickInterval = static_cast<ulong>(QGuiApplication::styleHints()->
                 mouseDoubleClickInterval());
         doubleClicked = timeBetweenPresses < doubleClickInterval;
         if (doubleClicked) {
@@ -546,6 +551,7 @@ bool QQuickWindowPrivate::translateTouchToMouse(QQuickItem *item, QTouchEvent *e
             // handler spins the event loop all subsequent moves and releases get lost.
             touchMouseId = p.id();
             itemForTouchPointId[touchMouseId] = item;
+            qCDebug(DBG_TOUCH_TARGET) << "TP (mouse)" << p.id() << "->" << item;
             QScopedPointer<QMouseEvent> mousePress(touchToMouseEvent(QEvent::MouseButtonPress, p, event, item, false));
 
             // Send a single press and see if that's accepted
@@ -557,8 +563,10 @@ bool QQuickWindowPrivate::translateTouchToMouse(QQuickItem *item, QTouchEvent *e
             event->setAccepted(mousePress->isAccepted());
             if (!mousePress->isAccepted()) {
                 touchMouseId = -1;
-                if (itemForTouchPointId.value(p.id()) == item)
+                if (itemForTouchPointId.value(p.id()) == item) {
+                    qCDebug(DBG_TOUCH_TARGET) << "TP (mouse)" << p.id() << "disassociated";
                     itemForTouchPointId.remove(p.id());
+                }
 
                 if (mouseGrabberItem == item)
                     item->ungrabMouse();
@@ -593,6 +601,7 @@ bool QQuickWindowPrivate::translateTouchToMouse(QQuickItem *item, QTouchEvent *e
                     QCoreApplication::sendEvent(item, me.data());
                     event->setAccepted(me->isAccepted());
                     if (me->isAccepted()) {
+                        qCDebug(DBG_TOUCH_TARGET) << "TP (mouse)" << p.id() << "->" << mouseGrabberItem;
                         itemForTouchPointId[p.id()] = mouseGrabberItem; // N.B. the mouseGrabberItem may be different after returning from sendEvent()
                         return true;
                     }
@@ -644,8 +653,10 @@ void QQuickWindowPrivate::setMouseGrabber(QQuickItem *grabber)
     if (touchMouseId != -1) {
         // update the touch item for mouse touch id to the new grabber
         itemForTouchPointId.remove(touchMouseId);
-        if (grabber)
+        if (grabber) {
+            qCDebug(DBG_TOUCH_TARGET) << "TP (mouse)" << touchMouseId << "->" << mouseGrabberItem;
             itemForTouchPointId[touchMouseId] = grabber;
+        }
     }
 
     if (oldGrabber) {
@@ -744,7 +755,7 @@ void QQuickWindowPrivate::setFocusInScope(QQuickItem *scope, QQuickItem *item, Q
 
         if (oldActiveFocusItem) {
 #ifndef QT_NO_IM
-            qApp->inputMethod()->commit();
+            QGuiApplication::inputMethod()->commit();
 #endif
 
             activeFocusItem = 0;
@@ -841,7 +852,7 @@ void QQuickWindowPrivate::clearFocusInScope(QQuickItem *scope, QQuickItem *item,
         newActiveFocusItem = scope;
 
 #ifndef QT_NO_IM
-        qApp->inputMethod()->commit();
+        QGuiApplication::inputMethod()->commit();
 #endif
 
         activeFocusItem = 0;
@@ -1342,7 +1353,7 @@ bool QQuickWindow::event(QEvent *e)
         QTouchEvent *touch = static_cast<QTouchEvent*>(e);
         d->translateTouchEvent(touch);
         d->deliverTouchEvent(touch);
-        if (Q_LIKELY(qApp->testAttribute(Qt::AA_SynthesizeMouseForUnhandledTouchEvents))) {
+        if (Q_LIKELY(QCoreApplication::testAttribute(Qt::AA_SynthesizeMouseForUnhandledTouchEvents))) {
             // we consume all touch events ourselves to avoid duplicate
             // mouse delivery by QtGui mouse synthesis
             e->accept();
@@ -1385,9 +1396,20 @@ bool QQuickWindow::event(QEvent *e)
         if (d->mouseGrabberItem)
             d->mouseGrabberItem->ungrabMouse();
         break;
+    case QEvent::UpdateRequest: {
+        if (d->windowManager)
+            d->windowManager->handleUpdateRequest(this);
+        break;
+    }
+    case QEvent::NativeGesture:
+        d->deliverNativeGestureEvent(d->contentItem, static_cast<QNativeGestureEvent*>(e));
+        break;
     default:
         break;
     }
+
+    if (e->type() == QEvent::Type(QQuickWindowPrivate::FullUpdateRequest))
+        update();
 
     return QWindow::event(e);
 }
@@ -1427,7 +1449,7 @@ void QQuickWindowPrivate::deliverKeyEvent(QKeyEvent *e)
         // toplevel non-popup window (the application current "key window") will
         // receive them. (QWidgetWindow does something similar for widgets, by keeping
         // a list of popup windows, and forwarding the key event to the top-most popup.)
-        QWindow *focusWindow = qApp->focusWindow();
+        QWindow *focusWindow = QGuiApplication::focusWindow();
         if (focusWindow && focusWindow != q
             && (focusWindow->flags() & Qt::Popup) == Qt::Popup)
             QGuiApplication::sendEvent(focusWindow, e);
@@ -1587,6 +1609,11 @@ bool QQuickWindowPrivate::sendHoverEvent(QEvent::Type type, QQuickItem *item,
     QHoverEvent hoverEvent(type, transform.map(scenePos), transform.map(lastScenePos), modifiers);
     hoverEvent.setAccepted(accepted);
 
+    QSet<QQuickItem *> hasFiltered;
+    if (sendFilteredMouseEvent(item->parentItem(), item, &hoverEvent, &hasFiltered)) {
+        return true;
+    }
+
     q->sendEvent(item, &hoverEvent);
 
     return hoverEvent.isAccepted();
@@ -1725,7 +1752,7 @@ bool QQuickWindowPrivate::deliverWheelEvent(QQuickItem *item, QWheelEvent *event
 
     if (item->contains(p)) {
         QWheelEvent wheel(p, p, event->pixelDelta(), event->angleDelta(), event->delta(),
-                          event->orientation(), event->buttons(), event->modifiers(), event->phase());
+                          event->orientation(), event->buttons(), event->modifiers(), event->phase(), event->source());
         wheel.accept();
         q->sendEvent(item, &wheel);
         if (wheel.isAccepted()) {
@@ -1741,7 +1768,7 @@ bool QQuickWindowPrivate::deliverWheelEvent(QQuickItem *item, QWheelEvent *event
 void QQuickWindow::wheelEvent(QWheelEvent *event)
 {
     Q_D(QQuickWindow);
-    qCDebug(DBG_MOUSE) << "QQuickWindow::wheelEvent()" << event->pixelDelta() << event->angleDelta();
+    qCDebug(DBG_MOUSE) << "QQuickWindow::wheelEvent()" << event->pixelDelta() << event->angleDelta() << event->phase();
 
     //if the actual wheel event was accepted, accept the compatibility wheel event and return early
     if (d->lastWheelEventAccepted && event->angleDelta().isNull() && event->phase() == Qt::ScrollUpdate)
@@ -1753,6 +1780,37 @@ void QQuickWindow::wheelEvent(QWheelEvent *event)
 }
 #endif // QT_NO_WHEELEVENT
 
+bool QQuickWindowPrivate::deliverNativeGestureEvent(QQuickItem *item, QNativeGestureEvent *event)
+{
+    QQuickItemPrivate *itemPrivate = QQuickItemPrivate::get(item);
+
+    if ((itemPrivate->flags & QQuickItem::ItemClipsChildrenToShape) && !item->contains(event->localPos()))
+        return false;
+
+    QList<QQuickItem *> children = itemPrivate->paintOrderChildItems();
+    for (int ii = children.count() - 1; ii >= 0; --ii) {
+        QQuickItem *child = children.at(ii);
+        if (!child->isVisible() || !child->isEnabled() || QQuickItemPrivate::get(child)->culled)
+            continue;
+        if (deliverNativeGestureEvent(child, event))
+            return true;
+    }
+
+    QPointF p = item->mapFromScene(event->localPos());
+
+    if (item->contains(p)) {
+        QNativeGestureEvent copy(event->gestureType(), p, event->windowPos(), event->screenPos(),
+                                 event->value(), 0L, 0L); // TODO can't copy things I can't access
+        event->accept();
+        item->event(&copy);
+        if (copy.isAccepted()) {
+            event->accept();
+            return true;
+        }
+    }
+
+    return false;
+}
 
 bool QQuickWindowPrivate::deliverTouchCancelEvent(QTouchEvent *event)
 {
@@ -1775,6 +1833,15 @@ bool QQuickWindowPrivate::deliverTouchCancelEvent(QTouchEvent *event)
     return true;
 }
 
+void QQuickWindowPrivate::deliverDelayedTouchEvent()
+{
+    // Deliver and delete delayedTouch.
+    // Set delayedTouch to 0 before delivery to avoid redelivery in case of
+    // event loop recursions (e.g if it the touch starts a dnd session).
+    QScopedPointer<QTouchEvent> e(delayedTouch.take());
+    reallyDeliverTouchEvent(e.data());
+}
+
 static bool qquickwindow_no_touch_compression = qEnvironmentVariableIsSet("QML_NO_TOUCH_COMPRESSION");
 
 // check what kind of touch we have (begin/update) and
@@ -1794,7 +1861,7 @@ void QQuickWindowPrivate::deliverTouchEvent(QTouchEvent *event)
         && ((states & (Qt::TouchPointPressed | Qt::TouchPointReleased)) == 0)) {
         // we can only compress something that isn't a press or release
         if (!delayedTouch) {
-            delayedTouch = new QTouchEvent(event->type(), event->device(), event->modifiers(), event->touchPointStates(), event->touchPoints());
+            delayedTouch.reset(new QTouchEvent(event->type(), event->device(), event->modifiers(), event->touchPointStates(), event->touchPoints()));
             delayedTouch->setTimestamp(event->timestamp());
             if (renderControl)
                 QQuickRenderControlPrivate::get(renderControl)->maybeUpdate();
@@ -1815,19 +1882,23 @@ void QQuickWindowPrivate::deliverTouchEvent(QTouchEvent *event)
                 Qt::TouchPointStates states;
                 for (int i = 0; i < event->touchPoints().count(); ++i) {
                     const QTouchEvent::TouchPoint &tp = tpts.at(i);
-                    const QTouchEvent::TouchPoint &tp2 = delayedTouch->touchPoints().at(i);
-                    if (tp.id() != tp2.id()) {
+                    const QTouchEvent::TouchPoint &tpDelayed = delayedTouch->touchPoints().at(i);
+                    if (tp.id() != tpDelayed.id()) {
                         mismatch = true;
                         break;
                     }
 
-                    if (tp2.state() == Qt::TouchPointMoved && tp.state() == Qt::TouchPointStationary)
+                    if (tpDelayed.state() == Qt::TouchPointMoved && tp.state() == Qt::TouchPointStationary)
                         tpts[i].setState(Qt::TouchPointMoved);
+                    tpts[i].setLastPos(tpDelayed.lastPos());
+                    tpts[i].setLastScenePos(tpDelayed.lastScenePos());
+                    tpts[i].setLastScreenPos(tpDelayed.lastScreenPos());
+                    tpts[i].setLastNormalizedPos(tpDelayed.lastNormalizedPos());
 
                     states |= tpts.at(i).state();
                 }
 
-                // same touch event? then merge if so
+                // matching touch event? then merge the new event into the old one
                 if (!mismatch) {
                     delayedTouch->setTouchPoints(tpts);
                     delayedTouch->setTimestamp(event->timestamp());
@@ -1835,21 +1906,15 @@ void QQuickWindowPrivate::deliverTouchEvent(QTouchEvent *event)
                 }
             }
 
-            // otherwise; we need to deliver the delayed event first, and
-            // then delay this one..
-            reallyDeliverTouchEvent(delayedTouch);
-            delete delayedTouch;
-            delayedTouch = new QTouchEvent(event->type(), event->device(), event->modifiers(), event->touchPointStates(), event->touchPoints());
+            // merging wasn't possible, so deliver the delayed event first, and then delay this one
+            deliverDelayedTouchEvent();
+            delayedTouch.reset(new QTouchEvent(event->type(), event->device(), event->modifiers(), event->touchPointStates(), event->touchPoints()));
             delayedTouch->setTimestamp(event->timestamp());
             return;
         }
     } else {
-        if (delayedTouch) {
-            // deliver the delayed touch first
-            reallyDeliverTouchEvent(delayedTouch);
-            delete delayedTouch;
-            delayedTouch = 0;
-        }
+        if (delayedTouch)
+            deliverDelayedTouchEvent();
         reallyDeliverTouchEvent(event);
     }
 }
@@ -1857,9 +1922,7 @@ void QQuickWindowPrivate::deliverTouchEvent(QTouchEvent *event)
 void QQuickWindowPrivate::flushDelayedTouchEvent()
 {
     if (delayedTouch) {
-        reallyDeliverTouchEvent(delayedTouch);
-        delete delayedTouch;
-        delayedTouch = 0;
+        deliverDelayedTouchEvent();
 
         // Touch events which constantly start animations (such as a behavior tracking
         // the mouse point) need animations to start.
@@ -1916,6 +1979,7 @@ void QQuickWindowPrivate::reallyDeliverTouchEvent(QTouchEvent *event)
     if (event->touchPointStates() & Qt::TouchPointReleased) {
         for (int i=0; i<touchPoints.count(); i++) {
             if (touchPoints[i].state() == Qt::TouchPointReleased) {
+                qCDebug(DBG_TOUCH_TARGET) << "TP" << touchPoints[i].id() << "released";
                 itemForTouchPointId.remove(touchPoints[i].id());
                 if (touchPoints[i].id() == touchMouseId)
                     touchMouseId = -1;
@@ -1925,7 +1989,12 @@ void QQuickWindowPrivate::reallyDeliverTouchEvent(QTouchEvent *event)
     }
 
     if (event->type() == QEvent::TouchEnd) {
-        Q_ASSERT(itemForTouchPointId.isEmpty());
+        if (!itemForTouchPointId.isEmpty()) {
+            qWarning() << "No release received for" << itemForTouchPointId.size()
+                << "touch points over" << itemForTouchPointId.begin().value()
+                << "on touch end.";
+            itemForTouchPointId.clear();
+        }
     }
 
     --touchRecursionGuard;
@@ -2023,21 +2092,27 @@ bool QQuickWindowPrivate::deliverMatchingPointsToItem(QQuickItem *item, QTouchEv
     touchEvent.data()->setTarget(item);
     bool touchEventAccepted = false;
 
+    qCDebug(DBG_TOUCH) << " - considering delivering " << touchEvent.data() << " to " << item;
+
     // First check whether the parent wants to be a filter,
     // and if the parent accepts the event we are done.
     if (sendFilteredTouchEvent(item->parentItem(), item, event, hasFiltered)) {
         // If the touch was accepted (regardless by whom or in what form),
         // update acceptedNewPoints
+        qCDebug(DBG_TOUCH) << " - can't. intercepted " << touchEvent.data() << " to " << item->parentItem() << " instead of " << item;
         foreach (int id, matchingNewPoints)
             acceptedNewPoints->insert(id);
         return true;
     }
 
     // Since it can change in sendEvent, update itemForTouchPointId now
-    foreach (int id, matchingNewPoints)
+    foreach (int id, matchingNewPoints) {
+        qCDebug(DBG_TOUCH_TARGET) << "TP" << id << "->" << item;
         itemForTouchPointId[id] = item;
+    }
 
     // Deliver the touch event to the given item
+    qCDebug(DBG_TOUCH) << " - actually delivering " << touchEvent.data() << " to " << item;
     QCoreApplication::sendEvent(item, touchEvent.data());
     touchEventAccepted = touchEvent->isAccepted();
 
@@ -2060,8 +2135,10 @@ bool QQuickWindowPrivate::deliverMatchingPointsToItem(QQuickItem *item, QTouchEv
         // But if the event was not accepted then we know this item
         // will not be interested in further updates for those touchpoint IDs either.
         foreach (int id, matchingNewPoints)
-            if (itemForTouchPointId[id] == item)
+            if (itemForTouchPointId[id] == item) {
+                qCDebug(DBG_TOUCH_TARGET) << "TP" << id << "disassociated";
                 itemForTouchPointId.remove(id);
+            }
     }
 
     return touchEventAccepted;
@@ -2274,10 +2351,7 @@ QQuickItem *QQuickWindowPrivate::findCursorItem(QQuickItem *item, const QPointF 
             return 0;
     }
 
-    const int numCursorsInHierarchy = itemPrivate->extra.isAllocated() ? itemPrivate->extra.value().numItemsWithCursor : 0;
-    const int numChildrenWithCursor = itemPrivate->hasCursor ? numCursorsInHierarchy-1 : numCursorsInHierarchy;
-
-    if (numChildrenWithCursor > 0) {
+    if (itemPrivate->hasCursorInChild) {
         QList<QQuickItem *> children = itemPrivate->paintOrderChildItems();
         for (int ii = children.count() - 1; ii >= 0; --ii) {
             QQuickItem *child = children.at(ii);
@@ -2310,6 +2384,7 @@ bool QQuickWindowPrivate::sendFilteredTouchEvent(QQuickItem *target, QQuickItem 
         QScopedPointer<QTouchEvent> targetEvent(touchEventForItemBounds(target, *event));
         if (!targetEvent->touchPoints().isEmpty()) {
             if (target->childMouseEventFilter(item, targetEvent.data())) {
+                qCDebug(DBG_TOUCH) << " - first chance intercepted on childMouseEventFilter by " << target;
                 QVector<int> touchIds;
                 for (int i = 0; i < targetEvent->touchPoints().size(); ++i)
                     touchIds.append(targetEvent->touchPoints().at(i).id());
@@ -2350,7 +2425,9 @@ bool QQuickWindowPrivate::sendFilteredTouchEvent(QQuickItem *target, QQuickItem 
                     // targetEvent is already transformed wrt local position, velocity, etc.
                     QScopedPointer<QMouseEvent> mouseEvent(touchToMouseEvent(t, tp, event, item, false));
                     if (target->childMouseEventFilter(item, mouseEvent.data())) {
+                        qCDebug(DBG_TOUCH) << " - second chance intercepted on childMouseEventFilter by " << target;
                         if (t != QEvent::MouseButtonRelease) {
+                            qCDebug(DBG_TOUCH_TARGET) << "TP" << tp.id() << "->" << target;
                             itemForTouchPointId[tp.id()] = target;
                             touchMouseId = tp.id();
                             target->grabMouse();
@@ -2387,7 +2464,7 @@ bool QQuickWindowPrivate::sendFilteredMouseEvent(QQuickItem *target, QQuickItem 
 
 bool QQuickWindowPrivate::dragOverThreshold(qreal d, Qt::Axis axis, QMouseEvent *event, int startDragThreshold)
 {
-    QStyleHints *styleHints = qApp->styleHints();
+    QStyleHints *styleHints = QGuiApplication::styleHints();
     int caps = QGuiApplicationPrivate::mouseEventCaps(event);
     bool dragVelocityLimitAvailable = (caps & QTouchDevice::Velocity)
         && styleHints->startDragVelocity();
@@ -2562,7 +2639,9 @@ bool QQuickWindow::sendEvent(QQuickItem *item, QEvent *e)
     case QEvent::TouchUpdate:
     case QEvent::TouchEnd: {
             QSet<QQuickItem*> hasFiltered;
-            d->sendFilteredTouchEvent(item->parentItem(), item, static_cast<QTouchEvent *>(e), &hasFiltered);
+            QTouchEvent *ev = static_cast<QTouchEvent *>(e);
+            qCDebug(DBG_TOUCH) << " - sendEvent for " << ev << " to " << item->parentItem() << " and " << item;
+            d->sendFilteredTouchEvent(item->parentItem(), item, ev, &hasFiltered);
         }
         break;
     default:
@@ -2592,7 +2671,6 @@ void QQuickWindowPrivate::cleanupNodesOnShutdown(QQuickItem *item)
             p->extra->rootNode = 0;
         }
 
-        p->groupNode = 0;
         p->paintNode = 0;
 
         p->dirty(QQuickItemPrivate::Window);
@@ -2620,8 +2698,7 @@ void QQuickWindowPrivate::cleanupNodesOnShutdown()
     Q_Q(QQuickWindow);
     cleanupNodes();
     cleanupNodesOnShutdown(contentItem);
-    QSet<QQuickItem *>::const_iterator it = parentlessItems.begin();
-    for (; it != parentlessItems.end(); ++it)
+    for (QSet<QQuickItem *>::const_iterator it = parentlessItems.begin(), cend = parentlessItems.end(); it != cend; ++it)
         cleanupNodesOnShutdown(*it);
     animationController->windowNodesDestroyed();
     q->cleanupSceneGraph();
@@ -2645,6 +2722,53 @@ void QQuickWindowPrivate::updateDirtyNodes()
         qCDebug(DBG_DIRTY) << "   QSGNode:" << item << qPrintable(itemPriv->dirtyToString());
         updateDirtyNode(item);
     }
+}
+
+static inline QSGNode *qquickitem_before_paintNode(QQuickItemPrivate *d)
+{
+    const QList<QQuickItem *> childItems = d->paintOrderChildItems();
+    QQuickItem *before = 0;
+    for (int i=0; i<childItems.size(); ++i) {
+        QQuickItemPrivate *dd = QQuickItemPrivate::get(childItems.at(i));
+        // Perform the same check as the in buildOrderNodeList below.
+        if (dd->z() < 0 && (dd->explicitVisible || (dd->extra.isAllocated() && dd->extra->effectRefCount)))
+            before = childItems.at(i);
+        else
+            break;
+    }
+    return Q_UNLIKELY(before) ? QQuickItemPrivate::get(before)->itemNode() : 0;
+}
+
+static QVector<QSGNode *> buildOrderedNodeList(QQuickItemPrivate *itemPriv)
+{
+    QList<QQuickItem *> orderedChildren = itemPriv->paintOrderChildItems();
+    QVector<QSGNode *> desiredNodes;
+    desiredNodes.reserve(orderedChildren.size() + 1); // + 1 for the paintNode
+
+    int ii = 0;
+
+    for (; ii < orderedChildren.count() && orderedChildren.at(ii)->z() < 0; ++ii) {
+        QQuickItemPrivate *childPrivate = QQuickItemPrivate::get(orderedChildren.at(ii));
+        if (!childPrivate->explicitVisible &&
+            (!childPrivate->extra.isAllocated() || !childPrivate->extra->effectRefCount))
+            continue;
+
+        desiredNodes.append(childPrivate->itemNode());
+    }
+
+    if (itemPriv->paintNode)
+        desiredNodes.append(itemPriv->paintNode);
+
+    for (; ii < orderedChildren.count(); ++ii) {
+        QQuickItemPrivate *childPrivate = QQuickItemPrivate::get(orderedChildren.at(ii));
+        if (!childPrivate->explicitVisible &&
+            (!childPrivate->extra.isAllocated() || !childPrivate->extra->effectRefCount))
+            continue;
+
+        desiredNodes.append(childPrivate->itemNode());
+    }
+
+    return desiredNodes;
 }
 
 void QQuickWindowPrivate::updateDirtyNode(QQuickItem *item)
@@ -2686,101 +2810,139 @@ void QQuickWindowPrivate::updateDirtyNode(QQuickItem *item)
 
     if (clipEffectivelyChanged) {
         QSGNode *parent = itemPriv->opacityNode() ? (QSGNode *) itemPriv->opacityNode() :
-                                                    (QSGNode *)itemPriv->itemNode();
-        QSGNode *child = itemPriv->rootNode() ? (QSGNode *)itemPriv->rootNode() :
-                                                (QSGNode *)itemPriv->groupNode;
+                                                    (QSGNode *) itemPriv->itemNode();
+        QSGNode *child = itemPriv->rootNode();
 
         if (item->clip()) {
             Q_ASSERT(itemPriv->clipNode() == 0);
-            itemPriv->extra.value().clipNode = new QQuickDefaultClipNode(item->clipRect());
-            itemPriv->clipNode()->update();
+            QQuickDefaultClipNode *clip = new QQuickDefaultClipNode(item->clipRect());
+            itemPriv->extra.value().clipNode = clip;
+            clip->update();
 
-            if (child)
+            if (!child) {
+                parent->reparentChildNodesTo(clip);
+                parent->appendChildNode(clip);
+            } else {
                 parent->removeChildNode(child);
-            parent->appendChildNode(itemPriv->clipNode());
-            if (child)
-                itemPriv->clipNode()->appendChildNode(child);
+                clip->appendChildNode(child);
+                parent->appendChildNode(clip);
+            }
 
         } else {
-            Q_ASSERT(itemPriv->clipNode() != 0);
-            parent->removeChildNode(itemPriv->clipNode());
-            if (child)
-                itemPriv->clipNode()->removeChildNode(child);
+            QQuickDefaultClipNode *clip = itemPriv->clipNode();
+            Q_ASSERT(clip);
+            parent->removeChildNode(clip);
+            if (child) {
+                clip->removeChildNode(child);
+                parent->appendChildNode(child);
+            } else {
+                clip->reparentChildNodesTo(parent);
+            }
+
             delete itemPriv->clipNode();
             itemPriv->extra->clipNode = 0;
-            if (child)
-                parent->appendChildNode(child);
         }
     }
 
-    if (dirty & QQuickItemPrivate::ChildrenUpdateMask)
-        itemPriv->childContainerNode()->removeAllChildNodes();
-
     if (effectRefEffectivelyChanged) {
+        if (dirty & QQuickItemPrivate::ChildrenUpdateMask)
+            itemPriv->childContainerNode()->removeAllChildNodes();
+
         QSGNode *parent = itemPriv->clipNode();
         if (!parent)
             parent = itemPriv->opacityNode();
         if (!parent)
             parent = itemPriv->itemNode();
-        QSGNode *child = itemPriv->groupNode;
 
         if (itemPriv->extra.isAllocated() && itemPriv->extra->effectRefCount) {
             Q_ASSERT(itemPriv->rootNode() == 0);
-            itemPriv->extra->rootNode = new QSGRootNode;
-
-            if (child)
-                parent->removeChildNode(child);
-            parent->appendChildNode(itemPriv->rootNode());
-            if (child)
-                itemPriv->rootNode()->appendChildNode(child);
+            QSGRootNode *root = new QSGRootNode();
+            itemPriv->extra->rootNode = root;
+            parent->reparentChildNodesTo(root);
+            parent->appendChildNode(root);
         } else {
             Q_ASSERT(itemPriv->rootNode() != 0);
-            parent->removeChildNode(itemPriv->rootNode());
-            if (child)
-                itemPriv->rootNode()->removeChildNode(child);
+            QSGRootNode *root = itemPriv->rootNode();
+            parent->removeChildNode(root);
+            root->reparentChildNodesTo(parent);
             delete itemPriv->rootNode();
             itemPriv->extra->rootNode = 0;
-            if (child)
-                parent->appendChildNode(child);
         }
     }
 
     if (dirty & QQuickItemPrivate::ChildrenUpdateMask) {
-        QSGNode *groupNode = itemPriv->groupNode;
-        if (groupNode)
-            groupNode->removeAllChildNodes();
+        QVector<QSGNode *> desiredNodes = buildOrderedNodeList(itemPriv);
 
-        QList<QQuickItem *> orderedChildren = itemPriv->paintOrderChildItems();
-        int ii = 0;
+        // now start making current state match the promised land of
+        // desiredNodes. in the case of our current state matching desiredNodes
+        // (though why would we get ChildrenUpdateMask with no changes?) then we
+        // should make no changes at all.
 
-        for (; ii < orderedChildren.count() && orderedChildren.at(ii)->z() < 0; ++ii) {
-            QQuickItemPrivate *childPrivate = QQuickItemPrivate::get(orderedChildren.at(ii));
-            if (!childPrivate->explicitVisible &&
-                (!childPrivate->extra.isAllocated() || !childPrivate->extra->effectRefCount))
-                continue;
-            if (childPrivate->itemNode()->parent())
-                childPrivate->itemNode()->parent()->removeChildNode(childPrivate->itemNode());
+        // how many nodes did we process, when examining changes
+        int desiredNodesProcessed = 0;
 
-            itemPriv->childContainerNode()->appendChildNode(childPrivate->itemNode());
+        // currentNode is how far, in our present tree, we have processed. we
+        // make use of this later on to trim the current child list if the
+        // desired list is shorter.
+        QSGNode *groupNode = itemPriv->childContainerNode();
+        QSGNode *currentNode = groupNode->firstChild();
+        int added = 0;
+        int removed = 0;
+        int replaced = 0;
+#if defined(CHILDRENUPDATE_DEBUG)
+        // This is slow! Do not do this in a normal/profiling build!
+        int initialCount = groupNode->childCount();
+#endif
+
+        while (currentNode && desiredNodesProcessed < desiredNodes.size()) {
+            QSGNode *desiredNode = desiredNodes.at(desiredNodesProcessed);
+
+            // uh oh... reality and our utopic paradise are diverging!
+            // we need to reconcile this...
+            if (currentNode != desiredNode) {
+                // for now, we're just removing the node from the children -
+                // and replacing it with the new node.
+                if (desiredNode->parent())
+                    desiredNode->parent()->removeChildNode(desiredNode);
+                groupNode->insertChildNodeAfter(desiredNode, currentNode);
+                groupNode->removeChildNode(currentNode);
+                replaced++;
+
+                // since we just replaced currentNode, we also need to reset
+                // the pointer.
+                currentNode = desiredNode;
+            }
+
+            currentNode = currentNode->nextSibling();
+            desiredNodesProcessed++;
         }
 
-        QSGNode *beforePaintNode = itemPriv->groupNode ? itemPriv->groupNode->lastChild() : 0;
-        if (beforePaintNode || itemPriv->extra.isAllocated())
-            itemPriv->extra.value().beforePaintNode = beforePaintNode;
-
-        if (itemPriv->paintNode)
-            itemPriv->childContainerNode()->appendChildNode(itemPriv->paintNode);
-
-        for (; ii < orderedChildren.count(); ++ii) {
-            QQuickItemPrivate *childPrivate = QQuickItemPrivate::get(orderedChildren.at(ii));
-            if (!childPrivate->explicitVisible &&
-                (!childPrivate->extra.isAllocated() || !childPrivate->extra->effectRefCount))
-                continue;
-            if (childPrivate->itemNode()->parent())
-                childPrivate->itemNode()->parent()->removeChildNode(childPrivate->itemNode());
-
-            itemPriv->childContainerNode()->appendChildNode(childPrivate->itemNode());
+        // if we didn't process as many nodes as in the new list, then we have
+        // more nodes at the end of desiredNodes to append to our list.
+        // this will be the case when adding new nodes, for instance.
+        if (desiredNodesProcessed < desiredNodes.size()) {
+            for (int i = desiredNodesProcessed; i < desiredNodes.size(); ++i) {
+                QSGNode *desiredNode = desiredNodes.at(i);
+                if (desiredNode->parent())
+                    desiredNode->parent()->removeChildNode(desiredNode);
+                groupNode->appendChildNode(desiredNode);
+                added++;
+            }
+        } else if (currentNode) {
+            // on the other hand, if we processed less than our current node
+            // tree, then nodes have been _removed_ from the scene, and we need
+            // to take care of that here.
+            while (currentNode) {
+                QSGNode *node = currentNode->nextSibling();
+                groupNode->removeChildNode(currentNode);
+                currentNode = node;
+                removed++;
+            }
         }
+
+#if defined(CHILDRENUPDATE_DEBUG)
+        qDebug() << "Done children update for " << itemPriv << "- before:" << initialCount << "after:" << groupNode->childCount() <<  "added:" << added << "removed:" << removed << "replaced:" << replaced;
+#endif
     }
 
     if ((dirty & QQuickItemPrivate::Size) && itemPriv->clipNode()) {
@@ -2795,20 +2957,22 @@ void QQuickWindowPrivate::updateDirtyNode(QQuickItem *item)
                       ? itemPriv->opacity() : qreal(0);
 
         if (opacity != 1 && !itemPriv->opacityNode()) {
-            itemPriv->extra.value().opacityNode = new QSGOpacityNode;
+            QSGOpacityNode *node = new QSGOpacityNode;
+            itemPriv->extra.value().opacityNode = node;
 
             QSGNode *parent = itemPriv->itemNode();
             QSGNode *child = itemPriv->clipNode();
             if (!child)
                 child = itemPriv->rootNode();
-            if (!child)
-                child = itemPriv->groupNode;
 
-            if (child)
+            if (child) {
                 parent->removeChildNode(child);
-            parent->appendChildNode(itemPriv->opacityNode());
-            if (child)
-                itemPriv->opacityNode()->appendChildNode(child);
+                node->appendChildNode(child);
+                parent->appendChildNode(node);
+            } else {
+                parent->reparentChildNodesTo(node);
+                parent->appendChildNode(node);
+            }
         }
         if (itemPriv->opacityNode())
             itemPriv->opacityNode()->setOpacity(opacity);
@@ -2825,8 +2989,9 @@ void QQuickWindowPrivate::updateDirtyNode(QQuickItem *item)
                      itemPriv->paintNode->parent() == itemPriv->childContainerNode());
 
             if (itemPriv->paintNode && itemPriv->paintNode->parent() == 0) {
-                if (itemPriv->extra.isAllocated() && itemPriv->extra->beforePaintNode)
-                    itemPriv->childContainerNode()->insertChildNodeAfter(itemPriv->paintNode, itemPriv->extra->beforePaintNode);
+                QSGNode *before = qquickitem_before_paintNode(itemPriv);
+                if (before)
+                    itemPriv->childContainerNode()->insertChildNodeAfter(itemPriv->paintNode, before);
                 else
                     itemPriv->childContainerNode()->prependChildNode(itemPriv->paintNode);
             }
@@ -2838,37 +3003,22 @@ void QQuickWindowPrivate::updateDirtyNode(QQuickItem *item)
 
 #ifndef QT_NO_DEBUG
     // Check consistency.
-    const QSGNode *nodeChain[] = {
-        itemPriv->itemNodeInstance,
-        itemPriv->opacityNode(),
-        itemPriv->clipNode(),
-        itemPriv->rootNode(),
-        itemPriv->groupNode,
-        itemPriv->paintNode,
-    };
 
-    int ip = 0;
-    for (;;) {
-        while (ip < 5 && nodeChain[ip] == 0)
-            ++ip;
-        if (ip == 5)
-            break;
-        int ic = ip + 1;
-        while (ic < 5 && nodeChain[ic] == 0)
-            ++ic;
-        const QSGNode *parent = nodeChain[ip];
-        const QSGNode *child = nodeChain[ic];
-        if (child == 0) {
-            Q_ASSERT(parent == itemPriv->groupNode || parent->childCount() == 0);
-        } else {
-            Q_ASSERT(parent == itemPriv->groupNode || parent->childCount() == 1);
-            Q_ASSERT(child->parent() == parent);
-            bool containsChild = false;
-            for (QSGNode *n = parent->firstChild(); n; n = n->nextSibling())
-                containsChild |= (n == child);
-            Q_ASSERT(containsChild);
-        }
-        ip = ic;
+    QList<QSGNode *> nodes;
+    nodes << itemPriv->itemNodeInstance
+          << itemPriv->opacityNode()
+          << itemPriv->clipNode()
+          << itemPriv->rootNode()
+          << itemPriv->paintNode;
+    nodes.removeAll(0);
+
+    Q_ASSERT(nodes.first() == itemPriv->itemNodeInstance);
+    for (int i=1; i<nodes.size(); ++i) {
+        QSGNode *n = nodes.at(i);
+        // Failing this means we messed up reparenting
+        Q_ASSERT(n->parent() == nodes.at(i-1));
+        // Only the paintNode and the one who is childContainer may have more than one child.
+        Q_ASSERT(n == itemPriv->paintNode || n == itemPriv->childContainerNode() || n->childCount() == 1);
     }
 #endif
 
@@ -2934,6 +3084,15 @@ QOpenGLContext *QQuickWindow::openglContext() const
 {
     Q_D(const QQuickWindow);
     return d->context ? d->context->openglContext() : 0;
+}
+
+/*!
+    Returns true if the scene graph has been initialized; otherwise returns false.
+ */
+bool QQuickWindow::isSceneGraphInitialized() const
+{
+    Q_D(const QQuickWindow);
+    return d->context != 0 && d->context->isValid();
 }
 
 /*!
@@ -3008,7 +3167,7 @@ QOpenGLContext *QQuickWindow::openglContext() const
     (e.g. the user clicked the title bar close button). The CloseEvent contains
     an accepted property which can be set to false to abort closing the window.
 
-    \sa Window.closing()
+    \sa QQuickWindow::closing()
 */
 
 /*!
@@ -3019,11 +3178,11 @@ QOpenGLContext *QQuickWindow::openglContext() const
 */
 
 /*!
-    \fn void QQuickWindow::closing()
+    \fn void QQuickWindow::closing(QQuickCloseEvent *close)
     \since 5.1
 
-    This signal is emitted when the window receives a QCloseEvent from the
-    windowing system.
+    This signal is emitted when the window receives the event \a close from
+    the windowing system.
 */
 
 /*!
@@ -3032,7 +3191,7 @@ QOpenGLContext *QQuickWindow::openglContext() const
 
     This signal is emitted when the user tries to close the window.
 
-    This signal includes a \a close parameter. The \a close \l accepted
+    This signal includes a \a close parameter. The \c {close.accepted}
     property is true by default so that the window is allowed to close; but you
     can implement an \c onClosing handler and set \c {close.accepted = false} if
     you need to do something else before the window can be closed.
@@ -3672,6 +3831,15 @@ void QQuickWindow::resetOpenGLState()
  */
 
 /*!
+    \qmlattachedproperty int Window::width
+    \qmlattachedproperty int Window::height
+    \since 5.5
+
+    These attached properties hold the size of the item's window.
+    The Window attached property can be attached to any Item.
+*/
+
+/*!
     \qmlproperty int Window::x
     \qmlproperty int Window::y
     \qmlproperty int Window::width
@@ -3894,7 +4062,7 @@ void QQuickWindow::resetOpenGLState()
     This is equivalent to calling showFullScreen(), showMaximized(), or showNormal(),
     depending on the platform's default behavior for the window type and flags.
 
-    \sa showFullScreen(), showMaximized(), showNormal(), hide(), flags()
+    \sa showFullScreen(), showMaximized(), showNormal(), hide(), QQuickItem::flags()
 */
 
 /*!
@@ -3940,14 +4108,14 @@ void QQuickWindow::resetOpenGLState()
 */
 
 /*!
-    \enum QQuickWindow::RenderJobSchedule
+    \enum QQuickWindow::RenderStage
     \since 5.4
 
-    \value ScheduleBeforeSynchronizing Before synchronization.
-    \value ScheduleAfterSynchronizing After synchronization.
-    \value ScheduleBeforeRendering Before rendering.
-    \value ScheduleAfterRendering After rendering.
-    \value ScheduleAfterSwap After the frame is swapped.
+    \value BeforeSynchronizingStage Before synchronization.
+    \value AfterSynchronizingStage After synchronization.
+    \value BeforeRenderingStage Before rendering.
+    \value AfterRenderingStage After rendering.
+    \value AfterSwapStage After the frame is swapped.
 
     \sa {Scene Graph and Rendering}
  */

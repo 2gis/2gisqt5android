@@ -1,7 +1,7 @@
 /****************************************************************************
 **
 ** Copyright (C) 2013 Aaron McCarthy <mccarthy.aaron@gmail.com>
-** Contact: http://www.qt-project.org/legal
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtLocation module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -69,10 +69,15 @@ QGeoCodingManagerEngineOsm::QGeoCodingManagerEngineOsm(const QVariantMap &parame
                                                        QString *errorString)
 :   QGeoCodingManagerEngine(parameters), m_networkManager(new QNetworkAccessManager(this))
 {
-    if (parameters.contains(QStringLiteral("useragent")))
-        m_userAgent = parameters.value(QStringLiteral("useragent")).toString().toLatin1();
+    if (parameters.contains(QStringLiteral("osm.useragent")))
+        m_userAgent = parameters.value(QStringLiteral("osm.useragent")).toString().toLatin1();
     else
         m_userAgent = "Qt Location based application";
+
+    if (parameters.contains(QStringLiteral("osm.geocoding.host")))
+        m_urlPrefix = parameters.value(QStringLiteral("geocoding.host")).toString().toLatin1();
+    else
+        m_urlPrefix = QStringLiteral("http://nominatim.openstreetmap.org");
 
     *error = QGeoServiceProvider::NoError;
     errorString->clear();
@@ -94,7 +99,7 @@ QGeoCodeReply *QGeoCodingManagerEngineOsm::geocode(const QString &address, int l
     QNetworkRequest request;
     request.setRawHeader("User-Agent", m_userAgent);
 
-    QUrl url(QStringLiteral("http://nominatim.openstreetmap.org/search"));
+    QUrl url(QString("%1/search").arg(m_urlPrefix));
     QUrlQuery query;
     query.addQueryItem(QStringLiteral("q"), address);
     query.addQueryItem(QStringLiteral("format"), QStringLiteral("json"));
@@ -104,7 +109,7 @@ QGeoCodeReply *QGeoCodingManagerEngineOsm::geocode(const QString &address, int l
         query.addQueryItem(QStringLiteral("viewbox"), boundingBoxToLtrb(bounds));
         query.addQueryItem(QStringLiteral("bounded"), QStringLiteral("1"));
     }
-    query.addQueryItem(QStringLiteral("polygon"), QStringLiteral("1"));
+    query.addQueryItem(QStringLiteral("polygon_geojson"), QStringLiteral("1"));
     query.addQueryItem(QStringLiteral("addressdetails"), QStringLiteral("1"));
     if (limit != -1)
         query.addQueryItem(QStringLiteral("limit"), QString::number(limit));
@@ -131,7 +136,7 @@ QGeoCodeReply *QGeoCodingManagerEngineOsm::reverseGeocode(const QGeoCoordinate &
     QNetworkRequest request;
     request.setRawHeader("User-Agent", m_userAgent);
 
-    QUrl url(QStringLiteral("http://nominatim.openstreetmap.org/reverse"));
+    QUrl url(QString("%1/reverse").arg(m_urlPrefix));
     QUrlQuery query;
     query.addQueryItem(QStringLiteral("format"), QStringLiteral("json"));
     query.addQueryItem(QStringLiteral("accept-language"), locale().name().left(2));

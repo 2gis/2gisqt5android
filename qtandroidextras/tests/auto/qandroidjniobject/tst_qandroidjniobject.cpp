@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -35,6 +35,22 @@
 #include <QtTest>
 #include <QtAndroidExtras/QAndroidJniObject>
 #include <QtAndroidExtras/QAndroidJniEnvironment>
+
+static const char testClassName[] = "org/qtproject/qt5/android/testdatapackage/QtAndroidJniObjectTestClass";
+
+static const jbyte A_BYTE_VALUE = 127;
+static const jshort A_SHORT_VALUE = 32767;
+static const jint A_INT_VALUE = 060701;
+static const jlong A_LONG_VALUE = 060701;
+static const jfloat A_FLOAT_VALUE = 1.0;
+static const jdouble A_DOUBLE_VALUE = 1.0;
+static const jboolean A_BOOLEAN_VALUE = true;
+static const jchar A_CHAR_VALUE = 'Q';
+
+static QString A_STRING_OBJECT()
+{
+    return QStringLiteral("TEST_DATA_STRING");
+}
 
 class tst_QAndroidJniObject : public QObject
 {
@@ -87,6 +103,7 @@ private slots:
     void getStaticCharField();
     void getBooleanField();
     void getIntField();
+    void templateApiCheck();
     void isClassAvailable();
 
     void cleanupTestCase();
@@ -706,6 +723,320 @@ void tst_QAndroidJniObject::getIntField()
     QVERIFY(obj.isValid());
     jint res = obj.getField<jint>("m_currentRotation");
     QCOMPARE(res, -1);
+}
+
+void tst_QAndroidJniObject::templateApiCheck()
+{
+    QAndroidJniObject testClass(testClassName);
+    QVERIFY(testClass.isValid());
+
+    // void ---------------------------------------------------------------------------------------
+    QAndroidJniObject::callStaticMethod<void>(testClassName, "staticVoidMethod");
+    QAndroidJniObject::callStaticMethod<void>(testClassName,
+                                              "staticVoidMethodWithArgs",
+                                              "(IZC)V",
+                                              1,
+                                              true,
+                                              'c');
+
+    testClass.callMethod<void>("voidMethod");
+    testClass.callMethod<void>("voidMethodWithArgs", "(IZC)V", 1, true, 'c');
+
+    // jboolean -----------------------------------------------------------------------------------
+    QVERIFY(QAndroidJniObject::callStaticMethod<jboolean>(testClassName, "staticBooleanMethod"));
+    QVERIFY(QAndroidJniObject::callStaticMethod<jboolean>(testClassName,
+                                                          "staticBooleanMethodWithArgs",
+                                                          "(ZZZ)Z",
+                                                          true,
+                                                          true,
+                                                          true));
+
+    QVERIFY(testClass.callMethod<jboolean>("booleanMethod"));
+    QVERIFY(testClass.callMethod<jboolean>("booleanMethodWithArgs",
+                                           "(ZZZ)Z",
+                                           true,
+                                           true,
+                                           true));
+
+    // jbyte --------------------------------------------------------------------------------------
+    QVERIFY(QAndroidJniObject::callStaticMethod<jbyte>(testClassName,
+                                                       "staticByteMethod") == A_BYTE_VALUE);
+    QVERIFY(QAndroidJniObject::callStaticMethod<jbyte>(testClassName,
+                                                       "staticByteMethodWithArgs",
+                                                       "(BBB)B",
+                                                       1,
+                                                       1,
+                                                       1) == A_BYTE_VALUE);
+
+    QVERIFY(testClass.callMethod<jbyte>("byteMethod") == A_BYTE_VALUE);
+    QVERIFY(testClass.callMethod<jbyte>("byteMethodWithArgs", "(BBB)B", 1, 1, 1) == A_BYTE_VALUE);
+
+    // jchar --------------------------------------------------------------------------------------
+    QVERIFY(QAndroidJniObject::callStaticMethod<jchar>(testClassName,
+                                                       "staticCharMethod") == A_CHAR_VALUE);
+    QVERIFY(QAndroidJniObject::callStaticMethod<jchar>(testClassName,
+                                                       "staticCharMethodWithArgs",
+                                                       "(CCC)C",
+                                                       jchar(1),
+                                                       jchar(1),
+                                                       jchar(1)) == A_CHAR_VALUE);
+
+    QVERIFY(testClass.callMethod<jchar>("charMethod") == A_CHAR_VALUE);
+    QVERIFY(testClass.callMethod<jchar>("charMethodWithArgs",
+                                        "(CCC)C",
+                                        jchar(1),
+                                        jchar(1),
+                                        jchar(1)) == A_CHAR_VALUE);
+
+    // jshort -------------------------------------------------------------------------------------
+    QVERIFY(QAndroidJniObject::callStaticMethod<jshort>(testClassName,
+                                                        "staticShortMethod") == A_SHORT_VALUE);
+    QVERIFY(QAndroidJniObject::callStaticMethod<jshort>(testClassName,
+                                                        "staticShortMethodWithArgs",
+                                                        "(SSS)S",
+                                                        jshort(1),
+                                                        jshort(1),
+                                                        jshort(1)) == A_SHORT_VALUE);
+
+    QVERIFY(testClass.callMethod<jshort>("shortMethod") == A_SHORT_VALUE);
+    QVERIFY(testClass.callMethod<jshort>("shortMethodWithArgs",
+                                         "(SSS)S",
+                                         jshort(1),
+                                         jshort(1),
+                                         jshort(1)) == A_SHORT_VALUE);
+
+    // jint ---------------------------------------------------------------------------------------
+    QVERIFY(QAndroidJniObject::callStaticMethod<jint>(testClassName,
+                                                      "staticIntMethod") == A_INT_VALUE);
+    QVERIFY(QAndroidJniObject::callStaticMethod<jint>(testClassName,
+                                                      "staticIntMethodWithArgs",
+                                                      "(III)I",
+                                                      jint(1),
+                                                      jint(1),
+                                                      jint(1)) == A_INT_VALUE);
+
+    QVERIFY(testClass.callMethod<jint>("intMethod") == A_INT_VALUE);
+    QVERIFY(testClass.callMethod<jint>("intMethodWithArgs",
+                                       "(III)I",
+                                       jint(1),
+                                       jint(1),
+                                       jint(1)) == A_INT_VALUE);
+
+    // jlong --------------------------------------------------------------------------------------
+    QVERIFY(QAndroidJniObject::callStaticMethod<jlong>(testClassName,
+                                                       "staticLongMethod") == A_LONG_VALUE);
+    QVERIFY(QAndroidJniObject::callStaticMethod<jlong>(testClassName,
+                                                       "staticLongMethodWithArgs",
+                                                       "(JJJ)J",
+                                                       jlong(1),
+                                                       jlong(1),
+                                                       jlong(1)) == A_LONG_VALUE);
+
+    QVERIFY(testClass.callMethod<jlong>("longMethod") == A_LONG_VALUE);
+    QVERIFY(testClass.callMethod<jlong>("longMethodWithArgs",
+                                        "(JJJ)J",
+                                        jlong(1),
+                                        jlong(1),
+                                        jlong(1)) == A_LONG_VALUE);
+
+    // jfloat -------------------------------------------------------------------------------------
+    QVERIFY(QAndroidJniObject::callStaticMethod<jfloat>(testClassName,
+                                                        "staticFloatMethod") == A_FLOAT_VALUE);
+    QVERIFY(QAndroidJniObject::callStaticMethod<jfloat>(testClassName,
+                                                        "staticFloatMethodWithArgs",
+                                                        "(FFF)F",
+                                                        jfloat(1.1),
+                                                        jfloat(1.1),
+                                                        jfloat(1.1)) == A_FLOAT_VALUE);
+
+    QVERIFY(testClass.callMethod<jfloat>("floatMethod") == A_FLOAT_VALUE);
+    QVERIFY(testClass.callMethod<jfloat>("floatMethodWithArgs",
+                                         "(FFF)F",
+                                         jfloat(1.1),
+                                         jfloat(1.1),
+                                         jfloat(1.1)) == A_FLOAT_VALUE);
+
+    // jdouble ------------------------------------------------------------------------------------
+    QVERIFY(QAndroidJniObject::callStaticMethod<jdouble>(testClassName,
+                                                         "staticDoubleMethod") == A_DOUBLE_VALUE);
+    QVERIFY(QAndroidJniObject::callStaticMethod<jdouble>(testClassName,
+                                                         "staticDoubleMethodWithArgs",
+                                                         "(DDD)D",
+                                                         jdouble(1.1),
+                                                         jdouble(1.1),
+                                                         jdouble(1.1)) == A_DOUBLE_VALUE);
+
+    QVERIFY(testClass.callMethod<jdouble>("doubleMethod") == A_DOUBLE_VALUE);
+    QVERIFY(testClass.callMethod<jdouble>("doubleMethodWithArgs",
+                                          "(DDD)D",
+                                          jdouble(1.1),
+                                          jdouble(1.1),
+                                          jdouble(1.1)) == A_DOUBLE_VALUE);
+
+    // jobject ------------------------------------------------------------------------------------
+    {
+        QAndroidJniObject res = QAndroidJniObject::callStaticObjectMethod<jobject>(testClassName,
+                                                                                   "staticObjectMethod");
+        QVERIFY(res.isValid());
+    }
+
+    {
+        QAndroidJniObject res = testClass.callObjectMethod<jobject>("objectMethod");
+        QVERIFY(res.isValid());
+    }
+
+    // jclass -------------------------------------------------------------------------------------
+    {
+        QAndroidJniObject res = QAndroidJniObject::callStaticObjectMethod<jclass>(testClassName,
+                                                                                  "staticClassMethod");
+        QVERIFY(res.isValid());
+        QAndroidJniEnvironment env;
+        QVERIFY(env->IsInstanceOf(testClass.object(), res.object<jclass>()));
+    }
+
+    {
+        QAndroidJniObject res = testClass.callObjectMethod<jclass>("classMethod");
+        QVERIFY(res.isValid());
+        QAndroidJniEnvironment env;
+        QVERIFY(env->IsInstanceOf(testClass.object(), res.object<jclass>()));
+    }
+    // jstring ------------------------------------------------------------------------------------
+    {
+        QAndroidJniObject res = QAndroidJniObject::callStaticObjectMethod<jstring>(testClassName,
+                                                                                   "staticStringMethod");
+        QVERIFY(res.isValid());
+        QVERIFY(res.toString() == A_STRING_OBJECT());
+    }
+
+    {
+        QAndroidJniObject res = testClass.callObjectMethod<jstring>("stringMethod");
+        QVERIFY(res.isValid());
+        QVERIFY(res.toString() == A_STRING_OBJECT());
+
+    }
+    // jthrowable ---------------------------------------------------------------------------------
+    {
+        // The Throwable object the same message (see: "getMessage()") as A_STRING_OBJECT
+        QAndroidJniObject res = QAndroidJniObject::callStaticObjectMethod<jthrowable>(testClassName,
+                                                                                      "staticThrowableMethod");
+        QVERIFY(res.isValid());
+        QVERIFY(res.callObjectMethod<jstring>("getMessage").toString() == A_STRING_OBJECT());
+    }
+
+    {
+        QAndroidJniObject res = testClass.callObjectMethod<jthrowable>("throwableMethod");
+        QVERIFY(res.isValid());
+        QVERIFY(res.callObjectMethod<jstring>("getMessage").toString() == A_STRING_OBJECT());
+    }
+
+    // jobjectArray -------------------------------------------------------------------------------
+    {
+        QAndroidJniObject res = QAndroidJniObject::callStaticObjectMethod<jobjectArray>(testClassName,
+                                                                                       "staticObjectArrayMethod");
+        QVERIFY(res.isValid());
+    }
+
+    {
+        QAndroidJniObject res = testClass.callObjectMethod<jobjectArray>("objectArrayMethod");
+        QVERIFY(res.isValid());
+    }
+
+    // jbooleanArray ------------------------------------------------------------------------------
+    {
+        QAndroidJniObject res = QAndroidJniObject::callStaticObjectMethod<jbooleanArray>(testClassName,
+                                                                                        "staticBooleanArrayMethod");
+        QVERIFY(res.isValid());
+    }
+
+    {
+        QAndroidJniObject res = testClass.callObjectMethod<jbooleanArray>("booleanArrayMethod");
+        QVERIFY(res.isValid());
+    }
+
+    // jbyteArray ---------------------------------------------------------------------------------
+    {
+        QAndroidJniObject res = QAndroidJniObject::callStaticObjectMethod<jbyteArray>(testClassName,
+                                                                                     "staticByteArrayMethod");
+        QVERIFY(res.isValid());
+    }
+
+    {
+        QAndroidJniObject res = testClass.callObjectMethod<jbyteArray>("byteArrayMethod");
+        QVERIFY(res.isValid());
+    }
+
+    // jcharArray ---------------------------------------------------------------------------------
+    {
+        QAndroidJniObject res = QAndroidJniObject::callStaticObjectMethod<jcharArray>(testClassName,
+                                                                                     "staticCharArrayMethod");
+        QVERIFY(res.isValid());
+    }
+
+    {
+        QAndroidJniObject res = testClass.callObjectMethod<jcharArray>("charArrayMethod");
+        QVERIFY(res.isValid());
+    }
+
+    // jshortArray --------------------------------------------------------------------------------
+    {
+        QAndroidJniObject res = QAndroidJniObject::callStaticObjectMethod<jshortArray>(testClassName,
+                                                                                      "staticShortArrayMethod");
+        QVERIFY(res.isValid());
+    }
+
+    {
+        QAndroidJniObject res = testClass.callObjectMethod<jshortArray>("shortArrayMethod");
+        QVERIFY(res.isValid());
+    }
+
+    // jintArray ----------------------------------------------------------------------------------
+    {
+        QAndroidJniObject res = QAndroidJniObject::callStaticObjectMethod<jintArray>(testClassName,
+                                                                                    "staticIntArrayMethod");
+        QVERIFY(res.isValid());
+    }
+
+    {
+        QAndroidJniObject res = testClass.callObjectMethod<jintArray>("intArrayMethod");
+        QVERIFY(res.isValid());
+    }
+
+    // jlongArray ---------------------------------------------------------------------------------
+    {
+        QAndroidJniObject res = QAndroidJniObject::callStaticObjectMethod<jlongArray>(testClassName,
+                                                                                     "staticLongArrayMethod");
+        QVERIFY(res.isValid());
+    }
+
+    {
+        QAndroidJniObject res = testClass.callObjectMethod<jlongArray>("longArrayMethod");
+        QVERIFY(res.isValid());
+    }
+
+    // jfloatArray --------------------------------------------------------------------------------
+    {
+        QAndroidJniObject res = QAndroidJniObject::callStaticObjectMethod<jfloatArray>(testClassName,
+                                                                                      "staticFloatArrayMethod");
+        QVERIFY(res.isValid());
+    }
+
+    {
+        QAndroidJniObject res = testClass.callObjectMethod<jfloatArray>("floatArrayMethod");
+        QVERIFY(res.isValid());
+    }
+
+    // jdoubleArray -------------------------------------------------------------------------------
+    {
+        QAndroidJniObject res = QAndroidJniObject::callStaticObjectMethod<jdoubleArray>(testClassName,
+                                                                                        "staticDoubleArrayMethod");
+        QVERIFY(res.isValid());
+    }
+
+    {
+        QAndroidJniObject res = testClass.callObjectMethod<jdoubleArray>("doubleArrayMethod");
+        QVERIFY(res.isValid());
+    }
+
 }
 
 void tst_QAndroidJniObject::isClassAvailable()

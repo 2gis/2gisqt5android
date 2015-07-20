@@ -22,6 +22,7 @@
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/download_url_parameters.h"
 #include "content/public/browser/global_request_id.h"
+#include "content/public/browser/resource_request_info.h"
 #include "content/public/common/referrer.h"
 #include "jni/DownloadController_jni.h"
 #include "net/cookies/cookie_options.h"
@@ -230,7 +231,8 @@ void DownloadControllerAndroidImpl::StartAndroidDownload(
   Java_DownloadController_newHttpGetDownload(
       env, GetJavaObject()->Controller(env).obj(), view.obj(), jurl.obj(),
       juser_agent.obj(), jcontent_disposition.obj(), jmime_type.obj(),
-      jcookie.obj(), jreferer.obj(), jfilename.obj(), info.total_bytes);
+      jcookie.obj(), jreferer.obj(), info.has_user_gesture, jfilename.obj(),
+      info.total_bytes);
 }
 
 void DownloadControllerAndroidImpl::OnDownloadStarted(
@@ -369,14 +371,17 @@ DownloadControllerAndroidImpl::JavaObject*
 void DownloadControllerAndroidImpl::StartContextMenuDownload(
     const ContextMenuParams& params, WebContents* web_contents, bool is_link) {
   const GURL& url = is_link ? params.link_url : params.src_url;
-  const GURL& referrer = params.frame_url.is_empty() ?
+  const GURL& referring_url = params.frame_url.is_empty() ?
       params.page_url : params.frame_url;
   DownloadManagerImpl* dlm = static_cast<DownloadManagerImpl*>(
       BrowserContext::GetDownloadManager(web_contents->GetBrowserContext()));
   scoped_ptr<DownloadUrlParameters> dl_params(
       DownloadUrlParameters::FromWebContents(web_contents, url));
-  dl_params->set_referrer(
-      Referrer(referrer, params.referrer_policy));
+  content::Referrer referrer = content::Referrer::SanitizeForRequest(
+      url,
+      content::Referrer(referring_url.GetAsReferrer(),
+                        params.referrer_policy));
+  dl_params->set_referrer(referrer);
   if (is_link)
     dl_params->set_referrer_encoding(params.frame_charset);
   else
@@ -401,7 +406,8 @@ void DownloadControllerAndroidImpl::DangerousDownloadValidated(
 }
 
 DownloadControllerAndroidImpl::DownloadInfoAndroid::DownloadInfoAndroid(
-    net::URLRequest* request) {
+    net::URLRequest* request)
+    : has_user_gesture(false) {
   request->GetResponseHeaderByName("content-disposition", &content_disposition);
 
   if (request->response_headers())
@@ -416,6 +422,11 @@ DownloadControllerAndroidImpl::DownloadInfoAndroid::DownloadInfoAndroid(
     original_url = request->url_chain().front();
     url = request->url_chain().back();
   }
+
+  const content::ResourceRequestInfo* info =
+      content::ResourceRequestInfo::ForRequest(request);
+  if (info)
+    has_user_gesture = info->HasUserGesture();
 }
 
 DownloadControllerAndroidImpl::DownloadInfoAndroid::~DownloadInfoAndroid() {}

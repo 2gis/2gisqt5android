@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the ActiveQt framework of the Qt Toolkit.
 **
@@ -17,8 +17,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -41,8 +41,10 @@
 #include "qaxscript.h"
 #include "../shared/qaxutils_p.h"
 
-#if defined(Q_CC_GNU)
-# define QT_NO_QAXSCRIPT
+#if defined(Q_CC_GNU) && __MINGW64_VERSION_MAJOR == 3 && __MINGW64_VERSION_MINOR > 0
+// Workaround for mingw-w64 bug #464
+// See https://sourceforge.net/p/mingw-w64/bugs/464/
+# define _NO_SCRIPT_GUIDS
 #elif defined(Q_CC_BOR) && __BORLANDC__ < 0x560
 # define QT_NO_QAXSCRIPT
 #endif
@@ -89,6 +91,7 @@ class QAxScriptSite : public IActiveScriptSite, public IActiveScriptSiteWindow
 {
 public:
     QAxScriptSite(QAxScript *script);
+    virtual ~QAxScriptSite() {}
 
     ULONG WINAPI AddRef();
     ULONG WINAPI Release();
@@ -383,8 +386,7 @@ HRESULT WINAPI QAxScriptSite::EnableModeless(BOOL fEnable)
     Direct access to the script engine is provided through
     queryInterface().
 
-    \warning This class is not available with the bcc5.5 and MingW
-    compilers.
+    \warning This class is not available with the bcc5.5 compiler.
 
     \sa QAxScript, QAxScriptManager, QAxBase, {ActiveQt Framework}
 */
@@ -632,8 +634,7 @@ void QAxScriptEngine::addItem(const QString &name)
     error() signal. Direct access to the QAxScriptEngine is provided
     through the scriptEngine() function.
 
-    \warning This class is not available with the bcc5.5 and MingW
-    compilers.
+    \warning This class is not available with the bcc5.5 compiler.
 
     \sa QAxScriptEngine, QAxScriptManager, QAxBase, {ActiveQt Framework}
 */
@@ -696,7 +697,7 @@ QAxScript::~QAxScript()
     heuristically. If \a code contains the string \c {End Sub} it will
     be interpreted as VBScript, otherwise as JScript. Additional
     scripting languages can be registered using
-    QAxScript::registerEngine().
+    QAxScriptManager::registerEngine().
 
     This function can only be called once for each QAxScript object,
     which is done automatically when using QAxScriptManager::load().
@@ -712,13 +713,8 @@ bool QAxScript::load(const QString &code, const QString &language)
         if (code.contains(QLatin1String("End Sub"), Qt::CaseInsensitive))
             lang = QLatin1String("VBScript");
 
-        QList<QAxEngineDescriptor>::ConstIterator it;
-        for (it = engines.begin(); it != engines.end(); ++it) {
-            QAxEngineDescriptor engine = *it;
-            if (engine.code.isEmpty())
-                continue;
-
-            if (code.contains(engine.code)) {
+        foreach (const QAxEngineDescriptor &engine, engines) {
+            if (!engine.code.isEmpty() && code.contains(engine.code)) {
                 lang = engine.name;
                 break;
             }
@@ -783,10 +779,8 @@ QVariant QAxScript::call(const QString &function, const QVariant &var1,
                          const QVariant &var7,
                          const QVariant &var8)
 {
-    if (!script_engine)
-        return QVariant();
-
-    return script_engine->dynamicCall(function.toLatin1(), var1, var2, var3, var4, var5, var6, var7, var8);
+    QVariantList vars = QAxBase::argumentsToList(var1, var2, var3, var4, var5, var6, var7, var8);
+    return call(function, vars);
 }
 
 /*!
@@ -803,7 +797,8 @@ QVariant QAxScript::call(const QString &function, QList<QVariant> &arguments)
     if (!script_engine)
         return QVariant();
 
-    return script_engine->dynamicCall(function.toLatin1(), arguments);
+    return script_engine->dynamicCall(function.toLatin1(), arguments,
+                                      QAxBase::NoPropertyGet);
 }
 
 /*! \internal
@@ -875,7 +870,7 @@ QAxBase *QAxScript::findObject(const QString &name)
 /*! \fn void QAxScript::stateChanged(int state);
 
     This signal is emitted when a script engine changes state.
-    \a state can be any value in the QAxScriptEngineState enumeration.
+    \a state can be any value in the \c QAxScriptEngine::State enumeration.
 */
 
 /*!
@@ -907,8 +902,7 @@ QAxBase *QAxScript::findObject(const QString &name)
     using addObject(). Then load() the script sources and invoke the
     functions using call().
 
-    \warning This class is not available with the bcc5.5 and MingW
-    compilers.
+    \warning This class is not available with the bcc5.5 compiler.
 
     \sa QAxScript, QAxScriptEngine, QAxBase, {ActiveQt Framework}
 */
@@ -944,13 +938,9 @@ QAxScriptManager::~QAxScriptManager()
 QStringList QAxScriptManager::functions(QAxScript::FunctionFlags flags) const
 {
     QStringList functions;
-
-    QHash<QString, QAxScript*>::ConstIterator scriptIt;
-    for (scriptIt = d->scriptDict.begin(); scriptIt != d->scriptDict.end(); ++scriptIt) {
-        QAxScript *script = scriptIt.value();
-        functions += script->functions(flags);
-    }
-
+    functions.reserve(d->scriptDict.size());
+    foreach (const QAxScript *script, d->scriptDict)
+        functions.append(script->functions(flags));
     return functions;
 }
 
@@ -959,14 +949,7 @@ QStringList QAxScriptManager::functions(QAxScript::FunctionFlags flags) const
 */
 QStringList QAxScriptManager::scriptNames() const
 {
-    QStringList scripts;
-
-    QHash<QString, QAxScript*>::ConstIterator scriptIt;
-    for (scriptIt = d->scriptDict.begin(); scriptIt != d->scriptDict.end(); ++scriptIt) {
-        scripts << scriptIt.key();
-    }
-
-    return scripts;
+    return d->scriptDict.keys();
 }
 
 /*!
@@ -1072,13 +1055,8 @@ QAxScript *QAxScriptManager::load(const QString &file, const QString &name)
     if (file.endsWith(QLatin1String(".js"))) {
         language = QLatin1String("JScript");
     } else {
-        QList<QAxEngineDescriptor>::ConstIterator it;
-        for (it = engines.begin(); it != engines.end(); ++it) {
-            QAxEngineDescriptor engine = *it;
-            if (engine.extension.isEmpty())
-                continue;
-
-            if (file.endsWith(engine.extension)) {
+        foreach (const QAxEngineDescriptor &engine, engines) {
+            if (!engine.extension.isEmpty() && file.endsWith(engine.extension)) {
                 language = engine.name;
                 break;
             }
@@ -1200,14 +1178,12 @@ QString QAxScriptManager::scriptFileFilter()
     QString specialFiles = QLatin1String(";;VBScript Files (*.vbs *.dsm)"
         ";;JavaScript Files (*.js)");
 
-    QList<QAxEngineDescriptor>::ConstIterator it;
-    for (it = engines.begin(); it != engines.end(); ++it) {
-        QAxEngineDescriptor engine = *it;
-        if (engine.extension.isEmpty())
-            continue;
-
-        allFiles += QLatin1String(" *") + engine.extension;
-        specialFiles += QLatin1String(";;") + engine.name + QLatin1String(" Files (*") + engine.extension + QLatin1Char(')');
+    foreach (const QAxEngineDescriptor &engine, engines) {
+        if (!engine.extension.isEmpty()) {
+            allFiles += QLatin1String(" *") + engine.extension;
+            specialFiles += QLatin1String(";;") + engine.name
+                + QLatin1String(" Files (*") + engine.extension + QLatin1Char(')');
+        }
     }
     allFiles += QLatin1Char(')');
 
@@ -1238,22 +1214,16 @@ QAxScript *QAxScriptManager::scriptForFunction(const QString &function) const
 {
     // check full prototypes if included
     if (function.contains(QLatin1Char('('))) {
-        QHash<QString, QAxScript*>::ConstIterator scriptIt;
-        for (scriptIt = d->scriptDict.begin(); scriptIt != d->scriptDict.end(); ++scriptIt) {
-            QAxScript *script = scriptIt.value();
-
+        foreach (QAxScript *script, d->scriptDict) {
             if (script->functions(QAxScript::FunctionSignatures).contains(function))
                 return script;
         }
     }
 
     QString funcName = function;
-    funcName = funcName.left(funcName.indexOf(QLatin1Char('(')));
+    funcName.truncate(funcName.indexOf(QLatin1Char('(')));
     // second try, checking only names, not prototypes
-    QHash<QString, QAxScript*>::ConstIterator scriptIt;
-    for (scriptIt = d->scriptDict.begin(); scriptIt != d->scriptDict.end(); ++scriptIt) {
-        QAxScript *script = scriptIt.value();
-
+    foreach (QAxScript *script, d->scriptDict) {
         if (script->functions(QAxScript::FunctionNames).contains(funcName))
             return script;
     }

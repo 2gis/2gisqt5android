@@ -26,17 +26,33 @@
 #ifndef WebGLExtension_h
 #define WebGLExtension_h
 
+#include "core/html/HTMLCanvasElement.h"
 #include "core/html/canvas/WebGLExtensionName.h"
 #include "core/html/canvas/WebGLRenderingContextBase.h"
+#include "platform/heap/Handle.h"
 #include "wtf/RefCounted.h"
 
-namespace WebCore {
+namespace blink {
 
-class WebGLExtension : public RefCounted<WebGLExtension> {
-    WTF_MAKE_FAST_ALLOCATED;
+class WebGLExtensionScopedContext : public NoBaseWillBeGarbageCollectedFinalized<WebGLExtensionScopedContext> {
+    WTF_MAKE_NONCOPYABLE(WebGLExtensionScopedContext);
+    WTF_MAKE_FAST_ALLOCATED_WILL_BE_REMOVED;
 public:
-    WebGLRenderingContextBase* context() { return m_context; }
+    WebGLExtensionScopedContext(WebGLExtension*);
+    virtual ~WebGLExtensionScopedContext();
 
+    bool isLost() { return !m_context; }
+    WebGLRenderingContextBase* context() const { return m_context.get(); }
+
+    virtual void trace(Visitor*);
+
+private:
+    RefPtrWillBeMember<WebGLRenderingContextBase> m_context;
+};
+
+class WebGLExtension : public RefCountedWillBeGarbageCollectedFinalized<WebGLExtension> {
+    WTF_MAKE_FAST_ALLOCATED_WILL_BE_REMOVED;
+public:
     virtual ~WebGLExtension();
     virtual WebGLExtensionName name() const = 0;
 
@@ -45,20 +61,22 @@ public:
     // is lost but must be lost when destroying their WebGLRenderingContextBase.
     virtual void lose(bool)
     {
-        m_context = 0;
+        m_context = nullptr;
     }
 
-    bool isLost()
-    {
-        return !m_context;
-    }
+    bool isLost() { return !m_context; }
+
+    virtual void trace(Visitor*);
 
 protected:
-    WebGLExtension(WebGLRenderingContextBase*);
+    explicit WebGLExtension(WebGLRenderingContextBase*);
 
-    WebGLRenderingContextBase* m_context;
+private:
+    friend WebGLExtensionScopedContext;
+
+    RawPtrWillBeWeakMember<WebGLRenderingContextBase> m_context;
 };
 
-} // namespace WebCore
+} // namespace blink
 
 #endif // WebGLExtension_h

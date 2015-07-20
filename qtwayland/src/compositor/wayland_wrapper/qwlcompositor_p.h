@@ -1,7 +1,8 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2014-2015 Pier Luigi Fiorini <pierluigi.fiorini@gmail.com>
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Compositor.
 **
@@ -17,8 +18,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -48,13 +49,16 @@
 
 #include <QtCore/QElapsedTimer>
 #include <QtCore/QSet>
-#include <QtGui/QWindow>
 
 #include <private/qwldisplay_p.h>
 
 #include <wayland-server.h>
 
 QT_BEGIN_NAMESPACE
+
+class QWaylandClient;
+class QWaylandClientPrivate;
+class QInputEvent;
 
 class QWaylandCompositor;
 class QWaylandInputDevice;
@@ -91,17 +95,28 @@ public:
 
     void init();
     void sendFrameCallbacks(QList<QWaylandSurface *> visibleSurfaces);
-    void frameFinished(Surface *surface = 0);
 
-    InputDevice *defaultInputDevice(); //we just have 1 default device for now (since QPA doesn't give us anything else)
+    InputDevice *defaultInputDevice();
+
+    void registerInputDevice(QWaylandInputDevice *device);
+    QList<QWaylandInputDevice *> inputDevices() const { return m_inputDevices; }
+    QWaylandInputDevice *inputDeviceFor(QInputEvent *inputEvent);
+    void removeInputDevice(QWaylandInputDevice *device);
 
     void destroySurface(Surface *surface);
 
-    void destroyClient(WaylandClient *client);
+    void destroyClient(QWaylandClient *client);
 
     uint currentTimeMsecs() const;
 
-    QWindow *window() const;
+    QList<QWaylandOutput *> outputs() const;
+    QWaylandOutput *output(QWindow *window) const;
+
+    void addOutput(QWaylandOutput *output);
+    void removeOutput(QWaylandOutput *output);
+
+    QWaylandOutput *primaryOutput() const;
+    void setPrimaryOutput(QWaylandOutput *output);
 
     ClientBufferIntegration *clientBufferIntegration() const;
     ServerBufferIntegration *serverBufferIntegration() const;
@@ -110,8 +125,8 @@ public:
     void initializeDefaultInputDevice();
     void initializeWindowManagerProtocol();
 
-    QList<Surface*> surfaces() const { return m_surfaces; }
-    QList<Surface*> surfacesForClient(wl_client* client);
+    QList<Surface *> surfaces() const { return m_surfaces; }
+
     QWaylandCompositor *waylandCompositor() const { return m_qt_compositor; }
 
     struct wl_display *wl_display() const { return m_display->handle(); }
@@ -119,16 +134,9 @@ public:
 
     static Compositor *instance();
 
-    QList<struct wl_client *> clients() const;
+    QList<QWaylandClient *> clients() const;
 
     WindowManagerServerIntegration *windowManagerIntegration() const { return m_windowManagerIntegration; }
-
-    void setScreenOrientation(Qt::ScreenOrientation orientation);
-    Qt::ScreenOrientation screenOrientation() const;
-    void setOutputGeometry(const QRect &geometry);
-    QRect outputGeometry() const;
-    void setOutputRefreshRate(int rate);
-    int outputRefreshRate() const;
 
     void setClientFullScreenHint(bool value);
 
@@ -153,6 +161,8 @@ public:
     void feedRetainedSelectionData(QMimeData *data);
 
     static void bindGlobal(wl_client *client, void *data, uint32_t version, uint32_t id);
+    void resetInputDevice(Surface *surface);
+
 public slots:
     void cleanupGraphicsResources();
 
@@ -173,11 +183,11 @@ protected:
 
     /* Input */
     QWaylandInputDevice *m_default_wayland_input_device;
-    InputDevice *m_default_input_device;
+
+    QList<QWaylandInputDevice *> m_inputDevices;
 
     /* Output */
-    //make this a list of the available screens
-    OutputGlobal *m_output_global;
+    QList<QWaylandOutput *> m_outputs;
 
     DataDeviceManager *m_data_device_manager;
 
@@ -193,6 +203,7 @@ protected:
 
     QWaylandCompositor *m_qt_compositor;
     Qt::ScreenOrientation m_orientation;
+    QList<QWaylandClient *> m_clients;
 
 #ifdef QT_COMPOSITOR_WAYLAND_GL
     QScopedPointer<HardwareIntegration> m_hw_integration;
@@ -218,6 +229,8 @@ protected:
     bool m_retainSelection;
 
     friend class QT_PREPEND_NAMESPACE(QWaylandCompositor);
+    friend class QT_PREPEND_NAMESPACE(QWaylandClient);
+    friend class QT_PREPEND_NAMESPACE(QWaylandClientPrivate);
 };
 
 }

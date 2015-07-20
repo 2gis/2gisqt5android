@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -43,7 +43,7 @@ QT_BEGIN_NAMESPACE
 
 static inline QString keyBase()
 {
-    return QStringLiteral("%1%2%3");
+    return QStringLiteral("%1%2:%3");
 }
 
 static QString qt_convertJString(jstring string)
@@ -72,15 +72,15 @@ typedef QHash<QString, jclass> JClassHash;
 Q_GLOBAL_STATIC(JClassHash, cachedClasses)
 Q_GLOBAL_STATIC(QReadWriteLock, cachedClassesLock)
 
-static QString toDotEncodedClassName(const char *className)
+static QByteArray toBinaryEncClassName(const QByteArray &className)
 {
-    return QString::fromLatin1(className).replace(QLatin1Char('/'), QLatin1Char('.'));
+    return QByteArray(className).replace('/', '.');
 }
 
-static jclass getCachedClass(const QString &classDotEnc, bool *isCached = 0)
+static jclass getCachedClass(const QByteArray &classBinEnc, bool *isCached = 0)
 {
     QReadLocker locker(cachedClassesLock);
-    const QHash<QString, jclass>::const_iterator &it = cachedClasses->constFind(classDotEnc);
+    const QHash<QString, jclass>::const_iterator &it = cachedClasses->constFind(QString::fromLatin1(classBinEnc));
     const bool found = (it != cachedClasses->constEnd());
 
     if (isCached != 0)
@@ -89,24 +89,26 @@ static jclass getCachedClass(const QString &classDotEnc, bool *isCached = 0)
     return found ? it.value() : 0;
 }
 
-static jclass loadClassDotEnc(const QString &classDotEnc, JNIEnv *env)
+inline static jclass loadClass(const QByteArray &className, JNIEnv *env, bool binEncoded = false)
 {
+    const QByteArray &binEncClassName = binEncoded ? className : toBinaryEncClassName(className);
     bool isCached = false;
-    jclass clazz = getCachedClass(classDotEnc, &isCached);
+    jclass clazz = getCachedClass(binEncClassName, &isCached);
     if (clazz != 0 || isCached)
         return clazz;
 
-    QJNIObjectPrivate classLoader = QtAndroidPrivate::classLoader();
+    QJNIObjectPrivate classLoader(QtAndroidPrivate::classLoader());
     if (!classLoader.isValid())
         return 0;
 
     QWriteLocker locker(cachedClassesLock);
     // did we lose the race?
-    const QHash<QString, jclass>::const_iterator &it = cachedClasses->constFind(classDotEnc);
+    const QLatin1String key(binEncClassName);
+    const QHash<QString, jclass>::const_iterator &it = cachedClasses->constFind(key);
     if (it != cachedClasses->constEnd())
         return it.value();
 
-    QJNIObjectPrivate stringName = QJNIObjectPrivate::fromString(classDotEnc);
+    QJNIObjectPrivate stringName = QJNIObjectPrivate::fromString(key);
     QJNIObjectPrivate classObject = classLoader.callObjectMethod("loadClass",
                                                                  "(Ljava/lang/String;)Ljava/lang/Class;",
                                                                  stringName.object());
@@ -114,27 +116,40 @@ static jclass loadClassDotEnc(const QString &classDotEnc, JNIEnv *env)
     if (!exceptionCheckAndClear(env) && classObject.isValid())
         clazz = static_cast<jclass>(env->NewGlobalRef(classObject.object()));
 
-    cachedClasses->insert(classDotEnc, clazz);
+    cachedClasses->insert(key, clazz);
     return clazz;
 }
 
-inline static jclass loadClass(const char *className, JNIEnv *env)
-{
-    return loadClassDotEnc(toDotEncodedClassName(className), env);
-}
 
 typedef QHash<QString, jmethodID> JMethodIDHash;
 Q_GLOBAL_STATIC(JMethodIDHash, cachedMethodID)
 Q_GLOBAL_STATIC(QReadWriteLock, cachedMethodIDLock)
 
+static inline jmethodID getMethodID(JNIEnv *env,
+                                    jclass clazz,
+                                    const char *name,
+                                    const char *sig,
+                                    bool isStatic = false)
+{
+    jmethodID id = isStatic ? env->GetStaticMethodID(clazz, name, sig)
+                            : env->GetMethodID(clazz, name, sig);
+
+    if (exceptionCheckAndClear(env))
+        return 0;
+
+    return id;
+}
 static jmethodID getCachedMethodID(JNIEnv *env,
                                    jclass clazz,
+                                   const QByteArray &className,
                                    const char *name,
                                    const char *sig,
                                    bool isStatic = false)
 {
-    // TODO: We need to use something else then the ref. from clazz to avoid collisions.
-    const QString key = keyBase().arg(size_t(clazz)).arg(QLatin1String(name)).arg(QLatin1String(sig));
+    if (className.isEmpty())
+        return getMethodID(env, clazz, name, sig, isStatic);
+
+    const QString key = keyBase().arg(QLatin1String(className)).arg(QLatin1String(name)).arg(QLatin1String(sig));
     QHash<QString, jmethodID>::const_iterator it;
 
     {
@@ -150,14 +165,7 @@ static jmethodID getCachedMethodID(JNIEnv *env,
         if (it != cachedMethodID->constEnd())
             return it.value();
 
-        jmethodID id = 0;
-        if (isStatic)
-            id = env->GetStaticMethodID(clazz, name, sig);
-        else
-            id = env->GetMethodID(clazz, name, sig);
-
-        if (exceptionCheckAndClear(env))
-            id = 0;
+        jmethodID id = getMethodID(env, clazz, name, sig, isStatic);
 
         cachedMethodID->insert(key, id);
         return id;
@@ -168,13 +176,31 @@ typedef QHash<QString, jfieldID> JFieldIDHash;
 Q_GLOBAL_STATIC(JFieldIDHash, cachedFieldID)
 Q_GLOBAL_STATIC(QReadWriteLock, cachedFieldIDLock)
 
+static inline jfieldID getFieldID(JNIEnv *env,
+                                  jclass clazz,
+                                  const char *name,
+                                  const char *sig,
+                                  bool isStatic = false)
+{
+    jfieldID id = isStatic ? env->GetStaticFieldID(clazz, name, sig)
+                           : env->GetFieldID(clazz, name, sig);
+
+    if (exceptionCheckAndClear(env))
+        return 0;
+
+    return id;
+}
 static jfieldID getCachedFieldID(JNIEnv *env,
                                  jclass clazz,
+                                 const QByteArray &className,
                                  const char *name,
                                  const char *sig,
                                  bool isStatic = false)
 {
-    const QString key = keyBase().arg(size_t(clazz)).arg(QLatin1String(name)).arg(QLatin1String(sig));
+    if (className.isNull())
+        return getFieldID(env, clazz, name, sig, isStatic);
+
+    const QString key = keyBase().arg(QLatin1String(className)).arg(QLatin1String(name)).arg(QLatin1String(sig));
     QHash<QString, jfieldID>::const_iterator it;
 
     {
@@ -190,14 +216,7 @@ static jfieldID getCachedFieldID(JNIEnv *env,
         if (it != cachedFieldID->constEnd())
             return it.value();
 
-        jfieldID id = 0;
-        if (isStatic)
-            id = env->GetStaticFieldID(clazz, name, sig);
-        else
-            id = env->GetFieldID(clazz, name, sig);
-
-        if (exceptionCheckAndClear(env))
-            id = 0;
+        jfieldID id = getFieldID(env, clazz, name, sig, isStatic);
 
         cachedFieldID->insert(key, id);
         return id;
@@ -221,13 +240,18 @@ QJNIEnvironmentPrivate::QJNIEnvironmentPrivate()
     : jniEnv(0)
 {
     JavaVM *vm = QtAndroidPrivate::javaVM();
-    if (vm->GetEnv((void**)&jniEnv, JNI_VERSION_1_6) == JNI_EDETACHED) {
+    const jint ret = vm->GetEnv((void**)&jniEnv, JNI_VERSION_1_6);
+    if (ret == JNI_OK) // Already attached
+        return;
+
+    if (ret == JNI_EDETACHED) { // We need to (re-)attach
         JavaVMAttachArgs args = { JNI_VERSION_1_6, qJniThreadName, Q_NULLPTR };
         if (vm->AttachCurrentThread(&jniEnv, &args) != JNI_OK)
             return;
-        if (!jniEnvTLS->hasLocalData())
+        if (!jniEnvTLS->hasLocalData()) // If we attached the thread we own it.
             jniEnvTLS->setLocalData(new QJNIEnvironmentPrivateTLS);
     }
+
 }
 
 JNIEnv *QJNIEnvironmentPrivate::operator->()
@@ -237,7 +261,7 @@ JNIEnv *QJNIEnvironmentPrivate::operator->()
 
 jclass QJNIEnvironmentPrivate::findClass(const char *className, JNIEnv *env)
 {
-    const QString &classDotEnc = toDotEncodedClassName(className);
+    const QByteArray &classDotEnc = toBinaryEncClassName(className);
     bool isCached = false;
     jclass clazz = getCachedClass(classDotEnc, &isCached);
 
@@ -246,9 +270,10 @@ jclass QJNIEnvironmentPrivate::findClass(const char *className, JNIEnv *env)
     if (found)
         return clazz;
 
+    const QLatin1String key(classDotEnc);
     if (env != 0) { // We got an env. pointer (We expect this to be the right env. and call FindClass())
         QWriteLocker locker(cachedClassesLock);
-        const QHash<QString, jclass>::const_iterator &it = cachedClasses->constFind(classDotEnc);
+        const QHash<QString, jclass>::const_iterator &it = cachedClasses->constFind(key);
         // Did we lose the race?
         if (it != cachedClasses->constEnd())
             return it.value();
@@ -260,11 +285,11 @@ jclass QJNIEnvironmentPrivate::findClass(const char *className, JNIEnv *env)
         }
 
         if (clazz != 0)
-            cachedClasses->insert(classDotEnc, clazz);
+            cachedClasses->insert(key, clazz);
     }
 
     if (clazz == 0) // We didn't get an env. pointer or we got one with the WRONG class loader...
-        clazz = loadClassDotEnc(classDotEnc, QJNIEnvironmentPrivate());
+        clazz = loadClass(classDotEnc, QJNIEnvironmentPrivate(), true);
 
     return clazz;
 }
@@ -305,11 +330,12 @@ QJNIObjectPrivate::QJNIObjectPrivate(const char *className)
     : d(new QJNIObjectData())
 {
     QJNIEnvironmentPrivate env;
-    d->m_jclass = loadClass(className, env);
+    d->m_className = toBinaryEncClassName(className);
+    d->m_jclass = loadClass(d->m_className, env, true);
     d->m_own_jclass = false;
     if (d->m_jclass) {
         // get default constructor
-        jmethodID constructorId = getCachedMethodID(env, d->m_jclass, "<init>", "()V");
+        jmethodID constructorId = getCachedMethodID(env, d->m_jclass, d->m_className, "<init>", "()V");
         if (constructorId) {
             jobject obj = env->NewObject(d->m_jclass, constructorId);
             if (obj) {
@@ -324,10 +350,11 @@ QJNIObjectPrivate::QJNIObjectPrivate(const char *className, const char *sig, ...
     : d(new QJNIObjectData())
 {
     QJNIEnvironmentPrivate env;
-    d->m_jclass = loadClass(className, env);
+    d->m_className = toBinaryEncClassName(className);
+    d->m_jclass = loadClass(d->m_className, env, true);
     d->m_own_jclass = false;
     if (d->m_jclass) {
-        jmethodID constructorId = getCachedMethodID(env, d->m_jclass, "<init>", sig);
+        jmethodID constructorId = getCachedMethodID(env, d->m_jclass, d->m_className, "<init>", sig);
         if (constructorId) {
             va_list args;
             va_start(args, sig);
@@ -345,10 +372,11 @@ QJNIObjectPrivate::QJNIObjectPrivate(const char *className, const char *sig, con
     : d(new QJNIObjectData())
 {
     QJNIEnvironmentPrivate env;
-    d->m_jclass = loadClass(className, env);
+    d->m_className = toBinaryEncClassName(className);
+    d->m_jclass = loadClass(d->m_className, env, true);
     d->m_own_jclass = false;
     if (d->m_jclass) {
-        jmethodID constructorId = getCachedMethodID(env, d->m_jclass, "<init>", sig);
+        jmethodID constructorId = getCachedMethodID(env, d->m_jclass, d->m_className, "<init>", sig);
         if (constructorId) {
             jobject obj = env->NewObjectV(d->m_jclass, constructorId, args);
             if (obj) {
@@ -366,7 +394,7 @@ QJNIObjectPrivate::QJNIObjectPrivate(jclass clazz)
     d->m_jclass = static_cast<jclass>(env->NewGlobalRef(clazz));
     if (d->m_jclass) {
         // get default constructor
-        jmethodID constructorId = getCachedMethodID(env, d->m_jclass, "<init>", "()V");
+        jmethodID constructorId = getMethodID(env, d->m_jclass, "<init>", "()V");
         if (constructorId) {
             jobject obj = env->NewObject(d->m_jclass, constructorId);
             if (obj) {
@@ -384,7 +412,7 @@ QJNIObjectPrivate::QJNIObjectPrivate(jclass clazz, const char *sig, ...)
     if (clazz) {
         d->m_jclass = static_cast<jclass>(env->NewGlobalRef(clazz));
         if (d->m_jclass) {
-            jmethodID constructorId = getCachedMethodID(env, d->m_jclass, "<init>", sig);
+            jmethodID constructorId = getMethodID(env, d->m_jclass, "<init>", sig);
             if (constructorId) {
                 va_list args;
                 va_start(args, sig);
@@ -406,7 +434,7 @@ QJNIObjectPrivate::QJNIObjectPrivate(jclass clazz, const char *sig, const QVaLis
     if (clazz) {
         d->m_jclass = static_cast<jclass>(env->NewGlobalRef(clazz));
         if (d->m_jclass) {
-            jmethodID constructorId = getCachedMethodID(env, d->m_jclass, "<init>", sig);
+            jmethodID constructorId = getMethodID(env, d->m_jclass, "<init>", sig);
             if (constructorId) {
                 jobject obj = env->NewObjectV(d->m_jclass, constructorId, args);
                 if (obj) {
@@ -426,15 +454,15 @@ QJNIObjectPrivate::QJNIObjectPrivate(jobject obj)
 
     QJNIEnvironmentPrivate env;
     d->m_jobject = env->NewGlobalRef(obj);
-    jclass objectClass = env->GetObjectClass(d->m_jobject);
-    d->m_jclass = static_cast<jclass>(env->NewGlobalRef(objectClass));
-    env->DeleteLocalRef(objectClass);
+    jclass cls = env->GetObjectClass(obj);
+    d->m_jclass = static_cast<jclass>(env->NewGlobalRef(cls));
+    env->DeleteLocalRef(cls);
 }
 template <>
 void QJNIObjectPrivate::callMethodV<void>(const char *methodName, const char *sig, va_list args) const
 {
     QJNIEnvironmentPrivate env;
-    jmethodID id = getCachedMethodID(env, d->m_jclass, methodName, sig);
+    jmethodID id = getCachedMethodID(env, d->m_jclass, d->m_className, methodName, sig);
     if (id) {
         env->CallVoidMethodV(d->m_jobject, id, args);
     }
@@ -454,7 +482,7 @@ jboolean QJNIObjectPrivate::callMethodV<jboolean>(const char *methodName, const 
 {
     QJNIEnvironmentPrivate env;
     jboolean res = 0;
-    jmethodID id = getCachedMethodID(env, d->m_jclass, methodName, sig);
+    jmethodID id = getCachedMethodID(env, d->m_jclass, d->m_className, methodName, sig);
     if (id) {
         res = env->CallBooleanMethodV(d->m_jobject, id, args);
     }
@@ -476,7 +504,7 @@ jbyte QJNIObjectPrivate::callMethodV<jbyte>(const char *methodName, const char *
 {
     QJNIEnvironmentPrivate env;
     jbyte res = 0;
-    jmethodID id = getCachedMethodID(env, d->m_jclass, methodName, sig);
+    jmethodID id = getCachedMethodID(env, d->m_jclass, d->m_className, methodName, sig);
     if (id) {
         res = env->CallByteMethodV(d->m_jobject, id, args);
     }
@@ -498,7 +526,7 @@ jchar QJNIObjectPrivate::callMethodV<jchar>(const char *methodName, const char *
 {
     QJNIEnvironmentPrivate env;
     jchar res = 0;
-    jmethodID id = getCachedMethodID(env, d->m_jclass, methodName, sig);
+    jmethodID id = getCachedMethodID(env, d->m_jclass, d->m_className, methodName, sig);
     if (id) {
         res = env->CallCharMethodV(d->m_jobject, id, args);
     }
@@ -520,7 +548,7 @@ jshort QJNIObjectPrivate::callMethodV<jshort>(const char *methodName, const char
 {
     QJNIEnvironmentPrivate env;
     jshort res = 0;
-    jmethodID id = getCachedMethodID(env, d->m_jclass, methodName, sig);
+    jmethodID id = getCachedMethodID(env, d->m_jclass, d->m_className, methodName, sig);
     if (id) {
         res = env->CallShortMethodV(d->m_jobject, id, args);
     }
@@ -542,7 +570,7 @@ jint QJNIObjectPrivate::callMethodV<jint>(const char *methodName, const char *si
 {
     QJNIEnvironmentPrivate env;
     jint res = 0;
-    jmethodID id = getCachedMethodID(env, d->m_jclass, methodName, sig);
+    jmethodID id = getCachedMethodID(env, d->m_jclass, d->m_className, methodName, sig);
     if (id) {
         res = env->CallIntMethodV(d->m_jobject, id, args);
     }
@@ -564,7 +592,7 @@ jlong QJNIObjectPrivate::callMethodV<jlong>(const char *methodName, const char *
 {
     QJNIEnvironmentPrivate env;
     jlong res = 0;
-    jmethodID id = getCachedMethodID(env, d->m_jclass, methodName, sig);
+    jmethodID id = getCachedMethodID(env, d->m_jclass, d->m_className, methodName, sig);
     if (id) {
         res = env->CallLongMethodV(d->m_jobject, id, args);
     }
@@ -586,7 +614,7 @@ jfloat QJNIObjectPrivate::callMethodV<jfloat>(const char *methodName, const char
 {
     QJNIEnvironmentPrivate env;
     jfloat res = 0.f;
-    jmethodID id = getCachedMethodID(env, d->m_jclass, methodName, sig);
+    jmethodID id = getCachedMethodID(env, d->m_jclass, d->m_className, methodName, sig);
     if (id) {
         res = env->CallFloatMethodV(d->m_jobject, id, args);
     }
@@ -608,7 +636,7 @@ jdouble QJNIObjectPrivate::callMethodV<jdouble>(const char *methodName, const ch
 {
     QJNIEnvironmentPrivate env;
     jdouble res = 0.;
-    jmethodID id = getCachedMethodID(env, d->m_jclass, methodName, sig);
+    jmethodID id = getCachedMethodID(env, d->m_jclass, d->m_className, methodName, sig);
     if (id) {
         res = env->CallDoubleMethodV(d->m_jobject, id, args);
     }
@@ -688,7 +716,7 @@ void QJNIObjectPrivate::callStaticMethodV<void>(const char *className,
     QJNIEnvironmentPrivate env;
     jclass clazz = loadClass(className, env);
     if (clazz) {
-        jmethodID id = getCachedMethodID(env, clazz, methodName, sig, true);
+        jmethodID id = getCachedMethodID(env, clazz, toBinaryEncClassName(className), methodName, sig, true);
         if (id) {
             env->CallStaticVoidMethodV(clazz, id, args);
         }
@@ -714,7 +742,7 @@ void QJNIObjectPrivate::callStaticMethodV<void>(jclass clazz,
                                                 va_list args)
 {
     QJNIEnvironmentPrivate env;
-    jmethodID id = getCachedMethodID(env, clazz, methodName, sig, true);
+    jmethodID id = getMethodID(env, clazz, methodName, sig, true);
     if (id) {
         env->CallStaticVoidMethodV(clazz, id, args);
     }
@@ -742,7 +770,7 @@ jboolean QJNIObjectPrivate::callStaticMethodV<jboolean>(const char *className,
     jboolean res = 0;
     jclass clazz = loadClass(className, env);
     if (clazz) {
-        jmethodID id = getCachedMethodID(env, clazz, methodName, sig, true);
+        jmethodID id = getCachedMethodID(env, clazz, toBinaryEncClassName(className), methodName, sig, true);
         if (id) {
             res = env->CallStaticBooleanMethodV(clazz, id, args);
         }
@@ -772,7 +800,7 @@ jboolean QJNIObjectPrivate::callStaticMethodV<jboolean>(jclass clazz,
 {
     QJNIEnvironmentPrivate env;
     jboolean res = 0;
-    jmethodID id = getCachedMethodID(env, clazz, methodName, sig, true);
+    jmethodID id = getMethodID(env, clazz, methodName, sig, true);
     if (id) {
         res = env->CallStaticBooleanMethodV(clazz, id, args);
     }
@@ -803,7 +831,7 @@ jbyte QJNIObjectPrivate::callStaticMethodV<jbyte>(const char *className,
     jbyte res = 0;
     jclass clazz = loadClass(className, env);
     if (clazz) {
-        jmethodID id = getCachedMethodID(env, clazz, methodName, sig, true);
+        jmethodID id = getCachedMethodID(env, clazz, toBinaryEncClassName(className), methodName, sig, true);
         if (id) {
             res = env->CallStaticByteMethodV(clazz, id, args);
         }
@@ -833,7 +861,7 @@ jbyte QJNIObjectPrivate::callStaticMethodV<jbyte>(jclass clazz,
 {
     QJNIEnvironmentPrivate env;
     jbyte res = 0;
-    jmethodID id = getCachedMethodID(env, clazz, methodName, sig, true);
+    jmethodID id = getMethodID(env, clazz, methodName, sig, true);
     if (id) {
         res = env->CallStaticByteMethodV(clazz, id, args);
     }
@@ -864,7 +892,7 @@ jchar QJNIObjectPrivate::callStaticMethodV<jchar>(const char *className,
     jchar res = 0;
     jclass clazz = loadClass(className, env);
     if (clazz) {
-        jmethodID id = getCachedMethodID(env, clazz, methodName, sig, true);
+        jmethodID id = getCachedMethodID(env, clazz, toBinaryEncClassName(className), methodName, sig, true);
         if (id) {
             res = env->CallStaticCharMethodV(clazz, id, args);
         }
@@ -894,7 +922,7 @@ jchar QJNIObjectPrivate::callStaticMethodV<jchar>(jclass clazz,
 {
     QJNIEnvironmentPrivate env;
     jchar res = 0;
-    jmethodID id = getCachedMethodID(env, clazz, methodName, sig, true);
+    jmethodID id = getMethodID(env, clazz, methodName, sig, true);
     if (id) {
         res = env->CallStaticCharMethodV(clazz, id, args);
     }
@@ -925,7 +953,7 @@ jshort QJNIObjectPrivate::callStaticMethodV<jshort>(const char *className,
     jshort res = 0;
     jclass clazz = loadClass(className, env);
     if (clazz) {
-        jmethodID id = getCachedMethodID(env, clazz, methodName, sig, true);
+        jmethodID id = getCachedMethodID(env, clazz, toBinaryEncClassName(className), methodName, sig, true);
         if (id) {
             res = env->CallStaticShortMethodV(clazz, id, args);
         }
@@ -955,7 +983,7 @@ jshort QJNIObjectPrivate::callStaticMethodV<jshort>(jclass clazz,
 {
     QJNIEnvironmentPrivate env;
     jshort res = 0;
-    jmethodID id = getCachedMethodID(env, clazz, methodName, sig, true);
+    jmethodID id = getMethodID(env, clazz, methodName, sig, true);
     if (id) {
         res = env->CallStaticShortMethodV(clazz, id, args);
     }
@@ -986,7 +1014,7 @@ jint QJNIObjectPrivate::callStaticMethodV<jint>(const char *className,
     jint res = 0;
     jclass clazz = loadClass(className, env);
     if (clazz) {
-        jmethodID id = getCachedMethodID(env, clazz, methodName, sig, true);
+        jmethodID id = getCachedMethodID(env, clazz, toBinaryEncClassName(className), methodName, sig, true);
         if (id) {
             res = env->CallStaticIntMethodV(clazz, id, args);
         }
@@ -1016,7 +1044,7 @@ jint QJNIObjectPrivate::callStaticMethodV<jint>(jclass clazz,
 {
     QJNIEnvironmentPrivate env;
     jint res = 0;
-    jmethodID id = getCachedMethodID(env, clazz, methodName, sig, true);
+    jmethodID id = getMethodID(env, clazz, methodName, sig, true);
     if (id) {
         res = env->CallStaticIntMethodV(clazz, id, args);
     }
@@ -1047,7 +1075,7 @@ jlong QJNIObjectPrivate::callStaticMethodV<jlong>(const char *className,
     jlong res = 0;
     jclass clazz = loadClass(className, env);
     if (clazz) {
-        jmethodID id = getCachedMethodID(env, clazz, methodName, sig, true);
+        jmethodID id = getCachedMethodID(env, clazz, toBinaryEncClassName(className), methodName, sig, true);
         if (id) {
             res = env->CallStaticLongMethodV(clazz, id, args);
         }
@@ -1077,7 +1105,7 @@ jlong QJNIObjectPrivate::callStaticMethodV<jlong>(jclass clazz,
 {
     QJNIEnvironmentPrivate env;
     jlong res = 0;
-    jmethodID id = getCachedMethodID(env, clazz, methodName, sig, true);
+    jmethodID id = getMethodID(env, clazz, methodName, sig, true);
     if (id) {
         res = env->CallStaticLongMethodV(clazz, id, args);
     }
@@ -1108,7 +1136,7 @@ jfloat QJNIObjectPrivate::callStaticMethodV<jfloat>(const char *className,
     jfloat res = 0.f;
     jclass clazz = loadClass(className, env);
     if (clazz) {
-        jmethodID id = getCachedMethodID(env, clazz, methodName, sig, true);
+        jmethodID id = getCachedMethodID(env, clazz, toBinaryEncClassName(className), methodName, sig, true);
         if (id) {
             res = env->CallStaticFloatMethodV(clazz, id, args);
         }
@@ -1138,7 +1166,7 @@ jfloat QJNIObjectPrivate::callStaticMethodV<jfloat>(jclass clazz,
 {
     QJNIEnvironmentPrivate env;
     jfloat res = 0.f;
-    jmethodID id = getCachedMethodID(env, clazz, methodName, sig, true);
+    jmethodID id = getMethodID(env, clazz, methodName, sig, true);
     if (id) {
         res = env->CallStaticFloatMethodV(clazz, id, args);
     }
@@ -1169,7 +1197,7 @@ jdouble QJNIObjectPrivate::callStaticMethodV<jdouble>(const char *className,
     jdouble res = 0.;
     jclass clazz = loadClass(className, env);
     if (clazz) {
-        jmethodID id = getCachedMethodID(env, clazz, methodName, sig, true);
+        jmethodID id = getCachedMethodID(env, clazz, toBinaryEncClassName(className), methodName, sig, true);
         if (id) {
             res = env->CallStaticDoubleMethodV(clazz, id, args);
         }
@@ -1199,7 +1227,7 @@ jdouble QJNIObjectPrivate::callStaticMethodV<jdouble>(jclass clazz,
 {
     QJNIEnvironmentPrivate env;
     jdouble res = 0.;
-    jmethodID id = getCachedMethodID(env, clazz, methodName, sig, true);
+    jmethodID id = getMethodID(env, clazz, methodName, sig, true);
     if (id) {
         res = env->CallStaticDoubleMethodV(clazz, id, args);
     }
@@ -1334,7 +1362,7 @@ QJNIObjectPrivate QJNIObjectPrivate::callObjectMethodV(const char *methodName,
 {
     QJNIEnvironmentPrivate env;
     jobject res = 0;
-    jmethodID id = getCachedMethodID(env, d->m_jclass, methodName, sig);
+    jmethodID id = getCachedMethodID(env, d->m_jclass, d->m_className, methodName, sig);
     if (id) {
         res = env->CallObjectMethodV(d->m_jobject, id, args);
         if (res && env->ExceptionCheck())
@@ -1414,7 +1442,7 @@ QJNIObjectPrivate QJNIObjectPrivate::callStaticObjectMethodV(const char *classNa
     jobject res = 0;
     jclass clazz = loadClass(className, env);
     if (clazz) {
-        jmethodID id = getCachedMethodID(env, clazz, methodName, sig, true);
+        jmethodID id = getCachedMethodID(env, clazz, toBinaryEncClassName(className), methodName, sig, true);
         if (id) {
             res = env->CallStaticObjectMethodV(clazz, id, args);
             if (res && env->ExceptionCheck())
@@ -1446,7 +1474,7 @@ QJNIObjectPrivate QJNIObjectPrivate::callStaticObjectMethodV(jclass clazz,
 {
     QJNIEnvironmentPrivate env;
     jobject res = 0;
-    jmethodID id = getCachedMethodID(env, clazz, methodName, sig, true);
+    jmethodID id = getMethodID(env, clazz, methodName, sig, true);
     if (id) {
         res = env->CallStaticObjectMethodV(clazz, id, args);
         if (res && env->ExceptionCheck())
@@ -1475,7 +1503,7 @@ jboolean QJNIObjectPrivate::getField<jboolean>(const char *fieldName) const
 {
     QJNIEnvironmentPrivate env;
     jboolean res = 0;
-    jfieldID id = getCachedFieldID(env, d->m_jclass, fieldName, "Z");
+    jfieldID id = getCachedFieldID(env, d->m_jclass, d->m_className, fieldName, "Z");
     if (id)
         res = env->GetBooleanField(d->m_jobject, id);
 
@@ -1487,7 +1515,7 @@ jbyte QJNIObjectPrivate::getField<jbyte>(const char *fieldName) const
 {
     QJNIEnvironmentPrivate env;
     jbyte res = 0;
-    jfieldID id = getCachedFieldID(env, d->m_jclass, fieldName, "B");
+    jfieldID id = getCachedFieldID(env, d->m_jclass, d->m_className, fieldName, "B");
     if (id)
         res = env->GetByteField(d->m_jobject, id);
 
@@ -1499,7 +1527,7 @@ jchar QJNIObjectPrivate::getField<jchar>(const char *fieldName) const
 {
     QJNIEnvironmentPrivate env;
     jchar res = 0;
-    jfieldID id = getCachedFieldID(env, d->m_jclass, fieldName, "C");
+    jfieldID id = getCachedFieldID(env, d->m_jclass, d->m_className, fieldName, "C");
     if (id)
         res = env->GetCharField(d->m_jobject, id);
 
@@ -1511,7 +1539,7 @@ jshort QJNIObjectPrivate::getField<jshort>(const char *fieldName) const
 {
     QJNIEnvironmentPrivate env;
     jshort res = 0;
-    jfieldID id = getCachedFieldID(env, d->m_jclass, fieldName, "S");
+    jfieldID id = getCachedFieldID(env, d->m_jclass, d->m_className, fieldName, "S");
     if (id)
         res = env->GetShortField(d->m_jobject, id);
 
@@ -1523,7 +1551,7 @@ jint QJNIObjectPrivate::getField<jint>(const char *fieldName) const
 {
     QJNIEnvironmentPrivate env;
     jint res = 0;
-    jfieldID id = getCachedFieldID(env, d->m_jclass, fieldName, "I");
+    jfieldID id = getCachedFieldID(env, d->m_jclass, d->m_className, fieldName, "I");
     if (id)
         res = env->GetIntField(d->m_jobject, id);
 
@@ -1535,7 +1563,7 @@ jlong QJNIObjectPrivate::getField<jlong>(const char *fieldName) const
 {
     QJNIEnvironmentPrivate env;
     jlong res = 0;
-    jfieldID id = getCachedFieldID(env, d->m_jclass, fieldName, "J");
+    jfieldID id = getCachedFieldID(env, d->m_jclass, d->m_className, fieldName, "J");
     if (id)
         res = env->GetLongField(d->m_jobject, id);
 
@@ -1547,7 +1575,7 @@ jfloat QJNIObjectPrivate::getField<jfloat>(const char *fieldName) const
 {
     QJNIEnvironmentPrivate env;
     jfloat res = 0.f;
-    jfieldID id = getCachedFieldID(env, d->m_jclass, fieldName, "F");
+    jfieldID id = getCachedFieldID(env, d->m_jclass, d->m_className, fieldName, "F");
     if (id)
         res = env->GetFloatField(d->m_jobject, id);
 
@@ -1559,7 +1587,7 @@ jdouble QJNIObjectPrivate::getField<jdouble>(const char *fieldName) const
 {
     QJNIEnvironmentPrivate env;
     jdouble res = 0.;
-    jfieldID id = getCachedFieldID(env, d->m_jclass, fieldName, "D");
+    jfieldID id = getCachedFieldID(env, d->m_jclass, d->m_className, fieldName, "D");
     if (id)
         res = env->GetDoubleField(d->m_jobject, id);
 
@@ -1571,7 +1599,7 @@ jboolean QJNIObjectPrivate::getStaticField<jboolean>(jclass clazz, const char *f
 {
     QJNIEnvironmentPrivate env;
     jboolean res = 0;
-    jfieldID id = getCachedFieldID(env, clazz, fieldName, "Z", true);
+    jfieldID id = getFieldID(env, clazz, fieldName, "Z", true);
     if (id)
         res = env->GetStaticBooleanField(clazz, id);
 
@@ -1582,12 +1610,15 @@ template <>
 jboolean QJNIObjectPrivate::getStaticField<jboolean>(const char *className, const char *fieldName)
 {
     QJNIEnvironmentPrivate env;
-    jboolean res = 0;
     jclass clazz = loadClass(className, env);
-    if (clazz)
-        res = getStaticField<jboolean>(clazz, fieldName);
+    if (clazz == 0)
+        return 0;
 
-    return res;
+    jfieldID id = getCachedFieldID(env, clazz, toBinaryEncClassName(className), fieldName, "Z", true);
+    if (id == 0)
+        return 0;
+
+    return env->GetStaticBooleanField(clazz, id);
 }
 
 template <>
@@ -1595,7 +1626,7 @@ jbyte QJNIObjectPrivate::getStaticField<jbyte>(jclass clazz, const char *fieldNa
 {
     QJNIEnvironmentPrivate env;
     jbyte res = 0;
-    jfieldID id = getCachedFieldID(env, clazz, fieldName, "B", true);
+    jfieldID id = getFieldID(env, clazz, fieldName, "B", true);
     if (id)
         res = env->GetStaticByteField(clazz, id);
 
@@ -1606,12 +1637,15 @@ template <>
 jbyte QJNIObjectPrivate::getStaticField<jbyte>(const char *className, const char *fieldName)
 {
     QJNIEnvironmentPrivate env;
-    jbyte res = 0;
     jclass clazz = loadClass(className, env);
-    if (clazz)
-        res = getStaticField<jbyte>(clazz, fieldName);
+    if (clazz == 0)
+        return 0;
 
-    return res;
+    jfieldID id = getCachedFieldID(env, clazz, toBinaryEncClassName(className), fieldName, "B", true);
+    if (id == 0)
+        return 0;
+
+    return env->GetStaticByteField(clazz, id);
 }
 
 template <>
@@ -1619,7 +1653,7 @@ jchar QJNIObjectPrivate::getStaticField<jchar>(jclass clazz, const char *fieldNa
 {
     QJNIEnvironmentPrivate env;
     jchar res = 0;
-    jfieldID id = getCachedFieldID(env, clazz, fieldName, "C", true);
+    jfieldID id = getFieldID(env, clazz, fieldName, "C", true);
     if (id)
         res = env->GetStaticCharField(clazz, id);
 
@@ -1630,12 +1664,15 @@ template <>
 jchar QJNIObjectPrivate::getStaticField<jchar>(const char *className, const char *fieldName)
 {
     QJNIEnvironmentPrivate env;
-    jchar res = 0;
     jclass clazz = loadClass(className, env);
-    if (clazz)
-        res = getStaticField<jchar>(clazz, fieldName);
+    if (clazz == 0)
+        return 0;
 
-    return res;
+    jfieldID id = getCachedFieldID(env, clazz, toBinaryEncClassName(className), fieldName, "C", true);
+    if (id == 0)
+        return 0;
+
+    return env->GetStaticCharField(clazz, id);
 }
 
 template <>
@@ -1643,7 +1680,7 @@ jshort QJNIObjectPrivate::getStaticField<jshort>(jclass clazz, const char *field
 {
     QJNIEnvironmentPrivate env;
     jshort res = 0;
-    jfieldID id = getCachedFieldID(env, clazz, fieldName, "S", true);
+    jfieldID id = getFieldID(env, clazz, fieldName, "S", true);
     if (id)
         res = env->GetStaticShortField(clazz, id);
 
@@ -1654,12 +1691,15 @@ template <>
 jshort QJNIObjectPrivate::getStaticField<jshort>(const char *className, const char *fieldName)
 {
     QJNIEnvironmentPrivate env;
-    jshort res = 0;
     jclass clazz = loadClass(className, env);
-    if (clazz)
-        res = getStaticField<jshort>(clazz, fieldName);
+    if (clazz == 0)
+        return 0;
 
-    return res;
+    jfieldID id = getCachedFieldID(env, clazz, toBinaryEncClassName(className), fieldName, "S", true);
+    if (id == 0)
+        return 0;
+
+    return env->GetStaticShortField(clazz, id);
 }
 
 template <>
@@ -1667,7 +1707,7 @@ jint QJNIObjectPrivate::getStaticField<jint>(jclass clazz, const char *fieldName
 {
     QJNIEnvironmentPrivate env;
     jint res = 0;
-    jfieldID id = getCachedFieldID(env, clazz, fieldName, "I", true);
+    jfieldID id = getFieldID(env, clazz, fieldName, "I", true);
     if (id)
         res = env->GetStaticIntField(clazz, id);
 
@@ -1678,12 +1718,15 @@ template <>
 jint QJNIObjectPrivate::getStaticField<jint>(const char *className, const char *fieldName)
 {
     QJNIEnvironmentPrivate env;
-    jint res = 0;
     jclass clazz = loadClass(className, env);
-    if (clazz)
-        res = getStaticField<jint>(clazz, fieldName);
+    if (clazz == 0)
+        return 0;
 
-    return res;
+    jfieldID id = getCachedFieldID(env, clazz, toBinaryEncClassName(className), fieldName, "I", true);
+    if (id == 0)
+        return 0;
+
+    return env->GetStaticIntField(clazz, id);
 }
 
 template <>
@@ -1691,7 +1734,7 @@ jlong QJNIObjectPrivate::getStaticField<jlong>(jclass clazz, const char *fieldNa
 {
     QJNIEnvironmentPrivate env;
     jlong res = 0;
-    jfieldID id = getCachedFieldID(env, clazz, fieldName, "J", true);
+    jfieldID id = getFieldID(env, clazz, fieldName, "J", true);
     if (id)
         res = env->GetStaticLongField(clazz, id);
 
@@ -1702,12 +1745,15 @@ template <>
 jlong QJNIObjectPrivate::getStaticField<jlong>(const char *className, const char *fieldName)
 {
     QJNIEnvironmentPrivate env;
-    jlong res = 0;
     jclass clazz = loadClass(className, env);
-    if (clazz)
-        res = getStaticField<jlong>(clazz, fieldName);
+    if (clazz == 0)
+        return 0;
 
-    return res;
+    jfieldID id = getCachedFieldID(env, clazz, toBinaryEncClassName(className), fieldName, "J", true);
+    if (id == 0)
+        return 0;
+
+    return env->GetStaticLongField(clazz, id);
 }
 
 template <>
@@ -1715,7 +1761,7 @@ jfloat QJNIObjectPrivate::getStaticField<jfloat>(jclass clazz, const char *field
 {
     QJNIEnvironmentPrivate env;
     jfloat res = 0.f;
-    jfieldID id = getCachedFieldID(env, clazz, fieldName, "F", true);
+    jfieldID id = getFieldID(env, clazz, fieldName, "F", true);
     if (id)
         res = env->GetStaticFloatField(clazz, id);
 
@@ -1726,12 +1772,15 @@ template <>
 jfloat QJNIObjectPrivate::getStaticField<jfloat>(const char *className, const char *fieldName)
 {
     QJNIEnvironmentPrivate env;
-    jfloat res = 0.f;
     jclass clazz = loadClass(className, env);
-    if (clazz)
-        res = getStaticField<jfloat>(clazz, fieldName);
+    if (clazz == 0)
+        return 0.f;
 
-    return res;
+    jfieldID id = getCachedFieldID(env, clazz, toBinaryEncClassName(className), fieldName, "F", true);
+    if (id == 0)
+        return 0.f;
+
+    return env->GetStaticFloatField(clazz, id);
 }
 
 template <>
@@ -1739,7 +1788,7 @@ jdouble QJNIObjectPrivate::getStaticField<jdouble>(jclass clazz, const char *fie
 {
     QJNIEnvironmentPrivate env;
     jdouble res = 0.;
-    jfieldID id = getCachedFieldID(env, clazz, fieldName, "D", true);
+    jfieldID id = getFieldID(env, clazz, fieldName, "D", true);
     if (id)
         res = env->GetStaticDoubleField(clazz, id);
 
@@ -1750,12 +1799,15 @@ template <>
 jdouble QJNIObjectPrivate::getStaticField<jdouble>(const char *className, const char *fieldName)
 {
     QJNIEnvironmentPrivate env;
-    jdouble res = 0.;
     jclass clazz = loadClass(className, env);
-    if (clazz)
-        res = getStaticField<jdouble>(clazz, fieldName);
+    if (clazz == 0)
+        return 0.;
 
-    return res;
+    jfieldID id = getCachedFieldID(env, clazz, toBinaryEncClassName(className), fieldName, "D", true);
+    if (id == 0)
+        return 0.;
+
+    return env->GetStaticDoubleField(clazz, id);
 }
 
 QJNIObjectPrivate QJNIObjectPrivate::getObjectField(const char *fieldName,
@@ -1763,7 +1815,7 @@ QJNIObjectPrivate QJNIObjectPrivate::getObjectField(const char *fieldName,
 {
     QJNIEnvironmentPrivate env;
     jobject res = 0;
-    jfieldID id = getCachedFieldID(env, d->m_jclass, fieldName, sig);
+    jfieldID id = getCachedFieldID(env, d->m_jclass, d->m_className, fieldName, sig);
     if (id) {
         res = env->GetObjectField(d->m_jobject, id);
         if (res && env->ExceptionCheck())
@@ -1780,12 +1832,21 @@ QJNIObjectPrivate QJNIObjectPrivate::getStaticObjectField(const char *className,
                                                           const char *sig)
 {
     QJNIEnvironmentPrivate env;
-    QJNIObjectPrivate res;
     jclass clazz = loadClass(className, env);
-    if (clazz)
-        res = getStaticObjectField(clazz, fieldName, sig);
+    if (clazz == 0)
+        return QJNIObjectPrivate();
 
-    return res;
+    jfieldID id = getCachedFieldID(env, clazz, toBinaryEncClassName(className), fieldName, sig, true);
+    if (id == 0)
+        return QJNIObjectPrivate();
+
+    jobject res = env->GetStaticObjectField(clazz, id);
+    if (res && env->ExceptionCheck())
+        res = 0;
+
+    QJNIObjectPrivate obj(res);
+    env->DeleteLocalRef(res);
+    return obj;
 }
 
 QJNIObjectPrivate QJNIObjectPrivate::getStaticObjectField(jclass clazz,
@@ -1794,7 +1855,7 @@ QJNIObjectPrivate QJNIObjectPrivate::getStaticObjectField(jclass clazz,
 {
     QJNIEnvironmentPrivate env;
     jobject res = 0;
-    jfieldID id = getCachedFieldID(env, clazz, fieldName, sig, true);
+    jfieldID id = getFieldID(env, clazz, fieldName, sig, true);
     if (id) {
         res = env->GetStaticObjectField(clazz, id);
         if (res && env->ExceptionCheck())
@@ -1810,7 +1871,7 @@ template <>
 void QJNIObjectPrivate::setField<jboolean>(const char *fieldName, jboolean value)
 {
     QJNIEnvironmentPrivate env;
-    jfieldID id = getCachedFieldID(env, d->m_jclass, fieldName, "Z");
+    jfieldID id = getCachedFieldID(env, d->m_jclass, d->m_className, fieldName, "Z");
     if (id)
         env->SetBooleanField(d->m_jobject, id, value);
 
@@ -1820,7 +1881,7 @@ template <>
 void QJNIObjectPrivate::setField<jbyte>(const char *fieldName, jbyte value)
 {
     QJNIEnvironmentPrivate env;
-    jfieldID id = getCachedFieldID(env, d->m_jclass, fieldName, "B");
+    jfieldID id = getCachedFieldID(env, d->m_jclass, d->m_className, fieldName, "B");
     if (id)
         env->SetByteField(d->m_jobject, id, value);
 
@@ -1830,7 +1891,7 @@ template <>
 void QJNIObjectPrivate::setField<jchar>(const char *fieldName, jchar value)
 {
     QJNIEnvironmentPrivate env;
-    jfieldID id = getCachedFieldID(env, d->m_jclass, fieldName, "C");
+    jfieldID id = getCachedFieldID(env, d->m_jclass, d->m_className, fieldName, "C");
     if (id)
         env->SetCharField(d->m_jobject, id, value);
 
@@ -1840,7 +1901,7 @@ template <>
 void QJNIObjectPrivate::setField<jshort>(const char *fieldName, jshort value)
 {
     QJNIEnvironmentPrivate env;
-    jfieldID id = getCachedFieldID(env, d->m_jclass, fieldName, "S");
+    jfieldID id = getCachedFieldID(env, d->m_jclass, d->m_className, fieldName, "S");
     if (id)
         env->SetShortField(d->m_jobject, id, value);
 
@@ -1850,7 +1911,7 @@ template <>
 void QJNIObjectPrivate::setField<jint>(const char *fieldName, jint value)
 {
     QJNIEnvironmentPrivate env;
-    jfieldID id = getCachedFieldID(env, d->m_jclass, fieldName, "I");
+    jfieldID id = getCachedFieldID(env, d->m_jclass, d->m_className, fieldName, "I");
     if (id)
         env->SetIntField(d->m_jobject, id, value);
 
@@ -1860,7 +1921,7 @@ template <>
 void QJNIObjectPrivate::setField<jlong>(const char *fieldName, jlong value)
 {
     QJNIEnvironmentPrivate env;
-    jfieldID id = getCachedFieldID(env, d->m_jclass, fieldName, "J");
+    jfieldID id = getCachedFieldID(env, d->m_jclass, d->m_className, fieldName, "J");
     if (id)
         env->SetLongField(d->m_jobject, id, value);
 
@@ -1870,7 +1931,7 @@ template <>
 void QJNIObjectPrivate::setField<jfloat>(const char *fieldName, jfloat value)
 {
     QJNIEnvironmentPrivate env;
-    jfieldID id = getCachedFieldID(env, d->m_jclass, fieldName, "F");
+    jfieldID id = getCachedFieldID(env, d->m_jclass, d->m_className, fieldName, "F");
     if (id)
         env->SetFloatField(d->m_jobject, id, value);
 
@@ -1880,7 +1941,7 @@ template <>
 void QJNIObjectPrivate::setField<jdouble>(const char *fieldName, jdouble value)
 {
     QJNIEnvironmentPrivate env;
-    jfieldID id = getCachedFieldID(env, d->m_jclass, fieldName, "D");
+    jfieldID id = getCachedFieldID(env, d->m_jclass, d->m_className, fieldName, "D");
     if (id)
         env->SetDoubleField(d->m_jobject, id, value);
 
@@ -1890,7 +1951,7 @@ template <>
 void QJNIObjectPrivate::setField<jbooleanArray>(const char *fieldName, jbooleanArray value)
 {
     QJNIEnvironmentPrivate env;
-    jfieldID id = getCachedFieldID(env, d->m_jclass, fieldName, "[Z");
+    jfieldID id = getCachedFieldID(env, d->m_jclass, d->m_className, fieldName, "[Z");
     if (id)
         env->SetObjectField(d->m_jobject, id, value);
 
@@ -1900,7 +1961,7 @@ template <>
 void QJNIObjectPrivate::setField<jbyteArray>(const char *fieldName, jbyteArray value)
 {
     QJNIEnvironmentPrivate env;
-    jfieldID id = getCachedFieldID(env, d->m_jclass, fieldName, "[B");
+    jfieldID id = getCachedFieldID(env, d->m_jclass, d->m_className, fieldName, "[B");
     if (id)
         env->SetObjectField(d->m_jobject, id, value);
 
@@ -1910,7 +1971,7 @@ template <>
 void QJNIObjectPrivate::setField<jcharArray>(const char *fieldName, jcharArray value)
 {
     QJNIEnvironmentPrivate env;
-    jfieldID id = getCachedFieldID(env, d->m_jclass, fieldName, "[C");
+    jfieldID id = getCachedFieldID(env, d->m_jclass, d->m_className, fieldName, "[C");
     if (id)
         env->SetObjectField(d->m_jobject, id, value);
 
@@ -1920,7 +1981,7 @@ template <>
 void QJNIObjectPrivate::setField<jshortArray>(const char *fieldName, jshortArray value)
 {
     QJNIEnvironmentPrivate env;
-    jfieldID id = getCachedFieldID(env, d->m_jclass, fieldName, "[S");
+    jfieldID id = getCachedFieldID(env, d->m_jclass, d->m_className, fieldName, "[S");
     if (id)
         env->SetObjectField(d->m_jobject, id, value);
 
@@ -1930,7 +1991,7 @@ template <>
 void QJNIObjectPrivate::setField<jintArray>(const char *fieldName, jintArray value)
 {
     QJNIEnvironmentPrivate env;
-    jfieldID id = getCachedFieldID(env, d->m_jclass, fieldName, "[I");
+    jfieldID id = getCachedFieldID(env, d->m_jclass, d->m_className, fieldName, "[I");
     if (id)
         env->SetObjectField(d->m_jobject, id, value);
 
@@ -1940,7 +2001,7 @@ template <>
 void QJNIObjectPrivate::setField<jlongArray>(const char *fieldName, jlongArray value)
 {
     QJNIEnvironmentPrivate env;
-    jfieldID id = getCachedFieldID(env, d->m_jclass, fieldName, "[J");
+    jfieldID id = getCachedFieldID(env, d->m_jclass, d->m_className, fieldName, "[J");
     if (id)
         env->SetObjectField(d->m_jobject, id, value);
 
@@ -1950,7 +2011,7 @@ template <>
 void QJNIObjectPrivate::setField<jfloatArray>(const char *fieldName, jfloatArray value)
 {
     QJNIEnvironmentPrivate env;
-    jfieldID id = getCachedFieldID(env, d->m_jclass, fieldName, "[F");
+    jfieldID id = getCachedFieldID(env, d->m_jclass, d->m_className, fieldName, "[F");
     if (id)
         env->SetObjectField(d->m_jobject, id, value);
 
@@ -1960,7 +2021,7 @@ template <>
 void QJNIObjectPrivate::setField<jdoubleArray>(const char *fieldName, jdoubleArray value)
 {
     QJNIEnvironmentPrivate env;
-    jfieldID id = getCachedFieldID(env, d->m_jclass, fieldName, "[D");
+    jfieldID id = getCachedFieldID(env, d->m_jclass, d->m_className, fieldName, "[D");
     if (id)
         env->SetObjectField(d->m_jobject, id, value);
 
@@ -1970,7 +2031,7 @@ template <>
 void QJNIObjectPrivate::setField<jstring>(const char *fieldName, jstring value)
 {
     QJNIEnvironmentPrivate env;
-    jfieldID id = getCachedFieldID(env, d->m_jclass, fieldName, "Ljava/lang/String;");
+    jfieldID id = getCachedFieldID(env, d->m_jclass, d->m_className, fieldName, "Ljava/lang/String;");
     if (id)
         env->SetObjectField(d->m_jobject, id, value);
 
@@ -1982,7 +2043,7 @@ void QJNIObjectPrivate::setField<jobject>(const char *fieldName,
                                           jobject value)
 {
     QJNIEnvironmentPrivate env;
-    jfieldID id = getCachedFieldID(env, d->m_jclass, fieldName, sig);
+    jfieldID id = getCachedFieldID(env, d->m_jclass, d->m_className, fieldName, sig);
     if (id)
         env->SetObjectField(d->m_jobject, id, value);
 
@@ -1994,7 +2055,7 @@ void QJNIObjectPrivate::setField<jobjectArray>(const char *fieldName,
                                                jobjectArray value)
 {
     QJNIEnvironmentPrivate env;
-    jfieldID id = getCachedFieldID(env, d->m_jclass, fieldName, sig);
+    jfieldID id = getCachedFieldID(env, d->m_jclass, d->m_className, fieldName, sig);
     if (id)
         env->SetObjectField(d->m_jobject, id, value);
 
@@ -2006,7 +2067,7 @@ void QJNIObjectPrivate::setStaticField<jboolean>(jclass clazz,
                                                  jboolean value)
 {
     QJNIEnvironmentPrivate env;
-    jfieldID id = getCachedFieldID(env, clazz, fieldName, "Z", true);
+    jfieldID id = getFieldID(env, clazz, fieldName, "Z", true);
     if (id)
         env->SetStaticBooleanField(clazz, id, value);
 }
@@ -2018,8 +2079,14 @@ void QJNIObjectPrivate::setStaticField<jboolean>(const char *className,
 {
     QJNIEnvironmentPrivate env;
     jclass clazz = loadClass(className, env);
-    if (clazz)
-        setStaticField<jboolean>(clazz, fieldName, value);
+    if (clazz == 0)
+        return;
+
+    jfieldID id = getCachedFieldID(env, clazz, className, fieldName, "Z", true);
+    if (id == 0)
+        return;
+
+    env->SetStaticBooleanField(clazz, id, value);
 }
 
 template <>
@@ -2028,7 +2095,7 @@ void QJNIObjectPrivate::setStaticField<jbyte>(jclass clazz,
                                               jbyte value)
 {
     QJNIEnvironmentPrivate env;
-    jfieldID id = getCachedFieldID(env, clazz, fieldName, "B", true);
+    jfieldID id = getFieldID(env, clazz, fieldName, "B", true);
     if (id)
         env->SetStaticByteField(clazz, id, value);
 }
@@ -2040,8 +2107,14 @@ void QJNIObjectPrivate::setStaticField<jbyte>(const char *className,
 {
     QJNIEnvironmentPrivate env;
     jclass clazz = loadClass(className, env);
-    if (clazz)
-        setStaticField<jbyte>(clazz, fieldName, value);
+    if (clazz == 0)
+        return;
+
+    jfieldID id = getCachedFieldID(env, clazz, className, fieldName, "B", true);
+    if (id == 0)
+        return;
+
+    env->SetStaticByteField(clazz, id, value);
 }
 
 template <>
@@ -2050,7 +2123,7 @@ void QJNIObjectPrivate::setStaticField<jchar>(jclass clazz,
                                               jchar value)
 {
     QJNIEnvironmentPrivate env;
-    jfieldID id = getCachedFieldID(env, clazz, fieldName, "C", true);
+    jfieldID id = getFieldID(env, clazz, fieldName, "C", true);
     if (id)
         env->SetStaticCharField(clazz, id, value);
 }
@@ -2062,8 +2135,14 @@ void QJNIObjectPrivate::setStaticField<jchar>(const char *className,
 {
     QJNIEnvironmentPrivate env;
     jclass clazz = loadClass(className, env);
-    if (clazz)
-        setStaticField<jchar>(clazz, fieldName, value);
+    if (clazz == 0)
+        return;
+
+    jfieldID id = getCachedFieldID(env, clazz, className, fieldName, "C", true);
+    if (id == 0)
+        return;
+
+    env->SetStaticCharField(clazz, id, value);
 }
 
 template <>
@@ -2072,7 +2151,7 @@ void QJNIObjectPrivate::setStaticField<jshort>(jclass clazz,
                                                jshort value)
 {
     QJNIEnvironmentPrivate env;
-    jfieldID id = getCachedFieldID(env, clazz, fieldName, "S", true);
+    jfieldID id = getFieldID(env, clazz, fieldName, "S", true);
     if (id)
         env->SetStaticShortField(clazz, id, value);
 }
@@ -2084,8 +2163,14 @@ void QJNIObjectPrivate::setStaticField<jshort>(const char *className,
 {
     QJNIEnvironmentPrivate env;
     jclass clazz = loadClass(className, env);
-    if (clazz)
-        setStaticField<jshort>(clazz, fieldName, value);
+    if (clazz == 0)
+        return;
+
+    jfieldID id = getCachedFieldID(env, clazz, className, fieldName, "S", true);
+    if (id == 0)
+        return;
+
+    env->SetStaticShortField(clazz, id, value);
 }
 
 template <>
@@ -2094,7 +2179,7 @@ void QJNIObjectPrivate::setStaticField<jint>(jclass clazz,
                                              jint value)
 {
     QJNIEnvironmentPrivate env;
-    jfieldID id = getCachedFieldID(env, clazz, fieldName, "I", true);
+    jfieldID id = getFieldID(env, clazz, fieldName, "I", true);
     if (id)
         env->SetStaticIntField(clazz, id, value);
 }
@@ -2106,8 +2191,14 @@ void QJNIObjectPrivate::setStaticField<jint>(const char *className,
 {
     QJNIEnvironmentPrivate env;
     jclass clazz = loadClass(className, env);
-    if (clazz)
-        setStaticField<jint>(clazz, fieldName, value);
+    if (clazz == 0)
+        return;
+
+    jfieldID id = getCachedFieldID(env, clazz, className, fieldName, "I", true);
+    if (id == 0)
+        return;
+
+    env->SetStaticIntField(clazz, id, value);
 }
 
 template <>
@@ -2116,7 +2207,7 @@ void QJNIObjectPrivate::setStaticField<jlong>(jclass clazz,
                                               jlong value)
 {
     QJNIEnvironmentPrivate env;
-    jfieldID id = getCachedFieldID(env, clazz, fieldName, "J", true);
+    jfieldID id = getFieldID(env, clazz, fieldName, "J", true);
     if (id)
         env->SetStaticLongField(clazz, id, value);
 }
@@ -2128,8 +2219,14 @@ void QJNIObjectPrivate::setStaticField<jlong>(const char *className,
 {
     QJNIEnvironmentPrivate env;
     jclass clazz = loadClass(className, env);
-    if (clazz)
-        setStaticField<jlong>(clazz, fieldName, value);
+    if (clazz == 0)
+        return;
+
+    jfieldID id = getCachedFieldID(env, clazz, className, fieldName, "J", true);
+    if (id == 0)
+        return;
+
+    env->SetStaticLongField(clazz, id, value);
 }
 
 template <>
@@ -2138,7 +2235,7 @@ void QJNIObjectPrivate::setStaticField<jfloat>(jclass clazz,
                                                jfloat value)
 {
     QJNIEnvironmentPrivate env;
-    jfieldID id = getCachedFieldID(env, clazz, fieldName, "F", true);
+    jfieldID id = getFieldID(env, clazz, fieldName, "F", true);
     if (id)
         env->SetStaticFloatField(clazz, id, value);
 }
@@ -2150,8 +2247,14 @@ void QJNIObjectPrivate::setStaticField<jfloat>(const char *className,
 {
     QJNIEnvironmentPrivate env;
     jclass clazz = loadClass(className, env);
-    if (clazz)
-        setStaticField<jfloat>(clazz, fieldName, value);
+    if (clazz == 0)
+        return;
+
+    jfieldID id = getCachedFieldID(env, clazz, className, fieldName, "F", true);
+    if (id == 0)
+        return;
+
+    env->SetStaticFloatField(clazz, id, value);
 }
 
 template <>
@@ -2160,7 +2263,7 @@ void QJNIObjectPrivate::setStaticField<jdouble>(jclass clazz,
                                                 jdouble value)
 {
     QJNIEnvironmentPrivate env;
-    jfieldID id = getCachedFieldID(env, clazz, fieldName, "D", true);
+    jfieldID id = getFieldID(env, clazz, fieldName, "D", true);
     if (id)
         env->SetStaticDoubleField(clazz, id, value);
 }
@@ -2172,8 +2275,14 @@ void QJNIObjectPrivate::setStaticField<jdouble>(const char *className,
 {
     QJNIEnvironmentPrivate env;
     jclass clazz = loadClass(className, env);
-    if (clazz)
-        setStaticField<jdouble>(clazz, fieldName, value);
+    if (clazz == 0)
+        return;
+
+    jfieldID id = getCachedFieldID(env, clazz, className, fieldName, "D", true);
+    if (id == 0)
+        return;
+
+    env->SetStaticDoubleField(clazz, id, value);
 }
 
 template <>
@@ -2183,7 +2292,7 @@ void QJNIObjectPrivate::setStaticField<jobject>(jclass clazz,
                                                 jobject value)
 {
     QJNIEnvironmentPrivate env;
-    jfieldID id = getCachedFieldID(env, clazz, fieldName, sig, true);
+    jfieldID id = getFieldID(env, clazz, fieldName, sig, true);
     if (id)
         env->SetStaticObjectField(clazz, id, value);
 }
@@ -2196,8 +2305,14 @@ void QJNIObjectPrivate::setStaticField<jobject>(const char *className,
 {
     QJNIEnvironmentPrivate env;
     jclass clazz = loadClass(className, env);
-    if (clazz)
-        setStaticField<jobject>(clazz, fieldName, sig, value);
+    if (clazz == 0)
+        return;
+
+    jfieldID id = getCachedFieldID(env, clazz, className, fieldName, sig, true);
+    if (id == 0)
+        return;
+
+    env->SetStaticObjectField(clazz, id, value);
 }
 
 QJNIObjectPrivate QJNIObjectPrivate::fromString(const QString &string)
@@ -2233,6 +2348,13 @@ bool QJNIObjectPrivate::isClassAvailable(const char *className)
 bool QJNIObjectPrivate::isValid() const
 {
     return d->m_jobject;
+}
+
+QJNIObjectPrivate QJNIObjectPrivate::fromLocalRef(jobject lref)
+{
+    QJNIObjectPrivate o(lref);
+    QJNIEnvironmentPrivate()->DeleteLocalRef(lref);
+    return o;
 }
 
 bool QJNIObjectPrivate::isSameObject(jobject obj) const

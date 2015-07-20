@@ -1,7 +1,7 @@
 /****************************************************************************
 **
 ** Copyright (C) 2014 Kurt Pattyn <pattyn.kurt@gmail.com>.
-** Contact: http://www.qt-project.org/legal
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtWebSockets module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -102,7 +102,7 @@ QWebSocketFrame &QWebSocketFrame::operator =(const QWebSocketFrame &other)
     m_mask = other.m_mask;
     m_rsv1 = other.m_rsv1;
     m_rsv2 = other.m_rsv2;
-    m_rsv3 = other.m_rsv2;
+    m_rsv3 = other.m_rsv3;
     m_opCode = other.m_opCode;
     m_length = other.m_length;
     m_payload = other.m_payload;
@@ -307,7 +307,7 @@ bool QWebSocketFrame::isValid() const
 // The arm compiler of Visual Studio 2013 Update 3 crashes when
 // trying to optimize QWebSocketFrame::readFrame. Hence turn
 // those off for this snippet
-#if defined(Q_OS_WINPHONE) && defined(__ARM__)
+#if (defined(Q_OS_WINPHONE) || defined(Q_OS_WINRT)) && defined(__ARM__)
 #  pragma optimize("", off)
 #endif
 
@@ -340,7 +340,7 @@ QWebSocketFrame QWebSocketFrame::readFrame(QIODevice *pIoDevice)
             //maybe, a QStateMachine should be used
             if (!pIoDevice->waitForReadyRead(5000)) {
                 frame.setError(QWebSocketProtocol::CloseCodeGoingAway,
-                               QObject::tr("Timeout when reading data from socket."));
+                               tr("Timeout when reading data from socket."));
                 processingState = PS_DISPATCH_RESULT;
             } else {
                 processingState = returnState;
@@ -394,7 +394,7 @@ QWebSocketFrame QWebSocketFrame::readFrame(QIODevice *pIoDevice)
                 bytesRead = pIoDevice->read(reinterpret_cast<char *>(length), 2);
                 if (Q_UNLIKELY(bytesRead == -1)) {
                     frame.setError(QWebSocketProtocol::CloseCodeGoingAway,
-                                   QObject::tr("Error occurred while reading from the network: %1")
+                                   tr("Error occurred while reading from the network: %1")
                                         .arg(pIoDevice->errorString()));
                     processingState = PS_DISPATCH_RESULT;
                 } else {
@@ -405,7 +405,7 @@ QWebSocketFrame QWebSocketFrame::readFrame(QIODevice *pIoDevice)
                         //the length, for example, the length of a 124-byte-long string
                         //can't be encoded as the sequence 126, 0, 124"
                         frame.setError(QWebSocketProtocol::CloseCodeProtocolError,
-                                       QObject::tr("Lengths smaller than 126 " \
+                                       tr("Lengths smaller than 126 " \
                                                    "must be expressed as one byte."));
                         processingState = PS_DISPATCH_RESULT;
                     } else {
@@ -423,7 +423,7 @@ QWebSocketFrame QWebSocketFrame::readFrame(QIODevice *pIoDevice)
                 bytesRead = pIoDevice->read(reinterpret_cast<char *>(length), 8);
                 if (Q_UNLIKELY(bytesRead < 8)) {
                     frame.setError(QWebSocketProtocol::CloseCodeAbnormalDisconnection,
-                                   QObject::tr("Something went wrong during "\
+                                   tr("Something went wrong during "\
                                                "reading from the network."));
                     processingState = PS_DISPATCH_RESULT;
                 } else {
@@ -432,7 +432,7 @@ QWebSocketFrame QWebSocketFrame::readFrame(QIODevice *pIoDevice)
                     payloadLength = qFromBigEndian<quint64>(length);
                     if (Q_UNLIKELY(payloadLength & (quint64(1) << 63))) {
                         frame.setError(QWebSocketProtocol::CloseCodeProtocolError,
-                                       QObject::tr("Highest bit of payload length is not 0."));
+                                       tr("Highest bit of payload length is not 0."));
                         processingState = PS_DISPATCH_RESULT;
                     } else if (Q_UNLIKELY(payloadLength <= 0xFFFFu)) {
                         //see http://tools.ietf.org/html/rfc6455#page-28 paragraph 5.2
@@ -440,7 +440,7 @@ QWebSocketFrame QWebSocketFrame::readFrame(QIODevice *pIoDevice)
                         //the length, for example, the length of a 124-byte-long string
                         //can't be encoded as the sequence 126, 0, 124"
                         frame.setError(QWebSocketProtocol::CloseCodeProtocolError,
-                                       QObject::tr("Lengths smaller than 65536 (2^16) " \
+                                       tr("Lengths smaller than 65536 (2^16) " \
                                                    "must be expressed as 2 bytes."));
                         processingState = PS_DISPATCH_RESULT;
                     } else {
@@ -459,7 +459,7 @@ QWebSocketFrame QWebSocketFrame::readFrame(QIODevice *pIoDevice)
                                             sizeof(frame.m_mask));
                 if (bytesRead == -1) {
                     frame.setError(QWebSocketProtocol::CloseCodeGoingAway,
-                                   QObject::tr("Error while reading from the network: %1.")
+                                   tr("Error while reading from the network: %1.")
                                         .arg(pIoDevice->errorString()));
                     processingState = PS_DISPATCH_RESULT;
                 } else {
@@ -476,7 +476,7 @@ QWebSocketFrame QWebSocketFrame::readFrame(QIODevice *pIoDevice)
                 processingState = PS_DISPATCH_RESULT;
             } else if (Q_UNLIKELY(payloadLength > MAX_FRAME_SIZE_IN_BYTES)) {
                 frame.setError(QWebSocketProtocol::CloseCodeTooMuchData,
-                               QObject::tr("Maximum framesize exceeded."));
+                               tr("Maximum framesize exceeded."));
                 processingState = PS_DISPATCH_RESULT;
             } else {
                 quint64 bytesAvailable = quint64(pIoDevice->bytesAvailable());
@@ -487,7 +487,7 @@ QWebSocketFrame QWebSocketFrame::readFrame(QIODevice *pIoDevice)
                     if (Q_UNLIKELY(frame.m_payload.length() != int(payloadLength))) {
                         //some error occurred; refer to the Qt documentation of QIODevice::read()
                         frame.setError(QWebSocketProtocol::CloseCodeAbnormalDisconnection,
-                                       QObject::tr("Some serious error occurred " \
+                                       tr("Some serious error occurred " \
                                                    "while reading from the network."));
                         processingState = PS_DISPATCH_RESULT;
                     } else {
@@ -519,7 +519,7 @@ QWebSocketFrame QWebSocketFrame::readFrame(QIODevice *pIoDevice)
     return frame;
 }
 
-#if defined(Q_OS_WINPHONE) && defined(__ARM__)
+#if (defined(Q_OS_WINPHONE) || defined(Q_OS_WINRT)) && defined(__ARM__)
 #  pragma optimize("", on)
 #endif
 
@@ -540,16 +540,16 @@ void QWebSocketFrame::setError(QWebSocketProtocol::CloseCode code, const QString
 bool QWebSocketFrame::checkValidity()
 {
     if (Q_UNLIKELY(m_rsv1 || m_rsv2 || m_rsv3)) {
-        setError(QWebSocketProtocol::CloseCodeProtocolError, QObject::tr("Rsv field is non-zero"));
+        setError(QWebSocketProtocol::CloseCodeProtocolError, tr("Rsv field is non-zero"));
     } else if (Q_UNLIKELY(QWebSocketProtocol::isOpCodeReserved(m_opCode))) {
-        setError(QWebSocketProtocol::CloseCodeProtocolError, QObject::tr("Used reserved opcode"));
+        setError(QWebSocketProtocol::CloseCodeProtocolError, tr("Used reserved opcode"));
     } else if (isControlFrame()) {
         if (Q_UNLIKELY(m_length > 125)) {
             setError(QWebSocketProtocol::CloseCodeProtocolError,
-                     QObject::tr("Controle frame is larger than 125 bytes"));
+                     tr("Controle frame is larger than 125 bytes"));
         } else if (Q_UNLIKELY(!m_isFinalFrame)) {
             setError(QWebSocketProtocol::CloseCodeProtocolError,
-                     QObject::tr("Controle frames cannot be fragmented"));
+                     tr("Controle frames cannot be fragmented"));
         } else {
             m_isValid = true;
         }

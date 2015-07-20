@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Designer of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -81,17 +81,17 @@ public:
     QVariantMap formData();
     void setFormData(const QVariantMap &vm);
 
-    virtual QStringList checkContents() const;
+    QStringList checkContents() const Q_DECL_OVERRIDE;
 
     // Deprecated
-    virtual QPoint grid() const;
+    QPoint grid() const Q_DECL_OVERRIDE;
 
     // Deprecated
-    virtual void setGrid(const QPoint &grid);
+    void setGrid(const QPoint &grid) Q_DECL_OVERRIDE;
 
-    virtual bool hasFeature(Feature f) const;
-    virtual Feature features() const;
-    virtual void setFeatures(Feature f);
+    bool hasFeature(Feature f) const Q_DECL_OVERRIDE;
+    Feature features() const Q_DECL_OVERRIDE;
+    void setFeatures(Feature f) Q_DECL_OVERRIDE;
 
     const Grid &designerGrid() const;
     void setDesignerGrid(const  Grid& grid);
@@ -101,8 +101,8 @@ public:
 
     bool gridVisible() const;
 
-    virtual ResourceFileSaveMode resourceFileSaveMode() const;
-    virtual void setResourceFileSaveMode(ResourceFileSaveMode behaviour);
+    ResourceFileSaveMode resourceFileSaveMode() const Q_DECL_OVERRIDE;
+    void setResourceFileSaveMode(ResourceFileSaveMode behavior) Q_DECL_OVERRIDE;
 
     static const Grid &defaultDesignerGrid();
     static void setDefaultDesignerGrid(const Grid& grid);
@@ -139,8 +139,8 @@ public:
 
     DesignerPixmapCache *pixmapCache() const;
     DesignerIconCache *iconCache() const;
-    virtual QtResourceSet *resourceSet() const;
-    virtual void setResourceSet(QtResourceSet *resourceSet);
+    QtResourceSet *resourceSet() const Q_DECL_OVERRIDE;
+    void setResourceSet(QtResourceSet *resourceSet) Q_DECL_OVERRIDE;
     void addReloadableProperty(QDesignerPropertySheet *sheet, int index);
     void removeReloadableProperty(QDesignerPropertySheet *sheet, int index);
     void addReloadablePropertySheet(QDesignerPropertySheet *sheet, QObject *object);

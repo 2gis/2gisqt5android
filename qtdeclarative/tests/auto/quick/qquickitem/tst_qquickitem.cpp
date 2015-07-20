@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -168,6 +168,9 @@ private slots:
     void testSGInvalidate();
 
     void objectChildTransform();
+
+    void contains_data();
+    void contains();
 
 private:
 
@@ -1926,6 +1929,48 @@ void tst_qquickitem::objectChildTransform()
     root->setProperty("source", QString());
     // Shouldn't crash.
 }
+
+void tst_qquickitem::contains_data()
+{
+    QTest::addColumn<int>("x");
+    QTest::addColumn<int>("y");
+    QTest::addColumn<bool>("contains");
+
+    QTest::newRow("(0, 0) = false") << 0 << 0 << false;
+    QTest::newRow("(50, 0) = false") << 50 << 0 << false;
+    QTest::newRow("(0, 50) = false") << 0 << 50 << false;
+    QTest::newRow("(50, 50) = true") << 50 << 50 << true;
+    QTest::newRow("(100, 100) = true") << 100 << 100 << true;
+    QTest::newRow("(150, 150) = false") << 150 << 150 << false;
+}
+
+void tst_qquickitem::contains()
+{
+    // Tests that contains works, but also checks that mapToItem/mapFromItem
+    // return the correct type (point or rect, not a JS object with those properties),
+    // as this is a common combination of calls.
+
+    QFETCH(int, x);
+    QFETCH(int, y);
+    QFETCH(bool, contains);
+
+    QQuickView view;
+    view.setSource(testFileUrl("contains.qml"));
+
+    QQuickItem *root = qobject_cast<QQuickItem*>(view.rootObject());
+    QVERIFY(root);
+
+    QVariant result = false;
+    QVERIFY(QMetaObject::invokeMethod(root, "childContainsViaMapToItem",
+        Q_RETURN_ARG(QVariant, result), Q_ARG(QVariant, qreal(x)), Q_ARG(QVariant, qreal(y))));
+    QCOMPARE(result.toBool(), contains);
+
+    result = false;
+    QVERIFY(QMetaObject::invokeMethod(root, "childContainsViaMapFromItem",
+        Q_RETURN_ARG(QVariant, result), Q_ARG(QVariant, qreal(x)), Q_ARG(QVariant, qreal(y))));
+    QCOMPARE(result.toBool(), contains);
+}
+
 
 QTEST_MAIN(tst_qquickitem)
 

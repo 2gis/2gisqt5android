@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -35,38 +35,54 @@
 #include <private/qgstutils_p.h>
 
 #include <QtCore/qdebug.h>
+#include <QtGui/qguiapplication.h>
 
 #include <gst/gst.h>
+
+#if !GST_CHECK_VERSION(1,0,0)
 #include <gst/interfaces/xoverlay.h>
 #include <gst/interfaces/propertyprobe.h>
+#else
+#include <gst/video/videooverlay.h>
+#endif
 
 
 QGstreamerVideoWindow::QGstreamerVideoWindow(QObject *parent, const char *elementName)
     : QVideoWindowControl(parent)
+    , QGstreamerBufferProbe(QGstreamerBufferProbe::ProbeCaps)
     , m_videoSink(0)
     , m_windowId(0)
     , m_aspectRatioMode(Qt::KeepAspectRatio)
     , m_fullScreen(false)
     , m_colorKey(QColor::Invalid)
 {
-    if (elementName)
+    if (elementName) {
         m_videoSink = gst_element_factory_make(elementName, NULL);
-    else
+    } else if (QGuiApplication::platformName().compare(QLatin1String("xcb"), Qt::CaseInsensitive) == 0) {
+        // We need a native X window handle to be able to use xvimagesink.
+        // Bail out if Qt is not using xcb (the control will then be ignored by the plugin)
         m_videoSink = gst_element_factory_make("xvimagesink", NULL);
+    }
 
     if (m_videoSink) {
         qt_gst_object_ref_sink(GST_OBJECT(m_videoSink)); //Take ownership
 
-        GstPad *pad = gst_element_get_static_pad(m_videoSink,"sink");
-        m_bufferProbeId = gst_pad_add_buffer_probe(pad, G_CALLBACK(padBufferProbe), this);
+        GstPad *pad = gst_element_get_static_pad(m_videoSink, "sink");
+        addProbeToPad(pad);
         gst_object_unref(GST_OBJECT(pad));
     }
+    else
+        qDebug() << "No m_videoSink available!";
 }
 
 QGstreamerVideoWindow::~QGstreamerVideoWindow()
 {
-    if (m_videoSink)
+    if (m_videoSink) {
+        GstPad *pad = gst_element_get_static_pad(m_videoSink,"sink");
+        removeProbeFromPad(pad);
+        gst_object_unref(GST_OBJECT(pad));
         gst_object_unref(GST_OBJECT(m_videoSink));
+    }
 }
 
 WId QGstreamerVideoWindow::winId() const
@@ -82,11 +98,15 @@ void QGstreamerVideoWindow::setWinId(WId id)
     WId oldId = m_windowId;
 
     m_windowId = id;
-
+#if GST_CHECK_VERSION(1,0,0)
+    if (m_videoSink && GST_IS_VIDEO_OVERLAY(m_videoSink)) {
+        gst_video_overlay_set_window_handle(GST_VIDEO_OVERLAY(m_videoSink), m_windowId);
+    }
+#else
     if (m_videoSink && GST_IS_X_OVERLAY(m_videoSink)) {
         gst_x_overlay_set_xwindow_id(GST_X_OVERLAY(m_videoSink), m_windowId);
     }
-
+#endif
     if (!oldId)
         emit readyChanged(true);
 
@@ -97,20 +117,26 @@ void QGstreamerVideoWindow::setWinId(WId id)
 bool QGstreamerVideoWindow::processSyncMessage(const QGstreamerMessage &message)
 {
     GstMessage* gm = message.rawMessage();
+#if GST_CHECK_VERSION(1,0,0)
+    const GstStructure *s = gst_message_get_structure(gm);
+    if ((GST_MESSAGE_TYPE(gm) == GST_MESSAGE_ELEMENT) &&
+            gst_structure_has_name(s, "prepare-window-handle") &&
+            m_videoSink && GST_IS_VIDEO_OVERLAY(m_videoSink)) {
 
+        gst_video_overlay_set_window_handle(GST_VIDEO_OVERLAY(m_videoSink), m_windowId);
+
+        return true;
+    }
+#else
     if ((GST_MESSAGE_TYPE(gm) == GST_MESSAGE_ELEMENT) &&
             gst_structure_has_name(gm->structure, "prepare-xwindow-id") &&
             m_videoSink && GST_IS_X_OVERLAY(m_videoSink)) {
 
         gst_x_overlay_set_xwindow_id(GST_X_OVERLAY(m_videoSink), m_windowId);
 
-        GstPad *pad = gst_element_get_static_pad(m_videoSink,"sink");
-        m_bufferProbeId = gst_pad_add_buffer_probe(pad, G_CALLBACK(padBufferProbe), this);
-        gst_object_unref(GST_OBJECT(pad));
-
         return true;
     }
-
+#endif
     return false;
 }
 
@@ -122,7 +148,19 @@ QRect QGstreamerVideoWindow::displayRect() const
 void QGstreamerVideoWindow::setDisplayRect(const QRect &rect)
 {
     m_displayRect = rect;
-
+#if GST_CHECK_VERSION(1,0,0)
+    if (m_videoSink && GST_IS_VIDEO_OVERLAY(m_videoSink)) {
+        if (m_displayRect.isEmpty())
+            gst_video_overlay_set_render_rectangle(GST_VIDEO_OVERLAY(m_videoSink), -1, -1, -1, -1);
+        else
+            gst_video_overlay_set_render_rectangle(GST_VIDEO_OVERLAY(m_videoSink),
+                                               m_displayRect.x(),
+                                               m_displayRect.y(),
+                                               m_displayRect.width(),
+                                               m_displayRect.height());
+        repaint();
+    }
+#else
     if (m_videoSink && GST_IS_X_OVERLAY(m_videoSink)) {
 #if GST_VERSION_MICRO >= 29
         if (m_displayRect.isEmpty())
@@ -136,6 +174,7 @@ void QGstreamerVideoWindow::setDisplayRect(const QRect &rect)
         repaint();
 #endif
     }
+#endif
 }
 
 Qt::AspectRatioMode QGstreamerVideoWindow::aspectRatioMode() const
@@ -157,6 +196,16 @@ void QGstreamerVideoWindow::setAspectRatioMode(Qt::AspectRatioMode mode)
 
 void QGstreamerVideoWindow::repaint()
 {
+#if GST_CHECK_VERSION(1,0,0)
+    if (m_videoSink && GST_IS_VIDEO_OVERLAY(m_videoSink)) {
+        //don't call gst_x_overlay_expose if the sink is in null state
+        GstState state = GST_STATE_NULL;
+        GstStateChangeReturn res = gst_element_get_state(m_videoSink, &state, NULL, 1000000);
+        if (res != GST_STATE_CHANGE_FAILURE && state != GST_STATE_NULL) {
+            gst_video_overlay_expose(GST_VIDEO_OVERLAY(m_videoSink));
+        }
+    }
+#else
     if (m_videoSink && GST_IS_X_OVERLAY(m_videoSink)) {
         //don't call gst_x_overlay_expose if the sink is in null state
         GstState state = GST_STATE_NULL;
@@ -165,6 +214,7 @@ void QGstreamerVideoWindow::repaint()
             gst_x_overlay_expose(GST_X_OVERLAY(m_videoSink));
         }
     }
+#endif
 }
 
 QColor QGstreamerVideoWindow::colorKey() const
@@ -296,32 +346,22 @@ QSize QGstreamerVideoWindow::nativeSize() const
     return m_nativeSize;
 }
 
-void QGstreamerVideoWindow::padBufferProbe(GstPad *pad, GstBuffer * /* buffer */, gpointer user_data)
+void QGstreamerVideoWindow::probeCaps(GstCaps *caps)
 {
-    QGstreamerVideoWindow *control = reinterpret_cast<QGstreamerVideoWindow*>(user_data);
-    QMetaObject::invokeMethod(control, "updateNativeVideoSize", Qt::QueuedConnection);
-    gst_pad_remove_buffer_probe(pad, control->m_bufferProbeId);
+    QSize resolution = QGstUtils::capsCorrectedResolution(caps);
+    QMetaObject::invokeMethod(
+                this,
+                "updateNativeVideoSize",
+                Qt::QueuedConnection,
+                Q_ARG(QSize, resolution));
 }
 
-void QGstreamerVideoWindow::updateNativeVideoSize()
+void QGstreamerVideoWindow::updateNativeVideoSize(const QSize &size)
 {
-    const QSize oldSize = m_nativeSize;
-    m_nativeSize = QSize();
-
-    if (m_videoSink) {
-        //find video native size to update video widget size hint
-        GstPad *pad = gst_element_get_static_pad(m_videoSink,"sink");
-        GstCaps *caps = gst_pad_get_negotiated_caps(pad);
-        gst_object_unref(GST_OBJECT(pad));
-
-        if (caps) {
-            m_nativeSize = QGstUtils::capsCorrectedResolution(caps);
-            gst_caps_unref(caps);
-        }
-    }
-
-    if (m_nativeSize != oldSize)
+    if (m_nativeSize != size) {
+        m_nativeSize = size;
         emit nativeSizeChanged();
+    }
 }
 
 GstElement *QGstreamerVideoWindow::videoSink()

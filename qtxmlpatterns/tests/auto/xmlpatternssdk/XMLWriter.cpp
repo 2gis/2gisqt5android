@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -75,12 +75,6 @@ using namespace QPatternistSDK;
  */
 typedef QPair<QString, QString> NSBinding;
 typedef QList<NSBinding> NSBindingList;
-
-#ifdef QT_NO_DEBUG
-#   define DEBUG_CODE(code)
-#else
-#   define DEBUG_CODE(code) code
-#endif
 
 class XMLWriter::Private
 {
@@ -290,8 +284,8 @@ public:
     QIODevice *dev;
     QStack<bool> hasContentStack;
     QString errorString;
-    DEBUG_CODE(QStack<QString> tags;)
-    DEBUG_CODE(QStack<NSBindingList> namespaceTracker;)
+    QStack<QString> tags;
+    QStack<NSBindingList> namespaceTracker;
 };
 
 /**
@@ -364,8 +358,8 @@ bool XMLWriter::startElement(const QString &qName,
     serialize('<');
     serialize(qName);
 
-    DEBUG_CODE(d->tags.push(qName));
-    DEBUG_CODE(d->namespaceTracker.push(d->namespaces));
+    d->tags.push(qName);
+    d->namespaceTracker.push(d->namespaces);
 
     /* Add namespace declarations. */
     const NSBindingList::const_iterator end(d->namespaces.constEnd());
@@ -421,7 +415,7 @@ bool XMLWriter::endElement(const QString &qName)
     Q_ASSERT_X(d->tags.pop() == qName, Q_FUNC_INFO,
                "The element tags are not balanced, the produced XML is invalid.");
 
-    DEBUG_CODE(d->namespaceTracker.pop());
+    d->namespaceTracker.pop();
 
     /* "this" element is content for our parent, so ensure hasElementContent is true. */
 

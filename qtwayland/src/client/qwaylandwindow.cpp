@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the config.tests of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -67,6 +59,8 @@
 
 QT_BEGIN_NAMESPACE
 
+namespace QtWaylandClient {
+
 QWaylandWindow *QWaylandWindow::mMouseGrab = 0;
 
 QWaylandWindow::QWaylandWindow(QWindow *window)
@@ -88,9 +82,8 @@ QWaylandWindow::QWaylandWindow(QWindow *window)
     , mResizeDirty(false)
     , mResizeAfterSwap(qEnvironmentVariableIsSet("QT_WAYLAND_RESIZE_AFTER_SWAP"))
     , mSentInitialResize(false)
-    , mMouseDevice(0)
-    , mMouseSerial(0)
     , mState(Qt::WindowNoState)
+    , mMask()
     , mBackingStore(Q_NULLPTR)
 {
     init(mDisplay->createSurface(static_cast<QtWayland::wl_surface *>(this)));
@@ -109,10 +102,24 @@ QWaylandWindow::QWaylandWindow(QWindow *window)
         // Set initial surface title
         mShellSurface->setTitle(window->title());
 
-        // Set surface class to the .desktop file name (obtained from executable name)
-        QFileInfo exeFileInfo(qApp->applicationFilePath());
-        QString className = exeFileInfo.baseName() + QLatin1String(".desktop");
-        mShellSurface->setAppId(className);
+        // The appId is the desktop entry identifier that should follow the
+        // reverse DNS convention (see http://standards.freedesktop.org/desktop-entry-spec/latest/ar01s02.html),
+        // use the application domain if available, otherwise the executable base name.
+        // According to xdg-shell the appId is only the name, without the .desktop suffix.
+        QFileInfo fi = QCoreApplication::instance()->applicationFilePath();
+        QStringList domainName =
+            QCoreApplication::instance()->organizationDomain().split(QLatin1Char('.'),
+                                                                     QString::SkipEmptyParts);
+
+        if (domainName.isEmpty()) {
+            mShellSurface->setAppId(fi.baseName());
+        } else {
+            QString appId;
+            for (int i = 0; i < domainName.count(); ++i)
+                appId.prepend(QLatin1Char('.')).prepend(domainName.at(i));
+            appId.append(fi.baseName());
+            mShellSurface->setAppId(appId);
+        }
     }
 
     if (QPlatformWindow::parent() && mSubSurfaceWindow) {
@@ -125,9 +132,16 @@ QWaylandWindow::QWaylandWindow(QWindow *window)
         mShellSurface->setTopLevel();
     }
 
+    // Enable high-dpi rendering. Scale() returns the screen scale factor and will
+    // typically be integer 1 (normal-dpi) or 2 (high-dpi). Call set_buffer_scale()
+    // to inform the compositor that high-resolution buffers will be provided.
+    if (mDisplay->compositorVersion() >= 3)
+        set_buffer_scale(scale());
+
     setOrientationMask(window->screen()->orientationUpdateMask());
     setWindowFlags(window->flags());
     setGeometry_helper(window->geometry());
+    setMask(window->mask());
     setWindowStateInternal(window->windowState());
     handleContentOrientationChange(window->contentOrientation());
 }
@@ -208,7 +222,7 @@ void QWaylandWindow::setGeometry(const QRect &rect)
 {
     setGeometry_helper(rect);
 
-    if (window()->isVisible()) {
+    if (window()->isVisible() && rect.isValid()) {
         if (mWindowDecoration)
             mWindowDecoration->update();
 
@@ -226,14 +240,17 @@ void QWaylandWindow::setGeometry(const QRect &rect)
 void QWaylandWindow::setVisible(bool visible)
 {
     if (visible) {
-        if (window()->type() == Qt::Popup && transientParent()) {
+        if (window()->type() == Qt::Popup) {
             QWaylandWindow *parent = transientParent();
-            mMouseDevice = parent->mMouseDevice;
-            mMouseSerial = parent->mMouseSerial;
-
-            QWaylandWlShellSurface *wlshellSurface = dynamic_cast<QWaylandWlShellSurface*>(mShellSurface);
-            if (mMouseDevice && wlshellSurface) {
-                wlshellSurface->setPopup(transientParent(), mMouseDevice, mMouseSerial);
+            if (!parent) {
+                // Try with the current focus window. It should be the right one and anyway
+                // better than having no parent at all.
+                parent = mDisplay->lastInputWindow();
+            }
+            if (parent) {
+                QWaylandWlShellSurface *wlshellSurface = qobject_cast<QWaylandWlShellSurface*>(mShellSurface);
+                if (wlshellSurface)
+                    wlshellSurface->setPopup(parent, mDisplay->lastInputDevice(), mDisplay->lastInputSerial());
             }
         }
 
@@ -269,6 +286,24 @@ void QWaylandWindow::lower()
 {
     if (mShellSurface)
         mShellSurface->lower();
+}
+
+void QWaylandWindow::setMask(const QRegion &mask)
+{
+    if (mMask == mask)
+        return;
+
+    mMask = mask;
+
+    if (mMask.isEmpty()) {
+        set_input_region(0);
+    } else {
+        struct ::wl_region *region = mDisplay->createRegion(mMask);
+        set_input_region(region);
+        wl_region_destroy(region);
+    }
+
+    commit();
 }
 
 void QWaylandWindow::configure(uint32_t edges, int32_t width, int32_t height)
@@ -336,7 +371,7 @@ void QWaylandWindow::requestResize()
 {
     QMutexLocker lock(&mResizeLock);
 
-    if (mCanResize) {
+    if (mCanResize || !mSentInitialResize) {
         doResize();
     }
 
@@ -349,7 +384,6 @@ void QWaylandWindow::requestResize()
 void QWaylandWindow::attach(QWaylandBuffer *buffer, int x, int y)
 {
     mBuffer = buffer;
-
     if (mBuffer)
         attach(mBuffer->buffer(), x, y);
     else
@@ -480,7 +514,7 @@ bool QWaylandWindow::createDecoration()
 {
     // so far only xdg-shell support this "unminimize" trick, may be moved elsewhere
     if (mState == Qt::WindowMinimized) {
-        QWaylandXdgSurface *xdgSurface = dynamic_cast<QWaylandXdgSurface *>(mShellSurface);
+        QWaylandXdgSurface *xdgSurface = qobject_cast<QWaylandXdgSurface *>(mShellSurface);
         if ( xdgSurface ) {
             if (xdgSurface->isFullscreen()) {
                 setWindowStateInternal(Qt::WindowFullScreen);
@@ -572,33 +606,30 @@ QWaylandWindow *QWaylandWindow::transientParent() const
     if (window()->transientParent()) {
         // Take the top level window here, since the transient parent may be a QWidgetWindow
         // or some other window without a shell surface, which is then not able to get mouse
-        // events, nor set mMouseSerial and mMouseDevice.
+        // events.
         return static_cast<QWaylandWindow *>(topLevelWindow(window()->transientParent())->handle());
     }
     return 0;
 }
 
-void QWaylandWindow::handleMouse(QWaylandInputDevice *inputDevice, ulong timestamp, const QPointF &local, const QPointF &global, Qt::MouseButtons b, Qt::KeyboardModifiers mods)
+void QWaylandWindow::handleMouse(QWaylandInputDevice *inputDevice, const QWaylandPointerEvent &e)
 {
-    if (b != Qt::NoButton) {
-        mMouseSerial = inputDevice->serial();
-        mMouseDevice = inputDevice;
-    }
 
     if (mWindowDecoration) {
-        handleMouseEventWithDecoration(inputDevice, timestamp,local,global,b,mods);
-        return;
+        handleMouseEventWithDecoration(inputDevice, e);
+    } else {
+        switch (e.type) {
+            case QWaylandPointerEvent::Enter:
+                QWindowSystemInterface::handleEnterEvent(window(), e.local, e.global);
+                break;
+            case QWaylandPointerEvent::Motion:
+                QWindowSystemInterface::handleMouseEvent(window(), e.timestamp, e.local, e.global, e.buttons, e.modifiers);
+                break;
+        }
     }
 
-    QWindowSystemInterface::handleMouseEvent(window(),timestamp,local,global,b,mods);
-}
-
-void QWaylandWindow::handleMouseEnter(QWaylandInputDevice *inputDevice)
-{
-    if (!mWindowDecoration) {
-        QWindowSystemInterface::handleEnterEvent(window());
-    }
-    restoreMouseCursor(inputDevice);
+    if (e.type == QWaylandPointerEvent::Enter)
+        restoreMouseCursor(inputDevice);
 }
 
 void QWaylandWindow::handleMouseLeave(QWaylandInputDevice *inputDevice)
@@ -620,19 +651,23 @@ bool QWaylandWindow::touchDragDecoration(QWaylandInputDevice *inputDevice, const
     return mWindowDecoration->handleTouch(inputDevice, local, global, state, mods);
 }
 
-void QWaylandWindow::handleMouseEventWithDecoration(QWaylandInputDevice *inputDevice, ulong timestamp, const QPointF &local, const QPointF &global, Qt::MouseButtons b, Qt::KeyboardModifiers mods)
+void QWaylandWindow::handleMouseEventWithDecoration(QWaylandInputDevice *inputDevice, const QWaylandPointerEvent &e)
 {
-    if (mWindowDecoration->handleMouse(inputDevice,local,global,b,mods))
+    if (mMousePressedInContentArea == Qt::NoButton &&
+        mWindowDecoration->handleMouse(inputDevice, e.local, e.global, e.buttons, e.modifiers)) {
+        if (mMouseEventsInContentArea)
+            QWindowSystemInterface::handleLeaveEvent(window());
         return;
+    }
 
     QMargins marg = frameMargins();
     QRect windowRect(0 + marg.left(),
                      0 + marg.top(),
                      geometry().size().width() - marg.right(),
                      geometry().size().height() - marg.bottom());
-    if (windowRect.contains(local.toPoint()) || mMousePressedInContentArea != Qt::NoButton) {
-        QPointF localTranslated = local;
-        QPointF globalTranslated = global;
+    if (windowRect.contains(e.local.toPoint()) || mMousePressedInContentArea != Qt::NoButton) {
+        QPointF localTranslated = e.local;
+        QPointF globalTranslated = e.global;
         localTranslated.setX(localTranslated.x() - marg.left());
         localTranslated.setY(localTranslated.y() - marg.top());
         globalTranslated.setX(globalTranslated.x() - marg.left());
@@ -641,15 +676,23 @@ void QWaylandWindow::handleMouseEventWithDecoration(QWaylandInputDevice *inputDe
             restoreMouseCursor(inputDevice);
             QWindowSystemInterface::handleEnterEvent(window());
         }
-        QWindowSystemInterface::handleMouseEvent(window(), timestamp, localTranslated, globalTranslated, b, mods);
+
+        switch (e.type) {
+            case QWaylandPointerEvent::Enter:
+                QWindowSystemInterface::handleEnterEvent(window(), localTranslated, globalTranslated);
+                break;
+            case QWaylandPointerEvent::Motion:
+                QWindowSystemInterface::handleMouseEvent(window(), e.timestamp, localTranslated, globalTranslated, e.buttons, e.modifiers);
+                break;
+        }
+
         mMouseEventsInContentArea = true;
-        mMousePressedInContentArea = b;
+        mMousePressedInContentArea = e.buttons;
     } else {
         if (mMouseEventsInContentArea) {
             QWindowSystemInterface::handleLeaveEvent(window());
             mMouseEventsInContentArea = false;
         }
-        mWindowDecoration->handleMouse(inputDevice,local,global,b,mods);
     }
 }
 
@@ -685,6 +728,16 @@ bool QWaylandWindow::isExposed() const
     if (mShellSurface)
         return window()->isVisible() && mShellSurface->isExposed();
     return QPlatformWindow::isExposed();
+}
+
+int QWaylandWindow::scale() const
+{
+    return screen()->scale();
+}
+
+qreal QWaylandWindow::devicePixelRatio() const
+{
+    return screen()->devicePixelRatio();
 }
 
 bool QWaylandWindow::setMouseGrabEnabled(bool grab)
@@ -760,6 +813,8 @@ QVariant QWaylandWindow::property(const QString &name)
 QVariant QWaylandWindow::property(const QString &name, const QVariant &defaultValue)
 {
     return m_properties.value(name, defaultValue);
+}
+
 }
 
 QT_END_NAMESPACE

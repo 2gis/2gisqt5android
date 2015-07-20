@@ -7,10 +7,10 @@
     <Name>com.digia.enginio</Name>
 	<SortingPriority>100</SortingPriority>
     <Licenses>
-		<License name="LGPL" file="LICENSE.LGPL" />
-		<License name="GPL" file="LICENSE.GPL" />
+        <License name="LGPLv21" file="LICENSE.LGPLv21" />
+        <License name="LGPLv3" file="LICENSE.LGPLv3" />
         <License name="FDL" file="LICENSE.FDL" />
-		<License name="LGPL_EXCEPTION" file="LGPL_EXCEPTION.txt" />
+        <License name="LGPL_EXCEPTION" file="LGPL_EXCEPTION.txt" />
     </Licenses>
     <Default>script</Default>
     <Script>installscript.qs</Script>

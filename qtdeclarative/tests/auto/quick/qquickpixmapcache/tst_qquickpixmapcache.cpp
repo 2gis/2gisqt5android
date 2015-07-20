@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -108,7 +108,7 @@ void tst_qquickpixmapcache::initTestCase()
 {
     QQmlDataTest::initTestCase();
 
-    QVERIFY2(server.listen(14452), qPrintable(server.errorString()));
+    QVERIFY2(server.listen(), qPrintable(server.errorString()));
 
     // This avoids a race condition/deadlock bug in network config
     // manager when it is accessed by the HTTP server thread before
@@ -133,8 +133,8 @@ void tst_qquickpixmapcache::single_data()
     // File URLs are optimized
     QTest::newRow("local") << testFileUrl("exists.png") << localfile_optimized << true << false;
     QTest::newRow("local") << testFileUrl("notexists.png") << localfile_optimized << false << false;
-    QTest::newRow("remote") << QUrl("http://127.0.0.1:14452/exists.png") << false << true << false;
-    QTest::newRow("remote") << QUrl("http://127.0.0.1:14452/notexists.png") << false << false << true;
+    QTest::newRow("remote") << server.url("/exists.png") << false << true << false;
+    QTest::newRow("remote") << server.url("/notexists.png") << false << false << true;
 }
 
 void tst_qquickpixmapcache::single()
@@ -201,26 +201,26 @@ void tst_qquickpixmapcache::parallel_data()
             << -1;
 
     QTest::newRow("remote")
-            << QUrl("http://127.0.0.1:14452/exists2.png")
-            << QUrl("http://127.0.0.1:14452/exists3.png")
+            << server.url("/exists2.png")
+            << server.url("/exists3.png")
             << 0
             << -1;
 
     QTest::newRow("remoteagain")
-            << QUrl("http://127.0.0.1:14452/exists2.png")
-            << QUrl("http://127.0.0.1:14452/exists3.png")
+            << server.url("/exists2.png")
+            << server.url("/exists3.png")
             << 2
             << -1;
 
     QTest::newRow("remotecopy")
-            << QUrl("http://127.0.0.1:14452/exists4.png")
-            << QUrl("http://127.0.0.1:14452/exists4.png")
+            << server.url("/exists4.png")
+            << server.url("/exists4.png")
             << 0
             << -1;
 
     QTest::newRow("remotecopycancel")
-            << QUrl("http://127.0.0.1:14452/exists5.png")
-            << QUrl("http://127.0.0.1:14452/exists5.png")
+            << server.url("/exists5.png")
+            << server.url("/exists5.png")
             << 0
             << 0;
 }
@@ -332,7 +332,7 @@ void tst_qquickpixmapcache::massive()
 // QTBUG-12729
 void tst_qquickpixmapcache::cancelcrash()
 {
-    QUrl url("http://127.0.0.1:14452/cancelcrash_notexist.png");
+    QUrl url = server.url("/cancelcrash_notexist.png");
     for (int ii = 0; ii < 1000; ++ii) {
         QQuickPixmap pix(&engine, url);
     }
@@ -370,12 +370,10 @@ void tst_qquickpixmapcache::shrinkcache()
 
 #ifndef QT_NO_CONCURRENT
 
-void createNetworkServer()
+void createNetworkServer(TestHTTPServer *server)
 {
    QEventLoop eventLoop;
-   TestHTTPServer server;
-   QVERIFY2(server.listen(14453), qPrintable(server.errorString()));
-   server.serveDirectory(QQmlDataTest::instance()->testFile("http"));
+   server->serveDirectory(QQmlDataTest::instance()->testFile("http"));
    QTimer::singleShot(100, &eventLoop, SLOT(quit()));
    eventLoop.exec();
 }
@@ -384,11 +382,13 @@ void createNetworkServer()
 // QT-3957
 void tst_qquickpixmapcache::networkCrash()
 {
-    QFuture<void> future = QtConcurrent::run(createNetworkServer);
+   TestHTTPServer server;
+   QVERIFY2(server.listen(), qPrintable(server.errorString()));
+    QFuture<void> future = QtConcurrent::run(createNetworkServer, &server);
     QQmlEngine engine;
     for (int ii = 0; ii < 100 ; ++ii) {
         QQuickPixmap* pixmap = new QQuickPixmap;
-        pixmap->load(&engine,  QUrl(QString("http://127.0.0.1:14453/exists.png")));
+        pixmap->load(&engine,  server.url("/exists.png"));
         QTest::qSleep(1);
         pixmap->clear();
         delete pixmap;
@@ -403,14 +403,14 @@ void tst_qquickpixmapcache::networkCrash()
 void tst_qquickpixmapcache::lockingCrash()
 {
     TestHTTPServer server;
-    QVERIFY2(server.listen(14453), qPrintable(server.errorString()));
+    QVERIFY2(server.listen(), qPrintable(server.errorString()));
     server.serveDirectory(testFile("http"), TestHTTPServer::Delay);
 
     {
         QQuickPixmap* p = new QQuickPixmap;
         {
             QQmlEngine e;
-            p->load(&e,  QUrl(QString("http://127.0.0.1:14453/exists6.png")));
+            p->load(&e,  server.url("/exists6.png"));
         }
         p->clear();
         QVERIFY(p->isNull());

@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQuick module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -202,7 +202,12 @@ void QQuickWidgetPrivate::itemGeometryChanged(QQuickItem *resizeItem, const QRec
 
 void QQuickWidgetPrivate::render(bool needsSync)
 {
-    context->makeCurrent(offscreenSurface);
+    if (!context->makeCurrent(offscreenSurface)) {
+        qWarning("QQuickWidget: Cannot render due to failing makeCurrent()");
+        return;
+    }
+
+    QOpenGLContextPrivate::get(context)->defaultFboRedirect = fbo->handle();
 
     if (needsSync) {
         renderControl->polishItems();
@@ -210,12 +215,15 @@ void QQuickWidgetPrivate::render(bool needsSync)
     }
 
     renderControl->render();
-    context->functions()->glFlush();
 
     if (resolvedFbo) {
         QRect rect(QPoint(0, 0), fbo->size());
         QOpenGLFramebufferObject::blitFramebuffer(resolvedFbo, rect, fbo, rect);
     }
+
+    static_cast<QOpenGLExtensions *>(context->functions())->flushShared();
+
+    QOpenGLContextPrivate::get(context)->defaultFboRedirect = 0;
 }
 
 void QQuickWidgetPrivate::renderSceneGraph()
@@ -622,6 +630,22 @@ void QQuickWidgetPrivate::updateSize()
     }
 }
 
+/*!
+  \internal
+
+  Update the position of the offscreen window, so it matches the position of the QQuickWidget.
+ */
+void QQuickWidgetPrivate::updatePosition()
+{
+    Q_Q(QQuickWidget);
+    if (offscreenWindow == 0)
+        return;
+
+    const QPoint &pos = q->mapToGlobal(QPoint(0, 0));
+    if (offscreenWindow->position() != pos)
+        offscreenWindow->setPosition(pos);
+}
+
 QSize QQuickWidgetPrivate::rootObjectSize() const
 {
     QSize rootObjectSize(0,0);
@@ -674,8 +698,10 @@ void QQuickWidgetPrivate::createContext()
         context = new QOpenGLContext;
         context->setFormat(offscreenWindow->requestedFormat());
 
-        if (qt_gl_global_share_context())
+        if (qt_gl_global_share_context()) {
             context->setShareContext(qt_gl_global_share_context());
+            context->setScreen(context->shareContext()->screen());
+        }
 
         if (!context->create()) {
             const bool isEs = context->isOpenGLES();
@@ -690,6 +716,7 @@ void QQuickWidgetPrivate::createContext()
         // contains a QSurfaceFormat representing the _actual_ format of the underlying
         // configuration. This is essential to get a surface that is compatible with the context.
         offscreenSurface->setFormat(context->format());
+        offscreenSurface->setScreen(context->screen());
         offscreenSurface->create();
     }
 
@@ -725,7 +752,14 @@ void QQuickWidget::createFramebufferObject()
 
     if (context->shareContext() != QWidgetPrivate::get(window())->shareContext()) {
         context->setShareContext(QWidgetPrivate::get(window())->shareContext());
-        context->create();
+        context->setScreen(context->shareContext()->screen());
+        if (!context->create())
+            qWarning("QQuickWidget: Failed to recreate context");
+        // The screen may be different so we must recreate the offscreen surface too.
+        // Unlike QOpenGLContext, QOffscreenSurface's create() does not recreate so have to destroy() first.
+        d->offscreenSurface->destroy();
+        d->offscreenSurface->setScreen(context->screen());
+        d->offscreenSurface->create();
     }
 
     context->makeCurrent(d->offscreenSurface);
@@ -738,6 +772,16 @@ void QQuickWidget::createFramebufferObject()
     format.setAttachment(QOpenGLFramebufferObject::CombinedDepthStencil);
     format.setSamples(samples);
 
+    // The default framebuffer for normal windows have sRGB support on OS X which leads to the Qt Quick text item
+    // utilizing sRGB blending. To get identical results with QQuickWidget we have to have our framebuffer backed
+    // by an sRGB texture.
+#ifdef Q_OS_OSX
+    if (context->hasExtension("GL_ARB_framebuffer_sRGB")
+            && context->hasExtension("GL_EXT_texture_sRGB")
+            && context->hasExtension("GL_EXT_texture_sRGB_decode"))
+        format.setInternalTextureFormat(GL_SRGB8_ALPHA8_EXT);
+#endif
+
     const QSize fboSize = size() * devicePixelRatio();
 
     // Could be a simple hide - show, in which case the previous fbo is just fine.
@@ -746,7 +790,22 @@ void QQuickWidget::createFramebufferObject()
         d->fbo = new QOpenGLFramebufferObject(fboSize, format);
     }
 
-    d->offscreenWindow->setGeometry(0, 0, width(), height());
+    // When compositing in the backingstore, sampling the sRGB texture would perform an
+    // sRGB-linear conversion which is not what we want when the final framebuffer (the window's)
+    // is sRGB too. Disable the conversion.
+#ifdef Q_OS_OSX
+    if (format.internalTextureFormat() == GL_SRGB8_ALPHA8_EXT) {
+        QOpenGLFunctions *funcs = context->functions();
+        funcs->glBindTexture(GL_TEXTURE_2D, d->fbo->texture());
+        funcs->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SRGB_DECODE_EXT, GL_SKIP_DECODE_EXT);
+    }
+#endif
+
+    // Even though this is just an offscreen window we should set the position on it, as it might be
+    // useful for an item to know the actual position of the scene.
+    // Note: The position will be update when we get a move event (see: updatePosition()).
+    const QPoint &globalPos = mapToGlobal(QPoint(0, 0));
+    d->offscreenWindow->setGeometry(globalPos.x(), globalPos.y(), width(), height());
     d->offscreenWindow->setRenderTarget(d->fbo);
 
     if (samples > 0)
@@ -1013,7 +1072,7 @@ void QQuickWidget::showEvent(QShowEvent *)
     Q_D(QQuickWidget);
     d->updatePending = false;
     d->createContext();
-    triggerUpdate();
+    d->render(true);
 }
 
 /*! \reimp */
@@ -1076,21 +1135,6 @@ bool QQuickWidget::event(QEvent *e)
     Q_D(QQuickWidget);
 
     switch (e->type()) {
-#ifndef QT_NO_DRAGANDDROP
-    case QEvent::Drop:
-    case QEvent::DragMove:
-    case QEvent::DragLeave:
-        // Drag/drop events only have local pos, so no need to map,
-        // but QQuickWindow::event() does not return true
-        d->offscreenWindow->event(e);
-        return e->isAccepted();
-    case QEvent::DragEnter:
-        // Don't reject drag events for the entire widget when one
-        // item rejects the drag enter
-        d->offscreenWindow->event(e);
-        e->accept();
-        return true;
-#endif
     case QEvent::InputMethod:
     case QEvent::InputMethodQuery:
 
@@ -1114,6 +1158,10 @@ bool QQuickWidget::event(QEvent *e)
         }
         break;
 
+    case QEvent::Move:
+        d->updatePosition();
+        break;
+
     default:
         break;
     }
@@ -1121,6 +1169,42 @@ bool QQuickWidget::event(QEvent *e)
     return QWidget::event(e);
 }
 
+#ifndef QT_NO_DRAGANDDROP
+
+/*! \reimp */
+void QQuickWidget::dragEnterEvent(QDragEnterEvent *e)
+{
+    Q_D(QQuickWidget);
+    // Don't reject drag events for the entire widget when one
+    // item rejects the drag enter
+    d->offscreenWindow->event(e);
+    e->accept();
+}
+
+/*! \reimp */
+void QQuickWidget::dragMoveEvent(QDragMoveEvent *e)
+{
+    Q_D(QQuickWidget);
+    // Drag/drop events only have local pos, so no need to map,
+    // but QQuickWindow::event() does not return true
+    d->offscreenWindow->event(e);
+}
+
+/*! \reimp */
+void QQuickWidget::dragLeaveEvent(QDragLeaveEvent *e)
+{
+    Q_D(QQuickWidget);
+    d->offscreenWindow->event(e);
+}
+
+/*! \reimp */
+void QQuickWidget::dropEvent(QDropEvent *e)
+{
+    Q_D(QQuickWidget);
+    d->offscreenWindow->event(e);
+}
+
+#endif // QT_NO_DRAGANDDROP
 
 // TODO: try to separate the two cases of
 // 1. render() unconditionally without sync
@@ -1194,6 +1278,25 @@ void QQuickWidget::setClearColor(const QColor &color)
 {
     Q_D(QQuickWidget);
     d->offscreenWindow->setColor(color);
+}
+
+/*!
+    \since 5.5
+
+    Returns the offscreen QQuickWindow which is used by this widget to drive
+    the Qt Quick rendering. This is useful if you want to use QQuickWindow
+    APIs that are not currently exposed by QQuickWidget, for instance
+    connecting to the QQuickWindow::beforeRendering() signal in order
+    to draw native OpenGL content below Qt Quick's own rendering.
+
+    \warning Use the return value of this function with caution. In
+    particular, do not ever attempt to show the QQuickWindow, and be
+    very careful when using other QWindow-only APIs.
+*/
+QQuickWindow *QQuickWidget::quickWindow() const
+{
+    Q_D(const QQuickWidget);
+    return d->offscreenWindow;
 }
 
 QT_END_NAMESPACE

@@ -1,31 +1,34 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Quick Controls module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL21$
+** $QT_BEGIN_LICENSE:LGPL3$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 or version 3 as published by the Free
-** Software Foundation and appearing in the file LICENSE.LGPLv21 and
-** LICENSE.LGPLv3 included in the packaging of this file. Please review the
-** following information to ensure the GNU Lesser General Public License
-** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
-** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPLv3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** GNU General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU
+** General Public License version 2.0 or later as published by the Free
+** Software Foundation and appearing in the file LICENSE.GPL included in
+** the packaging of this file. Please review the following information to
+** ensure the GNU General Public License version 2.0 requirements will be
+** met: http://www.gnu.org/licenses/gpl-2.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -103,14 +106,18 @@ QT_BEGIN_NAMESPACE
 /*!
     \qmlproperty bool Menu::visible
 
-    Whether the menu should be visible. This is only enabled when the menu is used as
-    a submenu or in the menubar. Its value defaults to \c true.
+    Whether the menu should be visible as a submenu of another Menu, or as a menu on a MenuBar.
+    Its value defaults to \c true.
+
+    \note This has nothing to do with the actual menu pop-up window being visible. Use
+    \l aboutToShow() and \l aboutToHide() if you need to know when the pop-up window will
+    be shown or hidden.
 */
 
 /*!
     \qmlproperty enumeration Menu::type
 
-    This property is read-only and constant, and its value is \l MenuItemType.Menu.
+    This property is read-only and constant, and its value is \l {QtQuick.Controls::MenuItem::}{type}.
 */
 
 /*!
@@ -228,6 +235,25 @@ QT_BEGIN_NAMESPACE
     \sa insertItem()
 */
 
+
+/*!
+    \qmlsignal Menu::aboutToShow()
+    \since QtQuick.Controls 1.4
+
+    This signal is emitted just before the menu is shown to the user.
+
+    \sa aboutToHide()
+*/
+
+/*!
+    \qmlsignal Menu::aboutToHide()
+    \since QtQuick.Controls 1.4
+
+    This signal is emitted just before the menu is hidden from the user.
+
+    \sa aboutToShow()
+*/
+
 QQuickMenu::QQuickMenu(QObject *parent)
     : QQuickMenuText(parent, QQuickMenuItemType::Menu),
       m_itemsCount(0),
@@ -245,6 +271,7 @@ QQuickMenu::QQuickMenu(QObject *parent)
 
     m_platformMenu = QGuiApplicationPrivate::platformTheme()->createPlatformMenu();
     if (m_platformMenu) {
+        connect(m_platformMenu, SIGNAL(aboutToShow()), this, SIGNAL(aboutToShow()));
         connect(m_platformMenu, SIGNAL(aboutToHide()), this, SLOT(__closeMenu()));
         if (platformItem())
             platformItem()->setMenu(m_platformMenu);
@@ -418,7 +445,7 @@ void QQuickMenu::__popup(const QRectF &targetRect, int atItemIndex, MenuType men
         m_platformMenu->setMenuType(QPlatformMenu::MenuType(menuType));
         m_platformMenu->showPopup(parentWindow, globalTargetRect.toRect(), atItem ? atItem->platformItem() : 0);
     } else {
-        m_popupWindow = new QQuickMenuPopupWindow();
+        m_popupWindow = new QQuickMenuPopupWindow(this);
         if (visualItem())
             m_popupWindow->setParentItem(visualItem());
         else
@@ -428,9 +455,11 @@ void QQuickMenu::__popup(const QRectF &targetRect, int atItemIndex, MenuType men
 
         connect(m_popupWindow, SIGNAL(visibleChanged(bool)), this, SLOT(windowVisibleChanged(bool)));
         connect(m_popupWindow, SIGNAL(geometryChanged()), this, SIGNAL(__popupGeometryChanged()));
+        connect(m_popupWindow, SIGNAL(willBeDeletedLater()), this, SLOT(clearPopupWindow()));
 
         m_popupWindow->setPosition(targetRect.x() + m_xOffset + renderOffset.x(),
                                    targetRect.y() + targetRect.height() + m_yOffset + renderOffset.y());
+        emit aboutToShow();
         m_popupWindow->show();
     }
 }
@@ -461,39 +490,64 @@ QRect QQuickMenu::popupGeometry() const
 
 void QQuickMenu::__closeMenu()
 {
-    setPopupVisible(false);
+    if (m_popupVisible) {
+        emit aboutToHide();
+        setPopupVisible(false);
+    }
     if (m_popupWindow)
         m_popupWindow->setVisible(false);
     m_parentWindow = 0;
-    emit __menuClosed();
+}
+
+QQuickMenuPopupWindow *QQuickMenu::topMenuPopup() const
+{
+    QQuickMenuPopupWindow *topMenuWindow = m_popupWindow;
+    while (topMenuWindow) {
+        QQuickMenuPopupWindow *pw = qobject_cast<QQuickMenuPopupWindow *>(topMenuWindow->transientParent());
+        if (!pw)
+            return topMenuWindow;
+        topMenuWindow = pw;
+    }
+
+    return 0;
 }
 
 void QQuickMenu::__dismissMenu()
 {
     if (m_platformMenu) {
         m_platformMenu->dismiss();
-    } else {
-        QQuickMenuPopupWindow *topMenuWindow = m_popupWindow;
-        while (topMenuWindow) {
-            QQuickMenuPopupWindow *pw = qobject_cast<QQuickMenuPopupWindow *>(topMenuWindow->transientParent());
-            if (!pw)
-                topMenuWindow->dismissPopup();
-            topMenuWindow = pw;
-        }
+    } else if (QQuickMenuPopupWindow *topPopup = topMenuPopup()) {
+        topPopup->dismissPopup();
     }
 }
 
 void QQuickMenu::windowVisibleChanged(bool v)
 {
     if (!v) {
-        if (qobject_cast<QQuickMenuPopupWindow *>(m_popupWindow->transientParent())) {
+        if (m_popupWindow && qobject_cast<QQuickMenuPopupWindow *>(m_popupWindow->transientParent())) {
             m_popupWindow->transientParent()->setMouseGrabEnabled(true);
             m_popupWindow->transientParent()->setKeyboardGrabEnabled(true);
         }
-        m_popupWindow->deleteLater();
-        m_popupWindow = 0;
         __closeMenu();
     }
+}
+
+void QQuickMenu::clearPopupWindow()
+{
+    m_popupWindow = 0;
+    emit __menuPopupDestroyed();
+}
+
+void QQuickMenu::__destroyMenuPopup()
+{
+    if (m_popupWindow)
+        m_popupWindow->setToBeDeletedLater();
+}
+
+void QQuickMenu::__destroyAllMenuPopups() {
+    QQuickMenuPopupWindow *popup = topMenuPopup();
+    if (popup)
+        popup->setToBeDeletedLater();
 }
 
 void QQuickMenu::itemIndexToListIndex(int itemIndex, int *listIndex, int *containerIndex) const

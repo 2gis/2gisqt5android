@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -103,8 +103,8 @@ Q_DECLARE_METATYPE(QList<int>)
 
   Here we pass the name of the file as the second argument to
   evaluate().  This does not affect evaluation in any way; the second
-  argument is a general-purpose string that is used to identify the
-  script for debugging purposes.
+  argument is a general-purpose string that is stored in the \c Error
+  object for debugging purposes.
 
   \section1 Engine Configuration
 
@@ -125,11 +125,21 @@ Q_DECLARE_METATYPE(QList<int>)
   \section1 Script Exceptions
 
   evaluate() can throw a script exception (e.g. due to a syntax
-  error); in that case, the return value is the value that was thrown
-  (typically an \c{Error} object). You can check whether the
-  evaluation caused an exception by calling isError() on the return
-  value. If isError() returns true, you can call toString() on the
-  error object to obtain an error message.
+  error). If it does, then evaluate() returns the value that was thrown
+  (typically an \c{Error} object). Use \l QJSValue::isError() to check
+  for exceptions.
+
+  For detailed information about the error, use \l QJSValue::toString() to
+  obtain an error message, and use \l QJSValue::property() to query the
+  properties of the \c Error object. The following properties are available:
+
+  \list
+  \li \c name
+  \li \c message
+  \li \c fileName
+  \li \c lineNumber
+  \li \c stack
+  \endlist
 
   \snippet code/src_script_qjsengine.cpp 4
 
@@ -165,7 +175,8 @@ QT_BEGIN_NAMESPACE
     \l{ECMA-262}, Section 15.1.
 */
 QJSEngine::QJSEngine()
-    : d(new QV8Engine(this))
+    : QObject(*new QJSEnginePrivate, 0)
+    , d(new QV8Engine(this))
 {
 }
 
@@ -177,7 +188,7 @@ QJSEngine::QJSEngine()
 */
 
 QJSEngine::QJSEngine(QObject *parent)
-    : QObject(parent)
+    : QObject(*new QJSEnginePrivate, parent)
     , d(new QV8Engine(this))
 {
 }
@@ -249,12 +260,18 @@ void QJSEngine::collectGarbage()
 */
 void QJSEngine::installTranslatorFunctions(const QJSValue &object)
 {
-    QV4::ExecutionEngine *v4 = d->m_v4Engine;
-    QV4::Scope scope(v4);
-    QJSValuePrivate *vp = QJSValuePrivate::get(object);
-    QV4::ScopedObject obj(scope, vp->getValue(v4));
+    QV4::ExecutionEngine *otherEngine = QJSValuePrivate::engine(&object);
+    if (otherEngine && otherEngine != d->m_v4Engine) {
+        qWarning("QJSEngine: Trying to install a translator function from a different engine");
+        return;
+    }
+    QV4::Scope scope(d->m_v4Engine);
+    QV4::ScopedObject obj(scope);
+    QV4::Value *val = QJSValuePrivate::getValue(&object);
+    if (val)
+        obj = val;
     if (!obj)
-        obj = v4->globalObject;
+        obj = scope.engine->globalObject();
 #ifndef QT_NO_TRANSLATION
     obj->defineDefaultProperty(QStringLiteral("qsTranslate"), QV4::GlobalExtensions::method_qsTranslate);
     obj->defineDefaultProperty(QStringLiteral("QT_TRANSLATE_NOOP"), QV4::GlobalExtensions::method_qsTranslateNoOp);
@@ -264,8 +281,8 @@ void QJSEngine::installTranslatorFunctions(const QJSValue &object)
     obj->defineDefaultProperty(QStringLiteral("QT_TRID_NOOP"), QV4::GlobalExtensions::method_qsTrIdNoOp);
 
     // string prototype extension
-    v4->stringObjectClass->prototype->defineDefaultProperty(QStringLiteral("arg"),
-                                                            QV4::GlobalExtensions::method_string_arg);
+    scope.engine->stringPrototype.asObject()->defineDefaultProperty(QStringLiteral("arg"),
+                                                          QV4::GlobalExtensions::method_string_arg);
 #endif
 }
 
@@ -275,7 +292,7 @@ void QJSEngine::installTranslatorFunctions(const QJSValue &object)
 
     The script code will be evaluated in the context of the global object.
 
-    The evaluation of \a program can cause an exception in the
+    The evaluation of \a program can cause an \l{Script Exceptions}{exception} in the
     engine; in this case the return value will be the exception
     that was thrown (typically an \c{Error} object; see
     QJSValue::isError()).
@@ -301,8 +318,8 @@ QJSValue QJSEngine::evaluate(const QString& program, const QString& fileName, in
 {
     QV4::ExecutionEngine *v4 = d->m_v4Engine;
     QV4::Scope scope(v4);
-    QV4::ExecutionContext *ctx = v4->currentContext();
-    if (ctx != v4->rootContext)
+    QV4::ScopedContext ctx(scope, v4->currentContext());
+    if (ctx->d() != v4->rootContext())
         ctx = v4->pushGlobalContext();
     QV4::ScopedValue result(scope);
 
@@ -313,10 +330,10 @@ QJSValue QJSEngine::evaluate(const QString& program, const QString& fileName, in
     if (!scope.engine->hasException)
         result = script.run();
     if (scope.engine->hasException)
-        result = ctx->catchException();
-    if (ctx != v4->rootContext)
+        result = v4->catchException();
+    if (ctx->d() != v4->rootContext())
         v4->popContext();
-    return new QJSValuePrivate(v4, result);
+    return QJSValue(v4, result->asReturnedValue());
 }
 
 /*!
@@ -331,7 +348,7 @@ QJSValue QJSEngine::newObject()
 {
     QV4::Scope scope(d->m_v4Engine);
     QV4::ScopedValue v(scope, d->m_v4Engine->newObject());
-    return new QJSValuePrivate(d->m_v4Engine, v);
+    return QJSValue(d->m_v4Engine, v->asReturnedValue());
 }
 
 /*!
@@ -342,11 +359,11 @@ QJSValue QJSEngine::newObject()
 QJSValue QJSEngine::newArray(uint length)
 {
     QV4::Scope scope(d->m_v4Engine);
-    QV4::Scoped<QV4::ArrayObject> array(scope, d->m_v4Engine->newArrayObject());
+    QV4::ScopedArrayObject array(scope, d->m_v4Engine->newArrayObject());
     if (length < 0x1000)
         array->arrayReserve(length);
     array->setArrayLengthUnchecked(length);
-    return new QJSValuePrivate(d->m_v4Engine, array);
+    return QJSValue(d->m_v4Engine, array.asReturnedValue());
 }
 
 /*!
@@ -365,7 +382,7 @@ QJSValue QJSEngine::newArray(uint length)
   If the given \a object is deleted outside of the engine's control, any
   attempt to access the deleted QObject's members through the JavaScript
   wrapper object (either by script code or C++) will result in a
-  script exception.
+  \l{Script Exceptions}{script exception}.
 
   \sa QJSValue::toQObject()
 */
@@ -380,7 +397,7 @@ QJSValue QJSEngine::newQObject(QObject *object)
             QQmlEngine::setObjectOwnership(object, QQmlEngine::JavaScriptOwnership);
     }
     QV4::ScopedValue v(scope, QV4::QObjectWrapper::wrap(v4, object));
-    return new QJSValuePrivate(v4, v);
+    return QJSValue(v4, v->asReturnedValue());
 }
 
 /*!
@@ -397,8 +414,8 @@ QJSValue QJSEngine::globalObject() const
 {
     Q_D(const QJSEngine);
     QV4::Scope scope(d->m_v4Engine);
-    QV4::ScopedValue v(scope, d->m_v4Engine->globalObject);
-    return new QJSValuePrivate(d->m_v4Engine, v);
+    QV4::ScopedValue v(scope, d->m_v4Engine->globalObject());
+    return QJSValue(d->m_v4Engine, v->asReturnedValue());
 }
 
 /*!
@@ -409,8 +426,8 @@ QJSValue QJSEngine::create(int type, const void *ptr)
 {
     Q_D(QJSEngine);
     QV4::Scope scope(d->m_v4Engine);
-    QV4::ScopedValue v(scope, d->metaTypeToJS(type, ptr));
-    return new QJSValuePrivate(d->m_v4Engine, v);
+    QV4::ScopedValue v(scope, scope.engine->metaTypeToJS(type, ptr));
+    return QJSValue(d->m_v4Engine, v->asReturnedValue());
 }
 
 /*!
@@ -419,15 +436,21 @@ QJSValue QJSEngine::create(int type, const void *ptr)
 */
 bool QJSEngine::convertV2(const QJSValue &value, int type, void *ptr)
 {
-    QJSValuePrivate *vp = QJSValuePrivate::get(value);
-    QV8Engine *engine = vp->engine ? vp->engine->v8Engine : 0;
-    if (engine) {
-        QV4::Scope scope(engine->m_v4Engine);
-        QV4::ScopedValue v(scope, vp->getValue(engine->m_v4Engine));
-        return engine->metaTypeFromJS(v, type, ptr);
-    } else if (vp->value.isEmpty()) {
-        if (vp->unboundData.userType() == QMetaType::QString) {
-            QString string = vp->unboundData.toString();
+    QV4::ExecutionEngine *v4 = QJSValuePrivate::engine(&value);
+    QV4::Value scratch;
+    QV4::Value *val = QJSValuePrivate::valueForData(&value, &scratch);
+    if (v4) {
+        QV4::Scope scope(v4);
+        QV4::ScopedValue v(scope, *val);
+        return scope.engine->metaTypeFromJS(v, type, ptr);
+    }
+
+    if (!val) {
+        QVariant *variant = QJSValuePrivate::getVariant(&value);
+        Q_ASSERT(variant);
+
+        if (variant->userType() == QMetaType::QString) {
+            QString string = variant->toString();
             // have a string based value without engine. Do conversion manually
             if (type == QMetaType::Bool) {
                 *reinterpret_cast<bool*>(ptr) = string.length() != 0;
@@ -476,52 +499,54 @@ bool QJSEngine::convertV2(const QJSValue &value, int type, void *ptr)
                 return false;
             }
         } else {
-            return QMetaType::convert(&vp->unboundData.data_ptr(), vp->unboundData.userType(), ptr, type);
+            return QMetaType::convert(&variant->data_ptr(), variant->userType(), ptr, type);
         }
-    } else {
-        switch (type) {
-            case QMetaType::Bool:
-                *reinterpret_cast<bool*>(ptr) = vp->value.toBoolean();
-                return true;
-            case QMetaType::Int:
-                *reinterpret_cast<int*>(ptr) = vp->value.toInt32();
-                return true;
-            case QMetaType::UInt:
-                *reinterpret_cast<uint*>(ptr) = vp->value.toUInt32();
-                return true;
-            case QMetaType::LongLong:
-                *reinterpret_cast<qlonglong*>(ptr) = vp->value.toInteger();
-                return true;
-            case QMetaType::ULongLong:
-                *reinterpret_cast<qulonglong*>(ptr) = vp->value.toInteger();
-                return true;
-            case QMetaType::Double:
-                *reinterpret_cast<double*>(ptr) = vp->value.toNumber();
-                return true;
-            case QMetaType::QString:
-                *reinterpret_cast<QString*>(ptr) = value.toString();
-                return true;
-            case QMetaType::Float:
-                *reinterpret_cast<float*>(ptr) = vp->value.toNumber();
-                return true;
-            case QMetaType::Short:
-                *reinterpret_cast<short*>(ptr) = vp->value.toInt32();
-                return true;
-            case QMetaType::UShort:
-                *reinterpret_cast<unsigned short*>(ptr) = vp->value.toUInt16();
-                return true;
-            case QMetaType::Char:
-                *reinterpret_cast<char*>(ptr) = vp->value.toInt32();
-                return true;
-            case QMetaType::UChar:
-                *reinterpret_cast<unsigned char*>(ptr) = vp->value.toUInt16();
-                return true;
-            case QMetaType::QChar:
-                *reinterpret_cast<QChar*>(ptr) = vp->value.toUInt16();
-                return true;
-            default:
-                return false;
-        }
+    }
+
+    Q_ASSERT(val);
+
+    switch (type) {
+        case QMetaType::Bool:
+            *reinterpret_cast<bool*>(ptr) = val->toBoolean();
+            return true;
+        case QMetaType::Int:
+            *reinterpret_cast<int*>(ptr) = val->toInt32();
+            return true;
+        case QMetaType::UInt:
+            *reinterpret_cast<uint*>(ptr) = val->toUInt32();
+            return true;
+        case QMetaType::LongLong:
+            *reinterpret_cast<qlonglong*>(ptr) = val->toInteger();
+            return true;
+        case QMetaType::ULongLong:
+            *reinterpret_cast<qulonglong*>(ptr) = val->toInteger();
+            return true;
+        case QMetaType::Double:
+            *reinterpret_cast<double*>(ptr) = val->toNumber();
+            return true;
+        case QMetaType::QString:
+            *reinterpret_cast<QString*>(ptr) = val->toQStringNoThrow();
+            return true;
+        case QMetaType::Float:
+            *reinterpret_cast<float*>(ptr) = val->toNumber();
+            return true;
+        case QMetaType::Short:
+            *reinterpret_cast<short*>(ptr) = val->toInt32();
+            return true;
+        case QMetaType::UShort:
+            *reinterpret_cast<unsigned short*>(ptr) = val->toUInt16();
+            return true;
+        case QMetaType::Char:
+            *reinterpret_cast<char*>(ptr) = val->toInt32();
+            return true;
+        case QMetaType::UChar:
+            *reinterpret_cast<unsigned char*>(ptr) = val->toUInt16();
+            return true;
+        case QMetaType::QChar:
+            *reinterpret_cast<QChar*>(ptr) = val->toUInt16();
+            return true;
+        default:
+            return false;
     }
 }
 
@@ -529,7 +554,7 @@ bool QJSEngine::convertV2(const QJSValue &value, int type, void *ptr)
 
     Creates a QJSValue with the given \a value.
 
-    \sa fromScriptValue()
+    \sa fromScriptValue(), newVariant()
 */
 
 /*! \fn T QJSEngine::fromScriptValue(const QJSValue &value)
@@ -538,6 +563,52 @@ bool QJSEngine::convertV2(const QJSValue &value, int type, void *ptr)
 
     \sa toScriptValue()
 */
+
+
+QJSEnginePrivate *QJSEnginePrivate::get(QV4::ExecutionEngine *e)
+{
+    return e->v8Engine->publicEngine()->d_func();
+}
+
+QJSEnginePrivate::~QJSEnginePrivate()
+{
+    typedef QHash<const QMetaObject *, QQmlPropertyCache *>::Iterator PropertyCacheIt;
+
+    for (PropertyCacheIt iter = propertyCache.begin(), end = propertyCache.end(); iter != end; ++iter)
+        (*iter)->release();
+}
+
+QQmlPropertyCache *QJSEnginePrivate::createCache(const QMetaObject *mo)
+{
+    if (!mo->superClass()) {
+        QQmlPropertyCache *rv = new QQmlPropertyCache(q_func(), mo);
+        propertyCache.insert(mo, rv);
+        return rv;
+    } else {
+        QQmlPropertyCache *super = cache(mo->superClass());
+        QQmlPropertyCache *rv = super->copyAndAppend(mo);
+        propertyCache.insert(mo, rv);
+        return rv;
+    }
+}
+
+/*!
+   \since 5.5
+   \relates QJSEngine
+
+   Returns the QJSEngine associated with \a object, if any.
+
+   This function is useful if you have exposed a QObject to the JavaScript environment
+   and later in your program would like to regain access. It does not require you to
+   keep the wrapper around that was returned from QJSEngine::newQObject().
+ */
+QJSEngine *qjsEngine(const QObject *object)
+{
+    QQmlData *data = QQmlData::get(object, false);
+    if (!data || data->jsWrapper.isNullOrUndefined())
+        return 0;
+    return data->jsWrapper.engine()->jsEngine();
+}
 
 QT_END_NAMESPACE
 

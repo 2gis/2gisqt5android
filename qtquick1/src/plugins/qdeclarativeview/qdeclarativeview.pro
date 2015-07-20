@@ -1,5 +1,5 @@
 TARGET      = qdeclarativeview
-QT         += declarative widgets designer
+QT         += declarative widgets uiplugin
 
 PLUGIN_TYPE = designer
 PLUGIN_CLASS_NAME = QDeclarativeViewPlugin

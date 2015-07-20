@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -39,10 +39,7 @@
 
 #include <QtDBus/private/qdbusutil_p.h>
 #include <QtDBus/private/qdbusconnection_p.h>
-
-#define QT_LINKED_LIBDBUS
-#include <QtDBus/private/qdbusutil_p.h>
-#include <QtDBus/private/qdbusconnection_p.h>
+#include <QtDBus/private/qdbus_symbols_p.h>
 
 static const char serviceName[] = "org.qtproject.autotests.qpong";
 static const char objectPath[] = "/org/qtproject/qpong";
@@ -85,10 +82,8 @@ private slots:
     void sendCallErrors_data();
     void sendCallErrors();
 
-#ifdef DBUS_TYPE_UNIX_FD
     void receiveUnknownType_data();
     void receiveUnknownType();
-#endif
 
     void demarshallPrimitives_data();
     void demarshallPrimitives();
@@ -1017,7 +1012,6 @@ void tst_QDBusMarshall::sendCallErrors()
     QCOMPARE(reply.errorMessage(), errorMsg);
 }
 
-#ifdef DBUS_TYPE_UNIX_FD
 // If DBUS_TYPE_UNIX_FD is not defined, it means the current system's D-Bus library is too old for this test
 void tst_QDBusMarshall::receiveUnknownType_data()
 {
@@ -1075,6 +1069,27 @@ public:
     }
 };
 
+// mostly the same as qdbusintegrator.cpp:connectionCapabilies
+static bool canSendUnixFd(DBusConnection *connection)
+{
+    typedef dbus_bool_t (*can_send_type_t)(DBusConnection *, int);
+    static can_send_type_t can_send_type = 0;
+
+#if defined(QT_LINKED_LIBDBUS)
+# if DBUS_VERSION-0 >= 0x010400
+    can_send_type = dbus_connection_can_send_type;
+# endif
+#else
+    // run-time check if the next functions are available
+    can_send_type = (can_send_type_t)qdbus_resolve_conditionally("dbus_connection_can_send_type");
+#endif
+
+#ifndef DBUS_TYPE_UNIX_FD
+# define DBUS_TYPE_UNIX_FD int('h')
+#endif
+    return can_send_type && can_send_type(connection, DBUS_TYPE_UNIX_FD);
+}
+
 void tst_QDBusMarshall::receiveUnknownType()
 {
     QDBusConnection con = QDBusConnection::sessionBus();
@@ -1088,7 +1103,8 @@ void tst_QDBusMarshall::receiveUnknownType()
     QVERIFY2(rawcon.data(), error.name);
 
     // check if this bus supports passing file descriptors
-    if (!q_dbus_connection_can_send_type(rawcon.data(), DBUS_TYPE_UNIX_FD))
+
+    if (!canSendUnixFd(rawcon.data()))
         QSKIP("Your session bus does not allow sending Unix file descriptors");
 
     // make sure this QDBusConnection won't handle Unix file descriptors
@@ -1184,7 +1200,6 @@ void tst_QDBusMarshall::receiveUnknownType()
         QCOMPARE(spy.list.at(0).arguments().at(0).userType(), receivedTypeId);
     }
 }
-#endif
 
 void tst_QDBusMarshall::demarshallPrimitives_data()
 {

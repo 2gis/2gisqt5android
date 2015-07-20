@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the plugins of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -44,6 +36,7 @@
 
 #include <QtCore/QObject>
 #include <QtCore/QRect>
+#include <QtCore/QPointer>
 
 #include <QtCore/QWaitCondition>
 
@@ -58,10 +51,22 @@ struct wl_cursor_image;
 QT_BEGIN_NAMESPACE
 
 class QAbstractEventDispatcher;
-class QWaylandInputDevice;
 class QSocketNotifier;
-class QWaylandBuffer;
 class QPlatformScreen;
+
+namespace QtWayland {
+    class qt_output_extension;
+    class qt_shell;
+    class qt_sub_surface_extension;
+    class qt_surface_extension;
+    class wl_text_input_manager;
+    class xdg_shell;
+}
+
+namespace QtWaylandClient {
+
+class QWaylandInputDevice;
+class QWaylandBuffer;
 class QWaylandScreen;
 class QWaylandClientBufferIntegration;
 class QWaylandWindowManagerIntegration;
@@ -74,15 +79,6 @@ class QWaylandIntegration;
 class QWaylandHardwareIntegration;
 class QWaylandXdgShell;
 class QWaylandShellSurface;
-
-namespace QtWayland {
-    class qt_output_extension;
-    class qt_shell;
-    class qt_sub_surface_extension;
-    class qt_surface_extension;
-    class wl_text_input_manager;
-    class xdg_shell;
-}
 
 typedef void (*RegistryListener)(void *data,
                                  struct wl_registry *registry,
@@ -103,6 +99,7 @@ public:
 
     struct wl_surface *createSurface(void *handle);
     QWaylandShellSurface *createShellSurface(QWaylandWindow *window);
+    struct ::wl_region *createRegion(const QRegion &qregion);
 
     QWaylandClientBufferIntegration *clientBufferIntegration() const;
 
@@ -159,6 +156,11 @@ public:
 
     bool supportsWindowDecoration() const;
 
+    uint32_t lastInputSerial() const { return mLastInputSerial; }
+    QWaylandInputDevice *lastInputDevice() const { return mLastInputDevice; }
+    QWaylandWindow *lastInputWindow() const;
+    void setLastInputDevice(QWaylandInputDevice *device, uint32_t serial, QWaylandWindow *window);
+
 public slots:
     void blockingReadEvents();
     void flushRequests();
@@ -197,9 +199,11 @@ private:
     QSocketNotifier *mReadNotifier;
     int mFd;
     int mWritableNotificationFd;
-    bool mScreensInitialized;
     QList<RegistryGlobal> mGlobals;
     int mCompositorVersion;
+    uint32_t mLastInputSerial;
+    QWaylandInputDevice *mLastInputDevice;
+    QPointer<QWaylandWindow> mLastInputWindow;
 
     void registry_global(uint32_t id, const QString &interface, uint32_t version) Q_DECL_OVERRIDE;
     void registry_global_remove(uint32_t id) Q_DECL_OVERRIDE;
@@ -209,6 +213,8 @@ private:
                                      struct wl_surface *surface,
                                      int32_t width, int32_t height);
 };
+
+}
 
 QT_END_NAMESPACE
 

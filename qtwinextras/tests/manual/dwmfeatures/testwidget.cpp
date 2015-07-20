@@ -1,7 +1,7 @@
 /****************************************************************************
  **
  ** Copyright (C) 2013 Ivan Vizir <define-true-false@yandex.com>
- ** Contact: http://www.qt-project.org/legal
+ ** Contact: http://www.qt.io/licensing/
  **
  ** This file is part of the test suite of the Qt Toolkit.
  **
@@ -10,9 +10,9 @@
  ** Licensees holding valid commercial Qt licenses may use this file in
  ** accordance with the commercial license agreement provided with the
  ** Software or, alternatively, in accordance with the terms contained in
- ** a written agreement between you and Digia. For licensing terms and
- ** conditions see http://qt.digia.com/licensing. For further information
- ** use the contact form at http://qt.digia.com/contact-us.
+ ** a written agreement between you and The Qt Company. For licensing terms
+ ** and conditions see http://www.qt.io/terms-conditions. For further
+ ** information use the contact form at http://www.qt.io/contact-us.
  **
  ** GNU Lesser General Public License Usage
  ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
  ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
  ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
  **
- ** In addition, as a special exception, Digia gives you certain additional
- ** rights. These rights are described in the Digia Qt LGPL Exception
+ ** As a special exception, The Qt Company gives you certain additional
+ ** rights. These rights are described in The Qt Company LGPL Exception
  ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
  **
  ** $QT_END_LICENSE$
@@ -45,16 +45,21 @@ TestWidget::TestWidget(QWidget *parent) :
 {
     ui->setupUi(this);
 
-    connect(ui->btnPeekDisallow, SIGNAL(clicked()), SLOT(onDisallowPeekClicked()));
-    connect(ui->btnPeekExclude,  SIGNAL(clicked()), SLOT(onExcludeFromPeekClicked()));
-    connect(ui->radioFlipDefault, SIGNAL(clicked()), SLOT(onFlip3DPolicyChanged()));
-    connect(ui->radioFlipAbove,   SIGNAL(clicked()), SLOT(onFlip3DPolicyChanged()));
-    connect(ui->radioFlipBelow,   SIGNAL(clicked()), SLOT(onFlip3DPolicyChanged()));
-    connect(ui->btnFrameReset, SIGNAL(clicked()), SLOT(onResetGlassFrameClicked()));
-    connect(ui->frameTop,    SIGNAL(valueChanged(int)), SLOT(onGlassMarginsChanged()));
-    connect(ui->frameRight,  SIGNAL(valueChanged(int)), SLOT(onGlassMarginsChanged()));
-    connect(ui->frameBottom, SIGNAL(valueChanged(int)), SLOT(onGlassMarginsChanged()));
-    connect(ui->frameLeft,   SIGNAL(valueChanged(int)), SLOT(onGlassMarginsChanged()));
+    connect(ui->btnPeekDisallow,  &QAbstractButton::clicked, this, &TestWidget::onDisallowPeekClicked);
+    connect(ui->btnPeekExclude,   &QAbstractButton::clicked, this, &TestWidget::onExcludeFromPeekClicked);
+    connect(ui->radioFlipDefault, &QAbstractButton::clicked, this, &TestWidget::onFlip3DPolicyChanged);
+    connect(ui->radioFlipAbove,   &QAbstractButton::clicked, this, &TestWidget::onFlip3DPolicyChanged);
+    connect(ui->radioFlipBelow,   &QAbstractButton::clicked, this, &TestWidget::onFlip3DPolicyChanged);
+    connect(ui->btnFrameReset,    &QAbstractButton::clicked, this, &TestWidget::onResetGlassFrameClicked);
+    typedef void(QSpinBox::*IntSignal)(int);
+    connect(ui->frameTop, static_cast<IntSignal>(&QSpinBox::valueChanged),
+            this, &TestWidget::onGlassMarginsChanged);
+    connect(ui->frameRight, static_cast<IntSignal>(&QSpinBox::valueChanged),
+            this, &TestWidget::onGlassMarginsChanged);
+    connect(ui->frameBottom, static_cast<IntSignal>(&QSpinBox::valueChanged),
+            this, &TestWidget::onGlassMarginsChanged);
+    connect(ui->frameLeft, static_cast<IntSignal>(&QSpinBox::valueChanged),
+            this, &TestWidget::onGlassMarginsChanged);
 }
 
 TestWidget::~TestWidget()

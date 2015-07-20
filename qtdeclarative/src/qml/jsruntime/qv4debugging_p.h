@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -104,7 +104,7 @@ public:
         virtual void addNull(const QString &name) = 0;
         virtual void addBoolean(const QString &name, bool value) = 0;
         virtual void addString(const QString &name, const QString &value) = 0;
-        virtual void addObject(const QString &name, ValueRef value) = 0;
+        virtual void addObject(const QString &name, const Value &value) = 0;
         virtual void addInteger(const QString &name, int value) = 0;
         virtual void addDouble(const QString &name, double value) = 0;
 
@@ -171,7 +171,7 @@ public:
     bool collectThisInContext(Collector *collector, int frame = 0);
     void collectThrownValue(Collector *collector);
     void collectReturnedValue(Collector *collector) const;
-    QVector<ExecutionContext::ContextType> getScopeTypes(int frame = 0) const;
+    QVector<Heap::ExecutionContext::ContextType> getScopeTypes(int frame = 0) const;
 
     void evaluateExpression(int frameNr, const QString &expression, Collector *resultsCollector);
 
@@ -196,7 +196,7 @@ private:
 
 private:
     QV4::ExecutionEngine *m_engine;
-    QV4::ExecutionContext *m_currentContext;
+    QV4::PersistentValue m_currentContext;
     DebuggerAgent *m_agent;
     QMutex m_lock;
     QWaitCondition m_runningCondition;

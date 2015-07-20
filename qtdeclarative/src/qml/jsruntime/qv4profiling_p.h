@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -120,11 +120,11 @@ private:
             (engine->profiler->featuresEnabled & (1 << Profiling::FeatureMemoryAllocation)) ?\
         engine->profiler->trackDealloc(pointer, size, type) : pointer)
 
-#define Q_V4_PROFILE(engine, ctx, function)\
+#define Q_V4_PROFILE(engine, function)\
     (engine->profiler &&\
             (engine->profiler->featuresEnabled & (1 << Profiling::FeatureFunctionCall)) ?\
-        Profiling::FunctionCallProfiler::profileCall(engine->profiler, ctx, function) :\
-        function->code(ctx, function->codeData))
+        Profiling::FunctionCallProfiler::profileCall(engine->profiler, engine, function) :\
+        function->code(engine, function->codeData))
 
 class Q_QML_EXPORT Profiler : public QObject {
     Q_OBJECT
@@ -182,10 +182,10 @@ public:
         profiler->m_data.append(FunctionCall(function, startTime, profiler->m_timer.nsecsElapsed()));
     }
 
-    static ReturnedValue profileCall(Profiler *profiler, ExecutionContext *ctx, Function *function)
+    static ReturnedValue profileCall(Profiler *profiler, ExecutionEngine *engine, Function *function)
     {
         FunctionCallProfiler callProfiler(profiler, function);
-        return function->code(ctx, function->codeData);
+        return function->code(engine, function->codeData);
     }
 
     Profiler *profiler;

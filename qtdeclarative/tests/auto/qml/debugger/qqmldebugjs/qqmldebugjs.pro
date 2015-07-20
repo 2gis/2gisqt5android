@@ -1,6 +1,6 @@
 CONFIG += testcase
 TARGET = tst_qqmldebugjs
-QT += qml testlib gui-private
+QT += qml testlib gui-private core-private
 macx:CONFIG -= app_bundle
 
 SOURCES +=     tst_qqmldebugjs.cpp
@@ -22,5 +22,3 @@ OTHER_FILES += data/test.qml data/test.js \
     data/breakpointRelocation.qml \
     data/createComponent.qml
 DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0
-
-mac:CONFIG+=insignificant_test # QTBUG-28263

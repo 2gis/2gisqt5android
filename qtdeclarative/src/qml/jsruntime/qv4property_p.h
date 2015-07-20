@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -34,7 +34,7 @@
 #define QV4PROPERTYDESCRIPTOR_H
 
 #include "qv4global_p.h"
-#include "qv4value_inl_p.h"
+#include "qv4value_p.h"
 #include "qv4internalclass_p.h"
 
 QT_BEGIN_NAMESPACE
@@ -68,25 +68,29 @@ struct Property {
         return pd;
     }
 
-    inline bool isSubset(const PropertyAttributes &attrs, const Property &other, PropertyAttributes otherAttrs) const;
-    inline void merge(PropertyAttributes &attrs, const Property &other, PropertyAttributes otherAttrs);
+    inline bool isSubset(const PropertyAttributes &attrs, const Property *other, PropertyAttributes otherAttrs) const;
+    inline void merge(PropertyAttributes &attrs, const Property *other, PropertyAttributes otherAttrs);
 
-    inline FunctionObject *getter() const { return reinterpret_cast<FunctionObject *>(value.asManaged()); }
-    inline FunctionObject *setter() const { return reinterpret_cast<FunctionObject *>(set.asManaged()); }
+    inline Heap::FunctionObject *getter() const { return value.isManaged() ? reinterpret_cast<Heap::FunctionObject *>(value.heapObject()) : 0; }
+    inline Heap::FunctionObject *setter() const { return set.isManaged() ? reinterpret_cast<Heap::FunctionObject *>(set.heapObject()) : 0; }
     inline void setGetter(FunctionObject *g) { value = Primitive::fromManaged(reinterpret_cast<Managed *>(g)); }
-    inline void setSetter(FunctionObject *s) { set = Primitive::fromManaged(reinterpret_cast<Managed *>(s)); }
+    inline void setSetter(FunctionObject *s) { set = s ? Primitive::fromManaged(reinterpret_cast<Managed *>(s)) : Value::fromHeapObject(0); }
 
-    void copy(const Property &other, PropertyAttributes attrs) {
-        value = other.value;
+    void copy(const Property *other, PropertyAttributes attrs) {
+        value = other->value;
         if (attrs.isAccessor())
-            set = other.set;
+            set = other->set;
     }
 
-    explicit Property()  { value = Encode::undefined(); set = Encode::undefined(); }
-    explicit Property(Value v) : value(v) { set = Encode::undefined(); }
+    explicit Property()  { value = Encode::undefined(); set = Value::fromHeapObject(0); }
+    explicit Property(Value v) : value(v) { set = Value::fromHeapObject(0); }
     Property(FunctionObject *getter, FunctionObject *setter) {
         value = Primitive::fromManaged(reinterpret_cast<Managed *>(getter));
         set = Primitive::fromManaged(reinterpret_cast<Managed *>(setter));
+    }
+    Property(Heap::FunctionObject *getter, Heap::FunctionObject *setter) {
+        value.m = reinterpret_cast<Heap::Base *>(getter);
+        set.m = reinterpret_cast<Heap::Base *>(setter);
     }
     Property &operator=(Value v) { value = v; return *this; }
 private:
@@ -94,7 +98,7 @@ private:
     Property &operator=(const Property &);
 };
 
-inline bool Property::isSubset(const PropertyAttributes &attrs, const Property &other, PropertyAttributes otherAttrs) const
+inline bool Property::isSubset(const PropertyAttributes &attrs, const Property *other, PropertyAttributes otherAttrs) const
 {
     if (attrs.type() != PropertyAttributes::Generic && attrs.type() != otherAttrs.type())
         return false;
@@ -104,18 +108,18 @@ inline bool Property::isSubset(const PropertyAttributes &attrs, const Property &
         return false;
     if (attrs.hasWritable() && attrs.isWritable() != otherAttrs.isWritable())
         return false;
-    if (attrs.type() == PropertyAttributes::Data && !value.sameValue(other.value))
+    if (attrs.type() == PropertyAttributes::Data && !value.sameValue(other->value))
         return false;
     if (attrs.type() == PropertyAttributes::Accessor) {
-        if (value.asManaged() != other.value.asManaged())
+        if (value.heapObject() != other->value.heapObject())
             return false;
-        if (set.asManaged() != other.set.asManaged())
+        if (set.heapObject() != other->set.heapObject())
             return false;
     }
     return true;
 }
 
-inline void Property::merge(PropertyAttributes &attrs, const Property &other, PropertyAttributes otherAttrs)
+inline void Property::merge(PropertyAttributes &attrs, const Property *other, PropertyAttributes otherAttrs)
 {
     if (otherAttrs.hasEnumerable())
         attrs.setEnumerable(otherAttrs.isEnumerable());
@@ -125,13 +129,13 @@ inline void Property::merge(PropertyAttributes &attrs, const Property &other, Pr
         attrs.setWritable(otherAttrs.isWritable());
     if (otherAttrs.type() == PropertyAttributes::Accessor) {
         attrs.setType(PropertyAttributes::Accessor);
-        if (!other.value.isEmpty())
-            value = other.value;
-        if (!other.set.isEmpty())
-            set = other.set;
+        if (!other->value.isEmpty())
+            value = other->value;
+        if (!other->set.isEmpty())
+            set = other->set;
     } else if (otherAttrs.type() == PropertyAttributes::Data){
         attrs.setType(PropertyAttributes::Data);
-        value = other.value;
+        value = other->value;
     }
 }
 

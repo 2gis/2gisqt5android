@@ -1,7 +1,7 @@
 /****************************************************************************
  **
- ** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
- ** Contact: http://www.qt-project.org/legal
+ ** Copyright (C) 2015 The Qt Company Ltd.
+ ** Contact: http://www.qt.io/licensing/
  **
  ** This file is part of the examples of the Qt Toolkit.
  **
@@ -17,8 +17,8 @@
  **     notice, this list of conditions and the following disclaimer in
  **     the documentation and/or other materials provided with the
  **     distribution.
- **   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
- **     of its contributors may be used to endorse or promote products derived
+ **   * Neither the name of The Qt Company Ltd nor the names of its
+ **     contributors may be used to endorse or promote products derived
  **     from this software without specific prior written permission.
  **
  **
@@ -68,22 +68,18 @@ AudioEngine {
     }
 
     AudioSample {
-        name:"fire"
-        source: "fire-03-loop.wav"
+        name:"engine"
+        source: "engine-loop.wav"
         preloaded:true
     }
 
     AudioSample {
-        name:"explosion"
-        source: "explosion-02.wav"
+        name:"horn"
+        source: "horn.wav"
     }
     AudioSample {
-        name:"lava"
-        source: "lava-bubbling-01.wav"
-    }
-    AudioSample {
-        name:"water"
-        source: "running-water-01.wav"
+        name:"whistle"
+        source: "whistle.wav"
     }
     Sound {
         name:"shipengine"
@@ -91,7 +87,7 @@ AudioEngine {
         category:"sfx"
         PlayVariation {
             looping:true
-            sample:"fire"
+            sample:"engine"
             maxGain:0.9
             minGain:0.8
         }
@@ -101,23 +97,14 @@ AudioEngine {
         name:"effects"
         category:"sfx"
         PlayVariation {
-            sample:"lava"
-            maxGain:1.5
-            minGain:1.2
-            maxPitch:2.0
-            minPitch:0.5
+            sample:"horn"
+            maxGain:2.0
+            minGain:0.9
         }
         PlayVariation {
-            sample:"explosion"
-            maxGain:1.1
-            minGain:0.7
-            maxPitch:1.5
-            minPitch:0.5
-        }
-        PlayVariation {
-            sample:"water"
-            maxGain:1.5
-            minGain:1.2
+            sample:"whistle"
+            maxGain:1.0
+            minGain:0.8
         }
     }
 

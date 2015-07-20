@@ -4,7 +4,7 @@
 ** Copyright (C) 2011 Sergey Belyashov <Sergey.Belyashov@gmail.com>
 ** Copyright (C) 2012 Laszlo Papp <lpapp@kde.org>
 ** Copyright (C) 2012 Andre Hartmann <aha_1980@gmx.de>
-** Contact: http://www.qt-project.org/legal
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtSerialPort module of the Qt Toolkit.
 **
@@ -13,9 +13,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -26,8 +26,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -38,30 +38,15 @@
 #include "qserialportinfo.h"
 #include "qserialportinfo_p.h"
 
-#ifdef Q_OS_WINCE
-#include "qserialport_wince_p.h"
-#elif defined (Q_OS_WIN)
-#include "qserialport_win_p.h"
-#elif defined (Q_OS_SYMBIAN)
-#include "qserialport_symbian_p.h"
-#elif defined (Q_OS_UNIX)
-#include "qserialport_unix_p.h"
-#else
-#error Unsupported OS
-#endif
-
-#ifndef SERIALPORT_BUFFERSIZE
-#  define SERIALPORT_BUFFERSIZE 16384
-#endif
+#include "qserialport_p.h"
 
 #include <QtCore/qdebug.h>
 
 QT_BEGIN_NAMESPACE
 
-QSerialPortPrivateData::QSerialPortPrivateData(QSerialPort *q)
+QSerialPortPrivate::QSerialPortPrivate()
     : readBufferMaxSize(0)
-    , readBuffer(SERIALPORT_BUFFERSIZE)
-    , writeBuffer(SERIALPORT_BUFFERSIZE)
+    , writeBuffer(InitialBufferSize)
     , error(QSerialPort::NoError)
     , inputBaudRate(9600)
     , outputBaudRate(9600)
@@ -73,11 +58,38 @@ QSerialPortPrivateData::QSerialPortPrivateData(QSerialPort *q)
 #if QT_DEPRECATED_SINCE(5,3)
     , settingsRestoredOnClose(true)
 #endif
-    , q_ptr(q)
+    , isBreakEnabled(false)
+#if defined(Q_OS_WINCE)
+    , handle(INVALID_HANDLE_VALUE)
+    , parityErrorOccurred(false)
+    , eventNotifier(0)
+#elif defined(Q_OS_WIN32)
+    , handle(INVALID_HANDLE_VALUE)
+    , parityErrorOccurred(false)
+    , readChunkBuffer(ReadChunkSize, 0)
+    , writeStarted(false)
+    , readStarted(false)
+    , notifier(0)
+    , startAsyncWriteTimer(0)
+    , originalEventMask(0)
+    , triggeredEventMask(0)
+    , actualBytesToWrite(0)
+#elif defined(Q_OS_UNIX)
+    , descriptor(-1)
+    , readNotifier(0)
+    , writeNotifier(0)
+    , readPortNotifierCalled(false)
+    , readPortNotifierState(false)
+    , readPortNotifierStateSet(false)
+    , emittedReadyRead(false)
+    , emittedBytesWritten(false)
+    , pendingBytesWritten(0)
+    , writeSequenceStarted(false)
+#endif
 {
 }
 
-int QSerialPortPrivateData::timeoutValue(int msecs, int elapsed)
+int QSerialPortPrivate::timeoutValue(int msecs, int elapsed)
 {
     if (msecs == -1)
         return msecs;
@@ -383,9 +395,10 @@ int QSerialPortPrivateData::timeoutValue(int msecs, int elapsed)
     Constructs a new serial port object with the given \a parent.
 */
 QSerialPort::QSerialPort(QObject *parent)
-    : QIODevice(parent)
-    , d_ptr(new QSerialPortPrivate(this))
-{}
+    : QIODevice(*new QSerialPortPrivate, parent)
+    , d_dummy(0)
+{
+}
 
 /*!
     Constructs a new serial port object with the given \a parent
@@ -394,8 +407,8 @@ QSerialPort::QSerialPort(QObject *parent)
     The name should have a specific format; see the setPort() method.
 */
 QSerialPort::QSerialPort(const QString &name, QObject *parent)
-    : QIODevice(parent)
-    , d_ptr(new QSerialPortPrivate(this))
+    : QIODevice(*new QSerialPortPrivate, parent)
+    , d_dummy(0)
 {
     setPortName(name);
 }
@@ -406,8 +419,8 @@ QSerialPort::QSerialPort(const QString &name, QObject *parent)
     \a serialPortInfo.
 */
 QSerialPort::QSerialPort(const QSerialPortInfo &serialPortInfo, QObject *parent)
-    : QIODevice(parent)
-    , d_ptr(new QSerialPortPrivate(this))
+    : QIODevice(*new QSerialPortPrivate, parent)
+    , d_dummy(0)
 {
     setPort(serialPortInfo);
 }
@@ -420,7 +433,6 @@ QSerialPort::~QSerialPort()
     /**/
     if (isOpen())
         close();
-    delete d_ptr;
 }
 
 /*!
@@ -465,10 +477,6 @@ void QSerialPort::setPort(const QSerialPortInfo &serialPortInfo)
         \li Windows CE
         \li Removes the suffix ":" from the system location
            and returns the remainder of the string.
-    \row
-        \li Symbian
-        \li Returns the system location as it is,
-           as it is equivalent to the port name.
     \row
         \li Unix, BSD
         \li Removes the prefix "/dev/" from the system location
@@ -550,6 +558,7 @@ void QSerialPort::close()
 
     QIODevice::close();
     d->close();
+    d->isBreakEnabled = false;
 }
 
 /*!
@@ -606,10 +615,9 @@ bool QSerialPort::settingsRestoredOnClose() const
     after that the opening of the port succeeds.
 
     \warning Setting the AllDirections flag is only supported on
-    the Windows, Windows CE, and Symbian platforms.
+    the Windows, Windows CE platforms.
 
-    \warning Returns equal baud rate in any direction on Windows, Windows CE, and
-    Symbian.
+    \warning Returns equal baud rate in any direction on Windows, Windows CE.
 
     The default value is Baud9600, i.e. 9600 bits per second.
 */
@@ -1009,7 +1017,7 @@ bool QSerialPort::clear(Directions directions)
     }
 
     if (directions & Input)
-        d->readBuffer.clear();
+        d->buffer.clear();
     if (directions & Output)
         d->writeBuffer.clear();
     return d->clear(directions);
@@ -1040,7 +1048,7 @@ bool QSerialPort::clear(Directions directions)
 bool QSerialPort::atEnd() const
 {
     Q_D(const QSerialPort);
-    return QIODevice::atEnd() && (!isOpen() || (d->readBuffer.size() == 0));
+    return QIODevice::atEnd() && (!isOpen() || (d->buffer.size() == 0));
 }
 
 /*!
@@ -1188,8 +1196,7 @@ bool QSerialPort::isSequential() const
 */
 qint64 QSerialPort::bytesAvailable() const
 {
-    Q_D(const QSerialPort);
-    return d->readBuffer.size() + QIODevice::bytesAvailable();
+    return QIODevice::bytesAvailable();
 }
 
 /*!
@@ -1217,9 +1224,7 @@ qint64 QSerialPort::bytesToWrite() const
 */
 bool QSerialPort::canReadLine() const
 {
-    Q_D(const QSerialPort);
-    const bool hasLine = (d->readBuffer.size() > 0) && d->readBuffer.canReadLine();
-    return hasLine || QIODevice::canReadLine();
+    return QIODevice::canReadLine();
 }
 
 /*!
@@ -1292,15 +1297,20 @@ bool QSerialPort::sendBreak(int duration)
 }
 
 /*!
-    Controls the signal break, depending on the flag \a set.
-    If successful, returns true; otherwise returns false.
+    \property QSerialPort::breakEnabled
+    \since 5.5
+    \brief the state of the transmission line in break
 
-    If \a set is true then enables the break transmission; otherwise disables.
+    Returns true on success, false otherwise.
+    If the flag is true then the transmission line is in break state;
+    otherwise is in non-break state.
 
-    \note The serial port has to be open before trying to set break enabled;
-    otherwise returns false and sets the NotOpenError error code.
-
-    \sa sendBreak()
+    \note The serial port has to be open before trying to set or get this
+    property; otherwise returns false and sets the NotOpenError error code.
+    This is a bit unusual as opposed to the regular Qt property settings of
+    a class. However, this is a special use case since the property is set
+    through the interaction with the kernel and hardware. Hence, the two
+    scenarios cannot be completely compared to each other.
 */
 bool QSerialPort::setBreakEnabled(bool set)
 {
@@ -1312,7 +1322,20 @@ bool QSerialPort::setBreakEnabled(bool set)
         return false;
     }
 
-    return d->setBreakEnabled(set);
+    if (d->setBreakEnabled(set)) {
+        if (d->isBreakEnabled != set) {
+            d->isBreakEnabled = set;
+            emit breakEnabledChanged(d->isBreakEnabled);
+        }
+        return true;
+    }
+    return false;
+}
+
+bool QSerialPort::isBreakEnabled() const
+{
+    Q_D(const QSerialPort);
+    return d->isBreakEnabled;
 }
 
 /*!
@@ -1347,7 +1370,7 @@ void QSerialPort::setError(QSerialPort::SerialPortError serialPortError, const Q
 
     d->error = serialPortError;
 
-    if (errorString.isNull())
+    if (errorString.isNull() && (serialPortError != QSerialPort::NoError))
         setErrorString(qt_error_string(-1));
     else
         setErrorString(errorString);

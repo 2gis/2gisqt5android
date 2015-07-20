@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -207,8 +207,22 @@ QVariant QQmlEngineDebugService::valueContents(QVariant value) const
         return contents;
     }
 
-    if (QQmlValueTypeFactory::isValueType(userType))
+    if (QQmlValueTypeFactory::isValueType(userType)) {
+        const QMetaObject *mo = QQmlValueTypeFactory::metaObjectForMetaType(userType);
+        if (mo) {
+            int toStringIndex = mo->indexOfMethod("toString");
+            if (toStringIndex != -1) {
+                QMetaMethod mm = mo->method(toStringIndex);
+                QMetaType info(userType);
+                QString s;
+                if (info.flags() & QMetaType::IsGadget
+                        && mm.invokeOnGadget(value.data(), Q_RETURN_ARG(QString, s)))
+                    return s;
+            }
+        }
+
         return value;
+    }
 
     if (QQmlMetaType::isQObject(userType)) {
         QObject *o = QQmlMetaType::toQObject(value);
@@ -377,7 +391,7 @@ QQmlEngineDebugService::objectData(QObject *object)
     QQmlData *ddata = QQmlData::get(object);
     QQmlObjectData rv;
     if (ddata && ddata->outerContext) {
-        rv.url = ddata->outerContext->url;
+        rv.url = ddata->outerContext->url();
         rv.lineNumber = ddata->lineNumber;
         rv.columnNumber = ddata->columnNumber;
     } else {
@@ -748,7 +762,7 @@ bool QQmlEngineDebugService::setMethodBody(int objectId, const QString &method, 
     int lineNumber = vmeMetaObject->vmeMethodLineNumber(prop->coreIndex);
     QV4::ExecutionEngine *v4 = QV8Engine::getV4(qmlEngine(object)->handle());
     QV4::Scope scope(v4);
-    QV4::ScopedValue v(scope, QQmlExpressionPrivate::evalFunction(contextData, object, jsfunction, contextData->url.toString(), lineNumber));
+    QV4::ScopedValue v(scope, QQmlExpressionPrivate::evalFunction(contextData, object, jsfunction, contextData->urlString(), lineNumber));
     vmeMetaObject->setVmeMethod(prop->coreIndex, v);
     return true;
 }

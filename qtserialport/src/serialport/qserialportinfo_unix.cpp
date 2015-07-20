@@ -3,7 +3,7 @@
 ** Copyright (C) 2011-2012 Denis Shienkov <denis.shienkov@gmail.com>
 ** Copyright (C) 2011 Sergey Belyashov <Sergey.Belyashov@gmail.com>
 ** Copyright (C) 2012 Laszlo Papp <lpapp@kde.org>
-** Contact: http://www.qt-project.org/legal
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtSerialPort module of the Qt Toolkit.
 **
@@ -12,9 +12,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -25,8 +25,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -35,7 +35,7 @@
 
 #include "qserialportinfo.h"
 #include "qserialportinfo_p.h"
-#include "qserialport_unix_p.h"
+#include "qserialport_p.h"
 
 #include <QtCore/qlockfile.h>
 #include <QtCore/qfile.h>
@@ -67,9 +67,9 @@ static QStringList filteredDeviceFilePaths()
     << QStringLiteral("ttyAMA*")  // AMBA serial device for embedded platform on ARM (i.e. Raspberry Pi).
     << QStringLiteral("rfcomm*")  // Bluetooth serial device.
     << QStringLiteral("ircomm*"); // IrDA serial device.
-#elif defined (Q_OS_FREEBSD)
+#elif defined(Q_OS_FREEBSD)
     << QStringLiteral("cu*");
-#elif defined (Q_OS_QNX)
+#elif defined(Q_OS_QNX)
     << QStringLiteral("ser*");
 #else
     ;
@@ -111,7 +111,7 @@ QList<QSerialPortInfo> availablePortsByFiltersOfDevices(bool &ok)
 
 static bool isSerial8250Driver(const QString &driverName)
 {
-    return (driverName == QStringLiteral("serial8250"));
+    return (driverName == QLatin1String("serial8250"));
 }
 
 static bool isValidSerial8250(const QString &systemLocation)
@@ -134,7 +134,7 @@ static bool isValidSerial8250(const QString &systemLocation)
 
 static bool isRfcommDevice(const QString &portName)
 {
-    if (!portName.startsWith(QStringLiteral("rfcomm")))
+    if (!portName.startsWith(QLatin1String("rfcomm")))
         return false;
 
     bool ok;
@@ -170,7 +170,7 @@ static QString deviceName(const QDir &targetDir)
 
 static QString deviceDriver(const QDir &targetDir)
 {
-    const QDir deviceDir(targetDir.absolutePath() + "/device");
+    const QDir deviceDir(targetDir.absolutePath() + QLatin1String("/device"));
     return ueventProperty(deviceDir, "DRIVER=");
 }
 
@@ -472,14 +472,14 @@ bool QSerialPortInfo::isValid() const
 QString QSerialPortInfoPrivate::portNameToSystemLocation(const QString &source)
 {
     return (source.startsWith(QLatin1Char('/'))
-            || source.startsWith(QStringLiteral("./"))
-            || source.startsWith(QStringLiteral("../")))
-            ? source : (QStringLiteral("/dev/") + source);
+            || source.startsWith(QLatin1String("./"))
+            || source.startsWith(QLatin1String("../")))
+            ? source : (QLatin1String("/dev/") + source);
 }
 
 QString QSerialPortInfoPrivate::portNameFromSystemLocation(const QString &source)
 {
-    return source.startsWith(QStringLiteral("/dev/"))
+    return source.startsWith(QLatin1String("/dev/"))
             ? source.mid(5) : source;
 }
 

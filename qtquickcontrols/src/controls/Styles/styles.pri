@@ -18,12 +18,30 @@ STYLES_QML_FILES = \
     $$PWD/Base/SpinBoxStyle.qml \
     $$PWD/Base/SwitchStyle.qml \
     $$PWD/Base/StatusBarStyle.qml \
+    $$PWD/Base/BasicTableViewStyle.qml \
     $$PWD/Base/TableViewStyle.qml \
+    $$PWD/Base/TreeViewStyle.qml \
     $$PWD/Base/TabViewStyle.qml \
     $$PWD/Base/TextAreaStyle.qml \
     $$PWD/Base/TextFieldStyle.qml \
     $$PWD/Base/ToolBarStyle.qml \
     $$PWD/Base/ToolButtonStyle.qml
+
+# Extras
+STYLES_QML_FILES += \
+    $$PWD/Base/CircularGaugeStyle.qml \
+    $$PWD/Base/CircularButtonStyle.qml \
+    $$PWD/Base/CircularTickmarkLabelStyle.qml \
+    $$PWD/Base/CommonStyleHelper.qml \
+    $$PWD/Base/DelayButtonStyle.qml \
+    $$PWD/Base/DialStyle.qml \
+    $$PWD/Base/GaugeStyle.qml \
+    $$PWD/Base/HandleStyle.qml \
+    $$PWD/Base/HandleStyleHelper.qml \
+    $$PWD/Base/PieMenuStyle.qml \
+    $$PWD/Base/StatusIndicatorStyle.qml \
+    $$PWD/Base/ToggleButtonStyle.qml \
+    $$PWD/Base/TumblerStyle.qml
 
 # Desktop
 !no_desktop {
@@ -49,6 +67,7 @@ STYLES_QML_FILES = \
         $$PWD/Desktop/StatusBarStyle.qml\
         $$PWD/Desktop/TabViewStyle.qml \
         $$PWD/Desktop/TableViewStyle.qml \
+        $$PWD/Desktop/TreeViewStyle.qml \
         $$PWD/Desktop/TextAreaStyle.qml \
         $$PWD/Desktop/TextFieldStyle.qml \
         $$PWD/Desktop/ToolBarStyle.qml \
@@ -85,8 +104,10 @@ STYLES_QML_FILES += \
     $$PWD/Base/images/spinner_medium.png \
     $$PWD/Base/images/spinner_large.png \
     $$PWD/Base/images/check.png \
-    $$PWD/Base/images/check@2x.png
+    $$PWD/Base/images/check@2x.png \
+    $$PWD/Base/images/knob.png \
+    $$PWD/Base/images/needle.png
 
 STYLES_QML_FILES += $$PWD/qmldir
 
-QML_FILES += $$STYLES_QML_FILES
+!qtquickcompiler: QML_FILES += $$STYLES_QML_FILES

@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -51,6 +51,7 @@
 #include <QUrl>
 #include <QSize>
 #include <QMutex>
+#include <QThreadStorage>
 
 QT_BEGIN_NAMESPACE
 
@@ -63,9 +64,38 @@ QT_BEGIN_NAMESPACE
 #define Q_QUICK_PROFILE(feature, Method)\
     Q_QUICK_PROFILE_IF_ENABLED(feature, QQuickProfiler::Method)
 
-#define Q_QUICK_SG_PROFILE(Type, Params)\
+#define Q_QUICK_SG_PROFILE_START(Type)\
     Q_QUICK_PROFILE_IF_ENABLED(QQuickProfiler::ProfileSceneGraph,\
-                               (QQuickProfiler::sceneGraphFrame<Type> Params))
+                               (QQuickProfiler::startSceneGraphFrame<Type>()))
+
+#define Q_QUICK_SG_PROFILE_RECORD(Type)\
+    Q_QUICK_PROFILE_IF_ENABLED(QQuickProfiler::ProfileSceneGraph,\
+                               (QQuickProfiler::recordSceneGraphTimestamp<Type>()))
+
+#define Q_QUICK_SG_PROFILE_SKIP(Type, Skip)\
+    Q_QUICK_PROFILE_IF_ENABLED(QQuickProfiler::ProfileSceneGraph,\
+                               (QQuickProfiler::skipSceneGraphTimestamps<Type, Skip>()))
+
+#define Q_QUICK_SG_PROFILE_START_SYNCHRONIZED(Type1, Type2)\
+    Q_QUICK_PROFILE_IF_ENABLED(QQuickProfiler::ProfileSceneGraph,\
+                               (QQuickProfiler::startSceneGraphFrame<Type1, Type2>()))
+
+#define Q_QUICK_SG_PROFILE_SWITCH(Type1, Type2) \
+    Q_QUICK_PROFILE_IF_ENABLED(QQuickProfiler::ProfileSceneGraph,\
+                               (QQuickProfiler::reportSceneGraphFrame<Type1, true, Type2>()))
+
+#define Q_QUICK_SG_PROFILE_REPORT(Type)\
+    Q_QUICK_PROFILE_IF_ENABLED(QQuickProfiler::ProfileSceneGraph,\
+                               (QQuickProfiler::reportSceneGraphFrame<Type, false>()))
+
+#define Q_QUICK_SG_PROFILE_END(Type)\
+    Q_QUICK_PROFILE_IF_ENABLED(QQuickProfiler::ProfileSceneGraph,\
+                               (QQuickProfiler::reportSceneGraphFrame<Type, true>()))
+
+#define Q_QUICK_SG_PROFILE_END_WITH_PAYLOAD(Type, Payload)\
+    Q_QUICK_PROFILE_IF_ENABLED(QQuickProfiler::ProfileSceneGraph,\
+                               (QQuickProfiler::reportSceneGraphFrame<Type, true>(Payload)))
+
 
 #define Q_QUICK_INPUT_PROFILE(Method)\
     Q_QUICK_PROFILE(QQuickProfiler::ProfileInputEvents, Method)
@@ -136,6 +166,39 @@ struct Q_AUTOTEST_EXPORT QQuickProfilerData
 
 Q_DECLARE_TYPEINFO(QQuickProfilerData, Q_MOVABLE_TYPE);
 
+class QQuickProfilerSceneGraphData : public QQmlProfilerDefinitions {
+private:
+    static const uint s_numSceneGraphTimings = 5;
+
+    template<uint size>
+    struct TimingData {
+        qint64 values[size][s_numSceneGraphTimings + 1];
+        int offsets[size];
+    };
+
+    QThreadStorage<TimingData<NumRenderThreadFrameTypes> > renderThreadTimings;
+    TimingData<NumGUIThreadFrameTypes> guiThreadTimings;
+
+public:
+    template<SceneGraphFrameType type>
+    qint64 *timings()
+    {
+        if (type < NumRenderThreadFrameTypes)
+            return renderThreadTimings.localData().values[type];
+        else
+            return guiThreadTimings.values[type - NumRenderThreadFrameTypes];
+    }
+
+    template<SceneGraphFrameType type>
+    int &offset()
+    {
+        if (type < NumRenderThreadFrameTypes)
+            return renderThreadTimings.localData().offsets[type];
+        else
+            return guiThreadTimings.offsets[type - NumRenderThreadFrameTypes];
+    }
+};
+
 class Q_QUICK_PRIVATE_EXPORT QQuickProfiler : public QQmlAbstractProfilerAdapter {
     Q_OBJECT
 public:
@@ -163,12 +226,62 @@ public:
         }
     }
 
-    template<SceneGraphFrameType FrameType>
-    static void sceneGraphFrame(qint64 value1, qint64 value2 = -1, qint64 value3 = -1,
-                                qint64 value4 = -1, qint64 value5 = -1)
+    template<SceneGraphFrameType FrameType1, SceneGraphFrameType FrameType2>
+    static void startSceneGraphFrame()
     {
-        s_instance->processMessage(QQuickProfilerData(s_instance->timestamp(), 1 << SceneGraphFrame,
-                1 << FrameType, value1, value2, value3, value4, value5));
+        startSceneGraphFrame<FrameType1>();
+        s_instance->m_sceneGraphData.offset<FrameType2>() = 0;
+        s_instance->m_sceneGraphData.timings<FrameType2>()[0] =
+                s_instance->m_sceneGraphData.timings<FrameType1>()[0];
+    }
+
+    template<SceneGraphFrameType FrameType>
+    static void startSceneGraphFrame()
+    {
+        s_instance->m_sceneGraphData.offset<FrameType>() = 0;
+        s_instance->m_sceneGraphData.timings<FrameType>()[0] = s_instance->timestamp();
+    }
+
+    template<SceneGraphFrameType FrameType>
+    static void recordSceneGraphTimestamp()
+    {
+        s_instance->m_sceneGraphData.timings<FrameType>()
+            [++s_instance->m_sceneGraphData.offset<FrameType>()] = s_instance->timestamp();
+    }
+
+    template<SceneGraphFrameType FrameType, uint Skip>
+    static void skipSceneGraphTimestamps()
+    {
+        qint64 *timings = s_instance->m_sceneGraphData.timings<FrameType>();
+        const qint64 last = timings[s_instance->m_sceneGraphData.offset<FrameType>()];
+        for (uint i = 0; i < Skip; ++i)
+            timings[++s_instance->m_sceneGraphData.offset<FrameType>()] = last;
+    }
+
+    template<SceneGraphFrameType FrameType, bool Record>
+    static void reportSceneGraphFrame(quint64 payload = -1)
+    {
+        qint64 *timings = s_instance->m_sceneGraphData.timings<FrameType>();
+        int &offset = s_instance->m_sceneGraphData.offset<FrameType>();
+        if (Record)
+            timings[++offset] = s_instance->timestamp();
+        s_instance->processMessage(QQuickProfilerData(
+                timings[offset], 1 << SceneGraphFrame, 1 << FrameType,
+                offset > 0 ? timings[1] - timings[0] : payload,
+                offset > 1 ? timings[2] - timings[1] : payload,
+                offset > 2 ? timings[3] - timings[2] : payload,
+                offset > 3 ? timings[4] - timings[3] : payload,
+                offset > 4 ? timings[5] - timings[4] : payload));
+    }
+
+    template<SceneGraphFrameType FrameType, bool Record, SceneGraphFrameType SwitchTo>
+    static void reportSceneGraphFrame(quint64 payload = -1)
+    {
+        reportSceneGraphFrame<FrameType, Record>(payload);
+        s_instance->m_sceneGraphData.offset<SwitchTo>() = 0;
+        s_instance->m_sceneGraphData.timings<SwitchTo>()[0] =
+                s_instance->m_sceneGraphData.timings<FrameType>()
+                [s_instance->m_sceneGraphData.offset<FrameType>()];
     }
 
     template<PixmapEventType PixmapState>
@@ -215,6 +328,7 @@ protected:
     QMutex m_dataMutex;
     QElapsedTimer m_timer;
     QVarLengthArray<QQuickProfilerData> m_data;
+    QQuickProfilerSceneGraphData m_sceneGraphData;
 
     QQuickProfiler(QQmlProfilerService *service);
 

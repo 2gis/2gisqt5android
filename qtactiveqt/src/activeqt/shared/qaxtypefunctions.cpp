@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the ActiveQt framework of the Qt Toolkit.
 **
@@ -17,8 +17,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -188,14 +188,12 @@ void clearVARIANT(VARIANT *var)
         case VT_UINT|VT_BYREF:
             delete var->puintVal;
             break;
-#if !defined(Q_OS_WINCE) && defined(_MSC_VER) && _MSC_VER >= 1400
         case VT_I8|VT_BYREF:
             delete var->pllVal;
             break;
         case VT_UI8|VT_BYREF:
             delete var->pullVal;
             break;
-#endif
         case VT_CY|VT_BYREF:
             delete var->pcyVal;
             break;
@@ -209,8 +207,11 @@ void clearVARIANT(VARIANT *var)
             delete var->pdate;
             break;
         case VT_DISPATCH|VT_BYREF:
-            (*var->ppdispVal)->Release();
-            delete var->ppdispVal;
+            if (var->ppdispVal) {
+                if (*var->ppdispVal)
+                    (*var->ppdispVal)->Release();
+                delete var->ppdispVal;
+            }
             break;
         case VT_ARRAY|VT_VARIANT|VT_BYREF:
         case VT_ARRAY|VT_UI1|VT_BYREF:

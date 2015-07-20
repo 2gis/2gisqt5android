@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQuick module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -37,12 +37,12 @@
 
 #include <private/qqmlproperty_p.h>
 #include <private/qquickpath_p.h>
-
-#include <QtQml/qqmlinfo.h>
-#include <QtCore/qmath.h>
-#include "private/qsequentialanimationgroupjob_p.h"
 #include "private/qparallelanimationgroupjob_p.h"
+#include "private/qsequentialanimationgroupjob_p.h"
+
+#include <QtCore/qmath.h>
 #include <QtGui/qtransform.h>
+#include <QtQml/qqmlinfo.h>
 
 QT_BEGIN_NAMESPACE
 
@@ -210,7 +210,7 @@ QAbstractAnimationJob* QQuickParentAnimation::transition(QQuickStateActions &act
         //### reverse should probably apply on a per-action basis
         bool reverse;
         QList<QQuickParentChange *> pc;
-        virtual void doAction()
+        void doAction() Q_DECL_OVERRIDE
         {
             for (int ii = 0; ii < actions.count(); ++ii) {
                 const QQuickStateAction &action = actions.at(ii);
@@ -319,7 +319,7 @@ QAbstractAnimationJob* QQuickParentAnimation::transition(QQuickStateActions &act
                     }
 
                     if (scale != 0)
-                        rotation = atan2(transform.m12()/scale, transform.m11()/scale) * 180/M_PI;
+                        rotation = qAtan2(transform.m12()/scale, transform.m11()/scale) * 180/M_PI;
                     else {
                         qmlInfo(this) << QQuickParentAnimation::tr("Unable to preserve appearance under scale of 0");
                         ok = false;
@@ -581,11 +581,11 @@ QQuickPathAnimation::QQuickPathAnimation(QObject *parent)
 
 QQuickPathAnimation::~QQuickPathAnimation()
 {
+    typedef QHash<QQuickItem*, QQuickPathAnimationAnimator* >::iterator ActiveAnimationsIt;
+
     Q_D(QQuickPathAnimation);
-    QHash<QQuickItem*, QQuickPathAnimationAnimator* >::iterator it;
-    for (it = d->activeAnimations.begin(); it != d->activeAnimations.end(); ++it) {
+    for (ActiveAnimationsIt it = d->activeAnimations.begin(), end = d->activeAnimations.end(); it != end; ++it)
         it.value()->clearTemplate();
-    }
 }
 
 /*!

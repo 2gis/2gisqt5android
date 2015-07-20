@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd and/or its subsidiary(-ies).
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -727,14 +719,17 @@ void AVFMediaPlayerSession::setVolume(int volume)
     if (m_volume == volume)
         return;
 
-    m_volume = volume;
-
-#if defined(Q_OS_OSX)
     AVPlayer *player = [(AVFMediaPlayerSessionObserver*)m_observer player];
-    if (player) {
-        [[(AVFMediaPlayerSessionObserver*)m_observer player] setVolume:m_volume / 100.0f];
+    if (!player)
+        return;
+
+    if (![player respondsToSelector:@selector(setVolume:)]) {
+        qWarning("%s not implemented, requires iOS 7 or later", Q_FUNC_INFO);
+        return;
     }
-#endif
+
+    [player setVolume:volume / 100.0f];
+    m_volume = volume;
 
     Q_EMIT volumeChanged(m_volume);
 }
@@ -747,10 +742,19 @@ void AVFMediaPlayerSession::setMuted(bool muted)
     if (m_muted == muted)
         return;
 
+    AVPlayer *player = [(AVFMediaPlayerSessionObserver*)m_observer player];
+    if (!player)
+        return;
+
+    // iOS: setMuted exists since iOS 7.0, thus check if it exists
+    if (![player respondsToSelector:@selector(setMuted:)]) {
+        qWarning("%s not implemented, requires iOS 7 or later", Q_FUNC_INFO);
+        return;
+    }
+
+    [player setMuted:muted];
     m_muted = muted;
-#if defined(Q_OS_OSX)
-    [[(AVFMediaPlayerSessionObserver*)m_observer player] setMuted:m_muted];
-#endif
+
     Q_EMIT mutedChanged(muted);
 }
 

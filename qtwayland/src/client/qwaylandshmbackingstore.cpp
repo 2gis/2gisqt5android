@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the plugins of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -49,6 +41,9 @@
 #include <QMutexLocker>
 
 #include <wayland-client.h>
+#include <wayland-client-protocol.h>
+#include "qwaylandshmformathelper.h"
+
 #include <unistd.h>
 #include <fcntl.h>
 #include <errno.h>
@@ -56,9 +51,12 @@
 
 QT_BEGIN_NAMESPACE
 
+namespace QtWaylandClient {
+
 QWaylandShmBuffer::QWaylandShmBuffer(QWaylandDisplay *display,
-                     const QSize &size, QImage::Format format)
-    : mMarginsImage(0)
+                     const QSize &size, QImage::Format format, int scale)
+    : mShmPool(0)
+    , mMarginsImage(0)
 {
     int stride = size.width() * 4;
     int alloc = stride * size.height();
@@ -87,23 +85,31 @@ QWaylandShmBuffer::QWaylandShmBuffer(QWaylandDisplay *display,
         return;
     }
 
+    wl_shm_format wl_format = QWaylandShmFormatHelper::fromQImageFormat(format);
     mImage = QImage(data, size.width(), size.height(), stride, format);
+    mImage.setDevicePixelRatio(qreal(scale));
+
     mShmPool = wl_shm_create_pool(display->shm(), fd, alloc);
     mBuffer = wl_shm_pool_create_buffer(mShmPool,0, size.width(), size.height(),
-                                       stride, WL_SHM_FORMAT_ARGB8888);
+                                       stride, wl_format);
     close(fd);
 }
 
 QWaylandShmBuffer::~QWaylandShmBuffer(void)
 {
     delete mMarginsImage;
-    munmap((void *) mImage.constBits(), mImage.byteCount());
-    wl_buffer_destroy(mBuffer);
-    wl_shm_pool_destroy(mShmPool);
+    if (mImage.constBits())
+        munmap((void *) mImage.constBits(), mImage.byteCount());
+    if (mBuffer)
+        wl_buffer_destroy(mBuffer);
+    if (mShmPool)
+        wl_shm_pool_destroy(mShmPool);
 }
 
-QImage *QWaylandShmBuffer::imageInsideMargins(const QMargins &margins)
+QImage *QWaylandShmBuffer::imageInsideMargins(const QMargins &marginsIn)
 {
+    QMargins margins = marginsIn * int(mImage.devicePixelRatio());
+
     if (!margins.isNull() && margins != mMargins) {
         if (mMarginsImage) {
             delete mMarginsImage;
@@ -113,6 +119,7 @@ QImage *QWaylandShmBuffer::imageInsideMargins(const QMargins &margins)
         int b_s_width = mImage.size().width() - margins.left() - margins.right();
         int b_s_height = mImage.size().height() - margins.top() - margins.bottom();
         mMarginsImage = new QImage(b_s_data, b_s_width,b_s_height,mImage.bytesPerLine(),mImage.format());
+        mMarginsImage->setDevicePixelRatio(mImage.devicePixelRatio());
     }
     if (margins.isNull()) {
         delete mMarginsImage;
@@ -230,7 +237,7 @@ void QWaylandShmBackingStore::flush(QWindow *window, const QRegion &region, cons
 
     if (damageAll) {
         //need to damage it all, otherwise the attach offset may screw up
-        waylandWindow()->damage(QRect(QPoint(0,0),mFrontBuffer->size()));
+        waylandWindow()->damage(QRect(QPoint(0,0), window->size()));
     } else {
         QVector<QRect> rects = region.rects();
         for (int i = 0; i < rects.size(); i++) {
@@ -251,7 +258,8 @@ void QWaylandShmBackingStore::resize(const QSize &size, const QRegion &)
 void QWaylandShmBackingStore::resize(const QSize &size)
 {
     QMargins margins = windowDecorationMargins();
-    QSize sizeWithMargins = size + QSize(margins.left()+margins.right(),margins.top()+margins.bottom());
+    int scale = waylandWindow()->scale();
+    QSize sizeWithMargins = (size + QSize(margins.left()+margins.right(),margins.top()+margins.bottom())) * scale;
 
     QImage::Format format = QPlatformScreen::platformScreenForWindow(window())->format();
 
@@ -262,7 +270,7 @@ void QWaylandShmBackingStore::resize(const QSize &size)
         delete mBackBuffer; //we delete the attached buffer when we flush
     }
 
-    mBackBuffer = new QWaylandShmBuffer(mDisplay, sizeWithMargins, format);
+    mBackBuffer = new QWaylandShmBuffer(mDisplay, sizeWithMargins, format, scale);
 
     if (windowDecoration() && window()->isVisible())
         windowDecoration()->update();
@@ -357,7 +365,7 @@ void QWaylandShmBackingStore::done(void *data, wl_callback *callback, uint32_t t
             delete window->attached();
         }
         window->attachOffset(self->mFrontBuffer);
-        window->damage(QRect(QPoint(0,0),self->mFrontBuffer->size()));
+        window->damage(QRect(QPoint(0,0),window->geometry().size()));
         window->commit();
     }
 }
@@ -365,5 +373,7 @@ void QWaylandShmBackingStore::done(void *data, wl_callback *callback, uint32_t t
 const struct wl_callback_listener QWaylandShmBackingStore::frameCallbackListener = {
     QWaylandShmBackingStore::done
 };
+
+}
 
 QT_END_NAMESPACE

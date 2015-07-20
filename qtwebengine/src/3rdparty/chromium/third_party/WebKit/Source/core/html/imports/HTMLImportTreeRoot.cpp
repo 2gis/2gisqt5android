@@ -10,7 +10,7 @@
 #include "core/frame/LocalFrame.h"
 #include "core/html/imports/HTMLImportChild.h"
 
-namespace WebCore {
+namespace blink {
 
 PassOwnPtrWillBeRawPtr<HTMLImportTreeRoot> HTMLImportTreeRoot::create(Document* document)
 {
@@ -87,7 +87,7 @@ HTMLImportChild* HTMLImportTreeRoot::find(const KURL& url) const
             return candidate;
     }
 
-    return 0;
+    return nullptr;
 }
 
 void HTMLImportTreeRoot::recalcTimerFired(Timer<HTMLImportTreeRoot>*)

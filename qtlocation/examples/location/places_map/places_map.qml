@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the examples of the Qt Toolkit.
 **
@@ -17,8 +17,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -51,7 +51,7 @@ Rectangle {
     //! [Initialize Plugin]
     Plugin {
         id: myPlugin
-        name: "nokia"
+        name: "osm"
         //specify plugin parameters if necessary
         //PluginParameter {...}
         //PluginParameter {...}
@@ -59,15 +59,36 @@ Rectangle {
     }
     //! [Initialize Plugin]
 
+    //! [Current Location]
+    PositionSource {
+        id: positionSource
+        property variant lastSearchPosition: locationBrisbane
+        active: true
+        updateInterval: 120000 // 2 mins
+        onPositionChanged:  {
+            var currentPosition = positionSource.position.coordinate
+            map.center = currentPosition
+            var distance = currentPosition.distanceTo(lastSearchPosition)
+            if (distance > 500) {
+                // 500m from last performed pizza search
+                lastSearchPosition = currentPosition
+                searchModel.searchArea = QtPositioning.circle(currentPosition)
+                searchModel.update()
+            }
+        }
+    }
+    //! [Current Location]
+
     //! [PlaceSearchModel]
+    property variant locationBrisbane: QtPositioning.coordinate(-27.47, 153.025)
     PlaceSearchModel {
         id: searchModel
 
         plugin: myPlugin
 
         searchTerm: "Pizza"
-        //Brisbane
-        searchArea: QtPositioning.circle(QtPositioning.coordinate(-27.46778, 153.02778))
+        //initially show Brisbane
+        searchArea: QtPositioning.circle(locationBrisbane)
 
         Component.onCompleted: update()
     }
@@ -78,10 +99,7 @@ Rectangle {
         id: map
         anchors.fill: parent
         plugin: myPlugin;
-        center {
-            latitude: -27.47
-            longitude: 153.025
-        }
+        center: locationBrisbane
         zoomLevel: 13
 
         MapItemView {

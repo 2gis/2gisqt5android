@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the examples of the Qt Toolkit.
 **
@@ -17,8 +17,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -86,7 +86,7 @@ Item {
     ImageParticle {
         system: sys
         groups: ["fireworks"]
-        source: "../trails/../images/star.png"
+        source: "qrc:particleresources/star.png"
         color: "lightsteelblue"
         alpha: 0
         colorVariation: 0
@@ -123,8 +123,7 @@ Item {
     }
     property Item alertItem;
     function alert() {
-        //resetter.active = false
-        force.active = true;
+        force.enabled = true;
         alertItem = alertDelegate.createObject(root);
         alertItem.x = root.width/2 - alertItem.width/2
         alertItem.y = root.height/2 - alertItem.height/2
@@ -139,8 +138,7 @@ Item {
         repeat: false
         interval: 800
         onTriggered: {
-            force.active = false
-            //resetter.active = true;
+            force.enabled = false;
             mp.take(alertItem, true);
             centerEmitter.burst(1);
         }

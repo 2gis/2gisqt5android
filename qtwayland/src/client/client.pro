@@ -3,9 +3,17 @@ QT += core-private gui-private
 QT_FOR_PRIVATE += platformsupport-private
 
 MODULE=waylandclient
-MODULE_PLUGIN_TYPES = wayland-graphics-integration-client wayland-decoration-client
+MODULE_PLUGIN_TYPES = \
+            wayland-graphics-integration-client \
+            wayland-inputdevice-integration \
+            wayland-decoration-client
+
+CONFIG += generated_privates
 
 load(qt_module)
+
+# We have a bunch of C code with casts, so we can't have this option
+QMAKE_CXXFLAGS_WARN_ON -= -Wcast-qual
 
 CONFIG -= precompile_header
 CONFIG -= create_cmake
@@ -112,3 +120,4 @@ HEADERS +=  qwaylandintegration_p.h \
 
 include(hardwareintegration/hardwareintegration.pri)
 include(shellintegration/shellintegration.pri)
+include(inputdeviceintegration/inputdeviceintegration.pri)

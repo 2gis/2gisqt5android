@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQuick module of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -40,15 +40,15 @@
 #include "qquicktextnode_p.h"
 #include "qquicktextnodeengine_p.h"
 #include "qquicktextutil_p.h"
-#include <QtQuick/qsgsimplerectnode.h>
 
-#include <QtQml/qqmlinfo.h>
+#include <QtCore/qmath.h>
 #include <QtGui/qguiapplication.h>
 #include <QtGui/qevent.h>
 #include <QtGui/qpainter.h>
 #include <QtGui/qtextobject.h>
 #include <QtGui/qtexttable.h>
-#include <QtCore/qmath.h>
+#include <QtQml/qqmlinfo.h>
+#include <QtQuick/qsgsimplerectnode.h>
 
 #include <private/qqmlglobal_p.h>
 #include <private/qqmlproperty_p.h>
@@ -211,10 +211,14 @@ QString QQuickTextEdit::text() const
 
     The weight can be one of:
     \list
+    \li Font.Thin
     \li Font.Light
+    \li Font.ExtraLight
     \li Font.Normal - the default
+    \li Font.Medium
     \li Font.DemiBold
     \li Font.Bold
+    \li Font.ExtraBold
     \li Font.Black
     \endlist
 
@@ -1232,15 +1236,21 @@ void QQuickTextEdit::setTextMargin(qreal margin)
     \endlist
 */
 
-#ifndef QT_NO_IM
 Qt::InputMethodHints QQuickTextEdit::inputMethodHints() const
 {
+#ifdef QT_NO_IM
+    return Qt::ImhNone;
+#else
     Q_D(const QQuickTextEdit);
     return d->inputMethodHints;
+#endif // QT_NO_IM
 }
 
 void QQuickTextEdit::setInputMethodHints(Qt::InputMethodHints hints)
 {
+#ifdef QT_NO_IM
+    Q_UNUSED(hints);
+#else
     Q_D(QQuickTextEdit);
 
     if (hints == d->inputMethodHints)
@@ -1249,8 +1259,8 @@ void QQuickTextEdit::setInputMethodHints(Qt::InputMethodHints hints)
     d->inputMethodHints = hints;
     updateInputMethod(Qt::ImHints);
     emit inputMethodHintsChanged();
-}
 #endif // QT_NO_IM
+}
 
 void QQuickTextEdit::geometryChanged(const QRectF &newGeometry,
                                   const QRectF &oldGeometry)
@@ -1426,6 +1436,11 @@ void QQuickTextEdit::setReadOnly(bool r)
     emit readOnlyChanged(r);
     if (!d->selectByKeyboardSet)
         emit selectByKeyboardChanged(!r);
+    if (r) {
+        setCursorVisible(false);
+    } else if (hasActiveFocus()) {
+        setCursorVisible(true);
+    }
 }
 
 bool QQuickTextEdit::isReadOnly() const
@@ -1828,6 +1843,10 @@ QSGNode *QQuickTextEdit::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData *
         int currentNodeSize = 0;
         int nodeStart = firstDirtyPos;
         QPointF basePosition(d->xoff, d->yoff);
+        QMatrix4x4 basePositionMatrix;
+        basePositionMatrix.translate(basePosition.x(), basePosition.y());
+        rootNode->setMatrix(basePositionMatrix);
+
         QPointF nodeOffset;
         TextNode *firstCleanNode = (nodeIterator != d->textNodeMap.end()) ? *nodeIterator : 0;
 
@@ -1838,7 +1857,6 @@ QSGNode *QQuickTextEdit::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData *
             QTextFrame *textFrame = frames.takeFirst();
             frames.append(textFrame->childFrames());
             rootNode->frameDecorationsNode->m_engine->addFrameDecorations(d->document, textFrame);
-
 
             if (textFrame->lastPosition() < firstDirtyPos || (firstCleanNode && textFrame->firstPosition() >= firstCleanNode->startPos()))
                 continue;
@@ -1860,7 +1878,7 @@ QSGNode *QQuickTextEdit::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData *
                 nodeOffset =  d->document->documentLayout()->frameBoundingRect(textFrame).topLeft();
                 updateNodeTransform(node, nodeOffset);
                 while (!it.atEnd())
-                    node->m_engine->addTextBlock(d->document, (it++).currentBlock(), basePosition - nodeOffset, d->color, QColor(), selectionStart(), selectionEnd() - 1);
+                    node->m_engine->addTextBlock(d->document, (it++).currentBlock(), -nodeOffset, d->color, QColor(), selectionStart(), selectionEnd() - 1);
                 nodeStart = textFrame->firstPosition();
             } else {
                 // Having nodes spanning across frame boundaries will break the current bookkeeping mechanism. We need to prevent that.
@@ -1883,7 +1901,7 @@ QSGNode *QQuickTextEdit::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData *
                         nodeStart = block.position();
                     }
 
-                    node->m_engine->addTextBlock(d->document, block, basePosition - nodeOffset, d->color, QColor(), selectionStart(), selectionEnd() - 1);
+                    node->m_engine->addTextBlock(d->document, block, -nodeOffset, d->color, QColor(), selectionStart(), selectionEnd() - 1);
                     currentNodeSize += block.length();
 
                     if ((it.atEnd()) || (firstCleanNode && block.next().position() >= firstCleanNode->startPos())) // last node that needed replacing or last block of the frame
@@ -1924,10 +1942,10 @@ QSGNode *QQuickTextEdit::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData *
         std::sort(d->textNodeMap.begin(), d->textNodeMap.end(), &comesBefore);
     }
 
-    if (d->cursorComponent == 0 && !isReadOnly()) {
+    if (d->cursorComponent == 0) {
         QSGRectangleNode* cursor = 0;
-        if (d->cursorVisible && d->control->cursorOn())
-            cursor = d->sceneGraphContext()->createRectangleNode(cursorRectangle(), d->color);
+        if (!isReadOnly() && d->cursorVisible && d->control->cursorOn())
+            cursor = d->sceneGraphContext()->createRectangleNode(d->control->cursorRect(), d->color);
         rootNode->resetCursorNode(cursor);
     }
 
@@ -1983,7 +2001,6 @@ bool QQuickTextEdit::canRedo() const
     return d->document->isRedoAvailable();
 }
 
-#ifndef QT_NO_IM
 /*!
     \qmlproperty bool QtQuick::TextEdit::inputMethodComposing
 
@@ -1998,10 +2015,13 @@ bool QQuickTextEdit::canRedo() const
 */
 bool QQuickTextEdit::isInputMethodComposing() const
 {
+#ifdef QT_NO_IM
+    return false;
+#else
     Q_D(const QQuickTextEdit);
     return d->control->hasImState();
-}
 #endif // QT_NO_IM
+}
 
 void QQuickTextEditPrivate::init()
 {
@@ -2284,7 +2304,14 @@ void QQuickTextEdit::updateWholeDocument()
 
 void QQuickTextEdit::invalidateBlock(const QTextBlock &block)
 {
+    Q_D(QQuickTextEdit);
     markDirtyNodesForRange(block.position(), block.position() + block.length(), 0);
+
+    polish();
+    if (isComponentComplete()) {
+        d->updateType = QQuickTextEditPrivate::UpdatePaintNode;
+        update();
+    }
 }
 
 void QQuickTextEdit::updateCursor()
@@ -2386,17 +2413,18 @@ void QQuickTextEditPrivate::handleFocusEvent(QFocusEvent *event)
 {
     Q_Q(QQuickTextEdit);
     bool focus = event->type() == QEvent::FocusIn;
-    q->setCursorVisible(focus);
+    if (!q->isReadOnly())
+        q->setCursorVisible(focus);
     control->processEvent(event, QPointF(-xoff, -yoff));
     if (focus) {
         q->q_updateAlignment();
 #ifndef QT_NO_IM
         if (focusOnPress && !q->isReadOnly())
             qGuiApp->inputMethod()->show();
-        q->connect(qApp->inputMethod(), SIGNAL(inputDirectionChanged(Qt::LayoutDirection)),
+        q->connect(QGuiApplication::inputMethod(), SIGNAL(inputDirectionChanged(Qt::LayoutDirection)),
                 q, SLOT(q_updateAlignment()));
     } else {
-        q->disconnect(qApp->inputMethod(), SIGNAL(inputDirectionChanged(Qt::LayoutDirection)),
+        q->disconnect(QGuiApplication::inputMethod(), SIGNAL(inputDirectionChanged(Qt::LayoutDirection)),
                    q, SLOT(q_updateAlignment()));
 #endif
     }

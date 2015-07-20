@@ -7,9 +7,8 @@ TEMPLATE = aux
 cross_compile {
     GYP_ARGS = "-D qt_cross_compile=1"
     posix: GYP_ARGS += "-D os_posix=1"
-    android: include(config/embedded_android.pri)
     qnx: include(config/embedded_qnx.pri)
-    linux:!android: include(config/embedded_linux.pri)
+    linux: include(config/embedded_linux.pri)
 } else {
     # !cross_compile
     GYP_ARGS = "-D qt_cross_compile=0"
@@ -88,8 +87,8 @@ contains(QT_ARCH, "i386"): GYP_ARGS += "-D target_arch=ia32"
 contains(WEBENGINE_CONFIG, proprietary_codecs): GYP_ARGS += "-Dproprietary_codecs=1 -Dffmpeg_branding=Chrome -Duse_system_ffmpeg=0"
 
 !contains(QT_CONFIG, qt_framework): contains(QT_CONFIG, private_tests) {
-    GYP_ARGS += "-D qt_install_data=\"$$[QT_INSTALL_DATA]\""
-    GYP_ARGS += "-D qt_install_translations=\"$$[QT_INSTALL_TRANSLATIONS]\""
+    GYP_ARGS += "-D qt_install_data=\"$$[QT_INSTALL_DATA/get]\""
+    GYP_ARGS += "-D qt_install_translations=\"$$[QT_INSTALL_TRANSLATIONS/get]\""
 }
 
 !build_pass {

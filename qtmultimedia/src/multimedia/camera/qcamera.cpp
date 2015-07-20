@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -45,6 +45,7 @@
 #include <qcameraimagecapturecontrol.h>
 #include <qvideodeviceselectorcontrol.h>
 #include <qcamerainfocontrol.h>
+#include <qcameraviewfindersettingscontrol.h>
 
 #include <QDebug>
 
@@ -63,6 +64,16 @@ static void qRegisterCameraMetaTypes()
 }
 
 Q_CONSTRUCTOR_FUNCTION(qRegisterCameraMetaTypes)
+
+static bool qt_sizeLessThan(const QSize &s1, const QSize &s2)
+{
+    return (s1.width() * s1.height()) < (s2.width() * s2.height());
+}
+
+static bool qt_frameRateRangeLessThan(const QCamera::FrameRateRange &s1, const QCamera::FrameRateRange &s2)
+{
+    return s1.maximumFrameRate < s2.maximumFrameRate;
+}
 
 /*!
     \class QCamera
@@ -163,13 +174,14 @@ void QCameraPrivate::initControls()
 {
     Q_Q(QCamera);
 
-    supportedLocks = 0;
-
     if (service) {
         control = qobject_cast<QCameraControl *>(service->requestControl(QCameraControl_iid));
         locksControl = qobject_cast<QCameraLocksControl *>(service->requestControl(QCameraLocksControl_iid));
         deviceControl = qobject_cast<QVideoDeviceSelectorControl*>(service->requestControl(QVideoDeviceSelectorControl_iid));
         infoControl = qobject_cast<QCameraInfoControl*>(service->requestControl(QCameraInfoControl_iid));
+        viewfinderSettingsControl2 = qobject_cast<QCameraViewfinderSettingsControl2*>(service->requestControl(QCameraViewfinderSettingsControl2_iid));
+        if (!viewfinderSettingsControl2)
+            viewfinderSettingsControl = qobject_cast<QCameraViewfinderSettingsControl*>(service->requestControl(QCameraViewfinderSettingsControl_iid));
 
         if (control) {
             q->connect(control, SIGNAL(stateChanged(QCamera::State)), q, SLOT(_q_updateState(QCamera::State)));
@@ -183,7 +195,6 @@ void QCameraPrivate::initControls()
         if (locksControl) {
             q->connect(locksControl, SIGNAL(lockStatusChanged(QCamera::LockType,QCamera::LockStatus,QCamera::LockChangeReason)),
                        q, SLOT(_q_updateLockStatus(QCamera::LockType,QCamera::LockStatus,QCamera::LockChangeReason)));
-            supportedLocks = locksControl->supportedLocks();
         }
 
         error = QCamera::NoError;
@@ -192,6 +203,8 @@ void QCameraPrivate::initControls()
         locksControl = 0;
         deviceControl = 0;
         infoControl = 0;
+        viewfinderSettingsControl = 0;
+        viewfinderSettingsControl2 = 0;
 
         error = QCamera::ServiceMissingError;
         errorString = QCamera::tr("The camera service is missing");
@@ -213,6 +226,10 @@ void QCameraPrivate::clear()
             service->releaseControl(deviceControl);
         if (infoControl)
             service->releaseControl(infoControl);
+        if (viewfinderSettingsControl)
+            service->releaseControl(viewfinderSettingsControl);
+        if (viewfinderSettingsControl2)
+            service->releaseControl(viewfinderSettingsControl2);
 
         provider->releaseService(service);
     }
@@ -224,8 +241,9 @@ void QCameraPrivate::clear()
     locksControl = 0;
     deviceControl = 0;
     infoControl = 0;
+    viewfinderSettingsControl = 0;
+    viewfinderSettingsControl2 = 0;
     service = 0;
-    supportedLocks = 0;
 }
 
 void QCameraPrivate::updateLockStatus()
@@ -236,8 +254,8 @@ void QCameraPrivate::updateLockStatus()
 
     QMap<QCamera::LockStatus, int> lockStatusPriority;
     lockStatusPriority.insert(QCamera::Locked, 1);
-    lockStatusPriority.insert(QCamera::Searching, 2);
-    lockStatusPriority.insert(QCamera::Unlocked, 3);
+    lockStatusPriority.insert(QCamera::Unlocked, 2);
+    lockStatusPriority.insert(QCamera::Searching, 3);
 
     lockStatus = requestedLocks ? QCamera::Locked : QCamera::Unlocked;
     int priority = 0;
@@ -521,6 +539,219 @@ void QCamera::setViewfinder(QAbstractVideoSurface *surface)
 }
 
 /*!
+    Returns the viewfinder settings being used by the camera.
+
+    Settings may change when the camera is started, for example if the viewfinder settings
+    are undefined or if unsupported values are set.
+
+    If viewfinder settings are not supported by the camera, it always returns a null
+    QCameraViewfinderSettings object.
+
+    \sa setViewfinderSettings()
+
+    \since 5.5
+*/
+QCameraViewfinderSettings QCamera::viewfinderSettings() const
+{
+    Q_D(const QCamera);
+
+    if (d->viewfinderSettingsControl2)
+        return d->viewfinderSettingsControl2->viewfinderSettings();
+
+    QCameraViewfinderSettings settings;
+    if (d->viewfinderSettingsControl) {
+        if (d->viewfinderSettingsControl->isViewfinderParameterSupported(QCameraViewfinderSettingsControl::Resolution))
+            settings.setResolution(d->viewfinderSettingsControl->viewfinderParameter(QCameraViewfinderSettingsControl::Resolution).toSize());
+
+        if (d->viewfinderSettingsControl->isViewfinderParameterSupported(QCameraViewfinderSettingsControl::MinimumFrameRate))
+            settings.setMinimumFrameRate(d->viewfinderSettingsControl->viewfinderParameter(QCameraViewfinderSettingsControl::MinimumFrameRate).toReal());
+
+        if (d->viewfinderSettingsControl->isViewfinderParameterSupported(QCameraViewfinderSettingsControl::MaximumFrameRate))
+            settings.setMaximumFrameRate(d->viewfinderSettingsControl->viewfinderParameter(QCameraViewfinderSettingsControl::MaximumFrameRate).toReal());
+
+        if (d->viewfinderSettingsControl->isViewfinderParameterSupported(QCameraViewfinderSettingsControl::PixelAspectRatio))
+            settings.setPixelAspectRatio(d->viewfinderSettingsControl->viewfinderParameter(QCameraViewfinderSettingsControl::PixelAspectRatio).toSize());
+
+        if (d->viewfinderSettingsControl->isViewfinderParameterSupported(QCameraViewfinderSettingsControl::PixelFormat))
+            settings.setPixelFormat(qvariant_cast<QVideoFrame::PixelFormat>(d->viewfinderSettingsControl->viewfinderParameter(QCameraViewfinderSettingsControl::PixelFormat)));
+    }
+    return settings;
+}
+
+/*!
+    Sets the viewfinder \a settings.
+
+    If some parameters are not specified, or null settings are passed, the camera will choose
+    default values.
+
+    If the camera is used to capture videos or images, the viewfinder settings might be
+    ignored if they conflict with the capture settings. You can check the actual viewfinder settings
+    once the camera is in the \c QCamera::ActiveStatus status.
+
+    Changing the viewfinder settings while the camera is in the QCamera::ActiveState state may
+    cause the camera to be restarted.
+
+    \sa viewfinderSettings(), supportedViewfinderResolutions(), supportedViewfinderFrameRateRanges(),
+    supportedViewfinderPixelFormats()
+
+    \since 5.5
+*/
+void QCamera::setViewfinderSettings(const QCameraViewfinderSettings &settings)
+{
+    Q_D(QCamera);
+
+    if (d->viewfinderSettingsControl || d->viewfinderSettingsControl2)
+        d->_q_preparePropertyChange(QCameraControl::ViewfinderSettings);
+
+    if (d->viewfinderSettingsControl2) {
+        d->viewfinderSettingsControl2->setViewfinderSettings(settings);
+
+    } else if (d->viewfinderSettingsControl) {
+        if (d->viewfinderSettingsControl->isViewfinderParameterSupported(QCameraViewfinderSettingsControl::Resolution))
+            d->viewfinderSettingsControl->setViewfinderParameter(QCameraViewfinderSettingsControl::Resolution, settings.resolution());
+
+        if (d->viewfinderSettingsControl->isViewfinderParameterSupported(QCameraViewfinderSettingsControl::MinimumFrameRate))
+            d->viewfinderSettingsControl->setViewfinderParameter(QCameraViewfinderSettingsControl::MinimumFrameRate, settings.minimumFrameRate());
+
+        if (d->viewfinderSettingsControl->isViewfinderParameterSupported(QCameraViewfinderSettingsControl::MaximumFrameRate))
+            d->viewfinderSettingsControl->setViewfinderParameter(QCameraViewfinderSettingsControl::MaximumFrameRate, settings.maximumFrameRate());
+
+        if (d->viewfinderSettingsControl->isViewfinderParameterSupported(QCameraViewfinderSettingsControl::PixelAspectRatio))
+            d->viewfinderSettingsControl->setViewfinderParameter(QCameraViewfinderSettingsControl::PixelAspectRatio, settings.pixelAspectRatio());
+
+        if (d->viewfinderSettingsControl->isViewfinderParameterSupported(QCameraViewfinderSettingsControl::PixelFormat))
+            d->viewfinderSettingsControl->setViewfinderParameter(QCameraViewfinderSettingsControl::PixelFormat, settings.pixelFormat());
+    }
+}
+
+/*!
+    Returns a list of supported viewfinder settings.
+
+    The list is ordered by preference; preferred settings come first.
+
+    The optional \a settings argument can be used to conveniently filter the results.
+    If \a settings is non null, the returned list is reduced to settings matching the given partial
+    \a settings.
+
+    The camera must be loaded before calling this function, otherwise the returned list
+    is empty.
+
+    \sa setViewfinderSettings(), supportedViewfinderResolutions(), supportedViewfinderFrameRateRanges(),
+    supportedViewfinderPixelFormats()
+
+    \since 5.5
+*/
+QList<QCameraViewfinderSettings> QCamera::supportedViewfinderSettings(const QCameraViewfinderSettings &settings) const
+{
+    Q_D(const QCamera);
+
+    if (!d->viewfinderSettingsControl2)
+        return QList<QCameraViewfinderSettings>();
+
+    if (settings.isNull())
+        return d->viewfinderSettingsControl2->supportedViewfinderSettings();
+
+    QList<QCameraViewfinderSettings> results;
+    QList<QCameraViewfinderSettings> supported = d->viewfinderSettingsControl2->supportedViewfinderSettings();
+    Q_FOREACH (const QCameraViewfinderSettings &s, supported) {
+        if ((settings.resolution().isEmpty() || settings.resolution() == s.resolution())
+                && (qFuzzyIsNull(settings.minimumFrameRate()) || qFuzzyCompare((float)settings.minimumFrameRate(), (float)s.minimumFrameRate()))
+                && (qFuzzyIsNull(settings.maximumFrameRate()) || qFuzzyCompare((float)settings.maximumFrameRate(), (float)s.maximumFrameRate()))
+                && (settings.pixelFormat() == QVideoFrame::Format_Invalid || settings.pixelFormat() == s.pixelFormat())
+                && (settings.pixelAspectRatio() == QSize(1, 1) || settings.pixelAspectRatio() == s.pixelAspectRatio())) {
+            results.append(s);
+        }
+    }
+
+    return results;
+}
+
+/*!
+    Returns a list of supported viewfinder resolutions.
+
+    This is a convenience function which retrieves unique resolutions from the supported settings.
+
+    If non null viewfinder \a settings are passed, the returned list is reduced to resolutions
+    supported with partial \a settings applied.
+
+    The camera must be loaded before calling this function, otherwise the returned list
+    is empty.
+
+    \sa QCameraViewfinderSettings::resolution(), setViewfinderSettings()
+
+    \since 5.5
+*/
+QList<QSize> QCamera::supportedViewfinderResolutions(const QCameraViewfinderSettings &settings) const
+{
+    QList<QSize> resolutions;
+    QList<QCameraViewfinderSettings> capabilities = supportedViewfinderSettings(settings);
+    Q_FOREACH (const QCameraViewfinderSettings &s, capabilities) {
+        if (!resolutions.contains(s.resolution()))
+            resolutions.append(s.resolution());
+    }
+    std::sort(resolutions.begin(), resolutions.end(), qt_sizeLessThan);
+
+    return resolutions;
+}
+
+/*!
+    Returns a list of supported viewfinder frame rate ranges.
+
+    This is a convenience function which retrieves unique frame rate ranges from the supported settings.
+
+    If non null viewfinder \a settings are passed, the returned list is reduced to frame rate ranges
+    supported with partial \a settings applied.
+
+    The camera must be loaded before calling this function, otherwise the returned list
+    is empty.
+
+    \sa QCameraViewfinderSettings::minimumFrameRate(), QCameraViewfinderSettings::maximumFrameRate(),
+    setViewfinderSettings()
+
+    \since 5.5
+*/
+QList<QCamera::FrameRateRange> QCamera::supportedViewfinderFrameRateRanges(const QCameraViewfinderSettings &settings) const
+{
+    QList<QCamera::FrameRateRange> frameRateRanges;
+    QList<QCameraViewfinderSettings> capabilities = supportedViewfinderSettings(settings);
+    Q_FOREACH (const QCameraViewfinderSettings &s, capabilities) {
+        QCamera::FrameRateRange range(s.minimumFrameRate(), s.maximumFrameRate());
+        if (!frameRateRanges.contains(range))
+            frameRateRanges.append(range);
+    }
+    std::sort(frameRateRanges.begin(), frameRateRanges.end(), qt_frameRateRangeLessThan);
+
+    return frameRateRanges;
+}
+
+/*!
+    Returns a list of supported viewfinder pixel formats.
+
+    This is a convenience function which retrieves unique pixel formats from the supported settings.
+
+    If non null viewfinder \a settings are passed, the returned list is reduced to pixel formats
+    supported with partial \a settings applied.
+
+    The camera must be loaded before calling this function, otherwise the returned list
+    is empty.
+
+    \sa QCameraViewfinderSettings::pixelFormat(), setViewfinderSettings()
+
+    \since 5.5
+*/
+QList<QVideoFrame::PixelFormat> QCamera::supportedViewfinderPixelFormats(const QCameraViewfinderSettings &settings) const
+{
+    QList<QVideoFrame::PixelFormat> pixelFormats;
+    QList<QCameraViewfinderSettings> capabilities = supportedViewfinderSettings(settings);
+    Q_FOREACH (const QCameraViewfinderSettings &s, capabilities) {
+        if (!pixelFormats.contains(s.pixelFormat()))
+            pixelFormats.append(s.pixelFormat());
+    }
+
+    return pixelFormats;
+}
+
+/*!
     Returns the error state of the object.
 */
 
@@ -673,7 +904,11 @@ QCamera::Status QCamera::status() const
 */
 QCamera::LockTypes QCamera::supportedLocks() const
 {
-    return d_func()->supportedLocks;
+    Q_D(const QCamera);
+
+    return d->locksControl
+            ? d->locksControl->supportedLocks()
+            : QCamera::LockTypes();
 }
 
 /*!
@@ -699,16 +934,13 @@ QCamera::LockStatus QCamera::lockStatus(QCamera::LockType lockType) const
 {
     const QCameraPrivate *d = d_func();
 
-    if (!(lockType & d->supportedLocks))
-        return lockType & d->requestedLocks ? QCamera::Locked : QCamera::Unlocked;
-
     if (!(lockType & d->requestedLocks))
         return QCamera::Unlocked;
 
     if (d->locksControl)
         return d->locksControl->lockStatus(lockType);
 
-    return QCamera::Unlocked;
+    return QCamera::Locked;
 }
 
 /*!
@@ -743,12 +975,11 @@ void QCamera::searchAndLock(QCamera::LockTypes locks)
     QCamera::LockStatus oldStatus = d->lockStatus;
     d->supressLockChangedSignal = true;
 
-    d->requestedLocks |= locks;
-
-    locks &= d->supportedLocks;
-
-    if (d->locksControl)
+    if (d->locksControl) {
+        locks &= d->locksControl->supportedLocks();
+        d->requestedLocks |= locks;
         d->locksControl->searchAndLock(locks);
+    }
 
     d->supressLockChangedSignal = false;
 
@@ -776,10 +1007,10 @@ void QCamera::unlock(QCamera::LockTypes locks)
 
     d->requestedLocks &= ~locks;
 
-    locks &= d->supportedLocks;
-
-    if (d->locksControl)
+    if (d->locksControl) {
+        locks &= d->locksControl->supportedLocks();
         d->locksControl->unlock(locks);
+    }
 
     d->supressLockChangedSignal = false;
 
@@ -795,6 +1026,31 @@ void QCamera::unlock()
     unlock(d_func()->requestedLocks);
 }
 
+
+/*!
+    \class QCamera::FrameRateRange
+    \inmodule QtMultimedia
+    \ingroup multimedia
+    \ingroup multimedia_camera
+    \since 5.5
+
+    \brief A FrameRateRange represents a range of frame rates as minimum and maximum rate.
+
+    If the minimum frame rate is equal to the maximum frame rate, the frame rate is fixed.
+    If not, the actual frame rate fluctuates between the minimum and the maximum.
+
+    \sa QCamera::supportedViewfinderFrameRateRanges(), QCameraViewfinderSettings
+*/
+
+/*!
+    \variable QCamera::FrameRateRange::minimumFrameRate
+    The minimum frame rate supported by the range, in frames per second.
+*/
+
+/*!
+    \variable QCamera::FrameRateRange::maximumFrameRate
+    The maximum frame rate supported by the range, in frames per second.
+*/
 
 /*!
     \enum QCamera::State

@@ -1,31 +1,34 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
-** This file is part of the QtQuick.Dialogs module of the Qt Toolkit.
+** This file is part of the Qt Quick Dialogs module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL21$
+** $QT_BEGIN_LICENSE:LGPL3$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 or version 3 as published by the Free
-** Software Foundation and appearing in the file LICENSE.LGPLv21 and
-** LICENSE.LGPLv3 included in the packaging of this file. Please review the
-** following information to ensure the GNU Lesser General Public License
-** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
-** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPLv3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** GNU General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU
+** General Public License version 2.0 or later as published by the Free
+** Software Foundation and appearing in the file LICENSE.GPL included in
+** the packaging of this file. Please review the following information to
+** ensure the GNU General Public License version 2.0 requirements will be
+** met: http://www.gnu.org/licenses/gpl-2.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -34,12 +37,17 @@
 #include "qquickfiledialog_p.h"
 #include <QQuickItem>
 #include <QQmlEngine>
+#include <QJSValueIterator>
 #include <private/qguiapplication_p.h>
 #include <private/qv4object_p.h>
 
 QT_BEGIN_NAMESPACE
 
 using namespace QV4;
+
+// Note: documentation comments here are not currently used to generate
+// user documentation, because AbstractFileDialog is not a user-facing type.
+// FileDialog docs go into qquickplatformfiledialog.cpp
 
 /*!
     \qmltype AbstractFileDialog
@@ -108,42 +116,89 @@ QList<QUrl> QQuickFileDialog::fileUrls() const
     return m_selections;
 }
 
-
-void QQuickFileDialog::addShortcut(int &i, const QString &name, const QString &path)
+void QQuickFileDialog::addShortcut(const QString &name, const QString &visibleName, const QString &path)
 {
     QJSEngine *engine = qmlEngine(this);
+    QUrl url = QUrl::fromLocalFile(path);
+
+    // Since the app can have bindings to the shortcut, we always add it
+    // to the public API, even if the directory doesn't (yet) exist.
+    m_shortcuts.setProperty(name, url.toString());
+
+    // ...but we are more strict about showing it as a clickable link inside the dialog
+    if (visibleName.isEmpty() || !QDir(path).exists())
+        return;
+
     QJSValue o = engine->newObject();
-    o.setProperty("name", name);
-    o.setProperty("url", QUrl::fromLocalFile(path).toString());
-    m_shortcuts.setProperty(i++, o);
+    o.setProperty("name", visibleName);
+    // TODO maybe some day QJSValue could directly store a QUrl
+    o.setProperty("url", url.toString());
+
+    int length = m_shortcutDetails.property(QLatin1String("length")).toInt();
+    m_shortcutDetails.setProperty(length, o);
 }
 
-void QQuickFileDialog::addIfReadable(int &i, const QString &name, QStandardPaths::StandardLocation loc)
+void QQuickFileDialog::addShortcutFromStandardLocation(const QString &name, QStandardPaths::StandardLocation loc, bool local)
 {
-    QStringList paths = QStandardPaths::standardLocations(loc);
-    if (!paths.isEmpty() && QDir(paths.first()).isReadable())
-        addShortcut(i, name, paths.first());
+    if (m_selectExisting) {
+        QStringList readPaths = QStandardPaths::standardLocations(loc);
+        QString path = readPaths.isEmpty() ? QString() : local ? readPaths.first() : readPaths.last();
+        addShortcut(name, QStandardPaths::displayName(loc), path);
+    } else {
+        QString path = QStandardPaths::writableLocation(loc);
+        addShortcut(name, QStandardPaths::displayName(loc), path);
+    }
+}
+
+void QQuickFileDialog::populateShortcuts()
+{
+    QJSEngine *engine = qmlEngine(this);
+    m_shortcutDetails = engine->newArray();
+    m_shortcuts = engine->newObject();
+
+    addShortcutFromStandardLocation(QLatin1String("desktop"), QStandardPaths::DesktopLocation);
+    addShortcutFromStandardLocation(QLatin1String("documents"), QStandardPaths::DocumentsLocation);
+    addShortcutFromStandardLocation(QLatin1String("music"), QStandardPaths::MusicLocation);
+    addShortcutFromStandardLocation(QLatin1String("movies"), QStandardPaths::MoviesLocation);
+    addShortcutFromStandardLocation(QLatin1String("home"), QStandardPaths::HomeLocation);
+
+#ifndef Q_OS_IOS
+    addShortcutFromStandardLocation(QLatin1String("pictures"), QStandardPaths::PicturesLocation);
+#else
+    // On iOS we point pictures to the system picture folder when loading
+    addShortcutFromStandardLocation(QLatin1String("pictures"), QStandardPaths::PicturesLocation, !m_selectExisting);
+#endif
+
+#ifndef Q_OS_IOS
+    // on iOS, this returns only "/", which is never a useful path to read or write anything
+    QFileInfoList drives = QDir::drives();
+    foreach (QFileInfo fi, drives)
+        addShortcut(fi.absoluteFilePath(), fi.absoluteFilePath(), fi.absoluteFilePath());
+#endif
+
+    emit shortcutsChanged();
+}
+
+void QQuickFileDialog::updateModes()
+{
+    QQuickAbstractFileDialog::updateModes();
+    populateShortcuts();
 }
 
 QJSValue QQuickFileDialog::shortcuts()
 {
-    if (m_shortcuts.isUndefined()) {
-        QJSEngine *engine = qmlEngine(this);
-        m_shortcuts = engine->newArray();
-        int i = 0;
+    if (m_shortcuts.isUndefined())
+        populateShortcuts();
 
-        addIfReadable(i, "Desktop", QStandardPaths::DesktopLocation);
-        addIfReadable(i, "Documents", QStandardPaths::DocumentsLocation);
-        addIfReadable(i, "Music", QStandardPaths::MusicLocation);
-        addIfReadable(i, "Movies", QStandardPaths::MoviesLocation);
-        addIfReadable(i, "Pictures", QStandardPaths::PicturesLocation);
-        addIfReadable(i, "Home", QStandardPaths::HomeLocation);
-
-        QFileInfoList drives = QDir::drives();
-        foreach (QFileInfo fi, drives)
-            addShortcut(i, fi.absoluteFilePath(), fi.absoluteFilePath());
-    }
     return m_shortcuts;
+}
+
+QJSValue QQuickFileDialog::__shortcuts()
+{
+    if (m_shortcutDetails.isUndefined())
+        populateShortcuts();
+
+    return m_shortcutDetails;
 }
 
 /*!

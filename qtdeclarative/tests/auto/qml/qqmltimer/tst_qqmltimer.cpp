@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -50,6 +50,23 @@ void consistentWait(int ms)
         QTest::qWait(20);
 }
 
+void eventLoopWait(int ms)
+{
+    // QTest::qWait() always calls sendPostedEvents before exiting, so we can't use it to stop
+    // between an event is posted and it is received; But we can use an event loop instead
+
+    QPauseAnimation waitTimer(ms);
+    waitTimer.start();
+    while (waitTimer.state() == QAbstractAnimation::Running)
+    {
+        QTimer timer;
+        QEventLoop eventLoop;
+        timer.start(0);
+        timer.connect(&timer, &QTimer::timeout, &eventLoop, &QEventLoop::quit);
+        eventLoop.exec();
+    }
+}
+
 class tst_qqmltimer : public QObject
 {
     Q_OBJECT
@@ -69,6 +86,8 @@ private slots:
     void restartFromTriggered();
     void runningFromTriggered();
     void parentProperty();
+    void stopWhenEventPosted();
+    void restartWhenEventPosted();
 };
 
 class TimerHelper : public QObject
@@ -394,6 +413,51 @@ void tst_qqmltimer::parentProperty()
     QVERIFY(timer->isRunning());
 
     delete timer;
+}
+
+void tst_qqmltimer::stopWhenEventPosted()
+{
+    QQmlEngine engine;
+    QQmlComponent component(&engine);
+    component.setData(QByteArray("import QtQml 2.0\nTimer { interval: 200; running: true }"), QUrl::fromLocalFile(""));
+    QQmlTimer *timer = qobject_cast<QQmlTimer*>(component.create());
+
+    TimerHelper helper;
+    connect(timer, SIGNAL(triggered()), &helper, SLOT(timeout()));
+    QCOMPARE(helper.count, 0);
+
+    eventLoopWait(200);
+    QCOMPARE(helper.count, 0);
+    QVERIFY(timer->isRunning());
+    timer->stop();
+    QVERIFY(!timer->isRunning());
+
+    consistentWait(300);
+    QCOMPARE(helper.count, 0);
+}
+
+
+void tst_qqmltimer::restartWhenEventPosted()
+{
+    QQmlEngine engine;
+    QQmlComponent component(&engine);
+    component.setData(QByteArray("import QtQml 2.0\nTimer { interval: 200; running: true }"), QUrl::fromLocalFile(""));
+    QQmlTimer *timer = qobject_cast<QQmlTimer*>(component.create());
+
+    TimerHelper helper;
+    connect(timer, SIGNAL(triggered()), &helper, SLOT(timeout()));
+    QCOMPARE(helper.count, 0);
+
+    eventLoopWait(200);
+    QCOMPARE(helper.count, 0);
+    timer->restart();
+
+    consistentWait(100);
+    QCOMPARE(helper.count, 0);
+    QVERIFY(timer->isRunning());
+
+    consistentWait(200);
+    QCOMPARE(helper.count, 1);
 }
 
 QTEST_MAIN(tst_qqmltimer)

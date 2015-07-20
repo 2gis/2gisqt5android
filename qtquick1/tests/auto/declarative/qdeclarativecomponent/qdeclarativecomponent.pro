@@ -7,7 +7,7 @@ macx:CONFIG -= app_bundle
 
 SOURCES += tst_qdeclarativecomponent.cpp
 
-DEFINES += SRCDIR=\\\"$$PWD\\\"
+RESOURCES += data/data.qrc
 
 CONFIG += parallel_test
 

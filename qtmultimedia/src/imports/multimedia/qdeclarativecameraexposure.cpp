@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the plugins of the Qt Toolkit.
 **
@@ -10,9 +10,9 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia. For licensing terms and
-** conditions see http://qt.digia.com/licensing. For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
@@ -23,8 +23,8 @@
 ** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights. These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** $QT_END_LICENSE$
@@ -341,6 +341,16 @@ void QDeclarativeCameraExposure::setAutoIsoSensitivity()
     \row \li Camera.ExposureLargeAperture \li Use larger aperture with small depth of field.
     \row \li Camera.ExposureSmallAperture \li Use smaller aperture.
     \row \li Camera.ExposurePortrait      \li Portrait exposure mode.
+    \row \li Camera.ExposureAction        \li Action exposure mode.  Since 5.5
+    \row \li Camera.ExposureLandscape     \li Landscape exposure mode.  Since 5.5
+    \row \li Camera.ExposureNightPortrait \li Night portrait exposure mode.  Since 5.5
+    \row \li Camera.ExposureTheatre       \li Theatre exposure mode.  Since 5.5
+    \row \li Camera.ExposureSunset        \li Sunset exposure mode.  Since 5.5
+    \row \li Camera.ExposureSteadyPhoto   \li Steady photo exposure mode.  Since 5.5
+    \row \li Camera.ExposureFireworks     \li Fireworks exposure mode.  Since 5.5
+    \row \li Camera.ExposureParty         \li Party exposure mode.  Since 5.5
+    \row \li Camera.ExposureCandlelight   \li Candlelight exposure mode.  Since 5.5
+    \row \li Camera.ExposureBarcode       \li Barcode exposure mode.  Since 5.5
     \row \li Camera.ExposureModeVendor    \li The base value for device specific exposure modes.
     \endtable
 */

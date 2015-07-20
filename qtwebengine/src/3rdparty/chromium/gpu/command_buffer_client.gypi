@@ -14,15 +14,14 @@
   'dependencies': [
     '../third_party/khronos/khronos.gyp:khronos_headers',
   ],
-  'export_dependent_settings': [
-    '../third_party/khronos/khronos.gyp:khronos_headers',
-  ],
   'sources': [
     'command_buffer/client/cmd_buffer_helper.cc',
     'command_buffer/client/cmd_buffer_helper.h',
     'command_buffer/client/fenced_allocator.cc',
     'command_buffer/client/fenced_allocator.h',
     'command_buffer/client/gpu_control.h',
+    'command_buffer/client/gpu_memory_buffer_manager.cc',
+    'command_buffer/client/gpu_memory_buffer_manager.h',
     'command_buffer/client/mapped_memory.cc',
     'command_buffer/client/mapped_memory.h',
     'command_buffer/client/ring_buffer.cc',

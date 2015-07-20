@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the examples of the Qt Toolkit.
 **
@@ -17,8 +17,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -38,30 +38,31 @@
 **
 ****************************************************************************/
 
+#include "tictactoe.h"
+#include "tictactoedialog.h"
+
+#include <QtDesigner/QDesignerFormWindowInterface>
+#include <QtDesigner/QDesignerFormWindowCursorInterface>
 #include <QDialogButtonBox>
 #include <QPushButton>
 #include <QVBoxLayout>
-#include <QtDesigner>
-
-#include "tictactoe.h"
-#include "tictactoedialog.h"
+#include <QVariant>
 
 //! [0]
 TicTacToeDialog::TicTacToeDialog(TicTacToe *tic, QWidget *parent)
     : QDialog(parent)
+    , editor(new TicTacToe)
+    , ticTacToe(tic)
+    , buttonBox(new QDialogButtonBox(QDialogButtonBox::Ok
+                                     | QDialogButtonBox::Cancel
+                                     | QDialogButtonBox::Reset))
 {
-    ticTacToe = tic;
-    editor = new TicTacToe;
     editor->setState(ticTacToe->state());
 
-    buttonBox = new QDialogButtonBox(QDialogButtonBox::Ok
-                                     | QDialogButtonBox::Cancel
-                                     | QDialogButtonBox::Reset);
-
-    connect(buttonBox->button(QDialogButtonBox::Reset), SIGNAL(clicked()),
-            this, SLOT(resetState()));
-    connect(buttonBox, SIGNAL(accepted()), this, SLOT(saveState()));
-    connect(buttonBox, SIGNAL(rejected()), this, SLOT(reject()));
+    connect(buttonBox->button(QDialogButtonBox::Reset), &QAbstractButton::clicked,
+            this, &TicTacToeDialog::resetState);
+    connect(buttonBox, &QDialogButtonBox::accepted, this, &TicTacToeDialog::saveState);
+    connect(buttonBox, &QDialogButtonBox::rejected, this, &QDialog::reject);
 
     QVBoxLayout *mainLayout = new QVBoxLayout;
     mainLayout->addWidget(editor);
