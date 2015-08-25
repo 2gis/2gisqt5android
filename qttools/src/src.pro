@@ -14,8 +14,8 @@ qtHaveModule(widgets) {
 }
 
 SUBDIRS += linguist \
-    qdoc \
-    qtplugininfo
+
+
 if(!android|android_app):!ios: SUBDIRS += qtpaths
 
 mac {
@@ -26,11 +26,15 @@ android {
     SUBDIRS += androiddeployqt
 }
 
-qtHaveModule(dbus): SUBDIRS += qdbus
 
 win32|winrt:SUBDIRS += windeployqt
 winrt:SUBDIRS += winrtrunner
-qtHaveModule(gui):!android:!ios:!qnx:!wince*:!winrt*:SUBDIRS += qtdiag
+!android:!ios:!qnx:!wince*:!winrt* {
+    qtHaveModule(gui):SUBDIRS += qtdiag
+    qtHaveModule(dbus): SUBDIRS += qdbus
+    SUBDIRS += qtplugininfo \
+		qdoc
+}
 
 qtNomakeTools( \
     pixeltool \

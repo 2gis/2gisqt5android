@@ -2160,8 +2160,8 @@ int QPdfEnginePrivate::generateRadialGradientShader(const QRadialGradient *gradi
         bool done = false;
         while (!done) {
             QPointF center = QPointF(p0.x() + to*(p1.x() - p0.x()), p0.y() + to*(p1.y() - p0.y()));
-            double radius = r0 + to*(r1 - r0);
-            double r2 = radius*radius;
+            qreal radius = r0 + to*(r1 - r0);
+            qreal r2 = radius*radius;
             done = true;
             for (int i = 0; i < 4; ++i) {
                 QPointF off = page_rect[i] - center;
