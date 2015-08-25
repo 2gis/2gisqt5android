@@ -1979,8 +1979,8 @@ int QPdfEnginePrivate::createShadingFunction(const QGradient *gradient, int from
         if (reflect && step % 2) {
             for (int i = stops.size() - 1; i > 0; --i) {
                 QGradientBound b;
-                b.start = step + 1 - qBound(0., stops.at(i).first, 1.);
-                b.stop = step + 1 - qBound(0., stops.at(i - 1).first, 1.);
+                b.start = step + 1 - qBound(qreal(0), stops.at(i).first, qreal(1));
+                b.stop = step + 1 - qBound(qreal(0), stops.at(i - 1).first, qreal(1));
                 b.function = functions.at(i - 1);
                 b.reverse = true;
                 gradientBounds << b;
@@ -1988,8 +1988,8 @@ int QPdfEnginePrivate::createShadingFunction(const QGradient *gradient, int from
         } else {
             for (int i = 0; i < stops.size() - 1; ++i) {
                 QGradientBound b;
-                b.start = step + qBound(0., stops.at(i).first, 1.);
-                b.stop = step + qBound(0., stops.at(i + 1).first, 1.);
+                b.start = step + qBound(qreal(0), stops.at(i).first, qreal(1));
+                b.stop = step + qBound(qreal(0), stops.at(i + 1).first, qreal(1));
                 b.function = functions.at(i);
                 b.reverse = false;
                 gradientBounds << b;
@@ -2098,9 +2098,9 @@ int QPdfEnginePrivate::generateLinearGradientShader(const QLinearGradient *gradi
 int QPdfEnginePrivate::generateRadialGradientShader(const QRadialGradient *gradient, const QTransform &matrix, bool alpha)
 {
     QPointF p1 = gradient->center();
-    double r1 = gradient->centerRadius();
+    qreal r1 = gradient->centerRadius();
     QPointF p0 = gradient->focalPoint();
-    double r0 = gradient->focalRadius();
+    qreal r0 = gradient->focalRadius();
 
     Q_ASSERT(gradient->coordinateMode() == QGradient::LogicalMode);
 
@@ -2127,8 +2127,8 @@ int QPdfEnginePrivate::generateRadialGradientShader(const QRadialGradient *gradi
         bool done = false;
         while (!done) {
             QPointF center = QPointF(p0.x() + to*(p1.x() - p0.x()), p0.y() + to*(p1.y() - p0.y()));
-            double radius = r0 + to*(r1 - r0);
-            double r2 = radius*radius;
+            qreal radius = r0 + to*(r1 - r0);
+            qreal r2 = radius*radius;
             done = true;
             for (int i = 0; i < 4; ++i) {
                 QPointF off = page_rect[i] - center;
