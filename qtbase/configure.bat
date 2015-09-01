@@ -34,7 +34,7 @@
 @echo off
 set QTSRC=%~dp0
 set QTDIR=%CD%
-if not exist %QTSRC%.gitignore goto sconf
+rem if not exist %QTSRC%.gitignore goto sconf
 echo Please wait while bootstrapping configure ...
 
 for %%C in (cl.exe icl.exe g++.exe perl.exe) do set %%C=%%~$PATH:C
