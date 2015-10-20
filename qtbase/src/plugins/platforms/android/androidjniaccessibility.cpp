@@ -102,8 +102,7 @@ namespace QtAndroidAccessibility
     {
         QAccessibleInterface *iface = interfaceFromId(objectId);
         if (iface) {
-            //allocate count+1 to avoid vector resizing because childCount() sometime increases on 1 child inside for-loop
-            QVector <jint> tmpArray(iface->childCount()+1);
+            QVector <jint> tmpArray();
             for (int i = 0; i < iface->childCount(); ++i) {
                 QAccessibleInterface *child = iface->child(i);
                 if (child) {
