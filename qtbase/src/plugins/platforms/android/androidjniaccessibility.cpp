@@ -43,6 +43,7 @@
 #include <QtCore/qmath.h>
 #include <QtCore/private/qjnihelpers_p.h>
 #include <QtCore/private/qjni_p.h>
+#include <QtCore/QVector>
 
 #include "qdebug.h"
 
@@ -102,7 +103,7 @@ namespace QtAndroidAccessibility
     {
         QAccessibleInterface *iface = interfaceFromId(objectId);
         if (iface) {
-            QVector <jint> tmpArray();
+            QVector<jint> tmpArray;
             for (int i = 0; i < iface->childCount(); ++i) {
                 QAccessibleInterface *child = iface->child(i);
                 if (child) {
