@@ -52,15 +52,23 @@ QT_BEGIN_NAMESPACE
     \namespace QtMac
     \inmodule QtMacExtras
     \since 5.2
-    \brief The QtMac namespace contains miscellaneous functionality specific to the OS X operating system.
+    \brief The QtMac namespace contains miscellaneous functionality specific to the OS X and iOS operating systems.
     \inheaderfile QtMac
  */
+
+/*!
+    \fn CGContextRef QtMac::currentCGContext()
+
+    Returns the current CoreGraphics context.
+*/
+
 namespace QtMac
 {
 
 #if QT_DEPRECATED_SINCE(5,3)
 /*!
     \obsolete
+    \fn NSData* QtMac::toNSData(const QByteArray &data)
 
     Use QByteArray::toNSData() instead.
  */
@@ -71,6 +79,7 @@ NSData* toNSData(const QByteArray &data)
 
 /*!
     \obsolete
+    \fn QByteArray QtMac::fromNSData(const NSData *data)
 
     Use QByteArray::fromNSData() instead.
  */
@@ -84,7 +93,9 @@ QByteArray fromNSData(const NSData *data)
 #endif // QT_DEPRECATED_SINCE
 
 /*!
-    Creates a \c CGImageRef equivalent to the QPixmap. Returns the \c CGImageRef handle.
+    \fn CGImageRef QtMac::toCGImageRef(const QPixmap &pixmap)
+
+    Creates a \c CGImageRef equivalent to the QPixmap \a pixmap. Returns the \c CGImageRef handle.
 
     It is the caller's responsibility to release the \c CGImageRef data
     after use.
@@ -109,6 +120,8 @@ CGImageRef toCGImageRef(const QPixmap &pixmap)
 }
 
 /*!
+    \fn QPixmap QtMac::fromCGImageRef(CGImageRef image)
+
     Returns a QPixmap that is equivalent to the given \a image.
 
     This function is not available in Qt 5.x until 5.0.2 and will return a null pixmap in earlier versions.

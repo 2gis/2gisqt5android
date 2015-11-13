@@ -40,14 +40,14 @@
 
 //! [Imports]
 import QtQuick 2.0
-import QtPositioning 5.2
-import QtLocation 5.3
+import QtPositioning 5.5
+import QtLocation 5.5
 //! [Imports]
 
 Rectangle {
     width: 360
-    height: 360
-    property variant startCoordinate: QtPositioning.coordinate(-27.46778, 153.02778)
+    height: 640
+    property variant startCoordinate: QtPositioning.coordinate( 59.9485, 10.7686) // The Qt Company in Oslo
 
     //! [Initialize Plugin]
     Plugin {
@@ -79,12 +79,15 @@ Rectangle {
         anchors.fill: parent
         model: searchModel
         delegate: Component {
-            Column {
-                Text { text: title }
-                Text { text: place.location.address.text }
+            Row {
+                spacing: 5
+                Marker { height: parent.height }
+                Column {
+                    Text { text: title; font.bold: true }
+                    Text { text: place.location.address.text }
+                }
             }
         }
-        spacing: 10
     }
     //! [Places ListView]
 

@@ -177,7 +177,7 @@ bool QQuickTreeModelAdaptor::setData(const QModelIndex &index, const QVariant &v
     }
 }
 
-int QQuickTreeModelAdaptor::itemIndex(const QModelIndex &index)
+int QQuickTreeModelAdaptor::itemIndex(const QModelIndex &index) const
 {
     // This is basically a plagiarism of QTreeViewPrivate::viewIndex()
     if (!index.isValid() || m_items.isEmpty())
@@ -244,11 +244,15 @@ QModelIndex QQuickTreeModelAdaptor::mapRowToModelIndex(int row) const
     return m_items.at(row).index;
 }
 
-QItemSelection  QQuickTreeModelAdaptor::selectionForRowRange(int from, int to) const
+QItemSelection  QQuickTreeModelAdaptor::selectionForRowRange(const QModelIndex &fromIndex, const QModelIndex &toIndex) const
 {
-    Q_ASSERT(0 <= from && from < m_items.count());
-    Q_ASSERT(0 <= to && to < m_items.count());
-
+    int from = itemIndex(fromIndex);
+    int to = itemIndex(toIndex);
+    if (from == -1) {
+        if (to == -1)
+            return QItemSelection();
+        return QItemSelection(toIndex, toIndex);
+    }
     if (from > to)
         qSwap(from, to);
 
@@ -726,7 +730,7 @@ void QQuickTreeModelAdaptor::dump() const
     int count = m_items.count();
     if (count == 0)
         return;
-    int countWidth = floorf(log10f(float(count))) + 1;
+    int countWidth = floor(log10(double(count))) + 1;
     qInfo() << "Dumping" << this;
     for (int i = 0; i < count; i++) {
         const TreeItem &item = m_items.at(i);

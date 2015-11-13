@@ -45,8 +45,6 @@ import QtQuick.Controls.Private 1.0
     \ingroup extras
     \brief A column within a tumbler.
 
-    \note TumblerColumn requires Qt 5.5.0 or later.
-
     TumblerColumn represents a column within a tumbler, providing the interface
     to define the items and width of each column.
 
@@ -91,7 +89,7 @@ QtObject {
     Accessible.role: Accessible.ColumnHeader
 
     /*!
-        \qmlproperty readonly int TumblerColumn::currentIndex
+        \qmlproperty int TumblerColumn::currentIndex
 
         This read-only property holds the index of the current item for this
         column. If the model count is reduced, the current index will be

@@ -260,6 +260,18 @@ void QQmlEnginePrivate::activateDesignerMode()
         on producing the image without blocking the main thread.
 */
 
+/*!
+    \fn QQmlImageProviderBase::imageType() const
+
+    Implement this method to return the image type supported by this image provider.
+*/
+
+/*!
+    \fn QQmlImageProviderBase::flags() const
+
+    Implement this to return the properties of this image provider.
+*/
+
 /*! \internal */
 QQmlImageProviderBase::QQmlImageProviderBase()
 {
@@ -900,7 +912,7 @@ QQuickWorkerScriptEngine *QQmlEnginePrivate::getWorkerScriptEngine()
 
   Note that the \l {Qt Quick 1} version is called QDeclarativeEngine.
 
-  \sa QQmlComponent, QQmlContext
+  \sa QQmlComponent, QQmlContext, {QML Global Object}
 */
 
 /*!
@@ -1354,6 +1366,9 @@ QQmlEngine::ObjectOwnership QQmlEngine::objectOwnership(QObject *object)
         return ddata->indestructible?CppOwnership:JavaScriptOwnership;
 }
 
+/*!
+   \reimp
+*/
 bool QQmlEngine::event(QEvent *e)
 {
     Q_D(QQmlEngine);
@@ -1540,16 +1555,28 @@ QQmlDataExtended::~QQmlDataExtended()
 
 void QQmlData::NotifyList::layout(QQmlNotifierEndpoint *endpoint)
 {
-    if (endpoint->next)
-        layout(endpoint->next);
+    // Add a temporary sentinel at beginning of list. This will be overwritten
+    // when the end point is inserted into the notifies further down.
+    endpoint->prev = 0;
 
-    int index = endpoint->sourceSignal;
-    index = qMin(index, 0xFFFF - 1);
+    while (endpoint->next) {
+        Q_ASSERT(reinterpret_cast<QQmlNotifierEndpoint *>(endpoint->next->prev) == endpoint);
+        endpoint = endpoint->next;
+    }
 
-    endpoint->next = notifies[index];
-    if (endpoint->next) endpoint->next->prev = &endpoint->next;
-    endpoint->prev = &notifies[index];
-    notifies[index] = endpoint;
+    while (endpoint) {
+        QQmlNotifierEndpoint *ep = (QQmlNotifierEndpoint *) endpoint->prev;
+
+        int index = endpoint->sourceSignal;
+        index = qMin(index, 0xFFFF - 1);
+
+        endpoint->next = notifies[index];
+        if (endpoint->next) endpoint->next->prev = &endpoint->next;
+        endpoint->prev = &notifies[index];
+        notifies[index] = endpoint;
+
+        endpoint = ep;
+    }
 }
 
 void QQmlData::NotifyList::layout()
@@ -2228,7 +2255,7 @@ QObject *QQmlEnginePrivate::toQObject(const QVariant &v, bool *ok) const
     int t = v.userType();
     if (t == QMetaType::QObjectStar || m_compositeTypes.contains(t)) {
         if (ok) *ok = true;
-        return *(QObject **)(v.constData());
+        return *(QObject *const *)(v.constData());
     } else {
         return QQmlMetaType::toQObject(v, ok);
     }

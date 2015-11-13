@@ -47,7 +47,6 @@
 #include <QHash>
 #include <QMatrix4x4>
 #include <QObject>
-#include <QTimer>
 
 #include <QOpenGLShaderProgram>
 #include <QOpenGLVertexArrayObject>
@@ -56,6 +55,7 @@
 #include <QWaitCondition>
 #include <QAtomicInt>
 #include <QScopedPointer>
+#include <QSemaphore>
 #include <QThreadStorage>
 
 QT_BEGIN_NAMESPACE
@@ -76,11 +76,8 @@ class QFrameAllocator;
 class QOpenGLFilter;
 class AbstractSceneParser;
 
-typedef QVector<QFrameAllocator *> QFrameAllocatorQueue;
-
 namespace Render {
 
-class RenderTextureProvider;
 class RenderCameraLens;
 class QGraphicsContext;
 class FrameGraphNode;
@@ -88,12 +85,10 @@ class RenderMaterial;
 class RenderTechnique;
 class RenderShader;
 class RenderEntity;
-class MeshDataManager;
-class MeshManager;
 class RenderCommand;
 class CameraManager;
 class EntityManager;
-class RenderQueues;
+class RenderQueue;
 class RenderView;
 class MaterialManager;
 class MatrixManager;
@@ -121,11 +116,16 @@ class ParameterManager;
 class ShaderDataManager;
 class UBOManager;
 class TextureImageManager;
+class VSyncFrameAdvanceService;
+class BufferManager;
+class AttributeManager;
+class GeometryManager;
+class GeometryRendererManager;
 
 class Renderer
 {
 public:
-    explicit Renderer(QRenderAspect::RenderType type, int cachedFrames = 5);
+    explicit Renderer(QRenderAspect::RenderType type);
     ~Renderer();
 
     void setQRenderAspect(QRenderAspect *aspect) { m_rendererAspect = aspect; }
@@ -134,7 +134,9 @@ public:
     void createAllocators();
     void destroyAllocators();
 
-    QThreadStorage<QPair<int, QFrameAllocatorQueue *> *> *tlsAllocators();
+    QFrameAllocator *currentFrameAllocator();
+
+    QThreadStorage<QFrameAllocator *> *tlsAllocators();
 
     void setFrameGraphRoot(const QNodeId &fgRoot);
     Render::FrameGraphNode *frameGraphRoot() const;
@@ -143,15 +145,16 @@ public:
     RenderEntity *renderSceneRoot() const { return m_renderSceneRoot; }
 
     void render();
-    void doRender(int maxFrameCount = -1);
+    void doRender();
 
     QVector<QAspectJobPtr> createRenderBinJobs();
+    QVector<QAspectJobPtr> createRenderBufferJobs();
+    QVector<QAspectJobPtr> createGeometryRendererJobs();
     QAspectJobPtr createRenderViewJob(FrameGraphNode *node, int submitOrderIndex);
     void executeCommands(const QVector<RenderCommand *> &commands);
+    RenderAttribute *updateBuffersAndAttributes(RenderGeometry *geometry, RenderCommand *command, GLsizei &count, bool forceUpdate);
+    void addAllocator(QFrameAllocator *allocator);
 
-    inline RenderQueues* renderQueues() const { return m_renderQueues; }
-    inline MeshDataManager *meshDataManager() const { return m_meshDataManager; }
-    inline MeshManager *meshManager() const { return m_meshManager; }
     inline CameraManager *cameraManager() const { return m_cameraManager; }
     inline EntityManager *renderNodesManager() const { return m_renderNodesManager; }
     inline MaterialManager *materialManager() const { return m_materialManager; }
@@ -175,6 +178,10 @@ public:
     inline ShaderDataManager *shaderDataManager() const { return m_shaderDataManager; }
     inline UBOManager *uboManager() const { return m_uboManager; }
     inline TextureImageManager *textureImageManager() const { return m_textureImageManager; }
+    inline BufferManager *bufferManager() const { return m_bufferManager; }
+    inline AttributeManager *attributeManager() const { return m_attributeManager; }
+    inline GeometryManager *geometryManager() const { return m_geometryManager; }
+    inline GeometryRendererManager *geometryRendererManager() const { return m_geometryRendererManager; }
 
     inline HMaterial defaultMaterialHandle() const { return m_defaultMaterialHandle; }
     inline HEffect defaultEffectHandle() const { return m_defaultEffectHandle; }
@@ -183,22 +190,20 @@ public:
     inline RenderStateSet *defaultRenderState() const { return m_defaultRenderStateSet; }
 
     inline QList<AbstractSceneParser *> sceneParsers() const { return m_sceneParsers; }
+    inline VSyncFrameAdvanceService *vsyncFrameAdvanceService() const { return m_vsyncFrameAdvanceService.data(); }
 
     QOpenGLFilter *contextInfo() const;
-
-    inline int cachedFramesCount() const { return m_cachedFramesCount; }
 
     void setSurface(QSurface *s);
 
     void enqueueRenderView(RenderView *renderView, int submitOrder);
-    void submitRenderViews(int maxFrameCount = -1);
+    void submitRenderViews();
 
     void initialize(QOpenGLContext *context = Q_NULLPTR);
     void shutdown();
 
-    QFrameAllocator *currentFrameAllocator(int frameIndex);
-
     QMutex* mutex() { return &m_mutex; }
+    bool isRunning() const { return m_running.load(); }
 
 private:
     bool canRender() const;
@@ -231,9 +236,6 @@ private:
 
     QScopedPointer<QGraphicsContext> m_graphicsContext;
     QSurface *m_surface;
-    QScopedPointer<RenderTextureProvider> m_textureProvider;
-    MeshDataManager *m_meshDataManager;
-    MeshManager *m_meshManager;
     CameraManager *m_cameraManager;
     EntityManager *m_renderNodesManager;
     MaterialManager *m_materialManager;
@@ -257,32 +259,36 @@ private:
     ShaderDataManager *m_shaderDataManager;
     UBOManager *m_uboManager;
     TextureImageManager *m_textureImageManager;
+    BufferManager *m_bufferManager;
+    AttributeManager *m_attributeManager;
+    GeometryManager *m_geometryManager;
+    GeometryRendererManager *m_geometryRendererManager;
 
-    QTimer *m_frameTimer;
-
-    RenderQueues *m_renderQueues;
+    RenderQueue *m_renderQueue;
     QScopedPointer<RenderThread> m_renderThread;
+    QScopedPointer<VSyncFrameAdvanceService> m_vsyncFrameAdvanceService;
 
     void buildDefaultMaterial();
     void buildDefaultTechnique();
     void loadSceneParsers();
 
     QMutex m_mutex;
-    QWaitCondition m_submitRenderViewsCondition;
+    QSemaphore m_submitRenderViewsSemaphore;
     QWaitCondition m_waitForWindowToBeSetCondition;
     QWaitCondition m_waitForInitializationToBeCompleted;
-    uint m_frameCount;
-    int m_currentPreprocessingFrameIndex;
 
     static void createThreadLocalAllocator(void *renderer);
     static void destroyThreadLocalAllocator(void *renderer);
-    QThreadStorage< QPair<int, QFrameAllocatorQueue *> *> m_tlsAllocators;
+    QThreadStorage<QFrameAllocator *> m_tlsAllocators;
 
-    const int m_cachedFramesCount;
     QAtomicInt m_running;
 
     QScopedPointer<QOpenGLDebugLogger> m_debugLogger;
     QList<AbstractSceneParser *> m_sceneParsers;
+    QVector<QFrameAllocator *> m_allocators;
+
+    QVector<RenderAttribute *> m_dirtyAttributes;
+    QVector<RenderGeometry *> m_dirtyGeometry;
 };
 
 } // namespace Render

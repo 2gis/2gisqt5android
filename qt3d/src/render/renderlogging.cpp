@@ -52,6 +52,7 @@ Q_LOGGING_CATEGORY(Rendering, "Qt3D.Renderer.Rendering")
 Q_LOGGING_CATEGORY(Memory, "Qt3D.Renderer.Memory")
 Q_LOGGING_CATEGORY(Shaders, "Qt3D.Renderer.Shaders")
 Q_LOGGING_CATEGORY(RenderStates, "Qt3D.Renderer.RenderStates")
+Q_LOGGING_CATEGORY(VSyncAdvanceService, "Qt3D.Renderer.VsyncAdvanceService")
 
 } // Render
 

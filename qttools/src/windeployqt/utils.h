@@ -62,7 +62,8 @@ enum Platform {
     WinRtArm = WindowsBased + ArmBased + 2,
     WinPhoneIntel = WindowsBased + IntelBased + 3,
     WinPhoneArm = WindowsBased + ArmBased + 4,
-    WinCE = WindowsBased + ArmBased + 5,
+    WinCEIntel = WindowsBased + IntelBased + 5,
+    WinCEArm = WindowsBased + ArmBased + 6,
     Unix = UnixBased,
     UnknownPlatform
 };
@@ -212,6 +213,8 @@ inline QStringList findDependentLibraries(const QString &executableFileName, Pla
 }
 
 QString findD3dCompiler(Platform platform, const QString &qtBinDir, unsigned wordSize);
+
+bool patchQtCore(const QString &path, QString *errorMessage);
 
 extern int optVerboseLevel;
 

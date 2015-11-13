@@ -34,9 +34,14 @@
 #if !defined(QMACMIME_H) && !defined(QMIME_H)
 #define QMACMIME_H
 
-#include "QtMacExtras/qmacextrasglobal.h"
+#include <QtMacExtras/qmacextrasglobal.h>
 
-#include <QtCore>
+#include <QtCore/QString>
+#include <QtCore/QStringList>
+#include <QtCore/QByteArray>
+#include <QtCore/QList>
+#include <QtCore/QVariant>
+#include <QtCore/QMimeData>
 
 #include <CoreFoundation/CoreFoundation.h>
 

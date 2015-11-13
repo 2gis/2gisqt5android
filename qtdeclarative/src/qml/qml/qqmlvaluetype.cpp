@@ -82,7 +82,8 @@ bool QQmlValueTypeFactoryImpl::isValueType(int idx)
             && idx != QVariant::StringList
             && idx != QMetaType::QObjectStar
             && idx != QMetaType::VoidStar
-            && idx != QMetaType::QVariant) {
+            && idx != QMetaType::QVariant
+            && idx != QMetaType::QLocale) {
         return true;
     }
 
@@ -202,7 +203,7 @@ QQmlValueType::~QQmlValueType()
     QObjectPrivate *op = QObjectPrivate::get(this);
     Q_ASSERT(op->metaObject == this);
     op->metaObject = 0;
-    ::free((void*)_metaObject);
+    ::free(const_cast<QMetaObject *>(_metaObject));
     metaType.destroy(gadgetPtr);
 }
 

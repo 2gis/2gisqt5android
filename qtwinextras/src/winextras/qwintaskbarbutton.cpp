@@ -71,6 +71,10 @@ QT_BEGIN_NAMESPACE
 
     \snippet code/taskbar.cpp taskbar_cpp
 
+    \note QWidget::windowHandle() returns a valid instance of a QWindow only
+    after the widget has been shown. It is therefore recommended to delay the
+    initialization of the QWinTaskbarButton instances until QWidget::showEvent().
+
     \note The class wraps API only available since Windows 7. Instantiating it
     on Windows XP or Windows Vista causes a runtime warning.
 

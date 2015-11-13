@@ -74,6 +74,7 @@ TestCase {
     function cleanup() {
         if (model !== 0)
             model.destroy()
+        wait(0) // spin the event loop to get all popups to close
     }
 
     function test_keyupdown() {
@@ -742,6 +743,17 @@ TestCase {
         verify(control1.editText === "0ab")
 
         test.destroy()
+    }
+
+    function test_modelDataChange() {
+        var comboBox = Qt.createQmlObject('import QtQuick.Controls 1.2 ; ComboBox {}', testCase, '');
+        comboBox.textRole = "text"
+        comboBox.model = model
+        compare(comboBox.currentIndex, 0)
+        compare(comboBox.currentText, "Banana")
+        model.set(0, { text: "Pomegranate", color: "Yellow" })
+        compare(comboBox.currentText, "Pomegranate")
+        comboBox.destroy()
     }
 }
 }

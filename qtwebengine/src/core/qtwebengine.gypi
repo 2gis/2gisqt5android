@@ -23,6 +23,7 @@
       '<(chromium_src_dir)/media/media.gyp:media',
       '<(chromium_src_dir)/net/net.gyp:net',
       '<(chromium_src_dir)/net/net.gyp:net_resources',
+      '<(chromium_src_dir)/net/net.gyp:net_with_v8',
       '<(chromium_src_dir)/skia/skia.gyp:skia',
       '<(chromium_src_dir)/third_party/WebKit/Source/web/web.gyp:blink_web',
       '<(chromium_src_dir)/ui/base/ui_base.gyp:ui_base',
@@ -44,6 +45,9 @@
       'CHROMIUM_VERSION=\"<!(python <(version_script_location) -f <(chromium_src_dir)/chrome/VERSION -t "@MAJOR@.@MINOR@.@BUILD@.@PATCH@")\"',
     ],
     'msvs_settings': {
+      'VCCLCompilerTool': {
+        'RuntimeTypeInfo': 'true',
+      },
       'VCLinkerTool': {
         'SubSystem': '2',  # Set /SUBSYSTEM:WINDOWS
       },
@@ -77,6 +81,11 @@
             ],
           },
         },
+      }],
+      ['qt_os=="win32" and qt_gl=="opengl"', {
+        'include_dirs': [
+          '<(chromium_src_dir)/third_party/khronos',
+        ],
       }],
       ['OS=="win"', {
         'resource_include_dirs': [

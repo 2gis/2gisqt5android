@@ -34,8 +34,8 @@
 #ifndef QMACTOOLBAR_H
 #define QMACTOOLBAR_H
 
-#include "qmacextrasglobal.h"
-#include "qmactoolbaritem.h"
+#include <QtMacExtras/qmacextrasglobal.h>
+#include <QtMacExtras/qmactoolbaritem.h>
 
 #include <QtCore/QString>
 #include <QtCore/QObject>

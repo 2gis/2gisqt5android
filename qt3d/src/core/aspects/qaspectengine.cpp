@@ -45,11 +45,13 @@
 #include <Qt3DCore/private/corelogging_p.h>
 #include <QMetaObject>
 #include <private/qpostman_p.h>
-#include "qscene.h"
+#include <private/qscene_p.h>
 #include <private/qaspectengine_p.h>
 #include <private/qnode_p.h>
+#include <private/qscene_p.h>
 #include "qentity.h"
 #include "qcomponent.h"
+#include "qnodevisitor.h"
 
 QT_BEGIN_NAMESPACE
 
@@ -67,7 +69,30 @@ QAspectEnginePrivate::QAspectEnginePrivate()
     qRegisterMetaType<Qt3D::QAbstractAspect *>();
     qRegisterMetaType<Qt3D::QObserverInterface *>();
     qRegisterMetaType<Qt3D::QEntity *>();
-    qRegisterMetaType<Qt3D::QSceneInterface *>();
+    qRegisterMetaType<Qt3D::QScene *>();
+    qRegisterMetaType<Qt3D::QAbstractPostman *>();
+}
+
+/*!
+    Used to init the scene tree when the Qt3D aspect is first started. Basically
+    sets the scene/change arbiter on the items and store the entity - component
+    pairs in the scene
+ */
+void QAspectEnginePrivate::initNode(QNode *node)
+{
+    QNodePrivate::get(node)->setScene(m_scene);
+    m_scene->addObservable(node);
+}
+
+void QAspectEnginePrivate::initEntity(QEntity *entity)
+{
+    Q_FOREACH (QComponent *comp, entity->components()) {
+        if (!m_scene->hasEntityForComponent(comp->id(), entity->id())) {
+            if (!comp->shareable() && !m_scene->entitiesForComponent(comp->id()).isEmpty())
+                qWarning() << "Trying to assign a non shareable component to more than one Entity";
+            m_scene->addEntityForComponent(comp->id(), entity->id());
+        }
+    }
 }
 
 QAspectEngine::QAspectEngine(QObject *parent)
@@ -107,24 +132,10 @@ QAspectEngine::~QAspectEngine()
     delete d->m_scene;
 }
 
-void QAspectEngine::initNodeTree(QNode *node) const
+void QAspectEngine::initNodeTree(QNode *node)
 {
-    Q_D(const QAspectEngine);
-    node->d_func()->setScene(d->m_scene);
-    d->m_scene->addObservable(node);
-    QEntity *entity = qobject_cast<QEntity *>(node);
-    if (entity != Q_NULLPTR)
-        Q_FOREACH (QComponent *comp, entity->components()) {
-            if (!comp->shareable() && !d->m_scene->entitiesForComponent(comp->id()).isEmpty())
-                qWarning() << "Trying to assign a non shareable component to more than one Entity";
-            d->m_scene->addEntityForComponent(comp->id(), entity->id());
-        }
-
-    Q_FOREACH (QObject *c, node->children()) {
-        QNode *childNode = qobject_cast<QNode *>(c);
-        if (childNode != Q_NULLPTR)
-            initNodeTree(childNode);
-    }
+    QNodeVisitor visitor;
+    visitor.traverse(node, d_func(), &QAspectEnginePrivate::initNode, &QAspectEnginePrivate::initEntity);
 }
 
 void QAspectEngine::initialize()
@@ -135,10 +146,10 @@ void QAspectEngine::initialize()
     QChangeArbiter::createUnmanagedThreadLocalChangeQueue(arbiter);
     QMetaObject::invokeMethod(arbiter,
                               "setPostman",
-                              Q_ARG(Qt3D::QObserverInterface *, d->m_postman));
+                              Q_ARG(Qt3D::QAbstractPostman*, d->m_postman));
     QMetaObject::invokeMethod(arbiter,
                               "setScene",
-                              Q_ARG(Qt3D::QSceneInterface *, d->m_scene));
+                              Q_ARG(Qt3D::QScene*, d->m_scene));
 }
 
 void QAspectEngine::shutdown()
@@ -146,14 +157,27 @@ void QAspectEngine::shutdown()
     Q_D(QAspectEngine);
     qCDebug(Aspects) << Q_FUNC_INFO;
 
-    // Cleanup the scene before quitting the backend
+    // Unset the root entity
     setRootEntity(Q_NULLPTR);
+
+    // Cleanup the scene before quitting the backend
     d->m_scene->setArbiter(Q_NULLPTR);
     QChangeArbiter *arbiter = d->m_aspectThread->aspectManager()->changeArbiter();
     QChangeArbiter::destroyUnmanagedThreadLocalChangeQueue(arbiter);
-    QMetaObject::invokeMethod(d->m_aspectThread->aspectManager(),
-                              "quit");
+
+    // Tell the aspect thread to exit
+    // This will return only after the aspectManager has
+    // exited its exec loop
+    d->m_aspectThread->aspectManager()->quit();
+
+    // Wait for thread to exit
     d->m_aspectThread->wait();
+
+    qCDebug(Aspects) << Q_FUNC_INFO << "deleting aspects";
+    // Deletes aspects in the same thread as the one they were created in
+    qDeleteAll(d->m_aspects);
+
+    qCDebug(Aspects) << Q_FUNC_INFO << "Shutdown complete";
 }
 
 void QAspectEngine::setData(const QVariantMap &data)
@@ -218,7 +242,7 @@ void QAspectEngine::setRootEntity(QEntity *root)
 
     // The aspect engine takes ownership of the scene root. We also set the
     // parent of the scene root to be the engine
-    d->m_root->setParent(this);
+    static_cast<QObject *>(d->m_root.data())->setParent(this);
 
     // Prepare the frontend tree for use by giving each node a pointer to the
     // scene object and adding each node to the scene

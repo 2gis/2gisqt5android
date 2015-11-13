@@ -1919,6 +1919,9 @@ void tst_qdeclarativetextedit::delegateLoading()
     QFETCH(QString, qmlfile);
     QFETCH(QString, error);
 
+    if (qstrcmp(QTest::currentDataTag(), "fail1") == 0)
+        QSKIP("QTBUG-48299", SkipSingle);
+
     TestHTTPServer server(42332);
     server.serveDirectory(testFile("httpfail"), TestHTTPServer::Disconnect);
     server.serveDirectory(testFile("httpslow"), TestHTTPServer::Delay);

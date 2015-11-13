@@ -88,6 +88,8 @@ public:
     bool mipmap() const;
     void setMipmap(bool use);
 
+    virtual void emitAutoTransformBaseChanged() Q_DECL_OVERRIDE { emit autoTransformChanged(); }
+
 Q_SIGNALS:
     void fillModeChanged();
     void paintedGeometryChanged();

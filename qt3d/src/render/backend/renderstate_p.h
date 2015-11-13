@@ -38,8 +38,7 @@
 #ifndef QT3D_RENDER_RENDERSTATE_H
 #define QT3D_RENDER_RENDERSTATE_H
 
-#include <QList>
-#include <QSet>
+#include <QVector>
 
 QT_BEGIN_NAMESPACE
 
@@ -65,7 +64,9 @@ enum StateMask
     DitheringStateMask      = 1 << 9,
     AlphaCoverageStateMask  = 1 << 10,
     PolygonOffsetStateMask  = 1 << 11,
-    ColorStateMask          = 1 << 12
+    ColorStateMask          = 1 << 12,
+    ClipPlaneMask           = 1 << 13,
+    StencilOpMask           = 1 << 14
 };
 
 typedef quint64 StateMaskSet;
@@ -87,6 +88,7 @@ class RenderStateSet
 {
 public:
     RenderStateSet();
+    ~RenderStateSet();
 
     void addState(RenderState* ds);
 
@@ -112,12 +114,12 @@ private:
      */
     bool contains(RenderState* ds) const;
 
-    QSet<RenderState*> m_states;
+    QVector<RenderState*> m_states;
 
     StateMaskSet m_stateMask;
 
     RenderStateSet* m_cachedPrevious;
-    QList<RenderState*> m_cachedDeltaStates;
+    QVector<RenderState*> m_cachedDeltaStates;
 
 };
 

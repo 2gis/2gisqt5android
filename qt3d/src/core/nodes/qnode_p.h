@@ -56,8 +56,8 @@ class QT3DCORESHARED_EXPORT QNodePrivate : public QObjectPrivate, public QObserv
 public:
     QNodePrivate();
 
-    void setScene(QSceneInterface *scene);
-    QSceneInterface *scene() const;
+    void setScene(QScene *scene);
+    QScene *scene() const;
 
     void setArbiter(QLockableObserverInterface *arbiter) Q_DECL_OVERRIDE;
 
@@ -70,21 +70,25 @@ public:
 
     // For now this just protects access to the m_changeArbiter.
     // Later on we may decide to extend support for multiple observers.
-    QLockableObserverInterface *m_changeArbiter;
-    QSceneInterface *m_scene;
+    QAbstractArbiter *m_changeArbiter;
+    QScene *m_scene;
     mutable QNodeId m_id;
     bool m_blockNotifications;
+    bool m_wasCleanedUp;
 
     static QNodePrivate *get(QNode *q);
     static void nodePtrDeleter(QNode *q);
 
 private:
-    void addChild(QNode *childNode);
-    void removeChild(QNode *childNode);
-    void removeAllChildren();
+    void _q_addChild(QNode *childNode);
+    void _q_removeChild(QNode *childNode);
     void registerNotifiedProperties();
     void unregisterNotifiedProperties();
     void propertyChanged(int propertyIndex);
+
+    void setSceneHelper(QNode *root);
+    void unsetSceneHelper(QNode *root);
+    void addEntityComponentToScene(QNode *root);
 
     friend class PropertyChangeHandler<QNodePrivate>;
     bool m_propertyChangesSetup;

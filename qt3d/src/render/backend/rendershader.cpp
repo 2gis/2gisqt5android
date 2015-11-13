@@ -220,7 +220,7 @@ void RenderShader::updateUniforms(QGraphicsContext *ctx, const QUniformPack &pac
     const QHash<QString, const QUniformValue* > &values = pack.uniforms();
     const QHash<QString, const QUniformValue* >::const_iterator valueEnd = values.constEnd();
 
-    foreach (const ShaderUniform &uniform, m_uniforms) {
+    Q_FOREACH (const ShaderUniform &uniform, m_uniforms) {
         QHash<QString, const QUniformValue* >::const_iterator valueIt = values.constFind(uniform.m_name);
         if (valueIt != valueEnd)
             valueIt.value()->apply(ctx, uniform);
@@ -373,6 +373,26 @@ void RenderShader::initializeUniformBlocks(const QVector<ShaderUniformBlock> &un
         }
         m_blockIndexToShaderUniforms.insert(uniformBlockDescription[i].m_index, activeUniformsInBlock);
     }
+}
+
+/*!
+   \internal
+   Initializes this RenderShader's state relating to attributes, global block uniforms and
+   and named uniform blocks by copying these details from \a other.
+*/
+void RenderShader::initialize(const RenderShader &other)
+{
+    Q_ASSERT(m_dna == other.m_dna);
+    m_program = other.m_program;
+    m_uniformsNames = other.m_uniformsNames;
+    m_uniforms = other.m_uniforms;
+    m_attributesNames = other.m_attributesNames;
+    m_attributes = other.m_attributes;
+    m_uniformBlockNames = other.m_uniformBlockNames;
+    m_uniformBlocks = other.m_uniformBlocks;
+    m_blockIndexToShaderUniforms = other.m_blockIndexToShaderUniforms;
+    m_fragOutputs = other.m_fragOutputs;
+    m_isLoaded = other.m_isLoaded;
 }
 
 } // namespace Render

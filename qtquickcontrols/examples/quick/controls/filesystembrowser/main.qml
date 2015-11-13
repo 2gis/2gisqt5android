@@ -83,12 +83,6 @@ ApplicationWindow {
     ItemSelectionModel {
         id: sel
         model: fileSystemModel
-        onSelectionChanged: {
-            console.log("selected", selected)
-            console.log("deselected", deselected)
-            console.log("selection", sel.selection())
-        }
-        onCurrentChanged: console.log("current", current)
     }
 
     TreeView {
@@ -98,8 +92,6 @@ ApplicationWindow {
         model: fileSystemModel
         selection: sel
 
-        onCurrentIndexChanged: console.log("current index", currentIndex)
-
         TableViewColumn {
             title: "Name"
             role: "fileName"
@@ -107,12 +99,25 @@ ApplicationWindow {
         }
 
         TableViewColumn {
+            title: "Size"
+            role: "size"
+            resizable: true
+            horizontalAlignment : Text.AlignRight
+        }
+
+        TableViewColumn {
             title: "Permissions"
-            role: "filePermissions"
+            role: "displayableFilePermissions"
             resizable: true
         }
 
-        onClicked: console.log("clicked", index)
+        TableViewColumn {
+            title: "Date Modified"
+            role: "lastModified"
+            resizable: true
+        }
+
         onDoubleClicked: isExpanded(index) ? collapse(index) : expand(index)
+        onActivated : Qt.openUrlExternally(fileSystemModel.data(index, 263))
     }
 }

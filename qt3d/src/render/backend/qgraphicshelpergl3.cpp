@@ -57,7 +57,7 @@ QGraphicsHelperGL3::QGraphicsHelperGL3()
 void QGraphicsHelperGL3::initializeHelper(QOpenGLContext *context,
                                           QAbstractOpenGLFunctions *functions)
 {
-    Q_UNUSED(context)
+    Q_UNUSED(context);
     m_funcs = static_cast<QOpenGLFunctions_3_2_Core*>(functions);
     const bool ok = m_funcs->initializeOpenGLFunctions();
     Q_ASSERT(ok);
@@ -73,14 +73,20 @@ void QGraphicsHelperGL3::drawElementsInstanced(GLenum primitiveType,
                                                GLsizei primitiveCount,
                                                GLint indexType,
                                                void *indices,
-                                               GLsizei instances)
+                                               GLsizei instances,
+                                               GLint baseVertex,
+                                               GLint baseInstance)
 {
+    if (baseInstance != 0)
+        qWarning() << "glDrawElementsInstancedBaseVertexBaseInstance is not supported with OpenGL ES 2";
+
     // glDrawElements OpenGL 3.1 or greater
-    m_funcs->glDrawElementsInstanced(primitiveType,
-                                     primitiveCount,
-                                     indexType,
-                                     indices,
-                                     instances);
+    m_funcs->glDrawElementsInstancedBaseVertex(primitiveType,
+                                               primitiveCount,
+                                               indexType,
+                                               indices,
+                                               instances,
+                                               baseVertex);
 }
 
 void QGraphicsHelperGL3::drawArraysInstanced(GLenum primitiveType,
@@ -98,12 +104,14 @@ void QGraphicsHelperGL3::drawArraysInstanced(GLenum primitiveType,
 void QGraphicsHelperGL3::drawElements(GLenum primitiveType,
                                       GLsizei primitiveCount,
                                       GLint indexType,
-                                      void *indices)
+                                      void *indices,
+                                      GLint baseVertex)
 {
-    m_funcs->glDrawElements(primitiveType,
-                            primitiveCount,
-                            indexType,
-                            indices);
+    m_funcs->glDrawElementsBaseVertex(primitiveType,
+                                      primitiveCount,
+                                      indexType,
+                                      indices,
+                                      baseVertex);
 }
 
 void QGraphicsHelperGL3::drawArrays(GLenum primitiveType,
@@ -141,15 +149,18 @@ QVector<ShaderUniform> QGraphicsHelperGL3::programUniformsAndLocations(GLuint pr
 
     GLint nbrActiveUniforms = 0;
     m_funcs->glGetProgramiv(programId, GL_ACTIVE_UNIFORMS, &nbrActiveUniforms);
-    uniforms.resize(nbrActiveUniforms);
+    uniforms.reserve(nbrActiveUniforms);
+    char uniformName[256];
     for (GLint i = 0; i < nbrActiveUniforms; i++) {
         ShaderUniform uniform;
-        QByteArray uniformName(256, '\0');
+        GLsizei uniformNameLength = 0;
         // Size is 1 for scalar and more for struct or arrays
         // Type is the GL Type
-        m_funcs->glGetActiveUniform(programId, i, 256, NULL, &uniform.m_size, &uniform.m_type , uniformName.data());
-        uniform.m_location = m_funcs->glGetUniformLocation(programId, uniformName.constData());
-        uniform.m_name = QString::fromUtf8(uniformName);
+        m_funcs->glGetActiveUniform(programId, i, sizeof(uniformName) - 1, &uniformNameLength,
+                                    &uniform.m_size, &uniform.m_type, uniformName);
+        uniformName[sizeof(uniformName) - 1] = '\0';
+        uniform.m_location = m_funcs->glGetUniformLocation(programId, uniformName);
+        uniform.m_name = QString::fromUtf8(uniformName, uniformNameLength);
         m_funcs->glGetActiveUniformsiv(programId, 1, (GLuint*)&i, GL_UNIFORM_BLOCK_INDEX, &uniform.m_blockIndex);
         m_funcs->glGetActiveUniformsiv(programId, 1, (GLuint*)&i, GL_UNIFORM_OFFSET, &uniform.m_offset);
         m_funcs->glGetActiveUniformsiv(programId, 1, (GLuint*)&i, GL_UNIFORM_ARRAY_STRIDE, &uniform.m_arrayStride);
@@ -169,14 +180,18 @@ QVector<ShaderAttribute> QGraphicsHelperGL3::programAttributesAndLocations(GLuin
     QVector<ShaderAttribute> attributes;
     GLint nbrActiveAttributes = 0;
     m_funcs->glGetProgramiv(programId, GL_ACTIVE_ATTRIBUTES, &nbrActiveAttributes);
+    attributes.reserve(nbrActiveAttributes);
+    char attributeName[256];
     for (GLint i = 0; i < nbrActiveAttributes; i++) {
         ShaderAttribute attribute;
-        QByteArray attributeName(256, '\0');
+        GLsizei attributeNameLength = 0;
         // Size is 1 for scalar and more for struct or arrays
         // Type is the GL Type
-        m_funcs->glGetActiveAttrib(programId, i, 256, NULL, &attribute.m_size, &attribute.m_type , attributeName.data());
-        attribute.m_location = m_funcs->glGetAttribLocation(programId, attributeName.constData());
-        attribute.m_name = QString::fromUtf8(attributeName);
+        m_funcs->glGetActiveAttrib(programId, i, sizeof(attributeName) - 1, &attributeNameLength,
+                                   &attribute.m_size, &attribute.m_type, attributeName);
+        attributeName[sizeof(attributeName) - 1] = '\0';
+        attribute.m_location = m_funcs->glGetAttribLocation(programId, attributeName);
+        attribute.m_name = QString::fromUtf8(attributeName, attributeNameLength);
         attributes.append(attribute);
     }
     return attributes;
@@ -204,8 +219,8 @@ QVector<ShaderUniformBlock> QGraphicsHelperGL3::programUniformBlocks(GLuint prog
 
 void QGraphicsHelperGL3::vertexAttribDivisor(GLuint index, GLuint divisor)
 {
-    Q_UNUSED(index)
-    Q_UNUSED(divisor)
+    Q_UNUSED(index);
+    Q_UNUSED(divisor);
 }
 
 void QGraphicsHelperGL3::blendEquation(GLenum mode)
@@ -309,11 +324,11 @@ bool QGraphicsHelperGL3::supportsFeature(QGraphicsHelperInterface::Feature featu
 {
     switch (feature) {
     case MRT:
+    case UniformBufferObject:
+    case PrimitiveRestart:
         return true;
     case Tessellation:
         return !m_tessFuncs.isNull();
-    case UniformBufferObject:
-        return true;
     default:
         return false;
     }
@@ -847,6 +862,34 @@ uint QGraphicsHelperGL3::uniformByteSize(const ShaderUniform &description)
     }
 
     return arrayStride ? rawByteSize * arrayStride : rawByteSize;
+}
+
+void QGraphicsHelperGL3::enableClipPlane(int clipPlane)
+{
+    m_funcs->glEnable(GL_CLIP_DISTANCE0 + clipPlane);
+}
+
+void QGraphicsHelperGL3::disableClipPlane(int clipPlane)
+{
+    m_funcs->glDisable(GL_CLIP_DISTANCE0 + clipPlane);
+}
+
+GLint QGraphicsHelperGL3::maxClipPlaneCount()
+{
+    GLint max = 0;
+    m_funcs->glGetIntegerv(GL_MAX_CLIP_DISTANCES, &max);
+    return max;
+}
+
+void QGraphicsHelperGL3::enablePrimitiveRestart(int primitiveRestartIndex)
+{
+    m_funcs->glPrimitiveRestartIndex(primitiveRestartIndex);
+    m_funcs->glEnable(GL_PRIMITIVE_RESTART);
+}
+
+void QGraphicsHelperGL3::disablePrimitiveRestart()
+{
+    m_funcs->glDisable(GL_PRIMITIVE_RESTART);
 }
 
 } // Render

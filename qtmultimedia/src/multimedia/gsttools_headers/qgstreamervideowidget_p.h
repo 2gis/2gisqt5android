@@ -38,6 +38,7 @@
 
 #include "qgstreamervideorendererinterface_p.h"
 #include <private/qgstreamerbushelper_p.h>
+#include <private/qgstreamervideooverlay_p.h>
 
 QT_BEGIN_NAMESPACE
 
@@ -52,12 +53,14 @@ class QGstreamerVideoWidgetControl
     Q_OBJECT
     Q_INTERFACES(QGstreamerVideoRendererInterface QGstreamerSyncMessageFilter QGstreamerBusMessageFilter)
 public:
-    QGstreamerVideoWidgetControl(QObject *parent = 0);
+    explicit QGstreamerVideoWidgetControl(QObject *parent = 0, const QByteArray &elementName = QByteArray());
     virtual ~QGstreamerVideoWidgetControl();
 
     GstElement *videoSink();
 
     QWidget *videoWidget();
+
+    void stopRenderer();
 
     Qt::AspectRatioMode aspectRatioMode() const;
     void setAspectRatioMode(Qt::AspectRatioMode mode);
@@ -77,27 +80,27 @@ public:
     int saturation() const;
     void setSaturation(int saturation);
 
-    void setOverlay();
-
     bool eventFilter(QObject *object, QEvent *event);
-    bool processSyncMessage(const QGstreamerMessage &message);
-    bool processBusMessage(const QGstreamerMessage &message);
-
-public slots:
-    void updateNativeVideoSize();
 
 signals:
     void sinkChanged();
     void readyChanged(bool);
 
+private Q_SLOTS:
+    void onOverlayActiveChanged();
+    void onNativeVideoSizeChanged();
+
 private:
     void createVideoWidget();
-    void windowExposed();
+    void updateWidgetAttributes();
 
-    GstElement *m_videoSink;
+    bool processSyncMessage(const QGstreamerMessage &message);
+    bool processBusMessage(const QGstreamerMessage &message);
+
+    QGstreamerVideoOverlay m_videoOverlay;
     QGstreamerVideoWidget *m_widget;
+    bool m_stopped;
     WId m_windowId;
-    Qt::AspectRatioMode m_aspectRatioMode;
     bool m_fullScreen;
 };
 
