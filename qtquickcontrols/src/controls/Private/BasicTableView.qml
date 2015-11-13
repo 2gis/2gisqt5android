@@ -297,6 +297,8 @@ ScrollView {
             console.warn(__viewTypeName + "::moveColumn(): Can't move column 0")
             return
         }
+        if (sortIndicatorColumn === from)
+            sortIndicatorColumn = to
         columnModel.move(from, to, 1)
     }
 
@@ -346,7 +348,7 @@ ScrollView {
 
     frameVisible: true
     __scrollBarTopMargin: (__style && __style.transientScrollBars || Qt.platform.os === "osx") ? headerrow.height : 0
-    __viewTopMargin: headerrow.height
+    __viewTopMargin: headerVisible ? headerrow.height : 0
 
     /*! \internal
         Use this to display user-friendly messages in TableView and TreeView common functions.
@@ -682,9 +684,9 @@ ScrollView {
                                 if (repeater.targetIndex >= 0 && repeater.targetIndex !== index ) {
                                     var targetColumn = columnModel.get(repeater.targetIndex).columnItem
                                     if (targetColumn.movable && (!__isTreeView || repeater.targetIndex > 0)) {
-                                        columnModel.move(index, repeater.targetIndex, 1)
                                         if (sortIndicatorColumn === index)
                                             sortIndicatorColumn = repeater.targetIndex
+                                        columnModel.move(index, repeater.targetIndex, 1)
                                     }
                                 }
                                 repeater.targetIndex = -1

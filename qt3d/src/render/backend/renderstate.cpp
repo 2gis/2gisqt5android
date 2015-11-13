@@ -58,6 +58,11 @@
 #include <Qt3DRenderer/qpolygonoffset.h>
 #include <Qt3DRenderer/qscissortest.h>
 #include <Qt3DRenderer/qstenciltest.h>
+#include <Qt3DRenderer/qstenciltestseparate.h>
+#include <Qt3DRenderer/qclipplane.h>
+#include <Qt3DRenderer/qstencilop.h>
+#include <Qt3DRenderer/qstencilopseparate.h>
+#include <Qt3DRenderer/qstencilmask.h>
 
 QT_BEGIN_NAMESPACE
 
@@ -68,13 +73,16 @@ RenderStateSet::RenderStateSet()
     : m_stateMask(0)
     , m_cachedPrevious(0)
 {
+}
 
+RenderStateSet::~RenderStateSet()
+{
 }
 
 void RenderStateSet::addState(RenderState *ds)
 {
     Q_ASSERT(ds);
-    m_states.insert(ds);
+    m_states.append(ds);
     m_stateMask |= ds->mask();
 }
 
@@ -85,14 +93,14 @@ int RenderStateSet::changeCost(RenderStateSet *previousState)
 
     int cost = 0;
 
-// first, find cost of any resets
+    // first, find cost of any resets
     StateMaskSet invOurState = ~stateMask();
     StateMaskSet stateToReset = previousState->stateMask() & invOurState;
 
     std::bitset<64> bs(stateToReset);
     cost += int(bs.count());
 
-// now, find out how many states we're changing
+    // now, find out how many states we're changing
     Q_FOREACH (RenderState* ds, m_states) {
         // if the other state contains matching, then doesn't
         // contribute to cost at all
@@ -112,7 +120,7 @@ void RenderStateSet::apply(QGraphicsContext *gc)
 {
     RenderStateSet* previousStates = gc->currentStateSet();
 
-    StateMaskSet invOurState = ~stateMask();
+    const StateMaskSet invOurState = ~stateMask();
     // generate a mask for each set bit in previous, where we do not have
     // the corresponding bit set.
 
@@ -135,7 +143,7 @@ void RenderStateSet::apply(QGraphicsContext *gc)
         m_cachedDeltaStates.clear();
         m_cachedPrevious = previousStates;
 
-        foreach (RenderState* ds, m_states) {
+        Q_FOREACH (RenderState* ds, m_states) {
             if (previousStates && previousStates->contains(ds)) {
                 continue;
             }
@@ -209,6 +217,16 @@ void RenderStateSet::resetMasked(StateMaskSet maskOfStatesToReset, QGraphicsCont
     if (maskOfStatesToReset & ColorStateMask) {
         funcs->glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
     }
+
+    if (maskOfStatesToReset & ClipPlaneMask) {
+        GLint max = gc->maxClipPlaneCount();
+        for (GLint i = 0; i < max; ++i)
+            gc->disableClipPlane(i);
+    }
+
+    if (maskOfStatesToReset & StencilOpMask) {
+        funcs->glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
+    }
 }
 
 bool RenderStateSet::contains(RenderState *ds) const
@@ -267,9 +285,12 @@ RenderState *RenderState::getOrCreateBackendState(QRenderState *renderState)
     }
     case QRenderState::StencilTest: {
         QStencilTest *stencilTest = static_cast<QStencilTest *>(renderState);
-        return StencilTest::getOrCreate(stencilTest->mask(),
-                                        stencilTest->func(),
-                                        stencilTest->faceMode());
+        return StencilTest::getOrCreate(stencilTest->front()->func(),
+                                        stencilTest->front()->ref(),
+                                        stencilTest->front()->mask(),
+                                        stencilTest->back()->func(),
+                                        stencilTest->back()->ref(),
+                                        stencilTest->back()->mask());
     }
     case QRenderState::AlphaCoverage: {
         return AlphaCoverage::getOrCreate();
@@ -286,7 +307,24 @@ RenderState *RenderState::getOrCreateBackendState(QRenderState *renderState)
                                       colorMask->isBlue(),
                                       colorMask->isAlpha());
     }
+    case QRenderState::ClipPlane: {
+        QClipPlane *clipPlane = static_cast<QClipPlane *>(renderState);
+        return ClipPlane::getOrCreate(clipPlane->plane());
+    }
+    case QRenderState::StencilOp: {
+        QStencilOp *stencilOp = static_cast<QStencilOp *>(renderState);
+        const QStencilOpSeparate *front = stencilOp->front();
+        const QStencilOpSeparate *back = stencilOp->back();
+        return StencilOp::getOrCreate(front->stencilFail(), front->depthFail(), front->stencilDepthPass(),
+                                      back->stencilFail(), back->depthFail(), back->stencilDepthPass());
+    }
+    case QRenderState::StencilMask: {
+        QStencilMask *stencilMask = static_cast<QStencilMask *>(renderState);
+        return StencilMask::getOrCreate(stencilMask->frontMask(), stencilMask->backMask());
+    }
+
     default:
+        Q_UNREACHABLE();
         qFatal("Should not happen");
         return Q_NULLPTR;
     }

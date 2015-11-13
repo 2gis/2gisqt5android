@@ -53,6 +53,7 @@ QT_BEGIN_NAMESPACE
 /*!
   \module enginio-client
   \title Enginio Client Interface
+  \qtvariable enginio
 
   This interface provides access to the Enginio service through a set of C++ classes
   based on Qt.

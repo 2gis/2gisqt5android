@@ -7,9 +7,13 @@ load(qt_plugin)
 
 include(assimp.pri)
 
-LIBS += -lassimp
+config_assimp {
+    LIBS += -lassimp
 
-unix {
-    CONFIG += link_pkgconfig
-    PKGCONFIG += assimp
+    unix {
+        CONFIG += link_pkgconfig
+        PKGCONFIG_PRIVATE += assimp
+    }
+} else {
+    include(../../../3rdparty/assimp/assimp.pri)
 }

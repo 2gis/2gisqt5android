@@ -152,7 +152,6 @@ QQuickImagePrivate::QQuickImagePrivate()
 QQuickImage::QQuickImage(QQuickItem *parent)
     : QQuickImageBase(*(new QQuickImagePrivate), parent)
 {
-    connect(this, SIGNAL(autoTransformBaseChanged()), SIGNAL(autoTransformChanged()));
 }
 
 QQuickImage::QQuickImage(QQuickImagePrivate &dd, QQuickItem *parent)
@@ -551,6 +550,13 @@ QRectF QQuickImage::boundingRect() const
 QSGTextureProvider *QQuickImage::textureProvider() const
 {
     Q_D(const QQuickImage);
+
+    // When Item::layer::enabled == true, QQuickItem will be a texture
+    // provider. In this case we should prefer to return the layer rather
+    // than the image itself. The layer will include any children and any
+    // the image's wrap and fill mode.
+    if (QQuickItem::isTextureProvider())
+        return QQuickItem::textureProvider();
 
     if (!d->window || !d->sceneGraphRenderContext() || QThread::currentThread() != d->sceneGraphRenderContext()->thread()) {
         qWarning("QQuickImage::textureProvider: can only be queried on the rendering thread of an exposed window");

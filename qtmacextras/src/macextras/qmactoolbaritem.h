@@ -38,7 +38,7 @@
 #include <QtCore/QString>
 #include <QtGui/QIcon>
 
-#include "qmacextrasglobal.h"
+#include <QtMacExtras/qmacextrasglobal.h>
 
 Q_FORWARD_DECLARE_OBJC_CLASS(NSToolbarItem);
 

@@ -359,7 +359,7 @@ QT_BEGIN_NAMESPACE
 
     \code
     QAndroidJniObject myJavaString; ==> "Hello, Java"
-    QAndroidJniObject mySubstring = myJavaString.callObjectMethod("substring", "(II)Ljava/lang/String;" 7, 10);
+    QAndroidJniObject mySubstring = myJavaString.callObjectMethod("substring", "(II)Ljava/lang/String;", 7, 10);
     \endcode
 */
 

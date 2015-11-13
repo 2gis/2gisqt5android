@@ -443,7 +443,7 @@ the project and then load the QML file in the \l {QML Viewer}:
     qmlviewer app.qml
 \endcode
 
-(On Mac OS X, you can launch the "QMLViewer" application instead.)
+(On OS X, you can launch the "QMLViewer" application instead.)
 
 Notice the "import Charts 1.0" statement has disappeared from \c app.qml. This is
 because the \c qmldir file is in the same directory as \c app.qml: this is equivalent to

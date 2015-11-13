@@ -69,6 +69,32 @@ TestCase {
                 ]
     }
 
+    function test_QTBUG_46468() {
+        var table = Qt.createQmlObject('import QtQuick.Controls 1.3; \n\
+                                        import QtQuick 2.4; \n\
+                                        TableView { \n\
+                                                headerVisible: false; \n\
+                                                TableViewColumn{} \n\
+                                                model: 10; \n\
+                                        }', testCase, '')
+        wait(50);
+        verify(table.__viewTopMargin === 0)
+        table.destroy()
+    }
+
+    function test_headervisible() {
+        var table = Qt.createQmlObject('import QtQuick.Controls 1.3; \n\
+                                        import QtQuick 2.4; \n\
+                                        TableView { \n\
+                                                headerVisible: true; \n\
+                                                TableViewColumn{} \n\
+                                                model: 10; \n\
+                                        }', testCase, '')
+        wait(50);
+        verify(table.__viewTopMargin > 0)
+        table.destroy()
+    }
+
     function test_basic_setup() {
         var test_instanceStr =
            'import QtQuick 2.2;             \
@@ -1043,6 +1069,54 @@ TestCase {
         }
 
         control.destroy()
+    }
+
+    ListModel {
+        id: testModel
+
+        ListElement {
+            name: "Red"
+            color: "#ff0000"
+        }
+        ListElement {
+            name: "Green"
+            color: "#00ff00"
+        }
+        ListElement {
+            name: "Blue"
+            color: "#0000ff"
+        }
+    }
+
+    Component {
+        id: tableViewComponent
+
+        TableView {
+            model: testModel
+            anchors.fill: parent
+            sortIndicatorVisible: true
+
+            TableViewColumn {
+                title: "Name"
+                role: "name"
+                width: 100
+            }
+
+            TableViewColumn {
+                title: "Color"
+                role: "color"
+                width: 100
+            }
+        }
+    }
+
+    function test_sortIndicatorAfterColumnMoved() {
+        var tableView = tableViewComponent.createObject(testCase);
+        verify(tableView);
+
+        compare(tableView.sortIndicatorColumn, 0);
+        tableView.moveColumn(0, 1);
+        compare(tableView.sortIndicatorColumn, 1);
     }
 }
 }

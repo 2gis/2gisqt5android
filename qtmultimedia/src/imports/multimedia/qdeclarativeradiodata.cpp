@@ -44,17 +44,12 @@ QT_BEGIN_NAMESPACE
     \ingroup multimedia_radio_qml
     \inherits Item
 
-    This type is part of the \b{QtMultimedia 5.0} module.
-
     \c RadioData is your gateway to all the data available through RDS. RDS is the Radio Data System
     which allows radio stations to broadcast information like the \l stationId, \l programType, \l programTypeName,
     \l stationName, and \l radioText. This information can be read from the \c RadioData. It also allows
     you to set whether the radio should tune to alternative frequencies if the current signal strength falls too much.
 
     \qml
-    import QtQuick 2.0
-    import QtMultimedia 5.0
-
     Rectangle {
         width: 480
         height: 320
@@ -134,7 +129,10 @@ QDeclarativeRadioData::~QDeclarativeRadioData()
  */
 QDeclarativeRadioData::Availability QDeclarativeRadioData::availability() const
 {
-    return Availability(m_radioData->availability());
+    if (m_radioData)
+        return Availability(m_radioData->availability());
+
+    return Unavailable;
 }
 
 
@@ -146,7 +144,10 @@ QDeclarativeRadioData::Availability QDeclarativeRadioData::availability() const
   */
 QString QDeclarativeRadioData::stationId() const
 {
-    return m_radioData->stationId();
+    if (m_radioData)
+        return m_radioData->stationId();
+
+    return QString();
 }
 
 /*!
@@ -211,7 +212,10 @@ QString QDeclarativeRadioData::stationId() const
   */
 QDeclarativeRadioData::ProgramType QDeclarativeRadioData::programType() const
 {
-    return static_cast<QDeclarativeRadioData::ProgramType>(m_radioData->programType());
+    if (m_radioData)
+        return static_cast<QDeclarativeRadioData::ProgramType>(m_radioData->programType());
+
+    return Undefined;
 }
 
 /*!
@@ -221,7 +225,10 @@ QDeclarativeRadioData::ProgramType QDeclarativeRadioData::programType() const
   */
 QString QDeclarativeRadioData::programTypeName() const
 {
-    return m_radioData->programTypeName();
+    if (m_radioData)
+        return m_radioData->programTypeName();
+
+    return QString();
 }
 
 /*!
@@ -231,7 +238,10 @@ QString QDeclarativeRadioData::programTypeName() const
   */
 QString QDeclarativeRadioData::stationName() const
 {
-    return m_radioData->stationName();
+    if (m_radioData)
+        return m_radioData->stationName();
+
+    return QString();
 }
 
 /*!
@@ -243,7 +253,10 @@ QString QDeclarativeRadioData::stationName() const
   */
 QString QDeclarativeRadioData::radioText() const
 {
-    return m_radioData->radioText();
+    if (m_radioData)
+        return m_radioData->radioText();
+
+    return QString();
 }
 
 /*!
@@ -255,12 +268,16 @@ QString QDeclarativeRadioData::radioText() const
   */
 bool QDeclarativeRadioData::alternativeFrequenciesEnabled() const
 {
-    return m_radioData->isAlternativeFrequenciesEnabled();
+    if (m_radioData)
+        return m_radioData->isAlternativeFrequenciesEnabled();
+
+    return false;
 }
 
 void QDeclarativeRadioData::setAlternativeFrequenciesEnabled(bool enabled)
 {
-    m_radioData->setAlternativeFrequenciesEnabled(enabled);
+    if (m_radioData)
+        m_radioData->setAlternativeFrequenciesEnabled(enabled);
 }
 
 void QDeclarativeRadioData::_q_programTypeChanged(QRadioData::ProgramType programType)

@@ -73,6 +73,11 @@ QShaderProgram::QShaderProgram(QNode *parent)
 {
 }
 
+QShaderProgram::~QShaderProgram()
+{
+    QNode::cleanup();
+}
+
 /*! \internal */
 QShaderProgram::QShaderProgram(QShaderProgramPrivate &dd, QNode *parent)
     : QNode(dd, parent)
@@ -102,8 +107,6 @@ void QShaderProgram::setTessellationControlShaderCode(const QByteArray &tessella
     Q_D(QShaderProgram);
     if (tessellationControlShaderCode != d->m_tessControlShaderCode) {
         d->m_tessControlShaderCode = tessellationControlShaderCode;
-        d->notifyPropertyChange(QByteArrayLiteral("tessellationControlSourceCode"),
-                                tessellationControlShaderCode);
         emit tessellationControlShaderCodeChanged();
     }
 }

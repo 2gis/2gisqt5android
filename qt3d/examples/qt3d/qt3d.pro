@@ -30,7 +30,16 @@ SUBDIRS += \
     controls \
     anaglyph-rendering \
     simple-shaders-qml \
-    planets-qml
+    planets-qml \
+    plasma \
+    gooch-qml \
+    transparency-qml \
+    transparency-qml-scene3d \
+    scene3d-loader \
+    clip-planes-qml \
+    mouseinput-qml \
+    custom-mesh-cpp \
+    bigscene-instanced-qml
 
 # TODO Port the old examples to new APIs
 #SUBDIRS += qt3d

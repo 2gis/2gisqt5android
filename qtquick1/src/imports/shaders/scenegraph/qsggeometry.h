@@ -136,13 +136,13 @@ inline quint16 *QSGGeometry::indexDataAsUShort()
 inline const uint *QSGGeometry::indexDataAsUInt() const
 {
     Q_ASSERT(m_index_type == GL_UNSIGNED_INT);
-    return (uint *) indexData();
+    return (const uint *) indexData();
 }
 
 inline const quint16 *QSGGeometry::indexDataAsUShort() const
 {
     Q_ASSERT(m_index_type == GL_UNSIGNED_SHORT);
-    return (quint16 *) indexData();
+    return (const quint16 *) indexData();
 }
 
 inline QSGGeometry::Point2D *QSGGeometry::vertexDataAsPoint2D()

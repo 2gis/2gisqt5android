@@ -1034,8 +1034,8 @@ void QWindowsWindow::setDropSiteEnabled(bool dropEnabled)
         RegisterDragDrop(m_data.hwnd, m_dropTarget);
         CoLockObjectExternal(m_dropTarget, true, true);
     } else {
-        m_dropTarget->Release();
         CoLockObjectExternal(m_dropTarget, false, true);
+        m_dropTarget->Release();
         RevokeDragDrop(m_data.hwnd);
         m_dropTarget = 0;
     }
@@ -2271,6 +2271,7 @@ void QWindowsWindow::setCustomMargins(const QMargins &newCustomMargins)
 void *QWindowsWindow::surface(void *nativeConfig, int *err)
 {
 #ifdef QT_NO_OPENGL
+    Q_UNUSED(err)
     Q_UNUSED(nativeConfig)
     return 0;
 #else

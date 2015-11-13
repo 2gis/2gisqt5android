@@ -13,7 +13,7 @@ headerdirs = .. ../../imports/winextras
 sourcedirs = .. ../../imports/winextras
 imagedirs += images
 
-depends += qtcore qtgui qtdoc
+depends += qtcore qtgui qtdoc qtwidgets
 
 qhp.projects = QtWinExtras
 

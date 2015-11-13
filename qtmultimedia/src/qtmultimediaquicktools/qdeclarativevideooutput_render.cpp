@@ -255,6 +255,12 @@ void QDeclarativeVideoRendererBackend::updateGeometry()
         m_sourceTextureRect.setTop(m_sourceTextureRect.bottom());
         m_sourceTextureRect.setBottom(top);
     }
+
+    if (videoSurface()->surfaceFormat().property("mirrored").toBool()) {
+        qreal left = m_sourceTextureRect.left();
+        m_sourceTextureRect.setLeft(m_sourceTextureRect.right());
+        m_sourceTextureRect.setRight(left);
+    }
 }
 
 QSGNode *QDeclarativeVideoRendererBackend::updatePaintNode(QSGNode *oldNode,
@@ -419,6 +425,17 @@ QList<QVideoFrame::PixelFormat> QSGVideoItemSurface::supportedPixelFormats(
         QAbstractVideoBuffer::HandleType handleType) const
 {
     QList<QVideoFrame::PixelFormat> formats;
+
+    static bool noGLTextures = false;
+    static bool noGLTexturesChecked = false;
+    if (handleType == QAbstractVideoBuffer::GLTextureHandle) {
+        if (!noGLTexturesChecked) {
+            noGLTexturesChecked = true;
+            noGLTextures = qEnvironmentVariableIsSet("QT_QUICK_NO_TEXTURE_VIDEOFRAMES");
+        }
+        if (noGLTextures)
+            return formats;
+    }
 
     foreach (QSGVideoNodeFactoryInterface* factory, m_backend->m_videoNodeFactories)
         formats.append(factory->supportedPixelFormats(handleType));

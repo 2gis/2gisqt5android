@@ -38,7 +38,6 @@
 #include "qabstractsceneloader_p.h"
 #include <Qt3DRenderer/private/renderlogging_p.h>
 #include <Qt3DRenderer/private/abstractsceneparser_p.h>
-#include <Qt3DRenderer/private/gltfparser_p.h>
 #include <Qt3DCore/qscenepropertychange.h>
 
 QT_BEGIN_NAMESPACE
@@ -67,6 +66,11 @@ QAbstractSceneLoader::QAbstractSceneLoader(QAbstractSceneLoaderPrivate &dd, QNod
 QAbstractSceneLoader::QAbstractSceneLoader(QNode *parent)
     : QComponent(*new QAbstractSceneLoaderPrivate, parent)
 {
+}
+
+QAbstractSceneLoader::~QAbstractSceneLoader()
+{
+    Q_ASSERT_X(QNodePrivate::get(this)->m_wasCleanedUp, Q_FUNC_INFO, "QNode::cleanup should have been called by now. A Qt3D::QAbstractSceneLoader subclass didn't call QNode::cleanup in its destructor");
 }
 
 void QAbstractSceneLoader::copy(const QNode *ref)

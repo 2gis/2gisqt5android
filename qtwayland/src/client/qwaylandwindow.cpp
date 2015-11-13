@@ -128,7 +128,7 @@ QWaylandWindow::QWaylandWindow(QWindow *window)
         if (window->type() != Qt::Popup) {
             mShellSurface->updateTransientParent(window->transientParent());
         }
-    } else if (mShellSurface) {
+    } else if (mShellSurface && window->type() != Qt::ToolTip) {
         mShellSurface->setTopLevel();
     }
 
@@ -240,17 +240,18 @@ void QWaylandWindow::setGeometry(const QRect &rect)
 void QWaylandWindow::setVisible(bool visible)
 {
     if (visible) {
-        if (window()->type() == Qt::Popup) {
-            QWaylandWindow *parent = transientParent();
-            if (!parent) {
-                // Try with the current focus window. It should be the right one and anyway
-                // better than having no parent at all.
-                parent = mDisplay->lastInputWindow();
-            }
-            if (parent) {
-                QWaylandWlShellSurface *wlshellSurface = qobject_cast<QWaylandWlShellSurface*>(mShellSurface);
-                if (wlshellSurface)
-                    wlshellSurface->setPopup(parent, mDisplay->lastInputDevice(), mDisplay->lastInputSerial());
+        if (mShellSurface) {
+            if (window()->type() == Qt::Popup) {
+                QWaylandWindow *parent = transientParent();
+                if (parent) {
+                    QWaylandWlShellSurface *wlshellSurface = qobject_cast<QWaylandWlShellSurface*>(mShellSurface);
+                    if (wlshellSurface)
+                        wlshellSurface->setPopup(parent, mDisplay->lastInputDevice(), mDisplay->lastInputSerial());
+                }
+            } else if (window()->type() == Qt::ToolTip) {
+                if (QWaylandWindow *parent = transientParent()) {
+                    mShellSurface->updateTransientParent(parent->window());
+                }
             }
         }
 
@@ -609,7 +610,9 @@ QWaylandWindow *QWaylandWindow::transientParent() const
         // events.
         return static_cast<QWaylandWindow *>(topLevelWindow(window()->transientParent())->handle());
     }
-    return 0;
+    // Try with the current focus window. It should be the right one and anyway
+    // better than having no parent at all.
+    return mDisplay->lastInputWindow();
 }
 
 void QWaylandWindow::handleMouse(QWaylandInputDevice *inputDevice, const QWaylandPointerEvent &e)
@@ -624,6 +627,9 @@ void QWaylandWindow::handleMouse(QWaylandInputDevice *inputDevice, const QWaylan
                 break;
             case QWaylandPointerEvent::Motion:
                 QWindowSystemInterface::handleMouseEvent(window(), e.timestamp, e.local, e.global, e.buttons, e.modifiers);
+                break;
+            case QWaylandPointerEvent::Wheel:
+                QWindowSystemInterface::handleWheelEvent(window(), e.timestamp, e.local, e.global, e.pixelDelta, e.angleDelta);
                 break;
         }
     }
@@ -683,6 +689,9 @@ void QWaylandWindow::handleMouseEventWithDecoration(QWaylandInputDevice *inputDe
                 break;
             case QWaylandPointerEvent::Motion:
                 QWindowSystemInterface::handleMouseEvent(window(), e.timestamp, localTranslated, globalTranslated, e.buttons, e.modifiers);
+                break;
+            case QWaylandPointerEvent::Wheel:
+                QWindowSystemInterface::handleWheelEvent(window(), e.timestamp, localTranslated, globalTranslated, e.pixelDelta, e.angleDelta);
                 break;
         }
 

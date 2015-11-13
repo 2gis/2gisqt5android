@@ -36,7 +36,7 @@
 
 #include "qsceneloader.h"
 #include "qabstractsceneloader_p.h"
-#include <Qt3DCore/qsceneinterface.h>
+#include <Qt3DCore/private/qscene_p.h>
 #include <Qt3DCore/qscenepropertychange.h>
 #include <Qt3DCore/qentity.h>
 #include <Qt3DRenderer/private/renderlogging_p.h>
@@ -49,6 +49,11 @@ namespace Qt3D {
 QSceneLoader::QSceneLoader(QNode *parent)
     : Render::QAbstractSceneLoader(parent)
 {
+}
+
+QSceneLoader::~QSceneLoader()
+{
+    QNode::cleanup();
 }
 
 // Called in main thread

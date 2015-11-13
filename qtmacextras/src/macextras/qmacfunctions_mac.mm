@@ -52,7 +52,9 @@ namespace QtMac
 {
 
 /*!
-    Creates an \c NSImage equivalent to the QPixmap. Returns the \c NSImage handle.
+    \fn NSImage* QtMac::toNSImage(const QPixmap &pixmap)
+
+    Creates an \c NSImage equivalent to the QPixmap \a pixmap. Returns the \c NSImage handle.
 
     It is the caller's responsibility to release the \c NSImage data
     after use.
@@ -72,7 +74,9 @@ NSImage* toNSImage(const QPixmap &pixmap)
 
 #if QT_VERSION >= QT_VERSION_CHECK(5, 0, 0)
 /*!
-    Returns whether the given QWindow is the application's main window
+    \fn bool QtMac::isMainWindow(QWindow *window)
+
+    Returns whether the given QWindow \a window is the application's main window
 */
 bool isMainWindow(QWindow *window)
 {
@@ -85,16 +89,15 @@ bool isMainWindow(QWindow *window)
 }
 #endif
 
-/*!
-    Returns the current CoreGraphics context.
-*/
 CGContextRef currentCGContext()
 {
     return reinterpret_cast<CGContextRef>([[NSGraphicsContext currentContext] graphicsPort]);
 }
 
 /*!
-    Sets the text shown on the application icon a.k.a badge.
+    \fn void QtMac::setBadgeLabelText(const QString &text)
+
+    Sets the \a text shown on the application icon a.k.a badge.
 
     This is generally used with numbers (e.g. number of unread emails); it can also show a string.
 
@@ -106,9 +109,11 @@ void setBadgeLabelText(const QString &text)
 }
 
 /*!
+    \fn QString QtMac::badgeLabelText()
+
     Returns the text of the application icon a.k.a badge.
 
-    \sa setBadgeText()
+    \sa setBadgeLabelText()
 */
 QString badgeLabelText()
 {

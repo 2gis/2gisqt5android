@@ -38,6 +38,7 @@
 #include <qpainter.h>
 #include <qvariant.h>
 #include <qvideosurfaceformat.h>
+#include <private/qmediaopenglhelper_p.h>
 
 #if !defined(QT_NO_OPENGL) && !defined(QT_OPENGL_ES_1_CL) && !defined(QT_OPENGL_ES_1)
 #include <qglshaderprogram.h>
@@ -85,11 +86,13 @@ private:
     QSize m_imageSize;
     QImage::Format m_imageFormat;
     QVideoSurfaceFormat::Direction m_scanLineDirection;
+    bool m_mirrored;
 };
 
 QVideoSurfaceGenericPainter::QVideoSurfaceGenericPainter()
     : m_imageFormat(QImage::Format_Invalid)
     , m_scanLineDirection(QVideoSurfaceFormat::TopToBottom)
+    , m_mirrored(false)
 {
     m_imagePixelFormats << QVideoFrame::Format_RGB32;
 
@@ -136,6 +139,7 @@ QAbstractVideoSurface::Error QVideoSurfaceGenericPainter::start(const QVideoSurf
     m_imageFormat = QVideoFrame::imageFormatFromPixelFormat(format.pixelFormat());
     m_imageSize = format.frameSize();
     m_scanLineDirection = format.scanLineDirection();
+    m_mirrored = format.property("mirrored").toBool();
 
     const QAbstractVideoBuffer::HandleType t = format.handleType();
     if (t == QAbstractVideoBuffer::NoHandle) {
@@ -182,17 +186,22 @@ QAbstractVideoSurface::Error QVideoSurfaceGenericPainter::paint(
                 m_frame.bytesPerLine(),
                 m_imageFormat);
 
+        const QTransform oldTransform = painter->transform();
+        QTransform transform = oldTransform;
+        QRectF targetRect = target;
         if (m_scanLineDirection == QVideoSurfaceFormat::BottomToTop) {
-            const QTransform oldTransform = painter->transform();
-
-            painter->scale(1, -1);
-            painter->translate(0, -target.bottom());
-            painter->drawImage(
-                QRectF(target.x(), 0, target.width(), target.height()), image, source);
-            painter->setTransform(oldTransform);
-        } else {
-            painter->drawImage(target, image, source);
+            transform.scale(1, -1);
+            transform.translate(0, -target.bottom());
+            targetRect.setY(0);
         }
+        if (m_mirrored) {
+            transform.scale(-1, 1);
+            transform.translate(-target.right(), 0);
+            targetRect.setX(0);
+        }
+        painter->setTransform(transform);
+        painter->drawImage(targetRect, image, source);
+        painter->setTransform(oldTransform);
 
         m_frame.unmap();
     } else if (m_frame.isValid()) {
@@ -261,6 +270,12 @@ protected:
     void initYuv420PTextureInfo(const QSize &size);
     void initYv12TextureInfo(const QSize &size);
 
+    bool needsSwizzling(const QVideoSurfaceFormat &format) const {
+        return !QMediaOpenGLHelper::isANGLE()
+                && (format.pixelFormat() == QVideoFrame::Format_RGB32
+                    || format.pixelFormat() == QVideoFrame::Format_ARGB32);
+    }
+
 #if !defined(QT_OPENGL_ES) && !defined(QT_OPENGL_DYNAMIC)
     typedef void (APIENTRY *_glActiveTexture) (GLenum);
     _glActiveTexture glActiveTexture;
@@ -274,6 +289,7 @@ protected:
     QGLContext *m_context;
     QAbstractVideoBuffer::HandleType m_handleType;
     QVideoSurfaceFormat::Direction m_scanLineDirection;
+    bool m_mirrored;
     QVideoSurfaceFormat::YCbCrColorSpace m_colorSpace;
     GLenum m_textureFormat;
     GLuint m_textureInternalFormat;
@@ -292,6 +308,7 @@ QVideoSurfaceGLPainter::QVideoSurfaceGLPainter(QGLContext *context)
     : m_context(context)
     , m_handleType(QAbstractVideoBuffer::NoHandle)
     , m_scanLineDirection(QVideoSurfaceFormat::TopToBottom)
+    , m_mirrored(false)
     , m_colorSpace(QVideoSurfaceFormat::YCbCr_BT601)
     , m_textureFormat(0)
     , m_textureInternalFormat(0)
@@ -702,7 +719,9 @@ QVideoSurfaceArbFpPainter::QVideoSurfaceArbFpPainter(QGLContext *context)
             << QVideoFrame::Format_YUV420P;
     m_glPixelFormats
             << QVideoFrame::Format_RGB32
-            << QVideoFrame::Format_ARGB32;
+            << QVideoFrame::Format_ARGB32
+            << QVideoFrame::Format_BGR32
+            << QVideoFrame::Format_BGRA32;
 }
 
 QAbstractVideoSurface::Error QVideoSurfaceArbFpPainter::start(const QVideoSurfaceFormat &format)
@@ -766,9 +785,14 @@ QAbstractVideoSurface::Error QVideoSurfaceArbFpPainter::start(const QVideoSurfac
         switch (format.pixelFormat()) {
         case QVideoFrame::Format_RGB32:
         case QVideoFrame::Format_ARGB32:
+        case QVideoFrame::Format_BGR32:
+        case QVideoFrame::Format_BGRA32:
             m_yuv = false;
             m_textureCount = 1;
-            program = qt_arbfp_rgbShaderProgram;
+            if (needsSwizzling(format))
+                program = qt_arbfp_xrgbShaderProgram;
+            else
+                program = qt_arbfp_rgbShaderProgram;
             break;
         default:
             break;
@@ -815,6 +839,7 @@ QAbstractVideoSurface::Error QVideoSurfaceArbFpPainter::start(const QVideoSurfac
             } else {
                 m_handleType = format.handleType();
                 m_scanLineDirection = format.scanLineDirection();
+                m_mirrored = format.property("mirrored").toBool();
                 m_frameSize = format.frameSize();
                 m_colorSpace = format.yCbCrColorSpace();
 
@@ -864,8 +889,10 @@ QAbstractVideoSurface::Error QVideoSurfaceArbFpPainter::paint(
         if (scissorTestEnabled)
             glEnable(GL_SCISSOR_TEST);
 
-        const float txLeft = source.left() / m_frameSize.width();
-        const float txRight = source.right() / m_frameSize.width();
+        const float txLeft = m_mirrored ? source.right() / m_frameSize.width()
+                                        : source.left() / m_frameSize.width();
+        const float txRight = m_mirrored ? source.left() / m_frameSize.width()
+                                         : source.right() / m_frameSize.width();
         const float txTop = m_scanLineDirection == QVideoSurfaceFormat::TopToBottom
                 ? source.top() / m_frameSize.height()
                 : source.bottom() / m_frameSize.height();
@@ -1070,7 +1097,9 @@ QVideoSurfaceGlslPainter::QVideoSurfaceGlslPainter(QGLContext *context)
             << QVideoFrame::Format_YUV420P;
     m_glPixelFormats
             << QVideoFrame::Format_RGB32
-            << QVideoFrame::Format_ARGB32;
+            << QVideoFrame::Format_ARGB32
+            << QVideoFrame::Format_BGR32
+            << QVideoFrame::Format_BGRA32;
 }
 
 QAbstractVideoSurface::Error QVideoSurfaceGlslPainter::start(const QVideoSurfaceFormat &format)
@@ -1138,9 +1167,14 @@ QAbstractVideoSurface::Error QVideoSurfaceGlslPainter::start(const QVideoSurface
         switch (format.pixelFormat()) {
         case QVideoFrame::Format_RGB32:
         case QVideoFrame::Format_ARGB32:
+        case QVideoFrame::Format_BGR32:
+        case QVideoFrame::Format_BGRA32:
             m_yuv = false;
             m_textureCount = 1;
-            fragmentProgram = qt_glsl_rgbShaderProgram;
+            if (needsSwizzling(format))
+                fragmentProgram = qt_glsl_xrgbShaderProgram;
+            else
+                fragmentProgram = qt_glsl_rgbShaderProgram;
             break;
         default:
             break;
@@ -1167,6 +1201,7 @@ QAbstractVideoSurface::Error QVideoSurfaceGlslPainter::start(const QVideoSurface
     } else {
         m_handleType = format.handleType();
         m_scanLineDirection = format.scanLineDirection();
+        m_mirrored = format.property("mirrored").toBool();
         m_frameSize = format.frameSize();
         m_colorSpace = format.yCbCrColorSpace();
 
@@ -1255,8 +1290,10 @@ QAbstractVideoSurface::Error QVideoSurfaceGlslPainter::paint(
             GLfloat(target.right() + 1), GLfloat(target.top())
         };
 
-        const GLfloat txLeft = source.left() / m_frameSize.width();
-        const GLfloat txRight = source.right() / m_frameSize.width();
+        const GLfloat txLeft = m_mirrored ? source.right() / m_frameSize.width()
+                                          : source.left() / m_frameSize.width();
+        const GLfloat txRight = m_mirrored ? source.left() / m_frameSize.width()
+                                           : source.right() / m_frameSize.width();
         const GLfloat txTop = m_scanLineDirection == QVideoSurfaceFormat::TopToBottom
                 ? source.top() / m_frameSize.height()
                 : source.bottom() / m_frameSize.height();

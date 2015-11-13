@@ -43,7 +43,7 @@ To run the examples and demos, open them in Qt Creator or use the included
     qmlviewer $QTDIR/demos/declarative/samegame/samegame.qml
 \endcode
 
-On Mac OS X, you can run the included "QMLViewer" application from the
+On OS X, you can run the included "QMLViewer" application from the
 Finder, or use the command line:
 
 \code

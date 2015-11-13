@@ -211,12 +211,12 @@
         For the open source version you do not need a license file.
 
         Unpack the archive if you have not done so already. For example,
-        if you have the \c{qt-everywhere-opensource-src-5.5.0.tar.gz}
+        if you have the \c{qt-everywhere-opensource-src-5.5.1.tar.gz}
         package, type the following commands at a command line prompt:
 
     \snippet snippets/code/doc_src_installation.qdoc 11
 
-        This creates the directory \c{/tmp/qt-everywhere-opensource-src-5.5.0}
+        This creates the directory \c{/tmp/qt-everywhere-opensource-src-5.5.1}
         containing the files from the archive.
 
     \section1 Step 2: Build the Qt Library
@@ -225,7 +225,7 @@
         \c{./configure} script in the package directory.
 
         By default, Qt is configured for installation in the
-        \c{/usr/local/Qt-5.5.0} directory, but this can be
+        \c{/usr/local/Qt-5.5.1} directory, but this can be
         changed by using the \c{-prefix} option.
 
     \snippet snippets/code/doc_src_installation.qdoc 12

@@ -388,7 +388,7 @@ void CameraBinSession::setupCaptureResolution()
     gst_caps_unref(caps);
 
     // Special case when using mfw_v4lsrc
-    if (m_videoSrc && qstrcmp(gst_plugin_feature_get_name(GST_PLUGIN_FEATURE(gst_element_get_factory(m_videoSrc))), "mfw_v4lsrc") == 0) {
+    if (m_videoSrc && qstrcmp(qt_gst_element_get_factory_name(m_videoSrc), "mfw_v4lsrc") == 0) {
         int capMode = 0;
         if (viewfinderResolution == QSize(320, 240))
             capMode = 1;
@@ -472,9 +472,7 @@ GstElement *CameraBinSession::buildCameraSource()
 #if CAMERABIN_DEBUG
         qDebug() << "set camera device" << m_inputDevice;
 #endif
-        const char *const cameraSrcName = gst_plugin_feature_get_name(
-                    GST_PLUGIN_FEATURE(gst_element_get_factory(m_cameraSrc)));
-        m_usingWrapperCameraBinSrc = qstrcmp(cameraSrcName, "wrappercamerabinsrc") == 0;
+        m_usingWrapperCameraBinSrc = qstrcmp(qt_gst_element_get_factory_name(m_cameraSrc), "wrappercamerabinsrc") == 0;
 
         if (g_object_class_find_property(G_OBJECT_GET_CLASS(m_cameraSrc), "video-source")) {
             if (!m_videoSrc) {
@@ -542,9 +540,10 @@ GstElement *CameraBinSession::buildCameraSource()
 
 void CameraBinSession::captureImage(int requestId, const QString &fileName)
 {
-    QString actualFileName = fileName;
-    if (actualFileName.isEmpty())
-        actualFileName = generateFileName("img_", defaultDir(QCamera::CaptureStillImage), "jpg");
+    const QString actualFileName = m_mediaStorageLocation.generateFileName(fileName,
+                                                                           QMediaStorageLocation::Pictures,
+                                                                           QLatin1String("IMG_"),
+                                                                           QLatin1String("jpg"));
 
     m_requestId = requestId;
 
@@ -590,60 +589,6 @@ bool CameraBinSession::setOutputLocation(const QUrl& sink)
 
     m_sink = m_actualSink = sink;
     return true;
-}
-
-QDir CameraBinSession::defaultDir(QCamera::CaptureModes mode) const
-{
-    QStringList dirCandidates;
-
-#if defined(Q_WS_MAEMO_6)
-    dirCandidates << QLatin1String("/home/user/MyDocs/DCIM");
-    dirCandidates << QLatin1String("/home/user/MyDocs/");
-#endif
-
-    if (mode == QCamera::CaptureVideo) {
-        dirCandidates << QStandardPaths::writableLocation(QStandardPaths::MoviesLocation);
-        dirCandidates << QDir::home().filePath("Documents/Video");
-        dirCandidates << QDir::home().filePath("Documents/Videos");
-    } else {
-        dirCandidates << QStandardPaths::writableLocation(QStandardPaths::PicturesLocation);
-        dirCandidates << QDir::home().filePath("Documents/Photo");
-        dirCandidates << QDir::home().filePath("Documents/Photos");
-        dirCandidates << QDir::home().filePath("Documents/photo");
-        dirCandidates << QDir::home().filePath("Documents/photos");
-        dirCandidates << QDir::home().filePath("Documents/Images");
-    }
-
-    dirCandidates << QDir::home().filePath("Documents");
-    dirCandidates << QDir::home().filePath("My Documents");
-    dirCandidates << QDir::homePath();
-    dirCandidates << QDir::currentPath();
-    dirCandidates << QDir::tempPath();
-
-    foreach (const QString &path, dirCandidates) {
-        if (QFileInfo(path).isWritable())
-            return QDir(path);
-    }
-
-    return QDir();
-}
-
-QString CameraBinSession::generateFileName(const QString &prefix, const QDir &dir, const QString &ext) const
-{
-    int lastClip = 0;
-    foreach(QString fileName, dir.entryList(QStringList() << QString("%1*.%2").arg(prefix).arg(ext))) {
-        int imgNumber = fileName.midRef(prefix.length(), fileName.size()-prefix.length()-ext.length()-1).toInt();
-        lastClip = qMax(lastClip, imgNumber);
-    }
-
-    QString name = QString("%1%2.%3").arg(prefix)
-                                     .arg(lastClip+1,
-                                     4, //fieldWidth
-                                     10,
-                                     QLatin1Char('0'))
-                                     .arg(ext);
-
-    return dir.absoluteFilePath(name);
 }
 
 void CameraBinSession::setDevice(const QString &device)
@@ -1122,18 +1067,16 @@ bool CameraBinSession::processBusMessage(const QGstreamerMessage &message)
 
 void CameraBinSession::recordVideo()
 {
-    m_recordingActive = true;
-    m_actualSink = m_sink;
-    if (m_actualSink.isEmpty()) {
-        QString ext = m_mediaContainerControl->suggestedFileExtension(m_mediaContainerControl->actualContainerFormat());
-        m_actualSink = QUrl::fromLocalFile(generateFileName("clip_", defaultDir(QCamera::CaptureVideo), ext));
-    } else {
-        // Output location was rejected in setOutputlocation() if not a local file
-        m_actualSink = QUrl::fromLocalFile(QDir::currentPath()).resolved(m_actualSink);
-    }
+    const QString actualFileName = m_mediaStorageLocation.generateFileName(m_sink.isLocalFile() ? m_sink.toLocalFile()
+                                                                                                : m_sink.toString(),
+                                      QMediaStorageLocation::Movies,
+                                      QLatin1String("clip_"),
+                                      m_mediaContainerControl->suggestedFileExtension(m_mediaContainerControl->actualContainerFormat()));
 
-    QString fileName = m_actualSink.toLocalFile();
-    g_object_set(G_OBJECT(m_camerabin), FILENAME_PROPERTY, QFile::encodeName(fileName).constData(), NULL);
+    m_recordingActive = true;
+    m_actualSink = QUrl::fromLocalFile(actualFileName);
+
+    g_object_set(G_OBJECT(m_camerabin), FILENAME_PROPERTY, QFile::encodeName(actualFileName).constData(), NULL);
 
     g_signal_emit_by_name(G_OBJECT(m_camerabin), CAPTURE_START, NULL);
 }
@@ -1304,7 +1247,7 @@ static QPair<int,int> valueRange(const GValue *value, bool *continuous)
 
 static bool resolutionLessThan(const QSize &r1, const QSize &r2)
 {
-     return r1.width()*r1.height() < r2.width()*r2.height();
+     return qlonglong(r1.width()) * r1.height() < qlonglong(r2.width()) * r2.height();
 }
 
 

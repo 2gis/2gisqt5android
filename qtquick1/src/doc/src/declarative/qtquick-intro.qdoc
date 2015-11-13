@@ -93,7 +93,7 @@ to export the design to Qt Quick Designer.
 features for completing code snippets, refactoring code, and viewing the element
 hierarchy of QML files.
 \li Build and deploy Qt Quick applications that target multiple desktop and
-mobile platforms, such as Microsoft Windows, Mac OS X, Linux, Symbian, and
+mobile platforms, such as Microsoft Windows, OS X, Linux, Symbian, and
 Maemo.
 \li Debug JavaScript functions and execute JavaScript expressions in the current
 context, and inspect QML at runtime to explore the object structure, debug

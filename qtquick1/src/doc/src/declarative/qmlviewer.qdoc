@@ -50,7 +50,7 @@ file path on the command line:
     qmlviewer myqmlfile.qml
 \endcode
 
-On Mac OS X, the QML Viewer application is named "QMLViewer" instead. You
+On OS X, the QML Viewer application is named "QMLViewer" instead. You
 can launch the viewer by opening the QMLViewer application from the Finder, or
 from the command line:
 

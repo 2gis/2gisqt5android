@@ -58,7 +58,7 @@
  To implement support for a custom networked scheme, see setNetworkAccessManagerFactory.
 */
 
-/*
+/*!
  \enum QQmlAbstractUrlInterceptor::DataType
 
  Specifies where URL interception is taking place.
@@ -81,4 +81,14 @@
 
  Your implementation of this function must be thread-safe, as it can be called from multiple threads
  at the same time.
+*/
+/*!
+   \fn QQmlAbstractUrlInterceptor::QQmlAbstractUrlInterceptor()
+
+   Constructor for QQmlAbstractUrlInterceptor.
+*/
+/*!
+   \fn QQmlAbstractUrlInterceptor::~QQmlAbstractUrlInterceptor()
+
+   Destructor for QQmlAbstractUrlInterceptor.
 */

@@ -39,7 +39,7 @@
 #include <qpa/qplatformnativeinterface.h>
 
 
-NSView *getEmbeddableView(QWindow *qtWindow)
+NSView *myGetEmbeddableView(QWindow *qtWindow)
 {
     // Make sure the platform window is created
     qtWindow->create();
@@ -75,7 +75,7 @@ NSView *getEmbeddableView(QWindow *qtWindow)
 
     // Create the QWindow and embed its view.
     Window *qtWindow = new Window(); // ### who owns this window?
-    NSView *qtView = getEmbeddableView(qtWindow);
+    NSView *qtView = myGetEmbeddableView(qtWindow);
     [window setContentView:qtView];
 
     // Show the NSWindow

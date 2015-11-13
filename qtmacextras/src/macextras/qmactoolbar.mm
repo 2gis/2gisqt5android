@@ -196,7 +196,7 @@ QList<QMacToolBarItem *> QMacToolBar::items()
 }
 
 /*!
-    Sets the list of toolbar items shown on the the toolbar customization menu.
+    Sets the list of toolbar items shown on the toolbar customization menu to \a allowedItems.
 */
 void QMacToolBar::setAllowedItems(QList<QMacToolBarItem *> &allowedItems)
 {

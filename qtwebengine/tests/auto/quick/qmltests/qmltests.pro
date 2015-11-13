@@ -10,10 +10,12 @@ OTHER_FILES += \
     $$PWD/data/append-document-title.js \
     $$PWD/data/big-user-script.js \
     $$PWD/data/change-document-title.js \
+    $$PWD/data/download.zip \
     $$PWD/data/confirm.html \
     $$PWD/data/favicon.html \
     $$PWD/data/favicon.png \
     $$PWD/data/favicon2.html \
+    $$PWD/data/geolocation.html \
     $$PWD/data/javascript.html \
     $$PWD/data/link.html \
     $$PWD/data/prompt.html \
@@ -25,7 +27,9 @@ OTHER_FILES += \
     $$PWD/data/test4.html \
     $$PWD/data/keyboardModifierMapping.html \
     $$PWD/data/tst_desktopBehaviorLoadHtml.qml \
+    $$PWD/data/tst_download.qml \
     $$PWD/data/tst_favIconLoad.qml \
+    $$PWD/data/tst_geopermission.qml \
     $$PWD/data/tst_javaScriptDialogs.qml \
     $$PWD/data/tst_linkHovered.qml \
     $$PWD/data/tst_loadFail.qml \

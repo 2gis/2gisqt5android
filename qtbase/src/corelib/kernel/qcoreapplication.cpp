@@ -393,7 +393,7 @@ static bool quitLockRefEnabled = true;
 // GUI apps or when using MinGW due to its globbing.
 static inline bool isArgvModified(int argc, char **argv)
 {
-    if (__argc != argc)
+    if (__argc != argc || !__argv /* wmain() */)
         return true;
     if (__argv == argv)
         return false;
@@ -438,7 +438,7 @@ QCoreApplicationPrivate::QCoreApplicationPrivate(int &aargc, char **aargv, uint 
     static const char *const empty = "";
     if (argc == 0 || argv == 0) {
         argc = 0;
-        argv = (char **)&empty;
+        argv = const_cast<char **>(&empty);
     }
 #if defined(Q_OS_WIN) && !defined(Q_OS_WINRT)
     if (!isArgvModified(argc, argv)) {
@@ -2065,11 +2065,13 @@ QString QCoreApplication::applicationFilePath()
 
     QCoreApplicationPrivate *d = self->d_func();
 
-    static char *procName = d->argv[0];
-    if (qstrcmp(procName, d->argv[0]) != 0) {
-        // clear the cache if the procname changes, so we reprocess it.
-        QCoreApplicationPrivate::clearApplicationFilePath();
-        procName = d->argv[0];
+    if (d->argc) {
+        static const char *procName = d->argv[0];
+        if (qstrcmp(procName, d->argv[0]) != 0) {
+            // clear the cache if the procname changes, so we reprocess it.
+            QCoreApplicationPrivate::clearApplicationFilePath();
+            procName = d->argv[0];
+        }
     }
 
     if (QCoreApplicationPrivate::cachedApplicationFilePath)
