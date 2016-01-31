@@ -399,7 +399,7 @@ public:
     class ActivationObserver
     {
     public:
-        virtual ~ActivationObserver() {}
+        virtual ~ActivationObserver();
         virtual void accessibilityActiveChanged(bool active) = 0;
     };
     static void installActivationObserver(ActivationObserver *);

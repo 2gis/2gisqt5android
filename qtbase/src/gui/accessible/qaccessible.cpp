@@ -608,6 +608,13 @@ QAccessible::RootObjectHandler QAccessible::installRootObjectHandler(RootObjectH
     \sa installActivationObserver()
 */
 
+
+QAccessible::ActivationObserver::~ActivationObserver()
+{
+    QAccessible::removeActivationObserver(this);
+}
+
+
 /*!
     \internal
 
