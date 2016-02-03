@@ -104,6 +104,7 @@ namespace QtAndroidAccessibility
         QAccessibleInterface *iface = interfaceFromId(objectId);
         if (iface) {
             QVector<jint> tmpArray;
+            tmpArray.reserve((iface->childCount() * 11) / 10 + 10);
             for (int i = 0; i < iface->childCount(); ++i) {
                 QAccessibleInterface *child = iface->child(i);
                 if (child) {
