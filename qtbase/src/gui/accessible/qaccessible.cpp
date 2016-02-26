@@ -797,11 +797,6 @@ bool QAccessible::isActive()
 */
 void QAccessible::setActive(bool active)
 {
-#ifndef QT_NO_ACCESSIBILITY
-    if (QPlatformAccessibility *pfAccessibility = platformAccessibility())
-        pfAccessibility->setActive(active);
-#endif
-
     for (int i = 0; i < qAccessibleActivationObservers()->count() ;++i)
         qAccessibleActivationObservers()->at(i)->accessibilityActiveChanged(active);
 }
