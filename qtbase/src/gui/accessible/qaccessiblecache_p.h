@@ -48,6 +48,7 @@
 #include <QtCore/qglobal.h>
 #include <QtCore/qobject.h>
 #include <QtCore/qhash.h>
+#include <QMutex>
 
 #include "qaccessible.h"
 
@@ -63,9 +64,14 @@ class Q_GUI_EXPORT QAccessibleCache  :public QObject
 
 public:
     static QAccessibleCache *instance();
+    QAccessibleCache();
     QAccessibleInterface *interfaceForId(QAccessible::Id id) const;
     QAccessible::Id insert(QObject *object, QAccessibleInterface *iface) const;
     void deleteInterface(QAccessible::Id id, QObject *obj = 0);
+
+    QAccessible::Id getId(QObject *object);
+    QAccessible::Id getId(QAccessibleInterface *iface);
+    bool containsObject(QObject *object);
 
 #ifdef Q_OS_MAC
     QT_MANGLE_NAMESPACE(QMacAccessibilityElement) *elementForId(QAccessible::Id axid) const;
@@ -80,14 +86,13 @@ private:
 
     mutable QHash<QAccessible::Id, QAccessibleInterface *> idToInterface;
     mutable QHash<QObject *, QAccessible::Id> objectToId;
+    mutable QMutex dataSync;
 
 #ifdef Q_OS_MAC
     void removeCocoaElement(QAccessible::Id axid);
     mutable QHash<QAccessible::Id, QT_MANGLE_NAMESPACE(QMacAccessibilityElement) *> cocoaElements;
 #endif
 
-    friend class QAccessible;
-    friend class QAccessibleInterface;
 };
 
 QT_END_NAMESPACE

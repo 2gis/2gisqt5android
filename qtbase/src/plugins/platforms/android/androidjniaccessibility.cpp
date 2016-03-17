@@ -79,6 +79,8 @@ namespace QtAndroidAccessibility
 
     static void setActive(JNIEnv */*env*/, jobject /*thiz*/, jboolean active)
     {
+        QAccessibleLock lock;
+
         QAndroidPlatformIntegration *platformIntegration = QtAndroid::androidPlatformIntegration();
         if (platformIntegration)
             platformIntegration->accessibility()->setActive(active);
@@ -88,6 +90,8 @@ namespace QtAndroidAccessibility
 
     QAccessibleInterface *interfaceFromId(jint objectId)
     {
+        QAccessibleLock lock;
+
         QAccessibleInterface *iface = 0;
         if (objectId == -1) {
             QWindow *win = qApp->focusWindow();
@@ -101,6 +105,8 @@ namespace QtAndroidAccessibility
 
     static jintArray childIdListForAccessibleObject(JNIEnv *env, jobject /*thiz*/, jint objectId)
     {
+        QAccessibleLock lock;
+
         QAccessibleInterface *iface = interfaceFromId(objectId);
         if (iface) {
             QVector<jint> tmpArray;
@@ -123,6 +129,8 @@ namespace QtAndroidAccessibility
 
     static jint parentId(JNIEnv */*env*/, jobject /*thiz*/, jint objectId)
     {
+        QAccessibleLock lock;
+
         QAccessibleInterface *iface = interfaceFromId(objectId);
         if (iface) {
             QAccessibleInterface *parent = iface->parent();
@@ -137,6 +145,8 @@ namespace QtAndroidAccessibility
 
     static jobject screenRect(JNIEnv *env, jobject /*thiz*/, jint objectId)
     {
+        QAccessibleLock lock;
+
         QRect rect;
         QAccessibleInterface *iface = interfaceFromId(objectId);
         if (iface && iface->isValid()) {
@@ -151,6 +161,8 @@ namespace QtAndroidAccessibility
 
     static jint hitTest(JNIEnv */*env*/, jobject /*thiz*/, jfloat x, jfloat y)
     {
+        QAccessibleLock lock;
+
         QAccessibleInterface *root = interfaceFromId(-1);
         if (root) {
             QAccessibleInterface *child = root->childAt((int)x, (int)y);
@@ -167,6 +179,8 @@ namespace QtAndroidAccessibility
 
     static jboolean clickAction(JNIEnv */*env*/, jobject /*thiz*/, jint objectId)
     {
+        QAccessibleLock lock;
+
 //        qDebug() << "A11Y: CLICK: " << objectId;
         QAccessibleInterface *iface = interfaceFromId(objectId);
         if (iface && iface->actionInterface()) {
@@ -180,12 +194,16 @@ namespace QtAndroidAccessibility
 
     static jboolean scrollForward(JNIEnv */*env*/, jobject /*thiz*/, jint objectId)
     {
+        QAccessibleLock lock;
+
         QAccessibleInterface *iface = interfaceFromId(objectId);
         return QAccessibleBridgeUtils::performEffectiveAction(iface, QAccessibleActionInterface::increaseAction());
     }
 
     static jboolean scrollBackward(JNIEnv */*env*/, jobject /*thiz*/, jint objectId)
     {
+        QAccessibleLock lock;
+
         QAccessibleInterface *iface = interfaceFromId(objectId);
         return QAccessibleBridgeUtils::performEffectiveAction(iface, QAccessibleActionInterface::decreaseAction());
     }
@@ -204,6 +222,8 @@ if (!clazz) { \
 
     static jstring descriptionForAccessibleObject_helper(JNIEnv *env, QAccessibleInterface *iface)
     {
+        QAccessibleLock lock;
+
         QString desc;
         if (iface && iface->isValid()) {
             desc = iface->text(QAccessible::Name);
@@ -223,12 +243,16 @@ if (!clazz) { \
 
     static jstring descriptionForAccessibleObject(JNIEnv *env, jobject /*thiz*/, jint objectId)
     {
+        QAccessibleLock lock;
+
         QAccessibleInterface *iface = interfaceFromId(objectId);
         return descriptionForAccessibleObject_helper(env, iface);
     }
 
     static jstring viewIdResourceForAccessibleObject_helper(JNIEnv *env, QAccessibleInterface *iface)
     {
+        QAccessibleLock lock;
+
         QString resourceId = "";
         if (iface && iface->isValid()) {
             QObject *object = iface->object();
@@ -244,12 +268,16 @@ if (!clazz) { \
 
     static jstring viewIdResourceForAccessibleObject(JNIEnv *env, jobject /*thiz*/, jint objectId)
     {
+        QAccessibleLock lock;
+
         QAccessibleInterface *iface = interfaceFromId(objectId);
         return viewIdResourceForAccessibleObject_helper(env, iface);
     }
 
     static bool populateNode(JNIEnv *env, jobject /*thiz*/, jint objectId, jobject node)
     {
+        QAccessibleLock lock;
+        
         QAccessibleInterface *iface = interfaceFromId(objectId);
         if (!iface || !iface->isValid()) {
             __android_log_print(ANDROID_LOG_WARN, m_qtTag, "Accessibility: populateNode for Invalid ID");

@@ -45,6 +45,7 @@
 #include <qpa/qplatformaccessibility.h>
 #include <qpa/qplatformintegration.h>
 
+#include <QMutex>
 #include <QtCore/qdebug.h>
 #include <QtCore/qmetaobject.h>
 #include <QtCore/qhash.h>
@@ -469,13 +470,31 @@ typedef QHash<QString, QAccessiblePlugin*> QAccessiblePluginsHash;
 Q_GLOBAL_STATIC(QAccessiblePluginsHash, qAccessiblePlugins)
 Q_GLOBAL_STATIC(QList<QAccessible::ActivationObserver *>, qAccessibleActivationObservers)
 
+static QMutex dataSync(QMutex::Recursive);
+
+
 QAccessible::UpdateHandler QAccessible::updateHandler = 0;
 QAccessible::RootObjectHandler QAccessible::rootObjectHandler = 0;
+
+
+QAccessibleLock::QAccessibleLock()
+{
+    dataSync.lock();
+}
+
+
+QAccessibleLock::~QAccessibleLock()
+{
+    dataSync.unlock();
+}
+
 
 static bool cleanupAdded = false;
 
 static QPlatformAccessibility *platformAccessibility()
 {
+    QMutexLocker lock(&dataSync);
+
     QPlatformIntegration *pfIntegration = QGuiApplicationPrivate::platformIntegration();
     return pfIntegration ? pfIntegration->accessibility() : 0;
 }
@@ -494,12 +513,15 @@ static QPlatformAccessibility *platformAccessibility()
 */
 void QAccessible::cleanup()
 {
+    QMutexLocker lock(&dataSync);
+
     if (QPlatformAccessibility *pfAccessibility = platformAccessibility())
         pfAccessibility->cleanup();
 }
 
 static void qAccessibleCleanup()
 {
+    QMutexLocker lock(&dataSync);
     qAccessibleActivationObservers()->clear();
     qAccessibleFactories()->clear();
 }
@@ -556,6 +578,8 @@ void QAccessible::installFactory(InterfaceFactory factory)
     if (!factory)
         return;
 
+    QMutexLocker lock(&dataSync);
+
     if (!cleanupAdded) {
         qAddPostRoutine(qAccessibleCleanup);
         cleanupAdded = true;
@@ -570,6 +594,7 @@ void QAccessible::installFactory(InterfaceFactory factory)
 */
 void QAccessible::removeFactory(InterfaceFactory factory)
 {
+    QMutexLocker lock(&dataSync);
     qAccessibleFactories()->removeAll(factory);
 }
 
@@ -582,6 +607,7 @@ void QAccessible::removeFactory(InterfaceFactory factory)
 */
 QAccessible::UpdateHandler QAccessible::installUpdateHandler(UpdateHandler handler)
 {
+    QMutexLocker lock(&dataSync);
     UpdateHandler old = updateHandler;
     updateHandler = handler;
     return old;
@@ -595,6 +621,7 @@ QAccessible::UpdateHandler QAccessible::installUpdateHandler(UpdateHandler handl
 */
 QAccessible::RootObjectHandler QAccessible::installRootObjectHandler(RootObjectHandler handler)
 {
+    QMutexLocker lock(&dataSync);
     RootObjectHandler old = rootObjectHandler;
     rootObjectHandler = handler;
     return old;
@@ -625,6 +652,8 @@ void QAccessible::installActivationObserver(QAccessible::ActivationObserver *obs
     if (!observer)
         return;
 
+    QMutexLocker lock(&dataSync);
+
     if (!cleanupAdded) {
         qAddPostRoutine(qAccessibleCleanup);
         cleanupAdded = true;
@@ -642,6 +671,7 @@ void QAccessible::installActivationObserver(QAccessible::ActivationObserver *obs
 */
 void QAccessible::removeActivationObserver(ActivationObserver *observer)
 {
+    QMutexLocker lock(&dataSync);
     qAccessibleActivationObservers()->removeAll(observer);
 }
 
@@ -668,7 +698,9 @@ QAccessibleInterface *QAccessible::queryAccessibleInterface(QObject *object)
     if (!object)
         return 0;
 
-    if (Id id = QAccessibleCache::instance()->objectToId.value(object))
+    QMutexLocker lock(&dataSync);
+
+    if (Id id = QAccessibleCache::instance()->getId(object))
         return QAccessibleCache::instance()->interfaceForId(id);
 
     // Create a QAccessibleInterface for the object class. Start by the most
@@ -682,7 +714,7 @@ QAccessibleInterface *QAccessible::queryAccessibleInterface(QObject *object)
             InterfaceFactory factory = qAccessibleFactories()->at(i - 1);
             if (QAccessibleInterface *iface = factory(cn, object)) {
                 QAccessibleCache::instance()->insert(object, iface);
-                Q_ASSERT(QAccessibleCache::instance()->objectToId.contains(object));
+                Q_ASSERT(QAccessibleCache::instance()->containsObject(object));
                 return iface;
             }
         }
@@ -704,7 +736,7 @@ QAccessibleInterface *QAccessible::queryAccessibleInterface(QObject *object)
             QAccessibleInterface *result = factory->create(cn, object);
             if (result) {   // Need this condition because of QDesktopScreenWidget
                 QAccessibleCache::instance()->insert(object, result);
-                Q_ASSERT(QAccessibleCache::instance()->objectToId.contains(object));
+                Q_ASSERT(QAccessibleCache::instance()->containsObject(object));
             }
             return result;
         }
@@ -715,7 +747,7 @@ QAccessibleInterface *QAccessible::queryAccessibleInterface(QObject *object)
     if (object == qApp) {
         QAccessibleInterface *appInterface = new QAccessibleApplication;
         QAccessibleCache::instance()->insert(object, appInterface);
-        Q_ASSERT(QAccessibleCache::instance()->objectToId.contains(qApp));
+        Q_ASSERT(QAccessibleCache::instance()->containsObject(qApp));
         return appInterface;
     }
 
@@ -757,7 +789,7 @@ void QAccessible::deleteAccessibleInterface(Id id)
 */
 QAccessible::Id QAccessible::uniqueId(QAccessibleInterface *iface)
 {
-    Id id = QAccessibleCache::instance()->idToInterface.key(iface);
+    Id id = QAccessibleCache::instance()->getId(iface);
     if (!id)
         id = registerAccessibleInterface(iface);
     return id;
@@ -770,7 +802,7 @@ QAccessible::Id QAccessible::uniqueId(QAccessibleInterface *iface)
 */
 QAccessibleInterface *QAccessible::accessibleInterface(Id id)
 {
-    return QAccessibleCache::instance()->idToInterface.value(id);
+    return QAccessibleCache::instance()->interfaceForId(id);
 }
 
 
@@ -787,6 +819,8 @@ QAccessibleInterface *QAccessible::accessibleInterface(Id id)
 */
 bool QAccessible::isActive()
 {
+    QMutexLocker lock(&dataSync);
+
     if (QPlatformAccessibility *pfAccessibility = platformAccessibility())
         return pfAccessibility->isActive();
     return false;
@@ -797,6 +831,7 @@ bool QAccessible::isActive()
 */
 void QAccessible::setActive(bool active)
 {
+    QMutexLocker lock(&dataSync);
     for (int i = 0; i < qAccessibleActivationObservers()->count() ;++i)
         qAccessibleActivationObservers()->at(i)->accessibilityActiveChanged(active);
 }
@@ -818,6 +853,8 @@ void QAccessible::setActive(bool active)
 */
 void QAccessible::setRootObject(QObject *object)
 {
+    QMutexLocker lock(&dataSync);
+
     if (rootObjectHandler) {
         rootObjectHandler(object);
         return;
@@ -862,6 +899,8 @@ void QAccessible::updateAccessibility(QAccessibleEvent *event)
         if (iface && iface->tableInterface())
             iface->tableInterface()->modelChange(static_cast<QAccessibleTableModelChangeEvent*>(event));
     }
+
+    QMutexLocker lock(&dataSync);
 
     if (updateHandler) {
         updateHandler(event);

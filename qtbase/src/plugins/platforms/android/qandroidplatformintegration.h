@@ -148,6 +148,7 @@ private:
     QAndroidSystemLocale *m_androidSystemLocale;
 #ifndef QT_NO_ACCESSIBILITY
     mutable QPlatformAccessibility *m_accessibility;
+    mutable QMutex accessibilitySync;
 #endif
 
     mutable QAndroidInputContext m_platformInputContext;

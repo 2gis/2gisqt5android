@@ -113,6 +113,7 @@ QAndroidPlatformIntegration::QAndroidPlatformIntegration(const QStringList &para
     : m_touchDevice(nullptr)
 #ifndef QT_NO_ACCESSIBILITY
     , m_accessibility(nullptr)
+    , accessibilitySync(QMutex::Recursive)
 #endif
 {
     Q_UNUSED(paramList);
@@ -149,7 +150,10 @@ QAndroidPlatformIntegration::QAndroidPlatformIntegration(const QStringList &para
     m_androidSystemLocale = new QAndroidSystemLocale;
 
 #ifndef QT_NO_ACCESSIBILITY
+    {
+        QMutexLocker locker(&accessibilitySync);
         m_accessibility = new QAndroidPlatformAccessibility();
+    }
 #endif // QT_NO_ACCESSIBILITY
 
     QJNIObjectPrivate javaActivity(QtAndroid::activity());
@@ -352,6 +356,7 @@ void QAndroidPlatformIntegration::setScreenOrientation(Qt::ScreenOrientation cur
 #ifndef QT_NO_ACCESSIBILITY
 QPlatformAccessibility *QAndroidPlatformIntegration::accessibility() const
 {
+    QMutexLocker locker(&accessibilitySync);
     return m_accessibility;
 }
 #endif

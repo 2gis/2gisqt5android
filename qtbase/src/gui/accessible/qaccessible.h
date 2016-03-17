@@ -57,6 +57,15 @@ class QAccessibleEvent;
 class QWindow;
 class QTextCursor;
 
+
+class Q_GUI_EXPORT QAccessibleLock
+{
+public:
+    QAccessibleLock();
+    virtual ~QAccessibleLock();
+};
+
+
 class Q_GUI_EXPORT QAccessible
 {
     Q_GADGET
@@ -431,7 +440,6 @@ private:
 
     QAccessible() {}
 
-    friend class QAccessibleCache;
 };
 
 Q_GUI_EXPORT bool operator==(const QAccessible::State &first, const QAccessible::State &second);
@@ -614,8 +622,6 @@ public:
     virtual void modelChange(QAccessibleTableModelChangeEvent *event) = 0;
 
 protected:
-friend class QAbstractItemView;
-friend class QAbstractItemViewPrivate;
 };
 
 class Q_GUI_EXPORT QAccessibleActionInterface
