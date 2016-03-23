@@ -344,7 +344,14 @@ void QQuickWindowPrivate::syncSceneGraph()
 
     // Copy the current state of clearing from window into renderer.
     renderer->setClearColor(clearColor);
-    QSGAbstractRenderer::ClearMode mode = QSGAbstractRenderer::ClearStencilBuffer | QSGAbstractRenderer::ClearDepthBuffer;
+
+    // 2GIS VNA-3203
+    // Old code: QSGAbstractRenderer::ClearMode mode = QSGAbstractRenderer::ClearStencilBuffer | QSGAbstractRenderer::ClearDepthBuffer;
+    // New code takes clearDepthAndStencil into account:
+    QSGAbstractRenderer::ClearMode mode = 0;
+    if (clearStencilAndDepth)
+        mode |= QSGAbstractRenderer::ClearStencilBuffer | QSGAbstractRenderer::ClearDepthBuffer;
+
     if (clearBeforeRendering)
         mode |= QSGAbstractRenderer::ClearColorBuffer;
     renderer->setClearMode(mode);
@@ -411,6 +418,7 @@ QQuickWindowPrivate::QQuickWindowPrivate()
     , persistentSceneGraph(true)
     , lastWheelEventAccepted(false)
     , componentCompleted(true)
+    , clearStencilAndDepth(true) // 2GIS VNA-3203
     , lastFocusReason(Qt::OtherFocusReason)
     , renderTarget(0)
     , renderTargetId(0)
@@ -4202,6 +4210,21 @@ qreal QQuickWindow::effectiveDevicePixelRatio() const
     QWindow *w = QQuickRenderControl::renderWindowFor(const_cast<QQuickWindow *>(this));
     return w ? w->devicePixelRatio() : devicePixelRatio();
 }
+
+// 2GIS VNA-3203
+bool QQuickWindow::clearStencilAndDepth()
+{
+    Q_D(QQuickWindow);
+    return d->clearStencilAndDepth;
+}
+
+// 2GIS VNA-3203
+void QQuickWindow::setClearStencilAndDepth(bool clear)
+{
+    Q_D(QQuickWindow);
+    d->clearStencilAndDepth = clear;
+}
+
 
 #include "moc_qquickwindow.cpp"
 
