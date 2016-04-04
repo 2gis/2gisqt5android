@@ -33,7 +33,19 @@
 #ifndef QV4PERSISTENT_H
 #define QV4PERSISTENT_H
 
-#include "qv4value_inl_p.h"
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
+#include "qv4value_p.h"
+#include "qv4managed_p.h"
 
 QT_BEGIN_NAMESPACE
 
@@ -50,8 +62,10 @@ struct Q_QML_EXPORT PersistentValueStorage
     void mark(ExecutionEngine *e);
 
     struct Iterator {
-        Q_DECL_CONSTEXPR Iterator(void *p, int idx)
-            : p(p), index(idx) {}
+        Iterator(void *p, int idx);
+        Iterator(const Iterator &o);
+        Iterator & operator=(const Iterator &o);
+        ~Iterator();
         void *p;
         int index;
         Iterator &operator++();
@@ -67,6 +81,8 @@ struct Q_QML_EXPORT PersistentValueStorage
 
     ExecutionEngine *engine;
     void *firstPage;
+private:
+    static void freePage(void *page);
 };
 
 class Q_QML_EXPORT PersistentValue
@@ -96,7 +112,13 @@ public:
     Managed *asManaged() const {
         if (!val)
             return 0;
-        return val->asManaged();
+        return val->as<Managed>();
+    }
+    template<typename T>
+    T *as() const {
+        if (!val)
+            return 0;
+        return val->as<T>();
     }
 
     ExecutionEngine *engine() const {
@@ -122,6 +144,7 @@ class Q_QML_EXPORT WeakValue
 public:
     WeakValue() : val(0) {}
     WeakValue(const WeakValue &other);
+    WeakValue(ExecutionEngine *engine, const Value &value);
     WeakValue &operator=(const WeakValue &other);
     ~WeakValue();
 
@@ -138,7 +161,13 @@ public:
     Managed *asManaged() const {
         if (!val)
             return 0;
-        return val->asManaged();
+        return val->as<Managed>();
+    }
+    template <typename T>
+    T *as() const {
+        if (!val)
+            return 0;
+        return val->as<T>();
     }
 
     ExecutionEngine *engine() const {
@@ -149,15 +178,15 @@ public:
 
     bool isUndefined() const { return !val || val->isUndefined(); }
     bool isNullOrUndefined() const { return !val || val->isNullOrUndefined(); }
-    void clear() {
-        PersistentValueStorage::free(val);
-        val = 0;
-    }
+    void clear() { free(); }
 
     void markOnce(ExecutionEngine *e);
 
 private:
     Value *val;
+
+private:
+    void free();
 };
 
 } // namespace QV4

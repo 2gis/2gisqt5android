@@ -479,6 +479,11 @@ public:
 
 Q_GLOBAL_STATIC(QEmptyItemModel, qEmptyModel)
 
+
+QAbstractItemModelPrivate::~QAbstractItemModelPrivate()
+{
+}
+
 QAbstractItemModel *QAbstractItemModelPrivate::staticEmptyModel()
 {
     return qEmptyModel();
@@ -3217,6 +3222,7 @@ QModelIndexList QAbstractItemModel::persistentIndexList() const
 {
     Q_D(const QAbstractItemModel);
     QModelIndexList result;
+    result.reserve(d->persistent.indexes.count());
     for (QHash<QModelIndex, QPersistentModelIndexData *>::const_iterator it = d->persistent.indexes.constBegin();
          it != d->persistent.indexes.constEnd(); ++it) {
         QPersistentModelIndexData *data = *it;

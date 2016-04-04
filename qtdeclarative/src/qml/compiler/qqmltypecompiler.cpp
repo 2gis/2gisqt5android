@@ -104,11 +104,10 @@ bool QQmlTypeCompiler::compile()
             }
 
             if (ref->type->containsRevisionedAttributes()) {
-                QQmlError cacheError;
                 ref->typePropertyCache = engine->cache(ref->type,
-                                                       resolvedType->minorVersion,
-                                                       cacheError);
+                                                       resolvedType->minorVersion);
                 if (!ref->typePropertyCache) {
+                    QQmlError cacheError;
                     cacheError.setColumn(resolvedType->location.column);
                     cacheError.setLine(resolvedType->location.line);
                     recordError(cacheError);
@@ -521,7 +520,24 @@ bool QQmlPropertyCacheCreator::buildMetaObjectRecursively(int objectIndex, int r
     } else if (instantiatingBinding && instantiatingBinding->isAttachedProperty()) {
         QQmlCompiledData::TypeReference *typeRef = resolvedTypes->value(instantiatingBinding->propertyNameIndex);
         Q_ASSERT(typeRef);
-        const QMetaObject *attachedMo = typeRef->type ? typeRef->type->attachedPropertiesType() : 0;
+        QQmlType *qmltype = typeRef->type;
+        if (!qmltype) {
+            QString propertyName = stringAt(instantiatingBinding->propertyNameIndex);
+            if (imports->resolveType(propertyName, &qmltype, 0, 0, 0)) {
+                if (qmltype->isComposite()) {
+                    QQmlTypeData *tdata = enginePrivate->typeLoader.getType(qmltype->sourceUrl());
+                    Q_ASSERT(tdata);
+                    Q_ASSERT(tdata->isComplete());
+
+                    QQmlCompiledData *data = tdata->compiledData();
+                    qmltype = QQmlMetaType::qmlType(data->metaTypeId);
+
+                    tdata->release();
+                }
+            }
+        }
+
+        const QMetaObject *attachedMo = qmltype ? qmltype->attachedPropertiesType(enginePrivate) : 0;
         if (!attachedMo) {
             recordError(instantiatingBinding->location, tr("Non-existent attached object"));
             return false;
@@ -668,17 +684,14 @@ bool QQmlPropertyCacheCreator::createMetaObject(int objectIndex, const QmlIR::Ob
     }
 
     // First set up notify signals for properties - first normal, then var, then alias
-    enum { NSS_Normal = 0, NSS_Var = 1, NSS_Alias = 2 };
+    enum { NSS_Normal = 0, NSS_Alias = 1 };
     for (int ii = NSS_Normal; ii <= NSS_Alias; ++ii) { // 0 == normal, 1 == var, 2 == alias
 
-        if (ii == NSS_Var && varPropCount == 0) continue;
-        else if (ii == NSS_Alias && aliasCount == 0) continue;
+        if (ii == NSS_Alias && aliasCount == 0) continue;
 
         for (const QmlIR::Property *p = obj->firstProperty(); p; p = p->next) {
-            if ((ii == NSS_Normal && (p->type == QV4::CompiledData::Property::Alias ||
-                                      p->type == QV4::CompiledData::Property::Var)) ||
-                ((ii == NSS_Var) && (p->type != QV4::CompiledData::Property::Var)) ||
-                ((ii == NSS_Alias) && (p->type != QV4::CompiledData::Property::Alias)))
+            if ((ii == NSS_Normal && p->type == QV4::CompiledData::Property::Alias) ||
+                (ii == NSS_Alias && p->type != QV4::CompiledData::Property::Alias))
                 continue;
 
             quint32 flags = QQmlPropertyData::IsSignal | QQmlPropertyData::IsFunction |
@@ -696,6 +709,7 @@ bool QQmlPropertyCacheCreator::createMetaObject(int objectIndex, const QmlIR::Ob
         const int paramCount = s->parameters->count;
 
         QList<QByteArray> names;
+        names.reserve(paramCount);
         QVarLengthArray<int, 10> paramTypes(paramCount?(paramCount + 1):0);
 
         if (paramCount) {
@@ -780,15 +794,18 @@ bool QQmlPropertyCacheCreator::createMetaObject(int objectIndex, const QmlIR::Ob
     int propertyIdx = 0;
     for (const QmlIR::Property *p = obj->firstProperty(); p; p = p->next, ++propertyIdx) {
 
-        if (p->type == QV4::CompiledData::Property::Alias ||
-            p->type == QV4::CompiledData::Property::Var)
+        if (p->type == QV4::CompiledData::Property::Alias)
             continue;
 
         int propertyType = 0;
         int vmePropertyType = 0;
         quint32 propertyFlags = 0;
 
-        if (p->type < builtinTypeCount) {
+        if (p->type == QV4::CompiledData::Property::Var) {
+            propertyType = QMetaType::QVariant;
+            vmePropertyType = QQmlVMEMetaData::VarPropertyType;
+            propertyFlags = QQmlPropertyData::IsVarProperty;
+        } else if (p->type < builtinTypeCount) {
             propertyType = builtinTypes[p->type].metaType;
             vmePropertyType = propertyType;
 
@@ -852,30 +869,6 @@ bool QQmlPropertyCacheCreator::createMetaObject(int objectIndex, const QmlIR::Ob
         vmd->propertyCount++;
     }
 
-    // Now do var properties
-    propertyIdx = 0;
-    for (const QmlIR::Property *p = obj->firstProperty(); p; p = p->next, ++propertyIdx) {
-
-        if (p->type != QV4::CompiledData::Property::Var)
-            continue;
-
-        quint32 propertyFlags = QQmlPropertyData::IsVarProperty;
-        if (!(p->flags & QV4::CompiledData::Property::IsReadOnly))
-            propertyFlags |= QQmlPropertyData::IsWritable;
-
-        VMD *vmd = (QQmlVMEMetaData *)dynamicData.data();
-        (vmd->propertyData() + vmd->propertyCount)->propertyType = QMetaType::QVariant;
-        vmd->propertyCount++;
-        ((QQmlVMEMetaData *)dynamicData.data())->varPropertyCount++;
-
-        QString propertyName = stringAt(p->nameIndex);
-        if (propertyIdx == obj->indexOfDefaultProperty) cache->_defaultPropertyName = propertyName;
-        cache->appendProperty(propertyName, propertyFlags, effectivePropertyIndex++,
-                              QMetaType::QVariant, effectiveSignalIndex);
-
-        effectiveSignalIndex++;
-    }
-
     // Alias property count.  Actual data is setup in buildDynamicMetaAliases
     ((QQmlVMEMetaData *)dynamicData.data())->aliasCount = aliasCount;
 
@@ -904,7 +897,9 @@ bool QQmlPropertyCacheCreator::createMetaObject(int objectIndex, const QmlIR::Ob
 
 SignalHandlerConverter::SignalHandlerConverter(QQmlTypeCompiler *typeCompiler)
     : QQmlCompilePass(typeCompiler)
+    , enginePrivate(typeCompiler->enginePrivate())
     , qmlObjects(*typeCompiler->qmlObjects())
+    , imports(typeCompiler->imports())
     , customParsers(typeCompiler->customParserCache())
     , resolvedTypes(*typeCompiler->resolvedTypes())
     , illegalNames(QV8Engine::get(QQmlEnginePrivate::get(typeCompiler->enginePrivate()))->illegalNames())
@@ -942,7 +937,22 @@ bool SignalHandlerConverter::convertSignalHandlerExpressionsToFunctionDeclaratio
             const QmlIR::Object *attachedObj = qmlObjects.at(binding->value.objectIndex);
             QQmlCompiledData::TypeReference *typeRef = resolvedTypes.value(binding->propertyNameIndex);
             QQmlType *type = typeRef ? typeRef->type : 0;
-            const QMetaObject *attachedType = type ? type->attachedPropertiesType() : 0;
+            if (!type) {
+                if (imports->resolveType(propertyName, &type, 0, 0, 0)) {
+                    if (type->isComposite()) {
+                        QQmlTypeData *tdata = enginePrivate->typeLoader.getType(type->sourceUrl());
+                        Q_ASSERT(tdata);
+                        Q_ASSERT(tdata->isComplete());
+
+                        QQmlCompiledData *data = tdata->compiledData();
+                        type = QQmlMetaType::qmlType(data->metaTypeId);
+
+                        tdata->release();
+                    }
+                }
+            }
+
+            const QMetaObject *attachedType = type ? type->attachedPropertiesType(enginePrivate) : 0;
             if (!attachedType)
                 COMPILE_EXCEPTION(binding, tr("Non-existent attached object"));
             QQmlPropertyCache *cache = compiler->enginePrivate()->cache(attachedType);
@@ -1022,10 +1032,10 @@ bool SignalHandlerConverter::convertSignalHandlerExpressionsToFunctionDeclaratio
                 }
             }
 
-            QHash<QString, QStringList>::ConstIterator entry = customSignals.find(propertyName);
+            QHash<QString, QStringList>::ConstIterator entry = customSignals.constFind(propertyName);
             if (entry == customSignals.constEnd() && propertyName.endsWith(QStringLiteral("Changed"))) {
                 QString alternateName = propertyName.mid(0, propertyName.length() - static_cast<int>(strlen("Changed")));
-                entry = customSignals.find(alternateName);
+                entry = customSignals.constFind(alternateName);
             }
 
             if (entry == customSignals.constEnd()) {
@@ -1067,16 +1077,29 @@ bool SignalHandlerConverter::convertSignalHandlerExpressionsToFunctionDeclaratio
             paramList = paramList->finish();
 
         QmlIR::CompiledFunctionOrExpression *foe = obj->functionsAndExpressions->slowAt(binding->value.compiledScriptIndex);
-        QQmlJS::AST::Statement *statement = static_cast<QQmlJS::AST::Statement*>(foe->node);
-        QQmlJS::AST::SourceElement *sourceElement = new (pool) QQmlJS::AST::StatementSourceElement(statement);
-        QQmlJS::AST::SourceElements *elements = new (pool) QQmlJS::AST::SourceElements(sourceElement);
-        elements = elements->finish();
+        QQmlJS::AST::FunctionDeclaration *functionDeclaration = 0;
+        if (QQmlJS::AST::ExpressionStatement *es = QQmlJS::AST::cast<QQmlJS::AST::ExpressionStatement*>(foe->node)) {
+            if (QQmlJS::AST::FunctionExpression *fe = QQmlJS::AST::cast<QQmlJS::AST::FunctionExpression*>(es->expression)) {
+                functionDeclaration = new (pool) QQmlJS::AST::FunctionDeclaration(fe->name, fe->formals, fe->body);
+                functionDeclaration->functionToken = fe->functionToken;
+                functionDeclaration->identifierToken = fe->identifierToken;
+                functionDeclaration->lparenToken = fe->lparenToken;
+                functionDeclaration->rparenToken = fe->rparenToken;
+                functionDeclaration->lbraceToken = fe->lbraceToken;
+                functionDeclaration->rbraceToken = fe->rbraceToken;
+            }
+        }
+        if (!functionDeclaration) {
+            QQmlJS::AST::Statement *statement = static_cast<QQmlJS::AST::Statement*>(foe->node);
+            QQmlJS::AST::SourceElement *sourceElement = new (pool) QQmlJS::AST::StatementSourceElement(statement);
+            QQmlJS::AST::SourceElements *elements = new (pool) QQmlJS::AST::SourceElements(sourceElement);
+            elements = elements->finish();
 
-        QQmlJS::AST::FunctionBody *body = new (pool) QQmlJS::AST::FunctionBody(elements);
+            QQmlJS::AST::FunctionBody *body = new (pool) QQmlJS::AST::FunctionBody(elements);
 
-        QQmlJS::AST::FunctionDeclaration *functionDeclaration = new (pool) QQmlJS::AST::FunctionDeclaration(compiler->newStringRef(stringAt(binding->propertyNameIndex)), paramList, body);
-        functionDeclaration->functionToken = foe->node->firstSourceLocation();
-
+            functionDeclaration = new (pool) QQmlJS::AST::FunctionDeclaration(compiler->newStringRef(stringAt(binding->propertyNameIndex)), paramList, body);
+            functionDeclaration->functionToken = foe->node->firstSourceLocation();
+        }
         foe->node = functionDeclaration;
         binding->propertyNameIndex = compiler->registerString(propertyName);
         binding->flags |= QV4::CompiledData::Binding::IsSignalHandlerExpression;
@@ -1174,8 +1197,6 @@ bool QQmlEnumTypeResolver::tryQualifiedEnumAssignment(const QmlIR::Object *obj, 
 
     if (!type && typeName != QLatin1String("Qt"))
         return true;
-    if (type && type->isComposite()) //No enums on composite (or composite singleton) types
-        return true;
 
     int value = 0;
     bool ok = false;
@@ -1193,7 +1214,7 @@ bool QQmlEnumTypeResolver::tryQualifiedEnumAssignment(const QmlIR::Object *obj, 
     } else {
         // Otherwise we have to search the whole type
         if (type) {
-            value = type->enumValue(QHashedStringRef(enumValue), &ok);
+            value = type->enumValue(compiler->enginePrivate(), QHashedStringRef(enumValue), &ok);
         } else {
             QByteArray enumName = enumValue.toUtf8();
             const QMetaObject *metaObject = StaticQtMetaObject::get();
@@ -1221,7 +1242,9 @@ int QQmlEnumTypeResolver::evaluateEnum(const QString &scope, const QByteArray &e
     if (scope != QLatin1String("Qt")) {
         QQmlType *type = 0;
         imports->resolveType(scope, &type, 0, 0, 0);
-        return type ? type->enumValue(QHashedCStringRef(enumValue.constData(), enumValue.length()), ok) : -1;
+        if (!type)
+            return -1;
+        return type ? type->enumValue(compiler->enginePrivate(), QHashedCStringRef(enumValue.constData(), enumValue.length()), ok) : -1;
     }
 
     const QMetaObject *mo = StaticQtMetaObject::get();
@@ -1730,17 +1753,6 @@ const QQmlImports &QQmlPropertyValidator::imports() const
     return *compiler->imports();
 }
 
-QString QQmlPropertyValidator::bindingAsString(int objectIndex, const QV4::CompiledData::Binding *binding) const
-{
-    const QmlIR::Object *object = compiler->qmlObjects()->value(objectIndex);
-    if (!object)
-        return QString();
-    int reverseIndex = object->runtimeFunctionIndices->indexOf(binding->value.compiledScriptIndex);
-    if (reverseIndex == -1)
-        return QString();
-    return compiler->bindingAsString(object, reverseIndex);
-}
-
 typedef QVarLengthArray<const QV4::CompiledData::Binding *, 8> GroupPropertyVector;
 
 struct BindingFinder
@@ -1847,6 +1859,7 @@ bool QQmlPropertyValidator::validateObject(int objectIndex, const QV4::CompiledD
         }
 
         bool bindingToDefaultProperty = false;
+        bool isGroupProperty = instantiatingBinding && instantiatingBinding->type == QV4::CompiledData::Binding::Type_GroupProperty;
 
         bool notInRevision = false;
         QQmlPropertyData *pd = 0;
@@ -1855,7 +1868,7 @@ bool QQmlPropertyValidator::validateObject(int objectIndex, const QV4::CompiledD
                 || binding->flags & QV4::CompiledData::Binding::IsSignalHandlerObject)
                 pd = propertyResolver.signal(name, &notInRevision);
             else
-                pd = propertyResolver.property(name, &notInRevision);
+                pd = propertyResolver.property(name, &notInRevision, isGroupProperty ? QmlIR::PropertyResolver::IgnoreRevision : QmlIR::PropertyResolver::CheckRevision);
 
             if (notInRevision) {
                 QString typeName = stringAt(obj->inheritedTypeNameIndex);
@@ -1867,7 +1880,7 @@ bool QQmlPropertyValidator::validateObject(int objectIndex, const QV4::CompiledD
                 }
             }
         } else {
-           if (instantiatingBinding && instantiatingBinding->type == QV4::CompiledData::Binding::Type_GroupProperty)
+           if (isGroupProperty)
                COMPILE_EXCEPTION(binding, tr("Cannot assign a value directly to a grouped property"));
 
            pd = defaultProperty;
@@ -2009,15 +2022,17 @@ bool QQmlPropertyValidator::validateObject(int objectIndex, const QV4::CompiledD
 
     if (customParser && !customBindings.isEmpty()) {
         customParser->clearErrors();
-        customParser->compiler = this;
+        customParser->validator = this;
+        customParser->engine = enginePrivate;
         customParser->imports = compiler->imports();
         customParser->verifyBindings(qmlUnit, customBindings);
-        customParser->compiler = 0;
+        customParser->validator = 0;
+        customParser->engine = 0;
         customParser->imports = (QQmlImports*)0;
         customParserBindingsPerObject->insert(objectIndex, customParserBindings);
         const QList<QQmlError> parserErrors = customParser->errors();
         if (!parserErrors.isEmpty()) {
-            foreach (QQmlError error, parserErrors)
+            foreach (const QQmlError &error, parserErrors)
                 compiler->recordError(error);
             return false;
         }
@@ -2623,10 +2638,8 @@ void QQmlJavaScriptBindingExpressionSimplificationPass::visitMove(QV4::IR::Move 
     }
 
     if (QV4::IR::Name *n = move->source->asName()) {
-        if (n->builtin == QV4::IR::Name::builtin_qml_id_array
-            || n->builtin == QV4::IR::Name::builtin_qml_imported_scripts_object
-            || n->builtin == QV4::IR::Name::builtin_qml_context_object
-            || n->builtin == QV4::IR::Name::builtin_qml_scope_object) {
+        if (n->builtin == QV4::IR::Name::builtin_qml_context
+            || n->builtin == QV4::IR::Name::builtin_qml_imported_scripts_object) {
             // these are free of side-effects
             return;
         }

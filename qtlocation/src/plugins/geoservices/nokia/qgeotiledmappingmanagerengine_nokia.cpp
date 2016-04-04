@@ -39,7 +39,7 @@
 #include "qgeotiledmap_nokia.h"
 #include "qgeotilefetcher_nokia.h"
 #include "qgeotilespec_p.h"
-#include "qgeotilecache_p.h"
+#include "qgeofiletilecache_p.h"
 
 #include <QDebug>
 #include <QDir>
@@ -101,16 +101,15 @@ QGeoTiledMappingManagerEngineNokia::QGeoTiledMappingManagerEngineNokia(
     // TODO: do this in a plugin-neutral way so that other tiled map plugins
     //       don't need this boilerplate or hardcode plugin name
 
-    QString cacheDir;
     if (parameters.contains(QStringLiteral("here.mapping.cache.directory"))) {
-        cacheDir = parameters.value(QStringLiteral("here.mapping.cache.directory")).toString();
+        m_cacheDirectory = parameters.value(QStringLiteral("here.mapping.cache.directory")).toString();
     } else {
         // managerName() is not yet set, we have to hardcode the plugin name below
-        cacheDir = QStandardPaths::writableLocation(QStandardPaths::GenericCacheLocation)
-                + QLatin1String("/QtLocation/here");
+        m_cacheDirectory = QAbstractGeoTileCache::baseCacheDirectory() + QLatin1String("here");
     }
 
-    QGeoTileCache *tileCache = createTileCacheWithDir(cacheDir);
+    QAbstractGeoTileCache *tileCache = new QGeoFileTileCache(m_cacheDirectory);
+    setTileCache(tileCache);
 
     if (parameters.contains(QStringLiteral("here.mapping.cache.disk.size"))) {
       bool ok = false;
@@ -258,14 +257,13 @@ void QGeoTiledMappingManagerEngineNokia::updateVersion(const QJsonObject &newVer
         m_mapVersion.setVersion(m_mapVersion.version() + 1);
 
         saveMapVersion();
-
-        emit mapVersionChanged();
+        setTileVersion(m_mapVersion.version());
     }
 }
 
 void QGeoTiledMappingManagerEngineNokia::saveMapVersion()
 {
-    QDir saveDir(tileCache()->directory());
+    QDir saveDir(m_cacheDirectory);
     QFile saveFile(saveDir.filePath(QStringLiteral("here_version")));
 
     if (!saveFile.open(QIODevice::WriteOnly)) {
@@ -279,8 +277,7 @@ void QGeoTiledMappingManagerEngineNokia::saveMapVersion()
 
 void QGeoTiledMappingManagerEngineNokia::loadMapVersion()
 {
-
-    QDir saveDir(tileCache()->directory());
+    QDir saveDir(m_cacheDirectory);
     QFile loadFile(saveDir.filePath(QStringLiteral("here_version")));
 
     if (!loadFile.open(QIODevice::ReadOnly)) {
@@ -297,6 +294,7 @@ void QGeoTiledMappingManagerEngineNokia::loadMapVersion()
 
     m_mapVersion.setVersion(object[QStringLiteral("version")].toInt());
     m_mapVersion.setVersionData(object[QStringLiteral("data")].toObject());
+    setTileVersion(m_mapVersion.version());
 }
 
 QString QGeoTiledMappingManagerEngineNokia::evaluateCopyrightsText(const QGeoMapType mapType,

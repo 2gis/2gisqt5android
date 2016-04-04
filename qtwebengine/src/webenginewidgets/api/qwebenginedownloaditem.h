@@ -37,9 +37,9 @@
 #ifndef QWEBENGINEDOWNLOADITEM_H
 #define QWEBENGINEDOWNLOADITEM_H
 
-#include "qtwebenginewidgetsglobal.h"
+#include <QtWebEngineWidgets/qtwebenginewidgetsglobal.h>
 
-#include <QObject>
+#include <QtCore/qobject.h>
 
 QT_BEGIN_NAMESPACE
 
@@ -59,13 +59,14 @@ public:
         DownloadCancelled,
         DownloadInterrupted
     };
-    Q_ENUMS(DownloadState)
+    Q_ENUM(DownloadState)
 
     quint32 id() const;
     DownloadState state() const;
     qint64 totalBytes() const;
     qint64 receivedBytes() const;
     QUrl url() const;
+    QString mimeType() const;
     QString path() const;
     void setPath(QString path);
     bool isFinished() const;
@@ -76,7 +77,7 @@ public Q_SLOTS:
 
 Q_SIGNALS:
     void finished();
-    void stateChanged(DownloadState state);
+    void stateChanged(QWebEngineDownloadItem::DownloadState state);
     void downloadProgress(qint64 bytesReceived, qint64 bytesTotal);
 
 private:

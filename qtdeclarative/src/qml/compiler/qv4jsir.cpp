@@ -175,8 +175,8 @@ struct RemoveSharedExpressions: IR::StmtVisitor, IR::ExprVisitor
         }
     }
 
-    template <typename _Expr>
-    _Expr *cleanup(_Expr *expr)
+    template <typename Expr_>
+    Expr_ *cleanup(Expr_ *expr)
     {
         std::vector<Expr *>::iterator it = std::lower_bound(subexpressions.begin(), subexpressions.end(), expr);
         if (it == subexpressions.end() || *it != expr) {
@@ -185,7 +185,7 @@ struct RemoveSharedExpressions: IR::StmtVisitor, IR::ExprVisitor
             qSwap(uniqueExpr, e);
             expr->accept(this);
             qSwap(uniqueExpr, e);
-            return static_cast<_Expr *>(e);
+            return static_cast<Expr_ *>(e);
         }
 
         // the cloned expression is unique by definition
@@ -341,14 +341,10 @@ const char *builtin_to_string(Name::Builtin b)
         return "builtin_setup_argument_object";
     case IR::Name::builtin_convert_this_to_object:
         return "builtin_convert_this_to_object";
-    case IR::Name::builtin_qml_id_array:
-        return "builtin_qml_id_array";
+    case IR::Name::builtin_qml_context:
+        return "builtin_qml_context";
     case IR::Name::builtin_qml_imported_scripts_object:
         return "builtin_qml_imported_scripts_object";
-    case IR::Name::builtin_qml_scope_object:
-        return "builtin_qml_scope_object";
-    case IR::Name::builtin_qml_context_object:
-        return "builtin_qml_context_object";
     }
     return "builtin_(###FIXME)";
 };
@@ -935,7 +931,7 @@ void CloneExpr::visitSubscript(Subscript *e)
 void CloneExpr::visitMember(Member *e)
 {
     Expr *clonedBase = clone(e->base);
-    cloned = block->MEMBER(clonedBase, e->name, e->property, e->kind, e->attachedPropertiesIdOrEnumValue);
+    cloned = block->MEMBER(clonedBase, e->name, e->property, e->kind, e->idIndex);
 }
 
 IRPrinter::IRPrinter(QTextStream *out)
@@ -1239,9 +1235,9 @@ void IRPrinter::visitSubscript(Subscript *e)
 
 void IRPrinter::visitMember(Member *e)
 {
-    if (e->kind != Member::MemberOfEnum
-            && e->attachedPropertiesIdOrEnumValue != 0 && !e->base->asTemp())
-        *out << "[[attached property from " << e->attachedPropertiesIdOrEnumValue << "]]";
+    if (e->kind != Member::MemberOfEnum && e->kind != Member::MemberOfIdObjectsArray
+            && e->attachedPropertiesId != 0 && !e->base->asTemp())
+        *out << "[[attached property from " << e->attachedPropertiesId << "]]";
     else
         e->base->accept(this);
     *out << '.' << *e->name;
@@ -1250,6 +1246,8 @@ void IRPrinter::visitMember(Member *e)
         *out << " (meta-property " << e->property->coreIndex
             << " <" << QMetaType::typeName(e->property->propType)
             << ">)";
+    else if (e->kind == Member::MemberOfIdObjectsArray)
+        *out << "(id object " << e->idIndex << ")";
 #endif
 }
 

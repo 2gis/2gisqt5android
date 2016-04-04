@@ -155,7 +155,7 @@ private slots:
 
     void callConstants();
 
-    void installTranslatorFunctions();
+    void installTranslationFunctions();
     void translateScript_data();
     void translateScript();
     void translateScript_crossScript();
@@ -172,6 +172,16 @@ private slots:
     void translateScriptUnicodeIdBased();
     void translateFromBuiltinCallback();
 
+    void installConsoleFunctions();
+    void logging();
+    void tracing();
+    void asserts();
+    void exceptions();
+
+    void installGarbageCollectionFunctions();
+
+    void installAllExtensions();
+
     void privateMethods();
 
     void engineForObject();
@@ -179,6 +189,8 @@ private slots:
     void toFixed();
 
     void argumentEvaluationOrder();
+
+    void v4FunctionWithoutQML();
 
 signals:
     void testSignal();
@@ -336,7 +348,7 @@ void tst_QJSEngine::constructWithParent()
         QJSEngine *engine = new QJSEngine(&obj);
         ptr = engine;
     }
-    QVERIFY(ptr == 0);
+    QVERIFY(ptr.isNull());
 }
 
 void tst_QJSEngine::newObject()
@@ -631,7 +643,7 @@ void tst_QJSEngine::newQObject_ownership()
         eng.collectGarbage();
         if (ptr)
             QGuiApplication::sendPostedEvents(ptr, QEvent::DeferredDelete);
-        QVERIFY(ptr == 0);
+        QVERIFY(ptr.isNull());
     }
     {
         QPointer<QObject> ptr = new QObject(this);
@@ -641,7 +653,7 @@ void tst_QJSEngine::newQObject_ownership()
         }
         QObject *before = ptr;
         eng.collectGarbage();
-        QVERIFY(ptr == before);
+        QCOMPARE(ptr.data(), before);
         delete ptr;
     }
     {
@@ -662,7 +674,7 @@ void tst_QJSEngine::newQObject_ownership()
         // no parent, so it should be like ScriptOwnership
         if (ptr)
             QGuiApplication::sendPostedEvents(ptr, QEvent::DeferredDelete);
-        QVERIFY(ptr == 0);
+        QVERIFY(ptr.isNull());
     }
     {
         QObject *parent = new QObject();
@@ -1258,7 +1270,7 @@ void tst_QJSEngine::valueConversion_QVariant()
     {
         QVariant tmp1;
         QVariant tmp2(QMetaType::QVariant, &tmp1);
-        QVERIFY(QMetaType::Type(tmp2.type()) == QMetaType::QVariant);
+        QCOMPARE(QMetaType::Type(tmp2.type()), QMetaType::QVariant);
 
         QJSValue val1 = eng.toScriptValue(tmp1);
         QJSValue val2 = eng.toScriptValue(tmp2);
@@ -1273,9 +1285,9 @@ void tst_QJSEngine::valueConversion_QVariant()
         QVariant tmp1(123);
         QVariant tmp2(QMetaType::QVariant, &tmp1);
         QVariant tmp3(QMetaType::QVariant, &tmp2);
-        QVERIFY(QMetaType::Type(tmp1.type()) == QMetaType::Int);
-        QVERIFY(QMetaType::Type(tmp2.type()) == QMetaType::QVariant);
-        QVERIFY(QMetaType::Type(tmp3.type()) == QMetaType::QVariant);
+        QCOMPARE(QMetaType::Type(tmp1.type()), QMetaType::Int);
+        QCOMPARE(QMetaType::Type(tmp2.type()), QMetaType::QVariant);
+        QCOMPARE(QMetaType::Type(tmp3.type()), QMetaType::QVariant);
 
         QJSValue val1 = eng.toScriptValue(tmp2);
         QJSValue val2 = eng.toScriptValue(tmp3);
@@ -1285,8 +1297,8 @@ void tst_QJSEngine::valueConversion_QVariant()
         QVERIFY(val1.isVariant());
         QEXPECT_FAIL("", "Variant are unrwapped, maybe we should not...", Continue);
         QVERIFY(val2.isVariant());
-        QVERIFY(val1.toVariant().toInt() == 123);
-        QVERIFY(eng.toScriptValue(val2.toVariant()).toVariant().toInt() == 123);
+        QCOMPARE(val1.toVariant().toInt(), 123);
+        QCOMPARE(eng.toScriptValue(val2.toVariant()).toVariant().toInt(), 123);
     }
     {
         QJSValue val = eng.toScriptValue(QVariant(true));
@@ -1472,7 +1484,7 @@ void tst_QJSEngine::collectGarbage()
     eng.collectGarbage();
     if (ptr)
         QGuiApplication::sendPostedEvents(ptr, QEvent::DeferredDelete);
-    QVERIFY(ptr == 0);
+    QVERIFY(ptr.isNull());
 }
 
 void tst_QJSEngine::gcWithNestedDataStructure()
@@ -1480,6 +1492,8 @@ void tst_QJSEngine::gcWithNestedDataStructure()
     // The GC must be able to traverse deeply nested objects, otherwise this
     // test would crash.
     QJSEngine eng;
+    eng.installExtensions(QJSEngine::GarbageCollectionExtension);
+
     QJSValue ret = eng.evaluate(
         "function makeList(size)"
         "{"
@@ -3171,7 +3185,7 @@ void tst_QJSEngine::callConstants()
     QCOMPARE(exceptionResult.toString(), QString("TypeError: true is not a function"));
 }
 
-void tst_QJSEngine::installTranslatorFunctions()
+void tst_QJSEngine::installTranslationFunctions()
 {
     QJSEngine eng;
     QJSValue global = eng.globalObject();
@@ -3182,7 +3196,7 @@ void tst_QJSEngine::installTranslatorFunctions()
     QVERIFY(global.property("qsTrId").isUndefined());
     QVERIFY(global.property("QT_TRID_NOOP").isUndefined());
 
-    eng.installTranslatorFunctions();
+    eng.installExtensions(QJSEngine::TranslationExtension);
     QVERIFY(global.property("qsTranslate").isCallable());
     QVERIFY(global.property("QT_TRANSLATE_NOOP").isCallable());
     QVERIFY(global.property("qsTr").isCallable());
@@ -3597,6 +3611,107 @@ void tst_QJSEngine::translateFromBuiltinCallback()
     eng.evaluate("[10,20].forEach(foo)", "script.js");
 }
 
+void tst_QJSEngine::installConsoleFunctions()
+{
+    QJSEngine engine;
+    QJSValue global = engine.globalObject();
+    QVERIFY(global.property("console").isUndefined());
+    QVERIFY(global.property("print").isUndefined());
+
+    engine.installExtensions(QJSEngine::ConsoleExtension);
+    QVERIFY(global.property("console").isObject());
+    QVERIFY(global.property("print").isCallable());
+}
+
+void tst_QJSEngine::logging()
+{
+    QLoggingCategory loggingCategory("js");
+    QVERIFY(loggingCategory.isDebugEnabled());
+    QVERIFY(loggingCategory.isWarningEnabled());
+    QVERIFY(loggingCategory.isCriticalEnabled());
+
+    QJSEngine engine;
+    engine.installExtensions(QJSEngine::ConsoleExtension);
+
+    QTest::ignoreMessage(QtDebugMsg, "console.debug");
+    engine.evaluate("console.debug('console.debug')");
+    QTest::ignoreMessage(QtDebugMsg, "console.log");
+    engine.evaluate("console.log('console.log')");
+    QTest::ignoreMessage(QtInfoMsg, "console.info");
+    engine.evaluate("console.info('console.info')");
+    QTest::ignoreMessage(QtWarningMsg, "console.warn");
+    engine.evaluate("console.warn('console.warn')");
+    QTest::ignoreMessage(QtCriticalMsg, "console.error");
+    engine.evaluate("console.error('console.error')");
+
+    QTest::ignoreMessage(QtDebugMsg, ": 1");
+    engine.evaluate("console.count()");
+
+    QTest::ignoreMessage(QtDebugMsg, ": 2");
+    engine.evaluate("console.count()");
+}
+
+void tst_QJSEngine::tracing()
+{
+    QJSEngine engine;
+    engine.installExtensions(QJSEngine::ConsoleExtension);
+
+    QTest::ignoreMessage(QtDebugMsg, "%entry (:1)");
+    engine.evaluate("console.trace()");
+
+    QTest::ignoreMessage(QtDebugMsg, "a (:1)\nb (:1)\nc (:1)\n%entry (:1)");
+    engine.evaluate("function a() { console.trace(); } function b() { a(); } function c() { b(); }");
+    engine.evaluate("c()");
+}
+
+void tst_QJSEngine::asserts()
+{
+    QJSEngine engine;
+    engine.installExtensions(QJSEngine::ConsoleExtension);
+
+    QTest::ignoreMessage(QtCriticalMsg, "This will fail\n%entry (:1)");
+    engine.evaluate("console.assert(0, 'This will fail')");
+
+    QTest::ignoreMessage(QtCriticalMsg, "This will fail too\n%entry (:1)");
+    engine.evaluate("console.assert(1 > 2, 'This will fail too')");
+}
+
+void tst_QJSEngine::exceptions()
+{
+    QJSEngine engine;
+    engine.installExtensions(QJSEngine::ConsoleExtension);
+
+    QTest::ignoreMessage(QtCriticalMsg, "Exception 1\n%entry (:1)");
+    engine.evaluate("console.exception('Exception 1')");
+}
+
+void tst_QJSEngine::installGarbageCollectionFunctions()
+{
+    QJSEngine engine;
+    QJSValue global = engine.globalObject();
+    QVERIFY(global.property("gc").isUndefined());
+
+    engine.installExtensions(QJSEngine::GarbageCollectionExtension);
+    QVERIFY(global.property("gc").isCallable());
+}
+
+void tst_QJSEngine::installAllExtensions()
+{
+    QJSEngine engine;
+    QJSValue global = engine.globalObject();
+    // Pick out a few properties from each extension and check that they're there.
+    QVERIFY(global.property("qsTranslate").isUndefined());
+    QVERIFY(global.property("console").isUndefined());
+    QVERIFY(global.property("print").isUndefined());
+    QVERIFY(global.property("gc").isUndefined());
+
+    engine.installExtensions(QJSEngine::AllExtensions);
+    QVERIFY(global.property("qsTranslate").isCallable());
+    QVERIFY(global.property("console").isObject());
+    QVERIFY(global.property("print").isCallable());
+    QVERIFY(global.property("gc").isCallable());
+}
+
 class ObjectWithPrivateMethods : public QObject
 {
     Q_OBJECT
@@ -3684,6 +3799,30 @@ void tst_QJSEngine::argumentEvaluationOrder()
     QVERIFY(ok.isBool());
     QVERIFY(ok.toBool());
 
+}
+
+class TestObject : public QObject
+{
+    Q_OBJECT
+public:
+    TestObject() : called(false) {}
+
+    bool called;
+
+    Q_INVOKABLE void callMe(QQmlV4Function *) {
+        called = true;
+    }
+};
+
+void tst_QJSEngine::v4FunctionWithoutQML()
+{
+    TestObject obj;
+    QJSEngine engine;
+    QJSValue wrapper = engine.newQObject(&obj);
+    QQmlEngine::setObjectOwnership(&obj, QQmlEngine::CppOwnership);
+    QVERIFY(!obj.called);
+    wrapper.property("callMe").call();
+    QVERIFY(obj.called);
 }
 
 QTEST_MAIN(tst_QJSEngine)

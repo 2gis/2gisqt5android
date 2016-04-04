@@ -352,7 +352,7 @@ public:
 #elif defined(QPROCESS_USE_SPAWN)
     pid_t spawnChild(pid_t *ppid, const char *workingDirectory, char **argv, char **envp);
 #endif
-    bool processStarted();
+    bool processStarted(QString *errorMessage = Q_NULLPTR);
     void terminateProcess();
     void killProcess();
     void findExitCode();
@@ -383,6 +383,8 @@ public:
     qint64 writeToStdin(const char *data, qint64 maxlen);
 
     void cleanup();
+    void setError(QProcess::ProcessError error, const QString &description = QString());
+    void setErrorAndEmit(QProcess::ProcessError error, const QString &description = QString());
 
 #ifdef Q_OS_BLACKBERRY
     QList<QSocketNotifier *> defaultNotifiers() const;

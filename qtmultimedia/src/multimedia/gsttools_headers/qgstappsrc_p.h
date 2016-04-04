@@ -34,6 +34,17 @@
 #ifndef QGSTAPPSRC_H
 #define QGSTAPPSRC_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include <QtCore/qobject.h>
 #include <QtCore/qiodevice.h>
 
@@ -54,7 +65,6 @@ public:
     ~QGstAppSrc();
 
     bool setup(GstElement *);
-    bool isReady() const { return m_setup; }
 
     void setStream(QIODevice *);
     QIODevice *stream() const;
@@ -93,7 +103,6 @@ private:
     GstAppStreamType m_streamType;
     GstAppSrcCallbacks m_callbacks;
     qint64 m_maxBytes;
-    bool m_setup;
     unsigned int m_dataRequestSize;
     bool m_dataRequested;
     bool m_enoughData;

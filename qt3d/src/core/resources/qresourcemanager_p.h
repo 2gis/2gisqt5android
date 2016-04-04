@@ -34,26 +34,37 @@
 **
 ****************************************************************************/
 
-#ifndef QT3D_QABSTRACTRESOURCESMANAGER_H
-#define QT3D_QABSTRACTRESOURCESMANAGER_H
+#ifndef QT3DCORE_QABSTRACTRESOURCESMANAGER_H
+#define QT3DCORE_QABSTRACTRESOURCESMANAGER_H
+
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists for the convenience
+// of other Qt classes.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
 
 #include <QtGlobal>
 #include <QMutex>
 #include <QHash>
 #include <Qt3DCore/qt3dcore_global.h>
-#include <Qt3DCore/qhandle.h>
-#include <Qt3DCore/qhandlemanager.h>
+#include "qhandle_p.h"
+#include "qhandlemanager_p.h"
 
 QT_BEGIN_NAMESPACE
 
-namespace Qt3D {
+namespace Qt3DCore {
 
 template <class Host>
 struct NonLockingPolicy
 {
     struct Locker
     {
-        Locker(NonLockingPolicy*) {}
+        Locker(const NonLockingPolicy*) {}
         void unlock() {}
         void relock() {}
     };
@@ -116,6 +127,7 @@ enum
 };
 
 #define Q_DECLARE_RESOURCE_INFO(TYPE, FLAGS) \
+    namespace Qt3DCore { \
     template<> \
     struct QResourceInfo<TYPE > \
 { \
@@ -123,7 +135,8 @@ enum
 { \
     needsCleanup = ((FLAGS & Q_REQUIRES_CLEANUP) == 0) \
 }; \
-}
+}; \
+} // namespace Qt3DCore
 
 template <int v>
 struct Int2Type
@@ -139,34 +152,46 @@ class ArrayAllocatingPolicy
 {
 public:
     ArrayAllocatingPolicy()
+        : m_numBuckets(0)
+        , m_numConstructed(0)
     {
         reset();
+    }
+
+    ~ArrayAllocatingPolicy()
+    {
+        deallocateBuckets();
     }
 
     T* allocateResource()
     {
         Q_ASSERT(!m_freeList.isEmpty());
-        int idx = m_freeList.last();
-        m_freeList.pop_back();
+        int idx = m_freeList.takeLast();
         int bucketIdx = idx / BucketSize;
         int localIdx = idx % BucketSize;
-        Q_ASSERT(bucketIdx <= m_buckets.size());
-        if (bucketIdx == m_buckets.size()) {
-            m_buckets.append(Bucket(BucketSize));
-            m_bucketDataPtrs[bucketIdx] = m_buckets.last().data();
+        Q_ASSERT(bucketIdx <= m_numBuckets);
+        if (bucketIdx == m_numBuckets) {
+            m_bucketDataPtrs[bucketIdx] = static_cast<T*>(malloc(sizeof(T) * BucketSize));
+            // ### memset is only needed as long as we also use this for primitive types (see FrameGraphManager)
+            // ### remove once this is fixed, add a static_assert on T instead
+            memset(m_bucketDataPtrs[bucketIdx], 0, sizeof(T) * BucketSize);
+            ++m_numBuckets;
         }
-        // Make sure we got a properly constructed object at that point
-        // otherwise we might end up passing around bogus vtable pointers
-        // (shows up when we start releasing resources)
-        return new (m_bucketDataPtrs[bucketIdx] + localIdx) T;
+
+        Q_ASSERT(idx <= m_numConstructed);
+        if (idx == m_numConstructed) {
+            new (m_bucketDataPtrs[bucketIdx] + localIdx) T;
+            ++m_numConstructed;
+        }
+
+        return m_bucketDataPtrs[bucketIdx] + localIdx;
     }
 
     void releaseResource(T *r)
     {
         // search linearly over buckets to find the index of the resource
         // and put it into the free list
-        const int numBuckets = m_buckets.size();
-        for (int bucketIdx = 0; bucketIdx < numBuckets; ++bucketIdx) {
+        for (int bucketIdx = 0; bucketIdx < m_numBuckets; ++bucketIdx) {
             const T* firstItem = m_bucketDataPtrs[bucketIdx];
             if (firstItem > r || r >= firstItem + BucketSize) {
                 // resource is not in this bucket when its pointer address
@@ -187,13 +212,14 @@ public:
 
     void reset()
     {
-        m_buckets.clear();
+        deallocateBuckets();
         m_freeList.resize(MaxSize);
         for (int i = 0; i < MaxSize; i++)
             m_freeList[i] = MaxSize - (i + 1);
     }
 
 private:
+    Q_DISABLE_COPY(ArrayAllocatingPolicy)
 
     enum {
         MaxSize = (1 << INDEXBITS),
@@ -202,13 +228,25 @@ private:
         BucketSize = (1 << (INDEXBITS < 10 ? INDEXBITS : 10))
     };
 
-    typedef QVector<T> Bucket;
-    QList<Bucket> m_buckets;
-    // optimization: quick access to bucket data pointers
-    // this improves the performance of the releaseResource benchmarks
-    // and reduces their runtime by a factor 2
+    void deallocateBuckets()
+    {
+        while (m_numConstructed > 0) {
+            --m_numConstructed;
+            int bucketIdx = m_numConstructed / BucketSize;
+            int localIdx = m_numConstructed % BucketSize;
+            (m_bucketDataPtrs[bucketIdx] + localIdx)->~T();
+        }
+
+        while (m_numBuckets > 0) {
+            --m_numBuckets;
+            free(m_bucketDataPtrs[m_numBuckets]);
+        }
+    }
+
     T* m_bucketDataPtrs[MaxSize / BucketSize];
     QVector<int> m_freeList;
+    int m_numBuckets;
+    int m_numConstructed;
 
     void performCleanup(T *r, Int2Type<true>)
     {
@@ -271,62 +309,6 @@ private:
     void performCleanup(T *, Int2Type<false>)
     {}
 
-};
-
-template <typename T, uint INDEXBITS>
-class ListAllocatingPolicy
-{
-public:
-    ListAllocatingPolicy()
-    {
-    }
-
-    T* allocateResource()
-    {
-        int idx;
-        T *newT;
-        if (!m_freeEntries.isEmpty()) {
-            idx = m_freeEntries.takeFirst();
-            m_resourcesEntries[idx] = T();
-            newT = &m_resourcesEntries[idx];
-        }
-        else {
-            m_resourcesEntries.append(T());
-            idx = m_resourcesEntries.size() - 1;
-            newT = &m_resourcesEntries.last();
-        }
-        // If elements are added to the list, we're not sure the address
-        // that was returned here for previous elements stays valid
-        m_resourcesToIndices[newT] = idx;
-        return newT;
-    }
-
-    void releaseResource(T *r)
-    {
-        if (m_resourcesToIndices.contains(r)) {
-            performCleanup(r, Int2Type<QResourceInfo<T>::needsCleanup>());
-            m_freeEntries.append(m_resourcesToIndices.take(r));
-        }
-    }
-
-    void reset()
-    {
-        m_resourcesEntries.clear();
-        m_resourcesToIndices.clear();
-    }
-
-private:
-    QList<T> m_resourcesEntries;
-    QHash<T*, int> m_resourcesToIndices;
-    QList<int> m_freeEntries;
-
-    void performCleanup(T *r, Int2Type<true>)
-    {
-        r->cleanup();
-    }
-
-    void performCleanup(T *, Int2Type<false>)
-    {}
 };
 
 template <typename T, typename C, uint INDEXBITS = 16,
@@ -444,4 +426,4 @@ private:
 
 QT_END_NAMESPACE
 
-#endif // QT3D_QABSTRACTRESOURCESMANAGER_H
+#endif // QT3DCORE_QABSTRACTRESOURCESMANAGER_H

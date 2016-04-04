@@ -33,6 +33,17 @@
 #ifndef QV4OBJECTITERATOR_H
 #define QV4OBJECTITERATOR_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include "qv4global_p.h"
 #include "qv4object_p.h"
 
@@ -57,9 +68,9 @@ struct Q_QML_EXPORT ObjectIterator
     uint flags;
 
     ObjectIterator(ExecutionEngine *e, Value *scratch1, Value *scratch2, Object *o, uint flags);
-    ObjectIterator(Scope &scope, Object *o, uint flags);
-    void init(Object *o);
-    void next(Heap::String **name, uint *index, Property *pd, PropertyAttributes *attributes = 0);
+    ObjectIterator(Scope &scope, const Object *o, uint flags);
+    void init(const Object *o);
+    void next(Value *name, uint *index, Property *pd, PropertyAttributes *attributes = 0);
     ReturnedValue nextPropertyName(Value *value);
     ReturnedValue nextPropertyNameAsString(Value *value);
     ReturnedValue nextPropertyNameAsString();
@@ -67,7 +78,7 @@ struct Q_QML_EXPORT ObjectIterator
 
 namespace Heap {
 struct ForEachIteratorObject : Object {
-    ForEachIteratorObject(QV4::ExecutionEngine *engine, QV4::Object *o);
+    ForEachIteratorObject(QV4::Object *o);
     ObjectIterator it;
     Value workArea[2];
 };
@@ -85,9 +96,8 @@ protected:
 };
 
 inline
-Heap::ForEachIteratorObject::ForEachIteratorObject(QV4::ExecutionEngine *engine, QV4::Object *o)
-    : Heap::Object(engine)
-    , it(engine, workArea, workArea + 1, o, ObjectIterator::EnumerableOnly|ObjectIterator::WithProtoChain)
+Heap::ForEachIteratorObject::ForEachIteratorObject(QV4::Object *o)
+    : it(internalClass->engine, workArea, workArea + 1, o, ObjectIterator::EnumerableOnly|ObjectIterator::WithProtoChain)
 {
 }
 

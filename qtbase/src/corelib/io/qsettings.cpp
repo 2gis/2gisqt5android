@@ -127,6 +127,7 @@ struct QConfFileCustomFormat
     QSettings::WriteFunc writeFunc;
     Qt::CaseSensitivity caseSensitivity;
 };
+Q_DECLARE_TYPEINFO(QConfFileCustomFormat, Q_MOVABLE_TYPE);
 
 typedef QHash<QString, QConfFile *> ConfFileHash;
 typedef QCache<QString, QConfFile> ConfFileCache;
@@ -299,7 +300,7 @@ QSettingsPrivate *QSettingsPrivate::create(const QString &fileName, QSettings::F
 }
 #endif
 
-void QSettingsPrivate::processChild(QString key, ChildSpec spec, QMap<QString, QString> &result)
+void QSettingsPrivate::processChild(QStringRef key, ChildSpec spec, QStringList &result)
 {
     if (spec != AllKeys) {
         int slashPos = key.indexOf(QLatin1Char('/'));
@@ -312,7 +313,7 @@ void QSettingsPrivate::processChild(QString key, ChildSpec spec, QMap<QString, Q
             key.truncate(slashPos);
         }
     }
-    result.insert(key, QString());
+    result.append(key.toString());
 }
 
 void QSettingsPrivate::beginGroupOrArray(const QSettingsGroup &group)
@@ -357,6 +358,7 @@ void QSettingsPrivate::requestUpdate()
 QStringList QSettingsPrivate::variantListToStringList(const QVariantList &l)
 {
     QStringList result;
+    result.reserve(l.count());
     QVariantList::const_iterator it = l.constBegin();
     for (; it != l.constEnd(); ++it)
         result.append(variantToString(*it));
@@ -374,7 +376,9 @@ QVariant QSettingsPrivate::stringListToVariantList(const QStringList &l)
                 outStringList[i].remove(0, 1);
             } else {
                 QVariantList variantList;
-                for (int j = 0; j < l.count(); ++j)
+                const int stringCount = l.count();
+                variantList.reserve(stringCount);
+                for (int j = 0; j < stringCount; ++j)
                     variantList.append(stringToVariant(l.at(j)));
                 return variantList;
             }
@@ -449,14 +453,23 @@ QString QSettingsPrivate::variantToString(const QVariant &v)
 
         default: {
 #ifndef QT_NO_DATASTREAM
+            QDataStream::Version version;
+            const char *typeSpec;
+            if (v.type() == QVariant::DateTime) {
+                version = QDataStream::Qt_5_6;
+                typeSpec = "@DateTime(";
+            } else {
+                version = QDataStream::Qt_4_0;
+                typeSpec = "@Variant(";
+            }
             QByteArray a;
             {
                 QDataStream s(&a, QIODevice::WriteOnly);
-                s.setVersion(QDataStream::Qt_4_0);
+                s.setVersion(version);
                 s << v;
             }
 
-            result = QLatin1String("@Variant(");
+            result = QLatin1String(typeSpec);
             result += QString::fromLatin1(a.constData(), a.size());
             result += QLatin1Char(')');
 #else
@@ -475,12 +488,22 @@ QVariant QSettingsPrivate::stringToVariant(const QString &s)
     if (s.startsWith(QLatin1Char('@'))) {
         if (s.endsWith(QLatin1Char(')'))) {
             if (s.startsWith(QLatin1String("@ByteArray("))) {
-                return QVariant(s.toLatin1().mid(11, s.size() - 12));
-            } else if (s.startsWith(QLatin1String("@Variant("))) {
+                return QVariant(s.midRef(11, s.size() - 12).toLatin1());
+            } else if (s.startsWith(QLatin1String("@Variant("))
+                       || s.startsWith(QLatin1String("@DateTime("))) {
 #ifndef QT_NO_DATASTREAM
-                QByteArray a(s.toLatin1().mid(9));
+                QDataStream::Version version;
+                int offset;
+                if (s.at(1) == QLatin1Char('D')) {
+                    version = QDataStream::Qt_5_6;
+                    offset = 10;
+                } else {
+                    version = QDataStream::Qt_4_0;
+                    offset = 9;
+                }
+                QByteArray a = s.midRef(offset).toLatin1();
                 QDataStream stream(&a, QIODevice::ReadOnly);
-                stream.setVersion(QDataStream::Qt_4_0);
+                stream.setVersion(version);
                 QVariant result;
                 stream >> result;
                 return result;
@@ -609,8 +632,9 @@ void QSettingsPrivate::iniEscapedString(const QString &str, QByteArray &result, 
     int startPos = result.size();
 
     result.reserve(startPos + str.size() * 3 / 2);
+    const QChar *unicode = str.unicode();
     for (i = 0; i < str.size(); ++i) {
-        uint ch = str.at(i).unicode();
+        uint ch = unicode[i].unicode();
         if (ch == ';' || ch == ',' || ch == '=')
             needsQuotes = true;
 
@@ -664,7 +688,7 @@ void QSettingsPrivate::iniEscapedString(const QString &str, QByteArray &result, 
 #ifndef QT_NO_TEXTCODEC
             } else if (useCodec) {
                 // slow
-                result += codec->fromUnicode(str.at(i));
+                result += codec->fromUnicode(&unicode[i], 1);
 #endif
             } else {
                 result += (char)ch;
@@ -1052,12 +1076,12 @@ static void initDefaultPaths(QMutexLocker *locker)
         // Non XDG platforms (OS X, iOS, Blackberry, Android...) have used this code path erroneously
         // for some time now. Moving away from that would require migrating existing settings.
         QString userPath;
-        char *env = getenv("XDG_CONFIG_HOME");
-        if (env == 0) {
+        QByteArray env = qgetenv("XDG_CONFIG_HOME");
+        if (env.isEmpty()) {
             userPath = QDir::homePath();
             userPath += QLatin1Char('/');
             userPath += QLatin1String(".config");
-        } else if (*env == '/') {
+        } else if (env.startsWith('/')) {
             userPath = QFile::decodeName(env);
         } else {
             userPath = QDir::homePath();
@@ -1269,7 +1293,7 @@ bool QConfFileSettingsPrivate::get(const QString &key, QVariant *value) const
 
 QStringList QConfFileSettingsPrivate::children(const QString &prefix, ChildSpec spec) const
 {
-    QMap<QString, QString> result;
+    QStringList result;
     ParsedSettingsMap::const_iterator j;
 
     QSettingsKey thePrefix(prefix, caseSensitivity);
@@ -1289,14 +1313,14 @@ QStringList QConfFileSettingsPrivate::children(const QString &prefix, ChildSpec 
                     &confFile->originalKeys)->lowerBound( thePrefix);
             while (j != confFile->originalKeys.constEnd() && j.key().startsWith(thePrefix)) {
                 if (!confFile->removedKeys.contains(j.key()))
-                    processChild(j.key().originalCaseKey().mid(startPos), spec, result);
+                    processChild(j.key().originalCaseKey().midRef(startPos), spec, result);
                 ++j;
             }
 
             j = const_cast<const ParsedSettingsMap *>(
                     &confFile->addedKeys)->lowerBound(thePrefix);
             while (j != confFile->addedKeys.constEnd() && j.key().startsWith(thePrefix)) {
-                processChild(j.key().originalCaseKey().mid(startPos), spec, result);
+                processChild(j.key().originalCaseKey().midRef(startPos), spec, result);
                 ++j;
             }
 
@@ -1304,7 +1328,10 @@ QStringList QConfFileSettingsPrivate::children(const QString &prefix, ChildSpec 
                 break;
         }
     }
-    return result.keys();
+    std::sort(result.begin(), result.end());
+    result.erase(std::unique(result.begin(), result.end()),
+                 result.end());
+    return result;
 }
 
 void QConfFileSettingsPrivate::clear()
@@ -1383,13 +1410,17 @@ void QConfFileSettingsPrivate::syncConfFile(int confFileNo)
         Concurrent read and write are not a problem because the writing operation is atomic.
     */
     QLockFile lockFile(confFile->name + QLatin1String(".lock"));
+#endif
     if (!readOnly) {
-        if (!confFile->isWritable() || !lockFile.lock() ) {
+        if (!confFile->isWritable()
+#ifndef QT_BOOTSTRAPPED
+            || !lockFile.lock()
+#endif
+            ) {
             setStatus(QSettings::AccessError);
             return;
         }
     }
-#endif
 
     /*
         We hold the lock. Let's reread the file if it has changed
@@ -1755,6 +1786,7 @@ public:
 
     int position;
 };
+Q_DECLARE_TYPEINFO(QSettingsIniKey, Q_MOVABLE_TYPE);
 
 static bool operator<(const QSettingsIniKey &k1, const QSettingsIniKey &k2)
 {

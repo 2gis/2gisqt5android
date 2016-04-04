@@ -34,6 +34,17 @@
 #ifndef QQUICKSMOOTHEDANIMATION_H
 #define QQUICKSMOOTHEDANIMATION_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include <qqml.h>
 #include "qquickanimation_p.h"
 
@@ -47,7 +58,6 @@ class Q_AUTOTEST_EXPORT QQuickSmoothedAnimation : public QQuickNumberAnimation
 {
     Q_OBJECT
     Q_DECLARE_PRIVATE(QQuickSmoothedAnimation)
-    Q_ENUMS(ReversingMode)
 
     Q_PROPERTY(qreal velocity READ velocity WRITE setVelocity NOTIFY velocityChanged)
     Q_PROPERTY(ReversingMode reversingMode READ reversingMode WRITE setReversingMode NOTIFY reversingModeChanged)
@@ -55,6 +65,7 @@ class Q_AUTOTEST_EXPORT QQuickSmoothedAnimation : public QQuickNumberAnimation
 
 public:
     enum ReversingMode { Eased, Immediate, Sync };
+    Q_ENUM(ReversingMode)
 
     QQuickSmoothedAnimation(QObject *parent = 0);
     ~QQuickSmoothedAnimation();

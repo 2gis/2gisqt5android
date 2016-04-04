@@ -34,8 +34,19 @@
 **
 ****************************************************************************/
 
-#ifndef QT3D_CAMERALENS_P_H
-#define QT3D_CAMERALENS_P_H
+#ifndef QT3DCORE_CAMERALENS_P_H
+#define QT3DCORE_CAMERALENS_P_H
+
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists for the convenience
+// of other Qt classes.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
 
 #include <Qt3DCore/private/qcomponent_p.h>
 #include "qcameralens.h"
@@ -46,9 +57,9 @@
 
 QT_BEGIN_NAMESPACE
 
-namespace Qt3D {
+namespace Qt3DCore {
 
-class QT3DCORESHARED_EXPORT QCameraLensPrivate : public QComponentPrivate
+class QCameraLensPrivate : public QComponentPrivate
 {
 public:
     QCameraLensPrivate();
@@ -56,8 +67,8 @@ public:
     inline void updateProjectionMatrix()
     {
         switch (m_projectionType) {
-        case QCameraLens::OrthogonalProjection:
-            updateOrthogonalProjection();
+        case QCameraLens::OrthographicProjection:
+            updateOrthographicProjection();
             break;
         case QCameraLens::PerspectiveProjection:
             updatePerpectiveProjection();
@@ -91,15 +102,15 @@ private:
         Q_Q(QCameraLens);
         m_projectionMatrix.setToIdentity();
         m_projectionMatrix.perspective(m_fieldOfView, m_aspectRatio, m_nearPlane, m_farPlane);
-        Q_EMIT q->projectionMatrixChanged();
+        Q_EMIT q->projectionMatrixChanged(m_projectionMatrix);
     }
 
-    inline void updateOrthogonalProjection()
+    inline void updateOrthographicProjection()
     {
         Q_Q(QCameraLens);
         m_projectionMatrix.setToIdentity();
         m_projectionMatrix.ortho(m_left, m_right, m_bottom, m_top, m_nearPlane, m_farPlane);
-        Q_EMIT q->projectionMatrixChanged();
+        Q_EMIT q->projectionMatrixChanged(m_projectionMatrix);
     }
 
     inline void updateFrustumProjection()
@@ -107,12 +118,12 @@ private:
         Q_Q(QCameraLens);
         m_projectionMatrix.setToIdentity();
         m_projectionMatrix.frustum(m_left, m_right, m_bottom, m_top, m_nearPlane, m_farPlane);
-        Q_EMIT q->projectionMatrixChanged();
+        Q_EMIT q->projectionMatrixChanged(m_projectionMatrix);
     }
 };
 
-} // namespace Qt3D
+} // namespace Qt3DCore
 
 QT_END_NAMESPACE
 
-#endif // QT3D_CAMERALENS_P_H
+#endif // QT3DCORE_CAMERALENS_P_H

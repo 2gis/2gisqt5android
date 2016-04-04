@@ -10,23 +10,28 @@ CONFIG -= precompile_header
 
 win32:DEFINES+=_CRT_SECURE_NO_WARNINGS
 
-contains(QT_CONFIG, system-zlib) {
-    unix|mingw: LIBS += -lz
-    else: LIBS += zdll.lib
+contains(QT_CONFIG, system-zlib):!if(cross_compile:host_build) {
+    if (unix|mingw):         LIBS += -lz
+    else:                    LIBS += zdll.lib
 } else {
-    INCLUDEPATH += $$[QT_INSTALL_HEADERS/get]/QtZlib
+    QT_PRIVATE += zlib-private
 }
 
 DEFINES += ASSIMP_BUILD_NO_OWN_ZLIB ASSIMP_BUILD_NO_COMPRESSED_IFC ASSIMP_BUILD_NO_Q3BSP_IMPORTER
 
 # Stop compiler complaining about ignored qualifiers on return types
-intel_icc: QMAKE_CXXFLAGS += -wd858
-else: gcc: QMAKE_CXXFLAGS += -Wno-ignored-qualifiers
+intel_icc: {
+    QMAKE_CFLAGS_WARN_ON += -wd858
+    QMAKE_CXXFLAGS_WARN_ON += $$QMAKE_CFLAGS_WARN_ON
+} gcc|clang: {
+    QMAKE_CFLAGS_WARN_ON += -Wno-ignored-qualifiers -Wno-unused-parameter -Wno-unused-variable -Wno-deprecated-declarations -Wno-unused-function -Wno-reorder
+    QMAKE_CXXFLAGS_WARN_ON = $$QMAKE_CFLAGS_WARN_ON
+}
 
 # warning #310: old-style parameter list (anachronism)
-intel_icc: QMAKE_CFLAGS += -wd310
+intel_icc: QMAKE_CFLAGS_WARN_ON += -wd310
 
-clang: CONFIG += warn_off
+CONFIG += warn_on
 
 VPATH += \
         $$PWD \
@@ -344,7 +349,8 @@ SOURCES += code/3DSConverter.cpp \
            code/IFCLoader.cpp \
            code/IFCMaterial.cpp \
            code/IFCProfile.cpp \
-           code/IFCReaderGen.cpp \
+           code/IFCReaderGen1.cpp \
+           code/IFCReaderGen2.cpp \
            code/IFCUtil.cpp \
            code/Importer.cpp \
            code/ImporterRegistry.cpp \

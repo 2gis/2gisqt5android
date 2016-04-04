@@ -1084,10 +1084,27 @@ protected:
     qreal m_p4;
 };
 
+
+class MyItemUsingRevisionedObject : public QObject
+{
+    Q_OBJECT
+    Q_PROPERTY(MyRevisionedClass *revisioned READ revisioned)
+
+public:
+    MyItemUsingRevisionedObject() {
+        m_revisioned = new MyRevisionedClass;
+    }
+
+    MyRevisionedClass *revisioned() const { return m_revisioned; }
+private:
+    MyRevisionedClass *m_revisioned;
+};
+
 QML_DECLARE_TYPE(MyRevisionedBaseClassRegistered)
 QML_DECLARE_TYPE(MyRevisionedBaseClassUnregistered)
 QML_DECLARE_TYPE(MyRevisionedClass)
 QML_DECLARE_TYPE(MyRevisionedSubclass)
+QML_DECLARE_TYPE(MyItemUsingRevisionedObject)
 Q_DECLARE_METATYPE(MyQmlObject::MyType)
 
 
@@ -1253,7 +1270,7 @@ public:
     Q_INVOKABLE void addReference(QObject *other)
     {
         QQmlData *ddata = QQmlData::get(this);
-        assert(ddata);
+        Q_ASSERT(ddata);
         QV4::ExecutionEngine *v4 = ddata->jsWrapper.engine();
         Q_ASSERT(v4);
         QV4::Scope scope(v4);

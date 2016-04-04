@@ -33,6 +33,17 @@
 #ifndef QQMLTYPECOMPILER_P_H
 #define QQMLTYPECOMPILER_P_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include <qglobal.h>
 #include <qqmlerror.h>
 #include <qhash.h>
@@ -158,7 +169,9 @@ public:
 private:
     bool convertSignalHandlerExpressionsToFunctionDeclarations(const QmlIR::Object *obj, const QString &typeName, QQmlPropertyCache *propertyCache);
 
+    QQmlEnginePrivate *enginePrivate;
     const QList<QmlIR::Object*> &qmlObjects;
+    const QQmlImports *imports;
     const QHash<int, QQmlCustomParser*> &customParsers;
     const QHash<int, QQmlCompiledData::TypeReference*> &resolvedTypes;
     const QSet<QString> &illegalNames;
@@ -264,7 +277,7 @@ protected:
     QHash<int, QHash<int, int> > *objectIndexToIdPerComponent;
 };
 
-class QQmlPropertyValidator : public QQmlCompilePass, public QQmlCustomParserCompilerBackend
+class QQmlPropertyValidator : public QQmlCompilePass
 {
     Q_DECLARE_TR_FUNCTIONS(QQmlPropertyValidator)
 public:
@@ -272,9 +285,8 @@ public:
 
     bool validate();
 
-    // Re-implemented for QQmlCustomParser
-    virtual const QQmlImports &imports() const;
-    virtual QString bindingAsString(int objectIndex, const QV4::CompiledData::Binding *binding) const;
+    const QQmlImports &imports() const;
+    QQmlEnginePrivate *engine() const { return enginePrivate; }
 
 private:
     bool validateObject(int objectIndex, const QV4::CompiledData::Binding *instantiatingBinding, bool populatingValueTypeGroupProperty = false) const;

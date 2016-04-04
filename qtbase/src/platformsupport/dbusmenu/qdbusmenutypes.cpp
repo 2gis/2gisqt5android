@@ -208,6 +208,7 @@ QDBusMenuItemList QDBusMenuItem::items(const QList<int> &ids, const QStringList 
     Q_UNUSED(propertyNames)
     QDBusMenuItemList ret;
     QList<const QDBusPlatformMenuItem *> items = QDBusPlatformMenuItem::byIds(ids);
+    ret.reserve(items.size());
     Q_FOREACH (const QDBusPlatformMenuItem *item, items)
         ret << QDBusMenuItem(item);
     return ret;
@@ -246,7 +247,7 @@ QDebug operator<<(QDebug d, const QDBusMenuItem &item)
 {
     QDebugStateSaver saver(d);
     d.nospace();
-    d << "QDBusMenuItem(id=" << item.m_id << ", properties=" << item.m_properties << ")";
+    d << "QDBusMenuItem(id=" << item.m_id << ", properties=" << item.m_properties << ')';
     return d;
 }
 

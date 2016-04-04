@@ -39,7 +39,7 @@
 // Not really clean but as the QHandle(idx, counter) is private
 // This allows to use this constructor in the tests
 #define private public
-#include <Qt3DCore/qhandle.h>
+#include <Qt3DCore/private/qhandle_p.h>
 
 class tst_Handle : public QObject
 {
@@ -69,8 +69,8 @@ public:
     int m_value;
 };
 
-typedef Qt3D::QHandle<SimpleResource> Handle;
-typedef Qt3D::QHandle<SimpleResource, 22> BigHandle;
+typedef Qt3DCore::QHandle<SimpleResource> Handle;
+typedef Qt3DCore::QHandle<SimpleResource, 22> BigHandle;
 
 void tst_Handle::defaultConstruction()
 {

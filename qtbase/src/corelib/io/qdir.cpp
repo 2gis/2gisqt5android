@@ -138,7 +138,7 @@ inline QChar QDirPrivate::getFilterSepChar(const QString &nameFilter)
 // static
 inline QStringList QDirPrivate::splitFilters(const QString &nameFilter, QChar sep)
 {
-    if (sep == 0)
+    if (sep.isNull())
         sep = getFilterSepChar(nameFilter);
     QStringList ret = nameFilter.split(sep);
     for (int i = 0; i < ret.count(); ++i)
@@ -152,7 +152,11 @@ inline void QDirPrivate::setPath(const QString &path)
     if (p.endsWith(QLatin1Char('/'))
             && p.length() > 1
 #if defined(Q_OS_WIN)
+#  if defined (Q_OS_WINRT)
+        && (!(p.toLower() == QDir::rootPath().toLower()))
+#  else
         && (!(p.length() == 3 && p.at(1).unicode() == ':' && p.at(0).isLetter()))
+#  endif
 #endif
     ) {
             p.truncate(p.length() - 1);
@@ -885,6 +889,9 @@ bool QDir::cd(const QString &dirName)
 #if defined (Q_OS_UNIX)
             //After cleanPath() if path is "/.." or starts with "/../" it means trying to cd above root.
             if (newPath.startsWith(QLatin1String("/../")) || newPath == QLatin1String("/.."))
+#elif defined (Q_OS_WINRT)
+            const QString rootPath = QDir::rootPath();
+            if (newPath.size() < rootPath.size() && rootPath.startsWith(newPath))
 #else
             /*
               cleanPath() already took care of replacing '\' with '/'.
@@ -1836,6 +1843,8 @@ QFileInfoList QDir::drives()
     underlying operating system. If you want to display paths to the
     user using their operating system's separator use
     toNativeSeparators().
+
+    \sa listSeparator()
 */
 QChar QDir::separator()
 {
@@ -1845,6 +1854,16 @@ QChar QDir::separator()
     return QLatin1Char('/');
 #endif
 }
+
+/*!
+    \fn QDir::listSeparator()
+    \since 5.6
+
+    Returns the native path list separator: ':' under Unix
+    and ';' under Windows.
+
+    \sa separator()
+*/
 
 /*!
     Sets the application's current working directory to \a path.
@@ -2175,7 +2194,11 @@ QString QDir::cleanPath(const QString &path)
     // Strip away last slash except for root directories
     if (ret.length() > 1 && ret.endsWith(QLatin1Char('/'))) {
 #if defined (Q_OS_WIN)
+#  if defined(Q_OS_WINRT)
+        if (!((ret.length() == 3 || ret.length() == QDir::rootPath().length()) && ret.at(1) == QLatin1Char(':')))
+#  else
         if (!(ret.length() == 3 && ret.at(1) == QLatin1Char(':')))
+#  endif
 #endif
             ret.chop(1);
     }

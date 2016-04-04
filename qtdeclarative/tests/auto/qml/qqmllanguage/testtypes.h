@@ -1079,9 +1079,20 @@ class MyEnumDerivedClass : public MyEnum2Class
     Q_OBJECT
 };
 
+class MyCompositeBaseType : public QObject
+{
+    Q_OBJECT
+    Q_ENUMS(CompositeEnum)
+
+public:
+    enum CompositeEnum { EnumValue0, EnumValue42 = 42 };
+    static QObject *qmlAttachedProperties(QObject *parent) { return new QObject(parent); }
+};
+
 Q_DECLARE_METATYPE(MyEnum2Class::EnumB)
 Q_DECLARE_METATYPE(MyEnum1Class::EnumA)
 Q_DECLARE_METATYPE(Qt::TextFormat)
+Q_DECLARE_METATYPE(MyCompositeBaseType::CompositeEnum)
 
 QML_DECLARE_TYPE(MyRevisionedBaseClassRegistered)
 QML_DECLARE_TYPE(MyRevisionedBaseClassUnregistered)
@@ -1089,6 +1100,8 @@ QML_DECLARE_TYPE(MyRevisionedClass)
 QML_DECLARE_TYPE(MyRevisionedSubclass)
 QML_DECLARE_TYPE(MySubclass)
 QML_DECLARE_TYPE(MyReceiversTestObject)
+QML_DECLARE_TYPE(MyCompositeBaseType)
+QML_DECLARE_TYPEINFO(MyCompositeBaseType, QML_HAS_ATTACHED_PROPERTIES)
 
 class CustomBinding : public QObject, public QQmlParserStatus
 {

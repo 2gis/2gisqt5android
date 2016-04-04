@@ -42,6 +42,17 @@
 #ifndef WL_OUTPUT_H
 #define WL_OUTPUT_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include <QtCompositor/qwaylandexport.h>
 
 #include <QtCore/QRect>
@@ -57,12 +68,10 @@ class QWindow;
 namespace QtWayland {
 
 class Compositor;
-class ExtendedOutput;
 
 struct OutputResource : public QtWaylandServer::wl_output::Resource
 {
-    OutputResource() : extendedOutput(0) {}
-    ExtendedOutput *extendedOutput;
+    OutputResource() {}
 };
 
 class Output : public QtWaylandServer::wl_output

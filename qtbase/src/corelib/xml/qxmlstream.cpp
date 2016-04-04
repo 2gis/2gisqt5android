@@ -2622,6 +2622,13 @@ QXmlStreamEntityDeclaration::~QXmlStreamEntityDeclaration()
 {
 }
 
+/*! \fn QXmlStreamStringRef::swap(QXmlStreamStringRef &other)
+    \since 5.6
+
+    Swaps this string reference's contents with \a other.
+    This function is very fast and never fails.
+*/
+
 /*! \fn QStringRef QXmlStreamEntityDeclaration::name() const
 
 Returns the entity name.
@@ -3013,7 +3020,8 @@ void QXmlStreamWriterPrivate::checkIfASCIICompatibleCodec()
 #ifndef QT_NO_TEXTCODEC
     Q_ASSERT(encoder);
     // assumes ASCII-compatibility for all 8-bit encodings
-    const QByteArray bytes = encoder->fromUnicode(QStringLiteral(" "));
+    QChar space = QLatin1Char(' ');
+    const QByteArray bytes = encoder->fromUnicode(&space, 1);
     isCodecASCIICompatible = (bytes.count() == 1);
 #else
     isCodecASCIICompatible = true;

@@ -32,7 +32,7 @@
 ****************************************************************************/
 
 import QtQuick 2.0
-import QtMultimedia 5.0
+import QtMultimedia 5.6
 
 /*!
     \qmltype Video
@@ -274,6 +274,35 @@ Item {
     property alias position:        player.position
 
     /*!
+        \qmlproperty enumeration Video::audioRole
+
+        This property holds the role of the audio stream. It can be set to specify the type of audio
+        being played, allowing the system to make appropriate decisions when it comes to volume,
+        routing or post-processing.
+
+        The audio role must be set before setting the source property.
+
+        Supported values can be retrieved with supportedAudioRoles().
+
+        The value can be one of:
+        \list
+        \li MediaPlayer.UnknownRole - the role is unknown or undefined.
+        \li MediaPlayer.MusicRole - music.
+        \li MediaPlayer.VideoRole - soundtrack from a movie or a video.
+        \li MediaPlayer.VoiceCommunicationRole - voice communications, such as telephony.
+        \li MediaPlayer.AlarmRole - alarm.
+        \li MediaPlayer.NotificationRole - notification, such as an incoming e-mail or a chat request.
+        \li MediaPlayer.RingtoneRole - ringtone.
+        \li MediaPlayer.AccessibilityRole - for accessibility, such as with a screen reader.
+        \li MediaPlayer.SonificationRole - sonification, such as with user interface sounds.
+        \li MediaPlayer.GameRole - game audio.
+        \endlist
+
+        \since 5.6
+    */
+    property alias audioRole:       player.audioRole
+
+    /*!
         \qmlproperty bool Video::seekable
 
         This property holds whether the playback position of the video can be
@@ -287,8 +316,21 @@ Item {
         \qmlproperty url Video::source
 
         This property holds the source URL of the media.
+
+        Setting the \l source property clears the current \l playlist, if any.
     */
     property alias source:          player.source
+
+    /*!
+        \qmlproperty Playlist Video::playlist
+
+        This property holds the playlist used by the media player.
+
+        Setting the \l playlist property resets the \l source to an empty string.
+
+        \since 5.6
+    */
+    property alias playlist:        player.playlist
 
     /*!
         \qmlproperty enumeration Video::status
@@ -405,6 +447,20 @@ Item {
     */
     function seek(offset) {
         player.seek(offset);
+    }
+
+    /*!
+        \qmlmethod list<int> Video::supportedAudioRoles()
+
+        Returns a list of supported audio roles.
+
+        If setting the audio role is not supported, an empty list is returned.
+
+        \since 5.6
+        \sa audioRole
+    */
+    function supportedAudioRoles() {
+        return player.supportedAudioRoles();
     }
 
 }

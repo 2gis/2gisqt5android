@@ -33,6 +33,17 @@
 #ifndef QV4MEMBERDATA_H
 #define QV4MEMBERDATA_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include "qv4global_p.h"
 #include "qv4managed_p.h"
 
@@ -61,7 +72,8 @@ struct MemberData : Managed
     Value *data() { return d()->data; }
     inline uint size() const { return d()->size; }
 
-    static Heap::MemberData *reallocate(QV4::ExecutionEngine *e, Heap::MemberData *old, uint idx);
+    static Heap::MemberData *allocate(QV4::ExecutionEngine *e, uint n);
+    static Heap::MemberData *reallocate(QV4::ExecutionEngine *e, Heap::MemberData *old, uint n);
 
     static void markObjects(Heap::Base *that, ExecutionEngine *e);
 };

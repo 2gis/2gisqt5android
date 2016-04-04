@@ -169,8 +169,7 @@ void QDeclarativeGeoRouteModel::reset()
     }
 
     abortRequest();
-    setErrorString(QString());
-    setError(NoError);
+    setError(NoError, QString());
     setStatus(QDeclarativeGeoRouteModel::Null);
 }
 
@@ -183,8 +182,7 @@ void QDeclarativeGeoRouteModel::reset()
 void QDeclarativeGeoRouteModel::cancel()
 {
     abortRequest();
-    setErrorString(QString());
-    setError(NoError);
+    setError(NoError, QString());
     setStatus(routes_.isEmpty() ? Null : Ready);
 }
 
@@ -214,8 +212,7 @@ void QDeclarativeGeoRouteModel::abortRequest()
 QDeclarativeGeoRoute *QDeclarativeGeoRouteModel::get(int index)
 {
     if (index < 0 || index >= routes_.count()) {
-        qmlInfo(this) << QStringLiteral("Error, invalid index for get():")
-                      << index;
+        qmlInfo(this) << QStringLiteral("Index '%1' out of range").arg(index);
         return 0;
     }
     return routes_.at(index);
@@ -308,11 +305,31 @@ void QDeclarativeGeoRouteModel::pluginReady()
 {
     QGeoServiceProvider *serviceProvider = plugin_->sharedGeoServiceProvider();
     QGeoRoutingManager *routingManager = serviceProvider->routingManager();
-    if (!routingManager || serviceProvider->error() != QGeoServiceProvider::NoError) {
-        qmlInfo(this) << QStringLiteral("Error: Plugin does not support routing.\nError message:")
-                      << serviceProvider->errorString();
+
+    if (serviceProvider->error() != QGeoServiceProvider::NoError) {
+        QDeclarativeGeoRouteModel::RouteError newError = UnknownError;
+        switch (serviceProvider->error()) {
+        case QGeoServiceProvider::NotSupportedError:
+            newError = EngineNotSetError; break;
+        case QGeoServiceProvider::UnknownParameterError:
+            newError = UnknownParameterError; break;
+        case QGeoServiceProvider::MissingRequiredParameterError:
+            newError = MissingRequiredParameterError; break;
+        case QGeoServiceProvider::ConnectionError:
+            newError = CommunicationError; break;
+        default:
+            break;
+        }
+
+        setError(newError, serviceProvider->errorString());
         return;
     }
+
+    if (!routingManager) {
+        setError(EngineNotSetError, tr("Plugin does not support routing."));
+        return;
+    }
+
     connect(routingManager, SIGNAL(finished(QGeoRouteReply*)),
             this, SLOT(routingFinished(QGeoRouteReply*)));
     connect(routingManager, SIGNAL(error(QGeoRouteReply*,QGeoRouteReply::Error,QString)),
@@ -420,20 +437,16 @@ bool QDeclarativeGeoRouteModel::autoUpdate() const
 */
 void QDeclarativeGeoRouteModel::setMeasurementSystem(QLocale::MeasurementSystem ms)
 {
-    if (!plugin_) {
-        qmlInfo(this) << ROUTE_PLUGIN_NOT_SET;
+    if (!plugin_)
         return;
-    }
 
     QGeoServiceProvider *serviceProvider = plugin_->sharedGeoServiceProvider();
     if (!serviceProvider)
         return;
 
     QGeoRoutingManager *routingManager = serviceProvider->routingManager();
-    if (!routingManager) {
-        qmlInfo(this) << ROUTE_MGR_NOT_SET;
+    if (!routingManager)
         return;
-    }
 
     if (routingManager->measurementSystem() == ms)
         return;
@@ -457,7 +470,6 @@ QLocale::MeasurementSystem QDeclarativeGeoRouteModel::measurementSystem() const
 
     QGeoRoutingManager *routingManager = serviceProvider->routingManager();
     if (!routingManager) {
-        qmlInfo(this) << ROUTE_MGR_NOT_SET;
         if (plugin_->locales().isEmpty())
             return QLocale().measurementSystem();
 
@@ -500,20 +512,6 @@ QDeclarativeGeoRouteModel::Status QDeclarativeGeoRouteModel::status() const
 }
 
 /*!
-    \internal
-*/
-void QDeclarativeGeoRouteModel::setErrorString(const QString &error)
-{
-    if (errorString_ == error)
-        return;
-
-    errorString_ = error;
-
-    if (complete_)
-        emit errorStringChanged();
-}
-
-/*!
     \qmlproperty string QtLocation::RouteModel::errorString
 
     This read-only property holds the textual presentation of the latest routing error.
@@ -534,12 +532,16 @@ QString QDeclarativeGeoRouteModel::errorString() const
     This read-only property holds the latest error value of the routing request.
 
     \list
-    \li RouteModel.NoError - No error has occurred
-    \li RouteModel.EngineNotSetError - The plugin/service provider used does not support routing
-    \li RouteModel.CommunicationError - An error occurred while communicating with the service provider
-    \li RouteModel.ParseError - The response from the service provider was in an unrecognizable format
-    \li RouteModel.UnsupportedOptionError - The requested operation or one of the options for the operation are not supported by the service provider.
-    \li RouteModel.UnknownError - An error occurred which does not fit into any of the other categories
+    \li RouteModel.NoError - No error has occurred.
+    \li RouteModel.CommunicationError - An error occurred while communicating with the service provider.
+    \li RouteModel.EngineNotSetError - The model's plugin property was not set or there is no routing manager associated with the plugin.
+    \li RouteModel.MissingRequiredParameterError - A required parameter was not specified.
+    \li RouteModel.ParseError - The response from the service provider was in an unrecognizable format.
+    \li RouteModel.UnknownError - An error occurred which does not fit into any of the other categories.
+    \li RouteModel.UnknownParameterError - The plugin did not recognize one of the parameters it was given.
+    \li RouteModel.UnsupportedOptionError - The requested operation is not supported by the routing provider.
+                                            This may happen when the loaded engine does not support a particular
+                                            type of routing request.
     \endlist
 */
 
@@ -548,11 +550,12 @@ QDeclarativeGeoRouteModel::RouteError QDeclarativeGeoRouteModel::error() const
     return error_;
 }
 
-void QDeclarativeGeoRouteModel::setError(RouteError error)
+void QDeclarativeGeoRouteModel::setError(RouteError error, const QString& errorString)
 {
-    if (error_ == error)
+    if (error_ == error && errorString_ == errorString)
         return;
     error_ = error;
+    errorString_ = errorString;
     emit errorChanged();
 }
 
@@ -569,7 +572,7 @@ void QDeclarativeGeoRouteModel::update()
         return;
 
     if (!plugin_) {
-        qmlInfo(this) << ROUTE_PLUGIN_NOT_SET;
+        setError(EngineNotSetError, tr("Cannot route, plugin not set."));
         return;
     }
 
@@ -579,22 +582,21 @@ void QDeclarativeGeoRouteModel::update()
 
     QGeoRoutingManager *routingManager = serviceProvider->routingManager();
     if (!routingManager) {
-        qmlInfo(this) << ROUTE_MGR_NOT_SET;
+        setError(EngineNotSetError, tr("Cannot route, route manager not set."));
         return;
     }
     if (!routeQuery_) {
-        qmlInfo(this) << QStringLiteral("Cannot route, valid query not set.");
+        setError(ParseError,"Cannot route, valid query not set.");
         return;
     }
     abortRequest(); // Clear previus requests
     QGeoRouteRequest request = routeQuery_->routeRequest();
     if (request.waypoints().count() < 2) {
-        qmlInfo(this) << QStringLiteral("Not enough waypoints for routing.");
+        setError(ParseError,tr("Not enough waypoints for routing."));
         return;
     }
 
-    setErrorString("");   // clear previous error string
-    setError(NoError);
+    setError(NoError, QString());
 
     reply_ = routingManager->calculateRoute(request);
     setStatus(QDeclarativeGeoRouteModel::Loading);
@@ -627,8 +629,7 @@ void QDeclarativeGeoRouteModel::routingFinished(QGeoRouteReply *reply)
     }
     endResetModel();
 
-    setErrorString("");
-    setError(NoError);
+    setError(NoError, QString());
     setStatus(QDeclarativeGeoRouteModel::Ready);
 
     reply->deleteLater();
@@ -649,8 +650,7 @@ void QDeclarativeGeoRouteModel::routingError(QGeoRouteReply *reply,
 {
     if (reply != reply_)
         return;
-    setErrorString(errorString);
-    setError(static_cast<QDeclarativeGeoRouteModel::RouteError>(error));
+    setError(static_cast<QDeclarativeGeoRouteModel::RouteError>(error), errorString);
     setStatus(QDeclarativeGeoRouteModel::Error);
     reply->deleteLater();
     reply_ = 0;

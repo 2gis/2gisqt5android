@@ -37,7 +37,7 @@
 #include "qgeotilespec_p.h"
 #include "qgeotiledmap_p.h"
 #include "qgeotiledmappingmanagerengine_p.h"
-#include "qgeotilecache_p.h"
+#include "qabstractgeotilecache_p.h"
 #include <QtCore/QPointer>
 
 QT_BEGIN_NAMESPACE
@@ -66,14 +66,12 @@ public:
 QGeoTileRequestManager::QGeoTileRequestManager(QGeoTiledMap *map, QGeoTiledMappingManagerEngine *engine)
     : d_ptr(new QGeoTileRequestManagerPrivate(map, engine))
 {
-     if (!d_ptr->m_engine.isNull())
-         d_ptr->m_engine->registerMap(d_ptr->m_map);
+
 }
 
 QGeoTileRequestManager::~QGeoTileRequestManager()
 {
-    if (!d_ptr->m_engine.isNull())
-         d_ptr->m_engine->deregisterMap(d_ptr->m_map);
+
 }
 
 QList<QSharedPointer<QGeoTileTexture> > QGeoTileRequestManager::requestTiles(const QSet<QGeoTileSpec> &tiles)

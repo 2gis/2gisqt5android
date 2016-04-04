@@ -1,12 +1,16 @@
 TARGET = gltfsceneparser
-QT += core-private 3dcore 3dcore-private 3drenderer 3drenderer-private
+QT += core-private 3dcore 3dcore-private 3drender 3drender-private
 
 PLUGIN_TYPE = sceneparsers
-PLUGIN_CLASS_NAME = GLTFParser
+PLUGIN_CLASS_NAME = GLTFSceneParserPlugin
 load(qt_plugin)
 
 HEADERS += \
-    gltfparser_p.h
+    gltfparser.h
 
 SOURCES += \
-    gltfparser.cpp
+    gltfparser.cpp \
+    main.cpp
+
+DISTFILES += \
+    gltf.json

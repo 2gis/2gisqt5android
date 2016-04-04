@@ -64,7 +64,6 @@
 
 #include <QtQuick/private/qquickpixmapcache_p.h>
 
-#include <private/qqmlprofilerservice_p.h>
 #include <private/qqmlmemoryprofiler_p.h>
 
 #include <private/qopenglvertexarrayobject_p.h>
@@ -83,8 +82,8 @@ bool QQuickWindowPrivate::defaultAlphaBuffer = false;
 
 void QQuickWindowPrivate::updateFocusItemTransform()
 {
-    Q_Q(QQuickWindow);
 #ifndef QT_NO_IM
+    Q_Q(QQuickWindow);
     QQuickItem *focus = q->activeFocusItem();
     if (focus && QGuiApplication::focusObject() == focus) {
         QQuickItemPrivate *focusPrivate = QQuickItemPrivate::get(focus);
@@ -259,8 +258,7 @@ void QQuickWindowPrivate::polishItems()
     // the user.
     int recursionSafeguard = INT_MAX;
     while (!itemsToPolish.isEmpty() && --recursionSafeguard > 0) {
-        QQuickItem *item = *itemsToPolish.begin();
-        itemsToPolish.remove(item);
+        QQuickItem *item = itemsToPolish.takeLast();
         QQuickItemPrivate::get(item)->polishScheduled = false;
         item->updatePolish();
     }
@@ -287,6 +285,46 @@ void QQuickWindow::update()
         QQuickRenderControlPrivate::get(d->renderControl)->update();
 }
 
+static void updatePixelRatioHelper(QQuickItem *item, float pixelRatio)
+{
+    if (item->flags() & QQuickItem::ItemHasContents) {
+        QQuickItemPrivate *itemPrivate = QQuickItemPrivate::get(item);
+        itemPrivate->itemChange(QQuickItem::ItemDevicePixelRatioHasChanged, pixelRatio);
+    }
+
+    QList <QQuickItem *> items = item->childItems();
+    for (int i = 0; i < items.size(); ++i)
+        updatePixelRatioHelper(items.at(i), pixelRatio);
+}
+
+void QQuickWindow::physicalDpiChanged()
+{
+    Q_D(QQuickWindow);
+    const qreal newPixelRatio = screen()->devicePixelRatio();
+    if (qFuzzyCompare(newPixelRatio, d->devicePixelRatio))
+        return;
+    d->devicePixelRatio = newPixelRatio;
+    if (d->contentItem)
+        updatePixelRatioHelper(d->contentItem, newPixelRatio);
+}
+
+void QQuickWindow::handleScreenChanged(QScreen *screen)
+{
+    Q_D(QQuickWindow);
+    if (screen) {
+        physicalDpiChanged();
+        // When physical DPI changes on the same screen, either the resolution or the device pixel
+        // ratio changed. We must check what it is. Device pixel ratio does not have its own
+        // ...Changed() signal.
+        d->physicalDpiChangedConnection = connect(screen, SIGNAL(physicalDotsPerInchChanged(qreal)),
+                                                  this, SLOT(physicalDpiChanged()));
+    } else {
+        disconnect(d->physicalDpiChangedConnection);
+    }
+
+    d->forcePolish();
+}
+
 void forcePolishHelper(QQuickItem *item)
 {
     if (item->flags() & QQuickItem::ItemHasContents) {
@@ -301,12 +339,12 @@ void forcePolishHelper(QQuickItem *item)
 /*!
     Schedules polish events on all items in the scene.
 */
-void QQuickWindow::forcePolish()
+void QQuickWindowPrivate::forcePolish()
 {
-    Q_D(QQuickWindow);
-    if (!screen())
+    Q_Q(QQuickWindow);
+    if (!q->screen())
         return;
-    forcePolishHelper(d->contentItem);
+    forcePolishHelper(contentItem);
 }
 
 void forceUpdate(QQuickItem *item)
@@ -370,12 +408,15 @@ void QQuickWindowPrivate::renderSceneGraph(const QSize &size)
     if (!customRenderStage || !customRenderStage->render()) {
         int fboId = 0;
         const qreal devicePixelRatio = q->effectiveDevicePixelRatio();
-        renderer->setDeviceRect(QRect(QPoint(0, 0), size * devicePixelRatio));
         if (renderTargetId) {
+            QRect rect(QPoint(0, 0), renderTargetSize);
             fboId = renderTargetId;
-            renderer->setViewportRect(QRect(QPoint(0, 0), renderTargetSize));
+            renderer->setDeviceRect(rect);
+            renderer->setViewportRect(rect);
         } else {
-            renderer->setViewportRect(QRect(QPoint(0, 0), size * devicePixelRatio));
+            QRect rect(QPoint(0, 0), devicePixelRatio * size);
+            renderer->setDeviceRect(rect);
+            renderer->setViewportRect(rect);
         }
         renderer->setProjectionMatrixToRect(QRect(QPoint(0, 0), size));
         renderer->setDevicePixelRatio(devicePixelRatio);
@@ -399,6 +440,7 @@ QQuickWindowPrivate::QQuickWindowPrivate()
     , touchMouseId(-1)
     , touchMousePressTimestamp(0)
     , dirtyItemList(0)
+    , devicePixelRatio(0)
     , context(0)
     , renderer(0)
     , windowManager(0)
@@ -451,6 +493,9 @@ void QQuickWindowPrivate::init(QQuickWindow *c, QQuickRenderControl *control)
 
     Q_ASSERT(windowManager || renderControl);
 
+    if (QScreen *screen = q->screen())
+       devicePixelRatio = screen->devicePixelRatio();
+
     QSGContext *sg;
     if (renderControl) {
         QQuickRenderControlPrivate *renderControlPriv = QQuickRenderControlPrivate::get(renderControl);
@@ -472,7 +517,7 @@ void QQuickWindowPrivate::init(QQuickWindow *c, QQuickRenderControl *control)
     QObject::connect(context, SIGNAL(invalidated()), q, SLOT(cleanupSceneGraph()), Qt::DirectConnection);
 
     QObject::connect(q, SIGNAL(focusObjectChanged(QObject*)), q, SIGNAL(activeFocusItemChanged()));
-    QObject::connect(q, SIGNAL(screenChanged(QScreen*)), q, SLOT(forcePolish()));
+    QObject::connect(q, SIGNAL(screenChanged(QScreen*)), q, SLOT(handleScreenChanged(QScreen*)));
 
     QObject::connect(q, SIGNAL(frameSwapped()), q, SLOT(runJobsAfterSwap()), Qt::DirectConnection);
 }
@@ -630,6 +675,15 @@ bool QQuickWindowPrivate::translateTouchToMouse(QQuickItem *item, QTouchEvent *e
                 if (mouseGrabberItem) {
                     QScopedPointer<QMouseEvent> me(touchToMouseEvent(QEvent::MouseButtonRelease, p, event, mouseGrabberItem, false));
                     QCoreApplication::sendEvent(item, me.data());
+
+                    if (item->acceptHoverEvents() && p.screenPos() != QGuiApplicationPrivate::lastCursorPosition) {
+                        QPointF localMousePos(qInf(), qInf());
+                        if (QWindow *w = item->window())
+                            localMousePos = item->mapFromScene(w->mapFromGlobal(QGuiApplicationPrivate::lastCursorPosition.toPoint()));
+                        QMouseEvent mm(QEvent::MouseMove, localMousePos, QGuiApplicationPrivate::lastCursorPosition,
+                                       Qt::NoButton, Qt::NoButton, event->modifiers());
+                        QCoreApplication::sendEvent(item, &mm);
+                    }
                     if (mouseGrabberItem) // might have ungrabbed due to event
                         mouseGrabberItem->ungrabMouse();
                     return me->isAccepted();
@@ -1400,9 +1454,15 @@ bool QQuickWindow::event(QEvent *e)
             d->windowManager->handleUpdateRequest(this);
         break;
     }
+#ifndef QT_NO_GESTURES
     case QEvent::NativeGesture:
         d->deliverNativeGestureEvent(d->contentItem, static_cast<QNativeGestureEvent*>(e));
         break;
+#endif
+    case QEvent::ShortcutOverride:
+        if (d->activeFocusItem)
+            sendEvent(d->activeFocusItem, static_cast<QKeyEvent *>(e));
+        return true;
     default:
         break;
     }
@@ -1431,29 +1491,8 @@ void QQuickWindowPrivate::deliverKeyEvent(QKeyEvent *e)
 {
     Q_Q(QQuickWindow);
 
-#ifndef QT_NO_SHORTCUT
-    // Try looking for a Shortcut before sending key events
-    if (e->type() == QEvent::KeyPress
-        && QGuiApplicationPrivate::instance()->shortcutMap.tryShortcutEvent(q->focusObject(), e))
-        return;
-#endif
-
     if (activeFocusItem)
         q->sendEvent(activeFocusItem, e);
-#ifdef Q_OS_MAC
-    else {
-        // This is the case for popup windows on Mac, where popup windows get focus
-        // in Qt (after exposure) but they are not "key windows" in the Cocoa sense.
-        // Therefore, the will never receive key events from Cocoa. Instead, the
-        // toplevel non-popup window (the application current "key window") will
-        // receive them. (QWidgetWindow does something similar for widgets, by keeping
-        // a list of popup windows, and forwarding the key event to the top-most popup.)
-        QWindow *focusWindow = QGuiApplication::focusWindow();
-        if (focusWindow && focusWindow != q
-            && (focusWindow->flags() & Qt::Popup) == Qt::Popup)
-            QGuiApplication::sendEvent(focusWindow, e);
-    }
-#endif
 }
 
 QMouseEvent *QQuickWindowPrivate::cloneMouseEvent(QMouseEvent *event, QPointF *transformedLocalPos)
@@ -1779,6 +1818,7 @@ void QQuickWindow::wheelEvent(QWheelEvent *event)
 }
 #endif // QT_NO_WHEELEVENT
 
+#ifndef QT_NO_GESTURES
 bool QQuickWindowPrivate::deliverNativeGestureEvent(QQuickItem *item, QNativeGestureEvent *event)
 {
     QQuickItemPrivate *itemPrivate = QQuickItemPrivate::get(item);
@@ -1810,6 +1850,7 @@ bool QQuickWindowPrivate::deliverNativeGestureEvent(QQuickItem *item, QNativeGes
 
     return false;
 }
+#endif // QT_NO_GESTURES
 
 bool QQuickWindowPrivate::deliverTouchCancelEvent(QTouchEvent *event)
 {
@@ -2385,7 +2426,9 @@ bool QQuickWindowPrivate::sendFilteredTouchEvent(QQuickItem *target, QQuickItem 
             if (target->childMouseEventFilter(item, targetEvent.data())) {
                 qCDebug(DBG_TOUCH) << " - first chance intercepted on childMouseEventFilter by " << target;
                 QVector<int> touchIds;
-                for (int i = 0; i < targetEvent->touchPoints().size(); ++i)
+                const int touchPointCount = targetEvent->touchPoints().size();
+                touchIds.reserve(touchPointCount);
+                for (int i = 0; i < touchPointCount; ++i)
                     touchIds.append(targetEvent->touchPoints().at(i).id());
                 target->grabTouchPoints(touchIds);
                 if (mouseGrabberItem) {
@@ -2449,9 +2492,11 @@ bool QQuickWindowPrivate::sendFilteredMouseEvent(QQuickItem *target, QQuickItem 
     if (!target)
         return false;
 
-    bool filtered = false;
-
     QQuickItemPrivate *targetPrivate = QQuickItemPrivate::get(target);
+    if (targetPrivate->replayingPressEvent)
+        return false;
+
+    bool filtered = false;
     if (targetPrivate->filtersChildMouseEvents && !hasFiltered->contains(target)) {
         hasFiltered->insert(target);
         if (target->childMouseEventFilter(item, event))
@@ -2596,6 +2641,9 @@ bool QQuickWindow::sendEvent(QQuickItem *item, QEvent *e)
             QCoreApplication::sendEvent(item, e);
         }
         break;
+    case QEvent::ShortcutOverride:
+        QCoreApplication::sendEvent(item, e);
+        break;
     case QEvent::MouseButtonPress:
     case QEvent::MouseButtonRelease:
     case QEvent::MouseButtonDblClick:
@@ -2729,7 +2777,7 @@ static inline QSGNode *qquickitem_before_paintNode(QQuickItemPrivate *d)
     QQuickItem *before = 0;
     for (int i=0; i<childItems.size(); ++i) {
         QQuickItemPrivate *dd = QQuickItemPrivate::get(childItems.at(i));
-        // Perform the same check as the in buildOrderNodeList below.
+        // Perform the same check as the in fetchNextNode below.
         if (dd->z() < 0 && (dd->explicitVisible || (dd->extra.isAllocated() && dd->extra->effectRefCount)))
             before = childItems.at(i);
         else
@@ -2738,13 +2786,9 @@ static inline QSGNode *qquickitem_before_paintNode(QQuickItemPrivate *d)
     return Q_UNLIKELY(before) ? QQuickItemPrivate::get(before)->itemNode() : 0;
 }
 
-static QVector<QSGNode *> buildOrderedNodeList(QQuickItemPrivate *itemPriv)
+static QSGNode *fetchNextNode(QQuickItemPrivate *itemPriv, int &ii, bool &returnedPaintNode)
 {
     QList<QQuickItem *> orderedChildren = itemPriv->paintOrderChildItems();
-    QVector<QSGNode *> desiredNodes;
-    desiredNodes.reserve(orderedChildren.size() + 1); // + 1 for the paintNode
-
-    int ii = 0;
 
     for (; ii < orderedChildren.count() && orderedChildren.at(ii)->z() < 0; ++ii) {
         QQuickItemPrivate *childPrivate = QQuickItemPrivate::get(orderedChildren.at(ii));
@@ -2752,11 +2796,14 @@ static QVector<QSGNode *> buildOrderedNodeList(QQuickItemPrivate *itemPriv)
             (!childPrivate->extra.isAllocated() || !childPrivate->extra->effectRefCount))
             continue;
 
-        desiredNodes.append(childPrivate->itemNode());
+        ii++;
+        return childPrivate->itemNode();
     }
 
-    if (itemPriv->paintNode)
-        desiredNodes.append(itemPriv->paintNode);
+    if (itemPriv->paintNode && !returnedPaintNode) {
+        returnedPaintNode = true;
+        return itemPriv->paintNode;
+    }
 
     for (; ii < orderedChildren.count(); ++ii) {
         QQuickItemPrivate *childPrivate = QQuickItemPrivate::get(orderedChildren.at(ii));
@@ -2764,10 +2811,11 @@ static QVector<QSGNode *> buildOrderedNodeList(QQuickItemPrivate *itemPriv)
             (!childPrivate->extra.isAllocated() || !childPrivate->extra->effectRefCount))
             continue;
 
-        desiredNodes.append(childPrivate->itemNode());
+        ii++;
+        return childPrivate->itemNode();
     }
 
-    return desiredNodes;
+    return 0;
 }
 
 void QQuickWindowPrivate::updateDirtyNode(QQuickItem *item)
@@ -2870,7 +2918,10 @@ void QQuickWindowPrivate::updateDirtyNode(QQuickItem *item)
     }
 
     if (dirty & QQuickItemPrivate::ChildrenUpdateMask) {
-        QVector<QSGNode *> desiredNodes = buildOrderedNodeList(itemPriv);
+        int ii = 0;
+        bool fetchedPaintNode = false;
+        QList<QQuickItem *> orderedChildren = itemPriv->paintOrderChildItems();
+        int desiredNodesSize = orderedChildren.size() + (itemPriv->paintNode ? 1 : 0);
 
         // now start making current state match the promised land of
         // desiredNodes. in the case of our current state matching desiredNodes
@@ -2888,14 +2939,9 @@ void QQuickWindowPrivate::updateDirtyNode(QQuickItem *item)
         int added = 0;
         int removed = 0;
         int replaced = 0;
-#if defined(CHILDRENUPDATE_DEBUG)
-        // This is slow! Do not do this in a normal/profiling build!
-        int initialCount = groupNode->childCount();
-#endif
+        QSGNode *desiredNode = 0;
 
-        while (currentNode && desiredNodesProcessed < desiredNodes.size()) {
-            QSGNode *desiredNode = desiredNodes.at(desiredNodesProcessed);
-
+        while (currentNode && (desiredNode = fetchNextNode(itemPriv, ii, fetchedPaintNode))) {
             // uh oh... reality and our utopic paradise are diverging!
             // we need to reconcile this...
             if (currentNode != desiredNode) {
@@ -2919,9 +2965,8 @@ void QQuickWindowPrivate::updateDirtyNode(QQuickItem *item)
         // if we didn't process as many nodes as in the new list, then we have
         // more nodes at the end of desiredNodes to append to our list.
         // this will be the case when adding new nodes, for instance.
-        if (desiredNodesProcessed < desiredNodes.size()) {
-            for (int i = desiredNodesProcessed; i < desiredNodes.size(); ++i) {
-                QSGNode *desiredNode = desiredNodes.at(i);
+        if (desiredNodesProcessed < desiredNodesSize) {
+            while ((desiredNode = fetchNextNode(itemPriv, ii, fetchedPaintNode))) {
                 if (desiredNode->parent())
                     desiredNode->parent()->removeChildNode(desiredNode);
                 groupNode->appendChildNode(desiredNode);
@@ -2938,10 +2983,6 @@ void QQuickWindowPrivate::updateDirtyNode(QQuickItem *item)
                 removed++;
             }
         }
-
-#if defined(CHILDRENUPDATE_DEBUG)
-        qDebug() << "Done children update for " << itemPriv << "- before:" << initialCount << "after:" << groupNode->childCount() <<  "added:" << added << "removed:" << removed << "replaced:" << replaced;
-#endif
     }
 
     if ((dirty & QQuickItemPrivate::Size) && itemPriv->clipNode()) {
@@ -3307,12 +3348,7 @@ QOpenGLFramebufferObject *QQuickWindow::renderTarget() const
 QImage QQuickWindow::grabWindow()
 {
     Q_D(QQuickWindow);
-    if (!isVisible()) {
-
-        if (d->context->openglContext()) {
-            qWarning("QQuickWindow::grabWindow: scene graph already in use");
-            return QImage();
-        }
+    if (!isVisible() && !d->context->openglContext()) {
 
         if (!handle() || !size().isValid()) {
             qWarning("QQuickWindow::grabWindow: window must be created and have a valid size");
@@ -3330,7 +3366,8 @@ QImage QQuickWindow::grabWindow()
         d->syncSceneGraph();
         d->renderSceneGraph(size());
 
-        QImage image = qt_gl_read_framebuffer(size() * effectiveDevicePixelRatio(), false, false);
+        bool alpha = format().alphaBufferSize() > 0 && color().alpha() < 255;
+        QImage image = qt_gl_read_framebuffer(size() * effectiveDevicePixelRatio(), alpha, alpha);
         d->cleanupNodesOnShutdown();
         d->context->invalidate();
         context.doneCurrent();
@@ -3382,6 +3419,11 @@ QQmlIncubationController *QQuickWindow::incubationController() const
     will delete the GL texture when the texture object is deleted.
 
     \value TextureCanUseAtlas The image can be uploaded into a texture atlas.
+
+    \value TextureIsOpaque The texture will return false for
+    QSGTexture::hasAlphaChannel() and will not be blended. This flag was added
+    in Qt 5.6.
+
  */
 
 /*!
@@ -3586,11 +3628,20 @@ QSGTexture *QQuickWindow::createTextureFromImage(const QImage &image) const
     The caller of the function is responsible for deleting the returned texture.
     The actual GL texture will be deleted when the texture object is deleted.
 
-    When \a options contains TextureCanUseAtlas the engine may put the image
+    When \a options contains TextureCanUseAtlas, the engine may put the image
     into a texture atlas. Textures in an atlas need to rely on
     QSGTexture::normalizedTextureSubRect() for their geometry and will not
     support QSGTexture::Repeat. Other values from CreateTextureOption are
     ignored.
+
+    When \a options contains TextureIsOpaque, the engine will create an RGB
+    texture which returns false for QSGTexture::hasAlphaChannel(). Opaque
+    textures will in most cases be faster to render. When this flag is not set,
+    the texture will have an alpha channel based on the image's format.
+
+    When \a options contains TextureHasMipmaps, the engine will create a
+    texture which can use mipmap filtering. Mipmapped textures can not be in
+    an atlas.
 
     The returned texture will be using \c GL_TEXTURE_2D as texture target and
     \c GL_RGBA as internal format. Reimplement QSGTexture to create textures
@@ -3613,14 +3664,13 @@ QSGTexture *QQuickWindow::createTextureFromImage(const QImage &image) const
 QSGTexture *QQuickWindow::createTextureFromImage(const QImage &image, CreateTextureOptions options) const
 {
     Q_D(const QQuickWindow);
-    if (d->context) {
-        if (options & TextureCanUseAtlas)
-            return d->context->createTexture(image);
-        else
-            return d->context->createTextureNoAtlas(image);
-    }
-    else
-        return 0;
+    if (!d->context)
+         return 0;
+    uint flags = 0;
+    if (options & TextureCanUseAtlas)     flags |= QSGRenderContext::CreateTexture_Atlas;
+    if (options & TextureHasMipmaps)      flags |= QSGRenderContext::CreateTexture_Mipmap;
+    if (!(options & TextureIsOpaque))     flags |= QSGRenderContext::CreateTexture_Alpha;
+    return d->context->createTexture(image, flags);
 }
 
 
@@ -3977,7 +4027,7 @@ void QQuickWindow::resetOpenGLState()
 */
 
 /*!
-    \qmlproperty Window::active
+    \qmlproperty bool Window::active
     \since 5.1
 
     The active status of the window.
@@ -4115,6 +4165,7 @@ void QQuickWindow::resetOpenGLState()
     \value BeforeRenderingStage Before rendering.
     \value AfterRenderingStage After rendering.
     \value AfterSwapStage After the frame is swapped.
+    \value NoStage As soon as possible. This value was added in Qt 5.6.
 
     \sa {Scene Graph and Rendering}
  */
@@ -4140,8 +4191,17 @@ void QQuickWindow::resetOpenGLState()
     If the rendering is happening on a different thread, then the job
     will happen on the rendering thread.
 
-    \note This function does not trigger rendering; the job
-    will be stored run until rendering is triggered elsewhere.
+    If \a stage is \l NoStage, \a job will be run at the earliest opportunity
+    whenever the render thread is not busy rendering a frame. If there is no
+    OpenGL context available or the window is not exposed at the time the job is
+    either posted or handled, it is deleted without executing the run() method.
+    If a non-threaded renderer is in use, the run() method of the job is executed
+    synchronously.
+    The OpenGL context is changed to the renderer context before executing a
+    \l NoStage job.
+
+    \note This function does not trigger rendering; the jobs targeting any other
+    stage than NoStage will be stored run until rendering is triggered elsewhere.
     To force the job to run earlier, call QQuickWindow::update();
 
     \sa beforeRendering(), afterRendering(), beforeSynchronizing(),
@@ -4153,16 +4213,22 @@ void QQuickWindow::scheduleRenderJob(QRunnable *job, RenderStage stage)
     Q_D(QQuickWindow);
 
     d->renderJobMutex.lock();
-    if (stage == BeforeSynchronizingStage)
+    if (stage == BeforeSynchronizingStage) {
         d->beforeSynchronizingJobs << job;
-    else if (stage == AfterSynchronizingStage)
+    } else if (stage == AfterSynchronizingStage) {
         d->afterSynchronizingJobs << job;
-    else if (stage == BeforeRenderingStage)
+    } else if (stage == BeforeRenderingStage) {
         d->beforeRenderingJobs << job;
-    else if (stage == AfterRenderingStage)
+    } else if (stage == AfterRenderingStage) {
         d->afterRenderingJobs << job;
-    else if (stage == AfterSwapStage)
+    } else if (stage == AfterSwapStage) {
         d->afterSwapJobs << job;
+    } else if (stage == NoStage) {
+        if (isExposed())
+            d->windowManager->postJob(this, job);
+        else
+            delete job;
+    }
     d->renderJobMutex.unlock();
 }
 

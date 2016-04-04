@@ -74,8 +74,10 @@ static QStringList filteredDeviceFilePaths()
     << QStringLiteral("ttyMI*")   // MOXA pci/serial converters.
     << QStringLiteral("ttymxc*")  // Motorola IMX serial ports (i.e. Freescale i.MX).
     << QStringLiteral("ttyAMA*")  // AMBA serial device for embedded platform on ARM (i.e. Raspberry Pi).
+    << QStringLiteral("ttyTHS*")  // Serial device for embedded platform on ARM (i.e. Tegra Jetson TK1).
     << QStringLiteral("rfcomm*")  // Bluetooth serial device.
-    << QStringLiteral("ircomm*"); // IrDA serial device.
+    << QStringLiteral("ircomm*")  // IrDA serial device.
+    << QStringLiteral("tnt*");    // Virtual tty0tty serial device.
 #elif defined(Q_OS_FREEBSD)
     << QStringLiteral("cu*");
 #elif defined(Q_OS_QNX)
@@ -436,6 +438,15 @@ static bool isRfcommDevice(const QString &portName)
     return true;
 }
 
+// provided by the tty0tty driver
+static bool isVirtualNullModemDevice(const QString &portName)
+{
+    if (!portName.startsWith(QLatin1String("tnt")))
+        return false;
+
+    return true;
+}
+
 static QString ueventProperty(const QDir &targetDir, const QByteArray &pattern)
 {
     QFile f(QFileInfo(targetDir, QStringLiteral("uevent")).absoluteFilePath());
@@ -530,8 +541,10 @@ QList<QSerialPortInfo> availablePortsBySysfs(bool &ok)
 
         const QString driverName = deviceDriver(targetDir);
         if (driverName.isEmpty()) {
-            if (!isRfcommDevice(priv.portName))
+            if (!isRfcommDevice(priv.portName)
+                    && !isVirtualNullModemDevice(priv.portName)) {
                 continue;
+            }
         }
 
         priv.device = QSerialPortInfoPrivate::portNameToSystemLocation(priv.portName);
@@ -692,7 +705,7 @@ QList<QSerialPortInfo> availablePortsByUdev(bool &ok)
 
         if (parentdev) {
             const QString driverName = deviceDriver(parentdev);
-            if (isSerial8250Driver(driverName) && !isValidSerial8250(priv.portName))
+            if (isSerial8250Driver(driverName) && !isValidSerial8250(priv.device))
                 continue;
             priv.description = deviceDescription(dev.data());
             priv.manufacturer = deviceManufacturer(dev.data());
@@ -700,8 +713,10 @@ QList<QSerialPortInfo> availablePortsByUdev(bool &ok)
             priv.vendorIdentifier = deviceVendorIdentifier(dev.data(), priv.hasVendorIdentifier);
             priv.productIdentifier = deviceProductIdentifier(dev.data(), priv.hasProductIdentifier);
         } else {
-            if (!isRfcommDevice(priv.portName))
+            if (!isRfcommDevice(priv.portName)
+                    && !isVirtualNullModemDevice(priv.portName)) {
                 continue;
+            }
         }
 
         serialPortInfoList.append(priv);
@@ -737,6 +752,7 @@ QList<qint32> QSerialPortInfo::standardBaudRates()
     return QSerialPortPrivate::standardBaudRates();
 }
 
+#if QT_DEPRECATED_SINCE(5, 6)
 bool QSerialPortInfo::isBusy() const
 {
     QString lockFilePath = serialPortLockFilePath(portName());
@@ -759,6 +775,7 @@ bool QSerialPortInfo::isBusy() const
 
     return true;
 }
+#endif // QT_DEPRECATED_SINCE(5, 6)
 
 #if QT_DEPRECATED_SINCE(5, 2)
 bool QSerialPortInfo::isValid() const

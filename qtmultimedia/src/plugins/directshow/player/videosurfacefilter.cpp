@@ -69,7 +69,7 @@ VideoSurfaceFilter::VideoSurfaceFilter(
 
 VideoSurfaceFilter::~VideoSurfaceFilter()
 {
-    Q_ASSERT(m_ref == 1);
+    Q_ASSERT(m_ref == 0);
 }
 
 HRESULT VideoSurfaceFilter::QueryInterface(REFIID riid, void **ppvObject)
@@ -110,8 +110,8 @@ ULONG VideoSurfaceFilter::AddRef()
 ULONG VideoSurfaceFilter::Release()
 {
     ULONG ref = InterlockedDecrement(&m_ref);
-
-    Q_ASSERT(ref != 0);
+    if (ref == 0)
+        delete this;
 
     return ref;
 }
@@ -146,6 +146,14 @@ HRESULT VideoSurfaceFilter::Stop()
     m_state = State_Stopped;
 
     m_sampleScheduler.stop();
+
+    if (thread() == QThread::currentThread()) {
+        flush();
+    } else {
+        QMutexLocker locker(&m_mutex);
+        m_loop->postEvent(this, new QEvent(QEvent::Type(FlushSurface)));
+        m_wait.wait(&m_mutex);
+    }
 
     return S_OK;
 }
@@ -606,10 +614,24 @@ void VideoSurfaceFilter::sampleReady()
     IMediaSample *sample = m_sampleScheduler.takeSample(&eos);
 
     if (sample) {
-        m_surface->present(QVideoFrame(
-                new MediaSampleVideoBuffer(sample, m_bytesPerLine),
-                m_surfaceFormat.frameSize(),
-                m_surfaceFormat.pixelFormat()));
+        QVideoFrame frame(new MediaSampleVideoBuffer(sample, m_bytesPerLine),
+                          m_surfaceFormat.frameSize(),
+                          m_surfaceFormat.pixelFormat());
+
+        if (IMediaSeeking *seeking = com_cast<IMediaSeeking>(m_graph, IID_IMediaSeeking)) {
+            LONGLONG position = 0;
+            seeking->GetCurrentPosition(&position);
+            seeking->Release();
+
+            frame.setStartTime(position * 0.1);
+
+            REFERENCE_TIME startTime = -1;
+            REFERENCE_TIME endTime = -1;
+            if (sample->GetTime(&startTime, &endTime) == S_OK)
+                frame.setEndTime(frame.startTime() + (endTime - startTime) * 0.1);
+        }
+
+        m_surface->present(frame);
 
         sample->Release();
 

@@ -39,7 +39,17 @@ SUBDIRS += \
     clip-planes-qml \
     mouseinput-qml \
     custom-mesh-cpp \
-    bigscene-instanced-qml
+    bigscene-instanced-qml \
+    custom-mesh-qml \
+    instanced-arrays-qml \
+    picking-qml \
+    transforms-qml \
+    lights
+
+qtHaveModule(multimedia): SUBDIRS += audio-visualizer-qml
+
+# qmake seems to break in some CI configurations, disable this for now
+#SUBDIRS += qgltf
 
 # TODO Port the old examples to new APIs
 #SUBDIRS += qt3d

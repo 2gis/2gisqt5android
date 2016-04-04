@@ -56,6 +56,7 @@
 #include "ui/gl/gl_context.h"
 #include "ui/gl/gl_implementation.h"
 #include "ui/gl/gl_share_group.h"
+#include "ui/gl/gpu_timing.h"
 
 #include "access_token_store_qt.h"
 #include "browser_context_adapter.h"
@@ -73,6 +74,12 @@
 #include "web_contents_delegate_qt.h"
 #include "web_engine_context.h"
 #include "web_engine_library_info.h"
+
+#if defined(ENABLE_PLUGINS)
+#include "content/public/browser/browser_ppapi_host.h"
+#include "ppapi/host/ppapi_host.h"
+#include "renderer/pepper/pepper_host_factory_qt.h"
+#endif
 
 #include <QGuiApplication>
 #include <QLocale>
@@ -277,7 +284,11 @@ public:
     virtual bool MakeCurrent(gfx::GLSurface *) Q_DECL_OVERRIDE { Q_UNREACHABLE(); return false; }
     virtual void ReleaseCurrent(gfx::GLSurface *) Q_DECL_OVERRIDE { Q_UNREACHABLE(); }
     virtual bool IsCurrent(gfx::GLSurface *) Q_DECL_OVERRIDE { Q_UNREACHABLE(); return false; }
-    virtual void SetSwapInterval(int) Q_DECL_OVERRIDE { Q_UNREACHABLE(); }
+    virtual void OnSetSwapInterval(int) Q_DECL_OVERRIDE { Q_UNREACHABLE(); }
+    virtual scoped_refptr<gfx::GPUTimingClient> CreateGPUTimingClient() Q_DECL_OVERRIDE
+    {
+        return nullptr;
+    }
 
 private:
     void *m_handle;
@@ -360,9 +371,8 @@ content::MediaObserver *ContentBrowserClientQt::GetMediaObserver()
     return MediaCaptureDevicesDispatcher::GetInstance();
 }
 
-void ContentBrowserClientQt::OverrideWebkitPrefs(content::RenderViewHost *rvh, const GURL &url, content::WebPreferences *web_prefs)
+void ContentBrowserClientQt::OverrideWebkitPrefs(content::RenderViewHost *rvh, content::WebPreferences *web_prefs)
 {
-    Q_UNUSED(url);
     if (content::WebContents *webContents = rvh->GetDelegate()->GetAsWebContents())
         static_cast<WebContentsDelegateQt*>(webContents->GetDelegate())->overrideWebPreferences(webContents, web_prefs);
 }
@@ -374,7 +384,7 @@ content::AccessTokenStore *ContentBrowserClientQt::CreateAccessTokenStore()
 
 net::URLRequestContextGetter* ContentBrowserClientQt::CreateRequestContext(content::BrowserContext* browser_context, content::ProtocolHandlerMap* protocol_handlers, content::URLRequestInterceptorScopedVector request_interceptors)
 {
-    return static_cast<BrowserContextQt*>(browser_context)->CreateRequestContext(protocol_handlers);
+    return static_cast<BrowserContextQt*>(browser_context)->CreateRequestContext(protocol_handlers, request_interceptors.Pass());
 }
 
 content::QuotaPermissionContext *ContentBrowserClientQt::CreateQuotaPermissionContext()
@@ -402,41 +412,6 @@ void ContentBrowserClientQt::AllowCertificateError(int render_process_id, int re
     contentsDelegate->allowCertificateError(errorController);
 }
 
-void ContentBrowserClientQt::RequestPermission(content::PermissionType permission,
-                                                content::WebContents* web_contents,
-                                                int bridge_id,
-                                                const GURL& requesting_frame,
-                                                bool user_gesture,
-                                                const base::Callback<void(bool)>& result_callback)
-{
-    Q_UNUSED(bridge_id);
-    Q_UNUSED(user_gesture);
-    WebContentsDelegateQt* contentsDelegate = static_cast<WebContentsDelegateQt*>(web_contents->GetDelegate());
-    Q_ASSERT(contentsDelegate);
-    if (permission == content::PERMISSION_GEOLOCATION)
-        contentsDelegate->requestGeolocationPermission(requesting_frame, result_callback);
-    else
-        result_callback.Run(false);
-}
-
-
-void ContentBrowserClientQt::CancelPermissionRequest(content::PermissionType permission,
-                                                     content::WebContents* web_contents,
-                                                     int bridge_id,
-                                                     const GURL& requesting_frame)
-{
-    Q_UNUSED(bridge_id);
-    WebContentsDelegateQt* contentsDelegate = static_cast<WebContentsDelegateQt*>(web_contents->GetDelegate());
-    Q_ASSERT(contentsDelegate);
-    if (permission == content::PERMISSION_GEOLOCATION)
-        contentsDelegate->cancelGeolocationPermissionRequest(requesting_frame);
-}
-
-blink::WebNotificationPermission ContentBrowserClientQt::CheckDesktopNotificationPermission(const GURL&, content::ResourceContext *, int )
-{
-    return blink::WebNotificationPermission::WebNotificationPermissionDenied;
-}
-
 content::LocationProvider *ContentBrowserClientQt::OverrideSystemLocationProvider()
 {
 #ifdef QT_USE_POSITIONING
@@ -451,6 +426,11 @@ std::string ContentBrowserClientQt::GetApplicationLocale()
     return WebEngineLibraryInfo::getApplicationLocale();
 }
 
+std::string ContentBrowserClientQt::GetAcceptLangs(content::BrowserContext *context)
+{
+    return static_cast<BrowserContextQt*>(context)->adapter()->httpAcceptLanguage().toStdString();
+}
+
 void ContentBrowserClientQt::AppendExtraCommandLineSwitches(base::CommandLine* command_line, int child_process_id)
 {
     Q_UNUSED(child_process_id);
@@ -459,6 +439,13 @@ void ContentBrowserClientQt::AppendExtraCommandLineSwitches(base::CommandLine* c
     if (processType == switches::kZygoteProcess)
         command_line->AppendSwitchASCII(switches::kLang, GetApplicationLocale());
 }
+
+#if defined(ENABLE_PLUGINS)
+    void ContentBrowserClientQt::DidCreatePpapiPlugin(content::BrowserPpapiHost* browser_host) {
+        browser_host->GetPpapiHost()->AddHostFactoryFilter(
+            scoped_ptr<ppapi::host::HostFactory>(new QtWebEngineCore::PepperHostFactoryQt(browser_host)));
+    }
+#endif
 
 content::DevToolsManagerDelegate* ContentBrowserClientQt::GetDevToolsManagerDelegate()
 {

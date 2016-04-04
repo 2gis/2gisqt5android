@@ -9,9 +9,30 @@ QMAKE_INFO_PLIST = Info_mac.plist
     error("Could not find the linking information that gyp should have generated.")
 }
 
-# We distribute the module binary but headers are only available in-tree.
-CONFIG += no_module_headers
 load(qt_module)
+
+api_library_name = qtwebenginecoreapi$$qtPlatformTargetSuffix()
+api_library_path = $$OUT_PWD/api/$$getConfigDir()
+
+
+LIBS_PRIVATE += -L$$api_library_path
+CONFIG *= no_smart_library_merge
+osx {
+    LIBS_PRIVATE += -Wl,-force_load,$${api_library_path}$${QMAKE_DIR_SEP}lib$${api_library_name}.a
+} else:msvc {
+    # Simulate -whole-archive by passing the list of object files that belong to the public
+    # API library as response file to the linker.
+    QMAKE_LFLAGS += /OPT:REF
+    QMAKE_LFLAGS += @$${api_library_path}$${QMAKE_DIR_SEP}$${api_library_name}.lib.objects
+} else {
+    LIBS_PRIVATE += -Wl,-whole-archive -l$$api_library_name -Wl,-no-whole-archive
+}
+
+win32-msvc* {
+    POST_TARGETDEPS += $${api_library_path}$${QMAKE_DIR_SEP}$${api_library_name}.lib
+} else {
+    POST_TARGETDEPS += $${api_library_path}$${QMAKE_DIR_SEP}lib$${api_library_name}.a
+}
 
 # Using -Wl,-Bsymbolic-functions seems to confuse the dynamic linker
 # and doesn't let Chromium get access to libc symbols through dlsym.
@@ -31,16 +52,7 @@ resources.files = $$REPACK_DIR/qtwebengine_resources.pak \
     $$REPACK_DIR/qtwebengine_resources_100p.pak \
     $$REPACK_DIR/qtwebengine_resources_200p.pak
 
-PLUGIN_EXTENSION = .so
-PLUGIN_PREFIX = lib
-osx: PLUGIN_PREFIX =
-win32 {
-    PLUGIN_EXTENSION = .dll
-    PLUGIN_PREFIX =
-}
 icu.files = $$OUT_PWD/$$getConfigDir()/icudtl.dat
-
-plugins.files = $$OUT_PWD/$$getConfigDir()/$${PLUGIN_PREFIX}ffmpegsumo$${PLUGIN_EXTENSION}
 
 !debug_and_release|!build_all|CONFIG(release, debug|release) {
     contains(QT_CONFIG, qt_framework) {
@@ -50,40 +62,37 @@ plugins.files = $$OUT_PWD/$$getConfigDir()/$${PLUGIN_PREFIX}ffmpegsumo$${PLUGIN_
         resources.path = Resources
         icu.version = Versions
         icu.path = Resources
-        plugins.version = Versions
-        plugins.path = Libraries
         # No files, this prepares the bundle Helpers symlink, process.pro will create the directories
         qtwebengineprocessplaceholder.version = Versions
         qtwebengineprocessplaceholder.path = Helpers
-        QMAKE_BUNDLE_DATA += icu locales resources plugins qtwebengineprocessplaceholder
+        QMAKE_BUNDLE_DATA += icu locales resources qtwebengineprocessplaceholder
     } else {
         locales.CONFIG += no_check_exist
         locales.path = $$[QT_INSTALL_TRANSLATIONS]/qtwebengine_locales
         resources.CONFIG += no_check_exist
-        resources.path = $$[QT_INSTALL_DATA]
+        resources.path = $$[QT_INSTALL_DATA]/resources
         icu.CONFIG += no_check_exist
-        icu.path = $$[QT_INSTALL_DATA]
-        plugins.CONFIG += no_check_exist
-        plugins.path = $$[QT_INSTALL_PLUGINS]/qtwebengine
-        INSTALLS += icu locales resources plugins
+        icu.path = $$[QT_INSTALL_DATA]/resources
+        INSTALLS += icu locales resources
     }
 
     !contains(QT_CONFIG, qt_framework): contains(QT_CONFIG, private_tests) {
-        ICU_TARGET = $$shell_path($$[QT_INSTALL_DATA/get]/icudtl.dat)
-        ICU_FILE = $$shell_path($$OUT_PWD/$$getConfigDir()/icudtl.dat)
-        icu_rule.target = $$ICU_TARGET
-        unix: icu_rule.commands = if [ -e $$ICU_FILE ] ; then $$QMAKE_COPY $$ICU_FILE $$ICU_TARGET ; fi
-        win32: icu_rule.commands = if exist $$ICU_FILE ( $$QMAKE_COPY $$ICU_FILE $$ICU_TARGET )
+        #
+        # Copy essential files to the qtbase build directory (for non-installed developer builds)
+        #
 
-        PLUGIN_DIR = $$shell_path($$[QT_INSTALL_PLUGINS/get]/qtwebengine)
-        PLUGIN_TARGET = $$shell_path($$PLUGIN_DIR/$${PLUGIN_PREFIX}ffmpegsumo$${PLUGIN_EXTENSION})
-        PLUGIN_FILE = $$shell_path($$OUT_PWD/$$getConfigDir()/$${PLUGIN_PREFIX}ffmpegsumo$${PLUGIN_EXTENSION})
-        plugins_rule.target = $$PLUGIN_TARGET
-        unix: plugins_rule.commands = $$QMAKE_MKDIR $$PLUGIN_DIR && if [ -e $$PLUGIN_FILE ] ; then $$QMAKE_COPY $$PLUGIN_FILE $$PLUGIN_TARGET ; fi
-        win32: plugins_rule.commands = (if not exist $$PLUGIN_DIR ( $$QMAKE_MKDIR $$PLUGIN_DIR )) && \
-                                        if exist $$PLUGIN_FILE ( $$QMAKE_COPY $$PLUGIN_FILE $$PLUGIN_TARGET )
+        icudt2build.input = icu.files
+        icudt2build.output = $$[QT_INSTALL_DATA/get]/resources/${QMAKE_FILE_BASE}${QMAKE_FILE_EXT}
+        icudt2build.commands = $$QMAKE_COPY ${QMAKE_FILE_IN} ${QMAKE_FILE_OUT}
+        icudt2build.name = COPY ${QMAKE_FILE_IN}
+        icudt2build.CONFIG = no_link no_clean target_predeps
 
-        QMAKE_EXTRA_TARGETS += icu_rule plugins_rule
-        PRE_TARGETDEPS += $$ICU_TARGET $$PLUGIN_TARGET
+        resources2build.input = resources.files
+        resources2build.output = $$[QT_INSTALL_DATA/get]/resources/${QMAKE_FILE_BASE}${QMAKE_FILE_EXT}
+        resources2build.commands = $$QMAKE_COPY ${QMAKE_FILE_IN} ${QMAKE_FILE_OUT}
+        resources2build.name = COPY ${QMAKE_FILE_IN}
+        resources2build.CONFIG = no_link no_clean target_predeps
+
+        QMAKE_EXTRA_COMPILERS += icudt2build resources2build
     }
 }

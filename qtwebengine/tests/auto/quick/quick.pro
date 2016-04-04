@@ -3,6 +3,8 @@ TEMPLATE = subdirs
 SUBDIRS += \
     inspectorserver \
     publicapi \
-    qmltests \
+    qquickwebenginedefaultsurfaceformat \
     qquickwebengineview \
     qquickwebengineviewgraphics
+
+isQMLTestSupportApiEnabled(): SUBDIRS += qmltests

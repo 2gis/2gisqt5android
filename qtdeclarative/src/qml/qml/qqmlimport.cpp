@@ -125,7 +125,9 @@ bool isPathAbsolute(const QString &path)
 }
 
 // If the type does not already exist as a file import, add the type and return the new type
-QQmlType *getTypeForUrl(const QString &urlString, const QHashedStringRef& typeName, bool isCompositeSingleton, QList<QQmlError> *errors)
+QQmlType *getTypeForUrl(const QString &urlString, const QHashedStringRef& typeName,
+                        bool isCompositeSingleton, QList<QQmlError> *errors,
+                        int majorVersion=-1, int minorVersion=-1)
 {
     QUrl url(urlString);
     QQmlType *ret = QQmlMetaType::qmlType(url);
@@ -140,8 +142,8 @@ QQmlType *getTypeForUrl(const QString &urlString, const QHashedStringRef& typeNa
             QQmlPrivate::RegisterCompositeSingletonType reg = {
                 url,
                 "", //Empty URI indicates loaded via file imports
-                -1,
-                -1,
+                majorVersion,
+                minorVersion,
                 buf.constData()
             };
             ret = QQmlMetaType::qmlTypeFromIndex(QQmlPrivate::qmlregister(QQmlPrivate::CompositeSingletonRegistration, &reg));
@@ -149,8 +151,8 @@ QQmlType *getTypeForUrl(const QString &urlString, const QHashedStringRef& typeNa
             QQmlPrivate::RegisterCompositeType reg = {
                 url,
                 "", //Empty URI indicates loaded via file imports
-                -1,
-                -1,
+                majorVersion,
+                minorVersion,
                 buf.constData()
             };
             ret = QQmlMetaType::qmlTypeFromIndex(QQmlPrivate::qmlregister(QQmlPrivate::CompositeRegistration, &reg));
@@ -169,6 +171,7 @@ QQmlType *getTypeForUrl(const QString &urlString, const QHashedStringRef& typeNa
 
 } // namespace
 
+#ifndef QT_NO_LIBRARY
 struct RegisteredPlugin {
     QString uri;
     QPluginLoader* loader;
@@ -193,6 +196,7 @@ void qmlClearEnginePlugins()
 }
 
 typedef QPair<QStaticPlugin, QJsonArray> StaticPluginPair;
+#endif
 
 class QQmlImportNamespace
 {
@@ -292,9 +296,10 @@ public:
                                                       const QString &uri, const QString &url,
                                                       int vmaj, int vmin, QV4::CompiledData::Import::ImportType type,
                                                       QList<QQmlError> *errors, bool lowPrecedence = false);
-
+#ifndef QT_NO_LIBRARY
    bool populatePluginPairVector(QVector<StaticPluginPair> &result, const QString &uri,
                                      const QString &qmldirPath, QList<QQmlError> *errors);
+#endif
 };
 
 /*!
@@ -382,7 +387,7 @@ void QQmlImports::populateCache(QQmlTypeNameCache *cache) const
 // We need to exclude the entry for the current baseUrl. This can happen for example
 // when handling qmldir files on the remote dir case and the current type is marked as
 // singleton.
-bool excludeBaseUrl(const QString &importUrl, const QString &fileName, const QString baseUrl)
+bool excludeBaseUrl(const QString &importUrl, const QString &fileName, const QString &baseUrl)
 {
     if (importUrl.isEmpty())
         return false;
@@ -398,7 +403,7 @@ bool excludeBaseUrl(const QString &importUrl, const QString &fileName, const QSt
     return true;
 }
 
-void findCompositeSingletons(const QQmlImportNamespace &set, QList<QQmlImports::CompositeSingletonReference> &resultList, QUrl baseUrl)
+void findCompositeSingletons(const QQmlImportNamespace &set, QList<QQmlImports::CompositeSingletonReference> &resultList, const QUrl &baseUrl)
 {
     typedef QQmlDirComponents::const_iterator ConstIterator;
 
@@ -413,6 +418,8 @@ void findCompositeSingletons(const QQmlImportNamespace &set, QList<QQmlImports::
                 QQmlImports::CompositeSingletonReference ref;
                 ref.typeName = cit->typeName;
                 ref.prefix = set.prefix;
+                ref.majorVersion = cit->majorVersion;
+                ref.minorVersion = cit->minorVersion;
                 resultList.append(ref);
             }
         }
@@ -653,7 +660,10 @@ bool QQmlImportNamespace::Import::resolveType(QQmlTypeLoader *typeLoader,
         }
 
         if (candidate != end) {
-            QQmlType *returnType = getTypeForUrl(componentUrl, type, isCompositeSingleton, 0);
+            int major = vmajor ? *vmajor : -1;
+            int minor = vminor ? *vminor : -1;
+            QQmlType *returnType = getTypeForUrl(componentUrl, type, isCompositeSingleton, 0,
+                                                 major, minor);
             if (type_return)
                 *type_return = returnType;
             return returnType != 0;
@@ -826,6 +836,7 @@ QQmlImportNamespace *QQmlImportsPrivate::findQualifiedNamespace(const QHashedStr
 }
 
 
+#ifndef QT_NO_LIBRARY
 /*!
     Get all static plugins that are QML plugins and has a meta data URI that begins with \a uri.
     Note that if e.g uri == "a", and different plugins have meta data "a", "a.2.1", "a.b.c", all
@@ -869,6 +880,7 @@ bool QQmlImportsPrivate::populatePluginPairVector(QVector<StaticPluginPair> &res
     }
     return true;
 }
+#endif
 
 /*!
 Import an extension defined by a qmldir file.
@@ -995,6 +1007,13 @@ bool QQmlImportsPrivate::importExtension(const QString &qmldirFilePath,
     }
 
 #else
+    Q_UNUSED(qmldirFilePath);
+    Q_UNUSED(uri);
+    Q_UNUSED(vmaj);
+    Q_UNUSED(vmin);
+    Q_UNUSED(database);
+    Q_UNUSED(qmldir);
+    Q_UNUSED(errors);
     return false;
 #endif // QT_NO_LIBRARY
     return true;
@@ -1550,8 +1569,8 @@ QQmlImportDatabase::QQmlImportDatabase(QQmlEngine *e)
     addImportPath(installImportsPath);
 
     // env import paths
-    QByteArray envImportPath = qgetenv("QML2_IMPORT_PATH");
-    if (!envImportPath.isEmpty()) {
+    if (Q_UNLIKELY(!qEnvironmentVariableIsEmpty("QML2_IMPORT_PATH"))) {
+        const QByteArray envImportPath = qgetenv("QML2_IMPORT_PATH");
 #if defined(Q_OS_WIN)
         QLatin1Char pathSep(';');
 #else
@@ -1639,8 +1658,6 @@ QString QQmlImportDatabase::resolvePlugin(QQmlTypeLoader *typeLoader,
   \header \li Platform \li Valid suffixes
   \row \li Windows     \li \c .dll
   \row \li Unix/Linux  \li \c .so
-  \row \li AIX  \li \c .a
-  \row \li HP-UX       \li \c .sl, \c .so (HP-UXi)
   \row \li OS X    \li \c .dylib, \c .bundle, \c .so
   \endtable
 
@@ -1657,9 +1674,7 @@ QString QQmlImportDatabase::resolvePlugin(QQmlTypeLoader *typeLoader,
                          << QLatin1String("d.dll") // try a qmake-style debug build first
 # endif
                          << QLatin1String(".dll"));
-#else
-
-# if defined(Q_OS_DARWIN)
+#elif defined(Q_OS_DARWIN)
 
     return resolvePlugin(typeLoader, qmldirPath, qmldirPluginPath, baseName,
                          QStringList()
@@ -1673,31 +1688,8 @@ QString QQmlImportDatabase::resolvePlugin(QQmlTypeLoader *typeLoader,
                          << QLatin1String(".so")
                          << QLatin1String(".bundle"),
                          QLatin1String("lib"));
-# else  // Generic Unix
-    QStringList validSuffixList;
-
-#  if defined(Q_OS_HPUX)
-/*
-    See "HP-UX Linker and Libraries User's Guide", section "Link-time Differences between PA-RISC and IPF":
-    "In PA-RISC (PA-32 and PA-64) shared libraries are suffixed with .sl. In IPF (32-bit and 64-bit),
-    the shared libraries are suffixed with .so. For compatibility, the IPF linker also supports the .sl suffix."
- */
-    validSuffixList << QLatin1String(".sl");
-#   if defined __ia64
-    validSuffixList << QLatin1String(".so");
-#   endif
-#  elif defined(Q_OS_AIX)
-    validSuffixList << QLatin1String(".a") << QLatin1String(".so");
-#  elif defined(Q_OS_UNIX)
-    validSuffixList << QLatin1String(".so");
-#  endif
-
-    // Examples of valid library names:
-    //  libfoo.so
-
-    return resolvePlugin(typeLoader, qmldirPath, qmldirPluginPath, baseName, validSuffixList, QLatin1String("lib"));
-# endif
-
+# else  // Unix
+    return resolvePlugin(typeLoader, qmldirPath, qmldirPluginPath, baseName, QStringList() << QLatin1String(".so"), QLatin1String("lib"));
 #endif
 }
 
@@ -1931,6 +1923,12 @@ bool QQmlImportDatabase::importStaticPlugin(QObject *instance, const QString &ba
 
     return true;
 #else
+    Q_UNUSED(instance);
+    Q_UNUSED(basePath);
+    Q_UNUSED(uri);
+    Q_UNUSED(typeNamespace);
+    Q_UNUSED(vmaj);
+    Q_UNUSED(errors);
     return false;
 #endif
 }
@@ -2011,6 +2009,11 @@ bool QQmlImportDatabase::importDynamicPlugin(const QString &filePath, const QStr
 
     return true;
 #else
+    Q_UNUSED(filePath);
+    Q_UNUSED(uri);
+    Q_UNUSED(typeNamespace);
+    Q_UNUSED(vmaj);
+    Q_UNUSED(errors);
     return false;
 #endif
 }

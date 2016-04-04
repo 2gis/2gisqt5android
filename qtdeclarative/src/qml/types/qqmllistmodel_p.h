@@ -34,6 +34,17 @@
 #ifndef QQMLLISTMODEL_H
 #define QQMLLISTMODEL_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include <qqml.h>
 #include <private/qqmlcustomparser_p.h>
 
@@ -54,6 +65,10 @@ class QQmlListModelWorkerAgent;
 class ListModel;
 class ListLayout;
 
+namespace QV4 {
+struct ModelObject;
+}
+
 class Q_QML_PRIVATE_EXPORT QQmlListModel : public QAbstractListModel
 {
     Q_OBJECT
@@ -67,6 +82,7 @@ public:
     QModelIndex index(int row, int column, const QModelIndex &parent) const;
     int rowCount(const QModelIndex &parent) const;
     QVariant data(const QModelIndex &index, int role) const;
+    bool setData(const QModelIndex &index, const QVariant &value, int role = Qt::EditRole);
     QHash<int,QByteArray> roleNames() const;
 
     QVariant data(int index, int role) const;
@@ -94,6 +110,7 @@ private:
     friend class QQmlListModelParser;
     friend class QQmlListModelWorkerAgent;
     friend class ModelObject;
+    friend struct QV4::ModelObject;
     friend class ModelNodeMetaObject;
     friend class ListModel;
     friend class ListElement;

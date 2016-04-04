@@ -104,7 +104,6 @@ public:
     void serializeNavigationHistory(QDataStream &output);
     void setZoomFactor(qreal);
     qreal currentZoomFactor() const;
-    void filesSelectedInChooser(const QStringList &fileList, WebContentsAdapterClient::FileChooserMode);
     void runJavaScript(const QString &javaScript);
     quint64 runJavaScriptCallbackResult(const QString &javaScript);
     quint64 fetchDocumentMarkup();
@@ -112,6 +111,25 @@ public:
     quint64 findText(const QString &subString, bool caseSensitively, bool findBackward);
     void stopFinding();
     void updateWebPreferences(const content::WebPreferences &webPreferences);
+    void download(const QUrl &url, const QString &suggestedFileName);
+
+    // Must match blink::WebMediaPlayerAction::Type.
+    enum MediaPlayerAction {
+        MediaPlayerNoAction,
+        MediaPlayerPlay,
+        MediaPlayerMute,
+        MediaPlayerLoop,
+        MediaPlayerControls,
+        MediaPlayerTypeLast = MediaPlayerControls
+    };
+    void copyImageAt(const QPoint &location);
+    void executeMediaPlayerActionAt(const QPoint &location, MediaPlayerAction action, bool enable);
+
+    void inspectElementAt(const QPoint &location);
+    bool hasInspector() const;
+    void exitFullScreen();
+    void requestClose();
+    void changedFullScreen();
 
     void wasShown();
     void wasHidden();
@@ -120,6 +138,7 @@ public:
     void grantMouseLockPermission(bool granted);
 
     void dpiScaleChanged();
+    void backgroundColorChanged();
     QAccessibleInterface *browserAccessible();
     BrowserContextQt* browserContext();
     BrowserContextAdapter* browserContextAdapter();

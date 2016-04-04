@@ -34,14 +34,14 @@
 **
 ****************************************************************************/
 
-import Qt3D 2.0
-import Qt3D.Renderer 2.0
+import Qt3D.Core 2.0
+import Qt3D.Render 2.0
 
 Material {
     id:root
     property color ambient:  Qt.rgba( 0.05, 0.05, 0.05, 1.0 )
     property color diffuse:  Qt.rgba( 0.7, 0.7, 0.7, 1.0 )
-    property color specular: Qt.rgba( 0.95, 0.95, 0.95, 1.0 )
+    property color specular: Qt.rgba( 0.01, 0.01, 0.01, 1.0 )
     property real shininess: 150.0
 
 
@@ -63,17 +63,15 @@ Material {
             Parameter { name: "ka";   value: Qt.vector3d(root.ambient.r, root.ambient.g, root.ambient.b) },
             Parameter { name: "kd";   value: Qt.vector3d(root.diffuse.r, root.diffuse.g, root.diffuse.b) },
             Parameter { name: "ks";  value: Qt.vector3d(root.specular.r, root.specular.g, root.specular.b) },
-            Parameter { name: "shininess"; value: root.shininess },
-            Parameter { name: "lightPosition"; value: Qt.vector4d(1.0, 1.0, 0.0, 1.0) },
-            Parameter { name: "lightIntensity"; value: Qt.vector3d(1.0, 1.0, 1.0) }
+            Parameter { name: "shininess"; value: root.shininess }
         ]
 
         techniques: [
             // GL 3 Technique
             Technique {
-                openGLFilter {
-                    api: OpenGLFilter.Desktop
-                    profile: OpenGLFilter.Core
+                graphicsApiFilter {
+                    api: GraphicsApiFilter.OpenGL
+                    profile: GraphicsApiFilter.CoreProfile
                     majorVersion: 3
                     minorVersion: 1
                 }
@@ -84,9 +82,9 @@ Material {
 
             // GL 2 Technique
             Technique {
-                openGLFilter {
-                    api: OpenGLFilter.Desktop
-                    profile: OpenGLFilter.None
+                graphicsApiFilter {
+                    api: GraphicsApiFilter.OpenGL
+                    profile: GraphicsApiFilter.NoProfile
                     majorVersion: 2
                     minorVersion: 0
                 }
@@ -97,9 +95,9 @@ Material {
 
             // ES 2 Technique
             Technique {
-                openGLFilter {
-                    api: OpenGLFilter.ES
-                    profile: OpenGLFilter.None
+                graphicsApiFilter {
+                    api: GraphicsApiFilter.OpenGLES
+                    profile: GraphicsApiFilter.NoProfile
                     majorVersion: 2
                     minorVersion: 0
                 }

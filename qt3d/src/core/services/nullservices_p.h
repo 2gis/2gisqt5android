@@ -34,19 +34,28 @@
 **
 ****************************************************************************/
 
-#ifndef QT3D_NULLSERVICES_P_H
-#define QT3D_NULLSERVICES_P_H
+#ifndef QT3DCORE_NULLSERVICES_P_H
+#define QT3DCORE_NULLSERVICES_P_H
+
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists for the convenience
+// of other Qt classes.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
 
 #include <Qt3DCore/qt3dcore_global.h>
 #include <Qt3DCore/qray3d.h>
-#include <Qt3DCore/qcollisionqueryresult.h>
-#include "qopenglinformationservice.h"
-#include "qsysteminformationservice.h"
-#include <Qt3DCore/qabstractcollisionqueryservice.h>
+#include "qopenglinformationservice_p.h"
+#include "qsysteminformationservice_p.h"
 
 QT_BEGIN_NAMESPACE
 
-namespace Qt3D {
+namespace Qt3DCore {
 
 class NullSystemInformationService : public QSystemInformationService
 {
@@ -72,39 +81,9 @@ public:
     QSurfaceFormat format() const Q_DECL_FINAL { return QSurfaceFormat(); }
 };
 
-class NullCollisionQueryService : public QAbstractCollisionQueryService
-{
-public:
-    NullCollisionQueryService()
-        : QAbstractCollisionQueryService(QStringLiteral("Null Collision Query Service"))
-    {}
-    ~NullCollisionQueryService() {}
-
-    QQueryHandle query(const QRay3D &ray, QueryMode mode) Q_DECL_OVERRIDE
-    {
-        Q_UNUSED(ray);
-        Q_UNUSED(mode);
-
-        return 0;
-    }
-
-    QCollisionQueryResult fetchResult(const QQueryHandle &handle) Q_DECL_OVERRIDE
-    {
-        Q_UNUSED(handle);
-
-        QCollisionQueryResult result;
-        return result;
-    }
-
-    QVector<QCollisionQueryResult> fetchAllResults() const Q_DECL_OVERRIDE
-    {
-        return QVector<QCollisionQueryResult>();
-    }
-};
-
-} // namespace Qt3D
+} // namespace Qt3DCore
 
 QT_END_NAMESPACE
 
-#endif // QT3D_NULLSERVICES_P_H
+#endif // QT3DCORE_NULLSERVICES_P_H
 

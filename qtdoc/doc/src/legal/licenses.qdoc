@@ -31,51 +31,42 @@
     \brief Information about licenses and licensing issues.
 
     Qt is available under different licensing options designed to accommodate
-    the needs of our various users.
+    the needs of our various users:
 
     \list
-        \li Enterprise, Professional, and Indie Mobile licenses.
-        \li Community license (GPL or LGPL versions 3 and 2.1).
+      \li Qt licensed under \e commercial licenses are appropriate for
+          development of proprietary/commercial software where you do not want
+          to share any source code with third parties or otherwise cannot
+          comply with the terms of the GNU LGPL version 3 or the GNU LGPL
+          version 2.1.
+
+      \li Qt licensed under the \l{GNU Lesser General Public License (LGPL)}
+          version 3 is appropriate for the development of Qt applications
+          provided you can comply with the terms and conditions of the GNU LGPL
+          version 3 (or GNU GPL version 3).
+
+      \li Qt licensed under the \l{GNU Lesser General Public License (LGPL)}
+          version 2.1 is appropriate for the development of Qt applications
+          provided you can comply with the terms and conditions of the GNU LGPL
+          version 2.1.
     \endlist
 
     \note Some specific parts (modules) of the Qt framework are not available
     under the GNU LGPL version 2.1. See \l {Licenses Used in Qt} for details.
 
-    Qt licensed under Enterprise, Professional and Indie Mobile licenses are
-    appropriate for development
-    of proprietary/commercial software where you do not want to share any source code
-    with third parties or otherwise cannot comply with the terms of the GNU LGPL
-    version 3 or the GNU LGPL version 2.1.
+    \e {Qt documentation} is licensed under the terms of the \l{GNU Free
+    Documentation License (FDL)} version 1.3, as published by the Free Software
+    Foundation. Alternatively, you may use the documentation in accordance with
+    the terms contained in a written agreement between you and The Qt Company.
 
-    Qt licensed under the \l{GNU Lesser General Public License (LGPL)} version 3
-    is appropriate for the development of Qt applications provided you can comply
-    with the terms and conditions of the GNU LGPL version 3 (or GNU GPL version 3).
-
-    Qt licensed under the \l{GNU Lesser General Public License (LGPL)} version 2.1
-    is appropriate for the development of Qt applications provided you can comply
-    with the terms and conditions of the GNU LGPL version 2.1.
-
-    Qt documentation is licensed under the terms of the \l{GNU Free Documentation
-    License (FDL)} version 1.3, as published by the Free Software Foundation.
-    Alternatively, you may use the documentation in accordance with the terms
-    contained in a written agreement between you and The Qt Company.
-
-    See \l{http://qt.io/licensing/} for an overview of Qt licensing, and
-    \l{http://www.qt.io/download/} for details on what is included in each license
-    type.
+    See \l{http://qt.io/licensing/} for an overview of Qt licensing.
 
     \section1 Purchasing and Sales Information
 
     To purchase a Qt license, visit \l{http://www.qt.io/download/}.
 
-   For further information and assistance about Qt licensing,
-    please contact our sales via one of the following channels:
-
-    \table
-    \row \li Web: \li \l{http://www.qt.io/contact-us/}
-    \row \li Phone, U.S. office (for sales in North America): \li \b{+1 408 433 9320}
-    \row \li Phone, Norway office (for sales in the rest of the world): \li \b{+47 2108 0420}
-    \endtable
+    For further information and assistance about Qt licensing, contact our
+    sales; see \l{http://www.qt.io/locations/} for contact details.
 
     \section1 Licenses Used in Qt
 
@@ -116,6 +107,8 @@
          \li GBK is an extension of the GB2312 character set for simplified Chinese characters, used mainland China. \li BSD-style \li
     \row \li \l{Big5 Text Codec}
          \li Big5, or BIG-5, is a Chinese character encoding method used for Traditional Chinese characters. \li BSD-style \li
+    \row \li \l{Big5-HKSCS Text Codec}
+         \li Big5-HKSCS is a Chinese character set with more than 4700 characters. \li BSD-style \li
     \row \li \l{TSCII Text Codec}
          \li The TSCII codec provides conversion to and from the Tamil TSCII encoding. \li BSD-style \li
     \row \li \l{Stack-less Just-In-Time compiler}
@@ -152,7 +145,6 @@
          \li zlib is a general purpose data compression library. \li BSD-style \li
     \row \li \l{The Public Suffix List}
          \li A list of all known public Internet suffixes. \li Mozilla Public License \li
-    \row \li \li \li \li
 
     \row \li {1,12} Qt Gui
     \row \li \l{QKeyMapper class on X11 platforms}{QKeyMapper}
@@ -264,8 +256,8 @@
 
     \row \li {1,4} Qt WebEngine
 
-    \row \li \l {Qt WebEngine Widgets#License Information}{License information}
-         \li \li LGPL v3 or\br LGPL v2.1 + Qt commercial license \li
+    \row \li \l[QtWebEngineCore]{Qt WebEngine Core}
+         \li \li LGPL v3 or\br GPL v2 + Qt commercial license \li
     \row \li \li \li \li
     \row \li \li \li \li
 
@@ -346,6 +338,44 @@
     \row \li {4,1} \b{Third-party Licenses}
     \row \li \l{Clucene Core Library}
          \li A high-performance, full-featured text search engine written in C++. \li LGPL/Apache \li
+
+    \row \li {1,6} Qt Virtual Keyboard
+
+    \row \li {4,1} \b{Third-party Licenses}
+    \row \li \l{Lipi Toolkit (LipiTk)}{Lipi Toolkit}
+         \li An open source toolkit for online Handwriting  Recognition (HWR).
+         \li MIT-Style License \li
+
+    \row \li \l{OpenWnn}
+         \li A Japanese IME
+         \li Apache License \li
+
+    \row \li \l{Pinyin}
+         \li An IME for Standard Chinese input.
+         \li Apache License \li
+
+    \row \li \l{Traditional Chinese IME (tcime)}{tcime}
+         \li A traditional Chinese IME.
+         \li Apache License \li
+
+    \row \li {1,6} Qt Quick 2D Renderer
+
+    \row \li {4,1} \b{Third-party Licenses}
+    \row \li \l{EGL 1.5 Headers}
+         \li These headers are based on EGL 1.5 specification.
+         \li MIT License \li
+
+    \row \li \l{OpenGL ES 2.0 Headers}
+         \li These headers are based on OpenGL ES 2.0 specification.
+         \li MIT and SGI License \li
+
+    \row \li \l{OpenGL ES 3.1 Headers}
+         \li These headers are based on OpenGL ES 3.1 specification.
+         \li MIT and SGI License \li
+
+    \row \li \l{OpenKODE Core 1.0 Header}
+         \li The header is based on OpenKODE Core 1.0 specification.
+         \li MIT License \li
 
     \endtable
 
@@ -1098,10 +1128,13 @@
 
     \section1 The PCRE library
 
-    Copyright (c) 1997-2012 University of Cambridge\br
+    Copyright (c) 1997-2015 University of Cambridge\br
     All rights reserved.
 
-    Copyright(c) 2009-2012 Zoltan Herczeg\br
+    Copyright(c) 2009-2015 Zoltan Herczeg\br
+    All rights reserved.
+
+    Copyright (c) 2007-2012, Google Inc.
     All rights reserved.
 
     Redistribution and use in source and binary forms, with or without

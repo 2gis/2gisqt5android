@@ -39,6 +39,7 @@
 ****************************************************************************/
 
 import QtQuick 2.0
+import "."
 
 Rectangle {
     id: button
@@ -54,7 +55,7 @@ Rectangle {
     }
     Text {
         anchors.centerIn: parent
-        font.family: "Open Sans"
+        font.family: Settings.fontFamily
         font.pointSize: 19
         font.weight: Font.DemiBold
         color: button.buttonEnabled ? "#000000" : "#14aaff"

@@ -34,30 +34,42 @@
 **
 ****************************************************************************/
 
-#ifndef QT3D_QENTITY_P_H
-#define QT3D_QENTITY_P_H
+#ifndef QT3DCORE_QENTITY_P_H
+#define QT3DCORE_QENTITY_P_H
 
-#include <Qt3DCore/qt3dcore_global.h>
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists for the convenience
+// of other Qt classes.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include <Qt3DCore/private/qnode_p.h>
+#include <Qt3DCore/private/qt3dcore_global_p.h>
 #include "qentity.h"
 
 QT_BEGIN_NAMESPACE
 
-namespace Qt3D {
+namespace Qt3DCore {
 
-class QT3DCORESHARED_EXPORT QEntityPrivate : public QNodePrivate
+class QT3DCORE_PRIVATE_EXPORT QEntityPrivate : public QNodePrivate
 {
 public :
     QEntityPrivate();
 
     Q_DECLARE_PUBLIC(QEntity)
 
+    QNodeId parentEntityId() const;
+
     QComponentList m_components;
     bool m_visible;
 
     // TODO: Is a bool enough here or do we need additional states for entities?
     // Perhaps aboutToBeDeleted would be useful?
-    bool m_enabled;
     mutable QNodeId m_parentEntityId;
 };
 
@@ -65,4 +77,4 @@ public :
 
 QT_END_NAMESPACE
 
-#endif // QT3D_QENTITY_P_H
+#endif // QT3DCORE_QENTITY_P_H

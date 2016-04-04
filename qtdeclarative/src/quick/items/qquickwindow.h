@@ -69,7 +69,8 @@ public:
         TextureHasAlphaChannel  = 0x0001,
         TextureHasMipmaps       = 0x0002,
         TextureOwnsGLTexture    = 0x0004,
-        TextureCanUseAtlas      = 0x0008
+        TextureCanUseAtlas      = 0x0008,
+        TextureIsOpaque         = 0x0010
     };
 
     enum RenderStage {
@@ -77,7 +78,8 @@ public:
         AfterSynchronizingStage,
         BeforeRenderingStage,
         AfterRenderingStage,
-        AfterSwapStage
+        AfterSwapStage,
+        NoStage
     };
 
     Q_DECLARE_FLAGS(CreateTextureOptions, CreateTextureOption)
@@ -85,7 +87,7 @@ public:
     enum SceneGraphError {
         ContextNotAvailable = 1
     };
-    Q_ENUMS(SceneGraphError)
+    Q_ENUM(SceneGraphError)
 
     QQuickWindow(QWindow *parent = 0);
     explicit QQuickWindow(QQuickRenderControl *renderControl);
@@ -194,7 +196,8 @@ protected:
 private Q_SLOTS:
     void maybeUpdate();
     void cleanupSceneGraph();
-    void forcePolish();
+    void physicalDpiChanged();
+    void handleScreenChanged(QScreen *screen);
     void setTransientParent_helper(QQuickWindow *window);
     void runJobsAfterSwap();
 

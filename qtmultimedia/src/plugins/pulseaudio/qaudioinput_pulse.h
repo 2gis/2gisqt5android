@@ -100,6 +100,7 @@ public:
     QAudio::Error m_errorState;
     QAudio::State m_deviceState;
     qreal m_volume;
+    bool m_customVolumeRequired;
     pa_cvolume m_chVolume;
 
 private slots:
@@ -115,8 +116,6 @@ private:
     bool open();
     void close();
     void setPulseVolume();
-
-    static QMap<void *, QPulseAudioInput*> s_inputsMap;
 
     static void sourceInfoCallback(pa_context *c, const pa_source_info *i, int eol, void *userdata);
     static void inputVolumeCallback(pa_context *context, int success, void *userdata);

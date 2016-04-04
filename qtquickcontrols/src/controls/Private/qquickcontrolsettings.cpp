@@ -98,6 +98,9 @@ bool QQuickControlSettings::isMobile() const
 #if defined(Q_OS_IOS) || defined(Q_OS_ANDROID) || defined(Q_OS_BLACKBERRY) || defined(Q_OS_QNX) || defined(Q_OS_WINRT)
     return true;
 #else
+    if (qEnvironmentVariableIsSet("QT_QUICK_CONTROLS_MOBILE")) {
+        return true;
+    }
     return false;
 #endif
 }
@@ -112,11 +115,11 @@ QString QQuickControlSettings::makeStyleComponentPath(const QString &controlStyl
     return styleDirPath + QStringLiteral("/") + controlStyleName;
 }
 
-QUrl QQuickControlSettings::makeStyleComponentUrl(const QString &controlStyleName, QString styleDirPath)
+QUrl QQuickControlSettings::makeStyleComponentUrl(const QString &controlStyleName, const QString &styleDirPath)
 {
     QString styleFilePath = makeStyleComponentPath(controlStyleName, styleDirPath);
 
-    if (styleDirPath.startsWith(QStringLiteral(":/")))
+    if (styleDirPath.startsWith(QLatin1String(":/")))
         return QUrl(QStringLiteral("qrc") + styleFilePath);
 
     return QUrl::fromLocalFile(styleFilePath);

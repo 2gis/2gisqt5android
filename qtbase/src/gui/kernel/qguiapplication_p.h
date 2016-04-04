@@ -202,6 +202,7 @@ public:
     static QWindow *currentMouseWindow;
     static QWindow *currentMousePressWindow;
     static Qt::ApplicationState applicationState;
+    static bool highDpiScalingUpdated;
 
 #ifndef QT_NO_CLIPBOARD
     static QClipboard *qt_clipboard;
@@ -219,6 +220,7 @@ public:
 
     static QFont *app_font;
 
+    static QString styleOverride;
     static QStyleHints *styleHints;
     static bool obey_desktop_settings;
     QInputMethod *inputMethod;
@@ -232,6 +234,7 @@ public:
 #endif
 
 #ifndef QT_NO_SESSIONMANAGER
+    static bool is_fallback_session_management_enabled;
     QSessionManager *session_manager;
     bool is_session_restored;
     bool is_saving_session;

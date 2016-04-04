@@ -37,13 +37,14 @@
 #include <QtCore/qjsondocument.h>
 #include <QtCore/qjsonobject.h>
 
-#include <private/qv4value_inl_p.h>
+#include <private/qv4value_p.h>
 #include <private/qv4debugging_p.h>
 #include <private/qv4function_p.h>
 #include <private/qv4functionobject_p.h>
 #include <private/qv4math_p.h>
 #include <private/qv4scopedvalue_p.h>
 #include <private/qv4lookup_p.h>
+#include <private/qv4string_p.h>
 #include <iostream>
 
 #include "qv4alloca_p.h"
@@ -374,8 +375,8 @@ QV4::ReturnedValue VME::run(ExecutionEngine *engine, const uchar *code
     const uchar *exceptionHandler = 0;
 
     QV4::Scope scope(engine);
-    QV4::ScopedContext context(scope, engine->currentContext());
-    engine->currentContext()->lineNumber = -1;
+    QV4::ExecutionContext *context = engine->currentContext;
+    engine->current->lineNumber = -1;
 
 #ifdef DO_TRACE_INSTR
     qDebug("Starting VME with context=%p and code=%p", context, code);
@@ -512,6 +513,28 @@ QV4::ReturnedValue VME::run(ExecutionEngine *engine, const uchar *code
         STOREVALUE(instr.result, Runtime::getQmlQObjectProperty(engine, VALUE(instr.base), instr.propertyIndex, instr.captureRequired));
     MOTH_END_INSTR(LoadQObjectProperty)
 
+    MOTH_BEGIN_INSTR(StoreScopeObjectProperty)
+        Runtime::setQmlScopeObjectProperty(engine, VALUE(instr.base), instr.propertyIndex, VALUE(instr.source));
+        CHECK_EXCEPTION;
+    MOTH_END_INSTR(StoreScopeObjectProperty)
+
+    MOTH_BEGIN_INSTR(LoadScopeObjectProperty)
+        STOREVALUE(instr.result, Runtime::getQmlScopeObjectProperty(engine, VALUE(instr.base), instr.propertyIndex));
+    MOTH_END_INSTR(LoadScopeObjectProperty)
+
+    MOTH_BEGIN_INSTR(StoreContextObjectProperty)
+        Runtime::setQmlContextObjectProperty(engine, VALUE(instr.base), instr.propertyIndex, VALUE(instr.source));
+        CHECK_EXCEPTION;
+    MOTH_END_INSTR(StoreContextObjectProperty)
+
+    MOTH_BEGIN_INSTR(LoadContextObjectProperty)
+        STOREVALUE(instr.result, Runtime::getQmlContextObjectProperty(engine, VALUE(instr.base), instr.propertyIndex));
+    MOTH_END_INSTR(LoadContextObjectProperty)
+
+    MOTH_BEGIN_INSTR(LoadIdObject)
+        STOREVALUE(instr.result, Runtime::getQmlIdObject(engine, VALUE(instr.base), instr.index));
+    MOTH_END_INSTR(LoadIdObject)
+
     MOTH_BEGIN_INSTR(LoadAttachedQObjectProperty)
         STOREVALUE(instr.result, Runtime::getQmlAttachedProperty(engine, instr.attachedPropertiesId, instr.propertyIndex));
     MOTH_END_INSTR(LoadAttachedQObjectProperty)
@@ -565,6 +588,26 @@ QV4::ReturnedValue VME::run(ExecutionEngine *engine, const uchar *code
         STOREVALUE(instr.result, Runtime::callPropertyLookup(engine, instr.lookupIndex, callData));
     MOTH_END_INSTR(CallPropertyLookup)
 
+    MOTH_BEGIN_INSTR(CallScopeObjectProperty)
+        TRACE(property name, "%s, args=%u, argc=%u, this=%s", qPrintable(runtimeStrings[instr.name]->toQString()), instr.callData, instr.argc, (VALUE(instr.base)).toString(context)->toQString().toUtf8().constData());
+        Q_ASSERT(instr.callData + instr.argc + qOffsetOf(QV4::CallData, args)/sizeof(QV4::Value) <= stackSize);
+        QV4::CallData *callData = reinterpret_cast<QV4::CallData *>(stack + instr.callData);
+        callData->tag = QV4::Value::Integer_Type;
+        callData->argc = instr.argc;
+        callData->thisObject = VALUE(instr.base);
+        STOREVALUE(instr.result, Runtime::callQmlScopeObjectProperty(engine, instr.index, callData));
+    MOTH_END_INSTR(CallScopeObjectProperty)
+
+    MOTH_BEGIN_INSTR(CallContextObjectProperty)
+        TRACE(property name, "%s, args=%u, argc=%u, this=%s", qPrintable(runtimeStrings[instr.name]->toQString()), instr.callData, instr.argc, (VALUE(instr.base)).toString(context)->toQString().toUtf8().constData());
+        Q_ASSERT(instr.callData + instr.argc + qOffsetOf(QV4::CallData, args)/sizeof(QV4::Value) <= stackSize);
+        QV4::CallData *callData = reinterpret_cast<QV4::CallData *>(stack + instr.callData);
+        callData->tag = QV4::Value::Integer_Type;
+        callData->argc = instr.argc;
+        callData->thisObject = VALUE(instr.base);
+        STOREVALUE(instr.result, Runtime::callQmlContextObjectProperty(engine, instr.index, callData));
+    MOTH_END_INSTR(CallContextObjectProperty)
+
     MOTH_BEGIN_INSTR(CallElement)
         Q_ASSERT(instr.callData + instr.argc + qOffsetOf(QV4::CallData, args)/sizeof(QV4::Value) <= stackSize);
         QV4::CallData *callData = reinterpret_cast<QV4::CallData *>(stack + instr.callData);
@@ -607,18 +650,18 @@ QV4::ReturnedValue VME::run(ExecutionEngine *engine, const uchar *code
 
     MOTH_BEGIN_INSTR(CallBuiltinPushCatchScope)
         Runtime::pushCatchScope(static_cast<QV4::NoThrowEngine*>(engine), instr.name);
-        context = engine->currentContext();
+        context = engine->currentContext;
     MOTH_END_INSTR(CallBuiltinPushCatchScope)
 
     MOTH_BEGIN_INSTR(CallBuiltinPushScope)
         Runtime::pushWithScope(VALUE(instr.arg), engine);
-        context = engine->currentContext();
+        context = engine->currentContext;
         CHECK_EXCEPTION;
     MOTH_END_INSTR(CallBuiltinPushScope)
 
     MOTH_BEGIN_INSTR(CallBuiltinPopScope)
         Runtime::popScope(engine);
-        context = engine->currentContext();
+        context = engine->currentContext;
     MOTH_END_INSTR(CallBuiltinPopScope)
 
     MOTH_BEGIN_INSTR(CallBuiltinForeachIteratorObject)
@@ -640,6 +683,14 @@ QV4::ReturnedValue VME::run(ExecutionEngine *engine, const uchar *code
     MOTH_BEGIN_INSTR(CallBuiltinDeleteName)
         STOREVALUE(instr.result, Runtime::deleteName(engine, instr.name));
     MOTH_END_INSTR(CallBuiltinDeleteName)
+
+    MOTH_BEGIN_INSTR(CallBuiltinTypeofScopeObjectProperty)
+        STOREVALUE(instr.result, Runtime::typeofScopeObjectProperty(engine, VALUE(instr.base), instr.index));
+    MOTH_END_INSTR(CallBuiltinTypeofMember)
+
+    MOTH_BEGIN_INSTR(CallBuiltinTypeofContextObjectProperty)
+        STOREVALUE(instr.result, Runtime::typeofContextObjectProperty(engine, VALUE(instr.base), instr.index));
+    MOTH_END_INSTR(CallBuiltinTypeofMember)
 
     MOTH_BEGIN_INSTR(CallBuiltinTypeofMember)
         STOREVALUE(instr.result, Runtime::typeofMember(engine, VALUE(instr.base), instr.member));
@@ -846,7 +897,7 @@ QV4::ReturnedValue VME::run(ExecutionEngine *engine, const uchar *code
     MOTH_END_INSTR(Ret)
 
     MOTH_BEGIN_INSTR(Debug)
-        engine->currentContext()->lineNumber = instr.lineNumber;
+        engine->current->lineNumber = instr.lineNumber;
         QV4::Debugging::Debugger *debugger = context->engine()->debugger;
         if (debugger && debugger->pauseAtNextOpportunity())
             debugger->maybeBreakAtInstruction();
@@ -855,30 +906,22 @@ QV4::ReturnedValue VME::run(ExecutionEngine *engine, const uchar *code
     MOTH_END_INSTR(Debug)
 
     MOTH_BEGIN_INSTR(Line)
-        engine->currentContext()->lineNumber = instr.lineNumber;
+        engine->current->lineNumber = instr.lineNumber;
         if (qt_v4IsDebugging)
             qt_v4CheckForBreak(context, scopes, scopeDepth);
-    MOTH_END_INSTR(Debug)
+    MOTH_END_INSTR(Line)
 
     MOTH_BEGIN_INSTR(LoadThis)
         VALUE(instr.result) = context->thisObject();
     MOTH_END_INSTR(LoadThis)
 
-    MOTH_BEGIN_INSTR(LoadQmlIdArray)
-        VALUE(instr.result) = Runtime::getQmlIdArray(static_cast<QV4::NoThrowEngine*>(engine));
-    MOTH_END_INSTR(LoadQmlIdArray)
+    MOTH_BEGIN_INSTR(LoadQmlContext)
+        VALUE(instr.result) = Runtime::getQmlContext(static_cast<QV4::NoThrowEngine*>(engine));
+    MOTH_END_INSTR(LoadQmlContext)
 
     MOTH_BEGIN_INSTR(LoadQmlImportedScripts)
         VALUE(instr.result) = Runtime::getQmlImportedScripts(static_cast<QV4::NoThrowEngine*>(engine));
     MOTH_END_INSTR(LoadQmlImportedScripts)
-
-    MOTH_BEGIN_INSTR(LoadQmlContextObject)
-        VALUE(instr.result) = Runtime::getQmlContextObject(static_cast<QV4::NoThrowEngine*>(engine));
-    MOTH_END_INSTR(LoadContextObject)
-
-    MOTH_BEGIN_INSTR(LoadQmlScopeObject)
-        VALUE(instr.result) = Runtime::getQmlScopeObject(static_cast<QV4::NoThrowEngine*>(engine));
-    MOTH_END_INSTR(LoadScopeObject)
 
     MOTH_BEGIN_INSTR(LoadQmlSingleton)
         VALUE(instr.result) = Runtime::getQmlSingleton(static_cast<QV4::NoThrowEngine*>(engine), instr.name);

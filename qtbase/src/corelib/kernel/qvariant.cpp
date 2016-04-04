@@ -413,7 +413,7 @@ static bool convert(const QVariant::Private *d, int t, void *result, bool *ok)
         QString *str = static_cast<QString *>(result);
         switch (d->type) {
         case QVariant::Char:
-            *str = QString(*v_cast<QChar>(d));
+            *str = *v_cast<QChar>(d);
             break;
         case QMetaType::Char:
         case QMetaType::SChar:
@@ -2891,6 +2891,7 @@ static const quint32 qCanConvertMatrix[QVariant::LastCoreType + 1] =
 
 /*QUuid*/         1 << QVariant::String
 };
+static const size_t qCanConvertMatrixMaximumTargetType = 8 * sizeof(*qCanConvertMatrix);
 
 #ifndef QT_BOOTSTRAPPED
 /*!
@@ -3140,8 +3141,9 @@ bool QVariant::canConvert(int targetTypeId) const
         case QMetaType::ULong:
         case QMetaType::Short:
         case QMetaType::UShort:
-            return qCanConvertMatrix[QVariant::Int] & (1 << currentType)
-                || currentType == QVariant::Int
+            return currentType == QVariant::Int
+                || (currentType < qCanConvertMatrixMaximumTargetType
+                    && qCanConvertMatrix[QVariant::Int] & (1U << currentType))
                 || QMetaType::typeFlags(currentType) & QMetaType::IsEnumeration;
         case QMetaType::QObjectStar:
             return canConvertMetaObject(currentType, targetTypeId, d.data.o);
@@ -3152,7 +3154,8 @@ bool QVariant::canConvert(int targetTypeId) const
 
     if (targetTypeId == String && currentType == StringList)
         return v_cast<QStringList>(&d)->count() == 1;
-    return qCanConvertMatrix[targetTypeId] & (1 << currentType);
+    return currentType < qCanConvertMatrixMaximumTargetType
+        && qCanConvertMatrix[targetTypeId] & (1U << currentType);
 }
 
 /*!
@@ -3448,7 +3451,7 @@ static int numericCompare(const QVariant::Private *d1, const QVariant::Private *
     Q_ASSERT(ok);
     qreal r2 = qConvertToRealNumber(d2, &ok);
     Q_ASSERT(ok);
-    if (qFuzzyCompare(r1, r2))
+    if (r1 == r2 || qFuzzyCompare(r1, r2))
         return 0;
     return r1 < r2 ? -1 : 1;
 }
@@ -3832,7 +3835,11 @@ QDebug operator<<(QDebug dbg, const QVariant::Type p)
 /*!
     \internal
 */
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
 QSequentialIterable::QSequentialIterable(QtMetaTypePrivate::QSequentialIterableImpl impl)
+#else
+QSequentialIterable::QSequentialIterable(const QtMetaTypePrivate::QSequentialIterableImpl &impl)
+#endif
   : m_impl(impl)
 {
 }
@@ -4140,7 +4147,11 @@ QSequentialIterable::const_iterator QSequentialIterable::const_iterator::operato
 /*!
     \internal
 */
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
 QAssociativeIterable::QAssociativeIterable(QtMetaTypePrivate::QAssociativeIterableImpl impl)
+#else
+QAssociativeIterable::QAssociativeIterable(const QtMetaTypePrivate::QAssociativeIterableImpl &impl)
+#endif
   : m_impl(impl)
 {
 }

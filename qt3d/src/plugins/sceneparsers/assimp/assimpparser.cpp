@@ -34,37 +34,38 @@
 **
 ****************************************************************************/
 
-#include "assimpparser_p.h"
+#include "assimpparser.h"
 
 #include <Qt3DCore/qentity.h>
 #include <Qt3DCore/qtransform.h>
-#include <Qt3DCore/qlookattransform.h>
-#include <Qt3DCore/qmatrixtransform.h>
 #include <Qt3DCore/qcameralens.h>
-#include <Qt3DRenderer/qparameter.h>
-#include <Qt3DRenderer/qeffect.h>
-#include <Qt3DRenderer/qmesh.h>
-#include <Qt3DRenderer/qmaterial.h>
-#include <Qt3DRenderer/qbuffer.h>
-#include <Qt3DRenderer/qattribute.h>
-#include <Qt3DRenderer/qtexture.h>
-#include <Qt3DRenderer/qdiffusemapmaterial.h>
-#include <Qt3DRenderer/qdiffusespecularmapmaterial.h>
-#include <Qt3DRenderer/qphongmaterial.h>
+#include <Qt3DRender/qparameter.h>
+#include <Qt3DRender/qeffect.h>
+#include <Qt3DRender/qmesh.h>
+#include <Qt3DRender/qmaterial.h>
+#include <Qt3DRender/qbuffer.h>
+#include <Qt3DRender/qattribute.h>
+#include <Qt3DRender/qtexture.h>
+#include <Qt3DRender/qdiffusemapmaterial.h>
+#include <Qt3DRender/qdiffusespecularmapmaterial.h>
+#include <Qt3DRender/qphongmaterial.h>
 #include <QFileInfo>
 #include <QColor>
 #include <qmath.h>
-#include <Qt3DRenderer/private/renderlogging_p.h>
-#include <Qt3DCore/private/qurlhelper_p.h>
-#include <Qt3DRenderer/qgeometryrenderer.h>
-#include <Qt3DRenderer/qgeometry.h>
+#include <Qt3DRender/private/renderlogging_p.h>
+#include <Qt3DRender/private/qurlhelper_p.h>
+#include <Qt3DRender/qgeometryrenderer.h>
+#include <Qt3DRender/qgeometry.h>
 
 QT_BEGIN_NAMESPACE
 
-namespace Qt3D {
+using namespace Qt3DCore;
+
+namespace Qt3DRender {
 
 /*!
-    \class Qt3D::AssimpParser
+    \class Qt3DRender::AssimpParser
+    \inmodule Qt3DRender
     \since 5.5
 
     \brief Provides a generic way of loading various 3D assets
@@ -156,9 +157,9 @@ QString texturePath(const aiString &path)
 }
 
 /*!
- * Returns the Qt3D::QParameter with named \a name if contained by the material
+ * Returns the Qt3DRender::QParameter with named \a name if contained by the material
  * \a material. If the material doesn't contain the named parameter, a new
- * Qt3D::QParameter is created and inserted into the material.
+ * Qt3DRender::QParameter is created and inserted into the material.
  */
 QParameter *findNamedParameter(const QString &name, QMaterial *material)
 {
@@ -272,7 +273,7 @@ private:
     public:
         explicit AssimpRawTextureImageFunctor(const QByteArray &data);
 
-        TexImageDataPtr operator()() Q_DECL_FINAL;
+        QTexImageDataPtr operator()() Q_DECL_FINAL;
         bool operator ==(const QTextureDataFunctor &other) const Q_DECL_FINAL;
 
         QT3D_FUNCTOR(AssimpRawTextureImageFunctor)
@@ -284,7 +285,7 @@ private:
 /*!
  *  Constructor. Initializes a new instance of AssimpParser.
  */
-AssimpParser::AssimpParser() : AbstractSceneParser(),
+AssimpParser::AssimpParser() : QAbstractSceneParser(),
     m_sceneParsed(false),
     m_scene(Q_NULLPTR)
 {
@@ -345,7 +346,7 @@ bool AssimpParser::isExtensionSupported(const QUrl &source) const
  *
  * Returns \c Q_NULLPTR if \a id was specified but no node matching it was found.
  */
-QEntity *AssimpParser::scene(const QString &id)
+Qt3DCore::QEntity *AssimpParser::scene(const QString &id)
 {
     // m_aiScene shouldn't be null.
     // If it is either, the file failed to be imported or
@@ -370,7 +371,7 @@ QEntity *AssimpParser::scene(const QString &id)
  *  Returns a Node from the scene identified by \a id.
  *  Returns \c Q_NULLPTR if the node was not found.
  */
-QEntity *AssimpParser::node(const QString &id)
+Qt3DCore::QEntity *AssimpParser::node(const QString &id)
 {
     if (m_scene == Q_NULLPTR || m_scene->m_aiScene == Q_NULLPTR)
         return Q_NULLPTR;
@@ -382,7 +383,7 @@ QEntity *AssimpParser::node(const QString &id)
 /*!
  * Returns a Node from an Assimp aiNode \a node.
  */
-QEntity *AssimpParser::node(aiNode *node)
+Qt3DCore::QEntity *AssimpParser::node(aiNode *node)
 {
     if (node == Q_NULLPTR)
         return Q_NULLPTR;
@@ -413,7 +414,8 @@ QEntity *AssimpParser::node(aiNode *node)
 
     // Add Transformations
     const QMatrix4x4 qTransformMatrix = aiMatrix4x4ToQMatrix4x4(node->mTransformation);
-    QTransform *transform = new QTransform(new QMatrixTransform(qTransformMatrix));
+    Qt3DCore::QTransform *transform = new Qt3DCore::QTransform;
+    transform->setMatrix(qTransformMatrix);
     entityNode->addComponent(transform);
 
     // Add Camera
@@ -676,7 +678,8 @@ void AssimpParser::loadEmbeddedTexture(uint textureIndex)
     uint textureSize = assimpTexture->mWidth *
             (isCompressed ? assimpTexture->mHeight : 1);
     // Set texture to RGBA8888
-    char *textureContent = new char[textureSize * 4];
+    QByteArray textureContent;
+    textureContent.reserve(textureSize * 4);
     for (uint i = 0; i < textureSize; i++) {
         uint idx = i * 4;
         aiTexel texel = assimpTexture->pcData[i];
@@ -685,7 +688,7 @@ void AssimpParser::loadEmbeddedTexture(uint textureIndex)
         textureContent[idx + 2] = texel.b;
         textureContent[idx + 3] = texel.a;
     }
-    imageData->setData(QByteArray(textureContent, textureSize * 4));
+    imageData->setData(textureContent);
     texture->addTextureImage(imageData);
     m_scene->m_embeddedTextures[textureIndex] = texture;
 }
@@ -722,12 +725,12 @@ void AssimpParser::loadCamera(uint cameraIndex)
                                    assimpCamera->mClipPlaneFar);
     camera->addComponent(lens);
 
-    QTransform *transform = new QTransform();
-    QLookAtTransform *lookAt = new QLookAtTransform();
-    lookAt->setPosition(QVector3D(assimpCamera->mPosition.x, assimpCamera->mPosition.y, assimpCamera->mPosition.z));
-    lookAt->setViewCenter(QVector3D(assimpCamera->mLookAt.x, assimpCamera->mLookAt.y, assimpCamera->mLookAt.z));
-    lookAt->setUpVector(QVector3D(assimpCamera->mUp.x, assimpCamera->mUp.y, assimpCamera->mUp.z));
-    transform->addTransform(lookAt);
+    QMatrix4x4 m;
+    m.lookAt(QVector3D(assimpCamera->mPosition.x, assimpCamera->mPosition.y, assimpCamera->mPosition.z),
+             QVector3D(assimpCamera->mLookAt.x, assimpCamera->mLookAt.y, assimpCamera->mLookAt.z),
+             QVector3D(assimpCamera->mUp.x, assimpCamera->mUp.y, assimpCamera->mUp.z));
+    Qt3DCore::QTransform *transform = new Qt3DCore::QTransform();
+    transform->setMatrix(m);
     camera->addComponent(transform);
 
     m_scene->m_cameras[cameraNode] = camera;
@@ -895,9 +898,9 @@ AssimpRawTextureImage::AssimpRawTextureImageFunctor::AssimpRawTextureImageFuncto
 {
 }
 
-TexImageDataPtr AssimpRawTextureImage::AssimpRawTextureImageFunctor::operator()()
+QTexImageDataPtr AssimpRawTextureImage::AssimpRawTextureImageFunctor::operator()()
 {
-    TexImageDataPtr dataPtr;
+    QTexImageDataPtr dataPtr;
     dataPtr->setData(m_data, QOpenGLTexture::RGBA, QOpenGLTexture::UInt8);
     return dataPtr;
 }
@@ -920,7 +923,7 @@ AssimpParser::SceneImporter::~SceneImporter()
     delete m_importer;
 }
 
-} // namespace Qt3D
+} // namespace Qt3DRender
 
 QT_END_NAMESPACE
 

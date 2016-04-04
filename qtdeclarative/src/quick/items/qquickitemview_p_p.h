@@ -34,6 +34,17 @@
 #ifndef QQUICKITEMVIEW_P_P_H
 #define QQUICKITEMVIEW_P_P_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include "qquickitemview_p.h"
 #include "qquickitemviewtransition_p.h"
 #include "qquickflickable_p_p.h"
@@ -45,7 +56,7 @@
 QT_BEGIN_NAMESPACE
 
 
-class FxViewItem
+class Q_AUTOTEST_EXPORT FxViewItem
 {
 public:
     FxViewItem(QQuickItem *, QQuickItemView *, bool own, QQuickItemViewAttached *attached);
@@ -53,6 +64,8 @@ public:
 
     qreal itemX() const;
     qreal itemY() const;
+    inline qreal itemWidth() const { return item ? item->width() : 0; }
+    inline qreal itemHeight() const { return item ? item->height() : 0; }
 
     void moveTo(const QPointF &pos, bool immediate);
     void setVisible(bool visible);
@@ -75,7 +88,7 @@ public:
 
     virtual bool contains(qreal x, qreal y) const = 0;
 
-    QQuickItem *item;
+    QPointer<QQuickItem> item;
     QQuickItemView *view;
     QQuickItemViewTransitionableItem *transitionableItem;
     QQuickItemViewAttached *attached;
@@ -110,7 +123,7 @@ public:
 };
 
 
-class QQuickItemViewPrivate : public QQuickFlickablePrivate, public QQuickItemViewTransitionChangeListener, public QAnimationJobChangeListener
+class Q_AUTOTEST_EXPORT QQuickItemViewPrivate : public QQuickFlickablePrivate, public QQuickItemViewTransitionChangeListener, public QAnimationJobChangeListener
 {
     Q_DECLARE_PUBLIC(QQuickItemView)
 public:
@@ -198,6 +211,8 @@ public:
 
     qreal minExtentForAxis(const AxisData &axisData, bool forXAxis) const;
     qreal maxExtentForAxis(const AxisData &axisData, bool forXAxis) const;
+    qreal calculatedMinExtent() const;
+    qreal calculatedMaxExtent() const;
 
     void applyPendingChanges();
     bool applyModelChanges(ChangeResult *insertionResult, ChangeResult *removalResult);
@@ -321,6 +336,8 @@ protected:
     virtual bool showFooterForIndex(int index) const = 0;
     virtual void updateHeader() = 0;
     virtual void updateFooter() = 0;
+    virtual bool hasStickyHeader() const { return false; };
+    virtual bool hasStickyFooter() const { return false; };
 
     virtual void createHighlight() = 0;
     virtual void updateHighlight() = 0;

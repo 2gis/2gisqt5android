@@ -432,7 +432,7 @@ void QCompletionEngine::filter(const QStringList& parts)
 
     QModelIndex parent;
     for (int i = 0; i < curParts.count() - 1; i++) {
-        QString part = curParts[i];
+        QString part = curParts.at(i);
         int emi = filter(part, parent, -1).exactMatchIndex;
         if (emi == -1)
             return;
@@ -442,10 +442,10 @@ void QCompletionEngine::filter(const QStringList& parts)
     // Note that we set the curParent to a valid parent, even if we have no matches
     // When filtering is disabled, we show all the items under this parent
     curParent = parent;
-    if (curParts.last().isEmpty())
+    if (curParts.constLast().isEmpty())
         curMatch = QMatchData(QIndexMapper(0, model->rowCount(curParent) - 1), -1, false);
     else
-        curMatch = filter(curParts.last(), curParent, 1); // build at least one
+        curMatch = filter(curParts.constLast(), curParent, 1); // build at least one
     curRow = curMatch.isValid() ? 0 : -1;
 }
 
@@ -1337,6 +1337,11 @@ bool QCompleter::eventFilter(QObject *o, QEvent *e)
         }
 
         // default implementation for keys not handled by the widget when popup is open
+        if (ke->matches(QKeySequence::Cancel)) {
+            d->popup->hide();
+            return true;
+        }
+
         switch (key) {
 #ifdef QT_KEYPAD_NAVIGATION
         case Qt::Key_Select:
@@ -1357,7 +1362,6 @@ bool QCompleter::eventFilter(QObject *o, QEvent *e)
             break;
 
         case Qt::Key_Backtab:
-        case Qt::Key_Escape:
             d->popup->hide();
             break;
 
@@ -1816,26 +1820,23 @@ QStringList QCompleter::splitPath(const QString& path) const
         return QStringList(completionPrefix());
 
     QString pathCopy = QDir::toNativeSeparators(path);
-    QString sep = QDir::separator();
 #if defined(Q_OS_WIN) && !defined(Q_OS_WINCE)
     if (pathCopy == QLatin1String("\\") || pathCopy == QLatin1String("\\\\"))
         return QStringList(pathCopy);
-    QString doubleSlash(QLatin1String("\\\\"));
-    if (pathCopy.startsWith(doubleSlash))
+    const bool startsWithDoubleSlash = pathCopy.startsWith(QLatin1String("\\\\"));
+    if (startsWithDoubleSlash)
         pathCopy = pathCopy.mid(2);
-    else
-        doubleSlash.clear();
 #endif
 
-    QRegExp re(QLatin1Char('[') + QRegExp::escape(sep) + QLatin1Char(']'));
-    QStringList parts = pathCopy.split(re);
+    const QChar sep = QDir::separator();
+    QStringList parts = pathCopy.split(sep);
 
 #if defined(Q_OS_WIN) && !defined(Q_OS_WINCE)
-    if (!doubleSlash.isEmpty())
-        parts[0].prepend(doubleSlash);
+    if (startsWithDoubleSlash)
+        parts[0].prepend(QLatin1String("\\\\"));
 #else
-    if (pathCopy[0] == sep[0]) // readd the "/" at the beginning as the split removed it
-        parts[0] = QDir::fromNativeSeparators(QString(sep[0]));
+    if (pathCopy[0] == sep) // readd the "/" at the beginning as the split removed it
+        parts[0] = QLatin1Char('/');
 #endif
 
     return parts;

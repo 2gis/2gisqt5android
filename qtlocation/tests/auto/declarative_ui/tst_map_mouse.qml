@@ -33,9 +33,8 @@
 
 import QtQuick 2.0
 import QtTest 1.0
-import QtLocation 5.3
-import QtPositioning 5.2
-import QtLocation.test 5.0
+import QtLocation 5.6
+import QtPositioning 5.5
 
     /*
      MouseArea setup for this test case.
@@ -268,25 +267,25 @@ Item {
             compare(mouseUpperClickedSpy.count, 0)
             mouseUpper.enabled = true
             mouseClick(map, 5, 25)
-            compare(mouseUpperClickedSpy.count, 1)
+            tryCompare(mouseUpperClickedSpy, "count", 1)
             compare(mouseUpperEnabledChangedSpy.count, 2)
             // when overlapping are is disabled, the event should flow through
             compare(mouseOverlapperClickedSpy.count, 0)
             mouseClick(map, 55, 25)
-            compare(mouseUpperClickedSpy.count, 1)
+            tryCompare(mouseUpperClickedSpy, "count", 1)
             compare(mouseOverlapperClickedSpy.count, 1)
             mouseOverlapper.enabled = false
             compare(mouseOverlapperEnabledChangedSpy.count, 1)
             compare(mouseOverlapper.enabled, false)
             mouseClick(map, 55, 25)
-            compare(mouseOverlapperClickedSpy.count, 1)
+            tryCompare(mouseOverlapperClickedSpy, "count", 1)
             compare(mouseUpperClickedSpy.count, 2)
             // re-enable and verify that still works
             mouseOverlapper.enabled = true
             compare(mouseOverlapperEnabledChangedSpy.count, 2)
             compare(mouseOverlapper.enabled, true)
             mouseClick(map, 55, 25)
-            compare(mouseOverlapperClickedSpy.count, 2) // should consume again
+            tryCompare(mouseOverlapperClickedSpy, "count", 2) // should consume again
             compare(mouseUpperClickedSpy.count, 2)
         }
 
@@ -339,7 +338,7 @@ Item {
             mouseUpper.acceptedButtons = Qt.LeftButton
             compare(mouseUpperAcceptedButtonsChangedSpy.count, 2)
             mouseClick(map, 5, 25)
-            compare(mouseUpperClickedSpy.count, 1)
+            tryCompare(mouseUpperClickedSpy, "count", 1)
         }
 
         function test_basic_position_changed() {
@@ -554,10 +553,10 @@ Item {
             compare(mouseLowerClickedSpy.count, 0)
             compare(mouseOverlapperClickedSpy.count, 0)
             mouseUpper.acceptedButtons = Qt.LeftButton | Qt.RightButton
-            console.log('TC sending click event to upper mouse area 5,25')
+            // TC sending click event to upper mouse area 5,25
             mouseClick(map, 5, 25, Qt.RightButton, Qt.AltModifier)
             tryCompare(mouseUpperClickedSpy, "count", 1)
-            console.log('TC done and clicked was received')
+            // TC done and clicked was received
             //compare(mouseUpperClickedSpy.count, 1)
             compare(mouseLowerClickedSpy.count, 0)
             compare(mouseOverlapperClickedSpy.count, 0)
@@ -575,40 +574,40 @@ Item {
             // mouse click with unaccepted buttons should not cause click
             mouseUpper.acceptedButtons = Qt.LeftButton
             mouseClick(map, 5, 25, Qt.RightButton, Qt.AltModifier)
-            compare(mouseUpperClickedSpy.count, 1)
+            tryCompare(mouseUpperClickedSpy, "count", 1)
             compare(mouseLowerClickedSpy.count, 0)
             compare(mouseOverlapperClickedSpy.count, 0)
 
             mouseClick(map, 5, 25)
-            compare(mouseUpperClickedSpy.count, 2)
+            tryCompare(mouseUpperClickedSpy, "count", 2)
             compare(mouseLowerClickedSpy.count, 0)
             compare(mouseOverlapperClickedSpy.count, 0)
             compare(mouseUpper.lastModifiers, Qt.NoModifier)
             compare(mouseUpper.lastButton, Qt.LeftButton)
             mouseClick(map, 5, 55)
-            compare(mouseUpperClickedSpy.count, 2)
+            tryCompare(mouseUpperClickedSpy, "count", 2)
             compare(mouseLowerClickedSpy.count, 1)
             compare(mouseOverlapperClickedSpy.count, 0)
             mouseClick(map, 5, 55)
-            compare(mouseUpperClickedSpy.count, 2)
+            tryCompare(mouseUpperClickedSpy,"count", 2)
             compare(mouseLowerClickedSpy.count, 2)
             compare(mouseOverlapperClickedSpy.count, 0)
             // declaration order counts on overlap case; overlapping area
             // declared later will get the events
             mouseClick(map, 55, 25)
-            compare(mouseUpperClickedSpy.count, 2)
+            tryCompare(mouseUpperClickedSpy, "count", 2)
             compare(mouseLowerClickedSpy.count, 2)
             compare(mouseOverlapperClickedSpy.count, 1)
             mouseClick(map, 55, 75)
-            compare(mouseUpperClickedSpy.count, 2)
+            tryCompare(mouseUpperClickedSpy, "count", 2)
             compare(mouseLowerClickedSpy.count, 2)
             compare(mouseOverlapperClickedSpy.count, 2)
             real_click(map, 55, 25)
-            compare(mouseUpperClickedSpy.count, 2)
+            tryCompare(mouseUpperClickedSpy, "count", 2)
             compare(mouseLowerClickedSpy.count, 2)
             compare(mouseOverlapperClickedSpy.count, 3)
             real_click(map, 55, 75)
-            compare(mouseUpperClickedSpy.count, 2)
+            tryCompare(mouseUpperClickedSpy, "count", 2)
             compare(mouseLowerClickedSpy.count, 2)
             compare(mouseOverlapperClickedSpy.count, 4)
         }
@@ -622,7 +621,7 @@ Item {
             compare(mouseLowerDoubleClickedSpy.count, 0)
             compare(mouseOverlapperDoubleClickedSpy.count, 0)
             real_double_click(map, 5, 25)
-            compare(mouseUpper.lastAccepted, true)
+            tryCompare(mouseUpper, "lastAccepted", true)
             compare(mouseUpper.lastButton, Qt.LeftButton)
             compare(mouseUpper.lastModifiers, Qt.NoModifier)
             compare(mouseUpper.lastWasHeld, false)
@@ -633,26 +632,26 @@ Item {
             compare(mouseLowerDoubleClickedSpy.count, 0)
             compare(mouseOverlapperDoubleClickedSpy.count, 0)
             real_double_click(map, 5, 25)
-            compare(mouseUpperDoubleClickedSpy.count, 2)
+            tryCompare(mouseUpperDoubleClickedSpy, "count", 2)
             compare(mouseLowerDoubleClickedSpy.count, 0)
             compare(mouseOverlapperDoubleClickedSpy.count, 0)
             real_double_click(map, 5, 55)
-            compare(mouseUpperDoubleClickedSpy.count, 2)
+            tryCompare(mouseUpperDoubleClickedSpy, "count", 2)
             compare(mouseLowerDoubleClickedSpy.count, 1)
             compare(mouseOverlapperDoubleClickedSpy.count, 0)
             real_double_click(map, 5, 55)
-            compare(mouseUpperDoubleClickedSpy.count, 2)
+            tryCompare(mouseUpperDoubleClickedSpy, "count", 2)
             compare(mouseLowerDoubleClickedSpy.count, 2)
             compare(mouseOverlapperDoubleClickedSpy.count, 0)
             // declaration order counts on overlap case; overlapping area declared later will get the events
             real_double_click(map, 55, 25)
-            compare(mouseUpperDoubleClickedSpy.count, 2)
+            tryCompare(mouseUpperDoubleClickedSpy, "count", 2)
             compare(mouseLowerDoubleClickedSpy.count, 2)
             compare(mouseOverlapperDoubleClickedSpy.count, 1)
             compare(mouseOverlapperPressedSpy.count, 2)
             compare(mouseOverlapperReleasedSpy.count, 2)
             real_double_click(map, 55, 75)
-            compare(mouseUpperDoubleClickedSpy.count, 2)
+            tryCompare(mouseUpperDoubleClickedSpy, "count", 2)
             compare(mouseLowerDoubleClickedSpy.count, 2)
             compare(mouseOverlapperDoubleClickedSpy.count, 2)
             compare(mouseOverlapperPressedSpy.count, 4)
@@ -660,20 +659,20 @@ Item {
             // disable overlapping area and check event is delivered to the ones beneath
             mouseOverlapper.enabled = false
             real_double_click(map, 55, 25)
-            compare(mouseUpperDoubleClickedSpy.count, 3)
+            tryCompare(mouseUpperDoubleClickedSpy, "count", 3)
             compare(mouseLowerDoubleClickedSpy.count, 2)
             compare(mouseOverlapperDoubleClickedSpy.count, 2)
             real_double_click(map, 55, 75)
-            compare(mouseUpperDoubleClickedSpy.count, 3)
+            tryCompare(mouseUpperDoubleClickedSpy, "count", 3)
             compare(mouseLowerDoubleClickedSpy.count, 3)
             compare(mouseOverlapperDoubleClickedSpy.count, 2)
             mouseOverlapper.enabled = true
             real_double_click(map, 55, 25)
-            compare(mouseUpperDoubleClickedSpy.count, 3)
+            tryCompare(mouseUpperDoubleClickedSpy, "count", 3)
             compare(mouseLowerDoubleClickedSpy.count, 3)
             compare(mouseOverlapperDoubleClickedSpy.count, 3)
             real_double_click(map, 55, 75)
-            compare(mouseUpperDoubleClickedSpy.count, 3)
+            tryCompare(mouseUpperDoubleClickedSpy, "count", 3)
             compare(mouseLowerDoubleClickedSpy.count, 3)
             compare(mouseOverlapperDoubleClickedSpy.count, 4)
         }
@@ -699,11 +698,11 @@ Item {
             compare(mouseUpper.lastY, 5) // remember 20 offset of the mouse area
             mouseRelease(map,5,25)
             real_press_and_hold(map, 5, 55)
-            compare(mouseUpperPressAndHoldSpy.count, 1)
+            tryCompare(mouseUpperPressAndHoldSpy, "count", 1)
             compare(mouseLowerPressAndHoldSpy.count, 1)
             compare(mouseOverlapperPressAndHoldSpy.count, 0)
             real_press_and_hold(map, 55, 75)
-            compare(mouseUpperPressAndHoldSpy.count, 1)
+            tryCompare(mouseUpperPressAndHoldSpy, "count", 1)
             compare(mouseLowerPressAndHoldSpy.count, 1)
             compare(mouseOverlapperPressAndHoldSpy.count, 1)
             compare(mouseOverlapper.lastAccepted, true)
@@ -714,14 +713,14 @@ Item {
             compare(mouseOverlapper.lastY, 75)
             // make sure that the wasHeld is cleared
             mouseClick(map, 55, 75)
-            compare(mouseOverlapper.lastAccepted, true)
+            tryCompare(mouseOverlapper, "lastAccepted", true)
             compare(mouseOverlapper.lastButton, Qt.LeftButton)
             compare(mouseOverlapper.lastModifiers, Qt.NoModifier)
             compare(mouseOverlapper.lastWasHeld, false)
             compare(mouseOverlapper.lastX, 5)
             compare(mouseOverlapper.lastY, 75)
             real_press_and_hold(map, 55, 25)
-            compare(mouseUpperPressAndHoldSpy.count, 1)
+            tryCompare(mouseUpperPressAndHoldSpy, "count", 1)
             compare(mouseLowerPressAndHoldSpy.count, 1)
             compare(mouseOverlapperPressAndHoldSpy.count, 2)
         }

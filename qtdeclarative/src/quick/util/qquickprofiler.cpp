@@ -33,8 +33,7 @@
 
 #include "qquickprofiler_p.h"
 #include <QCoreApplication>
-#include <private/qqmldebugservice_p.h>
-#include <private/qqmlprofilerservice_p.h>
+#include <private/qqmldebugserviceinterfaces_p.h>
 
 QT_BEGIN_NAMESPACE
 
@@ -113,18 +112,22 @@ void QQuickProfilerData::toByteArrays(QList<QByteArray> &messages) const
 qint64 QQuickProfiler::sendMessages(qint64 until, QList<QByteArray> &messages)
 {
     QMutexLocker lock(&m_dataMutex);
-    while (next < m_data.size() && m_data[next].time <= until) {
-        m_data[next++].toByteArrays(messages);
+    while (next < m_data.size()) {
+        if (m_data[next].time <= until)
+            m_data[next++].toByteArrays(messages);
+        else
+            return m_data[next].time;
     }
-    return next < m_data.size() ? m_data[next].time : -1;
+    m_data.clear();
+    next = 0;
+    return -1;
 }
 
-void QQuickProfiler::initialize()
+void QQuickProfiler::initialize(QQmlProfilerService *service)
 {
     Q_ASSERT(s_instance == 0);
-    QQmlProfilerService *service = QQmlProfilerService::instance();
     s_instance = new QQuickProfiler(service);
-    QQmlProfilerService::instance()->addGlobalProfiler(s_instance);
+    service->addGlobalProfiler(s_instance);
 }
 
 void animationTimerCallback(qint64 delta)
@@ -196,17 +199,12 @@ void QQuickProfiler::stopProfilingImpl()
     {
         QMutexLocker lock(&m_dataMutex);
         featuresEnabled = 0;
-        next = 0;
     }
     service->dataReady(this);
 }
 
 void QQuickProfiler::reportDataImpl()
 {
-    {
-        QMutexLocker lock(&m_dataMutex);
-        next = 0;
-    }
     service->dataReady(this);
 }
 

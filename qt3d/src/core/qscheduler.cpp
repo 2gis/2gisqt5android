@@ -37,12 +37,13 @@
 #include "qscheduler_p.h"
 
 #include "qabstractaspect.h"
+#include "qabstractaspect_p.h"
 #include "qaspectmanager_p.h"
 #include "qabstractaspectjobmanager_p.h"
 
 QT_BEGIN_NAMESPACE
 
-namespace Qt3D {
+namespace Qt3DCore {
 
 QScheduler::QScheduler(QObject *parent)
     : QObject(parent)
@@ -59,24 +60,20 @@ QAspectManager *QScheduler::aspectManager() const
     return m_aspectManager;
 }
 
-void QScheduler::update(qint64 time)
+void QScheduler::scheduleAndWaitForFrameAspectJobs(qint64 time)
 {
-    // Get tasks for this frame from each aspect
-    const QList<QAbstractAspect *> &aspects = m_aspectManager->aspects();
-    QMultiHash<QAbstractAspect::AspectType, QVector<QAspectJobPtr> > jobs;
-    Q_FOREACH (QAbstractAspect *aspect, aspects) {
-        QVector<QAspectJobPtr> aspectJobs = aspect->jobsToExecute(time);
-        jobs.insert(aspect->aspectType(), aspectJobs);
-    }
+    QVector<QAspectJobPtr> jobQueue;
+
+    // TODO: Allow clocks with custom scale factors and independent control
+    //       over running / paused / stopped status
+    // TODO: Advance all clocks registered with the engine
 
     // TODO: Set up dependencies between jobs as needed
-    // For now just queue them up as they are with render tasks first
-    QVector<QAspectJobPtr> jobQueue;
-    for (int i = QAbstractAspect::AspectRenderer; i <= QAbstractAspect::AspectOther; ++i) {
-        QAbstractAspect::AspectType aspectType = static_cast<QAbstractAspect::AspectType>(i);
-        QList<QVector<QAspectJobPtr> > jobsForAspectType = jobs.values(aspectType);
-        Q_FOREACH (const QVector<QAspectJobPtr> &v, jobsForAspectType)
-            jobQueue += v;
+    // For now just queue them up as they are
+    const QList<QAbstractAspect *> &aspects = m_aspectManager->aspects();
+    Q_FOREACH (QAbstractAspect *aspect, aspects) {
+        QVector<QAspectJobPtr> aspectJobs = QAbstractAspectPrivate::get(aspect)->jobsToExecute(time);
+        jobQueue << aspectJobs;
     }
 
     m_aspectManager->jobManager()->enqueueJobs(jobQueue);
@@ -87,6 +84,6 @@ void QScheduler::update(qint64 time)
     m_aspectManager->jobManager()->waitForAllJobs();
 }
 
-} // namespace Qt3D
+} // namespace Qt3DCore
 
 QT_END_NAMESPACE

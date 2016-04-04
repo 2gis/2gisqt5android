@@ -3,6 +3,7 @@ QT += quick-private network positioning-private location-private qml-private cor
 INCLUDEPATH += ../../location
 INCLUDEPATH += ../../location/maps
 INCLUDEPATH += ../../positioning
+INCLUDEPATH += ../positioning
 INCLUDEPATH *= $$PWD
 
 HEADERS += \
@@ -24,9 +25,11 @@ HEADERS += \
            qdeclarativeroutemapitem_p.h \
            qgeomapitemgeometry_p.h \
            qdeclarativegeomapcopyrightsnotice_p.h \
-           qdeclarativegeomapgesturearea_p.h \
            error_messages.h \
-           locationvaluetypehelper_p.h
+           locationvaluetypehelper_p.h\
+           qquickgeomapgesturearea_p.h\
+           ../positioning/qquickgeocoordinateanimation_p.h \
+           mapitemviewdelegateincubator.h
 
 SOURCES += \
            location.cpp \
@@ -48,9 +51,11 @@ SOURCES += \
            qdeclarativeroutemapitem.cpp \
            qgeomapitemgeometry.cpp \
            qdeclarativegeomapcopyrightsnotice.cpp \
-           qdeclarativegeomapgesturearea.cpp \
            error_messages.cpp \
-           locationvaluetypehelper.cpp
+           locationvaluetypehelper.cpp \
+           qquickgeomapgesturearea.cpp \
+           ../positioning/qquickgeocoordinateanimation.cpp \
+           mapitemviewdelegateincubator.cpp
 
 include(declarativeplaces/declarativeplaces.pri)
 

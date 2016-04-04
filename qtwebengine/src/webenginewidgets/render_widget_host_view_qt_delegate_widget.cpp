@@ -59,13 +59,37 @@ RenderWidgetHostViewQtDelegateWidget::RenderWidgetHostViewQtDelegateWidget(Rende
     , m_rootNode(new QSGRootNode)
     , m_sgEngine(new QSGEngine)
     , m_isPopup(false)
+    , m_clearColor(Qt::white)
 {
     setFocusPolicy(Qt::StrongFocus);
 
 #if (QT_VERSION >= QT_VERSION_CHECK(5, 4, 0))
+
     QSurfaceFormat format;
     format.setDepthBufferSize(24);
     format.setStencilBufferSize(8);
+
+    QOpenGLContext *globalSharedContext = QOpenGLContext::globalShareContext();
+    if (globalSharedContext) {
+        QSurfaceFormat sharedFormat = globalSharedContext->format();
+
+#ifdef Q_OS_OSX
+        // Check that the default QSurfaceFormat OpenGL profile matches the global OpenGL shared
+        // context profile, otherwise this could lead to a nasty crash.
+        QSurfaceFormat defaultFormat = QSurfaceFormat::defaultFormat();
+        if (defaultFormat.profile() != sharedFormat.profile()) {
+            qFatal("QWebEngine: Default QSurfaceFormat OpenGL profile does not match global shared context OpenGL profile. Please make sure you set a new QSurfaceFormat before the QtGui application instance is created.");
+        }
+#endif
+
+        // Make sure the OpenGL profile of the QOpenGLWidget matches the shared context profile.
+        if (sharedFormat.profile() == QSurfaceFormat::CoreProfile) {
+            format.setMajorVersion(sharedFormat.majorVersion());
+            format.setMinorVersion(sharedFormat.minorVersion());
+            format.setProfile(sharedFormat.profile());
+        }
+    }
+
     setFormat(format);
 #endif
 
@@ -138,14 +162,12 @@ void RenderWidgetHostViewQtDelegateWidget::show()
     // want to show anything else than popups as top-level.
     if (parent() || m_isPopup) {
         QOpenGLWidget::show();
-        m_client->notifyShown();
     }
 }
 
 void RenderWidgetHostViewQtDelegateWidget::hide()
 {
     QOpenGLWidget::hide();
-    m_client->notifyHidden();
 }
 
 bool RenderWidgetHostViewQtDelegateWidget::isVisible() const
@@ -218,6 +240,19 @@ void RenderWidgetHostViewQtDelegateWidget::setTooltip(const QString &tooltip)
     setToolTip(wrappedTip);
 }
 
+void RenderWidgetHostViewQtDelegateWidget::setClearColor(const QColor &color)
+{
+    m_clearColor = color;
+    // QOpenGLWidget is usually blended by punching holes into widgets
+    // above it to simulate the visual stacking order. If we want it to be
+    // transparent we have to throw away the proper stacking order and always
+    // blend the complete normal widgets backing store under it.
+    bool isTranslucent = color.alpha() < 255;
+    setAttribute(Qt::WA_AlwaysStackOnTop, isTranslucent);
+    setAttribute(Qt::WA_OpaquePaintEvent, !isTranslucent);
+    update();
+}
+
 QVariant RenderWidgetHostViewQtDelegateWidget::inputMethodQuery(Qt::InputMethodQuery query) const
 {
     return m_client->inputMethodQuery(query);
@@ -243,6 +278,13 @@ void RenderWidgetHostViewQtDelegateWidget::showEvent(QShowEvent *event)
         m_windowConnections.append(connect(w, SIGNAL(yChanged(int)), SLOT(onWindowPosChanged())));
     }
     m_client->windowChanged();
+    m_client->notifyShown();
+}
+
+void RenderWidgetHostViewQtDelegateWidget::hideEvent(QHideEvent *event)
+{
+    QOpenGLWidget::hideEvent(event);
+    m_client->notifyHidden();
 }
 
 bool RenderWidgetHostViewQtDelegateWidget::event(QEvent *event)
@@ -270,7 +312,13 @@ void RenderWidgetHostViewQtDelegateWidget::initializeGL()
     m_sgEngine->initialize(QOpenGLContext::currentContext());
     m_sgRenderer.reset(m_sgEngine->createRenderer());
     m_sgRenderer->setRootNode(m_rootNode.data());
-    m_sgRenderer->setClearColor(Qt::white);
+    m_sgRenderer->setClearColor(m_clearColor);
+
+    // When RenderWidgetHostViewQt::GetScreenInfo is called for the first time, the associated
+    // QWindow is NULL, and the screen device pixel ratio can not be queried.
+    // Re-initialize the screen information after the QWindow handle is available,
+    // so Chromium receives the correct device pixel ratio.
+    m_client->windowChanged();
 }
 
 void RenderWidgetHostViewQtDelegateWidget::paintGL()

@@ -36,7 +36,7 @@
 #include <qqmlcontext.h>
 #include <private/qqmlengine_p.h>
 #include <private/qv8engine_p.h>
-#include <private/qv4value_inl_p.h>
+#include <private/qv4value_p.h>
 #include <private/qv4engine_p.h>
 #include <private/qv4object_p.h>
 
@@ -416,7 +416,7 @@ void QQuickXmlQueryEngine::getValuesOfKeyRoles(const XmlQueryJob& currentJob, QS
     if (keysQueries.count() == 1)
         keysQuery = currentJob.prefix + keysQueries[0];
     else if (keysQueries.count() > 1)
-        keysQuery = currentJob.prefix + QLatin1String("concat(") + keysQueries.join(QLatin1String(",")) + QLatin1String(")");
+        keysQuery = currentJob.prefix + QLatin1String("concat(") + keysQueries.join(QLatin1Char(',')) + QLatin1Char(')');
 
     if (!keysQuery.isEmpty()) {
         query->setQuery(keysQuery);

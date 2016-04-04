@@ -34,6 +34,17 @@
 #ifndef QQUICKSHADEREFFECT_P_H
 #define QQUICKSHADEREFFECT_P_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include <QtQuick/qquickitem.h>
 
 #include <QtQuick/qsgmaterial.h>
@@ -92,8 +103,6 @@ class Q_QUICK_PRIVATE_EXPORT QQuickShaderEffect : public QQuickItem
     Q_PROPERTY(QString log READ log NOTIFY logChanged)
     Q_PROPERTY(Status status READ status NOTIFY statusChanged)
     Q_PROPERTY(bool supportsAtlasTextures READ supportsAtlasTextures WRITE setSupportsAtlasTextures NOTIFY supportsAtlasTexturesChanged REVISION 1)
-    Q_ENUMS(CullMode)
-    Q_ENUMS(Status)
 
 public:
     enum CullMode
@@ -102,6 +111,7 @@ public:
         BackFaceCulling = QQuickShaderEffectMaterial::BackFaceCulling,
         FrontFaceCulling = QQuickShaderEffectMaterial::FrontFaceCulling
     };
+    Q_ENUM(CullMode)
 
     enum Status
     {
@@ -109,6 +119,7 @@ public:
         Uncompiled,
         Error
     };
+    Q_ENUM(Status)
 
     QQuickShaderEffect(QQuickItem *parent = 0);
     ~QQuickShaderEffect();

@@ -35,7 +35,6 @@
 #include "qwindowscontext.h"
 #include "qwindowsole.h"
 #include "qwindowsmime.h"
-#include "qwindowsguieventdispatcher.h"
 
 #include <QtGui/QGuiApplication>
 #include <QtGui/QClipboard>
@@ -47,6 +46,8 @@
 #include <QtCore/QStringList>
 #include <QtCore/QVariant>
 #include <QtCore/QUrl>
+
+#include <QtPlatformSupport/private/qwindowsguieventdispatcher_p.h>
 
 QT_BEGIN_NAMESPACE
 
@@ -69,6 +70,7 @@ static const char formatTextHtmlC[] = "text/html";
     \ingroup qt-lighthouse-win
 */
 
+#ifndef QT_NO_DEBUG_STREAM
 static QDebug operator<<(QDebug d, const QMimeData *mimeData)
 {
     QDebugStateSaver saver(d);
@@ -93,6 +95,7 @@ static QDebug operator<<(QDebug d, const QMimeData *mimeData)
     d << ')';
     return d;
 }
+#endif // !QT_NO_DEBUG_STREAM
 
 /*!
     \class QWindowsClipboardRetrievalMimeData
@@ -109,8 +112,11 @@ static QDebug operator<<(QDebug d, const QMimeData *mimeData)
 IDataObject *QWindowsClipboardRetrievalMimeData::retrieveDataObject() const
 {
     IDataObject * pDataObj = 0;
-    if (OleGetClipboard(&pDataObj) == S_OK)
+    if (OleGetClipboard(&pDataObj) == S_OK) {
+        if (QWindowsContext::verbose > 1)
+            qCDebug(lcQpaMime) << __FUNCTION__ << pDataObj;
         return pDataObj;
+    }
     return 0;
 }
 
@@ -230,7 +236,7 @@ void QWindowsClipboard::propagateClipboardMessage(UINT message, WPARAM wParam, L
     // suspended by a shell prompt 'Select' or debugger).
     if (QWindowsContext::user32dll.isHungAppWindow
         && QWindowsContext::user32dll.isHungAppWindow(m_nextClipboardViewer)) {
-        qWarning("%s: Cowardly refusing to send clipboard message to hung application...", Q_FUNC_INFO);
+        qWarning("Cowardly refusing to send clipboard message to hung application...");
         return;
     }
     // Do not block if the process is being debugged, specifically, if it is

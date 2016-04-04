@@ -169,7 +169,7 @@ void tst_QQuickMouseArea::dragProperties()
     // target
     QQuickItem *blackRect = window.rootObject()->findChild<QQuickItem*>("blackrect");
     QVERIFY(blackRect != 0);
-    QVERIFY(blackRect == drag->target());
+    QCOMPARE(blackRect, drag->target());
     QQuickItem *rootItem = qobject_cast<QQuickItem*>(window.rootObject());
     QVERIFY(rootItem != 0);
     QSignalSpy targetSpy(drag, SIGNAL(targetChanged()));
@@ -267,14 +267,14 @@ void tst_QQuickMouseArea::resetDrag()
     // target
     QQuickItem *blackRect = window.rootObject()->findChild<QQuickItem*>("blackrect");
     QVERIFY(blackRect != 0);
-    QVERIFY(blackRect == drag->target());
+    QCOMPARE(blackRect, drag->target());
     QQuickItem *rootItem = qobject_cast<QQuickItem*>(window.rootObject());
     QVERIFY(rootItem != 0);
     QSignalSpy targetSpy(drag, SIGNAL(targetChanged()));
     QVERIFY(drag->target() != 0);
     window.rootContext()->setContextProperty("haveTarget", QVariant(false));
     QCOMPARE(targetSpy.count(),1);
-    QVERIFY(drag->target() == 0);
+    QVERIFY(!drag->target());
 }
 
 void tst_QQuickMouseArea::dragging()
@@ -300,7 +300,7 @@ void tst_QQuickMouseArea::dragging()
     // target
     QQuickItem *blackRect = window.rootObject()->findChild<QQuickItem*>("blackrect");
     QVERIFY(blackRect != 0);
-    QVERIFY(blackRect == drag->target());
+    QCOMPARE(blackRect, drag->target());
 
     QVERIFY(!drag->active());
 
@@ -347,7 +347,7 @@ void tst_QQuickMouseArea::dragSmoothed()
     mouseRegion->setAcceptedButtons(Qt::LeftButton);
     QQuickItem *blackRect = window.rootObject()->findChild<QQuickItem*>("blackrect");
     QVERIFY(blackRect != 0);
-    QVERIFY(blackRect == drag->target());
+    QCOMPARE(blackRect, drag->target());
     QVERIFY(!drag->active());
     QTest::mousePress(&window, Qt::LeftButton, 0, QPoint(100,100));
     QVERIFY(!drag->active());
@@ -393,7 +393,7 @@ void tst_QQuickMouseArea::dragThreshold()
     mouseRegion->setAcceptedButtons(Qt::LeftButton);
     QQuickItem *blackRect = window.rootObject()->findChild<QQuickItem*>("blackrect");
     QVERIFY(blackRect != 0);
-    QVERIFY(blackRect == drag->target());
+    QCOMPARE(blackRect, drag->target());
     QVERIFY(!drag->active());
     QTest::mousePress(&window, Qt::LeftButton, 0, QPoint(100,100));
     QVERIFY(!drag->active());
@@ -451,7 +451,7 @@ void tst_QQuickMouseArea::invalidDrag()
     // target
     QQuickItem *blackRect = window.rootObject()->findChild<QQuickItem*>("blackrect");
     QVERIFY(blackRect != 0);
-    QVERIFY(blackRect == drag->target());
+    QCOMPARE(blackRect, drag->target());
 
     QVERIFY(!drag->active());
 
@@ -501,7 +501,7 @@ void tst_QQuickMouseArea::cancelDragging()
     // target
     QQuickItem *blackRect = window.rootObject()->findChild<QQuickItem*>("blackrect");
     QVERIFY(blackRect != 0);
-    QVERIFY(blackRect == drag->target());
+    QCOMPARE(blackRect, drag->target());
 
     QVERIFY(!drag->active());
 
@@ -655,7 +655,7 @@ void tst_QQuickMouseArea::noOnClickedWithPressAndHold()
         QMouseEvent pressEvent(QEvent::MouseButtonPress, QPoint(100, 100), Qt::LeftButton, Qt::LeftButton, 0);
         QGuiApplication::sendEvent(&window, &pressEvent);
 
-        QVERIFY(mouseArea->pressedButtons() == Qt::LeftButton);
+        QCOMPARE(mouseArea->pressedButtons(), Qt::LeftButton);
         QVERIFY(!window.rootObject()->property("clicked").toBool());
         QVERIFY(!window.rootObject()->property("held").toBool());
 
@@ -1149,6 +1149,19 @@ void tst_QQuickMouseArea::clickThrough()
 
     QCOMPARE(window->rootObject()->property("clicksEnabled").toInt(), 2);
     QCOMPARE(window->rootObject()->property("clicksDisabled").toInt(), 1); //disabled, shouldn't increment
+
+    window.reset(new QQuickView);
+
+    //QTBUG-49100
+    QVERIFY2(initView(*window.data(), testFileUrl("qtbug49100.qml"), true, &errorMessage), errorMessage.constData());
+    window->show();
+    QVERIFY(QTest::qWaitForWindowExposed(window.data()));
+    QVERIFY(window->rootObject() != 0);
+
+    QTest::mousePress(window.data(), Qt::LeftButton, 0, QPoint(100,100));
+    QTest::mouseRelease(window.data(), Qt::LeftButton, 0, QPoint(100,100));
+
+    QVERIFY(window->rootObject() != 0);
 }
 
 void tst_QQuickMouseArea::hoverPosition()
@@ -1268,7 +1281,7 @@ void tst_QQuickMouseArea::disableAfterPress()
     // target
     QQuickItem *blackRect = window.rootObject()->findChild<QQuickItem*>("blackrect");
     QVERIFY(blackRect != 0);
-    QVERIFY(blackRect == drag->target());
+    QCOMPARE(blackRect, drag->target());
 
     QVERIFY(!drag->active());
 
@@ -1561,7 +1574,7 @@ void tst_QQuickMouseArea::changeAxis()
     // target
     QQuickItem *blackRect = view.rootObject()->findChild<QQuickItem*>("blackrect");
     QVERIFY(blackRect != 0);
-    QVERIFY(blackRect == drag->target());
+    QCOMPARE(blackRect, drag->target());
 
     QVERIFY(!drag->active());
 

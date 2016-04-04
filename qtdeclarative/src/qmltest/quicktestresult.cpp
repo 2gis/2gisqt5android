@@ -34,6 +34,7 @@
 #include "quicktestresult_p.h"
 #include <QtTest/qtestcase.h>
 #include <QtTest/qtestsystem.h>
+#include <QtTest/private/qtestblacklist_p.h>
 #include <QtTest/private/qtestresult_p.h>
 #include <QtTest/private/qtesttable_p.h>
 #include <QtTest/private/qtestlog_p.h>
@@ -107,6 +108,14 @@ public Q_SLOTS:
         const QRgb* pixel = reinterpret_cast<const QRgb*>(m_image.constScanLine(y));
         pixel += x;
         return QColor::fromRgba(*pixel);
+    }
+
+    bool equals(QuickTestImageObject *other) const
+    {
+        if (!other)
+            return m_image.isNull();
+
+        return m_image == other->m_image;
     }
 private:
     QImage m_image;
@@ -205,6 +214,7 @@ void QuickTestResult::setFunctionName(const QString &name)
             QString fullName = d->testCaseName + QLatin1String("::") + name;
             QTestResult::setCurrentTestFunction
                 (d->intern(fullName).constData());
+            QTestPrivate::checkBlackLists(fullName.toUtf8().constData(), 0);
         }
     } else {
         QTestResult::setCurrentTestFunction(0);
@@ -233,6 +243,7 @@ void QuickTestResult::setDataTag(const QString &tag)
     if (!tag.isEmpty()) {
         QTestData *data = &(QTest::newRow(tag.toUtf8().constData()));
         QTestResult::setCurrentTestData(data);
+        QTestPrivate::checkBlackLists((testCaseName() + QStringLiteral("::") + functionName()).toUtf8().constData(), tag.toUtf8().constData());
         emit dataTagChanged();
     } else {
         QTestResult::setCurrentTestData(0);
@@ -270,6 +281,8 @@ bool QuickTestResult::isSkipped() const
 void QuickTestResult::setSkipped(bool skip)
 {
     QTestResult::setSkipCurrentTest(skip);
+    if (!skip)
+        QTestResult::setBlacklistCurrentTest(false);
     emit skippedChanged();
 }
 
@@ -478,8 +491,8 @@ void QuickTestResult::stringify(QQmlV4Function *args)
 
     //Check for Object Type
     if (value->isObject()
-        && !value->asFunctionObject()
-        && !value->asArrayObject()) {
+        && !value->as<QV4::FunctionObject>()
+        && !value->as<QV4::ArrayObject>()) {
         QVariant v = scope.engine->toVariant(value, QMetaType::UnknownType);
         if (v.isValid()) {
             switch (v.type()) {
@@ -500,7 +513,7 @@ void QuickTestResult::stringify(QQmlV4Function *args)
 
     if (result.isEmpty()) {
         QString tmp = value->toQStringNoThrow();
-        if (value->asArrayObject())
+        if (value->as<QV4::ArrayObject>())
             result.append(QString::fromLatin1("[%1]").arg(tmp));
         else
             result.append(tmp);
@@ -707,6 +720,8 @@ void QuickTestResult::parseArgs(int argc, char *argv[])
 void QuickTestResult::setProgramName(const char *name)
 {
     if (name) {
+        QTestPrivate::parseBlackList();
+        QTestPrivate::parseGpuBlackList();
         QTestResult::reset();
     } else if (!name && loggingStarted) {
         QTestResult::setCurrentTestObject(globalProgramName);

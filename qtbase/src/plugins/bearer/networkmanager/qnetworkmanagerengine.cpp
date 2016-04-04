@@ -49,7 +49,6 @@
 #include <QDBusReply>
 #include "../linux_common/qofonoservice_linux_p.h"
 
-#ifndef QT_NO_BEARERMANAGEMENT
 #ifndef QT_NO_DBUS
 
 QT_BEGIN_NAMESPACE
@@ -846,7 +845,7 @@ QNetworkConfigurationPrivate *QNetworkManagerEngine::parseConnection(const QStri
             QHashIterator<QString, QOfonoDataConnectionManagerInterface*> i(ofonoContextManagers);
             while (i.hasNext()) {
                 i.next();
-                const QString path = i.key() +"/"+contextPart;
+                const QString path = i.key() + QLatin1Char('/') +contextPart;
                 if (isActiveContext(path)) {
                     cpPriv->state |= QNetworkConfiguration::Active;
                     break;
@@ -1025,23 +1024,23 @@ QNetworkConfiguration::BearerType QNetworkManagerEngine::currentBearerType(const
     QHashIterator<QString, QOfonoDataConnectionManagerInterface*> i(ofonoContextManagers);
     while (i.hasNext()) {
         i.next();
-        QString contextPath = i.key() +"/"+contextPart;
+        QString contextPath = i.key() + QLatin1Char('/') +contextPart;
 
         if (i.value()->contexts().contains(contextPath)) {
 
             QString bearer = i.value()->bearer();
 
-            if (bearer == QStringLiteral("gsm")) {
+            if (bearer == QLatin1String("gsm")) {
                 return QNetworkConfiguration::Bearer2G;
-            } else if (bearer == QStringLiteral("edge")) {
+            } else if (bearer == QLatin1String("edge")) {
                 return QNetworkConfiguration::Bearer2G;
-            } else if (bearer == QStringLiteral("umts")) {
+            } else if (bearer == QLatin1String("umts")) {
                 return QNetworkConfiguration::BearerWCDMA;
-            } else if (bearer == QStringLiteral("hspa")
-                       || bearer == QStringLiteral("hsdpa")
-                       || bearer == QStringLiteral("hsupa")) {
+            } else if (bearer == QLatin1String("hspa")
+                       || bearer == QLatin1String("hsdpa")
+                       || bearer == QLatin1String("hsupa")) {
                 return QNetworkConfiguration::BearerHSPA;
-            } else if (bearer == QStringLiteral("lte")) {
+            } else if (bearer == QLatin1String("lte")) {
                 return QNetworkConfiguration::BearerLTE;
             }
         }
@@ -1129,4 +1128,3 @@ void QNetworkManagerEngine::ofonoUnRegistered(const QString &)
 QT_END_NAMESPACE
 
 #endif // QT_NO_DBUS
-#endif // QT_NO_BEARERMANAGEMENT

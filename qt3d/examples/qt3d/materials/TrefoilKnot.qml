@@ -34,8 +34,8 @@
 **
 ****************************************************************************/
 
-import Qt3D 2.0
-import Qt3D.Renderer 2.0
+import Qt3D.Core 2.0
+import Qt3D.Render 2.0
 
 Entity {
     id: root
@@ -52,10 +52,10 @@ Entity {
 
     Transform {
         id: transform
-        Scale { scale: root.scale }
-        Rotate{ angle: root.theta; axis: Qt.vector3d(1.0, 0.0, 0.0) }
-        Rotate{ angle: root.phi; axis: Qt.vector3d(0.0, 1.0, 0.0) }
-        Translate { dx: root.x; dy: root.y; dz: root.z }
+        translation: Qt.vector3d(root.x, root.y, root.z)
+        rotationX: theta
+        rotationY: phi
+        scale: root.scale
     }
 
     Mesh {

@@ -34,8 +34,8 @@
 **
 ****************************************************************************/
 
-import Qt3D 2.0
-import Qt3D.Renderer 2.0
+import Qt3D.Core 2.0
+import Qt3D.Render 2.0
 
 Material {
     id:root
@@ -67,16 +67,15 @@ Material {
             Parameter { name: "kyellow";        value: root.warmColor },
             Parameter { name: "alpha";          value: root.alpha },
             Parameter { name: "beta";           value: root.beta },
-            Parameter { name: "shininess";      value: root.shininess },
-            Parameter { name: "lightPosition";  value: Qt.vector4d(10.0, 10.0, -10.0, 1.0) }
+            Parameter { name: "shininess";      value: root.shininess }
         ]
 
         techniques: [
             // GL 3 Technique
             Technique {
-                openGLFilter {
-                    api: OpenGLFilter.Desktop
-                    profile: OpenGLFilter.Core
+                graphicsApiFilter {
+                    api: GraphicsApiFilter.OpenGL
+                    profile: GraphicsApiFilter.CoreProfile
                     majorVersion: 3
                     minorVersion: 2
                 }
@@ -87,9 +86,9 @@ Material {
 
             // GL 2 Technique
             Technique {
-                openGLFilter {
-                    api: OpenGLFilter.Desktop
-                    profile: OpenGLFilter.None
+                graphicsApiFilter {
+                    api: GraphicsApiFilter.OpenGL
+                    profile: GraphicsApiFilter.NoProfile
                     majorVersion: 2
                     minorVersion: 0
                 }
@@ -100,9 +99,9 @@ Material {
 
             // ES 2 Technique
             Technique {
-                openGLFilter {
-                    api: OpenGLFilter.ES
-                    profile: OpenGLFilter.None
+                graphicsApiFilter {
+                    api: GraphicsApiFilter.OpenGLES
+                    profile: GraphicsApiFilter.NoProfile
                     majorVersion: 2
                     minorVersion: 0
                 }

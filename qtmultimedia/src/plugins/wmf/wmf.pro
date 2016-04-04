@@ -1,9 +1,6 @@
 TARGET = wmfengine
 QT += multimedia-private network
-qtHaveModule(widgets) {
-    QT += multimediawidgets-private
-    DEFINES += HAVE_WIDGETS
-}
+
 win32:!qtHaveModule(opengl) {
     LIBS_PRIVATE += -lgdi32 -luser32
 }
@@ -20,7 +17,6 @@ HEADERS += \
     sourceresolver.h \
     samplegrabber.h \
     mftvideo.h \
-    mfglobal.h \
     mfactivate.h
 
 SOURCES += \
@@ -29,22 +25,7 @@ SOURCES += \
     sourceresolver.cpp \
     samplegrabber.cpp \
     mftvideo.cpp \
-    mfactivate.cpp \
-    mfglobal.cpp
-
-contains(QT_CONFIG, angle)|contains(QT_CONFIG, dynamicgl) {
-    LIBS += -ld3d9 -ldxva2 -lwinmm -levr
-    QT += gui-private
-
-    HEADERS += \
-        evrcustompresenter.h \
-        evrd3dpresentengine.h
-
-    SOURCES += \
-        evrcustompresenter.cpp \
-        evrd3dpresentengine.cpp
-}
-
+    mfactivate.cpp
 
 include (player/player.pri)
 include (decoder/decoder.pri)

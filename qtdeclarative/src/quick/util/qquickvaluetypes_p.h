@@ -34,6 +34,17 @@
 #ifndef QQUICKVALUETYPES_P_H
 #define QQUICKVALUETYPES_P_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include <qqml.h>
 #include <qtquickglobal.h>
 #include <private/qqmlvaluetype_p.h>
@@ -244,6 +255,13 @@ public:
     void setM43(qreal value) { v(3, 2) = value; }
     void setM44(qreal value) { v(3, 3) = value; }
 
+    Q_INVOKABLE void translate(const QVector3D &t) { v.translate(t); }
+    Q_INVOKABLE void rotate(float angle, const QVector3D &axis) { v.rotate(angle, axis); }
+    Q_INVOKABLE void scale(float s) { v.scale(s); }
+    Q_INVOKABLE void scale(float sx, float sy, float sz) { v.scale(sx, sy, sz); }
+    Q_INVOKABLE void scale(const QVector3D &s) { v.scale(s); }
+    Q_INVOKABLE void lookAt(const QVector3D &eye, const QVector3D &center, const QVector3D &up) { v.lookAt(eye, center, up); }
+
     Q_INVOKABLE QMatrix4x4 times(const QMatrix4x4 &m) const;
     Q_INVOKABLE QVector4D times(const QVector4D &vec) const;
     Q_INVOKABLE QVector3D times(const QVector3D &vec) const;
@@ -266,10 +284,9 @@ class QQuickFontValueType
 {
     QFont v;
     Q_GADGET
-    Q_ENUMS(FontWeight)
-    Q_ENUMS(Capitalization)
 
     Q_PROPERTY(QString family READ family WRITE setFamily FINAL)
+    Q_PROPERTY(QString styleName READ styleName WRITE setStyleName FINAL)
     Q_PROPERTY(bool bold READ bold WRITE setBold FINAL)
     Q_PROPERTY(FontWeight weight READ weight WRITE setWeight FINAL)
     Q_PROPERTY(bool italic READ italic WRITE setItalic FINAL)
@@ -292,16 +309,21 @@ public:
                       Bold = QFont::Bold,
                       ExtraBold = QFont::ExtraBold,
                       Black = QFont::Black };
+    Q_ENUM(FontWeight)
     enum Capitalization { MixedCase = QFont::MixedCase,
                            AllUppercase = QFont::AllUppercase,
                            AllLowercase = QFont::AllLowercase,
                            SmallCaps = QFont::SmallCaps,
                            Capitalize = QFont::Capitalize };
+    Q_ENUM(Capitalization)
 
     Q_INVOKABLE QString toString() const;
 
     QString family() const;
     void setFamily(const QString &);
+
+    QString styleName() const;
+    void setStyleName(const QString &);
 
     bool bold() const;
     void setBold(bool b);

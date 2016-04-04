@@ -27,15 +27,15 @@
 
 /*!
     \example shadow-map-qml
-    \title Qt3D: Shadow Map QML Example
+    \title Qt 3D: Shadow Map QML Example
     \ingroup qt3d-examples-qml
 
-    \brief A Qt3D QML application that illustrates how to render a scene in Qt3D
+    \brief A Qt 3D QML application that illustrates how to render a scene in Qt 3D
     with shadows.
 
     \image shadowmapping-qt3d.png
 
-    \e {Qt3D Shadow Map} illustrates how to configure the renderer in order to
+    \e {Qt 3D Shadow Map} illustrates how to configure the renderer in order to
     accommodate custom rendering techniques. The example application displays a
     self-shadowed plane and trefoil knot.
 
@@ -58,8 +58,8 @@
     import the modules:
 
     \quotefromfile shadow-map-qml/main.qml
-    \skipto import Qt3D
-    \printuntil Renderer
+    \skipto import Qt3D.Core
+    \printuntil Render 2.0
 
     The first entities we create are a \l Camera, which represents the camera
     used for the final rendering, and a \l Configuration, which allows us to
@@ -90,13 +90,13 @@
 
     \section1 Specifying the Light
 
-    We specify the Light custom entity in \e Light.qml.
+    We specify the Light custom entity in \e ShadowMapLight.qml.
 
     Again, we import the necessary modules:
 
-    \quotefromfile shadow-map-qml/Light.qml
+    \quotefromfile shadow-map-qml/ShadowMapLight.qml
     \skipto import Qt3D
-    \printuntil Qt3D.Renderer
+    \printuntil Qt3D.Render
 
     We then use an \l Entity type as the root element of the custom QML type.
     The light is a directional spotlight that exposes as properties a position,
@@ -111,15 +111,15 @@
 
     \section1 Configuring the Framegraph
 
-    In Qt3D, the framegraph is the data-driven configuration for the rendering.
+    In Qt 3D, the framegraph is the data-driven configuration for the rendering.
     We implement the framegraph in the \e ShadowMapFrameGraph.qml file.
 
-    In addition to the Qt3D and Qt3D Renderer modules, we also import the
+    In addition to the Qt 3D and Qt 3D Render modules, we also import the
     Qt Quick module:
 
     \quotefromfile shadow-map-qml/ShadowMapFrameGraph.qml
-    \skipto import Qt3D
-    \printuntil QtQuick
+    \skipto import QtQuick
+    \printuntil Render 2.0
 
     The code defines a \l FrameGraph entity that has a tree of entities as the
     active framegraph:
@@ -132,7 +132,7 @@
 
     In our case, the tree looks like this:
 
-    \code
+    \badcode
     Viewport
         RenderPassFilter
             RenderTargetSelector
@@ -157,7 +157,7 @@
     \section1 Generating the Shadow Map
 
     In the shadow map generation pass, we must render to an offscreen surface
-    (Framebuffer Object) which has a depth texture attachment. In Qt3D, it is
+    (Framebuffer Object) which has a depth texture attachment. In Qt 3D, it is
     represented by the RenderTarget entity, which has a number of attachments.
 
     In this example, we need only a depth attachment. We define it as a

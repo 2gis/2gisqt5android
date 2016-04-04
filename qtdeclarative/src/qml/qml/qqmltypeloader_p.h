@@ -60,7 +60,7 @@
 #include <private/qflagpointer_p.h>
 #include <private/qqmlirbuilder_p.h>
 
-#include <private/qv4value_inl_p.h>
+#include <private/qv4value_p.h>
 #include <private/qv4script_p.h>
 
 QT_BEGIN_NAMESPACE
@@ -215,7 +215,7 @@ class Q_AUTOTEST_EXPORT QQmlTypeLoader
 {
     Q_DECLARE_TR_FUNCTIONS(QQmlTypeLoader)
 public:
-    enum Mode { PreferSynchronous, Asynchronous };
+    enum Mode { PreferSynchronous, Asynchronous, Synchronous };
 
     class Q_QML_PRIVATE_EXPORT Blob : public QQmlDataBlob
     {
@@ -283,7 +283,7 @@ public:
     QQmlImportDatabase *importDatabase();
 
     QQmlTypeData *getType(const QUrl &url, Mode mode = PreferSynchronous);
-    QQmlTypeData *getType(const QByteArray &, const QUrl &url);
+    QQmlTypeData *getType(const QByteArray &, const QUrl &url, Mode mode = PreferSynchronous);
 
     QQmlScriptBlob *getScript(const QUrl &);
     QQmlQmldirData *getQmldir(const QUrl &);
@@ -362,6 +362,13 @@ private:
     QmldirCache m_qmldirCache;
     ImportDirCache m_importDirCache;
     ImportQmlDirCache m_importQmlDirCache;
+
+    template<typename Loader>
+    void doLoad(const Loader &loader, QQmlDataBlob *blob, Mode mode);
+
+    friend struct PlainLoader;
+    friend struct CachedLoader;
+    friend struct StaticLoader;
 };
 
 class Q_AUTOTEST_EXPORT QQmlTypeData : public QQmlTypeLoader::Blob
@@ -474,7 +481,7 @@ public:
     QQmlTypeNameCache *importCache;
     QList<QQmlScriptBlob *> scripts;
 
-    QV4::PersistentValue scriptValueForContext(QQmlContextData *parentCtxt);
+    QV4::ReturnedValue scriptValueForContext(QQmlContextData *parentCtxt);
 
 protected:
     virtual void clear(); // From QQmlCleanup

@@ -110,12 +110,14 @@ void tst_qquickpixmapcache::initTestCase()
 
     QVERIFY2(server.listen(), qPrintable(server.errorString()));
 
+#ifndef QT_NO_BEARERMANAGEMENT
     // This avoids a race condition/deadlock bug in network config
     // manager when it is accessed by the HTTP server thread before
     // anything else. Bug report can be found at:
     // QTBUG-26355
     QNetworkConfigurationManager cm;
     cm.updateConfigurations();
+#endif
 
     server.serveDirectory(testFile("http"));
 }
@@ -146,7 +148,7 @@ void tst_qquickpixmapcache::single()
 
     QString expectedError;
     if (neterror) {
-        expectedError = "Error downloading " + target.toString() + " - server replied: Not found";
+        expectedError = "Error transferring " + target.toString() + " - server replied: Not found";
     } else if (!exists) {
         expectedError = "Cannot open: " + target.toString();
     }
@@ -159,10 +161,10 @@ void tst_qquickpixmapcache::single()
     if (incache) {
         QCOMPARE(pixmap.error(), expectedError);
         if (exists) {
-            QVERIFY(pixmap.status() == QQuickPixmap::Ready);
+            QCOMPARE(pixmap.status(), QQuickPixmap::Ready);
             QVERIFY(pixmap.width() > 0);
         } else {
-            QVERIFY(pixmap.status() == QQuickPixmap::Error);
+            QCOMPARE(pixmap.status(), QQuickPixmap::Error);
             QVERIFY(pixmap.width() <= 0);
         }
     } else {
@@ -174,10 +176,10 @@ void tst_qquickpixmapcache::single()
         QVERIFY(!QTestEventLoop::instance().timeout());
         QVERIFY(getter.gotslot);
         if (exists) {
-            QVERIFY(pixmap.status() == QQuickPixmap::Ready);
+            QCOMPARE(pixmap.status(), QQuickPixmap::Ready);
             QVERIFY(pixmap.width() > 0);
         } else {
-            QVERIFY(pixmap.status() == QQuickPixmap::Error);
+            QCOMPARE(pixmap.status(), QQuickPixmap::Error);
             QVERIFY(pixmap.width() <= 0);
         }
         QCOMPARE(pixmap.error(), expectedError);
@@ -259,7 +261,9 @@ void tst_qquickpixmapcache::parallel()
         }
     }
 
-    QCOMPARE(incache+slotters, targets.count());
+    if (incache + slotters != targets.count())
+        QFAIL(QString::fromLatin1("pixmap counts don't add up: %1 incache, %2 slotters, %3 total")
+              .arg(incache).arg(slotters).arg(targets.count()).toLatin1().constData());
 
     if (cancel >= 0) {
         pixmaps.at(cancel)->clear(getters[cancel]);
@@ -280,7 +284,12 @@ void tst_qquickpixmapcache::parallel()
             if (pending[i])
                 QVERIFY(getters[i]->gotslot);
 
-            QVERIFY(pixmap->isReady());
+            if (!pixmap->isReady()) {
+                QFAIL(QString::fromLatin1("pixmap %1 not ready, status %2: %3")
+                      .arg(pixmap->url().toString()).arg(pixmap->status())
+                      .arg(pixmap->error()).toLatin1().constData());
+
+            }
             QVERIFY(pixmap->width() > 0);
             delete getters[i];
         }
@@ -307,7 +316,7 @@ void tst_qquickpixmapcache::massive()
     QVERIFY(p2.isReady());
     QVERIFY(p2.image().size() == QSize(10000, 1000));
 
-    QVERIFY(p2.image().cacheKey() == cachekey);
+    QCOMPARE(p2.image().cacheKey(), cachekey);
     }
 
     // Confirm that massive images are removed from the cache when

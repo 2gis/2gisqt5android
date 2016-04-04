@@ -102,6 +102,22 @@ void QSGRenderLoop::cleanup()
     s_instance = 0;
 }
 
+/*!
+ * Non-threaded render loops immediately run the job if there is a context.
+ */
+void QSGRenderLoop::postJob(QQuickWindow *window, QRunnable *job)
+{
+    Q_ASSERT(window);
+    Q_ASSERT(job);
+
+    if (window->openglContext()) {
+        window->openglContext()->makeCurrent(window);
+        job->run();
+    }
+
+    delete job;
+}
+
 class QSGGuiThreadRenderLoop : public QSGRenderLoop
 {
     Q_OBJECT
@@ -183,13 +199,15 @@ QSGRenderLoop *QSGRenderLoop::instance()
             else if (qmlForceThreadedRenderer())
                 loopType = ThreadedRenderLoop;
 
-            const QByteArray loopName = qgetenv("QSG_RENDER_LOOP");
-            if (loopName == QByteArrayLiteral("windows"))
-                loopType = WindowsRenderLoop;
-            else if (loopName == QByteArrayLiteral("basic"))
-                loopType = BasicRenderLoop;
-            else if (loopName == QByteArrayLiteral("threaded"))
-                loopType = ThreadedRenderLoop;
+            if (Q_UNLIKELY(qEnvironmentVariableIsSet("QSG_RENDER_LOOP"))) {
+                const QByteArray loopName = qgetenv("QSG_RENDER_LOOP");
+                if (loopName == QByteArrayLiteral("windows"))
+                    loopType = WindowsRenderLoop;
+                else if (loopName == QByteArrayLiteral("basic"))
+                    loopType = BasicRenderLoop;
+                else if (loopName == QByteArrayLiteral("threaded"))
+                    loopType = ThreadedRenderLoop;
+            }
 
             switch (loopType) {
             case ThreadedRenderLoop:
@@ -382,7 +400,8 @@ void QSGGuiThreadRenderLoop::renderWindow(QQuickWindow *window)
     Q_QUICK_SG_PROFILE_RECORD(QQuickProfiler::SceneGraphRenderLoopFrame);
 
     if (data.grabOnly) {
-        grabContent = qt_gl_read_framebuffer(window->size() * window->effectiveDevicePixelRatio(), false, false);
+        bool alpha = window->format().alphaBufferSize() > 0 && window->color().alpha() != 255;
+        grabContent = qt_gl_read_framebuffer(window->size() * window->effectiveDevicePixelRatio(), alpha, alpha);
         data.grabOnly = false;
     }
 

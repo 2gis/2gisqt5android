@@ -38,7 +38,7 @@ _log = logging.getLogger(__name__)
 
 
 class MacPort(base.Port):
-    SUPPORTED_VERSIONS = ('snowleopard', 'lion', 'retina', 'mountainlion', 'mavericks')
+    SUPPORTED_VERSIONS = ('snowleopard', 'lion', 'mountainlion', 'retina', 'mavericks', 'yosemite')
     port_name = 'mac'
 
     # FIXME: We treat Retina (High-DPI) devices as if they are running
@@ -46,12 +46,13 @@ class MacPort(base.Port):
     # Note that the retina versions fallback to the non-retina versions and so no
     # baselines are shared between retina versions; this keeps the fallback graph as a tree
     # and maximizes the number of baselines we can share that way.
-    # We also currently only support Retina on 10.8; we need to either upgrade to 10.9 or support both.
+    # We also currently only support Retina on 10.9.
 
     FALLBACK_PATHS = {}
-    FALLBACK_PATHS['mavericks'] = ['mac']
+    FALLBACK_PATHS['yosemite'] = ['mac']
+    FALLBACK_PATHS['mavericks'] = ['mac-mavericks'] + FALLBACK_PATHS['yosemite']
+    FALLBACK_PATHS['retina'] = ['mac-retina'] + FALLBACK_PATHS['mavericks']
     FALLBACK_PATHS['mountainlion'] = ['mac-mountainlion'] + FALLBACK_PATHS['mavericks']
-    FALLBACK_PATHS['retina'] = ['mac-retina'] + FALLBACK_PATHS['mountainlion']
     FALLBACK_PATHS['lion'] = ['mac-lion'] + FALLBACK_PATHS['mountainlion']
     FALLBACK_PATHS['snowleopard'] = ['mac-snowleopard'] + FALLBACK_PATHS['lion']
 
@@ -65,7 +66,7 @@ class MacPort(base.Port):
     def determine_full_port_name(cls, host, options, port_name):
         if port_name.endswith('mac'):
             if host.platform.os_version in ('future',):
-                version = 'mavericks'
+                version = 'yosemite'
             else:
                 version = host.platform.os_version
             if host.platform.is_highdpi():
@@ -104,7 +105,8 @@ class MacPort(base.Port):
         return '/usr/sbin/httpd'
 
     def path_to_apache_config_file(self):
-        return self._filesystem.join(self.layout_tests_dir(), 'http', 'conf', 'apache2-httpd.conf')
+        config_file_name = 'apache2-httpd-' + self._apache_version() + '.conf'
+        return self._filesystem.join(self.layout_tests_dir(), 'http', 'conf', config_file_name)
 
     def _path_to_driver(self, configuration=None):
         # FIXME: make |configuration| happy with case-sensitive file systems.

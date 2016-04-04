@@ -34,6 +34,17 @@
 #ifndef QQMLINSTANCEMODEL_P_H
 #define QQMLINSTANCEMODEL_P_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include <private/qtqmlglobal_p.h>
 #include <QtQml/qqml.h>
 #include <QtCore/qobject.h>
@@ -61,7 +72,7 @@ public:
     virtual ReleaseFlags release(QObject *object) = 0;
     virtual void cancel(int) {}
     virtual QString stringValue(int, const QString &) = 0;
-    virtual void setWatchedRoles(QList<QByteArray> roles) = 0;
+    virtual void setWatchedRoles(const QList<QByteArray> &roles) = 0;
 
     virtual int indexOf(QObject *object, QObject *objectContext) const = 0;
 
@@ -99,13 +110,22 @@ public:
     virtual QObject *object(int index, bool asynchronous=false);
     virtual ReleaseFlags release(QObject *object);
     virtual QString stringValue(int index, const QString &role);
-    virtual void setWatchedRoles(QList<QByteArray>) {}
+    virtual void setWatchedRoles(const QList<QByteArray> &) {}
 
     virtual int indexOf(QObject *object, QObject *objectContext) const;
 
     QQmlListProperty<QObject> children();
 
     static QQmlObjectModelAttached *qmlAttachedProperties(QObject *obj);
+
+    Q_REVISION(3) Q_INVOKABLE QObject *get(int index) const;
+    Q_REVISION(3) Q_INVOKABLE void append(QObject *object);
+    Q_REVISION(3) Q_INVOKABLE void insert(int index, QObject *object);
+    Q_REVISION(3) Q_INVOKABLE void move(int from, int to, int n = 1);
+    Q_REVISION(3) Q_INVOKABLE void remove(int index, int n = 1);
+
+public Q_SLOTS:
+    Q_REVISION(3) void clear();
 
 Q_SIGNALS:
     void childrenChanged();
@@ -120,7 +140,7 @@ class QQmlObjectModelAttached : public QObject
 
 public:
     QQmlObjectModelAttached(QObject *parent)
-        : QObject(parent), m_index(0) {}
+        : QObject(parent), m_index(-1) {}
     ~QQmlObjectModelAttached() {
         attachedProperties.remove(parent());
     }

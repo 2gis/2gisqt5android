@@ -51,10 +51,11 @@ class QPlatformMenu;
 class QQuickMenuPopupWindow;
 class QQuickMenuItemContainer;
 class QQuickWindow;
+class QQuickMenuBar1;
 
 typedef QQmlListProperty<QObject> QQuickMenuItems;
 
-class QQuickMenu : public QQuickMenuText
+class QQuickMenu1 : public QQuickMenuText
 {
     Q_OBJECT
     Q_PROPERTY(QString title READ text WRITE setText NOTIFY titleChanged)
@@ -70,6 +71,7 @@ class QQuickMenu : public QQuickMenuText
     Q_PROPERTY(qreal __yOffset READ yOffset WRITE setYOffset)
     Q_PROPERTY(QQuickAction *__action READ action CONSTANT)
     Q_PROPERTY(QRect __popupGeometry READ popupGeometry NOTIFY __popupGeometryChanged)
+    Q_PROPERTY(bool __isProxy READ isProxy WRITE setProxy NOTIFY __proxyChanged)
     Q_ENUMS(MenuType)
 
 public:
@@ -77,8 +79,8 @@ public:
     enum MenuType { DefaultMenu = 0, EditMenu };
 
     Q_INVOKABLE void popup();
-    Q_INVOKABLE QQuickMenuItem *addItem(QString);
-    Q_INVOKABLE QQuickMenuItem *insertItem(int, QString);
+    Q_INVOKABLE QQuickMenuItem1 *addItem(const QString &);
+    Q_INVOKABLE QQuickMenuItem1 *insertItem(int, const QString &);
     Q_INVOKABLE void addSeparator();
     Q_INVOKABLE void insertSeparator(int);
 
@@ -89,10 +91,10 @@ public:
     Q_INVOKABLE void __popup(const QRectF &targetRect, int atItemIndex = -1, MenuType menuType = DefaultMenu);
 
 public Q_SLOTS:
-    void __closeMenu();
     void __dismissMenu();
-    void __destroyMenuPopup();
-    void __destroyAllMenuPopups();
+
+    void __closeAndDestroy();
+    void __dismissAndDestroy();
 
 Q_SIGNALS:
     void itemsChanged();
@@ -106,10 +108,11 @@ Q_SIGNALS:
     void __popupGeometryChanged();
     void menuContentItemChanged();
     void minimumWidthChanged();
+    void __proxyChanged();
 
 public:
-    QQuickMenu(QObject *parent = 0);
-    virtual ~QQuickMenu();
+    QQuickMenu1(QObject *parent = 0);
+    virtual ~QQuickMenu1();
 
     void setVisible(bool);
     void setEnabled(bool);
@@ -142,11 +145,22 @@ public:
 
     QRect popupGeometry() const;
 
+    bool isProxy() const { return m_proxy; }
+    void setProxy(bool proxy) { if (m_proxy != proxy) { m_proxy = proxy; emit __proxyChanged(); } }
+
+    void prepareItemTrigger(QQuickMenuItem1 *);
+    void concludeItemTrigger(QQuickMenuItem1 *);
+    void destroyMenuPopup();
+    void destroyAllMenuPopups();
+
+    QQuickMenuBar1 *menuBar();
+
 protected Q_SLOTS:
     void updateSelectedIndex();
 
     void setMenuContentItem(QQuickItem *);
     void setPopupVisible(bool);
+    void hideMenu();
     void clearPopupWindow();
 
     void updateText();
@@ -189,10 +203,12 @@ private:
     qreal m_xOffset;
     qreal m_yOffset;
     QFont m_font;
+    int m_triggerCount;
+    bool m_proxy;
 };
 
 QT_END_NAMESPACE
 
-QML_DECLARE_TYPE(QQuickMenu)
+QML_DECLARE_TYPE(QQuickMenu1)
 
 #endif // QQUICKMENU_P_H

@@ -34,8 +34,8 @@
 **
 ****************************************************************************/
 
-import Qt3D 2.0
-import Qt3D.Renderer 2.0
+import Qt3D.Core 2.0
+import Qt3D.Render 2.0
 
 Material {
     id:root
@@ -73,9 +73,9 @@ Material {
         techniques: [
             // GL 3 Technique
             Technique {
-                openGLFilter {
-                    api: OpenGLFilter.Desktop
-                    profile: OpenGLFilter.Core
+                graphicsApiFilter {
+                    api: GraphicsApiFilter.OpenGL
+                    profile: GraphicsApiFilter.CoreProfile
                     majorVersion: 3
                     minorVersion: 1
                 }
@@ -95,9 +95,9 @@ Material {
 
             // GL 2 Technique
             Technique {
-                openGLFilter {
-                    api: OpenGLFilter.Desktop
-                    profile: OpenGLFilter.None
+                graphicsApiFilter {
+                    api: GraphicsApiFilter.OpenGL
+                    profile: GraphicsApiFilter.NoProfile
                     majorVersion: 2
                     minorVersion: 0
                 }

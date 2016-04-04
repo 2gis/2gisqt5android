@@ -32,7 +32,7 @@
 ****************************************************************************/
 
 #include "qv4string_p.h"
-#include "qv4value_inl_p.h"
+#include "qv4value_p.h"
 #ifndef V4_BOOTSTRAP
 #include "qv4identifiertable_p.h"
 #include "qv4runtime_p.h"
@@ -110,7 +110,7 @@ bool String::isEqualTo(Managed *t, Managed *o)
     if (t == o)
         return true;
 
-    if (!o->d()->vtable->isString)
+    if (!o->d()->vtable()->isString)
         return false;
 
     return static_cast<String *>(t)->isEqualTo(static_cast<String *>(o));

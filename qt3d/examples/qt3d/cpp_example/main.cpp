@@ -41,91 +41,72 @@
 #include <Qt3DCore/qentity.h>
 #include <Qt3DCore/qcameralens.h>
 #include <Qt3DCore/qaspectengine.h>
+#include <Qt3DCore/qtransform.h>
 
 #include <Qt3DInput/QInputAspect>
 
-#include <Qt3DRenderer/qtorusmesh.h>
-#include <Qt3DRenderer/qmesh.h>
-#include <Qt3DRenderer/qtechnique.h>
-#include <Qt3DRenderer/qmaterial.h>
-#include <Qt3DRenderer/qeffect.h>
-#include <Qt3DRenderer/qtexture.h>
-#include <Qt3DRenderer/qrenderpass.h>
-#include <Qt3DRenderer/qsceneloader.h>
-
-#include <Qt3DCore/qtranslatetransform.h>
-#include <Qt3DCore/qmatrixtransform.h>
-#include <Qt3DCore/qrotatetransform.h>
-#include <Qt3DCore/qlookattransform.h>
-#include <Qt3DCore/qtransform.h>
-
-#include <Qt3DRenderer/qcameraselector.h>
-#include <Qt3DRenderer/qrenderpassfilter.h>
-#include <Qt3DRenderer/qtechniquefilter.h>
-#include <Qt3DRenderer/qviewport.h>
-#include <Qt3DRenderer/qrenderaspect.h>
-#include <Qt3DRenderer/qframegraph.h>
-#include <Qt3DRenderer/qclearbuffer.h>
+#include <Qt3DRender/qtorusmesh.h>
+#include <Qt3DRender/qmesh.h>
+#include <Qt3DRender/qtechnique.h>
+#include <Qt3DRender/qmaterial.h>
+#include <Qt3DRender/qeffect.h>
+#include <Qt3DRender/qtexture.h>
+#include <Qt3DRender/qrenderpass.h>
+#include <Qt3DRender/qsceneloader.h>
+#include <Qt3DRender/qcameraselector.h>
+#include <Qt3DRender/qrenderpassfilter.h>
+#include <Qt3DRender/qtechniquefilter.h>
+#include <Qt3DRender/qviewport.h>
+#include <Qt3DRender/qrenderaspect.h>
+#include <Qt3DRender/qframegraph.h>
+#include <Qt3DRender/qclearbuffer.h>
 
 int main(int ac, char **av)
 {
     QGuiApplication app(ac, av);
 
     Window view;
-    Qt3D::QAspectEngine engine;
-    engine.registerAspect(new Qt3D::QRenderAspect());
-    Qt3D::QInputAspect *input = new Qt3D::QInputAspect;
+    Qt3DCore::QAspectEngine engine;
+    engine.registerAspect(new Qt3DRender::QRenderAspect());
+    Qt3DInput::QInputAspect *input = new Qt3DInput::QInputAspect;
     engine.registerAspect(input);
-    engine.initialize();
     QVariantMap data;
     data.insert(QStringLiteral("surface"), QVariant::fromValue(static_cast<QSurface *>(&view)));
     data.insert(QStringLiteral("eventSource"), QVariant::fromValue(&view));
     engine.setData(data);
 
     // Root entity
-    Qt3D::QEntity *rootEntity = new Qt3D::QEntity();
+    Qt3DCore::QEntity *rootEntity = new Qt3DCore::QEntity();
     rootEntity->setObjectName(QStringLiteral("rootEntity"));
     // Torus
-    Qt3D::QEntity *torusEntity = new Qt3D::QEntity(rootEntity);
+    Qt3DCore::QEntity *torusEntity = new Qt3DCore::QEntity(rootEntity);
 
     // Torus shape data
-    Qt3D::QTorusMesh *torus = new Qt3D::QTorusMesh();
+    Qt3DRender::QTorusMesh *torus = new Qt3DRender::QTorusMesh();
     torus->setRadius(40);
     torus->setMinorRadius(15);
 
     torusEntity->addComponent(torus);
 
     // TorusMesh Transform
-    Qt3D::QTranslateTransform *torusTranslation = new Qt3D::QTranslateTransform();
-    Qt3D::QRotateTransform *torusRotation = new Qt3D::QRotateTransform();
-    Qt3D::QTransform *torusTransforms = new Qt3D::QTransform();
-
-    torusTranslation->setTranslation(QVector3D(-5.0f, 3.5f, 2.0f));
-    torusRotation->setAxis(QVector3D(1, 0, 0));
-    torusRotation->setAngleDeg(35.0f);
-    torusTransforms->addTransform(torusTranslation);
-    torusTransforms->addTransform(torusRotation);
+    Qt3DCore::QTransform *torusTransforms = new Qt3DCore::QTransform();
+    torusTransforms->setTranslation(QVector3D(-5.0f, 3.5f, 2.0f));
+    torusTransforms->setRotation(QQuaternion::fromAxisAndAngle(QVector3D(1, 0, 0), 35.0f));
     torusEntity->addComponent(torusTransforms);
 
     // Scene file
-    Qt3D::QEntity *sceneEntity = new Qt3D::QEntity(rootEntity);
-    Qt3D::QSceneLoader  *scene = new Qt3D::QSceneLoader();
+    Qt3DCore::QEntity *sceneEntity = new Qt3DCore::QEntity(rootEntity);
+    Qt3DRender::QSceneLoader *scene = new Qt3DRender::QSceneLoader();
     scene->setObjectName(QStringLiteral("scene"));
-    Qt3D::QTransform *sceneTransform = new Qt3D::QTransform();
-    Qt3D::QTranslateTransform *sceneTranslateTransform = new Qt3D::QTranslateTransform();
-    sceneTranslateTransform->setDx(2.5);
-    sceneTranslateTransform->setDy(0.5);
-    sceneTranslateTransform->setDz(-10);
-    sceneTransform->addTransform(sceneTranslateTransform);
+    Qt3DCore::QTransform *sceneTransform = new Qt3DCore::QTransform();
+    sceneTransform->setTranslation(QVector3D(2.5f, 0.5f, -10.0f));
     sceneEntity->addComponent(sceneTransform);
-//    scene->setSource(":/assets/gltf/wine/wine.json");
     scene->setSource(QUrl("qrc:/assets/test_scene.dae"));
     sceneEntity->addComponent(scene);
 
     // Camera
-    Qt3D::QCamera *cameraEntity = new Qt3D::QCamera(rootEntity);
+    Qt3DCore::QCamera *cameraEntity = new Qt3DCore::QCamera(rootEntity);
     cameraEntity->setObjectName(QStringLiteral("cameraEntity"));
-
     cameraEntity->lens()->setPerspectiveProjection(60.0f, 16.0f/9.0f, 0.1f, 1000.0f);
     cameraEntity->setPosition(QVector3D(-5, 0, -20.0f));
     cameraEntity->setViewCenter(QVector3D(11, 0, 5));
@@ -133,16 +114,16 @@ int main(int ac, char **av)
     input->setCamera(cameraEntity);
 
     // FrameGraph
-    Qt3D::QFrameGraph *frameGraph = new Qt3D::QFrameGraph();
-    Qt3D::QTechniqueFilter *techniqueFilter = new Qt3D::QTechniqueFilter();
-    Qt3D::QViewport *viewport = new Qt3D::QViewport(techniqueFilter);
-    Qt3D::QClearBuffer *clearBuffer = new Qt3D::QClearBuffer(viewport);
-    Qt3D::QCameraSelector *cameraSelector = new Qt3D::QCameraSelector(clearBuffer);
-    (void) new Qt3D::QRenderPassFilter(cameraSelector);
+    Qt3DRender::QFrameGraph *frameGraph = new Qt3DRender::QFrameGraph();
+    Qt3DRender::QTechniqueFilter *techniqueFilter = new Qt3DRender::QTechniqueFilter();
+    Qt3DRender::QViewport *viewport = new Qt3DRender::QViewport(techniqueFilter);
+    Qt3DRender::QClearBuffer *clearBuffer = new Qt3DRender::QClearBuffer(viewport);
+    Qt3DRender::QCameraSelector *cameraSelector = new Qt3DRender::QCameraSelector(clearBuffer);
+    (void) new Qt3DRender::QRenderPassFilter(cameraSelector);
 
     // TechiqueFilter and renderPassFilter are not implement yet
     viewport->setRect(QRectF(0, 0, 1, 1));
-    clearBuffer->setBuffers(Qt3D::QClearBuffer::ColorDepthBuffer);
+    clearBuffer->setBuffers(Qt3DRender::QClearBuffer::ColorDepthBuffer);
     cameraSelector->setCamera(cameraEntity);
     frameGraph->setActiveFrameGraph(techniqueFilter);
 

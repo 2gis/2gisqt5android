@@ -121,7 +121,7 @@ void tst_qquickimage::noSource()
     QQuickImage *obj = qobject_cast<QQuickImage*>(component.create());
     QVERIFY(obj != 0);
     QCOMPARE(obj->source(), QUrl());
-    QVERIFY(obj->status() == QQuickImage::Null);
+    QCOMPARE(obj->status(), QQuickImage::Null);
     QCOMPARE(obj->width(), 0.);
     QCOMPARE(obj->height(), 0.);
     QCOMPARE(obj->fillMode(), QQuickImage::Stretch);
@@ -154,7 +154,7 @@ void tst_qquickimage::imageSource_data()
     if (QImageReader::supportedImageFormats().contains("svgz"))
         QTest::newRow("remote svgz") << "/heart.svgz" << 550.0 << 500.0 << true << false << false << "";
     QTest::newRow("remote not found") << "/no-such-file.png" << 0.0 << 0.0 << true
-        << false << true << "<Unknown File>:2:1: QML Image: Error downloading {{ServerBaseUrl}}/no-such-file.png - server replied: Not found";
+        << false << true << "<Unknown File>:2:1: QML Image: Error transferring {{ServerBaseUrl}}/no-such-file.png - server replied: Not found";
 
 }
 
@@ -167,6 +167,18 @@ void tst_qquickimage::imageSource()
     QFETCH(bool, async);
     QFETCH(bool, cache);
     QFETCH(QString, error);
+
+
+#if defined(Q_OS_LINUX) && !defined(Q_OS_ANDROID)
+    if (qstrcmp(QTest::currentDataTag(), "remote") == 0
+        || qstrcmp(QTest::currentDataTag(), "remote redirected") == 0
+        || qstrcmp(QTest::currentDataTag(), "remote svg") == 0
+        || qstrcmp(QTest::currentDataTag(), "remote svgz") == 0
+        || qstrcmp(QTest::currentDataTag(), "remote not found") == 0
+       ) {
+        QSKIP("Remote tests cause occasional hangs in the CI system -- QTBUG-45655");
+    }
+#endif
 
     TestHTTPServer server;
     if (remote) {
@@ -189,28 +201,28 @@ void tst_qquickimage::imageSource()
     QVERIFY(obj != 0);
 
     if (async)
-        QVERIFY(obj->asynchronous() == true);
+        QVERIFY(obj->asynchronous());
     else
-        QVERIFY(obj->asynchronous() == false);
+        QVERIFY(!obj->asynchronous());
 
     if (cache)
-        QVERIFY(obj->cache() == true);
+        QVERIFY(obj->cache());
     else
-        QVERIFY(obj->cache() == false);
+        QVERIFY(!obj->cache());
 
     if (remote || async)
-        QTRY_VERIFY(obj->status() == QQuickImage::Loading);
+        QTRY_COMPARE(obj->status(), QQuickImage::Loading);
 
     QCOMPARE(obj->source(), remote ? source : QUrl(source));
 
     if (error.isEmpty()) {
-        QTRY_VERIFY(obj->status() == QQuickImage::Ready);
+        QTRY_COMPARE(obj->status(), QQuickImage::Ready);
         QCOMPARE(obj->width(), qreal(width));
         QCOMPARE(obj->height(), qreal(height));
         QCOMPARE(obj->fillMode(), QQuickImage::Stretch);
         QCOMPARE(obj->progress(), 1.0);
     } else {
-        QTRY_VERIFY(obj->status() == QQuickImage::Error);
+        QTRY_COMPARE(obj->status(), QQuickImage::Error);
     }
 
     delete obj;
@@ -225,14 +237,14 @@ void tst_qquickimage::clearSource()
     component.setData(componentStr.toLatin1(), QUrl::fromLocalFile(""));
     QQuickImage *obj = qobject_cast<QQuickImage*>(component.create());
     QVERIFY(obj != 0);
-    QVERIFY(obj->status() == QQuickImage::Ready);
+    QCOMPARE(obj->status(), QQuickImage::Ready);
     QCOMPARE(obj->width(), 120.);
     QCOMPARE(obj->height(), 120.);
     QCOMPARE(obj->progress(), 1.0);
 
     ctxt->setContextProperty("srcImage", "");
     QVERIFY(obj->source().isEmpty());
-    QVERIFY(obj->status() == QQuickImage::Null);
+    QCOMPARE(obj->status(), QQuickImage::Null);
     QCOMPARE(obj->width(), 0.);
     QCOMPARE(obj->height(), 0.);
     QCOMPARE(obj->progress(), 0.0);
@@ -533,7 +545,7 @@ void tst_qquickimage::noLoading()
     component.setData(componentStr.toLatin1(), QUrl::fromLocalFile(""));
     QQuickImage *obj = qobject_cast<QQuickImage*>(component.create());
     QVERIFY(obj != 0);
-    QVERIFY(obj->status() == QQuickImage::Ready);
+    QCOMPARE(obj->status(), QQuickImage::Ready);
 
     QSignalSpy sourceSpy(obj, SIGNAL(sourceChanged(QUrl)));
     QSignalSpy progressSpy(obj, SIGNAL(progressChanged(qreal)));
@@ -541,29 +553,30 @@ void tst_qquickimage::noLoading()
 
     // Loading local file
     ctxt->setContextProperty("srcImage", testFileUrl("green.png"));
-    QTRY_VERIFY(obj->status() == QQuickImage::Ready);
-    QTRY_VERIFY(obj->progress() == 1.0);
+    QTRY_COMPARE(obj->status(), QQuickImage::Ready);
+    QTRY_COMPARE(obj->progress(), 1.0);
     QTRY_COMPARE(sourceSpy.count(), 1);
     QTRY_COMPARE(progressSpy.count(), 0);
     QTRY_COMPARE(statusSpy.count(), 1);
 
     // Loading remote file
     ctxt->setContextProperty("srcImage", server.url("/rect.png"));
-    QTRY_VERIFY(obj->status() == QQuickImage::Loading);
-    QTRY_VERIFY(obj->progress() == 0.0);
-    QTRY_VERIFY(obj->status() == QQuickImage::Ready);
-    QTRY_VERIFY(obj->progress() == 1.0);
+    QTRY_COMPARE(obj->status(), QQuickImage::Loading);
+    QTRY_COMPARE(obj->progress(), 0.0);
+    QTRY_COMPARE(obj->status(), QQuickImage::Ready);
+    QTRY_COMPARE(obj->progress(), 1.0);
     QTRY_COMPARE(sourceSpy.count(), 2);
-    QTRY_COMPARE(progressSpy.count(), 2);
+    QTRY_VERIFY(progressSpy.count() >= 2);
     QTRY_COMPARE(statusSpy.count(), 3);
 
     // Loading remote file again - should not go through 'Loading' state.
+    progressSpy.clear();
     ctxt->setContextProperty("srcImage", testFileUrl("green.png"));
     ctxt->setContextProperty("srcImage", server.url("/rect.png"));
-    QTRY_VERIFY(obj->status() == QQuickImage::Ready);
-    QTRY_VERIFY(obj->progress() == 1.0);
+    QTRY_COMPARE(obj->status(), QQuickImage::Ready);
+    QTRY_COMPARE(obj->progress(), 1.0);
     QTRY_COMPARE(sourceSpy.count(), 4);
-    QTRY_COMPARE(progressSpy.count(), 2);
+    QTRY_COMPARE(progressSpy.count(), 0);
     QTRY_COMPARE(statusSpy.count(), 5);
 
     delete obj;
@@ -615,7 +628,7 @@ void tst_qquickimage::sourceSize_QTBUG_14303()
     QSignalSpy sourceSizeSpy(obj, SIGNAL(sourceSizeChanged()));
 
     QTRY_VERIFY(obj != 0);
-    QTRY_VERIFY(obj->status() == QQuickImage::Ready);
+    QTRY_COMPARE(obj->status(), QQuickImage::Ready);
 
     QTRY_COMPARE(obj->sourceSize().width(), 200);
     QTRY_COMPARE(obj->sourceSize().height(), 200);
@@ -831,8 +844,8 @@ void tst_qquickimage::progressAndStatusChanges()
     component.setData(componentStr.toLatin1(), QUrl::fromLocalFile(""));
     QQuickImage *obj = qobject_cast<QQuickImage*>(component.create());
     QVERIFY(obj != 0);
-    QVERIFY(obj->status() == QQuickImage::Ready);
-    QTRY_VERIFY(obj->progress() == 1.0);
+    QCOMPARE(obj->status(), QQuickImage::Ready);
+    QTRY_COMPARE(obj->progress(), 1.0);
 
     qRegisterMetaType<QQuickImageBase::Status>();
     QSignalSpy sourceSpy(obj, SIGNAL(sourceChanged(QUrl)));
@@ -841,33 +854,33 @@ void tst_qquickimage::progressAndStatusChanges()
 
     // Same image
     ctxt->setContextProperty("srcImage", testFileUrl("heart.png"));
-    QTRY_VERIFY(obj->status() == QQuickImage::Ready);
-    QTRY_VERIFY(obj->progress() == 1.0);
+    QTRY_COMPARE(obj->status(), QQuickImage::Ready);
+    QTRY_COMPARE(obj->progress(), 1.0);
     QTRY_COMPARE(sourceSpy.count(), 0);
     QTRY_COMPARE(progressSpy.count(), 0);
     QTRY_COMPARE(statusSpy.count(), 0);
 
     // Loading local file
     ctxt->setContextProperty("srcImage", testFileUrl("colors.png"));
-    QTRY_VERIFY(obj->status() == QQuickImage::Ready);
-    QTRY_VERIFY(obj->progress() == 1.0);
+    QTRY_COMPARE(obj->status(), QQuickImage::Ready);
+    QTRY_COMPARE(obj->progress(), 1.0);
     QTRY_COMPARE(sourceSpy.count(), 1);
     QTRY_COMPARE(progressSpy.count(), 0);
     QTRY_COMPARE(statusSpy.count(), 1);
 
     // Loading remote file
     ctxt->setContextProperty("srcImage", server.url("/heart.png"));
-    QTRY_VERIFY(obj->status() == QQuickImage::Loading);
-    QTRY_VERIFY(obj->progress() == 0.0);
-    QTRY_VERIFY(obj->status() == QQuickImage::Ready);
-    QTRY_VERIFY(obj->progress() == 1.0);
+    QTRY_COMPARE(obj->status(), QQuickImage::Loading);
+    QTRY_COMPARE(obj->progress(), 0.0);
+    QTRY_COMPARE(obj->status(), QQuickImage::Ready);
+    QTRY_COMPARE(obj->progress(), 1.0);
     QTRY_COMPARE(sourceSpy.count(), 2);
     QTRY_VERIFY(progressSpy.count() > 1);
     QTRY_COMPARE(statusSpy.count(), 3);
 
     ctxt->setContextProperty("srcImage", "");
-    QTRY_VERIFY(obj->status() == QQuickImage::Null);
-    QTRY_VERIFY(obj->progress() == 0.0);
+    QTRY_COMPARE(obj->status(), QQuickImage::Null);
+    QTRY_COMPARE(obj->progress(), 0.0);
     QTRY_COMPARE(sourceSpy.count(), 3);
     QTRY_VERIFY(progressSpy.count() > 2);
     QTRY_COMPARE(statusSpy.count(), 4);

@@ -75,6 +75,8 @@ private slots:
     void urlInterceptor_data();
     void urlInterceptor();
 
+    void qmlContextProperties();
+
 public slots:
     QObject *createAQObjectForOwnershipTest ()
     {
@@ -90,7 +92,7 @@ void tst_qqmlengine::rootContext()
     QVERIFY(engine.rootContext());
 
     QCOMPARE(engine.rootContext()->engine(), &engine);
-    QVERIFY(engine.rootContext()->parentContext() == 0);
+    QVERIFY(!engine.rootContext()->parentContext());
 }
 
 class NetworkAccessManagerFactory : public QQmlNetworkAccessManagerFactory
@@ -119,8 +121,9 @@ void tst_qqmlengine::networkAccessManager()
     engine = new QQmlEngine;
     NetworkAccessManagerFactory factory;
     engine->setNetworkAccessManagerFactory(&factory);
-    QVERIFY(engine->networkAccessManagerFactory() == &factory);
-    QVERIFY(engine->networkAccessManager() == factory.manager);
+    QCOMPARE(engine->networkAccessManagerFactory(), &factory);
+    QNetworkAccessManager *engineNam = engine->networkAccessManager(); // calls NetworkAccessManagerFactory::create()
+    QCOMPARE(engineNam, factory.manager);
     delete engine;
 }
 
@@ -184,7 +187,7 @@ void tst_qqmlengine::baseUrl()
     dir.cdUp();
     QVERIFY(dir != QDir::current());
     QDir::setCurrent(dir.path());
-    QVERIFY(QDir::current() == dir);
+    QCOMPARE(QDir::current(), dir);
 
     QUrl cwd2 = QUrl::fromLocalFile(QDir::currentPath() + QDir::separator());
     QCOMPARE(engine.baseUrl(), cwd2);
@@ -200,11 +203,11 @@ void tst_qqmlengine::contextForObject()
     QQmlEngine *engine = new QQmlEngine;
 
     // Test null-object
-    QVERIFY(QQmlEngine::contextForObject(0) == 0);
+    QVERIFY(!QQmlEngine::contextForObject(0));
 
     // Test an object with no context
     QObject object;
-    QVERIFY(QQmlEngine::contextForObject(&object) == 0);
+    QVERIFY(!QQmlEngine::contextForObject(&object));
 
     // Test setting null-object
     QQmlEngine::setContextForObject(0, engine->rootContext());
@@ -214,18 +217,18 @@ void tst_qqmlengine::contextForObject()
 
     // Test setting context
     QQmlEngine::setContextForObject(&object, engine->rootContext());
-    QVERIFY(QQmlEngine::contextForObject(&object) == engine->rootContext());
+    QCOMPARE(QQmlEngine::contextForObject(&object), engine->rootContext());
 
     QQmlContext context(engine->rootContext());
 
     // Try changing context
     QTest::ignoreMessage(QtWarningMsg, "QQmlEngine::setContextForObject(): Object already has a QQmlContext");
     QQmlEngine::setContextForObject(&object, &context);
-    QVERIFY(QQmlEngine::contextForObject(&object) == engine->rootContext());
+    QCOMPARE(QQmlEngine::contextForObject(&object), engine->rootContext());
 
     // Delete context
     delete engine; engine = 0;
-    QVERIFY(QQmlEngine::contextForObject(&object) == 0);
+    QVERIFY(!QQmlEngine::contextForObject(&object));
 }
 
 void tst_qqmlengine::offlineStoragePath()
@@ -446,7 +449,7 @@ void tst_qqmlengine::failedCompilation()
     QQmlComponent component(&engine, testFileUrl(file));
     QVERIFY(!component.isReady());
     QScopedPointer<QObject> object(component.create());
-    QVERIFY(object == 0);
+    QVERIFY(object.isNull());
 
     engine.collectGarbage();
     engine.trimComponentCache();
@@ -470,7 +473,7 @@ void tst_qqmlengine::outputWarningsToStandardError()
     QQmlComponent c(&engine);
     c.setData("import QtQuick 2.0; QtObject { property int a: undefined }", QUrl());
 
-    QVERIFY(c.isReady() == true);
+    QVERIFY(c.isReady());
 
     QQmlTestMessageHandler messageHandler;
 
@@ -743,6 +746,15 @@ void tst_qqmlengine::urlInterceptor_data()
         << QStringLiteral("base file")
         << testFileUrl("interception/strings/intercepted/doesNotExist.file").toString()
         << QStringLiteral("file:///intercepted/doesNotExist.file");
+
+    QTest::newRow("InterceptIncludes")
+        << testFileUrl("interception/includes/urlInterceptor.qml")
+        << (QList<QQmlAbstractUrlInterceptor::DataType>() << QQmlAbstractUrlInterceptor::JavaScriptFile)
+        << testFileUrl("interception/includes/doesNotExist.file").toString()
+        << QStringLiteral("base file")
+        << QStringLiteral("intercepted include file")
+        << testFileUrl("interception/includes/doesNotExist.file").toString()
+        << QStringLiteral("file:///doesNotExist.file");
 }
 
 void tst_qqmlengine::urlInterceptor()
@@ -775,6 +787,18 @@ void tst_qqmlengine::urlInterceptor()
     //Test a URL as a resolveUrl() call
     QCOMPARE(o->property("resolvedUrl").toString(), expectedResolvedUrl);
     QCOMPARE(o->property("absoluteUrl").toString(), expectedAbsoluteUrl);
+}
+
+void tst_qqmlengine::qmlContextProperties()
+{
+    QQmlEngine e;
+
+    QQmlComponent c(&e, testFileUrl("TypeofQmlProperty.qml"));
+    QObject *o = c.create();
+    if (!o) {
+        qDebug() << c.errorString();
+    }
+    QVERIFY(o);
 }
 
 QTEST_MAIN(tst_qqmlengine)

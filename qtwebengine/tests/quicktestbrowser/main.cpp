@@ -50,7 +50,10 @@ typedef QGuiApplication Application;
 #endif
 #include <QtQml/QQmlApplicationEngine>
 #include <QtQml/QQmlContext>
+#include <QtQml/QQmlComponent>
 #include <QtWebEngine/qtwebengineglobal.h>
+#include <QtWebEngine/QQuickWebEngineProfile>
+#include <QtWebEngineCore/qwebenginecookiestore.h>
 
 static QUrl startupUrl()
 {
@@ -80,7 +83,17 @@ int main(int argc, char **argv)
     Utils utils;
     appEngine.rootContext()->setContextProperty("utils", &utils);
     appEngine.load(QUrl("qrc:/ApplicationRoot.qml"));
-    QMetaObject::invokeMethod(appEngine.rootObjects().first(), "load", Q_ARG(QVariant, startupUrl()));
+    QObject *rootObject = appEngine.rootObjects().first();
+
+    QQuickWebEngineProfile *profile = new QQuickWebEngineProfile(rootObject);
+
+    const QMetaObject *rootMeta = rootObject->metaObject();
+    int index = rootMeta->indexOfProperty("testProfile");
+    Q_ASSERT(index != -1);
+    QMetaProperty profileProperty = rootMeta->property(index);
+    profileProperty.write(rootObject, qVariantFromValue(profile));
+
+    QMetaObject::invokeMethod(rootObject, "load", Q_ARG(QVariant, startupUrl()));
 
     return app.exec();
 }

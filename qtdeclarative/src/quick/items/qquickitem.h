@@ -141,7 +141,6 @@ class Q_QUICK_EXPORT QQuickItem : public QObject, public QQmlParserStatus
 
     Q_PRIVATE_PROPERTY(QQuickItem::d_func(), QQuickItemLayer *layer READ layer DESIGNABLE false CONSTANT FINAL)
 
-    Q_ENUMS(TransformOrigin)
     Q_CLASSINFO("DefaultProperty", "data")
     Q_CLASSINFO("qt_HasQmlAccessors", "true")
 
@@ -167,7 +166,8 @@ public:
         ItemOpacityHasChanged,     // value.realValue
         ItemActiveFocusHasChanged, // value.boolValue
         ItemRotationHasChanged,    // value.realValue
-        ItemAntialiasingHasChanged // value.boolValue
+        ItemAntialiasingHasChanged, // value.boolValue
+        ItemDevicePixelRatioHasChanged // value.realValue
     };
 
     union ItemChangeData {
@@ -187,6 +187,7 @@ public:
         Left, Center, Right,
         BottomLeft, Bottom, BottomRight
     };
+    Q_ENUM(TransformOrigin)
 
     QQuickItem(QQuickItem *parent = 0);
     virtual ~QQuickItem();

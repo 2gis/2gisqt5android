@@ -57,6 +57,7 @@
 #include "cc/quads/checkerboard_draw_quad.h"
 #include "cc/quads/debug_border_draw_quad.h"
 #include "cc/quads/draw_quad.h"
+#include "cc/quads/io_surface_draw_quad.h"
 #include "cc/quads/render_pass_draw_quad.h"
 #include "cc/quads/solid_color_draw_quad.h"
 #include "cc/quads/stream_video_draw_quad.h"
@@ -74,6 +75,14 @@
 #if !defined(QT_NO_EGL)
 #include <EGL/egl.h>
 #include <EGL/eglext.h>
+#endif
+
+#ifndef GL_TIMEOUT_IGNORED
+#define GL_TIMEOUT_IGNORED                0xFFFFFFFFFFFFFFFFull
+#endif
+
+#ifndef GL_TEXTURE_RECTANGLE
+#define GL_TEXTURE_RECTANGLE              0x84F5
 #endif
 
 namespace QtWebEngineCore {
@@ -127,7 +136,7 @@ private:
     QSGGeometry m_geometry;
 };
 
-static inline QSharedPointer<QSGLayer> findRenderPassLayer(const cc::RenderPassId &id, const QList<QPair<cc::RenderPassId, QSharedPointer<QSGLayer> > > &list)
+static inline QSharedPointer<QSGLayer> findRenderPassLayer(const cc::RenderPassId &id, const QVector<QPair<cc::RenderPassId, QSharedPointer<QSGLayer> > > &list)
 {
     typedef QPair<cc::RenderPassId, QSharedPointer<QSGLayer> > Pair;
     Q_FOREACH (const Pair &pair, list)
@@ -161,9 +170,9 @@ static QSGNode *buildLayerChain(QSGNode *chainParent, const cc::SharedQuadState 
         layerChain->appendChildNode(clipNode);
         layerChain = clipNode;
     }
-    if (!layerState->content_to_target_transform.IsIdentity()) {
+    if (!layerState->quad_to_target_transform.IsIdentity()) {
         QSGTransformNode *transformNode = new QSGTransformNode;
-        transformNode->setMatrix(toQt(layerState->content_to_target_transform.matrix()));
+        transformNode->setMatrix(toQt(layerState->quad_to_target_transform.matrix()));
         layerChain->appendChildNode(transformNode);
         layerChain = transformNode;
     }
@@ -205,7 +214,6 @@ static void waitChromiumSync(gfx::TransferableFence *sync)
 #endif
         break;
     case gfx::TransferableFence::ArbSync:
-#ifdef GL_ARB_sync
         typedef void (QOPENGLF_APIENTRYP WaitSyncPtr)(GLsync sync, GLbitfield flags, GLuint64 timeout);
         static WaitSyncPtr glWaitSync_ = 0;
         if (!glWaitSync_) {
@@ -214,7 +222,6 @@ static void waitChromiumSync(gfx::TransferableFence *sync)
             Q_ASSERT(glWaitSync_);
         }
         glWaitSync_(sync->arb.sync, 0, GL_TIMEOUT_IGNORED);
-#endif
         break;
     }
 }
@@ -250,7 +257,6 @@ static void deleteChromiumSync(gfx::TransferableFence *sync)
 #endif
         break;
     case gfx::TransferableFence::ArbSync:
-#ifdef GL_ARB_sync
         typedef void (QOPENGLF_APIENTRYP DeleteSyncPtr)(GLsync sync);
         static DeleteSyncPtr glDeleteSync_ = 0;
         if (!glDeleteSync_) {
@@ -260,7 +266,6 @@ static void deleteChromiumSync(gfx::TransferableFence *sync)
         }
         glDeleteSync_(sync->arb.sync);
         sync->reset();
-#endif
         break;
     }
     // If Chromium was able to create a sync, we should have been able to handle its type here too.
@@ -409,7 +414,7 @@ void DelegatedFrameNode::preprocess()
         {
             QMutexLocker lock(&m_mutex);
             base::MessageLoop *gpuMessageLoop = gpu_message_loop();
-            content::SyncPointManager *syncPointManager = sync_point_manager();
+            gpu::SyncPointManager *syncPointManager = sync_point_manager();
 
             Q_FOREACH (MailboxTexture *mailboxTexture, mailboxesToFetch) {
                 m_numPendingSyncPoints++;
@@ -442,6 +447,20 @@ void DelegatedFrameNode::preprocess()
         // Proceed with the actual update.
         pair.second->updateTexture();
     }
+}
+
+static YUVVideoMaterial::ColorSpace toQt(cc::YUVVideoDrawQuad::ColorSpace color_space)
+{
+    switch (color_space) {
+    case cc::YUVVideoDrawQuad::REC_601:
+        return YUVVideoMaterial::REC_601;
+    case cc::YUVVideoDrawQuad::REC_709:
+        return YUVVideoMaterial::REC_709;
+    case cc::YUVVideoDrawQuad::JPEG:
+        return YUVVideoMaterial::JPEG;
+    }
+    Q_UNREACHABLE();
+    return YUVVideoMaterial::REC_601;
 }
 
 void DelegatedFrameNode::commit(ChromiumCompositorData *chromiumCompositorData, cc::ReturnedResourceArray *resourcesToRelease, RenderWidgetHostViewQtDelegate *apiDelegate)
@@ -557,10 +576,10 @@ void DelegatedFrameNode::commit(ChromiumCompositorData *chromiumCompositorData, 
                 break;
             } case cc::DrawQuad::TEXTURE_CONTENT: {
                 const cc::TextureDrawQuad *tquad = cc::TextureDrawQuad::MaterialCast(quad);
-                ResourceHolder *resource = findAndHoldResource(tquad->resource_id, resourceCandidates);
+                ResourceHolder *resource = findAndHoldResource(tquad->resource_id(), resourceCandidates);
 
                 QSGSimpleTextureNode *textureNode = new QSGSimpleTextureNode;
-                textureNode->setTextureCoordinatesTransform(tquad->flipped ? QSGSimpleTextureNode::MirrorVertically : QSGSimpleTextureNode::NoTransform);
+                textureNode->setTextureCoordinatesTransform(tquad->y_flipped ? QSGSimpleTextureNode::MirrorVertically : QSGSimpleTextureNode::NoTransform);
                 textureNode->setRect(toQt(quad->rect));
                 textureNode->setFiltering(resource->transferableResource().filter == GL_LINEAR ? QSGTexture::Linear : QSGTexture::Nearest);
                 textureNode->setTexture(initAndHoldTexture(resource, quad->ShouldDrawWithBlending(), apiDelegate));
@@ -605,7 +624,7 @@ void DelegatedFrameNode::commit(ChromiumCompositorData *chromiumCompositorData, 
                 break;
             } case cc::DrawQuad::TILED_CONTENT: {
                 const cc::TileDrawQuad *tquad = cc::TileDrawQuad::MaterialCast(quad);
-                ResourceHolder *resource = findAndHoldResource(tquad->resource_id, resourceCandidates);
+                ResourceHolder *resource = findAndHoldResource(tquad->resource_id(), resourceCandidates);
 
                 QSGSimpleTextureNode *textureNode = new QSGSimpleTextureNode;
                 textureNode->setRect(toQt(quad->rect));
@@ -616,36 +635,54 @@ void DelegatedFrameNode::commit(ChromiumCompositorData *chromiumCompositorData, 
                 break;
             } case cc::DrawQuad::YUV_VIDEO_CONTENT: {
                 const cc::YUVVideoDrawQuad *vquad = cc::YUVVideoDrawQuad::MaterialCast(quad);
-                ResourceHolder *yResource = findAndHoldResource(vquad->y_plane_resource_id, resourceCandidates);
-                ResourceHolder *uResource = findAndHoldResource(vquad->u_plane_resource_id, resourceCandidates);
-                ResourceHolder *vResource = findAndHoldResource(vquad->v_plane_resource_id, resourceCandidates);
+                ResourceHolder *yResource = findAndHoldResource(vquad->y_plane_resource_id(), resourceCandidates);
+                ResourceHolder *uResource = findAndHoldResource(vquad->u_plane_resource_id(), resourceCandidates);
+                ResourceHolder *vResource = findAndHoldResource(vquad->v_plane_resource_id(), resourceCandidates);
                 ResourceHolder *aResource = 0;
                 // This currently requires --enable-vp8-alpha-playback and needs a video with alpha data to be triggered.
-                if (vquad->a_plane_resource_id)
-                    aResource = findAndHoldResource(vquad->a_plane_resource_id, resourceCandidates);
+                if (vquad->a_plane_resource_id())
+                    aResource = findAndHoldResource(vquad->a_plane_resource_id(), resourceCandidates);
 
                 YUVVideoNode *videoNode = new YUVVideoNode(
                     initAndHoldTexture(yResource, quad->ShouldDrawWithBlending()),
                     initAndHoldTexture(uResource, quad->ShouldDrawWithBlending()),
                     initAndHoldTexture(vResource, quad->ShouldDrawWithBlending()),
-                    aResource ? initAndHoldTexture(aResource, quad->ShouldDrawWithBlending()) : 0, toQt(vquad->tex_coord_rect));
+                    aResource ? initAndHoldTexture(aResource, quad->ShouldDrawWithBlending()) : 0,
+                                                   toQt(vquad->ya_tex_coord_rect), toQt(vquad->uv_tex_coord_rect),
+                                                   toQt(vquad->ya_tex_size), toQt(vquad->uv_tex_size), toQt(vquad->color_space));
                 videoNode->setRect(toQt(quad->rect));
                 currentLayerChain->appendChildNode(videoNode);
                 break;
 #ifdef GL_OES_EGL_image_external
             } case cc::DrawQuad::STREAM_VIDEO_CONTENT: {
                 const cc::StreamVideoDrawQuad *squad = cc::StreamVideoDrawQuad::MaterialCast(quad);
-                ResourceHolder *resource = findAndHoldResource(squad->resource_id, resourceCandidates);
+                ResourceHolder *resource = findAndHoldResource(squad->resource_id(), resourceCandidates);
                 MailboxTexture *texture = static_cast<MailboxTexture *>(initAndHoldTexture(resource, quad->ShouldDrawWithBlending()));
                 texture->setTarget(GL_TEXTURE_EXTERNAL_OES); // since this is not default TEXTURE_2D type
 
-                StreamVideoNode *svideoNode = new StreamVideoNode(texture);
+                StreamVideoNode *svideoNode = new StreamVideoNode(texture, false, ExternalTarget);
                 svideoNode->setRect(toQt(squad->rect));
                 svideoNode->setTextureMatrix(toQt(squad->matrix.matrix()));
                 currentLayerChain->appendChildNode(svideoNode);
                 break;
 #endif
-            } default:
+            }
+            case cc::DrawQuad::IO_SURFACE_CONTENT: {
+                const cc::IOSurfaceDrawQuad *ioquad = cc::IOSurfaceDrawQuad::MaterialCast(quad);
+                ResourceHolder *resource = findAndHoldResource(ioquad->io_surface_resource_id(), resourceCandidates);
+                MailboxTexture *texture = static_cast<MailboxTexture *>(initAndHoldTexture(resource, quad->ShouldDrawWithBlending()));
+                texture->setTarget(GL_TEXTURE_RECTANGLE);
+
+                bool flip = ioquad->orientation != cc::IOSurfaceDrawQuad::FLIPPED;
+                StreamVideoNode *svideoNode = new StreamVideoNode(texture, flip, RectangleTarget);
+                QMatrix4x4 matrix;
+                matrix.scale(ioquad->io_surface_size.width(), ioquad->io_surface_size.height());
+                svideoNode->setRect(toQt(ioquad->rect));
+                svideoNode->setTextureMatrix(matrix);
+                currentLayerChain->appendChildNode(svideoNode);
+                break;
+            }
+            default:
                 qWarning("Unimplemented quad material: %d", quad->material);
             }
         }

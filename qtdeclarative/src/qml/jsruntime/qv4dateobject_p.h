@@ -33,6 +33,17 @@
 #ifndef QV4DATEOBJECT_P_H
 #define QV4DATEOBJECT_P_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include "qv4object_p.h"
 #include "qv4functionobject_p.h"
 #include <QtCore/qnumeric.h>
@@ -46,20 +57,19 @@ namespace QV4 {
 namespace Heap {
 
 struct DateObject : Object {
-    DateObject(InternalClass *ic, QV4::Object *prototype)
-        : Object(ic, prototype)
+    DateObject()
     {
-        value = Encode(qSNaN());
+        date = qSNaN();
     }
 
-    DateObject(QV4::ExecutionEngine *engine, const Value &date)
-        : Object(engine->emptyClass, engine->datePrototype.asObject())
+    DateObject(const Value &date)
     {
-        value = date;
+        this->date = date.toNumber();
     }
-    DateObject(QV4::ExecutionEngine *engine, const QDateTime &date);
-    Value value;
+    DateObject(const QDateTime &date);
+    double date;
 };
+
 
 struct DateCtor : FunctionObject {
     DateCtor(QV4::ExecutionContext *scope);
@@ -70,21 +80,26 @@ struct DateCtor : FunctionObject {
 struct DateObject: Object {
     V4_OBJECT2(DateObject, Object)
     Q_MANAGED_TYPE(DateObject)
+    V4_PROTOTYPE(datePrototype)
 
 
-    Value date() const { return d()->value; }
-    Value &date() { return d()->value; }
-    void setDate(const Value &date) { d()->value = date; }
+    double date() const { return d()->date; }
+    void setDate(double date) { d()->date = date; }
 
     QDateTime toQDateTime() const;
 };
+
+template<>
+inline const DateObject *Value::as() const {
+    return isManaged() && m() && m()->vtable()->type == Managed::Type_DateObject ? static_cast<const DateObject *>(this) : 0;
+}
 
 struct DateCtor: FunctionObject
 {
     V4_OBJECT2(DateCtor, FunctionObject)
 
-    static ReturnedValue construct(Managed *, CallData *callData);
-    static ReturnedValue call(Managed *that, CallData *);
+    static ReturnedValue construct(const Managed *, CallData *callData);
+    static ReturnedValue call(const Managed *that, CallData *);
 };
 
 struct DatePrototype: DateObject

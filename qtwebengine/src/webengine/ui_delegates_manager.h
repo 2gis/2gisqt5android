@@ -41,6 +41,7 @@
 #include "web_contents_adapter.h"
 #include "web_contents_adapter_client.h"
 
+#include <QCoreApplication>
 #include <QExplicitlySharedDataPointer>
 #include <QPoint>
 #include <QQmlComponent>
@@ -55,7 +56,8 @@
     F(ConfirmDialog, confirmDialog) SEPARATOR \
     F(PromptDialog, promptDialog) SEPARATOR \
     F(FilePicker, filePicker) SEPARATOR \
-    F(MessageBubble, messageBubble) SEPARATOR
+    F(MessageBubble, messageBubble) SEPARATOR \
+    F(AuthenticationDialog, authenticationDialog) SEPARATOR
 
 #define COMMA_SEPARATOR ,
 #define SEMICOLON_SEPARATOR ;
@@ -72,7 +74,9 @@ class QQuickWebEngineView;
 QT_END_NAMESPACE
 
 namespace QtWebEngineCore {
+class AuthenticationDialogController;
 class JavaScriptDialogController;
+class FilePickerController;
 
 const char *defaultPropertyName(QObject *obj);
 
@@ -85,31 +89,9 @@ Q_SIGNALS:
     void triggered();
 };
 
-class CopyMenuItem : public MenuItemHandler {
-    Q_OBJECT
-public:
-    CopyMenuItem(QObject *parent, const QString &textToCopy);
-
-private:
-    void onTriggered();
-
-    QString m_textToCopy;
-};
-
-class NavigateMenuItem : public MenuItemHandler {
-    Q_OBJECT
-public:
-    NavigateMenuItem(QObject *parent, const QExplicitlySharedDataPointer<WebContentsAdapter> &adapter, const QUrl &targetUrl);
-
-private:
-    void onTriggered();
-
-    QExplicitlySharedDataPointer<WebContentsAdapter> m_adapter;
-    QUrl m_targetUrl;
-};
-
-class UIDelegatesManager {
-
+class UIDelegatesManager
+{
+    Q_DECLARE_TR_FUNCTIONS(UIDelegatesManager)
 public:
     enum ComponentType {
         Invalid = -1,
@@ -124,8 +106,8 @@ public:
     QObject *addMenu(QObject *parentMenu, const QString &title, const QPoint &pos = QPoint());
     QQmlContext *creationContextForComponent(QQmlComponent *);
     void showDialog(QSharedPointer<JavaScriptDialogController>);
-    void showFilePicker(WebContentsAdapterClient::FileChooserMode, const QString &defaultFileName, const QStringList &acceptedMimeTypes
-                        , const QExplicitlySharedDataPointer<WebContentsAdapter> &);
+    void showDialog(QSharedPointer<AuthenticationDialogController>);
+    void showFilePicker(FilePickerController *controller);
     void showMessageBubble(const QRect &anchor, const QString &mainText, const QString &subText);
     void hideMessageBubble();
     void moveMessageBubble(const QRect &anchor);

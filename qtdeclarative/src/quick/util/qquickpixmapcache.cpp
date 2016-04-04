@@ -44,7 +44,6 @@
 #include <qpa/qplatformintegration.h>
 
 #include <QtQuick/private/qsgtexture_p.h>
-#include <QtQuick/private/qsgcontext_p.h>
 
 #include <QQuickWindow>
 #include <QCoreApplication>
@@ -67,7 +66,7 @@
 
 #include <private/qquickprofiler_p.h>
 
-#define IMAGEREQUEST_MAX_REQUEST_COUNT       8
+#define IMAGEREQUEST_MAX_NETWORK_REQUEST_COUNT 8
 #define IMAGEREQUEST_MAX_REDIRECT_RECURSION 16
 #define CACHE_EXPIRE_TIME 30
 #define CACHE_REMOVAL_FRACTION 4
@@ -78,7 +77,7 @@ QT_BEGIN_NAMESPACE
 
 
 #ifndef QT_NO_DEBUG
-static bool qsg_leak_check = !qgetenv("QML_LEAK_CHECK").isEmpty();
+static const bool qsg_leak_check = !qEnvironmentVariableIsEmpty("QML_LEAK_CHECK");
 #endif
 
 // The cache limit describes the maximum "junk" in the cache.
@@ -113,16 +112,6 @@ QSGTexture *QQuickDefaultTextureFactory::createTexture(QQuickWindow *window) con
     if (transient)
         const_cast<QQuickDefaultTextureFactory *>(this)->im = QImage();
     return t;
-}
-
-static QQuickTextureFactory *textureFactoryForImage(const QImage &image)
-{
-    if (image.isNull())
-        return 0;
-    QQuickTextureFactory *texture = QSGContext::createTextureFactoryFromImage(image);
-    if (texture)
-        return texture;
-    return new QQuickDefaultTextureFactory(image);
 }
 
 class QQuickPixmapReader;
@@ -182,6 +171,7 @@ public:
     virtual bool event(QEvent *e);
 private slots:
     void networkRequestDone();
+    void asyncResponseFinished();
 private:
     QQuickPixmapReader *reader;
 };
@@ -206,8 +196,9 @@ protected:
 private:
     friend class QQuickPixmapReaderThreadObject;
     void processJobs();
-    void processJob(QQuickPixmapReply *, const QUrl &, const QSize &, AutoTransform);
+    void processJob(QQuickPixmapReply *, const QUrl &, const QString &, AutoTransform, QQuickImageProvider::ImageType, QQuickImageProvider *);
     void networkRequestDone(QNetworkReply *);
+    void asyncResponseFinished(QQuickImageResponse *);
 
     QList<QQuickPixmapReply*> jobs;
     QList<QQuickPixmapReply*> cancelled;
@@ -221,7 +212,8 @@ private:
     QNetworkAccessManager *networkAccessManager();
     QNetworkAccessManager *accessManager;
 
-    QHash<QNetworkReply*,QQuickPixmapReply*> replies;
+    QHash<QNetworkReply*,QQuickPixmapReply*> networkJobs;
+    QHash<QQuickImageResponse*,QQuickPixmapReply*> asyncResponses;
 
     static int replyDownloadProgress;
     static int replyFinished;
@@ -445,8 +437,8 @@ QQuickPixmapReader::~QQuickPixmapReader()
         delete reply;
     }
     jobs.clear();
-    QList<QQuickPixmapReply*> activeJobs = replies.values();
-    foreach (QQuickPixmapReply *reply, activeJobs) {
+    QList<QQuickPixmapReply*> activeJobs = networkJobs.values() + asyncResponses.values();
+    foreach (QQuickPixmapReply *reply, activeJobs ) {
         if (reply->loading) {
             cancelled.append(reply);
             reply->data = 0;
@@ -461,7 +453,7 @@ QQuickPixmapReader::~QQuickPixmapReader()
 
 void QQuickPixmapReader::networkRequestDone(QNetworkReply *reply)
 {
-    QQuickPixmapReply *job = replies.take(reply);
+    QQuickPixmapReply *job = networkJobs.take(reply);
 
     if (job) {
         job->redirectCount++;
@@ -478,7 +470,7 @@ void QQuickPixmapReader::networkRequestDone(QNetworkReply *reply)
                 QMetaObject::connect(reply, replyDownloadProgress, job, downloadProgress);
                 QMetaObject::connect(reply, replyFinished, threadObject, threadNetworkRequestDone);
 
-                replies.insert(reply, job);
+                networkJobs.insert(reply, job);
                 return;
             }
         }
@@ -500,10 +492,38 @@ void QQuickPixmapReader::networkRequestDone(QNetworkReply *reply)
         // send completion event to the QQuickPixmapReply
         mutex.lock();
         if (!cancelled.contains(job))
-            job->postReply(error, errorString, readSize, textureFactoryForImage(image));
+            job->postReply(error, errorString, readSize, QQuickTextureFactory::textureFactoryForImage(image));
         mutex.unlock();
     }
     reply->deleteLater();
+
+    // kick off event loop again incase we have dropped below max request count
+    threadObject->processJobs();
+}
+
+void QQuickPixmapReader::asyncResponseFinished(QQuickImageResponse *response)
+{
+    QQuickPixmapReply *job = asyncResponses.take(response);
+
+    if (job) {
+        QQuickTextureFactory *t = 0;
+        QQuickPixmapReply::ReadError error = QQuickPixmapReply::NoError;
+        QString errorString;
+        QSize readSize;
+        if (!response->errorString().isEmpty()) {
+            error = QQuickPixmapReply::Loading;
+            errorString = response->errorString();
+        } else {
+            t = response->textureFactory();
+       }
+        mutex.lock();
+        if (!cancelled.contains(job))
+            job->postReply(error, errorString, t ? t->textureSize() : QSize(), t);
+        else
+            delete t;
+        mutex.unlock();
+    }
+    response->deleteLater();
 
     // kick off event loop again incase we have dropped below max request count
     threadObject->processJobs();
@@ -535,6 +555,12 @@ void QQuickPixmapReaderThreadObject::networkRequestDone()
     reader->networkRequestDone(reply);
 }
 
+void QQuickPixmapReaderThreadObject::asyncResponseFinished()
+{
+    QQuickImageResponse *response = static_cast<QQuickImageResponse *>(sender());
+    reader->asyncResponseFinished(response);
+}
+
 void QQuickPixmapReader::processJobs()
 {
     QMutexLocker locker(&mutex);
@@ -544,15 +570,22 @@ void QQuickPixmapReader::processJobs()
             return; // Nothing else to do
 
         // Clean cancelled jobs
-        if (cancelled.count()) {
+        if (!cancelled.isEmpty()) {
             for (int i = 0; i < cancelled.count(); ++i) {
                 QQuickPixmapReply *job = cancelled.at(i);
-                QNetworkReply *reply = replies.key(job, 0);
+                QNetworkReply *reply = networkJobs.key(job, 0);
                 if (reply) {
-                    replies.remove(reply);
+                    networkJobs.remove(reply);
                     if (reply->isRunning()) {
                         // cancel any jobs already started
                         reply->close();
+                    }
+                } else {
+                    QQuickImageResponse *asyncResponse = asyncResponses.key(job);
+                    if (asyncResponse) {
+                        asyncResponses.remove(asyncResponse);
+                        asyncResponse->cancel();
+                        asyncResponse->deleteLater();
                     }
                 }
                 PIXMAP_PROFILE(pixmapStateChanged<QQuickProfiler::PixmapLoadingError>(job->url));
@@ -566,27 +599,34 @@ void QQuickPixmapReader::processJobs()
             // Find a job we can use
             bool usableJob = false;
             for (int i = jobs.count() - 1; !usableJob && i >= 0; i--) {
-                QQuickPixmapReply *runningJob = jobs[i];
-                const QUrl url = runningJob->url;
+                QQuickPixmapReply *job = jobs[i];
+                const QUrl url = job->url;
+                QString localFile;
+                QQuickImageProvider::ImageType imageType = QQuickImageProvider::Invalid;
+                QQuickImageProvider *provider = 0;
 
                 if (url.scheme() == QLatin1String("image")) {
+                    provider = static_cast<QQuickImageProvider *>(engine->imageProvider(imageProviderId(url)));
+                    if (provider)
+                        imageType = provider->imageType();
+
                     usableJob = true;
                 } else {
-                    const QString localFile = QQmlFile::urlToLocalFileOrQrc(url);
-                    usableJob = !localFile.isEmpty() || replies.count() < IMAGEREQUEST_MAX_REQUEST_COUNT;
+                    localFile = QQmlFile::urlToLocalFileOrQrc(url);
+                    usableJob = !localFile.isEmpty() || networkJobs.count() < IMAGEREQUEST_MAX_NETWORK_REQUEST_COUNT;
                 }
+
 
                 if (usableJob) {
                     jobs.removeAt(i);
 
-                    runningJob->loading = true;
+                    job->loading = true;
 
                     PIXMAP_PROFILE(pixmapStateChanged<QQuickProfiler::PixmapLoadingStarted>(url));
 
-                    QSize requestSize = runningJob->requestSize;
-                    AutoTransform autoTransform = runningJob->autoTransform;
+                    AutoTransform autoTransform = job->autoTransform;
                     locker.unlock();
-                    processJob(runningJob, url, requestSize, autoTransform);
+                    processJob(job, url, localFile, autoTransform, imageType, provider);
                     locker.relock();
                 }
             }
@@ -597,79 +637,97 @@ void QQuickPixmapReader::processJobs()
     }
 }
 
-void QQuickPixmapReader::processJob(QQuickPixmapReply *runningJob, const QUrl &url,
-                                    const QSize &requestSize, AutoTransform autoTransform)
+void QQuickPixmapReader::processJob(QQuickPixmapReply *runningJob, const QUrl &url, const QString &localFile,
+                                    AutoTransform autoTransform, QQuickImageProvider::ImageType imageType, QQuickImageProvider *provider)
 {
     // fetch
     if (url.scheme() == QLatin1String("image")) {
         // Use QQuickImageProvider
         QSize readSize;
 
-        QQuickImageProvider::ImageType imageType = QQuickImageProvider::Invalid;
-        QQuickImageProvider *provider = static_cast<QQuickImageProvider *>(engine->imageProvider(imageProviderId(url)));
-        if (provider)
-            imageType = provider->imageType();
+        switch (imageType) {
+            case QQuickImageProvider::Invalid:
+            {
+                QString errorStr = QQuickPixmap::tr("Invalid image provider: %1").arg(url.toString());
+                mutex.lock();
+                if (!cancelled.contains(runningJob))
+                    runningJob->postReply(QQuickPixmapReply::Loading, errorStr, readSize, 0);
+                mutex.unlock();
+                break;
+            }
 
-        if (imageType == QQuickImageProvider::Invalid) {
-            QQuickPixmapReply::ReadError errorCode = QQuickPixmapReply::Loading;
-            QString errorStr = QQuickPixmap::tr("Invalid image provider: %1").arg(url.toString());
-            QImage image;
-            mutex.lock();
-            if (!cancelled.contains(runningJob))
-                runningJob->postReply(errorCode, errorStr, readSize, textureFactoryForImage(image));
-            mutex.unlock();
-        } else if (imageType == QQuickImageProvider::Image) {
-            QImage image = provider->requestImage(imageId(url), &readSize, requestSize);
-            QQuickPixmapReply::ReadError errorCode = QQuickPixmapReply::NoError;
-            QString errorStr;
-            if (image.isNull()) {
-                errorCode = QQuickPixmapReply::Loading;
-                errorStr = QQuickPixmap::tr("Failed to get image from provider: %1").arg(url.toString());
+            case QQuickImageProvider::Image:
+            {
+                QImage image = provider->requestImage(imageId(url), &readSize, runningJob->requestSize);
+                QQuickPixmapReply::ReadError errorCode = QQuickPixmapReply::NoError;
+                QString errorStr;
+                if (image.isNull()) {
+                    errorCode = QQuickPixmapReply::Loading;
+                    errorStr = QQuickPixmap::tr("Failed to get image from provider: %1").arg(url.toString());
+                }
+                mutex.lock();
+                if (!cancelled.contains(runningJob))
+                    runningJob->postReply(errorCode, errorStr, readSize, QQuickTextureFactory::textureFactoryForImage(image));
+                mutex.unlock();
+                break;
             }
-            mutex.lock();
-            if (!cancelled.contains(runningJob))
-                runningJob->postReply(errorCode, errorStr, readSize, textureFactoryForImage(image));
-            mutex.unlock();
-        } else if (imageType == QQuickImageProvider::Pixmap) {
-            const QPixmap pixmap = provider->requestPixmap(imageId(url), &readSize, requestSize);
-            QQuickPixmapReply::ReadError errorCode = QQuickPixmapReply::NoError;
-            QString errorStr;
-            if (pixmap.isNull()) {
-                errorCode = QQuickPixmapReply::Loading;
-                errorStr = QQuickPixmap::tr("Failed to get image from provider: %1").arg(url.toString());
-            }
-            mutex.lock();
-            if (!cancelled.contains(runningJob))
-                runningJob->postReply(errorCode, errorStr, readSize, textureFactoryForImage(pixmap.toImage()));
-            mutex.unlock();
-        } else {
-            QQuickTextureFactory *t = provider->requestTexture(imageId(url), &readSize, requestSize);
-            QQuickPixmapReply::ReadError errorCode = QQuickPixmapReply::NoError;
-            QString errorStr;
-            if (!t) {
-                errorCode = QQuickPixmapReply::Loading;
-                errorStr = QQuickPixmap::tr("Failed to get texture from provider: %1").arg(url.toString());
-            }
-            mutex.lock();
-            if (!cancelled.contains(runningJob))
-                runningJob->postReply(errorCode, errorStr, readSize, t);
-            else
-                delete t;
-            mutex.unlock();
 
+            case QQuickImageProvider::Pixmap:
+            {
+                const QPixmap pixmap = provider->requestPixmap(imageId(url), &readSize, runningJob->requestSize);
+                QQuickPixmapReply::ReadError errorCode = QQuickPixmapReply::NoError;
+                QString errorStr;
+                if (pixmap.isNull()) {
+                    errorCode = QQuickPixmapReply::Loading;
+                    errorStr = QQuickPixmap::tr("Failed to get image from provider: %1").arg(url.toString());
+                }
+                mutex.lock();
+                if (!cancelled.contains(runningJob))
+                    runningJob->postReply(errorCode, errorStr, readSize, QQuickTextureFactory::textureFactoryForImage(pixmap.toImage()));
+                mutex.unlock();
+                break;
+            }
+
+            case QQuickImageProvider::Texture:
+            {
+                QQuickTextureFactory *t = provider->requestTexture(imageId(url), &readSize, runningJob->requestSize);
+                QQuickPixmapReply::ReadError errorCode = QQuickPixmapReply::NoError;
+                QString errorStr;
+                if (!t) {
+                    errorCode = QQuickPixmapReply::Loading;
+                    errorStr = QQuickPixmap::tr("Failed to get texture from provider: %1").arg(url.toString());
+                }
+                mutex.lock();
+                if (!cancelled.contains(runningJob))
+                    runningJob->postReply(errorCode, errorStr, readSize, t);
+                else
+                    delete t;
+                mutex.unlock();
+                break;
+            }
+
+            case QQuickImageProvider::ImageResponse:
+            {
+                QQuickAsyncImageProvider *asyncProvider = static_cast<QQuickAsyncImageProvider*>(provider);
+                QQuickImageResponse *response = asyncProvider->requestImageResponse(imageId(url), runningJob->requestSize);
+
+                QObject::connect(response, SIGNAL(finished()), threadObject, SLOT(asyncResponseFinished()));
+
+                asyncResponses.insert(response, runningJob);
+                break;
+            }
         }
 
     } else {
-        QString lf = QQmlFile::urlToLocalFileOrQrc(url);
-        if (!lf.isEmpty()) {
+        if (!localFile.isEmpty()) {
             // Image is local - load/decode immediately
             QImage image;
             QQuickPixmapReply::ReadError errorCode = QQuickPixmapReply::NoError;
             QString errorStr;
-            QFile f(lf);
+            QFile f(localFile);
             QSize readSize;
             if (f.open(QIODevice::ReadOnly)) {
-                if (!readImage(url, &f, &image, &errorStr, &readSize, requestSize, autoTransform))
+                if (!readImage(url, &f, &image, &errorStr, &readSize, runningJob->requestSize, autoTransform))
                     errorCode = QQuickPixmapReply::Loading;
             } else {
                 errorStr = QQuickPixmap::tr("Cannot open: %1").arg(url.toString());
@@ -677,7 +735,7 @@ void QQuickPixmapReader::processJob(QQuickPixmapReply *runningJob, const QUrl &u
             }
             mutex.lock();
             if (!cancelled.contains(runningJob))
-                runningJob->postReply(errorCode, errorStr, readSize, textureFactoryForImage(image));
+                runningJob->postReply(errorCode, errorStr, readSize, QQuickTextureFactory::textureFactoryForImage(image));
             mutex.unlock();
         } else {
             // Network resource
@@ -688,7 +746,7 @@ void QQuickPixmapReader::processJob(QQuickPixmapReply *runningJob, const QUrl &u
             QMetaObject::connect(reply, replyDownloadProgress, runningJob, downloadProgress);
             QMetaObject::connect(reply, replyFinished, threadObject, threadNetworkRequestDone);
 
-            replies.insert(reply, runningJob);
+            networkJobs.insert(reply, runningJob);
         }
     }
 }
@@ -780,8 +838,6 @@ inline uint qHash(const QQuickPixmapKey &key)
 {
     return qHash(*key.url) ^ (key.size->width()*7) ^ (key.size->height()*17) ^ (key.autoTransform * 0x5c5c5c5c);
 }
-
-class QSGContext;
 
 class QQuickPixmapStore : public QObject
 {
@@ -1091,7 +1147,7 @@ static QQuickPixmapData* createPixmapDataSync(QQuickPixmap *declarativePixmap, Q
                 QImage image = provider->requestImage(imageId(url), &readSize, requestSize);
                 if (!image.isNull()) {
                     *ok = true;
-                    return new QQuickPixmapData(declarativePixmap, url, textureFactoryForImage(image), readSize, requestSize, autoTransform, UsePluginDefault);
+                    return new QQuickPixmapData(declarativePixmap, url, QQuickTextureFactory::textureFactoryForImage(image), readSize, requestSize, autoTransform, UsePluginDefault);
                 }
             }
             case QQuickImageProvider::Pixmap:
@@ -1099,8 +1155,13 @@ static QQuickPixmapData* createPixmapDataSync(QQuickPixmap *declarativePixmap, Q
                 QPixmap pixmap = provider->requestPixmap(imageId(url), &readSize, requestSize);
                 if (!pixmap.isNull()) {
                     *ok = true;
-                    return new QQuickPixmapData(declarativePixmap, url, textureFactoryForImage(pixmap.toImage()), readSize, requestSize, autoTransform, UsePluginDefault);
+                    return new QQuickPixmapData(declarativePixmap, url, QQuickTextureFactory::textureFactoryForImage(pixmap.toImage()), readSize, requestSize, autoTransform, UsePluginDefault);
                 }
+            }
+            case QQuickImageProvider::ImageResponse:
+            {
+                // Fall through, ImageResponse providers never get here
+                Q_ASSERT(imageType != QQuickImageProvider::ImageResponse && "Sync call to ImageResponse provider");
             }
         }
 
@@ -1122,7 +1183,7 @@ static QQuickPixmapData* createPixmapDataSync(QQuickPixmap *declarativePixmap, Q
         AutoTransform appliedTransform = autoTransform;
         if (readImage(url, &f, &image, &errorString, &readSize, requestSize, appliedTransform)) {
             *ok = true;
-            return new QQuickPixmapData(declarativePixmap, url, textureFactoryForImage(image), readSize, requestSize, autoTransform, appliedTransform);
+            return new QQuickPixmapData(declarativePixmap, url, QQuickTextureFactory::textureFactoryForImage(image), readSize, requestSize, autoTransform, appliedTransform);
         }
         errorString = QQuickPixmap::tr("Invalid image data: %1").arg(url.toString());
 
@@ -1259,7 +1320,7 @@ void QQuickPixmap::setImage(const QImage &p)
     clear();
 
     if (!p.isNull())
-        d = new QQuickPixmapData(this, textureFactoryForImage(p));
+        d = new QQuickPixmapData(this, QQuickTextureFactory::textureFactoryForImage(p));
 }
 
 void QQuickPixmap::setPixmap(const QQuickPixmap &other)

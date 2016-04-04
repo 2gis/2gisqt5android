@@ -35,80 +35,42 @@
 
 QT_BEGIN_NAMESPACE
 
-// Used in qqmlabstractbinding.cpp
-QQmlAbstractBinding::VTable QQmlValueTypeProxyBinding_vtable = {
-    QQmlAbstractBinding::default_destroy<QQmlValueTypeProxyBinding>,
-    QQmlAbstractBinding::default_expression,
-    QQmlValueTypeProxyBinding::propertyIndex,
-    QQmlValueTypeProxyBinding::object,
-    QQmlValueTypeProxyBinding::setEnabled,
-    QQmlValueTypeProxyBinding::update,
-    QQmlAbstractBinding::default_retargetBinding
-};
-
 QQmlValueTypeProxyBinding::QQmlValueTypeProxyBinding(QObject *o, int index)
-: QQmlAbstractBinding(ValueTypeProxy), m_object(o), m_index(index), m_bindings(0)
+    : QQmlAbstractBinding(),
+      m_bindings(0)
 {
+    m_target = o;
+    m_targetIndex = index;
 }
 
 QQmlValueTypeProxyBinding::~QQmlValueTypeProxyBinding()
 {
-    QQmlAbstractBinding *binding = m_bindings;
-    // This must be identical to the logic in QQmlData::destroyed()
+    QQmlAbstractBinding *binding = m_bindings.data();
     while (binding) {
-        QQmlAbstractBinding *next = binding->nextBinding();
         binding->setAddedToObject(false);
-        binding->setNextBinding(0);
-        binding->destroy();
-        binding = next;
+        binding = binding->nextBinding();
     }
 }
 
-void QQmlValueTypeProxyBinding::setEnabled(QQmlAbstractBinding *_This,
-                                           bool e, QQmlPropertyPrivate::WriteFlags flags)
+void QQmlValueTypeProxyBinding::setEnabled(bool e, QQmlPropertyPrivate::WriteFlags flags)
 {
-    QQmlValueTypeProxyBinding *This = static_cast<QQmlValueTypeProxyBinding *>(_This);
-
-    if (e) {
-        QQmlAbstractBinding *bindings = This->m_bindings;
-        This->recursiveEnable(bindings, flags);
-    } else {
-        QQmlAbstractBinding *bindings = This->m_bindings;
-        This->recursiveDisable(bindings);
+    QQmlAbstractBinding *b = m_bindings.data();
+    while (b) {
+        b->setEnabled(e, flags);
+        b = b->nextBinding();
     }
 }
 
-void QQmlValueTypeProxyBinding::recursiveEnable(QQmlAbstractBinding *b, QQmlPropertyPrivate::WriteFlags flags)
+bool QQmlValueTypeProxyBinding::isValueTypeProxy() const
 {
-    if (!b)
-        return;
-
-    recursiveEnable(b->nextBinding(), flags);
-
-    if (b)
-        b->setEnabled(true, flags);
-}
-
-void QQmlValueTypeProxyBinding::recursiveDisable(QQmlAbstractBinding *b)
-{
-    if (!b)
-        return;
-
-    recursiveDisable(b->nextBinding());
-
-    if (b)
-        b->setEnabled(false, 0);
-}
-
-void QQmlValueTypeProxyBinding::update(QQmlAbstractBinding *, QQmlPropertyPrivate::WriteFlags)
-{
+    return true;
 }
 
 QQmlAbstractBinding *QQmlValueTypeProxyBinding::binding(int propertyIndex)
 {
-    QQmlAbstractBinding *binding = m_bindings;
+    QQmlAbstractBinding *binding = m_bindings.data();
 
-    while (binding && binding->propertyIndex() != propertyIndex)
+    while (binding && binding->targetPropertyIndex() != propertyIndex)
         binding = binding->nextBinding();
 
     return binding;
@@ -119,48 +81,25 @@ Removes a collection of bindings, corresponding to the set bits in \a mask.
 */
 void QQmlValueTypeProxyBinding::removeBindings(quint32 mask)
 {
-    QQmlAbstractBinding *binding = m_bindings;
+    QQmlAbstractBinding *binding = m_bindings.data();
     QQmlAbstractBinding *lastBinding = 0;
 
     while (binding) {
-        int valueTypeIndex = QQmlPropertyData::decodeValueTypePropertyIndex(binding->propertyIndex());
+        int valueTypeIndex = QQmlPropertyData::decodeValueTypePropertyIndex(binding->targetPropertyIndex());
         if (valueTypeIndex != -1 && (mask & (1 << valueTypeIndex))) {
             QQmlAbstractBinding *remove = binding;
+            remove->setAddedToObject(false);
             binding = remove->nextBinding();
 
             if (lastBinding == 0)
                 m_bindings = remove->nextBinding();
             else
                 lastBinding->setNextBinding(remove->nextBinding());
-
-            remove->setAddedToObject(false);
-            remove->setNextBinding(0);
-            remove->destroy();
         } else {
             lastBinding = binding;
             binding = binding->nextBinding();
         }
     }
-}
-
-int QQmlValueTypeProxyBinding::propertyIndex(const QQmlAbstractBinding *This)
-{
-    return static_cast<const QQmlValueTypeProxyBinding *>(This)->m_index;
-}
-
-QObject *QQmlValueTypeProxyBinding::object(const QQmlAbstractBinding *This)
-{
-    return static_cast<const QQmlValueTypeProxyBinding *>(This)->m_object;
-}
-
-int QQmlValueTypeProxyBinding::propertyIndex() const
-{
-    return m_index;
-}
-
-QObject *QQmlValueTypeProxyBinding::object() const
-{
-    return m_object;
 }
 
 QT_END_NAMESPACE

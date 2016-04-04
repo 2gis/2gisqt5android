@@ -37,6 +37,17 @@
 #ifndef QDECLARATIVEGEOMAPQUICKITEM_H
 #define QDECLARATIVEGEOMAPQUICKITEM_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include <QtQuick/QQuickItem>
 #include <QtQuick/QSGNode>
 
@@ -79,9 +90,9 @@ Q_SIGNALS:
 
 protected:
     void geometryChanged(const QRectF &newGeometry, const QRectF &oldGeometry) Q_DECL_OVERRIDE;
+    void updatePolish() Q_DECL_OVERRIDE;
 
 protected Q_SLOTS:
-    virtual void updateMapItem() Q_DECL_OVERRIDE;
     virtual void afterChildrenChanged() Q_DECL_OVERRIDE;
     virtual void afterViewportChanged(const QGeoMapViewportChangeEvent &event) Q_DECL_OVERRIDE;
 

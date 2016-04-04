@@ -80,16 +80,16 @@ Loader {
         function triggerCurrent() {
             var item = content.menuItemAt(__menu.__currentIndex)
             if (item)
-                content.triggered(item)
+                triggerAndDismiss(item)
         }
 
         function triggerAndDismiss(item) {
-            if (item && item.styleData.type !== MenuItemType.Separator) {
-                __menu.__dismissMenu()
-                if (item.styleData.type !== MenuItemType.Menu)
-                    item.__menuItem.trigger()
-                __menu.__destroyAllMenuPopups()
-            }
+            if (!item)
+                return;
+            if (item.styleData.type === MenuItemType.Separator)
+                __menu.__dismissAndDestroy()
+            else if (item.styleData.type === MenuItemType.Item)
+                item.__menuItem.trigger()
         }
     }
 
@@ -112,7 +112,7 @@ Loader {
         }
     }
 
-    Keys.onEscapePressed: __menu.__dismissMenu()
+    Keys.onEscapePressed: __menu.__dismissAndDestroy()
 
     Keys.onDownPressed: {
         if (__menu.__currentIndex < 0)
@@ -132,17 +132,19 @@ Loader {
     }
 
     Keys.onLeftPressed: {
-        if ((event.accepted = __menu.__parentMenu.hasOwnProperty("title"))) {
-            __menu.__closeMenu()
-            __menu.__destroyMenuPopup()
-        }
+        if ((event.accepted = __menu.__parentMenu.hasOwnProperty("title")))
+            __menu.__closeAndDestroy()
     }
 
     Keys.onRightPressed: {
         var item = content.menuItemAt(__menu.__currentIndex)
-        if ((event.accepted = (item && item.styleData.type === MenuItemType.Menu))) {
+        if (item && item.styleData.type === MenuItemType.Menu
+                 && !item.__menuItem.__popupVisible) {
             item.__showSubMenu(true)
             item.__menuItem.__currentIndex = 0
+            event.accepted = true
+        } else {
+            event.accepted = false
         }
     }
 
@@ -176,7 +178,7 @@ Loader {
             id: menuItemLoader
 
             Accessible.role: opts.type === MenuItemType.Item || opts.type === MenuItemType.Menu ?
-                                 Accessible.MenuItem : Acccessible.NoRole
+                                 Accessible.MenuItem : Accessible.NoRole
             Accessible.name: StyleHelpers.removeMnemonics(opts.text)
             Accessible.checkable: opts.checkable
             Accessible.checked: opts.checked
@@ -246,10 +248,8 @@ Loader {
                 id: closeMenuTimer
                 interval: 1
                 onTriggered: {
-                    if (__menu.__currentIndex !== __menuItemIndex) {
-                        __menuItem.__closeMenu()
-                        __menuItem.__destroyMenuPopup()
-                    }
+                    if (__menu.__currentIndex !== __menuItemIndex)
+                        __menuItem.__closeAndDestroy()
                 }
             }
 

@@ -34,6 +34,17 @@
 #ifndef QSGATLASTEXTURE_P_H
 #define QSGATLASTEXTURE_P_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include <QtCore/QSize>
 
 #include <QtGui/qopengl.h>
@@ -58,7 +69,7 @@ public:
     Manager();
     ~Manager();
 
-    QSGTexture *create(const QImage &image);
+    QSGTexture *create(const QImage &image, bool hasAlphaChannel);
     void invalidate();
 
 private:
@@ -114,6 +125,7 @@ public:
 
     int textureId() const { return m_atlas->textureId(); }
     QSize textureSize() const { return atlasSubRectWithoutPadding().size(); }
+    void setHasAlphaChannel(bool alpha) { m_has_alpha = alpha; }
     bool hasAlphaChannel() const { return m_has_alpha; }
     bool hasMipmaps() const { return false; }
     bool isAtlasTexture() const { return true; }

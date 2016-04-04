@@ -34,28 +34,45 @@
 **
 ****************************************************************************/
 
-#ifndef QT3D_QABSTRACTFRAMEADVANCESERVICE_P_H
-#define QT3D_QABSTRACTFRAMEADVANCESERVICE_P_H
+#ifndef QT3DCORE_QABSTRACTFRAMEADVANCESERVICE_P_H
+#define QT3DCORE_QABSTRACTFRAMEADVANCESERVICE_P_H
+
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists for the convenience
+// of other Qt classes.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
 
 #include <Qt3DCore/qt3dcore_global.h>
-#include <Qt3DCore/private/qabstractserviceprovider_p.h>
-#include <Qt3DCore/qservicelocator.h>
+#include <Qt3DCore/private/qservicelocator_p.h>
+#include <QString>
 
 QT_BEGIN_NAMESPACE
 
-namespace Qt3D {
+namespace Qt3DCore {
 
-class QAbstractFrameAdvanceServicePrivate : public QAbstractServiceProviderPrivate
+class QAbstractFrameAdvanceServicePrivate;
+
+class QT3DCORESHARED_EXPORT QAbstractFrameAdvanceService : public QAbstractServiceProvider
 {
 public:
-    QAbstractFrameAdvanceServicePrivate(const QString &description)
-        : QAbstractServiceProviderPrivate(QServiceLocator::FrameAdvanceService, description)
-    {}
+    virtual qint64 waitForNextFrame() = 0;
+    virtual void start() = 0;
+    virtual void stop() = 0;
+
+protected:
+    QAbstractFrameAdvanceService(const QString &description = QString());
+    QAbstractFrameAdvanceService(QAbstractFrameAdvanceServicePrivate &dd);
 };
 
-}
+} // Qt3D
 
 QT_END_NAMESPACE
 
-#endif // QT3D_QABSTRACTFRAMEADVANCESERVICE_P_H
+#endif // QT3DCORE_QABSTRACTFRAMEADVANCESERVICE_P_H
 

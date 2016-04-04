@@ -302,9 +302,14 @@ QString findAdapterForAddress(const QBluetoothAddress &wantedAddress, bool *ok =
     typedef QPair<QString, QBluetoothAddress> AddressForPathType;
     QList<AddressForPathType> localAdapters;
 
-    foreach (const QDBusObjectPath &path, reply.value().keys()) {
-        const InterfaceList ifaceList = reply.value().value(path);
-        foreach (const QString &iface, ifaceList.keys()) {
+    ManagedObjectList managedObjectList = reply.value();
+    for (ManagedObjectList::const_iterator it = managedObjectList.constBegin(); it != managedObjectList.constEnd(); ++it) {
+        const QDBusObjectPath &path = it.key();
+        const InterfaceList &ifaceList = it.value();
+
+        for (InterfaceList::const_iterator jt = ifaceList.constBegin(); jt != ifaceList.constEnd(); ++jt) {
+            const QString &iface = jt.key();
+
             if (iface == QStringLiteral("org.bluez.Adapter1")) {
                 AddressForPathType pair;
                 pair.first = path.path();
@@ -332,6 +337,28 @@ QString findAdapterForAddress(const QBluetoothAddress &wantedAddress, bool *ok =
     }
 
     return QString(); // nothing matching found
+}
+
+/*
+    Removes every character that cannot be used in QDbusObjectPath
+
+    See QDbusUtil::isValidObjectPath(QString) for more details.
+ */
+QString sanitizeNameForDBus(const QString &text)
+{
+    QString appName = text;
+    for (int i = 0; i < appName.length(); i++) {
+        ushort us = appName[i].unicode();
+        bool valid = (us >= 'a' && us <= 'z')
+                      || (us >= 'A' && us <= 'Z')
+                      || (us >= '0' && us <= '9')
+                      || (us == '_');
+
+        if (!valid)
+            appName[i] = QLatin1Char('_');
+    }
+
+    return appName;
 }
 
 QT_END_NAMESPACE

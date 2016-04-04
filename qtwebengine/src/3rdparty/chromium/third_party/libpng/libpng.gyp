@@ -3,12 +3,21 @@
 # found in the LICENSE file.
 
 {
+  'variables': {
+    'use_system_libpng%': 0,
+  },
+  'conditions' : [
+    ['use_system_libpng == 0', {
   'targets': [
     {
       'target_name': 'libpng',
       'dependencies': [
         '../zlib/zlib.gyp:zlib',
       ],
+      'variables': {
+        # Upstream uses self-assignment to avoid warnings.
+        'clang_warning_flags': [ '-Wno-self-assign' ]
+      },
       'defines': [
         'CHROME_PNG_WRITE_SUPPORT',
         'PNG_USER_CONFIG',
@@ -67,7 +76,7 @@
             'defines': [
               'PNG_USE_DLL',
             ],
-          },          
+          },
         }],
         ['OS=="android"', {
           'toolsets': ['target', 'host'],
@@ -83,4 +92,40 @@
       ],
     },
   ]
+  }, #  'use_system_libpng == 0'
+  {
+  'targets': [
+    {
+      'target_name': 'libpng',
+      'type': 'none',
+      'dependencies': [
+        '../zlib/zlib.gyp:zlib',
+      ],
+      'direct_dependent_settings': {
+        'cflags': [
+          '<!@(<(pkg-config) --cflags libpng)',
+        ],
+      },
+      'link_settings': {
+        'ldflags': [
+          '<!@(<(pkg-config) --libs-only-L --libs-only-other libpng)',
+        ],
+        'libraries': [
+          '<!@(<(pkg-config) --libs-only-l libpng)',
+        ],
+      },
+      'variables': {
+        'headers_root_path': '.',
+        'header_filenames': [
+          'png.h',
+          'pngconf.h',
+        ],
+      },
+      'includes': [
+        '../../build/shim_headers.gypi',
+      ],
+    },
+  ],
+  }
+  ]]
 }

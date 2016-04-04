@@ -39,8 +39,9 @@
 ****************************************************************************/
 
 import QtQuick 2.2
-import QtQuick.Controls 1.4
+import QtQuick.Controls 1.5
 import QtQml.Models 2.2
+import io.qt.examples.quick.controls.filesystembrowser 1.0
 
 ApplicationWindow {
     visible: true
@@ -90,6 +91,7 @@ ApplicationWindow {
         anchors.fill: parent
         anchors.margins: 2 * 12 + row.height
         model: fileSystemModel
+        rootIndex: rootPathIndex
         selection: sel
 
         TableViewColumn {
@@ -103,12 +105,14 @@ ApplicationWindow {
             role: "size"
             resizable: true
             horizontalAlignment : Text.AlignRight
+            width: 70
         }
 
         TableViewColumn {
             title: "Permissions"
             role: "displayableFilePermissions"
             resizable: true
+            width: 100
         }
 
         TableViewColumn {
@@ -117,7 +121,9 @@ ApplicationWindow {
             resizable: true
         }
 
-        onDoubleClicked: isExpanded(index) ? collapse(index) : expand(index)
-        onActivated : Qt.openUrlExternally(fileSystemModel.data(index, 263))
+        onActivated : {
+            var url = fileSystemModel.data(index, FileSystemModel.UrlStringRole)
+            Qt.openUrlExternally(url)
+        }
     }
 }

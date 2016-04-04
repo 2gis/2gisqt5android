@@ -77,10 +77,10 @@ QT_BEGIN_NAMESPACE
   \code
     QMacToolBar *toolBar = new QMacToolBar(this);
     QMacToolBarItem *toolBarItem = toolBar->addItem(QIcon(), QStringLiteral("foo"));
-    connect(toolButton, SIGNAL(activated()), this, SLOT(fooClicked()))
+    connect(toolBarItem, SIGNAL(activated()), this, SLOT(fooClicked()));
 
     this->window()->winId(); // create window->windowhandle()
-    toolBar->attachToWindow(this->window()->windowHandle())
+    toolBar->attachToWindow(this->window()->windowHandle());
   \endcode
 
   \sa QMacToolBarItem

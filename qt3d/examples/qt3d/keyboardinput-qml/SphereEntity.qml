@@ -34,17 +34,14 @@
 **
 ****************************************************************************/
 
-import Qt3D 2.0
-import Qt3D.Renderer 2.0
+import Qt3D.Core 2.0
+import Qt3D.Render 2.0
 import Qt3D.Input 2.0
 import QtQuick 2.3 as QQ2
 
 Entity {
     id: root
-
-    property alias x: translate.dx
-    property alias y: translate.dy
-    property alias z: translate.dz
+    property alias position: transform.translation
     property alias color: material.diffuse
     property alias input: input
 
@@ -54,17 +51,13 @@ Entity {
 
     Transform {
         id: transform
+        scale: root.input.focus ? 2 : 1
 
-        Scale {
-            scale: root.input.focus ? 2 : 1
-
-            QQ2.Behavior on scale {
-                QQ2.NumberAnimation {
-                    duration: 250
-                }
+        QQ2.Behavior on scale {
+            QQ2.NumberAnimation {
+                duration: 250
             }
         }
-        Translate { id: translate }
     }
 
     KeyboardInput { id: input }

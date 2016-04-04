@@ -53,6 +53,7 @@
 #include <QFileInfo>
 #include <QRegularExpression>
 #include <QStringList>
+#include <QScopedPointer>
 #include <QDebug>
 #include <QStandardPaths>
 #include <QTranslator>
@@ -67,8 +68,8 @@
 #include <cstdlib>
 
 #define VERSION_MAJ 1
-#define VERSION_MIN 0
-#define VERSION_STR "1.0"
+#define VERSION_MIN 1
+#define VERSION_STR "1.1"
 
 #define FILE_OPEN_EVENT_WAIT_TIME 3000 // ms
 
@@ -163,12 +164,19 @@ class LoadWatcher : public QObject
 public:
     LoadWatcher(QQmlApplicationEngine *e, int expected)
         : QObject(e)
+        , earlyExit(false)
         , expect(expected)
         , haveOne(false)
     {
         connect(e, SIGNAL(objectCreated(QObject*,QUrl)),
             this, SLOT(checkFinished(QObject*)));
+        // QQmlApplicationEngine also connects quit() to QCoreApplication::quit
+        // but if called before exec() then QCoreApplication::quit does nothing
+        connect(e, SIGNAL(quit()),
+            this, SLOT(quit()));
     }
+
+    bool earlyExit;
 
 private:
     void contain(QObject *o, const QUrl &containPath);
@@ -195,6 +203,11 @@ public Q_SLOTS:
             printf("qml: Did not load any objects, exiting.\n");
             exit(2);//Different return code from qFatal
         }
+    }
+
+    void quit() {
+        //Will be checked before calling exec()
+        earlyExit = true;
     }
 #if defined(QT_GUI_LIB) && !defined(QT_NO_OPENGL)
     void onOpenGlContextCreated(QOpenGLContext *context);
@@ -293,11 +306,10 @@ void printVersion()
 
 void printUsage()
 {
-    printf("Usage: qml [options] [files]\n");
+    printf("Usage: qml [options] [files] [-- args]\n");
     printf("\n");
-    printf("Any argument ending in .qml will be treated as a QML file to be loaded.\n");
+    printf("Any unknown argument before '--' will be treated as a QML file to be loaded.\n");
     printf("Any number of QML files can be loaded. They will share the same engine.\n");
-    printf("Any argument which is not a recognized option and which does not end in .qml will be ignored.\n");
     printf("'gui' application type is only available if the QtGui module is available.\n");
     printf("'widget' application type is only available if the QtWidgets module is available.\n");
     printf("\n");
@@ -320,6 +332,8 @@ void printUsage()
     printf("\t-desktop.......................Force use of desktop GL (AA_UseDesktopOpenGL)\n");
     printf("\t-gles..........................Force use of GLES (AA_UseOpenGLES)\n");
     printf("\t-software......................Force use of software rendering (AA_UseOpenGLES)\n");
+    printf("\t-scaling.......................Enable High DPI scaling (AA_EnableHighDpiScaling)\n");
+    printf("\t-no-scaling....................Disable High DPI scaling (AA_DisableHighDpiScaling)\n");
     printf("\tDebugging options:\n");
     printf("\t-verbose ..................... Print information about what qml is doing, like specific file urls being loaded.\n");
     printf("\t-translation [file] .......... Load the given file as the translations file.\n");
@@ -434,8 +448,8 @@ int main(int argc, char *argv[])
     app->setOrganizationName("QtProject");
     app->setOrganizationDomain("qt-project.org");
 
-    qmlRegisterType<Config>("QmlRuntime.Config", VERSION_MAJ, VERSION_MIN, "Configuration");
-    qmlRegisterType<PartialScene>("QmlRuntime.Config", VERSION_MAJ, VERSION_MIN, "PartialScene");
+    qmlRegisterType<Config>("QmlRuntime.Config", 1, 0, "Configuration");
+    qmlRegisterType<PartialScene>("QmlRuntime.Config", 1, 0, "PartialScene");
     QQmlApplicationEngine e;
     QStringList files;
     QString confFile;
@@ -444,7 +458,7 @@ int main(int argc, char *argv[])
 
     //Handle main arguments
     QStringList argList = app->arguments();
-    for (int i = 0; i < argList.count(); i++) {
+    for (int i = 1; i < argList.count(); i++) {
         const QString &arg = argList[i];
         if (arg == QLatin1String("-quiet"))
             quietMode = true;
@@ -491,10 +505,12 @@ int main(int argc, char *argv[])
             QCoreApplication::setAttribute(Qt::AA_UseSoftwareOpenGL);
         } else if (arg == QLatin1String("-desktop")) {
             QCoreApplication::setAttribute(Qt::AA_UseDesktopOpenGL);
+        } else if (arg == QLatin1String("-scaling")) {
+            QCoreApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
+        } else if (arg == QLatin1String("-no-scaling")) {
+            QCoreApplication::setAttribute(Qt::AA_DisableHighDpiScaling);
         } else {
-            //If it ends in .qml, treat it as a file. Else ignore it
-            if (arg.endsWith(".qml"))
-                files << arg;
+            files << arg;
         }
     }
 
@@ -538,7 +554,7 @@ int main(int argc, char *argv[])
     loadConf(confFile, !verboseMode);
 
     //Load files
-    LoadWatcher lw(&e, files.count());
+    QScopedPointer<LoadWatcher> lw(new LoadWatcher(&e, files.count()));
 
     // Load dummy data before loading QML-files
     if (!dummyDir.isEmpty() && QFileInfo (dummyDir).isDir())
@@ -569,6 +585,9 @@ int main(int argc, char *argv[])
                 e.load(path);
         }
     }
+
+    if (lw->earlyExit)
+        return 0;
 
     return app->exec();
 }

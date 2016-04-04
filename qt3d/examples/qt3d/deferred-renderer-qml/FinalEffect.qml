@@ -34,14 +34,14 @@
 **
 ****************************************************************************/
 
-import Qt3D 2.0
-import Qt3D.Renderer 2.0
+import Qt3D.Core 2.0
+import Qt3D.Render 2.0
 
 Effect {
     techniques : [
         // OpenGL 3.1
         Technique {
-            openGLFilter {api : OpenGLFilter.Desktop; profile : OpenGLFilter.Core; minorVersion : 1; majorVersion : 3 }
+            graphicsApiFilter {api : GraphicsApiFilter.OpenGL; profile : GraphicsApiFilter.CoreProfile; minorVersion : 1; majorVersion : 3 }
             parameters:  Parameter { name: "PointLightBlock"; value: ShaderData {
                     property ShaderDataArray lights: ShaderDataArray {
                         // hard coded lights until we have a way to filter
@@ -109,7 +109,7 @@ Effect {
         },
         // OpenGL 2.0 with FBO extension
         Technique {
-            openGLFilter {api : OpenGLFilter.Desktop; profile : OpenGLFilter.None; minorVersion : 0; majorVersion : 2 }
+            graphicsApiFilter {api : GraphicsApiFilter.OpenGL; profile : GraphicsApiFilter.NoProfile; minorVersion : 0; majorVersion : 2 }
             parameters: Parameter { name: "pointLights"; value: ShaderData {
                                 property ShaderDataArray lights: ShaderDataArray {
                                     // hard coded lights until we have a way to filter

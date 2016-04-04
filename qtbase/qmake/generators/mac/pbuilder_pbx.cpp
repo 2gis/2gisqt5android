@@ -417,20 +417,24 @@ public:
     inline QString groupName() const { return group; }
     inline QString compilerName() const { return compiler; }
     inline bool isObjectOutput(const QString &file) const {
-        bool ret = object_output;
-        for(int i = 0; !ret && i < Option::c_ext.size(); ++i) {
-            if(file.endsWith(Option::c_ext.at(i))) {
-                ret = true;
-                break;
-            }
+        if (object_output)
+            return true;
+
+        if (file.endsWith(Option::objc_ext))
+            return true;
+        if (file.endsWith(Option::objcpp_ext))
+            return true;
+
+        for (int i = 0; i < Option::c_ext.size(); ++i) {
+            if (file.endsWith(Option::c_ext.at(i)))
+                return true;
         }
-        for(int i = 0; !ret && i < Option::cpp_ext.size(); ++i) {
-            if(file.endsWith(Option::cpp_ext.at(i))) {
-                ret = true;
-                break;
-            }
+        for (int i = 0; i < Option::cpp_ext.size(); ++i) {
+            if (file.endsWith(Option::cpp_ext.at(i)))
+                return true;
         }
-        return ret;
+
+        return false;
     }
 };
 
@@ -490,15 +494,15 @@ static QString xcodeFiletypeForFilename(const QString &filename)
             return "sourcecode.c.h";
     }
 
-    if (filename.endsWith(QStringLiteral(".mm")))
+    if (filename.endsWith(Option::objcpp_ext))
         return QStringLiteral("sourcecode.cpp.objcpp");
-    if (filename.endsWith(QStringLiteral(".m")))
+    if (filename.endsWith(Option::objc_ext))
         return QStringLiteral("sourcecode.c.objc");
-    if (filename.endsWith(QStringLiteral(".framework")))
+    if (filename.endsWith(QLatin1String(".framework")))
         return QStringLiteral("wrapper.framework");
-    if (filename.endsWith(QStringLiteral(".a")))
+    if (filename.endsWith(QLatin1String(".a")))
         return QStringLiteral("archive.ar");
-    if (filename.endsWith(QStringLiteral(".pro")) || filename.endsWith(QStringLiteral(".qrc")))
+    if (filename.endsWith(QLatin1String(".pro")) || filename.endsWith(QLatin1String(".qrc")))
         return QStringLiteral("text");
 
     return QString();
@@ -816,7 +820,7 @@ ProjectBuilderMakefileGenerator::writeMakeParts(QTextStream &t)
             for(int x = 0; x < tmp.count();) {
                 bool remove = false;
                 QString library, name;
-                ProString opt = tmp[x].trimmed();
+                ProString opt = tmp[x];
                 if(opt.startsWith("-L")) {
                     QString r = opt.mid(2).toQString();
                     fixForOutput(r);
@@ -833,8 +837,8 @@ ProjectBuilderMakefileGenerator::writeMakeParts(QTextStream &t)
                                encode the version number in the Project file which might be a bad
                                things in days to come? --Sam
                             */
-                            QString lib_file = (*lit) + Option::dir_sep + lib;
-                            if(QMakeMetaInfo::libExists(lib_file)) {
+                            QString lib_file = QMakeMetaInfo::findLib(Option::normalizePath((*lit) + Option::dir_sep + lib));
+                            if (!lib_file.isEmpty()) {
                                 QMakeMetaInfo libinfo(project);
                                 if(libinfo.readLib(lib_file)) {
                                     if(!libinfo.isEmpty("QMAKE_PRL_TARGET")) {
@@ -849,8 +853,15 @@ ProjectBuilderMakefileGenerator::writeMakeParts(QTextStream &t)
                                                 QString librarySuffix = project->first("QMAKE_XCODE_LIBRARY_SUFFIX").toQString();
                                                 suffixSetting = "$(" + suffixSetting + ")";
                                                 if (!librarySuffix.isEmpty()) {
-                                                    library.replace(librarySuffix, suffixSetting);
-                                                    name.remove(librarySuffix);
+                                                    int pos = library.lastIndexOf(librarySuffix + '.');
+                                                    if (pos == -1) {
+                                                        warn_msg(WarnLogic, "Failed to find expected suffix '%s' for library '%s'.",
+                                                                            qPrintable(librarySuffix), qPrintable(library));
+                                                    } else {
+                                                        library.replace(pos, librarySuffix.length(), suffixSetting);
+                                                        if (name.endsWith(librarySuffix))
+                                                            name.chop(librarySuffix.length());
+                                                    }
                                                 } else {
                                                     library.replace(name, name + suffixSetting);
                                                 }

@@ -61,6 +61,8 @@ QT_BEGIN_NAMESPACE
 
 extern QByteArray qsgShaderRewriter_insertZAttributes(const char *input, QSurfaceFormat::OpenGLContextProfile profile);
 
+int qt_sg_envInt(const char *name, int defaultValue);
+
 namespace QSGBatchRenderer
 {
 
@@ -198,9 +200,9 @@ ShaderManager::Shader *ShaderManager::prepareMaterialNoRewrite(QSGMaterial *mate
 
 void ShaderManager::invalidated()
 {
-    qDeleteAll(stockShaders.values());
+    qDeleteAll(stockShaders);
     stockShaders.clear();
-    qDeleteAll(rewrittenShaders.values());
+    qDeleteAll(rewrittenShaders);
     rewrittenShaders.clear();
     delete blitProgram;
     blitProgram = 0;
@@ -485,6 +487,11 @@ void Updater::visitGeometryNode(Node *n)
         if (m_opacityChange) {
             Element *e = n->element();
             if (e->batch)
+                renderer->invalidateBatchAndOverlappingRenderOrders(e->batch);
+        }
+        if (n->dirtyState & QSGNode::DirtyMaterial) {
+            Element *e = n->element();
+            if (e->batch && e->batch->isMaterialCompatible(e) == BatchBreaksOnCompare)
                 renderer->invalidateBatchAndOverlappingRenderOrders(e->batch);
         }
     }
@@ -780,30 +787,17 @@ Renderer::Renderer(QSGRenderContext *ctx)
     }
 
     m_bufferStrategy = GL_STATIC_DRAW;
-    QByteArray strategy = qgetenv("QSG_RENDERER_BUFFER_STRATEGY");
-    if (strategy == "dynamic") {
-        m_bufferStrategy = GL_DYNAMIC_DRAW;
-    } else if (strategy == "stream") {
-        m_bufferStrategy = GL_STREAM_DRAW;
+    if (Q_UNLIKELY(qEnvironmentVariableIsSet("QSG_RENDERER_BUFFER_STRATEGY"))) {
+        const QByteArray strategy = qgetenv("QSG_RENDERER_BUFFER_STRATEGY");
+        if (strategy == "dynamic")
+            m_bufferStrategy = GL_DYNAMIC_DRAW;
+        else if (strategy == "stream")
+            m_bufferStrategy = GL_STREAM_DRAW;
     }
 
-    m_batchNodeThreshold = 64;
-    QByteArray alternateThreshold = qgetenv("QSG_RENDERER_BATCH_NODE_THRESHOLD");
-    if (alternateThreshold.length() > 0) {
-        bool ok = false;
-        int threshold = alternateThreshold.toInt(&ok);
-        if (ok)
-            m_batchNodeThreshold = threshold;
-    }
+    m_batchNodeThreshold = qt_sg_envInt("QSG_RENDERER_BATCH_NODE_THRESHOLD", 64);
+    m_batchVertexThreshold = qt_sg_envInt("QSG_RENDERER_BATCH_VERTEX_THRESHOLD", 1024);
 
-    m_batchVertexThreshold = 1024;
-    alternateThreshold = qgetenv("QSG_RENDERER_BATCH_VERTEX_THRESHOLD");
-    if (alternateThreshold.length() > 0) {
-        bool ok = false;
-        int threshold = alternateThreshold.toInt(&ok);
-        if (ok)
-            m_batchVertexThreshold = threshold;
-    }
     if (Q_UNLIKELY(debug_build() || debug_render())) {
         qDebug() << "Batch thresholds: nodes:" << m_batchNodeThreshold << " vertices:" << m_batchVertexThreshold;
         qDebug() << "Using buffer strategy:" << (m_bufferStrategy == GL_STATIC_DRAW ? "static" : (m_bufferStrategy == GL_DYNAMIC_DRAW ? "dynamic" : "stream"));
@@ -816,7 +810,8 @@ Renderer::Renderer(QSGRenderContext *ctx)
         m_vao->create();
     }
 
-    m_useDepthBuffer = ctx->openglContext()->format().depthBufferSize() > 0;
+    bool useDepth = qEnvironmentVariableIsEmpty("QSG_NO_DEPTH_BUFFER");
+    m_useDepthBuffer = useDepth && ctx->openglContext()->format().depthBufferSize() > 0;
 }
 
 static void qsg_wipeBuffer(Buffer *buffer, QOpenGLFunctions *funcs)
@@ -895,11 +890,11 @@ void Renderer::map(Buffer *buffer, int byteSize, bool isIndexBuf)
         if (byteSize > pool.size())
             pool.resize(byteSize);
         buffer->data = pool.data();
-    } else {
+    } else if (buffer->size != byteSize) {
+        free(buffer->data);
         buffer->data = (char *) malloc(byteSize);
     }
     buffer->size = byteSize;
-
 }
 
 void Renderer::unmap(Buffer *buffer, bool isIndexBuf)
@@ -1081,6 +1076,11 @@ void Renderer::nodeWasRemoved(Node *node)
         if (e) {
             e->removed = true;
             m_elementsToDelete.add(e);
+
+            if (m_renderNodeElements.isEmpty()) {
+                static bool useDepth = qEnvironmentVariableIsEmpty("QSG_NO_DEPTH_BUFFER");
+                m_useDepthBuffer = useDepth && context()->openglContext()->format().depthBufferSize() > 0;
+            }
         }
     }
 
@@ -1213,10 +1213,7 @@ void Renderer::nodeChanged(QSGNode *node, QSGNode::DirtyState state)
             if (e->isMaterialBlended != blended) {
                 m_rebuild |= Renderer::FullRebuild;
                 e->isMaterialBlended = blended;
-            } else if (e->batch) {
-                if (e->batch->isMaterialCompatible(e) == BatchBreaksOnCompare)
-                    invalidateBatchAndOverlappingRenderOrders(e->batch);
-            } else {
+            } else if (!e->batch) {
                 m_rebuild |= Renderer::BuildBatches;
             }
         }
@@ -2554,8 +2551,15 @@ void Renderer::render()
         QSGNodeDumper::dump(rootNode());
     }
 
-    if (Q_UNLIKELY(debug_render() || debug_build())) {
+    QElapsedTimer timer;
+    quint64 timeRenderLists = 0;
+    quint64 timePrepareOpaque = 0;
+    quint64 timePrepareAlpha = 0;
+    quint64 timeSorting = 0;
+    quint64 timeUploadOpaque = 0;
+    quint64 timeUploadAlpha = 0;
 
+    if (Q_UNLIKELY(debug_render() || debug_build())) {
         QByteArray type("rebuild:");
         if (m_rebuild == 0)
             type += " none";
@@ -2571,6 +2575,7 @@ void Renderer::render()
         }
 
         qDebug() << "Renderer::render()" << this << type;
+        timer.start();
     }
 
     if (m_vao)
@@ -2597,6 +2602,7 @@ void Renderer::render()
             }
         }
     }
+    if (Q_UNLIKELY(debug_render())) timeRenderLists = timer.restart();
 
     for (int i=0; i<m_opaqueBatches.size(); ++i)
         m_opaqueBatches.at(i)->cleanupRemovedElements();
@@ -2609,7 +2615,9 @@ void Renderer::render()
 
     if (m_rebuild & BuildBatches) {
         prepareOpaqueBatches();
+        if (Q_UNLIKELY(debug_render())) timePrepareOpaque = timer.restart();
         prepareAlphaBatches();
+        if (Q_UNLIKELY(debug_render())) timePrepareAlpha = timer.restart();
 
         if (Q_UNLIKELY(debug_build())) {
             qDebug() << "Opaque Batches:";
@@ -2629,7 +2637,10 @@ void Renderer::render()
                 }
             }
         }
+    } else {
+        if (Q_UNLIKELY(debug_render())) timePrepareOpaque = timePrepareAlpha = timer.restart();
     }
+
 
     deleteRemovedElements();
 
@@ -2646,6 +2657,8 @@ void Renderer::render()
         m_zRange = 1.0 / (m_nextRenderOrder);
     }
 
+    if (Q_UNLIKELY(debug_render())) timeSorting = timer.restart();
+
     int largestVBO = 0;
 #ifdef QSG_SEPARATE_INDEX_BUFFER
     int largestIBO = 0;
@@ -2660,6 +2673,8 @@ void Renderer::render()
 #endif
         uploadBatch(b);
     }
+    if (Q_UNLIKELY(debug_render())) timeUploadOpaque = timer.restart();
+
 
     if (Q_UNLIKELY(debug_upload())) qDebug() << "Uploading Alpha Batches:";
     for (int i=0; i<m_alphaBatches.size(); ++i) {
@@ -2670,6 +2685,7 @@ void Renderer::render()
         largestIBO = qMax(b->ibo.size, largestIBO);
 #endif
     }
+    if (Q_UNLIKELY(debug_render())) timeUploadAlpha = timer.restart();
 
     if (largestVBO * 2 < m_vertexUploadPool.size())
         m_vertexUploadPool.resize(largestVBO * 2);
@@ -2679,6 +2695,15 @@ void Renderer::render()
 #endif
 
     renderBatches();
+
+    if (Q_UNLIKELY(debug_render())) {
+        qDebug(" -> times: build: %d, prepare(opaque/alpha): %d/%d, sorting: %d, upload(opaque/alpha): %d/%d, render: %d",
+               (int) timeRenderLists,
+               (int) timePrepareOpaque, (int) timePrepareAlpha,
+               (int) timeSorting,
+               (int) timeUploadOpaque, (int) timeUploadAlpha,
+               (int) timer.elapsed());
+    }
 
     m_rebuild = 0;
     m_renderOrderRebuildLower = -1;

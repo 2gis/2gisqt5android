@@ -291,10 +291,11 @@ QString SplineEditor::generateCode()
 {
     QString s = QLatin1String("[");
     foreach (const QPointF &point, m_controlPoints) {
-        s += QString::number(point.x(), 'g', 2) + "," + QString::number(point.y(), 'g', 3) + ",";
+        s += QString::number(point.x(), 'g', 2) + QLatin1Char(',')
+             + QString::number(point.y(), 'g', 3) + QLatin1Char(',');
     }
     s.chop(1); //removing last ","
-    s += "]";
+    s += QLatin1Char(']');
 
     return s;
 }
@@ -673,13 +674,14 @@ void SplineEditor::setEasingCurve(const QString &code)
 {
     if (m_block)
         return;
-    if (code.left(1) == QLatin1String("[") && code.right(1) == QLatin1String("]")) {
+    if (code.startsWith(QLatin1Char('[')) && code.endsWith(QLatin1Char(']'))) {
         QString cleanCode = code;
         cleanCode.remove(0, 1);
         cleanCode.chop(1);
         const QStringList stringList = cleanCode.split(QLatin1Char(','), QString::SkipEmptyParts);
         if (stringList.count() >= 6 && (stringList.count() % 6 == 0)) {
             QList<qreal> realList;
+            realList.reserve(stringList.count());
             foreach (const QString &string, stringList) {
                 bool ok;
                 realList.append(string.toDouble(&ok));
@@ -687,7 +689,9 @@ void SplineEditor::setEasingCurve(const QString &code)
                     return;
             }
             QList<QPointF> points;
-            for (int i = 0; i < realList.count() / 2; ++i)
+            const int count = realList.count() / 2;
+            points.reserve(count);
+            for (int i = 0; i < count; ++i)
                 points.append(QPointF(realList.at(i * 2), realList.at(i * 2 + 1)));
             if (points.last() == QPointF(1.0, 1.0)) {
                 QEasingCurve easingCurve(QEasingCurve::BezierSpline);

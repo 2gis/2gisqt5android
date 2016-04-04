@@ -39,10 +39,13 @@
 
 #include "qwinrtabstractvideorenderercontrol.h"
 
+#include <QVideoFrame>
+
 struct IMF2DBuffer;
 
 QT_BEGIN_NAMESPACE
 
+class QWinRTVideoProbeControl;
 class QVideoSurfaceFormat;
 class QWinRTCameraVideoRendererControlPrivate;
 class QWinRTCameraVideoRendererControl : public QWinRTAbstractVideoRendererControl
@@ -53,11 +56,15 @@ public:
     ~QWinRTCameraVideoRendererControl();
 
     bool render(ID3D11Texture2D *texture) Q_DECL_OVERRIDE;
+    bool dequeueFrame(QVideoFrame *frame) Q_DECL_OVERRIDE;
     void queueBuffer(IMF2DBuffer *buffer);
     void discardBuffers();
+    void incrementProbe();
+    void decrementProbe();
 
 signals:
     void bufferRequested();
+    void videoFrameProbed(const QVideoFrame &frame);
 
 private:
     QScopedPointer<QWinRTCameraVideoRendererControlPrivate> d_ptr;

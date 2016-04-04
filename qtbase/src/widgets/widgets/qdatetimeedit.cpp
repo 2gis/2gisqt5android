@@ -1687,6 +1687,10 @@ QDateTimeEditPrivate::QDateTimeEditPrivate()
 #endif
 }
 
+QDateTimeEditPrivate::~QDateTimeEditPrivate()
+{
+}
+
 void QDateTimeEditPrivate::updateTimeSpec()
 {
     minimum = minimum.toDateTime().toTimeSpec(spec);
@@ -2655,7 +2659,7 @@ bool QCalendarPopup::event(QEvent *event)
 {
     if (event->type() == QEvent::KeyPress) {
         QKeyEvent *keyEvent = static_cast<QKeyEvent*>(event);
-        if (keyEvent->key()== Qt::Key_Escape)
+        if (keyEvent->matches(QKeySequence::Cancel))
             dateChanged = false;
     }
     return QWidget::event(event);

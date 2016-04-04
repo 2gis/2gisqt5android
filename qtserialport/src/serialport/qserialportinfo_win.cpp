@@ -41,35 +41,21 @@
 #include <QtCore/qpair.h>
 #include <QtCore/qstringlist.h>
 
+#include <vector>
+
 #include <initguid.h>
+#include <devguid.h> // for GUID_DEVCLASS_PORTS and GUID_DEVCLASS_MODEM
+#include <winioctl.h> // for GUID_DEVINTERFACE_COMPORT
 #include <setupapi.h>
 #include <cfgmgr32.h>
 
+#ifdef QT_NO_REDEFINE_GUID_DEVINTERFACE_MODEM
+#  include <ntddmodm.h> // for GUID_DEVINTERFACE_MODEM
+#else
+  DEFINE_GUID(GUID_DEVINTERFACE_MODEM, 0x2c7089aa, 0x2e0e, 0x11d1, 0xb1, 0x14, 0x00, 0xc0, 0x4f, 0xc2, 0xaa, 0xe4);
+#endif
+
 QT_BEGIN_NAMESPACE
-
-typedef QPair<QUuid, DWORD> GuidFlagsPair;
-
-static inline const QList<GuidFlagsPair>& guidFlagsPairs()
-{
-    static const QList<GuidFlagsPair> guidFlagsPairList = QList<GuidFlagsPair>()
-               // Standard Setup Ports Class GUID
-            << qMakePair(QUuid(0x4D36E978, 0xE325, 0x11CE, 0xBF, 0xC1, 0x08, 0x00, 0x2B, 0xE1, 0x03, 0x18), DWORD(DIGCF_PRESENT))
-               // Standard Setup Modems Class GUID
-            << qMakePair(QUuid(0x4D36E96D, 0xE325, 0x11CE, 0xBF, 0xC1, 0x08, 0x00, 0x2B, 0xE1, 0x03, 0x18), DWORD(DIGCF_PRESENT))
-               // Standard Serial Port Device Interface Class GUID
-            << qMakePair(QUuid(0x86E0D1E0, 0x8089, 0x11D0, 0x9C, 0xE4, 0x08, 0x00, 0x3E, 0x30, 0x1F, 0x73), DWORD(DIGCF_PRESENT | DIGCF_DEVICEINTERFACE))
-               // Standard Modem Device Interface Class GUID
-            << qMakePair(QUuid(0x2C7089AA, 0x2E0E, 0x11D1, 0xB1, 0x14, 0x00, 0xC0, 0x4F, 0xC2, 0xAA, 0xE4), DWORD(DIGCF_PRESENT | DIGCF_DEVICEINTERFACE));
-    return guidFlagsPairList;
-}
-
-static QString toStringAndTrimNullCharacter(const QByteArray &buffer)
-{
-    const QString result = QString::fromWCharArray(reinterpret_cast<const wchar_t *>(buffer.constData()),
-                                                   buffer.size() / sizeof(wchar_t));
-    const int index = result.indexOf(QChar(0));
-    return index == -1 ? result : result.mid(0, index);
-}
 
 static QStringList portNamesFromHardwareDeviceMap()
 {
@@ -79,19 +65,22 @@ static QStringList portNamesFromHardwareDeviceMap()
 
     QStringList result;
     DWORD index = 0;
-    static const DWORD maximumValueNameInChars = 16383;
-    QByteArray outputValueName;
-    outputValueName.resize(maximumValueNameInChars * sizeof(wchar_t));
-    QByteArray outputBuffer;
-    DWORD requiredDataBytes = 0;
+
+    // This is a maximum length of value name, see:
+    // https://msdn.microsoft.com/en-us/library/windows/desktop/ms724872%28v=vs.85%29.aspx
+    enum { MaximumValueNameInChars = 16383 };
+
+    std::vector<wchar_t> outputValueName(MaximumValueNameInChars, 0);
+    std::vector<wchar_t> outputBuffer(MAX_PATH + 1, 0);
+    DWORD bytesRequired = MAX_PATH;
     forever {
-        DWORD requiredValueNameChars = maximumValueNameInChars;
-        const LONG ret = ::RegEnumValue(hKey, index, reinterpret_cast<wchar_t *>(outputValueName.data()), &requiredValueNameChars,
-                                        Q_NULLPTR, Q_NULLPTR, reinterpret_cast<unsigned char *>(outputBuffer.data()), &requiredDataBytes);
+        DWORD requiredValueNameChars = MaximumValueNameInChars;
+        const LONG ret = ::RegEnumValue(hKey, index, &outputValueName[0], &requiredValueNameChars,
+                                        Q_NULLPTR, Q_NULLPTR, reinterpret_cast<PBYTE>(&outputBuffer[0]), &bytesRequired);
         if (ret == ERROR_MORE_DATA) {
-            outputBuffer.resize(requiredDataBytes);
+            outputBuffer.resize(bytesRequired / sizeof(wchar_t) + 2, 0);
         } else if (ret == ERROR_SUCCESS) {
-            result.append(toStringAndTrimNullCharacter(outputBuffer));
+            result.append(QString::fromWCharArray(&outputBuffer[0]));
             ++index;
         } else {
             break;
@@ -106,12 +95,12 @@ static QString deviceRegistryProperty(HDEVINFO deviceInfoSet,
                                       DWORD property)
 {
     DWORD dataType = 0;
-    QByteArray devicePropertyByteArray;
-    DWORD requiredSize = 0;
+    std::vector<wchar_t> outputBuffer(MAX_PATH + 1, 0);
+    DWORD bytesRequired = MAX_PATH;
     forever {
         if (::SetupDiGetDeviceRegistryProperty(deviceInfoSet, deviceInfoData, property, &dataType,
-                                               reinterpret_cast<unsigned char *>(devicePropertyByteArray.data()),
-                                               devicePropertyByteArray.size(), &requiredSize)) {
+                                               reinterpret_cast<PBYTE>(&outputBuffer[0]),
+                                               bytesRequired, &bytesRequired)) {
             break;
         }
 
@@ -119,25 +108,22 @@ static QString deviceRegistryProperty(HDEVINFO deviceInfoSet,
                 || (dataType != REG_SZ && dataType != REG_EXPAND_SZ)) {
             return QString();
         }
-        devicePropertyByteArray.resize(requiredSize);
+        outputBuffer.resize(bytesRequired / sizeof(wchar_t) + 2, 0);
     }
-    return toStringAndTrimNullCharacter(devicePropertyByteArray);
+    return QString::fromWCharArray(&outputBuffer[0]);
 }
 
 static QString deviceInstanceIdentifier(DEVINST deviceInstanceNumber)
 {
-    ULONG numberOfChars = 0;
-    if (::CM_Get_Device_ID_Size(&numberOfChars, deviceInstanceNumber, 0) != CR_SUCCESS)
-        return QString();
-    // The size does not include the terminating null character.
-    ++numberOfChars;
-    QByteArray outputBuffer;
-    outputBuffer.resize(numberOfChars * sizeof(wchar_t));
-    if (::CM_Get_Device_ID(deviceInstanceNumber, reinterpret_cast<wchar_t *>(outputBuffer.data()),
-                           outputBuffer.size(), 0) != CR_SUCCESS) {
+    std::vector<wchar_t> outputBuffer(MAX_DEVICE_ID_LEN + 1, 0);
+    if (::CM_Get_Device_ID(
+                deviceInstanceNumber,
+                &outputBuffer[0],
+                MAX_DEVICE_ID_LEN,
+                0) != CR_SUCCESS) {
         return QString();
     }
-    return toStringAndTrimNullCharacter(outputBuffer).toUpper();
+    return QString::fromWCharArray(&outputBuffer[0]).toUpper();
 }
 
 static DEVINST parentDeviceInstanceNumber(DEVINST childDeviceInstanceNumber)
@@ -161,26 +147,29 @@ static QString devicePortName(HDEVINFO deviceInfoSet, PSP_DEVINFO_DATA deviceInf
     if (key == INVALID_HANDLE_VALUE)
         return QString();
 
-    static const QStringList portNameRegistryKeyList = QStringList()
-            << QStringLiteral("PortName")
-            << QStringLiteral("PortNumber");
+    static const wchar_t * const keyTokens[] = {
+            L"PortName\0",
+            L"PortNumber\0"
+    };
+
+    static const int keyTokensCount = sizeof(keyTokens) / sizeof(keyTokens[0]);
 
     QString portName;
-    foreach (const QString &portNameKey, portNameRegistryKeyList) {
-        DWORD bytesRequired = 0;
+    for (int i = 0; i < keyTokensCount; ++i) {
         DWORD dataType = 0;
-        QByteArray outputBuffer;
+        std::vector<wchar_t> outputBuffer(MAX_PATH + 1, 0);
+        DWORD bytesRequired = MAX_PATH;
         forever {
-            const LONG ret = ::RegQueryValueEx(key, reinterpret_cast<const wchar_t *>(portNameKey.utf16()), Q_NULLPTR, &dataType,
-                                               reinterpret_cast<unsigned char *>(outputBuffer.data()), &bytesRequired);
+            const LONG ret = ::RegQueryValueEx(key, keyTokens[i], Q_NULLPTR, &dataType,
+                                               reinterpret_cast<PBYTE>(&outputBuffer[0]), &bytesRequired);
             if (ret == ERROR_MORE_DATA) {
-                outputBuffer.resize(bytesRequired);
+                outputBuffer.resize(bytesRequired / sizeof(wchar_t) + 2, 0);
                 continue;
             } else if (ret == ERROR_SUCCESS) {
                 if (dataType == REG_SZ)
-                    portName = toStringAndTrimNullCharacter(outputBuffer);
+                    portName = QString::fromWCharArray(&outputBuffer[0]);
                 else if (dataType == REG_DWORD)
-                    portName = QStringLiteral("COM%1").arg(*(PDWORD(outputBuffer.constData())));
+                    portName = QStringLiteral("COM%1").arg(*(PDWORD(&outputBuffer[0])));
             }
             break;
         }
@@ -289,10 +278,21 @@ static QString deviceSerialNumber(const QString &instanceIdentifier,
 
 QList<QSerialPortInfo> QSerialPortInfo::availablePorts()
 {
+    static const struct {
+        GUID guid; DWORD flags;
+    } setupTokens[] =  {
+        { GUID_DEVCLASS_PORTS, DIGCF_PRESENT },
+        { GUID_DEVCLASS_MODEM, DIGCF_PRESENT },
+        { GUID_DEVINTERFACE_COMPORT, DIGCF_PRESENT | DIGCF_DEVICEINTERFACE },
+        { GUID_DEVINTERFACE_MODEM, DIGCF_PRESENT | DIGCF_DEVICEINTERFACE }
+    };
+
+    static const int setupTokensCount = sizeof(setupTokens) / sizeof(setupTokens[0]);
+
     QList<QSerialPortInfo> serialPortInfoList;
 
-    foreach (const GuidFlagsPair &uniquePair, guidFlagsPairs()) {
-        const HDEVINFO deviceInfoSet = ::SetupDiGetClassDevs(reinterpret_cast<const GUID *>(&uniquePair.first), Q_NULLPTR, Q_NULLPTR, uniquePair.second);
+    for (int i = 0; i < setupTokensCount; ++i) {
+        const HDEVINFO deviceInfoSet = ::SetupDiGetClassDevs(&setupTokens[i].guid, Q_NULLPTR, Q_NULLPTR, setupTokens[i].flags);
         if (deviceInfoSet == INVALID_HANDLE_VALUE)
             return serialPortInfoList;
 
@@ -350,6 +350,7 @@ QList<qint32> QSerialPortInfo::standardBaudRates()
     return QSerialPortPrivate::standardBaudRates();
 }
 
+#if QT_DEPRECATED_SINCE(5, 6)
 bool QSerialPortInfo::isBusy() const
 {
     const HANDLE handle = ::CreateFile(reinterpret_cast<const wchar_t*>(systemLocation().utf16()),
@@ -363,6 +364,7 @@ bool QSerialPortInfo::isBusy() const
     }
     return false;
 }
+#endif // QT_DEPRECATED_SINCE(5, 6)
 
 #if QT_DEPRECATED_SINCE(5, 2)
 bool QSerialPortInfo::isValid() const

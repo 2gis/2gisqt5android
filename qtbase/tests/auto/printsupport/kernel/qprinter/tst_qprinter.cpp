@@ -425,12 +425,12 @@ void tst_QPrinter::outputFormatFromSuffix()
     if (QPrinterInfo::availablePrinters().size() == 0)
         QSKIP("No printers available.");
     QPrinter p;
-    QVERIFY(p.outputFormat() == QPrinter::NativeFormat);
+    QCOMPARE(p.outputFormat(), QPrinter::NativeFormat);
     p.setOutputFileName("test.pdf");
     TempFileCleanup tmpFile("test.pdf");
-    QVERIFY(p.outputFormat() == QPrinter::PdfFormat);
+    QCOMPARE(p.outputFormat(), QPrinter::PdfFormat);
     p.setOutputFileName(QString());
-    QVERIFY(p.outputFormat() == QPrinter::NativeFormat);
+    QCOMPARE(p.outputFormat(), QPrinter::NativeFormat);
 }
 
 void tst_QPrinter::testPageMargins_data()
@@ -1090,12 +1090,12 @@ void tst_QPrinter::doubleSidedPrinting()
     QPrinter native;
     if (native.outputFormat() == QPrinter::NativeFormat) {
         // Test default
-        QPrinterInfo printerInfo;
+        QPrinterInfo printerInfo(native);
         bool expected = (printerInfo.defaultDuplexMode() != QPrinter::DuplexNone);
-        QCOMPARE(native.doubleSidedPrinting(), false);
+        QCOMPARE(native.doubleSidedPrinting(), expected);
 
-        // Test set/get
-        expected = (printerInfo.supportedDuplexModes().count() > 1);
+        // Test set/get, changing the expected value if possible
+        expected = expected ? false : (printerInfo.supportedDuplexModes().count() > 1);
         native.setDoubleSidedPrinting(expected);
         QCOMPARE(native.doubleSidedPrinting(), expected);
 

@@ -5,27 +5,12 @@
 #ifndef CC_BASE_UTIL_H_
 #define CC_BASE_UTIL_H_
 
-#include <limits>
-
 #include "base/basictypes.h"
 #include "cc/resources/resource_provider.h"
 #include "third_party/khronos/GLES2/gl2.h"
 #include "third_party/khronos/GLES2/gl2ext.h"
 
 namespace cc {
-
-template <typename T> T RoundUp(T n, T mul) {
-  COMPILE_ASSERT(std::numeric_limits<T>::is_integer, type_must_be_integral);
-  return (n > 0) ? ((n + mul - 1) / mul) * mul
-                 : (n / mul) * mul;
-}
-
-template <typename T> T RoundDown(T n, T mul) {
-  COMPILE_ASSERT(std::numeric_limits<T>::is_integer, type_must_be_integral);
-  return (n > 0) ? (n / mul) * mul
-                 : (n == 0) ? 0
-                 : ((n - mul + 1) / mul) * mul;
-}
 
 inline GLenum GLDataType(ResourceFormat format) {
   DCHECK_LE(format, RESOURCE_FORMAT_MAX);
@@ -36,7 +21,8 @@ inline GLenum GLDataType(ResourceFormat format) {
     GL_UNSIGNED_BYTE,           // ALPHA_8
     GL_UNSIGNED_BYTE,           // LUMINANCE_8
     GL_UNSIGNED_SHORT_5_6_5,    // RGB_565,
-    GL_UNSIGNED_BYTE            // ETC1
+    GL_UNSIGNED_BYTE,           // ETC1
+    GL_UNSIGNED_BYTE            // RED_8
   };
   return format_gl_data_type[format];
 }
@@ -50,7 +36,8 @@ inline GLenum GLDataFormat(ResourceFormat format) {
     GL_ALPHA,          // ALPHA_8
     GL_LUMINANCE,      // LUMINANCE_8
     GL_RGB,            // RGB_565
-    GL_ETC1_RGB8_OES   // ETC1
+    GL_ETC1_RGB8_OES,  // ETC1
+    GL_RED_EXT         // RED_8
   };
   return format_gl_data_format[format];
 }

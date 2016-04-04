@@ -9,6 +9,7 @@
 
 #include "base/memory/ref_counted.h"
 #include "base/memory/scoped_ptr.h"
+#include "base/memory/weak_ptr.h"
 #include "base/process/process.h"
 #include "content/browser/appcache/appcache_backend_impl.h"
 #include "content/browser/appcache/appcache_frontend_proxy.h"
@@ -32,9 +33,6 @@ class AppCacheDispatcherHost : public BrowserMessageFilter {
 
  protected:
   ~AppCacheDispatcherHost() override;
-
-  // BrowserMessageFilter override.
-  void BadMessageReceived() override;
 
  private:
   // IPC message handlers
@@ -71,6 +69,8 @@ class AppCacheDispatcherHost : public BrowserMessageFilter {
 
   // The corresponding ChildProcessHost object's id().
   int process_id_;
+
+  base::WeakPtrFactory<AppCacheDispatcherHost> weak_factory_;
 
   DISALLOW_COPY_AND_ASSIGN(AppCacheDispatcherHost);
 };

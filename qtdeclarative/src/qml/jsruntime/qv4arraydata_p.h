@@ -33,6 +33,17 @@
 #ifndef QV4ARRAYDATA_H
 #define QV4ARRAYDATA_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include "qv4global_p.h"
 #include "qv4managed_p.h"
 #include "qv4property_p.h"
@@ -47,17 +58,17 @@ namespace QV4 {
         Q_MANAGED_CHECK \
         typedef QV4::Heap::DataClass Data; \
         static const QV4::ArrayVTable static_vtbl; \
-        static inline const QV4::ManagedVTable *staticVTable() { return &static_vtbl.managedVTable; } \
+        static inline const QV4::VTable *staticVTable() { return &static_vtbl.vTable; } \
         V4_MANAGED_SIZE_TEST \
-        const Data *d() const { return static_cast<const Data *>(m); } \
-        Data *d() { return static_cast<Data *>(m); }
+        const Data *d() const { return static_cast<const Data *>(m()); } \
+        Data *d() { return static_cast<Data *>(m()); }
 
 
 struct ArrayData;
 
 struct ArrayVTable
 {
-    ManagedVTable managedVTable;
+    VTable vTable;
     uint type;
     Heap::ArrayData *(*reallocate)(Object *o, uint n, bool enforceAttributes);
     ReturnedValue (*get)(const Heap::ArrayData *d, uint index);
@@ -86,7 +97,7 @@ struct ArrayData : public Base {
     PropertyAttributes *attrs;
     union {
         uint len;
-        uint freeList;
+        ReturnedValue freeList;
     };
     union {
         uint offset;
@@ -96,12 +107,15 @@ struct ArrayData : public Base {
 
     bool isSparse() const { return type == Sparse; }
 
-    const ArrayVTable *vtable() const { return reinterpret_cast<const ArrayVTable *>(Base::vtable); }
+    const ArrayVTable *vtable() const { return reinterpret_cast<const ArrayVTable *>(Base::vtable()); }
 
     inline ReturnedValue get(uint i) const {
         return vtable()->get(this, i);
     }
+    inline void getProperty(uint index, Property *p, PropertyAttributes *attrs);
+    inline void setProperty(uint index, const Property *p);
     inline Property *getProperty(uint index);
+    inline Value *getValueOrSetter(uint index, PropertyAttributes *attrs);
     inline PropertyAttributes attributes(uint i) const;
 
     bool isEmpty(uint i) const {
@@ -205,7 +219,7 @@ struct Q_QML_EXPORT ArrayData : public Managed
 
     static void sort(ExecutionEngine *engine, Object *thisObject, const Value &comparefn, uint dataLen);
     static uint append(Object *obj, ArrayObject *otherObj, uint n);
-    static Property *insert(Object *o, uint index, bool isAccessor = false);
+    static void insert(Object *o, uint index, const Value *v, bool isAccessor = false);
 };
 
 struct Q_QML_EXPORT SimpleArrayData : public ArrayData
@@ -239,8 +253,8 @@ struct Q_QML_EXPORT SparseArrayData : public ArrayData
     V4_ARRAYDATA(SparseArrayData)
     V4_NEEDS_DESTROY
 
-    uint &freeList() { return d()->freeList; }
-    uint freeList() const { return d()->freeList; }
+    ReturnedValue &freeList() { return d()->freeList; }
+    ReturnedValue freeList() const { return d()->freeList; }
     SparseArray *sparse() const { return d()->sparse; }
     void setSparse(SparseArray *s) { d()->sparse = s; }
 
@@ -270,6 +284,25 @@ inline SparseArrayData::~SparseArrayData()
     delete sparse;
 }
 
+void ArrayData::getProperty(uint index, Property *p, PropertyAttributes *attrs)
+{
+    Property *pd = getProperty(index);
+    Q_ASSERT(pd);
+    *attrs = attributes(index);
+    p->value = pd->value;
+    if (attrs->isAccessor())
+        p->set = pd->set;
+}
+
+void ArrayData::setProperty(uint index, const Property *p)
+{
+    Property *pd = getProperty(index);
+    Q_ASSERT(pd);
+    pd->value = p->value;
+    if (attributes(index).isAccessor())
+        pd->set = p->set;
+}
+
 inline Property *ArrayData::getProperty(uint index)
 {
     if (isSparse())
@@ -283,6 +316,19 @@ inline PropertyAttributes ArrayData::attributes(uint i) const
         return static_cast<const SparseArrayData *>(this)->attributes(i);
     return static_cast<const SimpleArrayData *>(this)->attributes(i);
 }
+
+Value *ArrayData::getValueOrSetter(uint index, PropertyAttributes *attrs)
+{
+    Property *p = getProperty(index);
+    if (!p) {
+        *attrs = Attr_Invalid;
+        return 0;
+    }
+
+    *attrs = attributes(index);
+    return attrs->isAccessor() ? &p->set : &p->value;
+}
+
 
 
 }

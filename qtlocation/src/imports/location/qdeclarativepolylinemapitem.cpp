@@ -199,6 +199,7 @@ void QGeoMapPolylineGeometry::updateSourcePoints(const QGeoMap &map,
 
     QDoubleVector2D origin, lastPoint, lastAddedPoint;
 
+    const double mapWidthHalf = map.width()/2.0;
     double unwrapBelowX = 0;
     if (preserveGeometry_)
         unwrapBelowX = map.coordinateToItemPosition(geoLeftBound_, false).x();
@@ -219,7 +220,8 @@ void QGeoMapPolylineGeometry::updateSourcePoints(const QGeoMap &map,
         // unwrap x to preserve geometry if moved to border of map
         if (preserveGeometry_ && point.x() < unwrapBelowX
                 && !qFuzzyCompare(geoLeftBound_.longitude(), coord.longitude())
-                && !qFuzzyCompare(point.x(), unwrapBelowX))
+                && !qFuzzyCompare(point.x(), unwrapBelowX)
+                && !qFuzzyCompare(mapWidthHalf, point.x()))
             point.setX(unwrapBelowX + geoDistanceToScreenWidth(map, geoLeftBound_, coord));
 
         if (!foundValid) {
@@ -472,7 +474,7 @@ void QDeclarativePolylineMapItem::updateAfterLinePropertiesChanged()
 {
     // mark dirty just in case we're a width change
     geometry_.markSourceDirty();
-    updateMapItem();
+    polishAndUpdate();
 }
 
 /*!
@@ -483,7 +485,7 @@ void QDeclarativePolylineMapItem::setMap(QDeclarativeGeoMap *quickMap, QGeoMap *
     QDeclarativeGeoMapItemBase::setMap(quickMap,map);
     if (map) {
         geometry_.markSourceDirty();
-        updateMapItem();
+        polishAndUpdate();
     }
 }
 
@@ -534,7 +536,6 @@ void QDeclarativePolylineMapItem::setPath(const QJSValue &value)
     setPathFromGeoList(pathList);
 }
 
-
 /*!
     \internal
 */
@@ -546,53 +547,155 @@ void QDeclarativePolylineMapItem::setPathFromGeoList(const QList<QGeoCoordinate>
     path_ = path;
 
     geometry_.markSourceDirty();
-    updateMapItem();
+    polishAndUpdate();
     emit pathChanged();
+}
+
+/*!
+    \qmlmethod int MapPolyline::pathLength()
+
+    Returns the number of coordinates of the polyline.
+
+    \since Qt Location 5.6
+
+    \sa path
+*/
+int QDeclarativePolylineMapItem::pathLength() const
+{
+    return path_.size();
 }
 
 /*!
     \qmlmethod void MapPolyline::addCoordinate(coordinate)
 
-    Adds a coordinate to the path.
+    Adds a coordinate to the end of the path.
 
-    \sa removeCoordinate, path
+    \sa insertCoordinate, removeCoordinate, path
 */
-
 void QDeclarativePolylineMapItem::addCoordinate(const QGeoCoordinate &coordinate)
 {
     path_.append(coordinate);
 
     geometry_.markSourceDirty();
-    updateMapItem();
+    polishAndUpdate();
     emit pathChanged();
+}
+
+/*!
+    \qmlmethod void MapPolyline::insertCoordinate(index, coordinate)
+
+    Inserts a \a coordinate to the path at the given \a index.
+
+    \since Qt Location 5.6
+
+    \sa addCoordinate, removeCoordinate, path
+*/
+void QDeclarativePolylineMapItem::insertCoordinate(int index, const QGeoCoordinate &coordinate)
+{
+    if (index < 0 || index > path_.size())
+        return;
+
+    path_.insert(index, coordinate);
+
+    geometry_.markSourceDirty();
+    polishAndUpdate();
+    emit pathChanged();
+}
+
+/*!
+    \qmlmethod void MapPolyline::replaceCoordinate(index, coordinate)
+
+    Replaces the coordinate in the current path at the given \a index
+    with the new \a coordinate.
+
+    \since Qt Location 5.6
+
+    \sa addCoordinate, insertCoordinate, removeCoordinate, path
+*/
+void QDeclarativePolylineMapItem::replaceCoordinate(int index, const QGeoCoordinate &coordinate)
+{
+    if (index < 0 || index >= path_.size())
+        return;
+
+    path_[index] = coordinate;
+
+    geometry_.markSourceDirty();
+    polishAndUpdate();
+    emit pathChanged();
+}
+
+/*!
+    \qmlmethod coordinate MapPolyline::coordinateAt(index)
+
+    Gets the coordinate of the polyline at the given \a index.
+    If the index is outside the path's bounds then an invalid
+    coordinate is returned.
+
+    \since Qt Location 5.6
+*/
+QGeoCoordinate QDeclarativePolylineMapItem::coordinateAt(int index) const
+{
+    if (index < 0 || index >= path_.size())
+        return QGeoCoordinate();
+
+    return path_.at(index);
+}
+
+/*!
+    \qmlmethod coordinate MapPolyline::containsCoordinate(coordinate)
+
+    Returns true if the given \a coordinate is part of the path.
+
+    \since Qt Location 5.6
+*/
+bool QDeclarativePolylineMapItem::containsCoordinate(const QGeoCoordinate &coordinate)
+{
+    return path_.indexOf(coordinate) > -1;
 }
 
 /*!
     \qmlmethod void MapPolyline::removeCoordinate(coordinate)
 
-    Removes a coordinate from the path. If there are multiple instances of the
+    Removes \a coordinate from the path. If there are multiple instances of the
     same coordinate, the one added last is removed.
 
-    \sa addCoordinate, path
-*/
+    If \a coordinate is not in the path this method does nothing.
 
+    \sa addCoordinate, insertCoordinate, path
+*/
 void QDeclarativePolylineMapItem::removeCoordinate(const QGeoCoordinate &coordinate)
 {
     int index = path_.lastIndexOf(coordinate);
-
-    if (index == -1) {
-        qmlInfo(this) << COORD_NOT_BELONG_TO << QStringLiteral("PolylineMapItem");
+    if (index == -1)
         return;
-    }
 
-    if (path_.count() < index + 1) {
-        qmlInfo(this) << COORD_NOT_BELONG_TO << QStringLiteral("PolylineMapItem");
-        return;
-    }
     path_.removeAt(index);
 
     geometry_.markSourceDirty();
-    updateMapItem();
+    polishAndUpdate();
+    emit pathChanged();
+}
+
+/*!
+    \qmlmethod void MapPolyline::removeCoordinate(index)
+
+    Removes a coordinate from the path at the given \a index.
+
+    If \a index is invalid then this method does nothing.
+
+    \since Qt Location 5.6
+
+    \sa addCoordinate, insertCoordinate, path
+*/
+void QDeclarativePolylineMapItem::removeCoordinate(int index)
+{
+    if (index < 0 || index >= path_.size())
+        return;
+
+    path_.removeAt(index);
+
+    geometry_.markSourceDirty();
+    polishAndUpdate();
     emit pathChanged();
 }
 
@@ -658,7 +761,7 @@ void QDeclarativePolylineMapItem::geometryChanged(const QRectF &newGeometry, con
                            + newCoordinate.longitude() - firstLongitude));
         geometry_.setPreserveGeometry(true, leftBoundCoord);
         geometry_.markSourceDirty();
-        updateMapItem();
+        polishAndUpdate();
         emit pathChanged();
     }
 
@@ -694,13 +797,13 @@ void QDeclarativePolylineMapItem::afterViewportChanged(const QGeoMapViewportChan
     }
     geometry_.setPreserveGeometry(true, geometry_.geoLeftBound());
     geometry_.markScreenDirty();
-    updateMapItem();
+    polishAndUpdate();
 }
 
 /*!
     \internal
 */
-void QDeclarativePolylineMapItem::updateMapItem()
+void QDeclarativePolylineMapItem::updatePolish()
 {
     if (!map() || path_.count() == 0)
         return;
@@ -715,7 +818,6 @@ void QDeclarativePolylineMapItem::updateMapItem()
     setHeight(geometry_.sourceBoundingBox().height());
 
     setPositionOnMap(path_.at(0), -1 * geometry_.sourceBoundingBox().topLeft());
-    update();
 }
 
 /*!
@@ -732,7 +834,7 @@ QSGNode *QDeclarativePolylineMapItem::updateMapItemPaintNode(QSGNode *oldNode, U
     }
 
     //TODO: update only material
-    if (geometry_.isScreenDirty() || dirtyMaterial_) {
+    if (geometry_.isScreenDirty() || dirtyMaterial_ || !oldNode) {
         node->update(line_.color(), &geometry_);
         geometry_.setPreserveGeometry(false);
         geometry_.markClean();
@@ -743,9 +845,10 @@ QSGNode *QDeclarativePolylineMapItem::updateMapItemPaintNode(QSGNode *oldNode, U
 
 bool QDeclarativePolylineMapItem::contains(const QPointF &point) const
 {
+    QVector<QPointF> vertices = geometry_.vertices();
     QPolygonF tri;
-    for (int i = 0; i < geometry_.vertices().size(); ++i) {
-        tri << geometry_.vertices()[i];
+    for (int i = 0; i < vertices.size(); ++i) {
+        tri << vertices[i];
         if (tri.size() == 3) {
             if (tri.containsPoint(point,Qt::OddEvenFill))
                 return true;

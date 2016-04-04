@@ -52,7 +52,7 @@ QT_BEGIN_NAMESPACE
   \instantiates EnginioQmlClient
   \inqmlmodule Enginio
   \ingroup engino-qml
-  \target EnginioClientQml
+  \keyword EnginioClientQml
 
   \brief Client interface to access Enginio service
   \snippet simple.qml import

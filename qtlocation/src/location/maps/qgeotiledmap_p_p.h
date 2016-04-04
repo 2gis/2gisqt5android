@@ -58,7 +58,7 @@ QT_BEGIN_NAMESPACE
 
 class QGeoCameraTiles;
 class QGeoMapScene;
-class QGeoTileCache;
+class QAbstractGeoTileCache;
 class QGeoTiledMappingManagerEngine;
 class QGeoTiledMap;
 class QGeoTileRequestManager;
@@ -74,8 +74,6 @@ public:
     ~QGeoTiledMapPrivate();
 
     QSGNode *updateSceneGraph(QSGNode *node, QQuickWindow *window);
-
-    void changeMapVersion(int mapVersion);
     void resized(int width, int height);
 
     QGeoCoordinate itemPositionToCoordinate(const QDoubleVector2D &pos) const;
@@ -88,9 +86,13 @@ protected:
     void mapResized(int width, int height) Q_DECL_OVERRIDE;
     void changeCameraData(const QGeoCameraData &oldCameraData) Q_DECL_OVERRIDE;
     void changeActiveMapType(const QGeoMapType mapType) Q_DECL_OVERRIDE;
+    void changeTileVersion(int version);
 
 private:
-    QGeoTileCache *m_cache;
+    void updateScene();
+
+private:
+    QAbstractGeoTileCache *m_cache;
     QGeoCameraTiles *m_cameraTiles;
     QGeoMapScene *m_mapScene;
     QGeoTileRequestManager *m_tileRequests;

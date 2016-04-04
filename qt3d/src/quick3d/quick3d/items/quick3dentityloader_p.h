@@ -37,50 +37,64 @@
 #ifndef QT3D_QUICK_QUICK3DENTITYLOADER_P_H
 #define QT3D_QUICK_QUICK3DENTITYLOADER_P_H
 
-#include "quick3dentityloader.h"
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists for the convenience
+// of other Qt classes.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
 
-#include <QQmlComponent>
+#include <QObject>
+#include <QUrl>
 
-#include <Qt3DCore/private/qentity_p.h>
+#include <Qt3DCore/QEntity>
+
+#include <Qt3DQuick/private/qt3dquick_global_p.h>
+
 
 QT_BEGIN_NAMESPACE
 
-class QQmlIncubator;
-class QQmlContext;
-
-namespace Qt3D {
+namespace Qt3DCore {
 
 class QEntity;
 
 namespace Quick {
 
-class Quick3DEntityLoaderIncubator;
+class Quick3DEntityLoaderPrivate;
 
-class Quick3DEntityLoaderPrivate : public QEntityPrivate
+class QT3DQUICKSHARED_PRIVATE_EXPORT Quick3DEntityLoader : public QEntity
 {
+    Q_OBJECT
+    Q_PROPERTY(QObject *entity READ entity NOTIFY entityChanged)
+    Q_PROPERTY(QUrl source READ source WRITE setSource NOTIFY sourceChanged)
 public:
-    Quick3DEntityLoaderPrivate();
+    explicit Quick3DEntityLoader(QNode *parent = 0);
+    ~Quick3DEntityLoader();
 
-    Q_DECLARE_PUBLIC(Quick3DEntityLoader)
+    QObject *entity() const;
 
-    void clear();
-    void loadFromSource();
-    void loadComponent(const QUrl &source);
+    QUrl source() const;
+    void setSource(const QUrl &url);
 
-    void _q_componentStatusChanged(QQmlComponent::Status status);
+Q_SIGNALS:
+    void entityChanged();
+    void sourceChanged();
 
-    static inline Quick3DEntityLoaderPrivate *get(Quick3DEntityLoader *q) { return q->d_func(); }
+protected:
+    void copy(const QNode *ref) Q_DECL_OVERRIDE;
 
-    QUrl m_source;
-    Quick3DEntityLoaderIncubator *m_incubator;
-    QQmlContext *m_context;
-    QQmlComponent *m_component;
-    QEntity *m_entity;
+private:
+    Q_DECLARE_PRIVATE(Quick3DEntityLoader)
+    Q_PRIVATE_SLOT(d_func(), void _q_componentStatusChanged(QQmlComponent::Status))
+    QT3D_CLONEABLE(Quick3DEntityLoader)
 };
 
-} // Quick
-
-} // Qt3D
+} // namespace Quick
+} // namespace Qt3DCore
 
 QT_END_NAMESPACE
 

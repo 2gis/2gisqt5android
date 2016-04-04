@@ -36,13 +36,19 @@
 
 #include "network_delegate_qt.h"
 
+#include "browser_context_adapter.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/render_view_host.h"
 #include "content/public/browser/resource_request_details.h"
 #include "content/public/browser/resource_request_info.h"
+#include "cookie_monster_delegate_qt.h"
 #include "ui/base/page_transition_types.h"
+#include "url_request_context_getter_qt.h"
 #include "net/base/load_flags.h"
 #include "net/url_request/url_request.h"
+#include "qwebengineurlrequestinfo.h"
+#include "qwebengineurlrequestinfo_p.h"
+#include "qwebengineurlrequestinterceptor.h"
 #include "type_conversion.h"
 #include "web_contents_adapter_client.h"
 #include "web_contents_view_qt.h"
@@ -56,11 +62,11 @@ int pageTransitionToNavigationType(ui::PageTransition transition)
     if (qualifier & ui::PAGE_TRANSITION_FORWARD_BACK)
         return WebContentsAdapterClient::BackForwardNavigation;
 
-    ui::PageTransition stippedTransition = ui::PageTransitionStripQualifier(transition);
+    ui::PageTransition strippedTransition = ui::PageTransitionStripQualifier(transition);
 
-    switch (stippedTransition) {
+    switch (strippedTransition) {
     case ui::PAGE_TRANSITION_LINK:
-        return WebContentsAdapterClient::LinkClickedNavigation;
+        return WebContentsAdapterClient::LinkNavigation;
     case ui::PAGE_TRANSITION_TYPED:
         return WebContentsAdapterClient::TypedNavigation;
     case ui::PAGE_TRANSITION_FORM_SUBMIT:
@@ -72,29 +78,70 @@ int pageTransitionToNavigationType(ui::PageTransition transition)
     }
 }
 
-int NetworkDelegateQt::OnBeforeURLRequest(net::URLRequest *request, const net::CompletionCallback &callback, GURL *)
+NetworkDelegateQt::NetworkDelegateQt(URLRequestContextGetterQt *requestContext)
+    : m_requestContextGetter(requestContext)
+{
+}
+
+int NetworkDelegateQt::OnBeforeURLRequest(net::URLRequest *request, const net::CompletionCallback &callback, GURL *newUrl)
 {
     Q_ASSERT(content::BrowserThread::CurrentlyOn(content::BrowserThread::IO));
-    const content::ResourceRequestInfo *info = content::ResourceRequestInfo::ForRequest(request);
-    if (!info)
+    Q_ASSERT(m_requestContextGetter);
+    Q_ASSERT(m_requestContextGetter->m_browserContext);
+
+    const content::ResourceRequestInfo *resourceInfo = content::ResourceRequestInfo::ForRequest(request);
+
+    content::ResourceType resourceType = content::RESOURCE_TYPE_LAST_TYPE;
+    int navigationType = QWebEngineUrlRequestInfo::NavigationTypeOther;
+
+    if (resourceInfo) {
+        resourceType = resourceInfo->GetResourceType();
+        navigationType = pageTransitionToNavigationType(resourceInfo->GetPageTransition());
+    }
+
+    const QUrl qUrl = toQt(request->url());
+
+    QWebEngineUrlRequestInterceptor* interceptor = m_requestContextGetter->m_browserContext->requestInterceptor();
+    if (interceptor) {
+        QWebEngineUrlRequestInfoPrivate *infoPrivate = new QWebEngineUrlRequestInfoPrivate(static_cast<QWebEngineUrlRequestInfo::ResourceType>(resourceType)
+                                                                                           , static_cast<QWebEngineUrlRequestInfo::NavigationType>(navigationType)
+                                                                                           , qUrl
+                                                                                           , toQt(request->first_party_for_cookies())
+                                                                                           , QByteArray::fromStdString(request->method()));
+        QWebEngineUrlRequestInfo requestInfo(infoPrivate);
+        interceptor->interceptRequest(requestInfo);
+        if (requestInfo.changed()) {
+            int result = infoPrivate->shouldBlockRequest ? net::ERR_ABORTED : net::OK;
+
+            if (qUrl != infoPrivate->url)
+                *newUrl = toGurl(infoPrivate->url);
+
+            if (!infoPrivate->extraHeaders.isEmpty()) {
+                auto end = infoPrivate->extraHeaders.constEnd();
+                for (auto header = infoPrivate->extraHeaders.constBegin(); header != end; ++header)
+                    request->SetExtraRequestHeaderByName(header.key().toStdString(), header.value().toStdString(), /* overwrite */ true);
+            }
+
+            return result;
+        }
+    }
+
+    if (!resourceInfo)
         return net::OK;
 
-    content::ResourceType resourceType = info->GetResourceType();
     int renderProcessId;
     int renderFrameId;
     // Only intercept MAIN_FRAME and SUB_FRAME with an associated render frame.
-    if (!content::IsResourceTypeFrame(resourceType) || !info->GetRenderFrameForRequest(request, &renderProcessId, &renderFrameId))
+    if (!content::IsResourceTypeFrame(resourceType) || !resourceInfo->GetRenderFrameForRequest(request, &renderProcessId, &renderFrameId))
         return net::OK;
 
     // Track active requests since |callback| and |new_url| are valid
     // only until OnURLRequestDestroyed is called for this request.
     m_activeRequests.insert(request);
 
-    int navigationType = pageTransitionToNavigationType(info->GetPageTransition());
-
     RequestParams params = {
-        toQt(request->url()),
-        info->IsMainFrame(),
+        qUrl,
+        resourceInfo->IsMainFrame(),
         navigationType,
         renderProcessId,
         renderFrameId
@@ -170,6 +217,90 @@ void NetworkDelegateQt::NotifyNavigationRequestedOnUIThread(net::URLRequest *req
                            navigationRequestAction,
                            callback)
                 );
+}
+
+bool NetworkDelegateQt::OnCanSetCookie(const net::URLRequest& request,
+                                       const std::string& cookie_line,
+                                       net::CookieOptions*)
+{
+    Q_ASSERT(m_requestContextGetter);
+    return m_requestContextGetter->m_cookieDelegate->canSetCookie(toQt(request.first_party_for_cookies()), QByteArray::fromStdString(cookie_line), toQt(request.url()));
+}
+
+void NetworkDelegateQt::OnResolveProxy(const GURL&, int, const net::ProxyService&, net::ProxyInfo*)
+{
+}
+
+void NetworkDelegateQt::OnProxyFallback(const net::ProxyServer&, int)
+{
+}
+
+int NetworkDelegateQt::OnBeforeSendHeaders(net::URLRequest*, const net::CompletionCallback&, net::HttpRequestHeaders*)
+{
+    return net::OK;
+}
+
+void NetworkDelegateQt::OnBeforeSendProxyHeaders(net::URLRequest*, const net::ProxyInfo&, net::HttpRequestHeaders*)
+{
+}
+
+void NetworkDelegateQt::OnSendHeaders(net::URLRequest*, const net::HttpRequestHeaders&)
+{
+}
+
+int NetworkDelegateQt::OnHeadersReceived(net::URLRequest*, const net::CompletionCallback&, const net::HttpResponseHeaders*, scoped_refptr<net::HttpResponseHeaders>*, GURL*)
+{
+    return net::OK;
+}
+
+void NetworkDelegateQt::OnBeforeRedirect(net::URLRequest*, const GURL&)
+{
+}
+
+void NetworkDelegateQt::OnResponseStarted(net::URLRequest*)
+{
+}
+
+void NetworkDelegateQt::OnRawBytesRead(const net::URLRequest&, int)
+{
+}
+
+void NetworkDelegateQt::OnCompleted(net::URLRequest*, bool)
+{
+}
+
+void NetworkDelegateQt::OnPACScriptError(int, const base::string16&)
+{
+}
+
+net::NetworkDelegate::AuthRequiredResponse NetworkDelegateQt::OnAuthRequired(net::URLRequest*, const net::AuthChallengeInfo&, const AuthCallback&, net::AuthCredentials*)
+{
+    return AUTH_REQUIRED_RESPONSE_NO_ACTION;
+}
+
+bool NetworkDelegateQt::OnCanGetCookies(const net::URLRequest&, const net::CookieList&)
+{
+    return true;
+}
+
+bool NetworkDelegateQt::OnCanAccessFile(const net::URLRequest& request, const base::FilePath& path) const
+{
+    return true;
+}
+
+bool NetworkDelegateQt::OnCanEnablePrivacyMode(const GURL&, const GURL&) const
+{
+    return false;
+}
+
+bool NetworkDelegateQt::OnFirstPartyOnlyCookieExperimentEnabled() const
+{
+    return false;
+}
+
+bool NetworkDelegateQt::OnCancelURLRequestWithPolicyViolatingReferrerHeader(const net::URLRequest&, const GURL&, const GURL&) const
+{
+    return false;
 }
 
 } // namespace QtWebEngineCore

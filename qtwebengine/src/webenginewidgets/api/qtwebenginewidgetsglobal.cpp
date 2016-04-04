@@ -36,13 +36,17 @@
 
 #include "qtwebenginewidgetsglobal.h"
 
-#include "qtwebengineglobal.h"
 #include <QCoreApplication>
+
+namespace QtWebEngineCore
+{
+    extern void initialize();
+}
 
 QT_BEGIN_NAMESPACE
 static void initialize()
 {
-    QtWebEngine::initialize();
+    QtWebEngineCore::initialize();
 }
 
 Q_COREAPP_STARTUP_FUNCTION(initialize)

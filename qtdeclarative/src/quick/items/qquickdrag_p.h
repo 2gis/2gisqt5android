@@ -34,6 +34,17 @@
 #ifndef QQUICKDRAG_P_H
 #define QQUICKDRAG_P_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include <QtQuick/qquickitem.h>
 
 #include <private/qv8engine_p.h>
@@ -140,7 +151,6 @@ class Q_AUTOTEST_EXPORT QQuickDrag : public QObject
 {
     Q_OBJECT
 
-    Q_ENUMS(Axis DragType)
     Q_PROPERTY(QQuickItem *target READ target WRITE setTarget NOTIFY targetChanged RESET resetTarget)
     Q_PROPERTY(Axis axis READ axis WRITE setAxis NOTIFY axisChanged)
     Q_PROPERTY(qreal minimumX READ xmin WRITE setXmin NOTIFY minimumXChanged)
@@ -160,12 +170,14 @@ public:
     ~QQuickDrag();
 
     enum DragType { None, Automatic, Internal };
+    Q_ENUM(DragType)
 
     QQuickItem *target() const;
     void setTarget(QQuickItem *target);
     void resetTarget();
 
     enum Axis { XAxis=0x01, YAxis=0x02, XAndYAxis=0x03, XandYAxis=XAndYAxis };
+    Q_ENUM(Axis)
     Axis axis() const;
     void setAxis(Axis);
 

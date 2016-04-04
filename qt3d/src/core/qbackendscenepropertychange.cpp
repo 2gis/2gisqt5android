@@ -41,16 +41,13 @@
 
 QT_BEGIN_NAMESPACE
 
-namespace Qt3D {
+namespace Qt3DCore {
 
 /*!
-    \class Qt3D::QBackendScenePropertyChange
+    \class Qt3DCore::QBackendScenePropertyChange
+    \inmodule Qt3DCore
 */
 
-/*!
-    \class Qt3D::QBackendScenePropertyChangePrivate
-    \internal
-*/
 QBackendScenePropertyChangePrivate::QBackendScenePropertyChangePrivate()
     : QScenePropertyChangePrivate()
 {
@@ -81,6 +78,13 @@ QNodeId QBackendScenePropertyChange::targetNode() const
     Q_D(const QBackendScenePropertyChange);
     return d->m_targetUuid;
 }
+
+/*!
+    \typedef Qt3DCore::QBackendScenePropertyChangePtr
+    \relates Qt3DCore::QBackendScenePropertyChange
+
+    A shared pointer for QBackendScenePropertyChange.
+*/
 
 /*! \internal */
 QBackendScenePropertyChange::QBackendScenePropertyChange(QBackendScenePropertyChangePrivate &dd)

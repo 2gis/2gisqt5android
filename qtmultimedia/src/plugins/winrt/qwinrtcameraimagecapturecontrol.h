@@ -68,6 +68,9 @@ public:
     int capture(const QString &fileName) Q_DECL_OVERRIDE;
     void cancelCapture() Q_DECL_OVERRIDE;
 
+signals:
+    void captureQueueChanged(bool isEmpty);
+
 private:
     HRESULT onCaptureCompleted(ABI::Windows::Foundation::IAsyncAction *,
                                ABI::Windows::Foundation::AsyncStatus);

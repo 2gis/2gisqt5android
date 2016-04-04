@@ -153,6 +153,8 @@ public:
 
     bool isMuted() const;
 
+    QString device() const { return m_inputDevice; }
+
     bool processSyncMessage(const QGstreamerMessage &message);
     bool processBusMessage(const QGstreamerMessage &message);
 
@@ -194,6 +196,8 @@ private:
     GstCaps *supportedCaps(QCamera::CaptureModes mode) const;
     void updateSupportedViewfinderSettings();
     static void updateBusyStatus(GObject *o, GParamSpec *p, gpointer d);
+
+    QString currentContainerFormat() const;
 
     static void elementAdded(GstBin *bin, GstElement *element, CameraBinSession *session);
     static void elementRemoved(GstBin *bin, GstElement *element, CameraBinSession *session);

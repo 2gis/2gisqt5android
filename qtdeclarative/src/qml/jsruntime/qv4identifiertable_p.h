@@ -33,6 +33,17 @@
 #ifndef QV4IDENTIFIERTABLE_H
 #define QV4IDENTIFIERTABLE_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include "qv4identifier_p.h"
 #include "qv4string_p.h"
 #include "qv4engine_p.h"
@@ -74,14 +85,16 @@ public:
 
     Identifier *identifierImpl(const Heap::String *str);
 
+    Heap::String *stringFromIdentifier(Identifier *i);
+
     void mark(ExecutionEngine *e) {
         for (int i = 0; i < alloc; ++i) {
             Heap::String *entry = entries[i];
             if (!entry || entry->isMarked())
                 continue;
             entry->setMarkBit();
-            Q_ASSERT(entry->gcGetVtable()->markObjects);
-            entry->gcGetVtable()->markObjects(entry, e);
+            Q_ASSERT(entry->vtable()->markObjects);
+            entry->vtable()->markObjects(entry, e);
         }
     }
 };

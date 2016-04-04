@@ -175,7 +175,7 @@ template <> QUrl convertValueToElement(const Value &value)
 
 template <> QModelIndex convertValueToElement(const Value &value)
 {
-    const QQmlValueTypeWrapper *v = value_cast<QQmlValueTypeWrapper>(value);
+    const QQmlValueTypeWrapper *v = value.as<QQmlValueTypeWrapper>();
     if (v)
         return v->toVariant().toModelIndex();
     return QModelIndex();
@@ -183,7 +183,7 @@ template <> QModelIndex convertValueToElement(const Value &value)
 
 template <> QItemSelectionRange convertValueToElement(const Value &value)
 {
-    const QQmlValueTypeWrapper *v = value_cast<QQmlValueTypeWrapper>(value);
+    const QQmlValueTypeWrapper *v = value.as<QQmlValueTypeWrapper>();
     if (v)
         return v->toVariant().value<QItemSelectionRange>();
     return QItemSelectionRange();
@@ -207,8 +207,8 @@ namespace Heap {
 
 template <typename Container>
 struct QQmlSequence : Object {
-    QQmlSequence(QV4::ExecutionEngine *engine, const Container &container);
-    QQmlSequence(QV4::ExecutionEngine *engine, QObject *object, int propertyIndex);
+    QQmlSequence(const Container &container);
+    QQmlSequence(QObject *object, int propertyIndex);
 
     mutable Container container;
     QPointer<QObject> object;
@@ -223,6 +223,7 @@ struct QQmlSequence : public QV4::Object
 {
     V4_OBJECT2(QQmlSequence<Container>, QV4::Object)
     Q_MANAGED_TYPE(QmlSequence)
+    V4_PROTOTYPE(sequencePrototype)
     V4_NEEDS_DESTROY
 public:
 
@@ -231,7 +232,7 @@ public:
         defineAccessorProperty(QStringLiteral("length"), method_get_length, method_set_length);
     }
 
-    QV4::ReturnedValue containerGetIndexed(uint index, bool *hasProperty)
+    QV4::ReturnedValue containerGetIndexed(uint index, bool *hasProperty) const
     {
         /* Qt containers have int (rather than uint) allowable indexes. */
         if (index > INT_MAX) {
@@ -316,9 +317,9 @@ public:
         return (signedIdx < d()->container.count()) ? QV4::Attr_Data : QV4::Attr_Invalid;
     }
 
-    void containerAdvanceIterator(ObjectIterator *it, Heap::String **name, uint *index, Property *p, PropertyAttributes *attrs)
+    void containerAdvanceIterator(ObjectIterator *it, Value *name, uint *index, Property *p, PropertyAttributes *attrs)
     {
-        *name = (Heap::String *)0;
+        name->setM(0);
         *index = UINT_MAX;
 
         if (d()->isReference) {
@@ -400,7 +401,7 @@ public:
             ScopedCallData callData(scope, 2);
             callData->args[0] = convertElementToValue(this->m_ctx->d()->engine, lhs);
             callData->args[1] = convertElementToValue(this->m_ctx->d()->engine, rhs);
-            callData->thisObject = this->m_ctx->d()->engine->globalObject();
+            callData->thisObject = this->m_ctx->d()->engine->globalObject;
             QV4::ScopedValue result(scope, compare->call(callData));
             return result->toNumber() < 0;
         }
@@ -419,7 +420,7 @@ public:
         }
 
         QV4::Scope scope(ctx);
-        if (ctx->argc() == 1 && ctx->args()[0].asFunctionObject()) {
+        if (ctx->argc() == 1 && ctx->args()[0].as<FunctionObject>()) {
             CompareFunctor cf(ctx, ctx->args()[0]);
             std::sort(d()->container.begin(), d()->container.end(), cf);
         } else {
@@ -526,8 +527,8 @@ public:
         QMetaObject::metacall(d()->object, QMetaObject::WriteProperty, d()->propertyIndex, a);
     }
 
-    static QV4::ReturnedValue getIndexed(QV4::Managed *that, uint index, bool *hasProperty)
-    { return static_cast<QQmlSequence<Container> *>(that)->containerGetIndexed(index, hasProperty); }
+    static QV4::ReturnedValue getIndexed(const QV4::Managed *that, uint index, bool *hasProperty)
+    { return static_cast<const QQmlSequence<Container> *>(that)->containerGetIndexed(index, hasProperty); }
     static void putIndexed(Managed *that, uint index, const QV4::Value &value)
     { static_cast<QQmlSequence<Container> *>(that)->containerPutIndexed(index, value); }
     static QV4::PropertyAttributes queryIndexed(const QV4::Managed *that, uint index)
@@ -536,33 +537,31 @@ public:
     { return static_cast<QQmlSequence<Container> *>(that)->containerDeleteIndexedProperty(index); }
     static bool isEqualTo(Managed *that, Managed *other)
     { return static_cast<QQmlSequence<Container> *>(that)->containerIsEqualTo(other); }
-    static void advanceIterator(Managed *that, ObjectIterator *it, Heap::String **name, uint *index, Property *p, PropertyAttributes *attrs)
+    static void advanceIterator(Managed *that, ObjectIterator *it, Value *name, uint *index, Property *p, PropertyAttributes *attrs)
     { return static_cast<QQmlSequence<Container> *>(that)->containerAdvanceIterator(it, name, index, p, attrs); }
 
 };
 
 
 template <typename Container>
-Heap::QQmlSequence<Container>::QQmlSequence(QV4::ExecutionEngine *engine, const Container &container)
-    : Heap::Object(engine->emptyClass, engine->sequencePrototype.asObject())
-    , container(container)
+Heap::QQmlSequence<Container>::QQmlSequence(const Container &container)
+    : container(container)
     , propertyIndex(-1)
     , isReference(false)
 {
-    QV4::Scope scope(engine);
+    QV4::Scope scope(internalClass->engine);
     QV4::Scoped<QV4::QQmlSequence<Container> > o(scope, this);
     o->setArrayType(Heap::ArrayData::Custom);
     o->init();
 }
 
 template <typename Container>
-Heap::QQmlSequence<Container>::QQmlSequence(QV4::ExecutionEngine *engine, QObject *object, int propertyIndex)
-    : Heap::Object(engine->emptyClass, engine->sequencePrototype.asObject())
-    , object(object)
+Heap::QQmlSequence<Container>::QQmlSequence(QObject *object, int propertyIndex)
+    : object(object)
     , propertyIndex(propertyIndex)
     , isReference(true)
 {
-    QV4::Scope scope(engine);
+    QV4::Scope scope(internalClass->engine);
     QV4::Scoped<QV4::QQmlSequence<Container> > o(scope, this);
     o->setArrayType(Heap::ArrayData::Custom);
     o->loadReference();
@@ -605,7 +604,7 @@ void SequencePrototype::init()
 {
     FOREACH_QML_SEQUENCE_TYPE(REGISTER_QML_SEQUENCE_METATYPE)
     defineDefaultProperty(QStringLiteral("sort"), method_sort, 1);
-    defineDefaultProperty(engine()->id_valueOf, method_valueOf, 0);
+    defineDefaultProperty(engine()->id_valueOf(), method_valueOf, 0);
 }
 #undef REGISTER_QML_SEQUENCE_METATYPE
 
@@ -644,7 +643,7 @@ bool SequencePrototype::isSequenceType(int sequenceTypeId)
 
 #define NEW_REFERENCE_SEQUENCE(ElementType, ElementTypeName, SequenceType, unused) \
     if (sequenceType == qMetaTypeId<SequenceType>()) { \
-        QV4::ScopedObject obj(scope, engine->memoryManager->alloc<QQml##ElementTypeName##List>(engine, object, propertyIndex)); \
+        QV4::ScopedObject obj(scope, engine->memoryManager->allocObject<QQml##ElementTypeName##List>(object, propertyIndex)); \
         return obj.asReturnedValue(); \
     } else
 
@@ -662,7 +661,7 @@ ReturnedValue SequencePrototype::newSequence(QV4::ExecutionEngine *engine, int s
 
 #define NEW_COPY_SEQUENCE(ElementType, ElementTypeName, SequenceType, unused) \
     if (sequenceType == qMetaTypeId<SequenceType>()) { \
-        QV4::ScopedObject obj(scope, engine->memoryManager->alloc<QQml##ElementTypeName##List>(engine, v.value<SequenceType >())); \
+        QV4::ScopedObject obj(scope, engine->memoryManager->allocObject<QQml##ElementTypeName##List>(v.value<SequenceType >())); \
         return obj.asReturnedValue(); \
     } else
 
@@ -700,11 +699,11 @@ QVariant SequencePrototype::toVariant(const QV4::Value &array, int typeHint, boo
 {
     *succeeded = true;
 
-    if (!array.asArrayObject()) {
+    if (!array.as<ArrayObject>()) {
         *succeeded = false;
         return QVariant();
     }
-    QV4::Scope scope(array.asObject()->engine());
+    QV4::Scope scope(array.as<Object>()->engine());
     QV4::ScopedArrayObject a(scope, array);
 
     FOREACH_QML_SEQUENCE_TYPE(SEQUENCE_TO_VARIANT) { /* else */ *succeeded = false; return QVariant(); }
@@ -717,7 +716,7 @@ QVariant SequencePrototype::toVariant(const QV4::Value &array, int typeHint, boo
         return qMetaTypeId<SequenceType>(); \
     } else
 
-int SequencePrototype::metaTypeForSequence(QV4::Object *object)
+int SequencePrototype::metaTypeForSequence(const QV4::Object *object)
 {
     FOREACH_QML_SEQUENCE_TYPE(MAP_META_TYPE)
     /*else*/ {

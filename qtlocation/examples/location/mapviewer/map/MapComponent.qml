@@ -39,7 +39,7 @@
 ****************************************************************************/
 import QtQuick 2.5
 import QtQuick.Controls 1.4
-import QtLocation 5.5
+import QtLocation 5.6
 import QtPositioning 5.5
 import "../helper.js" as Helper
 
@@ -269,7 +269,7 @@ Map {
 
 //! [mapnavigation]
     // Enable pan, flick, and pinch gestures to zoom in and out
-    gesture.activeGestures: MapGestureArea.PanGesture | MapGestureArea.FlickGesture | MapGestureArea.ZoomGesture
+    gesture.acceptedGestures: MapGestureArea.PanGesture | MapGestureArea.FlickGesture | MapGestureArea.PinchGesture
     gesture.flickDeceleration: 3000
     gesture.enabled: true
 //! [mapnavigation]
@@ -302,9 +302,25 @@ Map {
 
     Keys.onPressed: {
         if (event.key === Qt.Key_Plus) {
-            map.zoomLevel++
+            map.zoomLevel++;
         } else if (event.key === Qt.Key_Minus) {
-            map.zoomLevel--
+            map.zoomLevel--;
+        } else if (event.key === Qt.Key_Left || event.key === Qt.Key_Right ||
+                   event.key === Qt.Key_Up   || event.key === Qt.Key_Down) {
+            var dx = 0;
+            var dy = 0;
+
+            switch (event.key) {
+
+            case Qt.Key_Left: dx = map.width / 4; break;
+            case Qt.Key_Right: dx = -map.width / 4; break;
+            case Qt.Key_Up: dy = map.height / 4; break;
+            case Qt.Key_Down: dy = -map.height / 4; break;
+
+            }
+
+            var mapCenterPoint = Qt.point(map.width / 2.0 - dx, map.height / 2.0 - dy);
+            map.center = map.toCoordinate(mapCenterPoint);
         }
     }
 
@@ -594,14 +610,22 @@ Map {
         }
 
         onDoubleClicked: {
-            map.center = map.toCoordinate(Qt.point(mouse.x, mouse.y))
+            var mouseGeoPos = map.toCoordinate(Qt.point(mouse.x, mouse.y));
+            var preZoomPoint = map.fromCoordinate(mouseGeoPos, false);
             if (mouse.button === Qt.LeftButton) {
-                map.zoomLevel++
+                map.zoomLevel++;
             } else if (mouse.button === Qt.RightButton) {
-                map.zoomLevel--
+                map.zoomLevel--;
             }
-            lastX = -1
-            lastY = -1
+            var postZoomPoint = map.fromCoordinate(mouseGeoPos, false);
+            var dx = postZoomPoint.x - preZoomPoint.x;
+            var dy = postZoomPoint.y - preZoomPoint.y;
+
+            var mapCenterPoint = Qt.point(map.width / 2.0 + dx, map.height / 2.0 + dy);
+            map.center = map.toCoordinate(mapCenterPoint);
+
+            lastX = -1;
+            lastY = -1;
         }
 
         onPressAndHold:{

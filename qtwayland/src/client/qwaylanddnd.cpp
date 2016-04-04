@@ -65,21 +65,9 @@ QMimeData * QWaylandDrag::platformDropData()
 
 void QWaylandDrag::startDrag()
 {
-    bool cancel = false;
-    if (!shapedPixmapWindow()) {
-        QBasicDrag::startDrag();
-        // Don't call cancel() here, since that will hide 'shapedPixmapWindow()', and
-        // QWaylandWindow::setVisible(false) will flush the window system queue,
-        // ending up trying to render the window, which doesn't have a role yet,
-        // and so blocking waiting for a frame callback.
-        cancel = true;
-    }
-
+    QBasicDrag::startDrag();
     QWaylandWindow *icon = static_cast<QWaylandWindow *>(shapedPixmapWindow()->handle());
     m_display->currentInputDevice()->dataDevice()->startDrag(drag()->mimeData(), icon);
-    if (cancel)
-        QBasicDrag::cancel();
-    QBasicDrag::startDrag();
 }
 
 void QWaylandDrag::cancel()
@@ -89,15 +77,15 @@ void QWaylandDrag::cancel()
     m_display->currentInputDevice()->dataDevice()->cancelDrag();
 }
 
-void QWaylandDrag::move(const QMouseEvent *me)
+void QWaylandDrag::move(const QPoint &globalPos)
 {
-    Q_UNUSED(me);
+    Q_UNUSED(globalPos);
     // Do nothing
 }
 
-void QWaylandDrag::drop(const QMouseEvent *me)
+void QWaylandDrag::drop(const QPoint &globalPos)
 {
-    Q_UNUSED(me);
+    Q_UNUSED(globalPos);
     // Do nothing
 }
 

@@ -44,6 +44,7 @@ import QtQuick.Controls.Private 1.0
     \inqmlmodule QtQuick.Controls
     \since 5.1
     \ingroup menus
+    \ingroup controls
     \brief Provides a menu component for use as a context menu, popup menu, or
     as part of a menu bar.
 
@@ -146,7 +147,7 @@ MenuPrivate {
     /*! \internal */
     property bool __usingDefaultStyle: false
     /*! \internal */
-    property var __parentContentItem: __parentMenu.__contentItem
+    property var __parentContentItem: __parentMenu ? __parentMenu.__contentItem : null
     /*! \internal */
     property int __currentIndex: -1
     /*! \internal */

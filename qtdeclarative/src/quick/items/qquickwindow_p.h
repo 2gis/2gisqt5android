@@ -145,7 +145,9 @@ public:
 #ifndef QT_NO_WHEELEVENT
     bool deliverWheelEvent(QQuickItem *, QWheelEvent *);
 #endif
+#ifndef QT_NO_GESTURES
     bool deliverNativeGestureEvent(QQuickItem *, QNativeGestureEvent *);
+#endif
     bool deliverTouchPoints(QQuickItem *, QTouchEvent *, const QList<QTouchEvent::TouchPoint> &, QSet<int> *,
                             QHash<QQuickItem *, QList<QTouchEvent::TouchPoint> > *, QSet<QQuickItem*> *filtered);
     void deliverTouchEvent(QTouchEvent *);
@@ -188,6 +190,7 @@ public:
     void cleanup(QSGNode *);
 
     void polishItems();
+    void forcePolish();
     void syncSceneGraph();
     void renderSceneGraph(const QSize &size);
 
@@ -200,7 +203,10 @@ public:
     QQuickItem *dirtyItemList;
     QList<QSGNode *> cleanupNodeList;
 
-    QSet<QQuickItem *> itemsToPolish;
+    QVector<QQuickItem *> itemsToPolish;
+
+    qreal devicePixelRatio;
+    QMetaObject::Connection physicalDpiChangedConnection;
 
     void updateDirtyNodes();
     void cleanupNodes();

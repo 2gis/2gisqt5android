@@ -56,7 +56,6 @@
 #endif
 
 Q_DECLARE_METATYPE(QHostAddress)
-Q_DECLARE_METATYPE(QNetworkInterface)
 
 QT_FORWARD_DECLARE_CLASS(QUdpSocket)
 
@@ -117,6 +116,7 @@ private slots:
     void readyRead();
     void readyReadForEmptyDatagram();
     void asyncReadDatagram();
+    void writeInHostLookupState();
 
 protected slots:
     void empty_readyReadSlot();
@@ -227,7 +227,7 @@ void tst_QUdpSocket::constructing()
 
     QVERIFY(socket.isSequential());
     QVERIFY(!socket.isOpen());
-    QVERIFY(socket.socketType() == QUdpSocket::UdpSocket);
+    QCOMPARE(socket.socketType(), QUdpSocket::UdpSocket);
     QCOMPARE((int) socket.bytesAvailable(), 0);
     QCOMPARE(socket.canReadLine(), false);
     QCOMPARE(socket.readLine(), QByteArray());
@@ -753,7 +753,7 @@ void tst_QUdpSocket::writeDatagram()
             QCOMPARE(client.error(), QUdpSocket::DatagramTooLargeError);
             break;
         }
-        QVERIFY(bytesspy.count() == 1);
+        QCOMPARE(bytesspy.count(), 1);
         QCOMPARE(*static_cast<const qint64 *>(bytesspy.at(0).at(0).constData()),
                 qint64(i * 1024));
         QCOMPARE(errorspy.count(), 0);
@@ -1723,6 +1723,18 @@ void tst_QUdpSocket::asyncReadDatagram()
 
     delete m_asyncSender;
     delete m_asyncReceiver;
+}
+
+void tst_QUdpSocket::writeInHostLookupState()
+{
+    QFETCH_GLOBAL(bool, setProxy);
+    if (setProxy)
+        return;
+
+    QUdpSocket socket;
+    socket.connectToHost("nosuchserver.qt-project.org", 80);
+    QCOMPARE(socket.state(), QUdpSocket::HostLookupState);
+    QVERIFY(!socket.putChar('0'));
 }
 
 QTEST_MAIN(tst_QUdpSocket)

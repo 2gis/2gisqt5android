@@ -34,7 +34,6 @@
 #include <winsock2.h>
 
 #include "qhostinfo_p.h"
-#include "private/qnativesocketengine_p.h"
 #include <ws2tcpip.h>
 #include <private/qsystemlibrary_p.h>
 #include <qmutex.h>
@@ -77,14 +76,18 @@ static void resolveLibrary()
 {
     // Attempt to resolve getaddrinfo(); without it we'll have to fall
     // back to gethostbyname(), which has no IPv6 support.
-#if !defined(Q_OS_WINCE)
-    local_getaddrinfo = (getaddrinfoProto) QSystemLibrary::resolve(QLatin1String("ws2_32"), "getaddrinfo");
-    local_freeaddrinfo = (freeaddrinfoProto) QSystemLibrary::resolve(QLatin1String("ws2_32"), "freeaddrinfo");
-    local_getnameinfo = (getnameinfoProto) QSystemLibrary::resolve(QLatin1String("ws2_32"), "getnameinfo");
-#else
+#if defined(Q_OS_WINCE)
     local_getaddrinfo = (getaddrinfoProto) QSystemLibrary::resolve(QLatin1String("ws2"), "getaddrinfo");
     local_freeaddrinfo = (freeaddrinfoProto) QSystemLibrary::resolve(QLatin1String("ws2"), "freeaddrinfo");
     local_getnameinfo = (getnameinfoProto) QSystemLibrary::resolve(QLatin1String("ws2"), "getnameinfo");
+#elif defined (Q_OS_WINRT)
+    local_getaddrinfo = (getaddrinfoProto) &getaddrinfo;
+    local_freeaddrinfo = (freeaddrinfoProto) &freeaddrinfo;
+    local_getnameinfo = (getnameinfoProto) getnameinfo;
+#else
+    local_getaddrinfo = (getaddrinfoProto) QSystemLibrary::resolve(QLatin1String("ws2_32"), "getaddrinfo");
+    local_freeaddrinfo = (freeaddrinfoProto) QSystemLibrary::resolve(QLatin1String("ws2_32"), "freeaddrinfo");
+    local_getnameinfo = (getnameinfoProto) QSystemLibrary::resolve(QLatin1String("ws2_32"), "getnameinfo");
 #endif
 }
 
@@ -111,7 +114,7 @@ QHostInfo QHostInfoAgent::fromName(const QString &hostName)
     QMutexLocker locker(&qPrivCEMutex);
 #endif
 
-    QWindowsSockInit winSock;
+    QSysInfo::machineHostName();        // this initializes ws2_32.dll
 
     // Load res_init on demand.
     static QBasicAtomicInt triedResolve = Q_BASIC_ATOMIC_INITIALIZER(false);
@@ -136,7 +139,7 @@ QHostInfo QHostInfoAgent::fromName(const QString &hostName)
         // Reverse lookup
         if (local_getnameinfo) {
             sockaddr_in sa4;
-            qt_sockaddr_in6 sa6;
+            sockaddr_in6 sa6;
             sockaddr *sa;
             QT_SOCKLEN_T saSize;
             if (address.protocol() == QAbstractSocket::IPv4Protocol) {
@@ -150,7 +153,7 @@ QHostInfo QHostInfoAgent::fromName(const QString &hostName)
                 saSize = sizeof(sa6);
                 memset(&sa6, 0, sizeof(sa6));
                 sa6.sin6_family = AF_INET6;
-                memcpy(sa6.sin6_addr.qt_s6_addr, address.toIPv6Address().c, sizeof(sa6.sin6_addr.qt_s6_addr));
+                memcpy(&sa6.sin6_addr, address.toIPv6Address().c, sizeof(sa6.sin6_addr));
             }
 
             char hbuf[NI_MAXHOST];
@@ -197,7 +200,7 @@ QHostInfo QHostInfoAgent::fromName(const QString &hostName)
                     break;
                 case AF_INET6: {
                     QHostAddress addr;
-                    addr.setAddress(((qt_sockaddr_in6 *) p->ai_addr)->sin6_addr.qt_s6_addr);
+                    addr.setAddress(((sockaddr_in6 *) p->ai_addr)->sin6_addr.s6_addr);
                     if (!addresses.contains(addr))
                         addresses.append(addr);
                 }
@@ -254,17 +257,6 @@ QHostInfo QHostInfoAgent::fromName(const QString &hostName)
     }
 #endif
     return results;
-}
-
-QString QHostInfo::localHostName()
-{
-    QWindowsSockInit winSock;
-
-    char hostName[512];
-    if (gethostname(hostName, sizeof(hostName)) == -1)
-        return QString();
-    hostName[sizeof(hostName) - 1] = '\0';
-    return QString::fromLocal8Bit(hostName);
 }
 
 // QString QHostInfo::localDomainName() defined in qnetworkinterface_win.cpp

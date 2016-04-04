@@ -106,7 +106,9 @@ QQuickTextControlPrivate::QQuickTextControlPrivate()
       hadSelectionOnMousePress(false),
       wordSelectionEnabled(false),
       hasImState(false),
-      cursorRectangleChanged(false)
+      cursorRectangleChanged(false),
+      lastSelectionStart(-1),
+      lastSelectionEnd(-1)
 {}
 
 bool QQuickTextControlPrivate::cursorMoveKeyEvent(QKeyEvent *e)
@@ -403,11 +405,19 @@ void QQuickTextControlPrivate::selectionChanged(bool forceEmitSelectionChanged /
     }
 
     bool current = cursor.hasSelection();
-    if (current == lastSelectionState)
+    int selectionStart = cursor.selectionStart();
+    int selectionEnd = cursor.selectionEnd();
+    if (current == lastSelectionState && (!current || (selectionStart == lastSelectionStart && selectionEnd == lastSelectionEnd)))
         return;
 
-    lastSelectionState = current;
-    emit q->copyAvailable(current);
+    if (lastSelectionState != current) {
+        lastSelectionState = current;
+        emit q->copyAvailable(current);
+    }
+
+    lastSelectionStart = selectionStart;
+    lastSelectionEnd = selectionEnd;
+
     if (!forceEmitSelectionChanged) {
 #ifndef QT_NO_IM
         if (hasFocus)
@@ -1313,7 +1323,7 @@ void QQuickTextControlPrivate::inputMethodEvent(QInputMethodEvent *e)
     QTextLayout *layout = block.layout();
     if (isGettingInput)
         layout->setPreeditArea(cursor.position() - block.position(), e->preeditString());
-    QList<QTextLayout::FormatRange> overrides;
+    QVector<QTextLayout::FormatRange> overrides;
     const int oldPreeditCursor = preeditCursor;
     preeditCursor = e->preeditString().length();
     hasImState = !e->preeditString().isEmpty();
@@ -1336,7 +1346,7 @@ void QQuickTextControlPrivate::inputMethodEvent(QInputMethodEvent *e)
             }
         }
     }
-    layout->setAdditionalFormats(overrides);
+    layout->setFormats(overrides);
 
     cursor.endEditBlock();
 

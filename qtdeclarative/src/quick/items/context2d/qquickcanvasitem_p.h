@@ -34,6 +34,17 @@
 #ifndef QQUICKCANVASITEM_P_H
 #define QQUICKCANVASITEM_P_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include <QtQuick/qquickitem.h>
 #include <private/qv8engine_p.h>
 #include <QtCore/QThread>
@@ -68,8 +79,6 @@ private:
 class QQuickCanvasItem : public QQuickItem
 {
     Q_OBJECT
-    Q_ENUMS(RenderTarget)
-    Q_ENUMS(RenderStrategy)
 
     Q_PROPERTY(bool available READ isAvailable NOTIFY availableChanged)
     Q_PROPERTY(QString contextType READ contextType WRITE setContextType NOTIFY contextTypeChanged)
@@ -85,12 +94,14 @@ public:
         Image,
         FramebufferObject
     };
+    Q_ENUM(RenderTarget)
 
     enum RenderStrategy {
         Immediate,
         Threaded,
         Cooperative
     };
+    Q_ENUM(RenderStrategy)
 
     QQuickCanvasItem(QQuickItem *parent = 0);
     ~QQuickCanvasItem();

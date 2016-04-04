@@ -110,9 +110,8 @@
 
     \section1 Libraries
 
-    The following libraries may be used when running Qt 5 applications in Windows.
-    These are not mandatory, but some components (for example, Qt WebKit) may depend
-    on them.
+    The following third-party libraries may be used when running Qt 5
+    applications on Windows.
 
     \list
         \li \l{ICU}: Qt 5 can make use of the ICU library for enhanced UNICODE and Globalization
@@ -127,13 +126,7 @@
         \li \l{ANGLE}: This library converts OpenGL ES 2.0 API calls to DirectX 11 or DirectX 9
            calls (depending on availability), removing the need to install graphics drivers on
            the target machines.
-           Building the library requires the installation of the \l{Direct X SDK}.
-           More information is available at \l{http://code.google.com/p/angleproject/wiki/DevSetup}
-
-           \note When building for 64-bit environments, de-activate the
-           \c WarnAsError option in every project file, otherwise, integer
-           conversion warnings will break the build.
-    \endlist
+     \endlist
 
     Support for Secure Sockets Layer (SSL) communication is provided by the
     \l {OpenSSL Toolkit}, which must be obtained separately. See
@@ -142,13 +135,9 @@
 
     \section2 ICU
 
-    Qt WebKit, and applications using it, always need the ICU libraries. Qt Core
-    can be configured to either rely on ICU functionality, or fall back to Windows API
-    and internal algorithms with somewhat reduced functionality.
-
     From Qt 5.3 and onwards, configure does not link Qt Core against ICU libraries
     anymore by default. This reduces the size of a self-contained
-    application package considerably, as long as Qt WebKit is not used.
+    application package considerably.
 
     Letting Qt Core utilize the ICU libraries however has following advantages:
     \list
@@ -291,10 +280,23 @@
     The following feature keywords are relevant for choosing the OpenGL implementation:
 
     \list
-        \li \c disable_desktopgl - Disables Desktop OpenGL
-        \li \c disable_angle - Disables ANGLE
-        \li \c disable_d3d11 - Disables the D3D11 rasterizer in ANGLE
+        \li \c disable_desktopgl - Disables OpenGL. This ensures that Qt does not attempt
+        to use regular OpenGL (opengl32.dll), and that it starts with ANGLE right
+        away. This is useful to prevent bad OpenGL drivers from crashing the application.
+
+        \li \c disable_angle - Disables ANGLE. Ensures that Qt does not attempt to use
+        ANGLE (and so Direct3D).
+
+        \li \c disable_d3d11 - Disables the D3D11 rasterizer in ANGLE. Instead, the next
+        D3D rendering option is tried first. The default order is: D3D11, D3D9, WARP,
+        reference implementation.
+
         \li \c disable_d3d9 - Disables the D3D9 rasterizer in ANGLE
+
+        \li \c disable_rotation - Forces the application to run in landscape orientation
+        always. It applies to OpengGL only and has no effect when using ANGLE or Software
+        OpenGL implementations. This is intended for drivers that have issues with rotation.
+        This feature keyword was introduced in Qt 5.6.
     \endlist
 
     A sample file looks like:
@@ -326,6 +328,42 @@
     \c disable_desktopgl set, in order to prevent Qt from using their unstable
     desktop OpenGL implementations and instead fall back to ANGLE right away.
 
+    In practice the most common combinations are expected to be the following:
+
+    \list
+        \li \c disable_desktopgl - In case the system provides OpenGL 2.0 or newer, but
+        the driver is known to be unstable and prone to crash.
+
+        \li \c disable_desktopgl, disable_angle - When no accelerated path is
+        desired. This ensures that the only option Qt tries is the sofware rasterizer
+        (opengl32sw.dll). Can be useful in virtual machines and applications that are
+        deployed on a wide range of old systems.
+
+        \li \c disable_d3d11, disable_d3d9 - When the accelerated D3D options are known to
+        be unstable and WARP is desired (when available). Can be useful in virtual machines.
+    \endlist
+
+    The supported keys for matching a given card or driver are the following. Note that
+    some of these are specific to Qt.
+
+    \list
+        \li \c os.type - Operating system: \c win, \c linux, \c macosx, \c android
+        \li \c os.version - Kernel version
+        \li \c os.release - Specifies a list of operating system releases on Windows:
+        \c xp, \c vista, \c 7, \c 8, \c 8.1, \c 10.
+
+        \li \c vendor_id - Vendor from the adapter identifier
+
+        \li \c device_id - List of PCI device IDs.
+
+        \li \c driver_version - Driver version from the adapter identifier
+
+        \li \c driver_description - Matches when the value is a substring of the driver
+        description from the adapter identifier
+
+        \li \c gl_vendor - Matches when the value is a substring of the \c GL_VENDOR string
+    \endlist
+
     \section1 Building from Source
 
     These tools are not needed to run Qt 5 applications, but they are required
@@ -336,13 +374,7 @@
             (\l{http://www.activestate.com/activeperl}{download page}) and add
            the installation location to your \c PATH.
         \li Python - Install Python from the \l{http://www.python.org/download/}{here}
-           and add the installation location to your PATH in order to be able
-           to build Qt WebKit.
-
-        \li Install \l{http://www.ruby-lang.org}{Ruby} from \l{http://rubyinstaller.org/}{here}
-           and add the installation location to your PATH in order to be able
-           to build Qt WebKit.
-
+           and add the installation location to your PATH.
     \endlist
 
     \note Please make sure that the \c perl executable from ActivePerl is found
@@ -350,7 +382,7 @@
            latter is outdated.
 
 
-    Qt WebKit and ANGLE depend on these extra tools from the \l{GnuWin32 Project}{GnuWin32} and
+    ANGLE depends on these extra tools from the \l{GnuWin32 Project}{GnuWin32} and
     \l {http://sourceforge.net/projects/winflexbison/}{Win flex-bison}
     projects, which are provided for your convenience in the \e gnuwin32/bin
     folder:
@@ -398,8 +430,8 @@
 
     \endlist
 
-    For the most up to date information about the \l{Qt WebKit} dependencies,
-    please refer to the \l{http://trac.webkit.org/wiki/BuildingQtOnWindows}{Qt WebKit Wiki for Windows}.
+    For the most up-to-date information about the \l{Qt WebEngine} dependencies,
+    see the \l{Qt WebEngine on Windows}{Qt WebEngine} wiki for Windows.
 
 */
 
@@ -436,6 +468,10 @@
     nmake
     \endcode
 
+    \note The \c configure option -qtlibinfix cannot take a version number as an argument.
+    For example:
+    \c{-qtlibinfix 5.6.0} should be specified as \c{-qtlibinfix QtCore5.6.dll}.
+
     Also compile your own application in the above environment if compiling
     on the command line. If you use Visual Studio, set the \c v110_xp toolset in the project's
     property pages.
@@ -460,7 +496,7 @@
     The minimum version of MinGW-builds supported is GCC 4.7.2.
     \l{http://sourceforge.net/projects/mingwbuilds/files/host-windows/releases/4.7.2/32-bit/threads-posix/sjlj/x32-4.7.2-release-posix-sjlj-rev8.7z}
     {MinGW-builds GCC 4.7.2 32 bit, rev 8} and later should be able
-    to build Qt including Qt WebKit.
+    to build Qt.
 
     For more information about the MinGW builds, visit the
     \e{Reference Configuration} section of the
@@ -497,6 +533,36 @@
 
     Consult the \l{Qt for Windows - Requirements} page for specific versions
     of the Windows SDK.
+
+    \section1 Fullscreen OpenGL Based Windows
+
+    When a window is using an OpenGL based surface and is appearing in full
+    screen mode, problems can occur with other top-level windows which are
+    part of the application. Due to limitations of the Windows DWM,
+    compositing is not handled correctly for OpenGL based windows when going
+    into full screen mode. As a result, other top-level windows are not placed
+    on top of the full screen window when they are made visible. For example,
+    menus may not appear correctly, or dialogs fail to show up.
+
+    A window can use an OpenGL based surface either explicitly when
+    \l {QWindow::}{setSurfaceType()} is called, or when something that
+    requires OpenGL is used inside the window, causing the whole window to be
+    OpenGL based. For example, QOpenGLWidget or QQuickWidget can trigger this.
+    However, if the surface is contained in a QWindow which is hosted with
+    \l {QWidget::}{createWindowContainer()}, or the obsoleted QGLWidget is
+    used and it does cover the entire full screen window, then this problem
+    does not occur.
+
+    To solve this problem, a QWindowsWindowFunction can be used to enable a
+    native Windows flag which will set \c WS_BORDER when showing in full
+    screen mode. This can be utilized as follows:
+
+    \code
+    QWindowsWindowFunctions::setHasBorderInFullScreen(tlwWindow->windowHandle(), true);
+    \endcode
+
+    This will give the full screen window a 1-pixel border, thus enabling the
+    other top level windows to appear on top.
 */
 
 /*!
@@ -779,12 +845,11 @@
 
     \snippet snippets/code/doc_src_deployment.qdoc 20
 
-    To use the options, add
+    Both options are enabled by default. To remove \c{embed_manifest_exe}, add
 
     \snippet snippets/code/doc_src_deployment.pro 21
 
-    to your .pro file. The \c embed_manifest_dll option is enabled by default.
-    The \c embed_manifest_exe option is NOT enabled by default.
+    to your .pro file.
 
     You can find more information about manifest files and side-by-side
     assemblies at the
@@ -896,6 +961,10 @@
     When looking at the plugin DLLs the exact same dependencies
     are listed.
 
+    From Qt version 5.2 onwards, the officially supported version
+    for OpenSSL is 1.0.0 or later. Versions >= 0.9.7 and < 1.0.0 might
+    work, but are not guaranteed to.
+
     \section2 Qt Plugins
 
     All Qt GUI applications require a plugin that implements the \l {Qt
@@ -911,10 +980,6 @@
     application. Similar to the platform plugin, each type of plugin must
     be located within a specific subdirectory (such as \c printsupport,
     \c imageformats or \c sqldrivers) within your distribution directory.
-
-    \note If you are deploying an application that uses Qt WebKit to display
-    HTML pages from the World Wide Web, you should include all text codec
-    plugins to support as many HTML encodings possible.
 
     The search path for Qt plugins is hard-coded into the QtCore library.
     By default, the plugins subdirectory of the Qt installation is the first
@@ -946,7 +1011,7 @@
 
     \list
     \li \c{C:/customPath/plugins}
-    \li \c{C:/Qt/5.5.1/plugins}
+    \li \c{C:/Qt/%VERSION%/plugins}
     \li \c{E:/myApplication/directory}
     \endlist
 
@@ -971,7 +1036,7 @@
 
     \badcode
 Usage: windeployqt [options] [files]
-Qt Deploy Tool 5.4.0
+Qt Deploy Tool 5.6.0
 
 The simplest way to use windeployqt is to add the bin directory of your Qt
 installation (e.g. <QT_DIR\bin>) to the PATH variable and then run:
@@ -988,6 +1053,7 @@ Options:
   --debug                    Assume debug binaries.
   --release                  Assume release binaries.
   --release-with-debug-info  Assume release binaries with debug information.
+  --pdb                      Deploy .pdb files (MSVC).
   --force                    Force updating files.
   --dry-run                  Simulation mode. Behave normally, but do not
                              copy/update any files.
@@ -999,11 +1065,10 @@ Options:
   --no-system-d3d-compiler   Skip deployment of the system D3D compiler.
   --compiler-runtime         Deploy compiler runtime (Desktop only).
   --no-compiler-runtime      Do not deploy compiler runtime (Desktop only).
-  --webkit2                  Deployment of WebKit2 (web process).
-  --no-webkit2               Skip deployment of WebKit2.
   --json                     Print to stdout in JSON format.
   --angle                    Force deployment of ANGLE.
   --no-angle                 Disable deployment of ANGLE.
+  --no-opengl-sw             Do not deploy the software rasterizer library.
   --list <option>            Print only the names of the files copied.
                              Available options:
                               source:   absolute path of the source files
@@ -1020,9 +1085,10 @@ the name prepended by --no- (--no-xml). Available libraries:
 bluetooth clucene concurrent core declarative designer designercomponents
 enginio gui qthelp multimedia multimediawidgets multimediaquick network nfc
 opengl positioning printsupport qml qmltooling quick quickparticles quickwidgets
-script scripttools sensors serialport sql svg test webkit webkitwidgets
+script scripttools sensors serialport sql svg test
 websockets widgets winextras xml xmlpatterns webenginecore webengine
-webenginewidgets
+webenginewidgets 3dcore 3drenderer 3dquick 3dquickrenderer 3dinput geoservices
+webchannel
 
 Arguments:
   [files]                    Binaries or directory containing the binary.
@@ -1058,7 +1124,7 @@ Arguments:
     \section1 Step 2: Unpack the Archive
 
         Uncompress the files into the directory you want Qt installed;
-        e.g. \c{C:\Qt\5.5.1}.
+        e.g. \c{C:\Qt\%VERSION%}.
 
         \note The install path must not contain any spaces or Windows specific
         file system characters.

@@ -34,6 +34,17 @@
 #ifndef QQUICKFLIPABLE_P_H
 #define QQUICKFLIPABLE_P_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include "qquickitem.h"
 
 #include <QtGui/qtransform.h>
@@ -47,7 +58,6 @@ class Q_AUTOTEST_EXPORT QQuickFlipable : public QQuickItem
 {
     Q_OBJECT
 
-    Q_ENUMS(Side)
     Q_PROPERTY(QQuickItem *front READ front WRITE setFront NOTIFY frontChanged)
     Q_PROPERTY(QQuickItem *back READ back WRITE setBack NOTIFY backChanged)
     Q_PROPERTY(Side side READ side NOTIFY sideChanged)
@@ -64,6 +74,7 @@ public:
     void setBack(QQuickItem *);
 
     enum Side { Front, Back };
+    Q_ENUM(Side)
     Side side() const;
 
 Q_SIGNALS:

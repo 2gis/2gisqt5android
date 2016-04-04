@@ -34,6 +34,17 @@
 #ifndef OSXBTUTILITY_P_H
 #define OSXBTUTILITY_P_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include <QtCore/qloggingcategory.h>
 #include <QtCore/qscopedpointer.h>
 #include <QtCore/qsysinfo.h>
@@ -83,8 +94,7 @@ public:
     }
 };
 
-typedef ObjCScopedPointer<NSAutoreleasePool> AutoreleasePool;
-#define QT_BT_MAC_AUTORELEASEPOOL const OSXBluetooth::AutoreleasePool pool([[NSAutoreleasePool alloc] init])
+#define QT_BT_MAC_AUTORELEASEPOOL const QMacAutoReleasePool pool;
 
 template<class T>
 class ObjCStrongReference {
@@ -294,6 +304,10 @@ inline QSysInfo::MacVersion qt_OS_limit(QSysInfo::MacVersion osxVersion, QSysInf
     return iosVersion;
 #endif
 }
+
+dispatch_queue_t qt_LE_queue();
+// LE scan, in seconds.
+unsigned qt_LE_deviceInquiryLength();
 
 } // namespace OSXBluetooth
 

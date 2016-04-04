@@ -3,10 +3,10 @@
 
 TARGET = QtWebEngineCore
 QT += qml quick webchannel
-QT_PRIVATE += quick-private gui-private core-private
+QT_PRIVATE += quick-private gui-private core-private webenginecoreheaders-private
 
 # Make QtCreator happy.
-CHROMIUM_SRC_DIR = $$QTWEBENGINE_ROOT/$${getChromiumSrcDir()}
+CHROMIUM_SRC_DIR = $$QTWEBENGINE_ROOT/$$getChromiumSrcDir()
 INCLUDEPATH += $$CHROMIUM_SRC_DIR
 
 qtHaveModule(positioning):QT += positioning

@@ -37,14 +37,11 @@
 #include "qtickclockservice_p.h"
 #include "qtickclock_p.h"
 #include "qabstractframeadvanceservice_p.h"
+#include "qabstractframeadvanceservice_p_p.h"
 
 QT_BEGIN_NAMESPACE
 
-namespace Qt3D {
-/*!
-    \class Qt3D::QTickClockServicePrivate
-    \internal
-*/
+namespace Qt3DCore {
 
 class QTickClockServicePrivate : public QAbstractFrameAdvanceServicePrivate
 {
@@ -59,12 +56,12 @@ public:
     QTickClock m_clock;
 };
 
-/*!
-    \class Qt3D::QTickClockService
+/* !\internal
+    \class Qt3DCore::QTickClockService
     \inmodule Qt3DCore
-    \brief Default Qt3D::QAbstractFrameAdvanceService implementation.
+    \brief Default QAbstractFrameAdvanceService implementation.
 
-    This default Qt3D::QAbstractFrameAdvanceService implementation has a frequency of 60 Hz.
+    This default QAbstractFrameAdvanceService implementation has a frequency of 60 Hz.
 */
 QTickClockService::QTickClockService()
     : QAbstractFrameAdvanceService(*new QTickClockServicePrivate())
@@ -81,7 +78,7 @@ qint64 QTickClockService::waitForNextFrame()
     return d->m_clock.waitForNextTick();
 }
 
-/*!
+/*
     Starts the inner tick clock used by the service.
  */
 void QTickClockService::start()

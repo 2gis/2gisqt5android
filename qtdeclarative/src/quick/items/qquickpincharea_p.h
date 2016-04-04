@@ -34,6 +34,17 @@
 #ifndef QQUICKPINCHAREA_H
 #define QQUICKPINCHAREA_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include "qquickitem.h"
 
 QT_BEGIN_NAMESPACE
@@ -42,7 +53,6 @@ class Q_AUTOTEST_EXPORT QQuickPinch : public QObject
 {
     Q_OBJECT
 
-    Q_ENUMS(Axis)
     Q_PROPERTY(QQuickItem *target READ target WRITE setTarget RESET resetTarget)
     Q_PROPERTY(qreal minimumScale READ minimumScale WRITE setMinimumScale NOTIFY minimumScaleChanged)
     Q_PROPERTY(qreal maximumScale READ maximumScale WRITE setMaximumScale NOTIFY maximumScaleChanged)
@@ -103,6 +113,7 @@ public:
     }
 
     enum Axis { NoDrag=0x00, XAxis=0x01, YAxis=0x02, XAndYAxis=0x03, XandYAxis=XAndYAxis };
+    Q_ENUM(Axis)
     Axis axis() const { return m_axis; }
     void setAxis(Axis a) {
         if (a == m_axis)

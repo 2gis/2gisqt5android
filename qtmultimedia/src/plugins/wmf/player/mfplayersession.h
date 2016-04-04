@@ -57,7 +57,7 @@ QT_USE_NAMESPACE
 
 class SourceResolver;
 #ifndef Q_WS_SIMULATOR
-class Evr9VideoWindowControl;
+class EvrVideoWindowControl;
 #endif
 class MFAudioEndpointControl;
 class MFVideoRendererControl;
@@ -215,9 +215,10 @@ private:
 
     void createSession();
     void setupPlaybackTopology(IMFMediaSource *source, IMFPresentationDescriptor *sourcePD);
+    MediaType getStreamType(IMFStreamDescriptor *stream) const;
     IMFTopologyNode* addSourceNode(IMFTopology* topology, IMFMediaSource* source,
         IMFPresentationDescriptor* presentationDesc, IMFStreamDescriptor *streamDesc);
-    IMFTopologyNode* addOutputNode(IMFStreamDescriptor *streamDesc, MediaType& mediaType, IMFTopology* topology, DWORD sinkID);
+    IMFTopologyNode* addOutputNode(MediaType mediaType, IMFTopology* topology, DWORD sinkID);
 
     bool addAudioSampleGrabberNode(IMFTopology* topology);
     bool setupAudioSampleGrabber(IMFTopology *topology, IMFTopologyNode *sourceNode, IMFTopologyNode *outputNode);

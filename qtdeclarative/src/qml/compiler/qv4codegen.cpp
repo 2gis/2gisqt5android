@@ -33,6 +33,7 @@
 
 #include "qv4codegen_p.h"
 #include "qv4util_p.h"
+#include "qv4engine_p.h"
 
 #include <QtCore/QCoreApplication>
 #include <QtCore/QStringList>
@@ -43,7 +44,7 @@
 #include <QtCore/QStack>
 #include <private/qqmljsast_p.h>
 #include <private/qv4string_p.h>
-#include <private/qv4value_inl_p.h>
+#include <private/qv4value_p.h>
 
 #ifndef V4_BOOTSTRAP
 #include <qv4context_p.h>

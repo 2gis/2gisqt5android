@@ -13,6 +13,7 @@
 
 #include "base/gtest_prod_util.h"
 #include "base/memory/ref_counted.h"
+#include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
 #include "content/browser/appcache/appcache.h"
 #include "content/browser/appcache/appcache_host.h"
@@ -278,9 +279,11 @@ class CONTENT_EXPORT AppCacheUpdateJob
   UpdateType update_type_;
   InternalUpdateState internal_state_;
   base::Time last_progress_time_;
+  bool doing_full_update_check_;
 
   PendingMasters pending_master_entries_;
   size_t master_entries_completed_;
+  std::set<GURL> failed_master_entries_;
 
   // TODO(jennb): Delete when update no longer fetches master entries directly.
   // Helper containers to track which pending master entries have yet to be
@@ -335,6 +338,7 @@ class CONTENT_EXPORT AppCacheUpdateJob
   StoredState stored_state_;
 
   AppCacheStorage* storage_;
+  base::WeakPtrFactory<AppCacheUpdateJob> weak_factory_;
 
   FRIEND_TEST_ALL_PREFIXES(content::AppCacheGroupTest, QueueUpdate);
 

@@ -39,7 +39,7 @@
 ****************************************************************************/
 
 import QtQuick 2.1
-import QtWebEngine 1.1
+import QtWebEngine 1.2
 import QtWebEngine.experimental 1.0
 
 import QtQuick.Controls 1.0
@@ -61,8 +61,10 @@ ApplicationWindow {
         // This is for the case where the system forces us to leave fullscreen.
         if (currentWebView && !isFullScreen) {
             currentWebView.state = ""
-            if (currentWebView.isFullScreen)
+            if (currentWebView.isFullScreen) {
                 currentWebView.fullScreenCancelled()
+                fullScreenNotification.hide()
+            }
         }
     }
 
@@ -76,6 +78,7 @@ ApplicationWindow {
         property alias autoLoadImages: loadImages.checked;
         property alias javaScriptEnabled: javaScriptEnabled.checked;
         property alias errorPageEnabled: errorPageEnabled.checked;
+        property alias pluginsEnabled: pluginsEnabled.checked;
     }
 
     // Make sure the Qt.WindowFullscreenButtonHint is set on OS X.
@@ -245,6 +248,12 @@ ApplicationWindow {
                             checked: true
                         }
                         MenuItem {
+                            id: pluginsEnabled
+                            text: "Plugins On"
+                            checkable: true
+                            checked: true
+                        }
+                        MenuItem {
                             id: offTheRecordEnabled
                             text: "Off The Record"
                             checkable: true
@@ -347,6 +356,7 @@ ApplicationWindow {
                     settings.autoLoadImages: appSettings.autoLoadImages
                     settings.javascriptEnabled: appSettings.javaScriptEnabled
                     settings.errorPageEnabled: appSettings.errorPageEnabled
+                    settings.pluginsEnabled: appSettings.pluginsEnabled
 
                     onCertificateError: {
                         if (!acceptedCertificates.shouldAutoAccept(error)){
@@ -381,9 +391,11 @@ ApplicationWindow {
                             webEngineView.state = "FullScreen"
                             browserWindow.previousVisibility = browserWindow.visibility
                             browserWindow.showFullScreen()
+                            fullScreenNotification.show()
                         } else {
                             webEngineView.state = ""
                             browserWindow.visibility = browserWindow.previousVisibility
+                            fullScreenNotification.hide()
                         }
                         request.accept()
                     }
@@ -484,6 +496,10 @@ ApplicationWindow {
         function presentError(){
             visible = certErrors.length > 0
         }
+    }
+
+    FullScreenNotification {
+        id: fullScreenNotification
     }
 
     DownloadView {

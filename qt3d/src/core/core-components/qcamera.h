@@ -34,8 +34,8 @@
 **
 ****************************************************************************/
 
-#ifndef QT3D_CAMERA_H
-#define QT3D_CAMERA_H
+#ifndef QT3DCORE_CAMERA_H
+#define QT3DCORE_CAMERA_H
 
 #include <Qt3DCore/qentity.h>
 #include <Qt3DCore/qcameralens.h>
@@ -45,7 +45,7 @@
 
 QT_BEGIN_NAMESPACE
 
-namespace Qt3D {
+namespace Qt3DCore {
 
 class QLookAtTransform;
 class QTransform;
@@ -55,7 +55,7 @@ class QT3DCORESHARED_EXPORT QCamera : public QEntity
 {
     Q_OBJECT
     // CameraLens
-    Q_PROPERTY(Qt3D::QCameraLens::ProjectionType projectionType READ projectionType WRITE setProjectionType NOTIFY projectionTypeChanged)
+    Q_PROPERTY(Qt3DCore::QCameraLens::ProjectionType projectionType READ projectionType WRITE setProjectionType NOTIFY projectionTypeChanged)
     Q_PROPERTY(float nearPlane READ nearPlane WRITE setNearPlane NOTIFY nearPlaneChanged)
     Q_PROPERTY(float farPlane READ farPlane WRITE setFarPlane NOTIFY farPlaneChanged)
     Q_PROPERTY(float fieldOfView READ fieldOfView WRITE setFieldOfView NOTIFY fieldOfViewChanged)
@@ -69,7 +69,8 @@ class QT3DCORESHARED_EXPORT QCamera : public QEntity
     Q_PROPERTY(QVector3D position READ position WRITE setPosition NOTIFY positionChanged)
     Q_PROPERTY(QVector3D upVector READ upVector WRITE setUpVector NOTIFY upVectorChanged)
     Q_PROPERTY(QVector3D viewCenter READ viewCenter WRITE setViewCenter NOTIFY viewCenterChanged)
-    Q_PROPERTY(QMatrix4x4 matrix READ matrix NOTIFY matrixChanged)
+    Q_PROPERTY(QVector3D viewVector READ viewVector NOTIFY viewVectorChanged)
+    Q_PROPERTY(QMatrix4x4 viewMatrix READ viewMatrix NOTIFY viewMatrixChanged)
 
 public:
     explicit QCamera(QNode *parent = 0);
@@ -79,95 +80,90 @@ public:
         TranslateViewCenter,
         DontTranslateViewCenter
     };
+    Q_ENUM(CameraTranslationOption)
 
     QCameraLens *lens() const;
     QTransform *transform() const;
-    QLookAtTransform *lookAt() const;
 
     QQuaternion tiltRotation(float angle) const;
     QQuaternion panRotation(float angle) const;
     QQuaternion rollRotation(float angle) const;
+    QQuaternion rotation(float angle, const QVector3D &axis) const;
 
     // Translate relative to camera orientation axes
-    void translate( const QVector3D& vLocal, CameraTranslationOption option = TranslateViewCenter );
+    Q_INVOKABLE void translate(const QVector3D& vLocal, CameraTranslationOption option = TranslateViewCenter);
 
     // Translate relative to world axes
-    void translateWorld( const QVector3D& vWorld, CameraTranslationOption option = TranslateViewCenter );
+    Q_INVOKABLE void translateWorld(const QVector3D& vWorld, CameraTranslationOption option = TranslateViewCenter);
 
-    void tilt( const float& angle );
-    void pan( const float& angle );
-    void roll( const float& angle );
+    Q_INVOKABLE void tilt(float angle);
+    Q_INVOKABLE void pan(float angle);
+    Q_INVOKABLE void pan(float angle, const QVector3D &axis);
+    Q_INVOKABLE void roll(float angle);
 
-    void tiltAboutViewCenter( const float& angle );
-    void panAboutViewCenter( const float& angle );
-    void rollAboutViewCenter( const float& angle );
+    Q_INVOKABLE void tiltAboutViewCenter(float angle);
+    Q_INVOKABLE void panAboutViewCenter(float angle);
+    Q_INVOKABLE void panAboutViewCenter(float angle, const QVector3D &axis);
+    Q_INVOKABLE void rollAboutViewCenter(float angle);
 
-    void rotate( const QQuaternion& q );
-    void rotateAboutViewCenter( const QQuaternion& q );
+    Q_INVOKABLE void rotate(const QQuaternion& q);
+    Q_INVOKABLE void rotateAboutViewCenter(const QQuaternion& q);
 
-    void setProjectionType(QCameraLens::ProjectionType type);
     QCameraLens::ProjectionType projectionType() const;
-
-    void setNearPlane(float nearPlane);
     float nearPlane() const;
-
-    void setFarPlane(float farPlane);
     float farPlane() const;
-
-    void setFieldOfView(float fieldOfView);
     float fieldOfView() const;
-
-    void setAspectRatio(float aspectRatio);
     float aspectRatio() const;
-
-    void setLeft(float left);
     float left() const;
-
-    void setRight(float right);
     float right() const;
-
-    void setBottom(float bottom);
     float bottom() const;
-
-    void setTop(float top);
     float top() const;
-
     QMatrix4x4 projectionMatrix() const;
-
-    void setPosition(const QVector3D &position);
     QVector3D position() const;
-
-    void setUpVector(const QVector3D &upVector);
     QVector3D upVector() const;
-
-    void setViewCenter(const QVector3D &viewCenter);
     QVector3D viewCenter() const;
+    QVector3D viewVector() const;
+    QMatrix4x4 viewMatrix() const;
 
-    QMatrix4x4 matrix() const;
+public Q_SLOTS:
+    void setProjectionType(QCameraLens::ProjectionType type);
+    void setNearPlane(float nearPlane);
+    void setFarPlane(float farPlane);
+    void setFieldOfView(float fieldOfView);
+    void setAspectRatio(float aspectRatio);
+    void setLeft(float left);
+    void setRight(float right);
+    void setBottom(float bottom);
+    void setTop(float top);
+    void setPosition(const QVector3D &position);
+    void setUpVector(const QVector3D &upVector);
+    void setViewCenter(const QVector3D &viewCenter);
 
 Q_SIGNALS:
-    void projectionTypeChanged();
-    void nearPlaneChanged();
-    void farPlaneChanged();
-    void fieldOfViewChanged();
-    void aspectRatioChanged();
-    void leftChanged();
-    void rightChanged();
-    void bottomChanged();
-    void topChanged();
-    void projectionMatrixChanged();
-    void positionChanged();
-    void upVectorChanged();
-    void viewCenterChanged();
-    void matrixChanged();
+    void projectionTypeChanged(QCameraLens::ProjectionType projectionType);
+    void nearPlaneChanged(float nearPlane);
+    void farPlaneChanged(float farPlane);
+    void fieldOfViewChanged(float fieldOfView);
+    void aspectRatioChanged(float aspectRatio);
+    void leftChanged(float left);
+    void rightChanged(float right);
+    void bottomChanged(float bottom);
+    void topChanged(float top);
+    void projectionMatrixChanged(const QMatrix4x4 &projectionMatrix);
+    void positionChanged(const QVector3D &position);
+    void upVectorChanged(const QVector3D &upVector);
+    void viewCenterChanged(const QVector3D &viewCenter);
+    void viewVectorChanged(const QVector3D &viewVector);
+    void viewMatrixChanged(const QMatrix4x4 &viewMatrix);
 
 protected:
     Q_DECLARE_PRIVATE(QCamera)
+    QT3D_CLONEABLE(QCamera)
     QCamera(QCameraPrivate &dd, QNode *parent = 0);
 };
 
-} // namespace Qt3D
+} // namespace Qt3DCore
 
 QT_END_NAMESPACE
 
-#endif // QT3D_CAMERA_H
+#endif // QT3DCORE_CAMERA_H

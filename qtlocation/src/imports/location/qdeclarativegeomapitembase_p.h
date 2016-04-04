@@ -37,6 +37,17 @@
 #ifndef QDECLARATIVEGEOMAPITEMBASE_H
 #define QDECLARATIVEGEOMAPITEMBASE_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include <QtQuick/QQuickItem>
 
 #include "qdeclarativegeomap_p.h"
@@ -78,13 +89,14 @@ public:
     virtual QSGNode *updateMapItemPaintNode(QSGNode *, UpdatePaintNodeData *);
 
 protected Q_SLOTS:
-    virtual void updateMapItem() = 0;
     virtual void afterChildrenChanged();
     virtual void afterViewportChanged(const QGeoMapViewportChangeEvent &event) = 0;
+    void polishAndUpdate();
 
 protected:
     float zoomLevelOpacity() const;
     bool childMouseEventFilter(QQuickItem *item, QEvent *event);
+    bool isPolishScheduled() const;
 
 private Q_SLOTS:
     void baseCameraDataChanged(const QGeoCameraData &camera);
@@ -95,6 +107,8 @@ private:
 
     QSizeF lastSize_;
     QGeoCameraData lastCameraData_;
+
+    friend class QDeclarativeGeoMap;
 };
 
 QT_END_NAMESPACE

@@ -33,11 +33,17 @@
 
 #include <qtest.h>
 
+#include <QOffscreenSurface>
+#include <QOpenGLContext>
+#include <QOpenGLFunctions>
+
 #include <QtQuick>
+#include <QtQml>
 
 #include <private/qopenglcontext_p.h>
+#include <private/qsgcontext_p.h>
+#include <private/qsgrenderloop_p.h>
 
-#include <QtQml>
 
 class PerPixelRect : public QQuickItem
 {
@@ -97,6 +103,12 @@ private slots:
     void render();
 
     void hideWithOtherContext();
+
+    void createTextureFromImage_data();
+    void createTextureFromImage();
+
+private:
+    bool m_brokenMipmapSupport;
 };
 
 template <typename T> class ScopedList : public QList<T> {
@@ -107,6 +119,42 @@ public:
 void tst_SceneGraph::initTestCase()
 {
     qmlRegisterType<PerPixelRect>("SceneGraphTest", 1, 0, "PerPixelRect");
+
+    QSGRenderLoop *loop = QSGRenderLoop::instance();
+    qDebug() << "RenderLoop:        " << loop;
+
+    QOpenGLContext context;
+    context.setFormat(loop->sceneGraphContext()->defaultSurfaceFormat());
+    context.create();
+    QSurfaceFormat format = context.format();
+
+    QOffscreenSurface surface;
+    surface.setFormat(format);
+    surface.create();
+    if (!context.makeCurrent(&surface))
+        qFatal("Failed to create a GL context...");
+
+    QOpenGLFunctions *funcs = QOpenGLContext::currentContext()->functions();
+    qDebug() << "R/G/B/A Buffers:   " << format.redBufferSize() << format.greenBufferSize() << format.blueBufferSize() << format.alphaBufferSize();
+    qDebug() << "Depth Buffer:      " << format.depthBufferSize();
+    qDebug() << "Stencil Buffer:    " << format.stencilBufferSize();
+    qDebug() << "Samples:           " << format.samples();
+    int textureSize;
+    funcs->glGetIntegerv(GL_MAX_TEXTURE_SIZE, &textureSize);
+    qDebug() << "Max Texture Size:  " << textureSize;
+    qDebug() << "GL_VENDOR:         " << (const char *) funcs->glGetString(GL_VENDOR);
+    qDebug() << "GL_RENDERER:       " << (const char *) funcs->glGetString(GL_RENDERER);
+    QByteArray version = (const char *) funcs->glGetString(GL_VERSION);
+    qDebug() << "GL_VERSION:        " << version.constData();
+    QSet<QByteArray> exts = context.extensions();
+    QByteArray all;
+    foreach (const QByteArray &e, exts) all += ' ' + e;
+    qDebug() << "GL_EXTENSIONS:    " << all.constData();
+
+    m_brokenMipmapSupport = version.contains("Mesa 10.1") || version.contains("Mesa 9.");
+    qDebug() << "Broken Mipmap:    " << m_brokenMipmapSupport;
+
+    context.doneCurrent();
 }
 
 QQuickView *createView(const QString &file, QWindow *parent = 0, int x = -1, int y = -1, int w = -1, int h = -1)
@@ -210,7 +258,7 @@ void tst_SceneGraph::manyWindows_data()
 
 struct ShareContextResetter {
 public:
-    ~ShareContextResetter() { QOpenGLContextPrivate::setGlobalShareContext(0); }
+    ~ShareContextResetter() { qt_gl_set_global_share_context(0); }
 };
 
 void tst_SceneGraph::manyWindows()
@@ -223,7 +271,7 @@ void tst_SceneGraph::manyWindows()
     ShareContextResetter cleanup; // To avoid dangling pointer in case of test-failure.
     if (shared) {
         QVERIFY(sharedGLContext.create());
-        QOpenGLContextPrivate::setGlobalShareContext(&sharedGLContext);
+        qt_gl_set_global_share_context(&sharedGLContext);
     }
 
     QScopedPointer<QWindow> parent;
@@ -297,8 +345,8 @@ struct Sample {
                 .arg(color.redF()).arg(color.greenF()).arg(color.blueF());
     }
 
-    bool check(const QImage &image) {
-        QColor color(image.pixel(x, y));
+    bool check(const QImage &image, qreal scale) {
+        QColor color(image.pixel(x * scale, y * scale));
         return qAbs(color.redF() - r) <= tolerance
                 && qAbs(color.greenF() - g) <= tolerance
                 && qAbs(color.blueF() - b) <= tolerance;
@@ -368,11 +416,11 @@ void tst_SceneGraph::render_data()
           << "data/render_BreakOpacityBatch.qml"
           << "data/render_OutOfFloatRange.qml"
           << "data/render_StackingOrder.qml"
-          << "data/render_Mipmap.qml"
           << "data/render_ImageFiltering.qml"
           << "data/render_bug37422.qml"
-          << "data/render_OpacityThroughBatchRoot.qml"
-        ;
+          << "data/render_OpacityThroughBatchRoot.qml";
+    if (!m_brokenMipmapSupport)
+          files << "data/render_Mipmap.qml";
 
     QRegExp sampleCount("#samples: *(\\d+)");
     //                          X:int   Y:int   R:float       G:float       B:float       Error:float
@@ -428,11 +476,18 @@ void tst_SceneGraph::render()
     view.show();
     QVERIFY(QTest::qWaitForWindowExposed(&view));
 
+    // We're checking actual pixels, so scale up the sample point to the top-left of the
+    // 2x2 pixel block and hope that this is good enough. Ideally, view and content
+    // would be in identical coordinate space, meaning pixels, but we're not in an
+    // ideal world.
+    // Just keep this in mind when writing tests.
+    qreal scale = view.devicePixelRatio();
+
     // Grab the window and check all our base stage samples
     QImage content = view.grabWindow();
     for (int i=0; i<baseStage.size(); ++i) {
         Sample sample = baseStage.at(i);
-        QVERIFY2(sample.check(content), qPrintable(sample.toString(content)));
+        QVERIFY2(sample.check(content, scale), qPrintable(sample.toString(content)));
     }
 
     // Put the qml file into the final stage and wait for it to
@@ -445,7 +500,7 @@ void tst_SceneGraph::render()
     content = view.grabWindow();
     for (int i=0; i<finalStage.size(); ++i) {
         Sample sample = finalStage.at(i);
-        QVERIFY2(sample.check(content), qPrintable(sample.toString(content)));
+        QVERIFY2(sample.check(content, scale), qPrintable(sample.toString(content)));
     }
 }
 
@@ -480,6 +535,34 @@ void tst_SceneGraph::hideWithOtherContext()
     // required to makeCurrent their context again before making any
     // GL calls to a new frame (see QOpenGLContext docs).
     QVERIFY(!renderingOnMainThread || QOpenGLContext::currentContext() != &context);
+}
+
+void tst_SceneGraph::createTextureFromImage_data()
+{
+    QImage rgba(64, 64, QImage::Format_ARGB32_Premultiplied);
+    QImage rgb(64, 64, QImage::Format_RGB32);
+
+    QTest::addColumn<QImage>("image");
+    QTest::addColumn<uint>("flags");
+    QTest::addColumn<bool>("expectedAlpha");
+
+    QTest::newRow("rgb") << rgb << uint(0) << false;
+    QTest::newRow("argb") << rgba << uint(0) << true;
+    QTest::newRow("rgb,alpha") << rgb << uint(QQuickWindow::TextureHasAlphaChannel) << false;
+    QTest::newRow("argb,alpha") << rgba << uint(QQuickWindow::TextureHasAlphaChannel) << true;
+    QTest::newRow("rgb,!alpha") << rgb << uint(QQuickWindow::TextureIsOpaque) << false;
+    QTest::newRow("argb,!alpha") << rgba << uint(QQuickWindow::TextureIsOpaque) << false;
+}
+
+void tst_SceneGraph::createTextureFromImage()
+{
+    QFETCH(QImage, image);
+    QFETCH(uint, flags);
+    QFETCH(bool, expectedAlpha);
+
+    QQuickView view;
+    QScopedPointer<QSGTexture> texture(view.createTextureFromImage(image, (QQuickWindow::CreateTextureOptions) flags));
+    QCOMPARE(texture->hasAlphaChannel(), expectedAlpha);
 }
 
 

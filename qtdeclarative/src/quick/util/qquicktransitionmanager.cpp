@@ -101,8 +101,8 @@ void QQuickTransitionManager::complete()
 void QQuickTransitionManagerPrivate::applyBindings()
 {
     foreach(const QQuickStateAction &action, bindingsList) {
-        if (!action.toBinding.isNull()) {
-            QQmlPropertyPrivate::setBinding(action.property, action.toBinding.data());
+        if (action.toBinding) {
+            QQmlPropertyPrivate::setBinding(action.toBinding.data());
         } else if (action.event) {
             if (action.reverseEvent)
                 action.event->reverse();
@@ -131,7 +131,7 @@ void QQuickTransitionManager::transition(const QList<QQuickStateAction> &list,
         if (action.toBinding)
             d->bindingsList << action;
         if (action.fromBinding)
-            QQmlPropertyPrivate::setBinding(action.property, 0); // Disable current binding
+            QQmlPropertyPrivate::removeBinding(action.property); // Disable current binding
         if (action.event && action.event->changesBindings()) {  //### assume isReversable()?
             d->bindingsList << action;
             action.event->clearBindings();
@@ -146,24 +146,21 @@ void QQuickTransitionManager::transition(const QList<QQuickStateAction> &list,
     //
     // This doesn't catch everything, and it might be a little fragile in
     // some cases - but whatcha going to do?
-    //
-    // Note that we only fast forward if both a transition and bindings are
-    // present, as it is unnecessary (and potentially expensive) otherwise.
 
     if (transition && !d->bindingsList.isEmpty()) {
 
         // Apply all the property and binding changes
         for (int ii = 0; ii < applyList.size(); ++ii) {
             const QQuickStateAction &action = applyList.at(ii);
-            if (!action.toBinding.isNull()) {
-                QQmlPropertyPrivate::setBinding(action.property, action.toBinding.data(), QQmlPropertyPrivate::BypassInterceptor | QQmlPropertyPrivate::DontRemoveBinding);
+            if (action.toBinding) {
+                QQmlPropertyPrivate::setBinding(action.toBinding.data(), QQmlPropertyPrivate::None, QQmlPropertyPrivate::BypassInterceptor | QQmlPropertyPrivate::DontRemoveBinding);
             } else if (!action.event) {
                 QQmlPropertyPrivate::write(action.property, action.toValue, QQmlPropertyPrivate::BypassInterceptor | QQmlPropertyPrivate::DontRemoveBinding);
             } else if (action.event->isReversable()) {
                 if (action.reverseEvent)
-                    action.event->reverse(QQuickStateActionEvent::FastForward);
+                    action.event->reverse();
                 else
-                    action.event->execute(QQuickStateActionEvent::FastForward);
+                    action.event->execute();
             }
         }
 
@@ -175,7 +172,7 @@ void QQuickTransitionManager::transition(const QList<QQuickStateAction> &list,
                 continue;
             }
             const QQmlProperty &prop = action->property;
-            if (!action->toBinding.isNull() || !action->toValue.isValid()) {
+            if (action->toBinding || !action->toValue.isValid()) {
                 action->toValue = prop.read();
             }
         }
@@ -192,7 +189,7 @@ void QQuickTransitionManager::transition(const QList<QQuickStateAction> &list,
             }
 
             if (action.toBinding)
-                QQmlPropertyPrivate::setBinding(action.property, 0); // Make sure this is disabled during the transition
+                QQmlPropertyPrivate::removeBinding(action.property); // Make sure this is disabled during the transition
 
             QQmlPropertyPrivate::write(action.property, action.fromValue, QQmlPropertyPrivate::BypassInterceptor | QQmlPropertyPrivate::DontRemoveBinding);
         }
@@ -269,10 +266,9 @@ void QQuickTransitionManager::cancel()
 
     for(int i = 0; i < d->bindingsList.count(); ++i) {
         QQuickStateAction action = d->bindingsList[i];
-        if (!action.toBinding.isNull() && action.deletableToBinding) {
-            QQmlPropertyPrivate::setBinding(action.property, 0);
-            action.toBinding.data()->destroy();
-            action.toBinding.clear();
+        if (action.toBinding && action.deletableToBinding) {
+            QQmlPropertyPrivate::removeBinding(action.property);
+            action.toBinding = 0;
             action.deletableToBinding = false;
         } else if (action.event) {
             //### what do we do here?

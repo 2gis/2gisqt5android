@@ -155,7 +155,7 @@
     \raw HTML
     <div class="table">
      <table style="background:transparent; border: none;">
-      <tr><td style="width:50%; border-bottom:0px;">
+      <tr><td style="width:50%; vertical-align:top;">
     \endraw
     \l{Qt Quick} provides the necessary infrastructure to develop QML
     applications. The latest version (v2.0) of this technology also
@@ -210,9 +210,6 @@
     \endraw
 
     \section1 Designing UI Made Simpler
-
-
-
 
     \raw HTML
     <div class="table">
@@ -272,19 +269,6 @@
      </table>
     </div>
     \endraw
-
-    \section1 Qt Cloud Backend
-
-    Enginio is the backend for Qt Cloud Services. New in Qt 5.3, the
-    \l{Enginio Manual}{Enginio} module combines a \e{no-SQL} object
-    approach with JSON and Qt APIs to provide applications a reliable and
-    powerful storage capability. The C++ and QML APIs provided by the new
-    module interact with the Qt Cloud servers from Digia.
-
-    \list
-    \li \l{Qt Cloud Services} by Digia
-    \li \l{Enginio Manual}{Enginio} - API for developers
-    \endlist
 
     \section1 Web Engine and HTML5
 
@@ -392,6 +376,32 @@
 
     Designing the UI for widget-based applications can be quick with
     \l{Qt Designer Manual}{Qt Designer}.
+
+    \section1 Provide Map-based Solutions with Qt
+
+    \raw HTML
+    <div class="table">
+     <table style="background:transparent; border: none">
+      <tr><td style="width:50%; vertical-align:top;border: none;">
+    \endraw
+    In today's world, location and maps information is more widely used, be it
+    to look up nearby restaurants or plan commute to the office. With Qt,
+    it is now possible to cater to these usecases by consuming map data
+    provided by the third-party vendors. The \l{QtLocation}{Qt Location} module
+    provides the APIs and the necessary backend to fetch map data from some of
+    the popular third-party mapping solutions. Here is a snapshot of the demo
+    application running on Android, presenting OpenStreetMap data from
+    \l {http://www.mapquest.com/}{www.mapquest.com}.
+    \raw HTML
+      </td><td style="width:50%; border: none; vertical-align: top">
+    \endraw
+    \image  qtlocation-mapviewer-demo.jpg
+    \caption Mapviewer example screenshot
+    \raw HTML
+      </td></tr>
+     </table>
+    </div>
+    \endraw
 
     \section1 Qt Platform Abstraction
 
@@ -502,6 +512,7 @@
 
     \section1 Related Topics
     \list
+    \li \l{What's New in Qt 5.6}
     \li \l{What's New in Qt 5.5}
     \li \l{What's New in Qt 5.4}
     \li \l{What's New in Qt 5.3}

@@ -45,9 +45,14 @@ QLowEnergyControllerPrivate::QLowEnergyControllerPrivate()
       error(QLowEnergyController::NoError),
       hub(0)
 {
+    registerQLowEnergyControllerMetaType();
 }
 
 QLowEnergyControllerPrivate::~QLowEnergyControllerPrivate()
+{
+}
+
+void QLowEnergyControllerPrivate::init()
 {
 }
 
@@ -262,7 +267,7 @@ void QLowEnergyControllerPrivate::readCharacteristic(
     }
 
     if (!result)
-        service->setError(QLowEnergyService::CharacteristicWriteError);
+        service->setError(QLowEnergyService::CharacteristicReadError);
 }
 
 void QLowEnergyControllerPrivate::readDescriptor(
@@ -288,7 +293,7 @@ void QLowEnergyControllerPrivate::readDescriptor(
     }
 
     if (!result)
-        service->setError(QLowEnergyService::DescriptorWriteError);
+        service->setError(QLowEnergyService::DescriptorReadError);
 }
 
 void QLowEnergyControllerPrivate::connectionUpdated(
@@ -325,6 +330,14 @@ void QLowEnergyControllerPrivate::connectionUpdated(
     if (newState == QLowEnergyController::UnconnectedState
             && !(oldState == QLowEnergyController::UnconnectedState
                 || oldState == QLowEnergyController::ConnectingState)) {
+
+        // Invalidate the services if the disconnect came from the remote end.
+        // Qtherwise we disconnected via QLowEnergyController::disconnectDevice() which
+        // triggered invalidation already
+        if (!serviceList.isEmpty()) {
+            Q_ASSERT(oldState != QLowEnergyController::ClosingState);
+            invalidateServices();
+        }
         emit q->disconnected();
     } else if (newState == QLowEnergyController::ConnectedState
                && oldState != QLowEnergyController::ConnectedState ) {
@@ -453,9 +466,11 @@ void QLowEnergyControllerPrivate::descriptorRead(
             serviceList.value(serviceUuid);
 
     bool entryUpdated = false;
-    foreach (QLowEnergyHandle charHandle, service->characteristicList.keys()) {
-        QLowEnergyServicePrivate::CharData &charDetails =
-                service->characteristicList[charHandle];
+
+    CharacteristicDataMap::iterator charIt = service->characteristicList.begin();
+    for ( ; charIt != service->characteristicList.end(); ++charIt) {
+        QLowEnergyServicePrivate::CharData &charDetails = charIt.value();
+
         if (charDetails.uuid != charUuid)
             continue;
 

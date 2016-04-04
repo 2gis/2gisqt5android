@@ -34,6 +34,17 @@
 #ifndef PARTICLEEMITTER_H
 #define PARTICLEEMITTER_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include <QtQuick/QQuickItem>
 #include <QDebug>
 #include "qquickparticlesystem_p.h"
@@ -67,7 +78,6 @@ class QQuickParticleEmitter : public QQuickItem
     Q_PROPERTY(QQuickDirection *acceleration READ acceleration WRITE setAcceleration NOTIFY accelerationChanged)
     Q_PROPERTY(qreal velocityFromMovement READ velocityFromMovement WRITE setVelocityFromMovement NOTIFY velocityFromMovementChanged)
 
-    Q_ENUMS(Lifetime)
 public:
     explicit QQuickParticleEmitter(QQuickItem *parent = 0);
     virtual ~QQuickParticleEmitter();
@@ -76,6 +86,7 @@ public:
     enum Lifetime {
         InfiniteLife = QQuickParticleSystem::maxLife
     };
+    Q_ENUM(Lifetime)
 
     bool enabled() const
     {

@@ -1,22 +1,31 @@
-TARGET   = Qt3DRenderer
+TARGET   = Qt3DRender
 
 QT      += core-private gui-private 3dcore 3dcore-private openglextensions concurrent
 
-DEFINES += QT3DRENDERER_LIBRARY
+DEFINES += QT3DRENDER_LIBRARY
 
-MODULE   = 3drenderer
+MODULE   = 3drender
 
 MODULE_PLUGIN_TYPES = \
     sceneparsers
 
 load(qt_module)
 
-QMAKE_DOCS = $$PWD/doc/qt3drenderer.qdocconf
-
 include (backend/render-backend.pri)
+include (geometry/geometry.pri)
+include (graphicshelpers/graphicshelpers.pri)
+include (framegraph/framegraph.pri)
 include (frontend/render-frontend.pri)
-include (io/render-io.pri)
+include (jobs/jobs.pri)
+include (lights/lights.pri)
+include (materialsystem/materialsystem.pri)
+include (renderstates/renderstates.pri)
+include (io/io.pri)
 include (defaults/defaults.pri)
+include (picking/picking.pri)
+include (raycasting/raycasting.pri)
+include (services/services.pri)
+include (texture/texture.pri)
 
 RESOURCES += $$PWD/render.qrc
 
@@ -32,9 +41,9 @@ gcov {
 }
 
 HEADERS += \
-    qt3drenderer_global.h \
-    qt3drenderer_global_p.h \
-    renderlogging_p.h
+    renderlogging_p.h \
+    qt3drender_global.h \
+    qt3drender_global_p.h
 
 !contains(QT_CONFIG, egl):DEFINES += QT_NO_EGL
 

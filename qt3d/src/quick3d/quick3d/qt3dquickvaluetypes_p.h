@@ -38,6 +38,17 @@
 #ifndef QT3DQUICKVALUETYPES_P_H
 #define QT3DQUICKVALUETYPES_P_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists for the convenience
+// of other Qt classes.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include <private/qt3dquick_global_p.h>
 #include <private/qqmlvaluetype_p.h>
 
@@ -50,10 +61,8 @@
 
 QT_BEGIN_NAMESPACE
 
-namespace Qt3D {
-
+namespace Qt3DCore {
 namespace Quick {
-
 namespace Quick3DValueTypes {
 
 QT3DQUICKSHARED_PRIVATE_EXPORT void registerValueTypes();
@@ -252,6 +261,14 @@ public:
     void setM43(qreal value) { v(3, 2) = value; }
     void setM44(qreal value) { v(3, 3) = value; }
 
+    Q_INVOKABLE void translate(float x, float y, float z) { v.translate(x, y, z); }
+    Q_INVOKABLE void translate(const QVector3D &t) { v.translate(t); }
+    Q_INVOKABLE void rotate(float angle, const QVector3D &axis) { v.rotate(angle, axis); }
+    Q_INVOKABLE void scale(float s) { v.scale(s); }
+    Q_INVOKABLE void scale(float sx, float sy, float sz) { v.scale(sx, sy, sz); }
+    Q_INVOKABLE void scale(const QVector3D &s) { v.scale(s); }
+    Q_INVOKABLE void lookAt(const QVector3D &eye, const QVector3D &center, const QVector3D &up) { v.lookAt(eye, center, up); }
+
     Q_INVOKABLE QMatrix4x4 times(const QMatrix4x4 &m) const;
     Q_INVOKABLE QVector4D times(const QVector4D &vec) const;
     Q_INVOKABLE QVector3D times(const QVector3D &vec) const;
@@ -270,9 +287,8 @@ public:
     Q_INVOKABLE bool fuzzyEquals(const QMatrix4x4 &m) const;
 };
 
-} // Quick
-
-} // Qt3D
+} // namespace Quick
+} // namespace Qt3DCore
 
 QT_END_NAMESPACE
 

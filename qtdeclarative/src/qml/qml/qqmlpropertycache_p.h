@@ -54,7 +54,7 @@
 #include <QtCore/qvarlengtharray.h>
 #include <QtCore/qvector.h>
 
-#include <private/qv4value_inl_p.h>
+#include <private/qv4value_p.h>
 
 QT_BEGIN_NAMESPACE
 
@@ -174,7 +174,6 @@ public:
         int propType;             // When !NotFullyResolved
         const char *propTypeName; // When NotFullyResolved
     };
-    int coreIndex;
     union {
         // The notify index is in the range returned by QObjectPrivate::signalIndex().
         // This is different from QMetaMethod::methodIndex().
@@ -208,6 +207,7 @@ public:
             qintptr accessorData;
         };
     };
+    int coreIndex;
 
 private:
     friend class QQmlPropertyData;
@@ -243,8 +243,8 @@ class QQmlPropertyCacheMethodArguments;
 class Q_QML_PRIVATE_EXPORT QQmlPropertyCache : public QQmlRefCount, public QQmlCleanup
 {
 public:
-    QQmlPropertyCache(QJSEngine *);
-    QQmlPropertyCache(QJSEngine *, const QMetaObject *);
+    QQmlPropertyCache(QV4::ExecutionEngine *);
+    QQmlPropertyCache(QV4::ExecutionEngine *, const QMetaObject *);
     virtual ~QQmlPropertyCache();
 
     void update(const QMetaObject *);
@@ -267,15 +267,9 @@ public:
                                       int methodCount, int signalCount);
     void appendProperty(const QString &,
                         quint32 flags, int coreIndex, int propType, int notifyIndex);
-    void appendProperty(const QHashedCStringRef &,
-                        quint32 flags, int coreIndex, int propType, int notifyIndex);
     void appendSignal(const QString &, quint32, int coreIndex, const int *types = 0,
                       const QList<QByteArray> &names = QList<QByteArray>());
-    void appendSignal(const QHashedCStringRef &, quint32, int coreIndex, const int *types = 0,
-                      const QList<QByteArray> &names = QList<QByteArray>());
     void appendMethod(const QString &, quint32 flags, int coreIndex,
-                      const QList<QByteArray> &names = QList<QByteArray>());
-    void appendMethod(const QHashedCStringRef &, quint32 flags, int coreIndex,
                       const QList<QByteArray> &names = QList<QByteArray>());
 
     const QMetaObject *metaObject() const;
@@ -290,7 +284,7 @@ public:
 
     QQmlPropertyData *property(int) const;
     QQmlPropertyData *method(int) const;
-    QQmlPropertyData *signal(int index) const { return signal(index, 0); }
+    QQmlPropertyData *signal(int index) const;
     int methodIndexToSignalIndex(int) const;
     QStringList propertyNames() const;
 
@@ -313,7 +307,6 @@ public:
     static int originalClone(QObject *, int index);
 
     QList<QByteArray> signalParameterNames(int index) const;
-    QString signalParameterStringForJS(int index, QString *errorString = 0);
     static QString signalParameterStringForJS(QV4::ExecutionEngine *engine, const QList<QByteArray> &parameterNameList, QString *errorString = 0);
 
     const char *className() const;
@@ -347,9 +340,7 @@ private:
                 QQmlPropertyData::Flag methodFlags = QQmlPropertyData::NoFlags,
                 QQmlPropertyData::Flag signalFlags = QQmlPropertyData::NoFlags);
 
-    QQmlPropertyCacheMethodArguments *createArgumentsObject(int count,
-                                                            const QList<QByteArray> &names);
-    QQmlPropertyData *signal(int, QQmlPropertyCache **) const;
+    QQmlPropertyCacheMethodArguments *createArgumentsObject(int count, const QList<QByteArray> &names);
 
     typedef QVector<QQmlPropertyData> IndexCache;
     typedef QStringMultiHash<QPair<int, QQmlPropertyData *> > StringCache;
@@ -377,8 +368,10 @@ private:
         _hasPropertyOverrides |= isOverride;
     }
 
-    QJSEngine *engine;
+public:
+    QV4::ExecutionEngine *engine;
 
+private:
     QQmlPropertyCache *_parent;
     int propertyIndexCacheStart;
     int methodIndexCacheStart;

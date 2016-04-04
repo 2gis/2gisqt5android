@@ -34,16 +34,31 @@
 #ifndef QQUICKITEMVIEWTRANSITION_P_P_H
 #define QQUICKITEMVIEWTRANSITION_P_P_H
 
-#include <private/qquicktransitionmanager_p_p.h>
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
+#include <QtQuick/private/qtquickglobal_p.h>
+#include <QtCore/qobject.h>
+#include <QtCore/qpoint.h>
+#include <QtQml/qqml.h>
 
 QT_BEGIN_NAMESPACE
 
 class QQuickItem;
+class QQuickTransition;
 class QQuickItemViewTransitionableItem;
 class QQuickItemViewTransitionJob;
 
 
-class QQuickItemViewTransitionChangeListener
+class Q_QUICK_PRIVATE_EXPORT QQuickItemViewTransitionChangeListener
 {
 public:
     QQuickItemViewTransitionChangeListener() {}
@@ -53,7 +68,7 @@ public:
 };
 
 
-class QQuickItemViewTransitioner
+class Q_QUICK_PRIVATE_EXPORT QQuickItemViewTransitioner
 {
 public:
     enum TransitionType {
@@ -113,7 +128,7 @@ private:
 /*
   An item that can be transitioned using QQuickViewTransitionJob.
   */
-class QQuickItemViewTransitionableItem
+class Q_QUICK_PRIVATE_EXPORT QQuickItemViewTransitionableItem
 {
 public:
     QQuickItemViewTransitionableItem(QQuickItem *i);

@@ -34,22 +34,18 @@
 **
 ****************************************************************************/
 
-#include "qabstractframeadvanceservice.h"
 #include "qabstractframeadvanceservice_p.h"
+#include "qabstractframeadvanceservice_p_p.h"
 
 QT_BEGIN_NAMESPACE
 
-namespace Qt3D {
+namespace Qt3DCore {
 
-/*!
-    \class Qt3D::QAbstractFrameAdvanceServicePrivate
-    \internal
-*/
 
-/*!
-    \class Qt3D::QAbstractFrameAdvanceService
+/* !\internal
+    \class Qt3DCore::QAbstractFrameAdvanceService
     \inmodule Qt3DCore
-    \brief Interface for a Qt3D frame advance service
+    \brief Interface for a Qt3D frame advance service.
 
     This is an interface class that should be subclassed by providers of the
     frame advance service. When used with the Renderer aspect, the aspect needs to
@@ -71,20 +67,20 @@ QAbstractFrameAdvanceService::QAbstractFrameAdvanceService(QAbstractFrameAdvance
 
 }
 
-/*!
-    \fn qint64 Qt3D::QAbstractFrameAdvanceService::waitForNextTick()
+/*
+    \fn qint64 Qt3DCore::QAbstractFrameAdvanceService::waitForNextFrame()
 
     Returns the current time, the call may be blocking if waiting for a tick.
 */
 
-/*!
-    \fn void Qt3D::QAbstractFrameAdvanceService::start()
+/*
+    \fn void Qt3DCore::QAbstractFrameAdvanceService::start()
 
     Starts the service.
 */
 
-/*!
-    \fn void Qt3D::QAbstractFrameAdvanceService::stop()
+/*
+    \fn void Qt3DCore::QAbstractFrameAdvanceService::stop()
 
     Stops the service, performing any cleanup deemed necessary.
 */

@@ -271,6 +271,7 @@ QVariantList QJsonArray::toVariantList() const
     QVariantList list;
 
     if (a) {
+        list.reserve(a->length);
         for (int i = 0; i < (int)a->length; ++i)
             list.append(QJsonValue(d, a, a->at(i)).toVariant());
     }
@@ -532,8 +533,8 @@ bool QJsonArray::contains(const QJsonValue &value) const
     \a i must be a valid index position in the array (i.e., \c{0 <= i <
     size()}).
 
-    The return value is of type \keyword QJsonValueRef, a helper class for QJsonArray
-    and QJsonObject. When you get an object of type \keyword QJsonValueRef, you can
+    The return value is of type QJsonValueRef, a helper class for QJsonArray
+    and QJsonObject. When you get an object of type QJsonValueRef, you can
     use it as if it were a reference to a QJsonValue. If you assign to it,
     the assignment will apply to the character in the QJsonArray of QJsonObject
     from which you got the reference.
@@ -738,8 +739,8 @@ bool QJsonArray::operator!=(const QJsonArray &other) const
     You can change the value of an item by using operator*() on the
     left side of an assignment.
 
-    The return value is of type \keyword QJsonValueRef, a helper class for QJsonArray
-    and QJsonObject. When you get an object of type \keyword QJsonValueRef, you can
+    The return value is of type QJsonValueRef, a helper class for QJsonArray
+    and QJsonObject. When you get an object of type QJsonValueRef, you can
     use it as if it were a reference to a QJsonValue. If you assign to it,
     the assignment will apply to the character in the QJsonArray of QJsonObject
     from which you got the reference.
@@ -758,8 +759,8 @@ bool QJsonArray::operator!=(const QJsonArray &other) const
     This function is provided to make QJsonArray iterators behave like C++
     pointers.
 
-    The return value is of type \keyword QJsonValueRef, a helper class for QJsonArray
-    and QJsonObject. When you get an object of type \keyword QJsonValueRef, you can
+    The return value is of type QJsonValueRef, a helper class for QJsonArray
+    and QJsonObject. When you get an object of type QJsonValueRef, you can
     use it as if it were a reference to a QJsonValue. If you assign to it,
     the assignment will apply to the character in the QJsonArray of QJsonObject
     from which you got the reference.

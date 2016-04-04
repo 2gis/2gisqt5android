@@ -35,7 +35,8 @@
 #define QQMLDEBUGSERVICE_H
 
 #include <QtCore/qobject.h>
-#include <QtCore/QDataStream>
+#include <QtCore/qdatastream.h>
+#include <QtCore/qhash.h>
 
 #include <private/qtqmlglobal_p.h>
 
@@ -62,35 +63,14 @@ class Q_QML_PRIVATE_EXPORT QQmlDebugService : public QObject
     Q_DISABLE_COPY(QQmlDebugService)
 
 public:
-    explicit QQmlDebugService(const QString &, float version, QObject *parent = 0);
     ~QQmlDebugService();
 
-    QString name() const;
+    const QString &name() const;
     float version() const;
 
     enum State { NotConnected, Unavailable, Enabled };
     State state() const;
-
-    void sendMessage(const QByteArray &);
-    void sendMessages(const QList<QByteArray> &);
-
-    static int idForObject(QObject *);
-    static QObject *objectForId(int);
-    static QList<QObject*> objectForLocationInfo(const QString &filename,
-                                          int lineNumber, int columnNumber);
-    static void removeInvalidObjectsFromHash();
-    static void clearObjectsFromHash();
-
-    static QString objectToString(QObject *obj);
-
-    static bool isDebuggingEnabled();
-    static bool hasDebuggingClient();
-    static bool blockingMode();
-
-protected:
-    QQmlDebugService(QQmlDebugServicePrivate &dd, const QString &name, float version, QObject *parent = 0);
-
-    State registerService();
+    void setState(State newState);
 
     virtual void stateAboutToBeChanged(State);
     virtual void stateChanged(State);
@@ -101,18 +81,26 @@ protected:
     virtual void engineAdded(QQmlEngine *);
     virtual void engineRemoved(QQmlEngine *);
 
+    static const QHash<int, QObject *> &objectsForIds();
+    static int idForObject(QObject *);
+    static QObject *objectForId(int id) { return objectsForIds().value(id); }
+
+protected:
+    explicit QQmlDebugService(const QString &, float version, QObject *parent = 0);
+
 signals:
     void attachedToEngine(QQmlEngine *);
     void detachedFromEngine(QQmlEngine *);
 
-private:
-    friend class QQmlDebugServer;
-    friend class QQmlDebugServerPrivate;
+    void messageToClient(const QString &name, const QByteArray &message);
+    void messagesToClient(const QString &name, const QList<QByteArray> &messages);
 };
 
 class Q_QML_PRIVATE_EXPORT QQmlDebugStream : public QDataStream
 {
 public:
+    static int s_dataStreamVersion;
+
     QQmlDebugStream();
     explicit QQmlDebugStream(QIODevice *d);
     QQmlDebugStream(QByteArray *ba, QIODevice::OpenMode flags);

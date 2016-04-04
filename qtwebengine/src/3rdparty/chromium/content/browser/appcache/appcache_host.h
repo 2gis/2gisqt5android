@@ -33,6 +33,7 @@ FORWARD_DECLARE_TEST(AppCacheHostTest, SetSwappableCache);
 FORWARD_DECLARE_TEST(AppCacheHostTest, ForDedicatedWorker);
 FORWARD_DECLARE_TEST(AppCacheHostTest, SelectCacheAllowed);
 FORWARD_DECLARE_TEST(AppCacheHostTest, SelectCacheBlocked);
+FORWARD_DECLARE_TEST(AppCacheHostTest, SelectCacheTwice);
 FORWARD_DECLARE_TEST(AppCacheTest, CleanupUnusedCache);
 class AppCache;
 class AppCacheFrontend;
@@ -76,13 +77,13 @@ class CONTENT_EXPORT AppCacheHost
   void RemoveObserver(Observer* observer);
 
   // Support for cache selection and scriptable method calls.
-  void SelectCache(const GURL& document_url,
+  bool SelectCache(const GURL& document_url,
                    const int64 cache_document_was_loaded_from,
                    const GURL& manifest_url);
-  void SelectCacheForWorker(int parent_process_id,
+  bool SelectCacheForWorker(int parent_process_id,
                             int parent_host_id);
-  void SelectCacheForSharedWorker(int64 appcache_id);
-  void MarkAsForeignEntry(const GURL& document_url,
+  bool SelectCacheForSharedWorker(int64 appcache_id);
+  bool MarkAsForeignEntry(const GURL& document_url,
                           int64 cache_document_was_loaded_from);
   void GetStatusWithCallback(const GetStatusCallback& callback,
                              void* callback_param);
@@ -111,7 +112,8 @@ class CONTENT_EXPORT AppCacheHost
   // May return NULL if the request isn't subject to retrieval from an appache.
   AppCacheRequestHandler* CreateRequestHandler(
       net::URLRequest* request,
-      ResourceType resource_type);
+      ResourceType resource_type,
+      bool should_reset_appcache);
 
   // Support for devtools inspecting appcache resources.
   void GetResourceList(std::vector<AppCacheResourceInfo>* resource_infos);
@@ -268,6 +270,9 @@ class CONTENT_EXPORT AppCacheHost
   int64 pending_selected_cache_id_;
   GURL pending_selected_manifest_url_;
 
+  // Used to defend against bad IPC messages.
+  bool was_select_cache_called_;
+
   // Used to avoid stepping on pages controlled by ServiceWorkers.
   bool is_cache_selection_enabled_;
 
@@ -312,7 +317,7 @@ class CONTENT_EXPORT AppCacheHost
   bool associated_cache_info_pending_;
 
   // List of objects observing us.
-  ObserverList<Observer> observers_;
+  base::ObserverList<Observer> observers_;
 
   // Used to inform the QuotaManager of what origins are currently in use.
   GURL origin_in_use_;
@@ -331,6 +336,7 @@ class CONTENT_EXPORT AppCacheHost
   FRIEND_TEST_ALL_PREFIXES(content::AppCacheHostTest, ForDedicatedWorker);
   FRIEND_TEST_ALL_PREFIXES(content::AppCacheHostTest, SelectCacheAllowed);
   FRIEND_TEST_ALL_PREFIXES(content::AppCacheHostTest, SelectCacheBlocked);
+  FRIEND_TEST_ALL_PREFIXES(content::AppCacheHostTest, SelectCacheTwice);
   FRIEND_TEST_ALL_PREFIXES(content::AppCacheTest, CleanupUnusedCache);
 
   DISALLOW_COPY_AND_ASSIGN(AppCacheHost);

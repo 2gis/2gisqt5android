@@ -145,12 +145,12 @@ public:
     QQmlBoundSignalExpressionPointer reverseExpression;
     QQmlBoundSignalExpressionPointer rewindExpression;
 
-    virtual void execute(Reason) {
+    virtual void execute() {
         QQmlPropertyPrivate::setSignalExpression(property, expression);
     }
 
     virtual bool isReversable() { return true; }
-    virtual void reverse(Reason) {
+    virtual void reverse() {
         QQmlPropertyPrivate::setSignalExpression(property, reverseExpression);
     }
 
@@ -451,7 +451,7 @@ QQuickPropertyChanges::ActionList QQuickPropertyChanges::actions()
             QQmlBinding *newBinding = 0;
             if (e.id != QQmlBinding::Invalid) {
                 QV4::Scope scope(QQmlEnginePrivate::getV4Engine(qmlEngine(this)));
-                QV4::ScopedValue function(scope, QV4::QmlBindingWrapper::createQmlCallableForFunction(context, object(), d->cdata->compilationUnit->runtimeFunctions[e.id]));
+                QV4::ScopedValue function(scope, QV4::FunctionObject::createQmlFunction(context, object(), d->cdata->compilationUnit->runtimeFunctions[e.id]));
                 newBinding = new QQmlBinding(function, object(), context);
             }
 //            QQmlBinding *newBinding = e.id != QQmlBinding::Invalid ? QQmlBinding::createBinding(e.id, object(), qmlContext(this)) : 0;
@@ -464,10 +464,10 @@ QQuickPropertyChanges::ActionList QQuickPropertyChanges::actions()
                 // XXX TODO: add a static QQmlJavaScriptExpression::evaluate(QString)
                 // so that we can avoid creating then destroying the binding in this case.
                 a.toValue = newBinding->evaluate();
-                newBinding->destroy();
+                delete newBinding;
             } else {
                 newBinding->setTarget(prop);
-                a.toBinding = QQmlAbstractBinding::getPointer(newBinding);
+                a.toBinding = newBinding;
                 a.deletableToBinding = true;
             }
 
@@ -558,11 +558,7 @@ void QQuickPropertyChanges::changeValue(const QString &name, const QVariant &val
         if (entry.name == name) {
             expressionIterator.remove();
             if (state() && state()->isStateActive()) {
-                QQmlAbstractBinding *oldBinding = QQmlPropertyPrivate::binding(d->property(name));
-                if (oldBinding) {
-                    QQmlPropertyPrivate::setBinding(d->property(name), 0);
-                    oldBinding->destroy();
-                }
+                QQmlPropertyPrivate::removeBinding(d->property(name));
                 d->property(name).write(value);
             }
 
@@ -624,15 +620,9 @@ void QQuickPropertyChanges::changeExpression(const QString &name, const QString 
         if (entry.name == name) {
             entry.expression = expression;
             if (state() && state()->isStateActive()) {
-                QQmlAbstractBinding *oldBinding = QQmlPropertyPrivate::binding(d->property(name));
-                if (oldBinding) {
-                   QQmlPropertyPrivate::setBinding(d->property(name), 0);
-                   oldBinding->destroy();
-                }
-
                 QQmlBinding *newBinding = new QQmlBinding(expression, object(), qmlContext(this));
                 newBinding->setTarget(d->property(name));
-                QQmlPropertyPrivate::setBinding(d->property(name), newBinding, QQmlPropertyPrivate::DontRemoveBinding | QQmlPropertyPrivate::BypassInterceptor);
+                QQmlPropertyPrivate::setBinding(newBinding, QQmlPropertyPrivate::None, QQmlPropertyPrivate::DontRemoveBinding | QQmlPropertyPrivate::BypassInterceptor);
             }
             return;
         }
@@ -651,7 +641,7 @@ void QQuickPropertyChanges::changeExpression(const QString &name, const QString 
 
             QQmlBinding *newBinding = new QQmlBinding(expression, object(), qmlContext(this));
             newBinding->setTarget(d->property(name));
-            QQmlPropertyPrivate::setBinding(d->property(name), newBinding, QQmlPropertyPrivate::DontRemoveBinding | QQmlPropertyPrivate::BypassInterceptor);
+            QQmlPropertyPrivate::setBinding(newBinding, QQmlPropertyPrivate::None, QQmlPropertyPrivate::DontRemoveBinding | QQmlPropertyPrivate::BypassInterceptor);
         } else {
             QQuickStateAction action;
             action.restore = restoreEntryValues();
@@ -666,10 +656,10 @@ void QQuickPropertyChanges::changeExpression(const QString &name, const QString 
                 // XXX TODO: add a static QQmlJavaScriptExpression::evaluate(QString)
                 // so that we can avoid creating then destroying the binding in this case.
                 action.toValue = newBinding->evaluate();
-                newBinding->destroy();
+                delete newBinding;
             } else {
-                newBinding->setTarget(d->property(name));
-                action.toBinding = QQmlAbstractBinding::getPointer(newBinding);
+                newBinding->setTarget(action.property);
+                action.toBinding = newBinding;
                 action.deletableToBinding = true;
 
                 state()->addEntryToRevertList(action);
@@ -677,7 +667,7 @@ void QQuickPropertyChanges::changeExpression(const QString &name, const QString 
                 if (oldBinding)
                     oldBinding->setEnabled(false, QQmlPropertyPrivate::DontRemoveBinding | QQmlPropertyPrivate::BypassInterceptor);
 
-                QQmlPropertyPrivate::setBinding(action.property, newBinding, QQmlPropertyPrivate::DontRemoveBinding | QQmlPropertyPrivate::BypassInterceptor);
+                QQmlPropertyPrivate::setBinding(newBinding, QQmlPropertyPrivate::None, QQmlPropertyPrivate::DontRemoveBinding | QQmlPropertyPrivate::BypassInterceptor);
             }
         }
     }

@@ -38,12 +38,8 @@
 
 QT_BEGIN_NAMESPACE
 
-namespace Qt3D {
+namespace Qt3DCore {
 
-/*!
-    \class Qt3D::QAbstractAspectJobManager
-    \internal
-*/
 QAbstractAspectJobManager::QAbstractAspectJobManager(QObject *parent)
     : QObject(parent)
 {

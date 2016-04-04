@@ -62,6 +62,8 @@ addTsTargets(qtlocation, qtlocation/src/src.pro)
 #addTsTargets(qtsensors, qtsensors/src/src.pro) # empty
 #addTsTargets(qtsystems, qtsystems/src/src.pro)  # not part of 5.0
 addTsTargets(qtwebsockets, qtwebsockets/src/src.pro)
+addTsTargets(qtserialport, qtserialport/src/src.pro)
+addTsTargets(qtwebengine, qtwebengine/src/src.pro)
 
 addTsTargets(designer, qttools/src/designer/designer.pro)
 addTsTargets(linguist, qttools/src/linguist/linguist/linguist.pro)
@@ -120,6 +122,7 @@ TRANSLATIONS = $$files(*.ts)
 translations.path = $$[QT_INSTALL_TRANSLATIONS]
 translations.files = $$TRANSLATIONS
 translations.files ~= s,\\.ts$,.qm,g
+translations.files ~= s,^$$re_escape($$OUT_PWD),,g
 translations.files ~= s,^,$$MODULE_BASE_OUTDIR/translations/,g
 translations.CONFIG += no_check_exist
 INSTALLS += translations

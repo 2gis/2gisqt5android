@@ -45,6 +45,7 @@
 #include "qv4binop_p.h"
 
 #include <QtCore/QBuffer>
+#include <QtCore/QCoreApplication>
 
 #include <assembler/LinkBuffer.h>
 #include <WTFStubs.h>
@@ -120,6 +121,19 @@ static void printDisassembledOutputWithCalls(QByteArray processedOutput, const Q
     qDebug("%s", processedOutput.constData());
 }
 
+#if defined(Q_OS_LINUX)
+static FILE *pmap;
+
+static void qt_closePmap()
+{
+    if (pmap) {
+        fclose(pmap);
+        pmap = 0;
+    }
+}
+
+#endif
+
 JSC::MacroAssemblerCodeRef Assembler::link(int *codeSize)
 {
     Label endOfCode = label();
@@ -167,19 +181,21 @@ JSC::MacroAssemblerCodeRef Assembler::link(int *codeSize)
 
     *codeSize = linkBuffer.offsetOf(endOfCode);
 
+    QByteArray name;
+
     JSC::MacroAssemblerCodeRef codeRef;
 
-    static bool showCode = !qgetenv("QV4_SHOW_ASM").isNull();
+    static const bool showCode = qEnvironmentVariableIsSet("QV4_SHOW_ASM");
     if (showCode) {
         QBuffer buf;
         buf.open(QIODevice::WriteOnly);
         WTF::setDataFile(new QIODevicePrintStream(&buf));
 
-        QByteArray name = _function->name->toUtf8();
+        name = _function->name->toUtf8();
         if (name.isEmpty()) {
             name = QByteArray::number(quintptr(_function), 16);
             name.prepend("IR::Function(0x");
-            name.append(")");
+            name.append(')');
         }
         codeRef = linkBuffer.finalizeCodeWithDisassembly("%s", name.data());
 
@@ -188,6 +204,50 @@ JSC::MacroAssemblerCodeRef Assembler::link(int *codeSize)
     } else {
         codeRef = linkBuffer.finalizeCodeWithoutDisassembly();
     }
+
+#if defined(Q_OS_LINUX)
+    // This implements writing of JIT'd addresses so that perf can find the
+    // symbol names.
+    //
+    // Perf expects the mapping to be in a certain place and have certain
+    // content, for more information, see:
+    // https://github.com/torvalds/linux/blob/master/tools/perf/Documentation/jit-interface.txt
+    static bool doProfile = !qEnvironmentVariableIsEmpty("QV4_PROFILE_WRITE_PERF_MAP");
+    static bool profileInitialized = false;
+    if (doProfile && !profileInitialized) {
+        profileInitialized = true;
+
+        char pname[PATH_MAX];
+        snprintf(pname, PATH_MAX - 1, "/tmp/perf-%lu.map",
+                                      (unsigned long)QCoreApplication::applicationPid());
+
+        pmap = fopen(pname, "w");
+        if (!pmap)
+            qWarning("QV4: Can't write %s, call stacks will not contain JavaScript function names", pname);
+
+        // make sure we clean up nicely
+        std::atexit(qt_closePmap);
+    }
+
+    if (pmap) {
+        // this may have been pre-populated, if QV4_SHOW_ASM was on
+        if (name.isEmpty()) {
+            name = _function->name->toUtf8();
+            if (name.isEmpty()) {
+                name = QByteArray::number(quintptr(_function), 16);
+                name.prepend("IR::Function(0x");
+                name.append(')');
+            }
+        }
+
+        fprintf(pmap, "%llx %x %.*s\n",
+                      (long long unsigned int)codeRef.code().executableAddress(),
+                      *codeSize,
+                      name.length(),
+                      name.constData());
+        fflush(pmap);
+    }
+#endif
 
     return codeRef;
 }
@@ -215,7 +275,7 @@ void InstructionSelection::run(int functionIndex)
     IR::Optimizer opt(_function);
     opt.run(qmlEngine);
 
-    static const bool withRegisterAllocator = qgetenv("QV4_NO_REGALLOC").isEmpty();
+    static const bool withRegisterAllocator = qEnvironmentVariableIsEmpty("QV4_NO_REGALLOC");
     if (Assembler::RegAllocIsSupported && opt.isInSSA() && withRegisterAllocator) {
         RegisterAllocator regalloc(Assembler::getRegisterInfo());
         regalloc.run(_function, opt);
@@ -317,7 +377,7 @@ const void *InstructionSelection::addConstantTable(QVector<Primitive> *values)
 QQmlRefPointer<QV4::CompiledData::CompilationUnit> InstructionSelection::backendCompileStep()
 {
     QQmlRefPointer<QV4::CompiledData::CompilationUnit> result;
-    result.take(compilationUnit.take());
+    result.adopt(compilationUnit.take());
     return result;
 }
 
@@ -336,6 +396,23 @@ void InstructionSelection::callBuiltinInvalid(IR::Name *func, IR::ExprList *args
                              Assembler::EngineRegister,
                              Assembler::StringToIndex(*func->id),
                              baseAddressForCallData());
+    }
+}
+
+void InstructionSelection::callBuiltinTypeofQmlContextProperty(IR::Expr *base,
+                                                               IR::Member::MemberKind kind,
+                                                               int propertyIndex, IR::Expr *result)
+{
+    if (kind == IR::Member::MemberOfQmlScopeObject) {
+        generateFunctionCall(result, Runtime::typeofScopeObjectProperty, Assembler::EngineRegister,
+                             Assembler::PointerToValue(base),
+                             Assembler::TrustedImm32(propertyIndex));
+    } else if (kind == IR::Member::MemberOfQmlContextObject) {
+        generateFunctionCall(result, Runtime::typeofContextObjectProperty,
+                             Assembler::EngineRegister, Assembler::PointerToValue(base),
+                             Assembler::TrustedImm32(propertyIndex));
+    } else {
+        Q_UNREACHABLE();
     }
 }
 
@@ -574,24 +651,14 @@ void InstructionSelection::loadThisObject(IR::Expr *temp)
 #endif
 }
 
-void InstructionSelection::loadQmlIdArray(IR::Expr *temp)
+void InstructionSelection::loadQmlContext(IR::Expr *temp)
 {
-    generateFunctionCall(temp, Runtime::getQmlIdArray, Assembler::EngineRegister);
+    generateFunctionCall(temp, Runtime::getQmlContext, Assembler::EngineRegister);
 }
 
 void InstructionSelection::loadQmlImportedScripts(IR::Expr *temp)
 {
     generateFunctionCall(temp, Runtime::getQmlImportedScripts, Assembler::EngineRegister);
-}
-
-void InstructionSelection::loadQmlContextObject(IR::Expr *temp)
-{
-    generateFunctionCall(temp, Runtime::getQmlContextObject, Assembler::EngineRegister);
-}
-
-void InstructionSelection::loadQmlScopeObject(IR::Expr *temp)
-{
-    generateFunctionCall(temp, Runtime::getQmlScopeObject, Assembler::EngineRegister);
 }
 
 void InstructionSelection::loadQmlSingleton(const QString &name, IR::Expr *temp)
@@ -614,7 +681,7 @@ void InstructionSelection::loadConst(IR::Const *sourceConst, IR::Expr *target)
                 _as->toUInt32Register(sourceConst, (Assembler::RegisterID) targetTemp->index);
             } else if (targetTemp->type == IR::BoolType) {
                 Q_ASSERT(sourceConst->type == IR::BoolType);
-                _as->move(Assembler::TrustedImm32(convertToValue(sourceConst).int_32),
+                _as->move(Assembler::TrustedImm32(convertToValue(sourceConst).int_32()),
                           (Assembler::RegisterID) targetTemp->index);
             } else {
                 Q_UNREACHABLE();
@@ -631,7 +698,7 @@ void InstructionSelection::loadString(const QString &str, IR::Expr *target)
     Pointer srcAddr = _as->loadStringAddress(Assembler::ReturnValueRegister, str);
     _as->loadPtr(srcAddr, Assembler::ReturnValueRegister);
     Pointer destAddr = _as->loadAddress(Assembler::ScratchRegister, target);
-#if QT_POINTER_SIZE == 8
+#ifdef QV4_USE_64_BIT_VALUE_ENCODING
     _as->store64(Assembler::ReturnValueRegister, destAddr);
 #else
     _as->store32(Assembler::ReturnValueRegister, destAddr);
@@ -680,6 +747,18 @@ void InstructionSelection::getProperty(IR::Expr *base, const QString &name, IR::
     }
 }
 
+void InstructionSelection::getQmlContextProperty(IR::Expr *base, IR::Member::MemberKind kind, int index, IR::Expr *target)
+{
+    if (kind == IR::Member::MemberOfQmlScopeObject)
+        generateFunctionCall(target, Runtime::getQmlScopeObjectProperty, Assembler::EngineRegister, Assembler::PointerToValue(base), Assembler::TrustedImm32(index));
+    else if (kind == IR::Member::MemberOfQmlContextObject)
+        generateFunctionCall(target, Runtime::getQmlContextObjectProperty, Assembler::EngineRegister, Assembler::PointerToValue(base), Assembler::TrustedImm32(index));
+    else if (kind == IR::Member::MemberOfIdObjectsArray)
+        generateFunctionCall(target, Runtime::getQmlIdObject, Assembler::EngineRegister, Assembler::PointerToValue(base), Assembler::TrustedImm32(index));
+    else
+        Q_ASSERT(false);
+}
+
 void InstructionSelection::getQObjectProperty(IR::Expr *base, int propertyIndex, bool captureRequired, bool isSingleton, int attachedPropertiesId, IR::Expr *target)
 {
     if (attachedPropertiesId != 0)
@@ -706,6 +785,18 @@ void InstructionSelection::setProperty(IR::Expr *source, IR::Expr *targetBase,
                              Assembler::PointerToValue(targetBase), Assembler::StringToIndex(targetName),
                              Assembler::PointerToValue(source));
     }
+}
+
+void InstructionSelection::setQmlContextProperty(IR::Expr *source, IR::Expr *targetBase, IR::Member::MemberKind kind, int propertyIndex)
+{
+    if (kind == IR::Member::MemberOfQmlScopeObject)
+        generateFunctionCall(Assembler::Void, Runtime::setQmlScopeObjectProperty, Assembler::EngineRegister, Assembler::PointerToValue(targetBase),
+                             Assembler::TrustedImm32(propertyIndex), Assembler::PointerToValue(source));
+    else if (kind == IR::Member::MemberOfQmlContextObject)
+        generateFunctionCall(Assembler::Void, Runtime::setQmlContextObjectProperty, Assembler::EngineRegister, Assembler::PointerToValue(targetBase),
+                             Assembler::TrustedImm32(propertyIndex), Assembler::PointerToValue(source));
+    else
+        Q_ASSERT(false);
 }
 
 void InstructionSelection::setQObjectProperty(IR::Expr *source, IR::Expr *targetBase, int propertyIndex)
@@ -868,10 +959,10 @@ void InstructionSelection::swapValues(IR::Expr *source, IR::Expr *target)
             quint32 tag;
             switch (regTemp->type) {
             case IR::BoolType:
-                tag = QV4::Value::_Boolean_Type;
+                tag = QV4::Value::Boolean_Type_Internal;
                 break;
             case IR::SInt32Type:
-                tag = QV4::Value::_Integer_Type;
+                tag = QV4::Value::Integer_Type_Internal;
                 break;
             default:
                 tag = QV4::Value::Undefined_Type;
@@ -899,6 +990,24 @@ void InstructionSelection::binop(IR::AluOp oper, IR::Expr *leftSource, IR::Expr 
 {
     QV4::JIT::Binop binop(_as, oper);
     binop.generate(leftSource, rightSource, target);
+}
+
+void InstructionSelection::callQmlContextProperty(IR::Expr *base, IR::Member::MemberKind kind, int propertyIndex, IR::ExprList *args, IR::Expr *result)
+{
+    prepareCallData(args, base);
+
+    if (kind == IR::Member::MemberOfQmlScopeObject)
+        generateFunctionCall(result, Runtime::callQmlScopeObjectProperty,
+                             Assembler::EngineRegister,
+                             Assembler::TrustedImm32(propertyIndex),
+                             baseAddressForCallData());
+    else if (kind == IR::Member::MemberOfQmlContextObject)
+        generateFunctionCall(result, Runtime::callQmlContextObjectProperty,
+                             Assembler::EngineRegister,
+                             Assembler::TrustedImm32(propertyIndex),
+                             baseAddressForCallData());
+    else
+        Q_ASSERT(false);
 }
 
 void InstructionSelection::callProperty(IR::Expr *base, const QString &name, IR::ExprList *args,
@@ -987,13 +1096,13 @@ void InstructionSelection::convertTypeToDouble(IR::Expr *source, IR::Expr *targe
 
         // check if it's an int32:
         Assembler::Jump isNoInt = _as->branch32(Assembler::NotEqual, Assembler::ScratchRegister,
-                                                Assembler::TrustedImm32(Value::_Integer_Type));
+                                                Assembler::TrustedImm32(Value::Integer_Type_Internal));
         convertIntToDouble(source, target);
         Assembler::Jump intDone = _as->jump();
 
         // not an int, check if it's NOT a double:
         isNoInt.link(_as);
-#if QT_POINTER_SIZE == 8
+#ifdef QV4_USE_64_BIT_VALUE_ENCODING
         _as->and32(Assembler::TrustedImm32(Value::IsDouble_Mask), Assembler::ScratchRegister);
         Assembler::Jump isDbl = _as->branch32(Assembler::NotEqual, Assembler::ScratchRegister,
                                               Assembler::TrustedImm32(0));
@@ -1011,7 +1120,7 @@ void InstructionSelection::convertTypeToDouble(IR::Expr *source, IR::Expr *targe
         Assembler::Pointer addr2 = _as->loadAddress(Assembler::ScratchRegister, source);
         IR::Temp *targetTemp = target->asTemp();
         if (!targetTemp || targetTemp->kind == IR::Temp::StackSlot) {
-#if QT_POINTER_SIZE == 8
+#if Q_PROCESSOR_WORDSIZE == 8
             _as->load64(addr2, Assembler::ScratchRegister);
             _as->store64(Assembler::ScratchRegister, _as->loadAddress(Assembler::ReturnValueRegister, target));
 #else
@@ -1080,7 +1189,7 @@ void InstructionSelection::convertTypeToSInt32(IR::Expr *source, IR::Expr *targe
     switch (source->type) {
     case IR::VarType: {
 
-#if QT_POINTER_SIZE == 8
+#ifdef QV4_USE_64_BIT_VALUE_ENCODING
         Assembler::Pointer addr = _as->loadAddress(Assembler::ScratchRegister, source);
         _as->load64(addr, Assembler::ScratchRegister);
         _as->move(Assembler::ScratchRegister, Assembler::ReturnValueRegister);
@@ -1110,7 +1219,7 @@ void InstructionSelection::convertTypeToSInt32(IR::Expr *source, IR::Expr *targe
             Assembler::Pointer targetAddr = _as->loadAddress(Assembler::ScratchRegister, target);
             _as->store32(Assembler::ReturnValueRegister, targetAddr);
             targetAddr.offset += 4;
-            _as->store32(Assembler::TrustedImm32(Value::_Integer_Type), targetAddr);
+            _as->store32(Assembler::TrustedImm32(Value::Integer_Type_Internal), targetAddr);
         } else {
             _as->storeInt32(Assembler::ReturnValueRegister, target);
         }
@@ -1123,14 +1232,14 @@ void InstructionSelection::convertTypeToSInt32(IR::Expr *source, IR::Expr *targe
 
         // check if it's an int32:
         Assembler::Jump fallback = _as->branch32(Assembler::NotEqual, Assembler::ReturnValueRegister,
-                                                Assembler::TrustedImm32(Value::_Integer_Type));
+                                                Assembler::TrustedImm32(Value::Integer_Type_Internal));
         IR::Temp *targetTemp = target->asTemp();
         if (!targetTemp || targetTemp->kind == IR::Temp::StackSlot) {
             _as->load32(addr, Assembler::ReturnValueRegister);
             Assembler::Pointer targetAddr = _as->loadAddress(Assembler::ScratchRegister, target);
             _as->store32(Assembler::ReturnValueRegister, targetAddr);
             targetAddr.offset += 4;
-            _as->store32(Assembler::TrustedImm32(Value::_Integer_Type), targetAddr);
+            _as->store32(Assembler::TrustedImm32(Value::Integer_Type_Internal), targetAddr);
         } else {
             _as->load32(addr, (Assembler::RegisterID) targetTemp->index);
         }
@@ -1187,7 +1296,7 @@ void InstructionSelection::convertTypeToUInt32(IR::Expr *source, IR::Expr *targe
 
         // check if it's an int32:
         Assembler::Jump isNoInt = _as->branch32(Assembler::NotEqual, Assembler::ScratchRegister,
-                                                Assembler::TrustedImm32(Value::_Integer_Type));
+                                                Assembler::TrustedImm32(Value::Integer_Type_Internal));
         Assembler::Pointer addr = _as->loadAddress(Assembler::ScratchRegister, source);
         _as->storeUInt32(_as->toInt32Register(addr, Assembler::ScratchRegister), target);
         Assembler::Jump intDone = _as->jump();
@@ -1297,11 +1406,11 @@ void InstructionSelection::visitCJump(IR::CJump *s)
         } else {
             Address temp = _as->loadAddress(Assembler::ScratchRegister, s->cond);
             Address tag = temp;
-            tag.offset += qOffsetOf(QV4::Value, tag);
+            tag.offset += QV4::Value::tagOffset();
             Assembler::Jump booleanConversion = _as->branch32(Assembler::NotEqual, tag, Assembler::TrustedImm32(QV4::Value::Boolean_Type));
 
             Address data = temp;
-            data.offset += qOffsetOf(QV4::Value, int_32);
+            data.offset += QV4::Value::valueOffset();
             _as->load32(data, Assembler::ReturnValueRegister);
             Assembler::Jump testBoolean = _as->jump();
 
@@ -1383,11 +1492,14 @@ void InstructionSelection::visitRet(IR::Ret *s)
         // this only happens if the method doesn't have a return statement and can
         // only exit through an exception
     } else if (IR::Temp *t = s->expr->asTemp()) {
-#if CPU(X86) || CPU(ARM)
+#if CPU(X86) || CPU(ARM) || CPU(MIPS)
 
 #  if CPU(X86)
         Assembler::RegisterID lowReg = JSC::X86Registers::eax;
         Assembler::RegisterID highReg = JSC::X86Registers::edx;
+#  elif CPU(MIPS)
+        Assembler::RegisterID lowReg = JSC::MIPSRegisters::v0;
+        Assembler::RegisterID highReg = JSC::MIPSRegisters::v1;
 #  else // CPU(ARM)
         Assembler::RegisterID lowReg = JSC::ARMRegisters::r0;
         Assembler::RegisterID highReg = JSC::ARMRegisters::r1;
@@ -1406,16 +1518,16 @@ void InstructionSelection::visitRet(IR::Ret *s)
                 Assembler::Jump done = _as->jump();
                 intRange.link(_as);
                 _as->move(srcReg, lowReg);
-                _as->move(Assembler::TrustedImm32(QV4::Value::_Integer_Type), highReg);
+                _as->move(Assembler::TrustedImm32(QV4::Value::Integer_Type_Internal), highReg);
                 done.link(_as);
             } break;
             case IR::SInt32Type:
                 _as->move((Assembler::RegisterID) t->index, lowReg);
-                _as->move(Assembler::TrustedImm32(QV4::Value::_Integer_Type), highReg);
+                _as->move(Assembler::TrustedImm32(QV4::Value::Integer_Type_Internal), highReg);
                 break;
             case IR::BoolType:
                 _as->move((Assembler::RegisterID) t->index, lowReg);
-                _as->move(Assembler::TrustedImm32(QV4::Value::_Boolean_Type), highReg);
+                _as->move(Assembler::TrustedImm32(QV4::Value::Boolean_Type_Internal), highReg);
                 break;
             default:
                 Q_UNREACHABLE();
@@ -1444,7 +1556,7 @@ void InstructionSelection::visitRet(IR::Ret *s)
                 Assembler::Jump done = _as->jump();
                 intRange.link(_as);
                 _as->zeroExtend32ToPtr(srcReg, Assembler::ReturnValueRegister);
-                quint64 tag = QV4::Value::_Integer_Type;
+                quint64 tag = QV4::Value::Integer_Type_Internal;
                 _as->or64(Assembler::TrustedImm64(tag << 32),
                           Assembler::ReturnValueRegister);
                 done.link(_as);
@@ -1453,10 +1565,10 @@ void InstructionSelection::visitRet(IR::Ret *s)
                 quint64 tag;
                 switch (t->type) {
                 case IR::SInt32Type:
-                    tag = QV4::Value::_Integer_Type;
+                    tag = QV4::Value::Integer_Type_Internal;
                     break;
                 case IR::BoolType:
-                    tag = QV4::Value::_Boolean_Type;
+                    tag = QV4::Value::Boolean_Type_Internal;
                     break;
                 default:
                     tag = QV4::Value::Undefined_Type;
@@ -1472,13 +1584,16 @@ void InstructionSelection::visitRet(IR::Ret *s)
     } else if (IR::Const *c = s->expr->asConst()) {
         QV4::Primitive retVal = convertToValue(c);
 #if CPU(X86)
-        _as->move(Assembler::TrustedImm32(retVal.int_32), JSC::X86Registers::eax);
-        _as->move(Assembler::TrustedImm32(retVal.tag), JSC::X86Registers::edx);
+        _as->move(Assembler::TrustedImm32(retVal.int_32()), JSC::X86Registers::eax);
+        _as->move(Assembler::TrustedImm32(retVal.tag()), JSC::X86Registers::edx);
 #elif CPU(ARM)
-        _as->move(Assembler::TrustedImm32(retVal.int_32), JSC::ARMRegisters::r0);
-        _as->move(Assembler::TrustedImm32(retVal.tag), JSC::ARMRegisters::r1);
+        _as->move(Assembler::TrustedImm32(retVal.int_32()), JSC::ARMRegisters::r0);
+        _as->move(Assembler::TrustedImm32(retVal.tag()), JSC::ARMRegisters::r1);
+#elif CPU(MIPS)
+        _as->move(Assembler::TrustedImm32(retVal.int_32()), JSC::MIPSRegisters::v0);
+        _as->move(Assembler::TrustedImm32(retVal.tag()), JSC::MIPSRegisters::v1);
 #else
-        _as->move(Assembler::TrustedImm64(retVal.val), Assembler::ReturnValueRegister);
+        _as->move(Assembler::TrustedImm64(retVal.rawValue()), Assembler::ReturnValueRegister);
 #endif
     } else {
         Q_UNREACHABLE();
@@ -1499,13 +1614,16 @@ void InstructionSelection::visitRet(IR::Ret *s)
     _as->exceptionReturnLabel = _as->label();
     QV4::Primitive retVal = Primitive::undefinedValue();
 #if CPU(X86)
-    _as->move(Assembler::TrustedImm32(retVal.int_32), JSC::X86Registers::eax);
-    _as->move(Assembler::TrustedImm32(retVal.tag), JSC::X86Registers::edx);
+    _as->move(Assembler::TrustedImm32(retVal.int_32()), JSC::X86Registers::eax);
+    _as->move(Assembler::TrustedImm32(retVal.tag()), JSC::X86Registers::edx);
 #elif CPU(ARM)
-    _as->move(Assembler::TrustedImm32(retVal.int_32), JSC::ARMRegisters::r0);
-    _as->move(Assembler::TrustedImm32(retVal.tag), JSC::ARMRegisters::r1);
+    _as->move(Assembler::TrustedImm32(retVal.int_32()), JSC::ARMRegisters::r0);
+    _as->move(Assembler::TrustedImm32(retVal.tag()), JSC::ARMRegisters::r1);
+#elif CPU(MIPS)
+    _as->move(Assembler::TrustedImm32(retVal.int_32()), JSC::MIPSRegisters::v0);
+    _as->move(Assembler::TrustedImm32(retVal.tag()), JSC::MIPSRegisters::v1);
 #else
-    _as->move(Assembler::TrustedImm64(retVal.val), Assembler::ReturnValueRegister);
+    _as->move(Assembler::TrustedImm64(retVal.rawValue()), Assembler::ReturnValueRegister);
 #endif
     _as->jump(leaveStackFrame);
 }
@@ -1539,7 +1657,7 @@ int InstructionSelection::prepareCallData(IR::ExprList* args, IR::Expr *thisObje
     }
 
     Pointer p = _as->stackLayout().callDataAddress(qOffsetOf(CallData, tag));
-    _as->store32(Assembler::TrustedImm32(QV4::Value::_Integer_Type), p);
+    _as->store32(Assembler::TrustedImm32(QV4::Value::Integer_Type_Internal), p);
     p = _as->stackLayout().callDataAddress(qOffsetOf(CallData, argc));
     _as->store32(Assembler::TrustedImm32(argc), p);
     p = _as->stackLayout().callDataAddress(qOffsetOf(CallData, thisObject));
@@ -1718,7 +1836,7 @@ bool InstructionSelection::visitCJumpStrictNullUndefined(IR::Type nullOrUndef, I
 
     Assembler::RelationalCondition cond = binop->op == IR::OpStrictEqual ? Assembler::Equal
                                                                            : Assembler::NotEqual;
-    const Assembler::TrustedImm32 tag(nullOrUndef == IR::NullType ? int(QV4::Value::_Null_Type)
+    const Assembler::TrustedImm32 tag(nullOrUndef == IR::NullType ? int(QV4::Value::Null_Type_Internal)
                                                                     : int(QV4::Value::Undefined_Type));
     _as->generateCJumpOnCompare(cond, tagReg, tag, _block, trueBlock, falseBlock);
     return true;
@@ -1760,7 +1878,7 @@ bool InstructionSelection::visitCJumpStrictBool(IR::Binop *binop, IR::BasicBlock
     // check if the tag of the var operand is indicates 'boolean'
     _as->load32(otherAddr, Assembler::ScratchRegister);
     Assembler::Jump noBool = _as->branch32(Assembler::NotEqual, Assembler::ScratchRegister,
-                                           Assembler::TrustedImm32(QV4::Value::_Boolean_Type));
+                                           Assembler::TrustedImm32(QV4::Value::Boolean_Type_Internal));
     if (binop->op == IR::OpStrictEqual)
         _as->addPatch(falseBlock, noBool);
     else
@@ -1809,7 +1927,7 @@ bool InstructionSelection::visitCJumpNullUndefined(IR::Type nullOrUndef, IR::Bin
 
     if (binop->op == IR::OpNotEqual)
         qSwap(trueBlock, falseBlock);
-    Assembler::Jump isNull = _as->branch32(Assembler::Equal, tagReg, Assembler::TrustedImm32(int(QV4::Value::_Null_Type)));
+    Assembler::Jump isNull = _as->branch32(Assembler::Equal, tagReg, Assembler::TrustedImm32(int(QV4::Value::Null_Type_Internal)));
     Assembler::Jump isUndefined = _as->branch32(Assembler::Equal, tagReg, Assembler::TrustedImm32(int(QV4::Value::Undefined_Type)));
     _as->addPatch(trueBlock, isNull);
     _as->addPatch(trueBlock, isUndefined);

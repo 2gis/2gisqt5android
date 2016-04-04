@@ -37,7 +37,7 @@
 #include <private/qqmllistmodel_p.h>
 #include <private/qqmllistmodelworkeragent_p.h>
 
-#include <private/qv4value_inl_p.h>
+#include <private/qv4value_p.h>
 #include <private/qv4dateobject_p.h>
 #include <private/qv4regexpobject_p.h>
 #include <private/qv4sequenceobject_p.h>
@@ -168,11 +168,11 @@ void Serialize::serialize(QByteArray &data, const QV4::Value &v, ExecutionEngine
         char *buffer = data.data() + offset;
 
         memcpy(buffer, qstr.constData(), length*sizeof(QChar));
-    } else if (v.asFunctionObject()) {
+    } else if (v.as<FunctionObject>()) {
         // XXX TODO: Implement passing function objects between the main and
         // worker scripts
         push(data, valueheader(WorkerUndefined));
-    } else if (QV4::ArrayObject *array = v.asArrayObject()) {
+    } else if (const QV4::ArrayObject *array = v.as<ArrayObject>()) {
         uint length = array->getLength();
         if (length > 0xFFFFFF) {
             push(data, valueheader(WorkerUndefined));
@@ -195,11 +195,11 @@ void Serialize::serialize(QByteArray &data, const QV4::Value &v, ExecutionEngine
         reserve(data, sizeof(quint32) + sizeof(double));
         push(data, valueheader(WorkerNumber));
         push(data, v.asDouble());
-    } else if (QV4::DateObject *d = v.asDateObject()) {
+    } else if (const QV4::DateObject *d = v.as<DateObject>()) {
         reserve(data, sizeof(quint32) + sizeof(double));
         push(data, valueheader(WorkerDate));
-        push(data, d->date().asDouble());
-    } else if (RegExpObject *re = v.as<RegExpObject>()) {
+        push(data, d->date());
+    } else if (const RegExpObject *re = v.as<RegExpObject>()) {
         quint32 flags = re->flags();
         QString pattern = re->source();
         int length = pattern.length() + 1;
@@ -218,7 +218,7 @@ void Serialize::serialize(QByteArray &data, const QV4::Value &v, ExecutionEngine
         char *buffer = data.data() + offset;
 
         memcpy(buffer, pattern.constData(), length*sizeof(QChar));
-    } else if (QObjectWrapper *qobjectWrapper = v.as<QV4::QObjectWrapper>()) {
+    } else if (const QObjectWrapper *qobjectWrapper = v.as<QV4::QObjectWrapper>()) {
         // XXX TODO: Generalize passing objects between the main thread and worker scripts so
         // that others can trivially plug in their elements.
         QQmlListModel *lm = qobject_cast<QQmlListModel *>(qobjectWrapper->object());
@@ -231,10 +231,10 @@ void Serialize::serialize(QByteArray &data, const QV4::Value &v, ExecutionEngine
         }
         // No other QObject's are allowed to be sent
         push(data, valueheader(WorkerUndefined));
-    } else if (Object *o = v.asObject()) {
+    } else if (const Object *o = v.as<Object>()) {
         if (o->isListType()) {
             // valid sequence.  we generate a length (sequence length + 1 for the sequence type)
-            uint seqLength = ScopedValue(scope, o->get(engine->id_length))->toUInt32();
+            uint seqLength = ScopedValue(scope, o->get(engine->id_length()))->toUInt32();
             uint length = seqLength + 1;
             if (length > 0xFFFFFF) {
                 push(data, valueheader(WorkerUndefined));
@@ -265,7 +265,7 @@ void Serialize::serialize(QByteArray &data, const QV4::Value &v, ExecutionEngine
             s = properties->getIndexed(ii);
             serialize(data, s, engine);
 
-            QV4::String *str = s->asString();
+            QV4::String *str = s->as<String>();
             val = o->get(str);
             if (scope.hasException())
                 scope.engine->catchException();
@@ -356,7 +356,7 @@ ReturnedValue Serialize::deserialize(const char *&data, ExecutionEngine *engine)
         QVariant var = qVariantFromValue(ref);
         QV4::ScopedValue v(scope, scope.engine->fromVariant(var));
         QV4::ScopedString s(scope, engine->newString(QStringLiteral("__qml:hidden:ref")));
-        rv->asObject()->defineReadonlyProperty(s, v);
+        rv->as<Object>()->defineReadonlyProperty(s, v);
 
         agent->release();
         agent->setEngine(engine);

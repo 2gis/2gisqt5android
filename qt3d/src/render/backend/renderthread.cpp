@@ -35,17 +35,17 @@
 ****************************************************************************/
 
 #include "renderthread_p.h"
-#include <Qt3DRenderer/private/renderer_p.h>
-#include <Qt3DRenderer/private/renderview_p.h>
+#include <Qt3DRender/private/renderer_p.h>
+#include <Qt3DRender/private/renderview_p.h>
 
-#include <Qt3DRenderer/private/renderlogging_p.h>
+#include <Qt3DRender/private/renderlogging_p.h>
 #include <QEventLoop>
 #include <QTime>
 #include <QMutexLocker>
 
 QT_BEGIN_NAMESPACE
 
-namespace Qt3D {
+namespace Qt3DRender {
 
 namespace Render {
 
@@ -95,8 +95,8 @@ void RenderThread::run()
     qCDebug(Render::Backend) << "Exiting RenderThread";
 }
 
-} // Render
+} // namespace Render
 
-} // Qt3D
+} // namespace Qt3DRender
 
 QT_END_NAMESPACE

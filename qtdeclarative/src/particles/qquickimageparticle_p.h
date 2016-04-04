@@ -33,6 +33,17 @@
 
 #ifndef ULTRAPARTICLE_H
 #define ULTRAPARTICLE_H
+
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
 #include "qquickparticlepainter_p.h"
 #include "qquickdirection_p.h"
 #include <private/qquickpixmapcache_p.h>
@@ -175,13 +186,12 @@ class QQuickImageParticle : public QQuickParticlePainter
     Q_PROPERTY(bool spritesInterpolate READ spritesInterpolate WRITE setSpritesInterpolate NOTIFY spritesInterpolateChanged)
 
     Q_PROPERTY(EntryEffect entryEffect READ entryEffect WRITE setEntryEffect NOTIFY entryEffectChanged)
-    Q_ENUMS(EntryEffect)
-    Q_ENUMS(Status)
 public:
     explicit QQuickImageParticle(QQuickItem *parent = 0);
     virtual ~QQuickImageParticle();
 
     enum Status { Null, Ready, Loading, Error };
+    Q_ENUM(Status)
 
     QQmlListProperty<QQuickSprite> sprites();
     QQuickStochasticEngine* spriteEngine() {return m_spriteEngine;}
@@ -191,6 +201,7 @@ public:
         Fade = 1,
         Scale = 2
     };
+    Q_ENUM(EntryEffect)
 
     enum PerformanceLevel{//TODO: Expose?
         Unknown = 0,

@@ -8,14 +8,10 @@ include (./jobs/jobs.pri)
 include (./nodes/nodes.pri)
 # Qml Components
 include (./core-components/core-components.pri)
-# Bounds
-include (./bounds/bounds.pri)
 #Transformations
 include (./transforms/transforms.pri)
 # Resources Management
 include (./resources/resources.pri)
-# IO
-include (./io/io.pri)
 # Services
 include (./services/services.pri)
 
@@ -28,7 +24,7 @@ HEADERS += \
     $$PWD/qscenepropertychange.h \
     $$PWD/qscenechange_p.h \
     $$PWD/qscenepropertychange_p.h \
-    $$PWD/qsceneobserverinterface.h \
+    $$PWD/qsceneobserverinterface_p.h \
     $$PWD/qpostman_p.h \
     $$PWD/qbackendscenepropertychange.h \
     $$PWD/qbackendscenepropertychange_p.h \
@@ -36,14 +32,10 @@ HEADERS += \
     $$PWD/qobserverinterface_p.h \
     $$PWD/qlockableobserverinterface_p.h \
     $$PWD/qchangearbiter_p.h \
-    $$PWD/qbackendnodefactory.h \
+    $$PWD/qbackendnodefactory_p.h \
     $$PWD/qray3d.h \
     $$PWD/qt3dcore_global_p.h \
-    $$PWD/qscene_p.h \
-    $$PWD/qabstractfunctor.h \
-    $$PWD/qboundingvolume.h \
-    $$PWD/qboundingsphere.h \
-    $$PWD/qboundingvolumeprovider.h
+    $$PWD/qscene_p.h
 
 SOURCES += \
     $$PWD/qtickclock.cpp \
@@ -60,8 +52,4 @@ SOURCES += \
     $$PWD/qscene.cpp \
     $$PWD/qbackendscenepropertychange.cpp \
     $$PWD/qbackendnodefactory.cpp \
-    $$PWD/qray3d.cpp \
-    $$PWD/qabstractfunctor.cpp \
-    $$PWD/qboundingvolume.cpp \
-    $$PWD/qboundingsphere.cpp \
-    $$PWD/qboundingvolumeprovider.cpp
+    $$PWD/qray3d.cpp

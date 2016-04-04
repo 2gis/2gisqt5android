@@ -42,6 +42,17 @@
 #ifndef WL_COMPOSITOR_H
 #define WL_COMPOSITOR_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include <QtCompositor/qwaylandexport.h>
 #include <QtCompositor/qwaylandcompositor.h>
 
@@ -66,6 +77,7 @@ class WindowManagerServerIntegration;
 class QMimeData;
 class QPlatformScreenBuffer;
 class QWaylandSurface;
+class QWindowSystemEventHandler;
 
 namespace QtWayland {
 
@@ -74,7 +86,6 @@ class SurfaceBuffer;
 class InputDevice;
 class DataDeviceManager;
 class OutputGlobal;
-class OutputExtensionGlobal;
 class SurfaceExtensionGlobal;
 class SubSurfaceExtensionGlobal;
 class TouchExtensionGlobal;
@@ -214,7 +225,6 @@ protected:
     //extensions
     WindowManagerServerIntegration *m_windowManagerIntegration;
 
-    OutputExtensionGlobal *m_outputExtension;
     SurfaceExtensionGlobal *m_surfaceExtension;
     SubSurfaceExtensionGlobal *m_subSurfaceExtension;
     TouchExtensionGlobal *m_touchExtension;
@@ -222,6 +232,7 @@ protected:
     QScopedPointer<TextInputManager> m_textInputManager;
     QScopedPointer<InputPanel> m_inputPanel;
     QList<QWaylandGlobalInterface *> m_globals;
+    QScopedPointer<QWindowSystemEventHandler> m_eventHandler;
 
     static void bind_func(struct wl_client *client, void *data,
                           uint32_t version, uint32_t id);

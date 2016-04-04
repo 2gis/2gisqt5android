@@ -34,6 +34,17 @@
 #ifndef QWAYLANDDND_H
 #define QWAYLANDDND_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include <qpa/qplatformdrag.h>
 #include <QtGui/private/qsimpledrag_p.h>
 
@@ -63,8 +74,8 @@ public:
 protected:
     void startDrag() Q_DECL_OVERRIDE;
     void cancel() Q_DECL_OVERRIDE;
-    void move(const QMouseEvent *me) Q_DECL_OVERRIDE;
-    void drop(const QMouseEvent *me) Q_DECL_OVERRIDE;
+    void move(const QPoint &globalPos) Q_DECL_OVERRIDE;
+    void drop(const QPoint &globalpos) Q_DECL_OVERRIDE;
     void endDrag() Q_DECL_OVERRIDE;
 
 

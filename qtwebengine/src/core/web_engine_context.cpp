@@ -85,6 +85,10 @@
 
 using namespace QtWebEngineCore;
 
+QT_BEGIN_NAMESPACE
+Q_GUI_EXPORT QOpenGLContext *qt_gl_global_share_context();
+QT_END_NAMESPACE
+
 namespace {
 
 scoped_refptr<WebEngineContext> sContext;
@@ -101,7 +105,7 @@ void destroyContext()
 bool usingANGLE()
 {
 #if defined(Q_OS_WIN)
-    return QOpenGLContext::openGLModuleType() == QOpenGLContext::LibGLES;
+    return qt_gl_global_share_context()->isOpenGLES();
 #else
     return false;
 #endif
@@ -153,6 +157,7 @@ void WebEngineContext::destroy()
     // Flush the UI message loop before quitting.
     while (delegate->DoWork()) { }
     GLContextHelper::destroy();
+    m_devtools.reset(0);
     m_runLoop->AfterRun();
 
     // Force to destroy RenderProcessHostImpl by destroying BrowserMainRunner.
@@ -198,38 +203,39 @@ WebEngineContext::WebEngineContext()
     , m_browserRunner(content::BrowserMainRunner::Create())
     , m_globalQObject(new QObject())
 {
-    QList<QByteArray> args;
+    QVector<QByteArray> args;
     Q_FOREACH (const QString& arg, QCoreApplication::arguments())
         args << arg.toUtf8();
+
+    bool useEmbeddedSwitches = args.removeAll("--enable-embedded-switches");
+#if defined(QTWEBENGINE_EMBEDDED_SWITCHES)
+    useEmbeddedSwitches = !args.removeAll("--disable-embedded-switches");
+#endif
 
     QVector<const char*> argv(args.size());
     for (int i = 0; i < args.size(); ++i)
         argv[i] = args[i].constData();
-    CommandLine::Init(argv.size(), argv.constData());
+    base::CommandLine::Init(argv.size(), argv.constData());
 
-    CommandLine* parsedCommandLine = CommandLine::ForCurrentProcess();
+    base::CommandLine* parsedCommandLine = base::CommandLine::ForCurrentProcess();
     parsedCommandLine->AppendSwitchPath(switches::kBrowserSubprocessPath, WebEngineLibraryInfo::getPath(content::CHILD_PROCESS_EXE));
     parsedCommandLine->AppendSwitch(switches::kNoSandbox);
-    parsedCommandLine->AppendSwitch(switches::kDisablePlugins);
     parsedCommandLine->AppendSwitch(switches::kEnableDelegatedRenderer);
     parsedCommandLine->AppendSwitch(switches::kEnableThreadedCompositing);
     parsedCommandLine->AppendSwitch(switches::kInProcessGPU);
 
-#if defined(QTWEBENGINE_MOBILE_SWITCHES)
-    // Inspired by the Android port's default switches
-    parsedCommandLine->AppendSwitch(switches::kEnableOverlayScrollbar);
-    parsedCommandLine->AppendSwitch(switches::kEnablePinch);
-    parsedCommandLine->AppendSwitch(switches::kEnableViewport);
-    parsedCommandLine->AppendSwitch(switches::kEnableViewportMeta);
-    parsedCommandLine->AppendSwitch(switches::kMainFrameResizesAreOrientationChanges);
-    parsedCommandLine->AppendSwitch(switches::kDisableAcceleratedVideoDecode);
-    parsedCommandLine->AppendSwitch(switches::kDisableGpuShaderDiskCache);
-    parsedCommandLine->AppendSwitch(switches::kDisable2dCanvasAntialiasing);
-    parsedCommandLine->AppendSwitch(switches::kEnableImplSidePainting);
-    parsedCommandLine->AppendSwitch(cc::switches::kDisableCompositedAntialiasing);
-
-    parsedCommandLine->AppendSwitchASCII(switches::kProfilerTiming, switches::kProfilerTimingDisabledValue);
-#endif
+    if (useEmbeddedSwitches) {
+        // Inspired by the Android port's default switches
+        parsedCommandLine->AppendSwitch(switches::kEnableOverlayScrollbar);
+        parsedCommandLine->AppendSwitch(switches::kEnablePinch);
+        parsedCommandLine->AppendSwitch(switches::kEnableViewport);
+        parsedCommandLine->AppendSwitch(switches::kMainFrameResizesAreOrientationChanges);
+        parsedCommandLine->AppendSwitch(switches::kDisableAcceleratedVideoDecode);
+        parsedCommandLine->AppendSwitch(switches::kDisableGpuShaderDiskCache);
+        parsedCommandLine->AppendSwitch(switches::kDisable2dCanvasAntialiasing);
+        parsedCommandLine->AppendSwitch(cc::switches::kDisableCompositedAntialiasing);
+        parsedCommandLine->AppendSwitchASCII(switches::kProfilerTiming, switches::kProfilerTimingDisabledValue);
+    }
 
     GLContextHelper::initialize();
 
@@ -237,14 +243,12 @@ WebEngineContext::WebEngineContext()
         parsedCommandLine->AppendSwitch(switches::kDisableGpu);
     } else {
         const char *glType = 0;
-        switch (QOpenGLContext::openGLModuleType()) {
-        case QOpenGLContext::LibGL:
-            glType = gfx::kGLImplementationDesktopName;
-            break;
-        case QOpenGLContext::LibGLES:
+        if (qt_gl_global_share_context()->isOpenGLES()) {
             glType = gfx::kGLImplementationEGLName;
-            break;
+        } else {
+            glType = gfx::kGLImplementationDesktopName;
         }
+
         parsedCommandLine->AppendSwitchASCII(switches::kUseGL, glType);
     }
 
@@ -260,13 +264,13 @@ WebEngineContext::WebEngineContext()
     contentMainParams.sandbox_info = &sandbox_info;
 #endif
     m_contentRunner->Initialize(contentMainParams);
-    m_browserRunner->Initialize(content::MainFunctionParams(*CommandLine::ForCurrentProcess()));
+    m_browserRunner->Initialize(content::MainFunctionParams(*base::CommandLine::ForCurrentProcess()));
 
     // Once the MessageLoop has been created, attach a top-level RunLoop.
     m_runLoop.reset(new base::RunLoop);
     m_runLoop->BeforeRun();
 
-    m_devtools.reset(new DevToolsHttpHandlerDelegateQt);
+    m_devtools = createDevToolsHttpHandler();
     // Force the initialization of MediaCaptureDevicesDispatcher on the UI
     // thread to avoid a thread check assertion in its constructor when it
     // first gets referenced on the IO thread.

@@ -165,14 +165,14 @@ VersionDialog::VersionDialog(QWidget *parent)
 
     lbl->setText(tr("%1"
                     "<br/>Copyright (C) %2 The Qt Company Ltd."
-                    ).arg(version, QStringLiteral("2015")));
+                    ).arg(version, QStringLiteral("2016")));
 
     lbl->setWordWrap(true);
     lbl->setOpenExternalLinks(true);
 
     QDialogButtonBox *buttonBox = new QDialogButtonBox(QDialogButtonBox::Close);
-    connect(buttonBox , SIGNAL(rejected()), this, SLOT(reject()));
-    connect(label, SIGNAL(triggered()), this, SLOT(accept()));
+    connect(buttonBox , &QDialogButtonBox::rejected, this, &QDialog::reject);
+    connect(label, &VersionLabel::triggered, this, &QDialog::accept);
     layout->addWidget(label, 0, 0, 1, 1);
     layout->addWidget(lbl, 0, 1, 4, 4);
     layout->addWidget(buttonBox, 4, 2, 1, 1);

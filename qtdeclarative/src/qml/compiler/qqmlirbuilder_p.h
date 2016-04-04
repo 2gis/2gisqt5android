@@ -33,8 +33,18 @@
 #ifndef QQMLIRBUILDER_P_H
 #define QQMLIRBUILDER_P_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include <private/qqmljsast_p.h>
-#include <private/qqmlpool_p.h>
 #include <private/qqmljsengine_p.h>
 #include <private/qv4compiler_p.h>
 #include <private/qv4compileddata_p.h>
@@ -450,10 +460,15 @@ struct Q_QML_EXPORT PropertyResolver
         return cache->property(index);
     }
 
-    QQmlPropertyData *property(const QString &name, bool *notInRevision = 0, QObject *object = 0, QQmlContextData *context = 0);
+    enum RevisionCheck {
+        CheckRevision,
+        IgnoreRevision
+    };
+
+    QQmlPropertyData *property(const QString &name, bool *notInRevision = 0, RevisionCheck check = CheckRevision);
 
     // This code must match the semantics of QQmlPropertyPrivate::findSignalByName
-    QQmlPropertyData *signal(const QString &name, bool *notInRevision, QObject *object = 0, QQmlContextData *context = 0);
+    QQmlPropertyData *signal(const QString &name, bool *notInRevision);
 
     QQmlPropertyCache *cache;
 };
@@ -496,10 +511,8 @@ private:
     ObjectIdMapping _idObjects;
     QQmlPropertyCache *_contextObject;
     QQmlPropertyCache *_scopeObject;
-    int _contextObjectTemp;
-    int _scopeObjectTemp;
+    int _qmlContextTemp;
     int _importedScriptsTemp;
-    int _idArrayTemp;
 };
 
 } // namespace QmlIR

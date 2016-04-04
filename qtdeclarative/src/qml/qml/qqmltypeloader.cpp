@@ -81,7 +81,7 @@
 
 #define ASSERT_MAINTHREAD() do { if (m_thread->isThisThread()) qFatal("QQmlTypeLoader: Caller not in main thread"); } while (false)
 #define ASSERT_LOADTHREAD() do { if (!m_thread->isThisThread()) qFatal("QQmlTypeLoader: Caller not in load thread"); } while (false)
-#define ASSERT_CALLBACK() do { if(!m_manager || !m_manager->m_thread->isThisThread()) qFatal("QQmlDataBlob: An API call was made outside a callback"); } while(false)
+#define ASSERT_CALLBACK() do { if (!m_typeLoader || !m_typeLoader->m_thread->isThisThread()) qFatal("QQmlDataBlob: An API call was made outside a callback"); } while (false)
 
 #else
 
@@ -647,6 +647,8 @@ void QQmlDataBlob::notifyComplete(QQmlDataBlob *blob)
 {
     Q_ASSERT(m_waitingFor.contains(blob));
     Q_ASSERT(blob->status() == Error || blob->status() == Complete);
+    QQmlCompilingProfiler prof(QQmlEnginePrivate::get(typeLoader()->engine())->profiler,
+                               blob->url());
 
     m_inCallback = true;
 
@@ -909,6 +911,93 @@ void QQmlTypeLoader::unlock()
     m_thread->unlock();
 }
 
+struct PlainLoader {
+    void loadThread(QQmlTypeLoader *loader, QQmlDataBlob *blob) const
+    {
+        loader->loadThread(blob);
+    }
+    void load(QQmlTypeLoader *loader, QQmlDataBlob *blob) const
+    {
+        loader->m_thread->load(blob);
+    }
+    void loadAsync(QQmlTypeLoader *loader, QQmlDataBlob *blob) const
+    {
+        loader->m_thread->loadAsync(blob);
+    }
+};
+
+struct StaticLoader {
+    const QByteArray &data;
+    StaticLoader(const QByteArray &data) : data(data) {}
+
+    void loadThread(QQmlTypeLoader *loader, QQmlDataBlob *blob) const
+    {
+        loader->loadWithStaticDataThread(blob, data);
+    }
+    void load(QQmlTypeLoader *loader, QQmlDataBlob *blob) const
+    {
+        loader->m_thread->loadWithStaticData(blob, data);
+    }
+    void loadAsync(QQmlTypeLoader *loader, QQmlDataBlob *blob) const
+    {
+        loader->m_thread->loadWithStaticDataAsync(blob, data);
+    }
+};
+
+struct CachedLoader {
+    const QQmlPrivate::CachedQmlUnit *unit;
+    CachedLoader(const QQmlPrivate::CachedQmlUnit *unit) :  unit(unit) {}
+
+    void loadThread(QQmlTypeLoader *loader, QQmlDataBlob *blob) const
+    {
+        loader->loadWithCachedUnitThread(blob, unit);
+    }
+    void load(QQmlTypeLoader *loader, QQmlDataBlob *blob) const
+    {
+        loader->m_thread->loadWithCachedUnit(blob, unit);
+    }
+    void loadAsync(QQmlTypeLoader *loader, QQmlDataBlob *blob) const
+    {
+        loader->m_thread->loadWithCachedUnit(blob, unit);
+    }
+};
+
+template<typename Loader>
+void QQmlTypeLoader::doLoad(const Loader &loader, QQmlDataBlob *blob, Mode mode)
+{
+#ifdef DATABLOB_DEBUG
+    qWarning("QQmlTypeLoader::doLoad(%s): %s thread", qPrintable(blob->m_url.toString()),
+             m_thread->isThisThread()?"Compile":"Engine");
+#endif
+    blob->startLoading();
+
+    if (m_thread->isThisThread()) {
+        unlock();
+        loader.loadThread(this, blob);
+        lock();
+    } else if (mode == Asynchronous) {
+        blob->m_data.setIsAsync(true);
+        unlock();
+        loader.loadAsync(this, blob);
+        lock();
+    } else {
+        unlock();
+        loader.load(this, blob);
+        lock();
+        if (mode == PreferSynchronous) {
+            if (!blob->isCompleteOrError())
+                blob->m_data.setIsAsync(true);
+        } else {
+            Q_ASSERT(mode == Synchronous);
+            while (!blob->isCompleteOrError()) {
+                unlock();
+                m_thread->waitForNextMessage();
+                lock();
+            }
+        }
+    }
+}
+
 /*!
 Load the provided \a blob from the network or filesystem.
 
@@ -916,29 +1005,7 @@ The loader must be locked.
 */
 void QQmlTypeLoader::load(QQmlDataBlob *blob, Mode mode)
 {
-#ifdef DATABLOB_DEBUG
-    qWarning("QQmlTypeLoader::load(%s): %s thread", qPrintable(blob->m_url.toString()),
-             m_thread->isThisThread()?"Compile":"Engine");
-#endif
-    blob->startLoading();
-
-    if (m_thread->isThisThread()) {
-        unlock();
-        loadThread(blob);
-        lock();
-    } else if (mode == PreferSynchronous) {
-        unlock();
-        m_thread->load(blob);
-        lock();
-        if (!blob->isCompleteOrError())
-            blob->m_data.setIsAsync(true);
-    } else {
-        Q_ASSERT(mode == Asynchronous);
-        blob->m_data.setIsAsync(true);
-        unlock();
-        m_thread->loadAsync(blob);
-        lock();
-    }
+    doLoad(PlainLoader(), blob, mode);
 }
 
 /*!
@@ -948,58 +1015,12 @@ The loader must be locked.
 */
 void QQmlTypeLoader::loadWithStaticData(QQmlDataBlob *blob, const QByteArray &data, Mode mode)
 {
-#ifdef DATABLOB_DEBUG
-    qWarning("QQmlTypeLoader::loadWithStaticData(%s, data): %s thread", qPrintable(blob->m_url.toString()),
-             m_thread->isThisThread()?"Compile":"Engine");
-#endif
-
-    blob->startLoading();
-
-    if (m_thread->isThisThread()) {
-        unlock();
-        loadWithStaticDataThread(blob, data);
-        lock();
-    } else if (mode == PreferSynchronous) {
-        unlock();
-        m_thread->loadWithStaticData(blob, data);
-        lock();
-        if (!blob->isCompleteOrError())
-            blob->m_data.setIsAsync(true);
-    } else {
-        Q_ASSERT(mode == Asynchronous);
-        blob->m_data.setIsAsync(true);
-        unlock();
-        m_thread->loadWithStaticDataAsync(blob, data);
-        lock();
-    }
+    doLoad(StaticLoader(data), blob, mode);
 }
 
 void QQmlTypeLoader::loadWithCachedUnit(QQmlDataBlob *blob, const QQmlPrivate::CachedQmlUnit *unit, Mode mode)
 {
-#ifdef DATABLOB_DEBUG
-    qWarning("QQmlTypeLoader::loadWithUnitFcatory(%s, data): %s thread", qPrintable(blob->m_url.toString()),
-             m_thread->isThisThread()?"Compile":"Engine");
-#endif
-
-    blob->startLoading();
-
-    if (m_thread->isThisThread()) {
-        unlock();
-        loadWithCachedUnitThread(blob, unit);
-        lock();
-    } else if (mode == PreferSynchronous) {
-        unlock();
-        m_thread->loadWithCachedUnit(blob, unit);
-        lock();
-        if (!blob->isCompleteOrError())
-            blob->m_data.setIsAsync(true);
-    } else {
-        Q_ASSERT(mode == Asynchronous);
-        blob->m_data.setIsAsync(true);
-        unlock();
-        m_thread->loadWithCachedUnitAsync(blob, unit);
-        lock();
-    }
+    doLoad(CachedLoader(unit), blob, mode);
 }
 
 void QQmlTypeLoader::loadWithStaticDataThread(QQmlDataBlob *blob, const QByteArray &data)
@@ -1194,6 +1215,8 @@ void QQmlTypeLoader::setData(QQmlDataBlob *blob, QQmlFile *file)
 void QQmlTypeLoader::setData(QQmlDataBlob *blob, const QQmlDataBlob::Data &d)
 {
     QML_MEMORY_SCOPE_URL(blob->url());
+    QQmlCompilingProfiler prof(QQmlEnginePrivate::get(engine())->profiler, blob->url());
+
     blob->m_inCallback = true;
 
     blob->dataReceived(d);
@@ -1212,6 +1235,8 @@ void QQmlTypeLoader::setData(QQmlDataBlob *blob, const QQmlDataBlob::Data &d)
 void QQmlTypeLoader::setCachedUnit(QQmlDataBlob *blob, const QQmlPrivate::CachedQmlUnit *unit)
 {
     QML_MEMORY_SCOPE_URL(blob->url());
+    QQmlCompilingProfiler prof(QQmlEnginePrivate::get(engine())->profiler, blob->url());
+
     blob->m_inCallback = true;
 
     blob->initializeFromCachedUnit(unit);
@@ -1612,6 +1637,20 @@ QQmlTypeData *QQmlTypeLoader::getType(const QUrl &url, Mode mode)
         } else {
             QQmlTypeLoader::load(typeData, mode);
         }
+    } else if ((mode == PreferSynchronous || mode == Synchronous) && QQmlFile::isSynchronous(url)) {
+        // this was started Asynchronous, but we need to force Synchronous
+        // completion now (if at all possible with this type of URL).
+
+        if (!m_thread->isThisThread()) {
+            // this only works when called directly from the UI thread, but not
+            // when recursively called on the QML thread via resolveTypes()
+
+            while (!typeData->isCompleteOrError()) {
+                unlock();
+                m_thread->waitForNextMessage();
+                lock();
+            }
+        }
     }
 
     typeData->addref();
@@ -1623,12 +1662,12 @@ QQmlTypeData *QQmlTypeLoader::getType(const QUrl &url, Mode mode)
 Returns a QQmlTypeData for the given \a data with the provided base \a url.  The
 QQmlTypeData will not be cached.
 */
-QQmlTypeData *QQmlTypeLoader::getType(const QByteArray &data, const QUrl &url)
+QQmlTypeData *QQmlTypeLoader::getType(const QByteArray &data, const QUrl &url, Mode mode)
 {
     LockHolder<QQmlTypeLoader> holder(this);
 
     QQmlTypeData *typeData = new QQmlTypeData(url, this);
-    QQmlTypeLoader::loadWithStaticData(typeData, data);
+    QQmlTypeLoader::loadWithStaticData(typeData, data, mode);
 
     return typeData;
 }
@@ -2114,6 +2153,7 @@ void QQmlTypeData::dataReceived(const Data &data)
     QmlIR::IRBuilder compiler(QV8Engine::get(qmlEngine)->illegalNames());
     if (!compiler.generateFromQml(code, finalUrlString(), m_document.data())) {
         QList<QQmlError> errors;
+        errors.reserve(compiler.errors.count());
         foreach (const QQmlJS::DiagnosticMessage &msg, compiler.errors) {
             QQmlError e;
             e.setUrl(finalUrl());
@@ -2238,8 +2278,6 @@ void QQmlTypeData::compile()
 
     m_compiledData = new QQmlCompiledData(typeLoader()->engine());
 
-    QQmlCompilingProfiler prof(QQmlEnginePrivate::get(typeLoader()->engine())->profiler, finalUrlString());
-
     QQmlTypeCompiler compiler(QQmlEnginePrivate::get(typeLoader()->engine()), m_compiledData, this, m_document.data());
     if (!compiler.compile()) {
         setError(compiler.compilationErrors());
@@ -2282,8 +2320,8 @@ void QQmlTypeData::resolveTypes()
             m_namespaces.insert(csRef.prefix);
         }
 
-        int majorVersion = -1;
-        int minorVersion = -1;
+        int majorVersion = csRef.majorVersion > -1 ? csRef.majorVersion : -1;
+        int minorVersion = csRef.minorVersion > -1 ? csRef.minorVersion : -1;
 
         if (!resolveType(typeName, majorVersion, minorVersion, ref))
             return;
@@ -2452,12 +2490,10 @@ void QQmlScriptData::initialize(QQmlEngine *engine)
     addref();
 }
 
-QV4::PersistentValue QQmlScriptData::scriptValueForContext(QQmlContextData *parentCtxt)
+QV4::ReturnedValue QQmlScriptData::scriptValueForContext(QQmlContextData *parentCtxt)
 {
     if (m_loaded)
-        return m_value;
-
-    QV4::PersistentValue rv;
+        return m_value.value();
 
     Q_ASSERT(parentCtxt && parentCtxt->engine);
     QQmlEnginePrivate *ep = QQmlEnginePrivate::get(parentCtxt->engine);
@@ -2507,8 +2543,9 @@ QV4::PersistentValue QQmlScriptData::scriptValueForContext(QQmlContextData *pare
     } else {
         scriptsArray = ctxt->importedScripts.valueRef();
     }
+    QV4::ScopedValue v(scope);
     for (int ii = 0; ii < scripts.count(); ++ii)
-        scriptsArray->putIndexed(ii, *scripts.at(ii)->scriptData()->scriptValueForContext(ctxt).valueRef());
+        scriptsArray->putIndexed(ii, (v = scripts.at(ii)->scriptData()->scriptValueForContext(ctxt)));
 
     if (!hasEngine())
         initialize(parentCtxt->engine);
@@ -2516,13 +2553,13 @@ QV4::PersistentValue QQmlScriptData::scriptValueForContext(QQmlContextData *pare
     if (!m_program) {
         if (shared)
             m_loaded = true;
-        return QV4::PersistentValue();
+        return QV4::Encode::undefined();
     }
 
-    QV4::ScopedValue qmlglobal(scope, QV4::QmlContextWrapper::qmlScope(v4, ctxt, 0));
-    QV4::QmlContextWrapper::takeContextOwnership(qmlglobal);
+    QV4::Scoped<QV4::QmlContext> qmlContext(scope, v4->rootContext()->newQmlContext(ctxt, 0));
+    qmlContext->takeContextOwnership();
 
-    m_program->qml.set(scope.engine, qmlglobal);
+    m_program->qmlContext.set(scope.engine, qmlContext);
     m_program->run();
     if (scope.engine->hasException) {
         QQmlError error = scope.engine->catchExceptionAsQmlError();
@@ -2530,13 +2567,13 @@ QV4::PersistentValue QQmlScriptData::scriptValueForContext(QQmlContextData *pare
             ep->warning(error);
     }
 
-    rv.set(scope.engine, qmlglobal);
+    QV4::ScopedValue retval(scope, qmlContext->d()->qml);
     if (shared) {
-        m_value = rv;
+        m_value.set(scope.engine, retval);
         m_loaded = true;
     }
 
-    return rv;
+    return retval->asReturnedValue();
 }
 
 void QQmlScriptData::clear()
@@ -2594,7 +2631,7 @@ void QQmlScriptBlob::dataReceived(const Data &data)
         return;
     }
     if (!unit) {
-        unit.take(new EmptyCompilationUnit);
+        unit.adopt(new EmptyCompilationUnit);
     }
     irUnit.javaScriptCompilationUnit = unit;
     irUnit.imports = collector.imports;

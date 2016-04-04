@@ -33,6 +33,7 @@
 
 #include "qv4numberobject_p.h"
 #include "qv4runtime_p.h"
+#include "qv4string_p.h"
 
 #include <QtCore/qnumeric.h>
 #include <QtCore/qmath.h>
@@ -50,14 +51,14 @@ Heap::NumberCtor::NumberCtor(QV4::ExecutionContext *scope)
 {
 }
 
-ReturnedValue NumberCtor::construct(Managed *m, CallData *callData)
+ReturnedValue NumberCtor::construct(const Managed *m, CallData *callData)
 {
     Scope scope(m->cast<NumberCtor>()->engine());
     double dbl = callData->argc ? callData->args[0].toNumber() : 0.;
     return Encode(scope.engine->newNumberObject(dbl));
 }
 
-ReturnedValue NumberCtor::call(Managed *, CallData *callData)
+ReturnedValue NumberCtor::call(const Managed *, CallData *callData)
 {
     double dbl = callData->argc ? callData->args[0].toNumber() : 0.;
     return Encode(dbl);
@@ -67,8 +68,8 @@ void NumberPrototype::init(ExecutionEngine *engine, Object *ctor)
 {
     Scope scope(engine);
     ScopedObject o(scope);
-    ctor->defineReadonlyProperty(engine->id_prototype, (o = this));
-    ctor->defineReadonlyProperty(engine->id_length, Primitive::fromInt32(1));
+    ctor->defineReadonlyProperty(engine->id_prototype(), (o = this));
+    ctor->defineReadonlyProperty(engine->id_length(), Primitive::fromInt32(1));
 
     ctor->defineReadonlyProperty(QStringLiteral("NaN"), Primitive::fromDouble(qSNaN()));
     ctor->defineReadonlyProperty(QStringLiteral("NEGATIVE_INFINITY"), Primitive::fromDouble(-qInf()));
@@ -81,9 +82,9 @@ QT_WARNING_DISABLE_INTEL(239)
 QT_WARNING_POP
 
     defineDefaultProperty(QStringLiteral("constructor"), (o = ctor));
-    defineDefaultProperty(engine->id_toString, method_toString);
+    defineDefaultProperty(engine->id_toString(), method_toString);
     defineDefaultProperty(QStringLiteral("toLocaleString"), method_toLocaleString);
-    defineDefaultProperty(engine->id_valueOf, method_valueOf);
+    defineDefaultProperty(engine->id_valueOf(), method_valueOf);
     defineDefaultProperty(QStringLiteral("toFixed"), method_toFixed, 1);
     defineDefaultProperty(QStringLiteral("toExponential"), method_toExponential);
     defineDefaultProperty(QStringLiteral("toPrecision"), method_toPrecision);
@@ -93,7 +94,7 @@ inline ReturnedValue thisNumberValue(ExecutionContext *ctx)
 {
     if (ctx->thisObject().isNumber())
         return ctx->thisObject().asReturnedValue();
-    NumberObject *n = ctx->thisObject().asNumberObject();
+    NumberObject *n = ctx->thisObject().as<NumberObject>();
     if (!n)
         return ctx->engine()->throwTypeError();
     return Encode(n->value());
@@ -103,7 +104,7 @@ inline double thisNumber(ExecutionContext *ctx)
 {
     if (ctx->thisObject().isNumber())
         return ctx->thisObject().asDouble();
-    NumberObject *n = ctx->thisObject().asNumberObject();
+    NumberObject *n = ctx->thisObject().as<NumberObject>();
     if (!n)
         return ctx->engine()->throwTypeError();
     return n->value();
@@ -119,7 +120,7 @@ ReturnedValue NumberPrototype::method_toString(CallContext *ctx)
     if (ctx->argc() && !ctx->args()[0].isUndefined()) {
         int radix = ctx->args()[0].toInt32();
         if (radix < 2 || radix > 36)
-            return ctx->engine()->throwError(QString::fromLatin1("Number.prototype.toString: %0 is not a valid radix")
+            return ctx->engine()->throwError(QStringLiteral("Number.prototype.toString: %0 is not a valid radix")
                             .arg(radix));
 
         if (std::isnan(num)) {
@@ -197,7 +198,7 @@ ReturnedValue NumberPrototype::method_toFixed(CallContext *ctx)
 
     QString str;
     if (std::isnan(v))
-        str = QString::fromLatin1("NaN");
+        str = QStringLiteral("NaN");
     else if (qIsInf(v))
         str = QString::fromLatin1(v < 0 ? "-Infinity" : "Infinity");
     else if (v < 1.e21) {

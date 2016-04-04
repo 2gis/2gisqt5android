@@ -34,24 +34,24 @@
 **
 ****************************************************************************/
 
-#ifndef QT3D_QRENDERATTACHMENT_H
-#define QT3D_QRENDERATTACHMENT_H
+#ifndef QT3DRENDER_QRENDERATTACHMENT_H
+#define QT3DRENDER_QRENDERATTACHMENT_H
 
 #include <Qt3DCore/qnode.h>
-#include <Qt3DRenderer/qt3drenderer_global.h>
+#include <Qt3DRender/qt3drender_global.h>
 
 QT_BEGIN_NAMESPACE
 
-namespace Qt3D {
+namespace Qt3DRender {
 
 class QAbstractTextureProvider;
 class QRenderAttachmentPrivate;
 
-class QT3DRENDERERSHARED_EXPORT QRenderAttachment : public QNode
+class QT3DRENDERSHARED_EXPORT QRenderAttachment : public Qt3DCore::QNode
 {
     Q_OBJECT
     Q_PROPERTY(RenderAttachmentType type READ type WRITE setType NOTIFY typeChanged)
-    Q_PROPERTY(Qt3D::QAbstractTextureProvider *texture READ texture WRITE setTexture NOTIFY textureChanged)
+    Q_PROPERTY(Qt3DRender::QAbstractTextureProvider *texture READ texture WRITE setTexture NOTIFY textureChanged)
     Q_PROPERTY(int mipLevel READ mipLevel WRITE setMipLevel NOTIFY mipLevelChanged)
     Q_PROPERTY(int layer READ layer WRITE setLayer NOTIFY layerChanged)
     Q_PROPERTY(CubeMapFace face READ face WRITE setFace NOTIFY faceChanged)
@@ -91,48 +91,45 @@ public:
     };
     Q_ENUM(CubeMapFace)
 
-    explicit QRenderAttachment(QNode *parent = 0);
+    explicit QRenderAttachment(Qt3DCore::QNode *parent = 0);
     ~QRenderAttachment();
 
-    void setType(RenderAttachmentType type);
     RenderAttachmentType type() const;
-
-    void setTexture(QAbstractTextureProvider *texture);
     QAbstractTextureProvider *texture() const;
-
-    void setMipLevel(int level);
     int mipLevel() const;
-
-    void setLayer(int layer);
     int layer() const;
-
-    void setFace(CubeMapFace face);
     CubeMapFace face() const;
-
-    void setName(const QString &name);
     QString name() const;
 
+public Q_SLOTS:
+    void setType(RenderAttachmentType type);
+    void setTexture(QAbstractTextureProvider *texture);
+    void setMipLevel(int level);
+    void setLayer(int layer);
+    void setFace(CubeMapFace face);
+    void setName(const QString &name);
+
 Q_SIGNALS:
-    void typeChanged();
-    void textureChanged();
-    void mipLevelChanged();
-    void layerChanged();
-    void faceChanged();
-    void nameChanged();
+    void typeChanged(RenderAttachmentType type);
+    void textureChanged(QAbstractTextureProvider *texture);
+    void mipLevelChanged(int mipLevel);
+    void layerChanged(int layer);
+    void faceChanged(CubeMapFace face);
+    void nameChanged(const QString &name);
 
 protected:
-    QRenderAttachment(QRenderAttachmentPrivate &dd, QNode *parent = 0);
-    void copy(const QNode *ref) Q_DECL_OVERRIDE;
+    QRenderAttachment(QRenderAttachmentPrivate &dd, Qt3DCore::QNode *parent = 0);
+    void copy(const Qt3DCore::QNode *ref) Q_DECL_OVERRIDE;
 
 private:
     Q_DECLARE_PRIVATE(QRenderAttachment)
     QT3D_CLONEABLE(QRenderAttachment)
 };
 
-} // Qt3D
+} // namespace Qt3DRender
 
 QT_END_NAMESPACE
 
-Q_DECLARE_METATYPE(Qt3D::QRenderAttachment::RenderAttachmentType)
+Q_DECLARE_METATYPE(Qt3DRender::QRenderAttachment::RenderAttachmentType)
 
-#endif // QT3D_QRENDERATTACHMENT_H
+#endif // QT3DRENDER_QRENDERATTACHMENT_H

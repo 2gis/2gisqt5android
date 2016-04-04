@@ -170,6 +170,7 @@ public:
                                    const char *changedSignal)
         : className(className), property(property), changedSignal(changedSignal) {}
 };
+Q_DECLARE_TYPEINFO(QWizardDefaultProperty, Q_MOVABLE_TYPE);
 
 class QWizardField
 {
@@ -189,6 +190,7 @@ public:
     QByteArray changedSignal;
     QVariant initialValue;
 };
+Q_DECLARE_TYPEINFO(QWizardField, Q_MOVABLE_TYPE);
 
 QWizardField::QWizardField(QWizardPage *page, const QString &spec, QObject *object,
                            const char *property, const char *changedSignal)
@@ -751,6 +753,7 @@ void QWizardPrivate::init()
 
     updateButtonLayout();
 
+    defaultPropertyTable.reserve(NFallbackDefaultProperties);
     for (uint i = 0; i < NFallbackDefaultProperties; ++i)
         defaultPropertyTable.append(QWizardDefaultProperty(fallbackProperties[i].className,
                                                            fallbackProperties[i].property,
@@ -1344,7 +1347,6 @@ void QWizardPrivate::updateMinMaxSizes(const QWizardLayoutInfo &info)
     }
     if (info.watermark && !info.sideWidget) {
         minimumSize.setHeight(mainLayout->totalSizeHint().height());
-        maximumSize.setHeight(mainLayout->totalSizeHint().height());
     }
     if (q->minimumWidth() == minimumWidth) {
         minimumWidth = minimumSize.width();
@@ -3660,7 +3662,7 @@ bool QWizardPage::validatePage()
     from the rest of your implementation, whenever the value of isComplete()
     changes. This ensures that QWizard updates the enabled or disabled state of
     its buttons. An example of the reimplementation is
-    available \l{http://doc.qt.digia.com/qq/qq22-qwizard.html#validatebeforeitstoolate}
+    available \l{http://doc.qt.io/archives/qq/qq22-qwizard.html#validatebeforeitstoolate}
     {here}.
 
     \sa completeChanged(), isFinalPage()

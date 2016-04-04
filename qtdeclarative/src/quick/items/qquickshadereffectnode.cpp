@@ -83,7 +83,9 @@ QQuickCustomMaterialShader::QQuickCustomMaterialShader(const QQuickShaderEffectM
     , m_compiled(false)
     , m_initialized(false)
 {
-    for (int i = 0; i < m_attributes.count(); ++i)
+    const int attributesCount = m_attributes.count();
+    m_attributeNames.reserve(attributesCount + 1);
+    for (int i = 0; i < attributesCount; ++i)
         m_attributeNames.append(m_attributes.at(i).constData());
     m_attributeNames.append(0);
 }
@@ -348,11 +350,22 @@ uint qHash(const QQuickShaderEffectMaterialKey &key)
     return hash;
 }
 
-
-typedef QHash<QQuickShaderEffectMaterialKey, QWeakPointer<QSGMaterialType> > MaterialHash;
-
-Q_GLOBAL_STATIC(MaterialHash, materialHash)
-Q_GLOBAL_STATIC(QMutex, materialHashMutex)
+class QQuickShaderEffectMaterialCache : public QObject
+{
+    Q_OBJECT
+public:
+    static QQuickShaderEffectMaterialCache *get(bool create = true) {
+        QOpenGLContext *ctx = QOpenGLContext::currentContext();
+        QQuickShaderEffectMaterialCache *me = ctx->findChild<QQuickShaderEffectMaterialCache *>(QStringLiteral("__qt_ShaderEffectCache"), Qt::FindDirectChildrenOnly);
+        if (!me && create) {
+            me = new QQuickShaderEffectMaterialCache();
+            me->setObjectName(QStringLiteral("__qt_ShaderEffectCache"));
+            me->setParent(ctx);
+        }
+        return me;
+    }
+    QHash<QQuickShaderEffectMaterialKey, QSGMaterialType *> cache;
+};
 
 QQuickShaderEffectMaterial::QQuickShaderEffectMaterial(QQuickShaderEffectNode *node)
     : cullMode(NoCulling)
@@ -365,7 +378,7 @@ QQuickShaderEffectMaterial::QQuickShaderEffectMaterial(QQuickShaderEffectNode *n
 
 QSGMaterialType *QQuickShaderEffectMaterial::type() const
 {
-    return m_type.data();
+    return m_type;
 }
 
 QSGMaterialShader *QQuickShaderEffectMaterial::createShader() const
@@ -423,30 +436,23 @@ int QQuickShaderEffectMaterial::compare(const QSGMaterial *o) const
 
 void QQuickShaderEffectMaterial::setProgramSource(const QQuickShaderEffectMaterialKey &source)
 {
-    QMutexLocker locker(materialHashMutex);
-    Q_UNUSED(locker);
-
     m_source = source;
     m_emittedLogChanged = false;
-    QWeakPointer<QSGMaterialType> weakPtr = materialHash->value(m_source);
-    m_type = weakPtr.toStrongRef();
 
-    if (m_type.isNull()) {
-        m_type = QSharedPointer<QSGMaterialType>(new QSGMaterialType);
-        materialHash->insert(m_source, m_type.toWeakRef());
+    QQuickShaderEffectMaterialCache *cache = QQuickShaderEffectMaterialCache::get();
+    m_type = cache->cache.value(m_source);
+    if (!m_type) {
+        m_type = new QSGMaterialType();
+        cache->cache.insert(source, m_type);
     }
 }
 
 void QQuickShaderEffectMaterial::cleanupMaterialCache()
 {
-    QMutexLocker locker(materialHashMutex);
-    Q_UNUSED(locker);
-
-    for (MaterialHash::iterator it = materialHash->begin(); it != materialHash->end(); ) {
-        if (!it.value().toStrongRef())
-            it = materialHash->erase(it);
-        else
-            ++it;
+    QQuickShaderEffectMaterialCache *cache = QQuickShaderEffectMaterialCache::get(false);
+    if (cache) {
+        qDeleteAll(cache->cache.values());
+        delete cache;
     }
 }
 
@@ -454,7 +460,7 @@ void QQuickShaderEffectMaterial::updateTextures() const
 {
     for (int i = 0; i < textureProviders.size(); ++i) {
         if (QSGTextureProvider *provider = textureProviders.at(i)) {
-            if (QSGLayer *texture = qobject_cast<QSGLayer *>(provider->texture()))
+            if (QSGDynamicTexture *texture = qobject_cast<QSGDynamicTexture *>(provider->texture()))
                 texture->updateTexture();
         }
     }
@@ -498,5 +504,7 @@ void QQuickShaderEffectNode::preprocess()
     Q_ASSERT(material());
     static_cast<QQuickShaderEffectMaterial *>(material())->updateTextures();
 }
+
+#include "qquickshadereffectnode.moc"
 
 QT_END_NAMESPACE

@@ -41,6 +41,7 @@
 #include <QGuiApplication>
 #include <QQuickPaintedItem>
 #include <QQuickWindow>
+#include <QSurfaceFormat>
 #include <QVariant>
 #include <QWindow>
 #include <private/qquickwindow_p.h>
@@ -60,14 +61,32 @@ RenderWidgetHostViewQtDelegateQuick::RenderWidgetHostViewQtDelegateQuick(RenderW
         return;
     setFocus(true);
     setActiveFocusOnTab(true);
+
+#ifdef Q_OS_OSX
+    // Check that the default QSurfaceFormat OpenGL profile matches the global OpenGL shared
+    // context profile, otherwise this could lead to a nasty crash.
+    QOpenGLContext *globalSharedContext = QOpenGLContext::globalShareContext();
+    if (globalSharedContext) {
+        QSurfaceFormat sharedFormat = globalSharedContext->format();
+        QSurfaceFormat defaultFormat = QSurfaceFormat::defaultFormat();
+        if (defaultFormat.profile() != sharedFormat.profile()) {
+            qFatal("QWebEngine: Default QSurfaceFormat OpenGL profile does not match global shared context OpenGL profile. Please make sure you set a new QSurfaceFormat before the QtGui application instance is created.");
+        }
+    }
+#endif
+
 }
 
 void RenderWidgetHostViewQtDelegateQuick::initAsChild(WebContentsAdapterClient* container)
 {
-    QQuickWebEngineViewPrivate *viewPrivate = static_cast<QQuickWebEngineViewPrivate *>(container);
-    setParentItem(viewPrivate->q_func());
-    setSize(viewPrivate->q_func()->boundingRect().size());
+    QQuickWebEngineView *view = static_cast<QQuickWebEngineViewPrivate *>(container)->q_func();
+    setParentItem(view);
+    setSize(view->boundingRect().size());
+    // Focus on creation if the view accepts it
+    if (view->activeFocusOnPress())
+        setFocus(true);
     m_initialized = true;
+
 }
 
 void RenderWidgetHostViewQtDelegateQuick::initAsPopup(const QRect &r)
@@ -176,9 +195,11 @@ void RenderWidgetHostViewQtDelegateQuick::inputMethodStateChanged(bool editorVis
     if (qApp->inputMethod()->isVisible() == editorVisible)
         return;
 
-    setFlag(QQuickItem::ItemAcceptsInputMethod, editorVisible);
-    qApp->inputMethod()->update(Qt::ImQueryInput | Qt::ImEnabled | Qt::ImHints);
-    qApp->inputMethod()->setVisible(editorVisible);
+    if (parentItem() && parentItem()->flags() & QQuickItem::ItemAcceptsInputMethod) {
+        qApp->inputMethod()->update(Qt::ImQueryInput | Qt::ImEnabled | Qt::ImHints);
+        qApp->inputMethod()->setVisible(editorVisible);
+    }
+
 }
 
 void RenderWidgetHostViewQtDelegateQuick::focusInEvent(QFocusEvent *event)
@@ -193,7 +214,7 @@ void RenderWidgetHostViewQtDelegateQuick::focusOutEvent(QFocusEvent *event)
 
 void RenderWidgetHostViewQtDelegateQuick::mousePressEvent(QMouseEvent *event)
 {
-    if (!m_isPopup)
+    if (!m_isPopup && (parentItem() && parentItem()->property("activeFocusOnPress").toBool()))
         forceActiveFocus();
     m_client->forwardEvent(event);
 }
@@ -225,7 +246,8 @@ void RenderWidgetHostViewQtDelegateQuick::wheelEvent(QWheelEvent *event)
 
 void RenderWidgetHostViewQtDelegateQuick::touchEvent(QTouchEvent *event)
 {
-    if (event->type() == QEvent::TouchBegin && !m_isPopup)
+    if (event->type() == QEvent::TouchBegin && !m_isPopup
+            && (parentItem() && parentItem()->property("activeFocusOnPress").toBool()))
         forceActiveFocus();
     m_client->forwardEvent(event);
 }
@@ -261,10 +283,15 @@ void RenderWidgetHostViewQtDelegateQuick::itemChange(ItemChange change, const It
         if (value.window) {
             m_windowConnections.append(connect(value.window, SIGNAL(xChanged(int)), SLOT(onWindowPosChanged())));
             m_windowConnections.append(connect(value.window, SIGNAL(yChanged(int)), SLOT(onWindowPosChanged())));
+            if (!m_isPopup)
+                m_windowConnections.append(connect(value.window, SIGNAL(closing(QQuickCloseEvent *)), SLOT(onHide())));
         }
 
         if (m_initialized)
             m_client->windowChanged();
+    } else if (change == QQuickItem::ItemVisibleHasChanged) {
+        if (!m_isPopup && !value.boolValue)
+            onHide();
     }
 }
 
@@ -276,6 +303,12 @@ QSGNode *RenderWidgetHostViewQtDelegateQuick::updatePaintNode(QSGNode *oldNode, 
 void RenderWidgetHostViewQtDelegateQuick::onWindowPosChanged()
 {
     m_client->windowBoundsChanged();
+}
+
+void RenderWidgetHostViewQtDelegateQuick::onHide()
+{
+    QFocusEvent event(QEvent::FocusOut, Qt::OtherFocusReason);
+    m_client->forwardEvent(&event);
 }
 
 } // namespace QtWebEngineCore

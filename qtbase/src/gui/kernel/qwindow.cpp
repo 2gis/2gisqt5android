@@ -47,6 +47,7 @@
 #ifndef QT_NO_ACCESSIBILITY
 #  include "qaccessible.h"
 #endif
+#include "qhighdpiscaling_p.h"
 
 #include <private/qevent_p.h>
 
@@ -368,7 +369,7 @@ void QWindowPrivate::setTopLevelScreen(QScreen *newScreen, bool recreate)
 {
     Q_Q(QWindow);
     if (parentWindow) {
-        qWarning() << this << Q_FUNC_INFO << '(' << newScreen << "): Attempt to set a screen on a child window.";
+        qWarning() << this << '(' << newScreen << "): Attempt to set a screen on a child window.";
         return;
     }
     if (newScreen != topLevelScreen) {
@@ -388,25 +389,31 @@ void QWindowPrivate::setTopLevelScreen(QScreen *newScreen, bool recreate)
 void QWindowPrivate::create(bool recursive)
 {
     Q_Q(QWindow);
-    if (!platformWindow) {
-        platformWindow = QGuiApplicationPrivate::platformIntegration()->createPlatformWindow(q);
-        QObjectList childObjects = q->children();
-        for (int i = 0; i < childObjects.size(); i ++) {
-            QObject *object = childObjects.at(i);
-            if (object->isWindowType()) {
-                QWindow *window = static_cast<QWindow *>(object);
-                if (recursive)
-                    window->d_func()->create(true);
-                if (window->d_func()->platformWindow)
-                    window->d_func()->platformWindow->setParent(platformWindow);
-            }
-        }
+    if (platformWindow)
+        return;
 
-        if (platformWindow) {
-            QPlatformSurfaceEvent e(QPlatformSurfaceEvent::SurfaceCreated);
-            QGuiApplication::sendEvent(q, &e);
+    platformWindow = QGuiApplicationPrivate::platformIntegration()->createPlatformWindow(q);
+    Q_ASSERT(platformWindow);
+
+    if (!platformWindow) {
+        qWarning() << "Failed to create platform window for" << q << "with flags" << q->flags();
+        return;
+    }
+
+    QObjectList childObjects = q->children();
+    for (int i = 0; i < childObjects.size(); i ++) {
+        QObject *object = childObjects.at(i);
+        if (object->isWindowType()) {
+            QWindow *window = static_cast<QWindow *>(object);
+            if (recursive)
+                window->d_func()->create(true);
+            if (window->d_func()->platformWindow)
+                window->d_func()->platformWindow->setParent(platformWindow);
         }
     }
+
+    QPlatformSurfaceEvent e(QPlatformSurfaceEvent::SurfaceCreated);
+    QGuiApplication::sendEvent(q, &e);
 }
 
 void QWindowPrivate::clearFocusObject()
@@ -587,8 +594,7 @@ QWindow *QWindow::parent() const
     Setting \a parent to be 0 will make the window become a top level window.
 
     If \a parent is a window created by fromWinId(), then the current window
-    will be embedded inside \a parent, if the platform supports it. Window
-    embedding is currently supported only by the X11 platform plugin.
+    will be embedded inside \a parent, if the platform supports it.
 */
 void QWindow::setParent(QWindow *parent)
 {
@@ -598,11 +604,13 @@ void QWindow::setParent(QWindow *parent)
 
     QScreen *newScreen = parent ? parent->screen() : screen();
     if (d->windowRecreationRequired(newScreen)) {
-        qWarning() << this << Q_FUNC_INFO << '(' << parent << "): Cannot change screens (" << screen() << newScreen << ')';
+        qWarning() << this << '(' << parent << "): Cannot change screens (" << screen() << newScreen << ')';
         return;
     }
 
     QObject::setParent(parent);
+    d->parentWindow = parent;
+
     if (parent)
         d->disconnectFromScreen();
     else
@@ -615,8 +623,6 @@ void QWindow::setParent(QWindow *parent)
             d->platformWindow->setParent(0);
         }
     }
-
-    d->parentWindow = parent;
 
     QGuiApplicationPrivate::updateBlockedStatus(this);
 }
@@ -1085,13 +1091,13 @@ qreal QWindow::devicePixelRatio() const
 {
     Q_D(const QWindow);
 
-    // If there is no platform window, do the second best thing and
-    // return the app global devicePixelRatio. This is the highest
-    // devicePixelRatio found on the system screens, and will be
-    // correct for single-display systems (a very common case).
+    // If there is no platform window use the app global devicePixelRatio,
+    // which is the the highest devicePixelRatio found on the system
+    // screens, and will be correct for single-display systems (a very common case).
     if (!d->platformWindow)
         return qApp->devicePixelRatio();
-    return d->platformWindow->devicePixelRatio();
+
+    return d->platformWindow->devicePixelRatio() * QHighDpiScaling::factor(this);
 }
 
 /*!
@@ -1154,7 +1160,7 @@ void QWindow::setTransientParent(QWindow *parent)
 {
     Q_D(QWindow);
     if (parent && !parent->isTopLevel()) {
-        qWarning() << Q_FUNC_INFO << parent << "must be a top level window.";
+        qWarning() << parent << "must be a top level window.";
         return;
     }
 
@@ -1270,8 +1276,11 @@ void QWindow::setMinimumSize(const QSize &size)
 */
 void QWindow::setX(int arg)
 {
+    Q_D(QWindow);
     if (x() != arg)
         setGeometry(QRect(arg, y(), width(), height()));
+    else
+        d->positionAutomatic = false;
 }
 
 /*!
@@ -1280,8 +1289,11 @@ void QWindow::setX(int arg)
 */
 void QWindow::setY(int arg)
 {
+    Q_D(QWindow);
     if (y() != arg)
         setGeometry(QRect(x(), arg, width(), height()));
+    else
+        d->positionAutomatic = false;
 }
 
 /*!
@@ -1431,7 +1443,13 @@ void QWindow::setGeometry(const QRect &rect)
 
     d->positionPolicy = QWindowPrivate::WindowFrameExclusive;
     if (d->platformWindow) {
-        d->platformWindow->setGeometry(rect);
+        QRect nativeRect;
+        QScreen *newScreen = d->screenForGeometry(rect);
+        if (newScreen && isTopLevel())
+            nativeRect = QHighDpi::toNativePixels(rect, newScreen);
+        else
+            nativeRect = QHighDpi::toNativePixels(rect, this);
+        d->platformWindow->setGeometry(nativeRect);
     } else {
         d->geometry = rect;
 
@@ -1446,6 +1464,30 @@ void QWindow::setGeometry(const QRect &rect)
     }
 }
 
+/*
+  This is equivalent to QPlatformWindow::screenForGeometry, but in platform
+  independent coordinates. The duplication is unfortunate, but there is a
+  chicken and egg problem here: we cannot convert to native coordinates
+  before we know which screen we are on.
+*/
+QScreen *QWindowPrivate::screenForGeometry(const QRect &newGeometry)
+{
+    Q_Q(QWindow);
+    QScreen *currentScreen = q->screen();
+    QScreen *fallback = currentScreen;
+    QPoint center = newGeometry.center();
+    if (!q->parent() && currentScreen && !currentScreen->geometry().contains(center)) {
+        Q_FOREACH (QScreen* screen, currentScreen->virtualSiblings()) {
+            if (screen->geometry().contains(center))
+                return screen;
+            if (screen->geometry().intersects(newGeometry))
+                fallback = screen;
+        }
+    }
+    return fallback;
+}
+
+
 /*!
     Returns the geometry of the window, excluding its window frame.
 
@@ -1455,7 +1497,7 @@ QRect QWindow::geometry() const
 {
     Q_D(const QWindow);
     if (d->platformWindow)
-        return d->platformWindow->geometry();
+        return QHighDpi::fromNativePixels(d->platformWindow->geometry(), this);
     return d->geometry;
 }
 
@@ -1468,7 +1510,7 @@ QMargins QWindow::frameMargins() const
 {
     Q_D(const QWindow);
     if (d->platformWindow)
-        return d->platformWindow->frameMargins();
+        return QHighDpi::fromNativePixels(d->platformWindow->frameMargins(), this);
     return QMargins();
 }
 
@@ -1482,7 +1524,7 @@ QRect QWindow::frameGeometry() const
     Q_D(const QWindow);
     if (d->platformWindow) {
         QMargins m = frameMargins();
-        return d->platformWindow->geometry().adjusted(-m.left(), -m.top(), m.right(), m.bottom());
+        return QHighDpi::fromNativePixels(d->platformWindow->geometry(), this).adjusted(-m.left(), -m.top(), m.right(), m.bottom());
     }
     return d->geometry;
 }
@@ -1499,7 +1541,7 @@ QPoint QWindow::framePosition() const
     Q_D(const QWindow);
     if (d->platformWindow) {
         QMargins margins = frameMargins();
-        return d->platformWindow->geometry().topLeft() - QPoint(margins.left(), margins.top());
+        return QHighDpi::fromNativePixels(d->platformWindow->geometry().topLeft(), this) - QPoint(margins.left(), margins.top());
     }
     return d->geometry.topLeft();
 }
@@ -1515,7 +1557,7 @@ void QWindow::setFramePosition(const QPoint &point)
     d->positionPolicy = QWindowPrivate::WindowFrameInclusive;
     d->positionAutomatic = false;
     if (d->platformWindow) {
-        d->platformWindow->setGeometry(QRect(point, size()));
+        d->platformWindow->setGeometry(QHighDpi::toNativePixels(QRect(point, size()), this));
     } else {
         d->geometry.moveTopLeft(point);
     }
@@ -1575,7 +1617,7 @@ void QWindow::resize(const QSize &newSize)
 {
     Q_D(QWindow);
     if (d->platformWindow) {
-        d->platformWindow->setGeometry(QRect(position(), newSize));
+        d->platformWindow->setGeometry(QHighDpi::toNativePixels(QRect(position(), newSize), this));
     } else {
         const QSize oldSize = d->geometry.size();
         d->geometry.setSize(newSize);
@@ -2255,10 +2297,10 @@ QPoint QWindow::mapToGlobal(const QPoint &pos) const
     Q_D(const QWindow);
     // QTBUG-43252, prefer platform implementation for foreign windows.
     if (d->platformWindow
-        && (type() == Qt::ForeignWindow || d->platformWindow->isEmbedded(0))) {
+        && (type() == Qt::ForeignWindow || d->platformWindow->isEmbedded())) {
         return d->platformWindow->mapToGlobal(pos);
     }
-    return pos + d_func()->globalPosition();
+    return pos + d->globalPosition();
 }
 
 
@@ -2275,10 +2317,10 @@ QPoint QWindow::mapFromGlobal(const QPoint &pos) const
     Q_D(const QWindow);
     // QTBUG-43252, prefer platform implementation for foreign windows.
     if (d->platformWindow
-        && (type() == Qt::ForeignWindow || d->platformWindow->isEmbedded(0))) {
+        && (type() == Qt::ForeignWindow || d->platformWindow->isEmbedded())) {
         return d->platformWindow->mapFromGlobal(pos);
     }
-    return pos - d_func()->globalPosition();
+    return pos - d->globalPosition();
 }
 
 
@@ -2340,9 +2382,16 @@ QWindow *QWindowPrivate::topLevelWindow() const
     Given the handle \a id to a native window, this method creates a QWindow
     object which can be used to represent the window when invoking methods like
     setParent() and setTransientParent().
-    This can be used, on platforms which support it, to embed a window inside a
-    container or to make a window stick on top of a window created by another
-    process.
+
+    This can be used, on platforms which support it, to embed a QWindow inside a
+    native window, or to embed a native window inside a QWindow.
+
+    If foreign windows are not supported, this function returns 0.
+
+    \note The resulting QWindow should not be used to manipulate the underlying
+    native window (besides re-parenting), or to observe state changes of the
+    native window. Any support for these kind of operations is incidental, highly
+    platform dependent and untested.
 
     \sa setParent()
     \sa setTransientParent()
@@ -2470,6 +2519,45 @@ void QWindowPrivate::applyCursor()
     }
 }
 #endif // QT_NO_CURSOR
+
+#ifndef QT_NO_DEBUG_STREAM
+QDebug operator<<(QDebug debug, const QWindow *window)
+{
+    QDebugStateSaver saver(debug);
+    debug.nospace();
+    if (window) {
+        debug << window->metaObject()->className() << '(' << (const void *)window;
+        if (!window->objectName().isEmpty())
+            debug << ", name=" << window->objectName();
+        if (debug.verbosity() > 2) {
+            const QRect geometry = window->geometry();
+            if (window->isVisible())
+                debug << ", visible";
+            if (window->isExposed())
+                debug << ", exposed";
+            debug << ", state=" << window->windowState()
+                << ", type=" << window->type() << ", flags=" << window->flags()
+                << ", surface type=" << window->surfaceType();
+            if (window->isTopLevel())
+                debug << ", toplevel";
+            debug << ", " << geometry.width() << 'x' << geometry.height()
+                << forcesign << geometry.x() << geometry.y() << noforcesign;
+            const QMargins margins = window->frameMargins();
+            if (!margins.isNull())
+                debug << ", margins=" << margins;
+            debug << ", devicePixelRatio=" << window->devicePixelRatio();
+            if (const QPlatformWindow *platformWindow = window->handle())
+                debug << ", winId=0x" << hex << platformWindow->winId() << dec;
+            if (const QScreen *screen = window->screen())
+                debug << ", on " << screen->name();
+        }
+        debug << ')';
+    } else {
+        debug << "QWindow(0x0)";
+    }
+    return debug;
+}
+#endif // !QT_NO_DEBUG_STREAM
 
 QT_END_NAMESPACE
 

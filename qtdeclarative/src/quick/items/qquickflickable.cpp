@@ -218,7 +218,7 @@ QQuickFlickablePrivate::QQuickFlickablePrivate()
     , hMoved(false), vMoved(false)
     , stealMouse(false), pressed(false)
     , scrollingPhase(false), interactive(true), calcVelocity(false)
-    , pixelAligned(false), replayingPressEvent(false)
+    , pixelAligned(false)
     , lastPosTime(-1)
     , lastPressTime(0)
     , deceleration(QML_FLICK_DEFAULTDECELERATION)
@@ -344,10 +344,12 @@ bool QQuickFlickablePrivate::flick(AxisData &data, qreal minExtent, qreal maxExt
         accel = v2 / (2.0f * qAbs(dist));
 
         resetTimeline(data);
-        if (boundsBehavior & QQuickFlickable::OvershootBounds)
-            timeline.accel(data.move, v, accel);
-        else
-            timeline.accel(data.move, v, accel, maxDistance);
+        if (!data.inOvershoot) {
+            if (boundsBehavior & QQuickFlickable::OvershootBounds)
+                timeline.accel(data.move, v, accel);
+            else
+                timeline.accel(data.move, v, accel, maxDistance);
+        }
         timeline.callback(QQuickTimeLineCallback(&data.move, fixupCallback, this));
 
         if (&data == &hData)
@@ -433,12 +435,12 @@ void QQuickFlickablePrivate::clearTimeline()
 
 void QQuickFlickablePrivate::fixup(AxisData &data, qreal minExtent, qreal maxExtent)
 {
-    if (data.move.value() > minExtent || maxExtent > minExtent) {
+    if (data.move.value() >= minExtent || maxExtent > minExtent) {
         resetTimeline(data);
         if (data.move.value() != minExtent) {
             adjustContentPos(data, minExtent);
         }
-    } else if (data.move.value() < maxExtent) {
+    } else if (data.move.value() <= maxExtent) {
         resetTimeline(data);
         adjustContentPos(data, maxExtent);
     } else if (-qRound(-data.move.value()) != data.move.value()) {
@@ -619,7 +621,7 @@ is finished.
     \qmlsignal QtQuick::Flickable::movementStarted()
 
     This signal is emitted when the view begins moving due to user
-    interaction.
+    interaction or a generated flick().
 
     The corresponding handler is \c onMovementStarted.
 */
@@ -628,9 +630,9 @@ is finished.
     \qmlsignal QtQuick::Flickable::movementEnded()
 
     This signal is emitted when the view stops moving due to user
-    interaction.  If a flick was generated, this signal will
+    interaction or a generated flick().  If a flick was active, this signal will
     be emitted once the flick stops.  If a flick was not
-    generated, this signal will be emitted when the
+    active, this signal will be emitted when the
     user stops dragging - i.e. a mouse or touch release.
 
     The corresponding handler is \c onMovementEnded.
@@ -1347,7 +1349,7 @@ void QQuickFlickable::mouseReleaseEvent(QMouseEvent *event)
             if (window() && window()->mouseGrabberItem()) {
                 QPointF localPos = window()->mouseGrabberItem()->mapFromScene(event->windowPos());
                 QScopedPointer<QMouseEvent> mouseEvent(QQuickWindowPrivate::cloneMouseEvent(event, &localPos));
-                window()->sendEvent(window()->mouseGrabberItem(), mouseEvent.data());
+                QCoreApplication::sendEvent(window(), mouseEvent.data());
             }
 
             // And the event has been consumed
@@ -1451,6 +1453,7 @@ void QQuickFlickable::wheelEvent(QWheelEvent *event)
         d->lastPosTime = currentTimestamp;
         d->accumulatedWheelPixelDelta += QVector2D(event->pixelDelta());
         d->drag(currentTimestamp, event->type(), event->posF(), d->accumulatedWheelPixelDelta, true, !d->scrollingPhase, true, velocity);
+        event->accept();
     }
 
     if (!event->isAccepted())
@@ -1639,10 +1642,8 @@ void QQuickFlickable::geometryChanged(const QRectF &newGeometry,
     bool changed = false;
     if (newGeometry.width() != oldGeometry.width()) {
         changed = true; // we must update visualArea.widthRatio
-        if (d->hData.viewSize < 0) {
+        if (d->hData.viewSize < 0)
             d->contentItem->setWidth(width());
-            emit contentWidthChanged();
-        }
         // Make sure that we're entirely in view.
         if (!d->pressed && !d->hData.moving && !d->vData.moving) {
             d->fixupMode = QQuickFlickablePrivate::Immediate;
@@ -1651,10 +1652,8 @@ void QQuickFlickable::geometryChanged(const QRectF &newGeometry,
     }
     if (newGeometry.height() != oldGeometry.height()) {
         changed = true; // we must update visualArea.heightRatio
-        if (d->vData.viewSize < 0) {
+        if (d->vData.viewSize < 0)
             d->contentItem->setHeight(height());
-            emit contentHeightChanged();
-        }
         // Make sure that we're entirely in view.
         if (!d->pressed && !d->hData.moving && !d->vData.moving) {
             d->fixupMode = QQuickFlickablePrivate::Immediate;
@@ -1670,6 +1669,9 @@ void QQuickFlickable::geometryChanged(const QRectF &newGeometry,
     \qmlmethod QtQuick::Flickable::flick(qreal xVelocity, qreal yVelocity)
 
     Flicks the content with \a xVelocity horizontally and \a yVelocity vertically in pixels/sec.
+
+    Calling this method will update the corresponding moving and flicking properties and signals,
+    just like a real flick.
 */
 
 void QQuickFlickable::flick(qreal xVelocity, qreal yVelocity)
@@ -1679,8 +1681,15 @@ void QQuickFlickable::flick(qreal xVelocity, qreal yVelocity)
     d->vData.reset();
     d->hData.velocity = xVelocity;
     d->vData.velocity = yVelocity;
+
     bool flickedX = d->flickX(xVelocity);
     bool flickedY = d->flickY(yVelocity);
+
+    if (flickedX)
+        d->hMoved = true;
+    if (flickedY)
+        d->vMoved = true;
+    movementStarting();
     d->flickingStarted(flickedX, flickedY);
 }
 
@@ -2195,10 +2204,6 @@ bool QQuickFlickable::sendMouseEvent(QQuickItem *item, QMouseEvent *event)
             d->handleMouseMoveEvent(mouseEvent.data());
             break;
         case QEvent::MouseButtonPress:
-            // Don't process a replayed event during replay
-            if (d->replayingPressEvent)
-                return false;
-
             d->handleMousePressEvent(mouseEvent.data());
             d->captureDelayedPress(item, event);
             stealThisEvent = d->stealMouse;   // Update stealThisEvent in case changed by function call above

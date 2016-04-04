@@ -39,7 +39,7 @@
 ****************************************************************************/
 
 import QtQuick 2.0
-import "private"
+import QtGraphicalEffects.private 1.0
 
 /*!
     \qmltype InnerShadow
@@ -241,8 +241,8 @@ Item {
     property color color: "black"
 
     /*!
-        \qmlproperty real QtGraphicalEffects1::InnerShadow::horizontalOffset
-        \qmlproperty real QtGraphicalEffects1::InnerShadow::verticalOffset
+        \qmlproperty real QtGraphicalEffects::InnerShadow::horizontalOffset
+        \qmlproperty real QtGraphicalEffects::InnerShadow::verticalOffset
 
         HorizontalOffset and verticalOffset properties define the offset for the
         rendered shadow compared to the InnerShadow item position. Often, the

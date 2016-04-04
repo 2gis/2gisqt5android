@@ -241,15 +241,15 @@ void Assembler::enterStandardStackFrame(const RegisterInformation &regularRegist
     subPtr(TrustedImm32(frameSize), StackPointerRegister);
 
     Address slotAddr(StackFrameRegister, 0);
-    for (int i = 0, ei = regularRegistersToSave.size(); i < ei; ++i) {
-        Q_ASSERT(regularRegistersToSave.at(i).isRegularRegister());
-        slotAddr.offset -= RegisterSize;
-        storePtr(regularRegistersToSave.at(i).reg<RegisterID>(), slotAddr);
-    }
     for (int i = 0, ei = fpRegistersToSave.size(); i < ei; ++i) {
         Q_ASSERT(fpRegistersToSave.at(i).isFloatingPoint());
         slotAddr.offset -= sizeof(double);
         JSC::MacroAssembler::storeDouble(fpRegistersToSave.at(i).reg<FPRegisterID>(), slotAddr);
+    }
+    for (int i = 0, ei = regularRegistersToSave.size(); i < ei; ++i) {
+        Q_ASSERT(regularRegistersToSave.at(i).isRegularRegister());
+        slotAddr.offset -= RegisterSize;
+        storePtr(regularRegistersToSave.at(i).reg<RegisterID>(), slotAddr);
     }
 }
 
@@ -259,15 +259,15 @@ void Assembler::leaveStandardStackFrame(const RegisterInformation &regularRegist
     Address slotAddr(StackFrameRegister, -regularRegistersToSave.size() * RegisterSize - fpRegistersToSave.size() * sizeof(double));
 
     // restore the callee saved registers
-    for (int i = fpRegistersToSave.size() - 1; i >= 0; --i) {
-        Q_ASSERT(fpRegistersToSave.at(i).isFloatingPoint());
-        JSC::MacroAssembler::loadDouble(slotAddr, fpRegistersToSave.at(i).reg<FPRegisterID>());
-        slotAddr.offset += sizeof(double);
-    }
     for (int i = regularRegistersToSave.size() - 1; i >= 0; --i) {
         Q_ASSERT(regularRegistersToSave.at(i).isRegularRegister());
         loadPtr(slotAddr, regularRegistersToSave.at(i).reg<RegisterID>());
         slotAddr.offset += RegisterSize;
+    }
+    for (int i = fpRegistersToSave.size() - 1; i >= 0; --i) {
+        Q_ASSERT(fpRegistersToSave.at(i).isFloatingPoint());
+        JSC::MacroAssembler::loadDouble(slotAddr, fpRegistersToSave.at(i).reg<FPRegisterID>());
+        slotAddr.offset += sizeof(double);
     }
 
     Q_ASSERT(slotAddr.offset == 0);
@@ -327,13 +327,13 @@ Assembler::Jump Assembler::genTryDoubleConversion(IR::Expr *src, Assembler::FPRe
 
     // check if it's an int32:
     Assembler::Jump isNoInt = branch32(Assembler::NotEqual, Assembler::ScratchRegister,
-                                            Assembler::TrustedImm32(Value::_Integer_Type));
+                                            Assembler::TrustedImm32(Value::Integer_Type_Internal));
     convertInt32ToDouble(toInt32Register(src, Assembler::ScratchRegister), dest);
     Assembler::Jump intDone = jump();
 
     // not an int, check if it's a double:
     isNoInt.link(this);
-#if QT_POINTER_SIZE == 8
+#ifdef QV4_USE_64_BIT_VALUE_ENCODING
     and32(Assembler::TrustedImm32(Value::IsDouble_Mask), Assembler::ScratchRegister);
     Assembler::Jump isNoDbl = branch32(Assembler::Equal, Assembler::ScratchRegister,
                                             Assembler::TrustedImm32(0));

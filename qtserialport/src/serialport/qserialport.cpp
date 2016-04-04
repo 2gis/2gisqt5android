@@ -44,6 +44,42 @@
 
 QT_BEGIN_NAMESPACE
 
+QSerialPortErrorInfo::QSerialPortErrorInfo(QSerialPort::SerialPortError newErrorCode,
+                                           const QString &newErrorString)
+    : errorCode(newErrorCode)
+    , errorString(newErrorString)
+{
+    if (errorString.isNull()) {
+        switch (errorCode) {
+        case QSerialPort::NoError:
+            errorString = QSerialPort::tr("No error");
+            break;
+        case QSerialPort::OpenError:
+            errorString = QSerialPort::tr("Device is already open");
+            break;
+        case QSerialPort::NotOpenError:
+            errorString = QSerialPort::tr("Device is not open");
+            break;
+        case QSerialPort::TimeoutError:
+            errorString = QSerialPort::tr("Operation timed out");
+            break;
+        case QSerialPort::ReadError:
+            errorString = QSerialPort::tr("Error reading from device");
+            break;
+        case QSerialPort::WriteError:
+            errorString = QSerialPort::tr("Error writing to device");
+            break;
+        case QSerialPort::ResourceError:
+            errorString = QSerialPort::tr("Device disappeared from the system");
+            break;
+        default:
+            // an empty string will be interpreted as "Unknown error"
+            // from the QIODevice::errorString()
+            break;
+        }
+    }
+}
+
 QSerialPortPrivate::QSerialPortPrivate()
     : readBufferMaxSize(0)
     , writeBuffer(InitialBufferSize)
@@ -54,19 +90,17 @@ QSerialPortPrivate::QSerialPortPrivate()
     , parity(QSerialPort::NoParity)
     , stopBits(QSerialPort::OneStop)
     , flowControl(QSerialPort::NoFlowControl)
-    , policy(QSerialPort::IgnorePolicy)
 #if QT_DEPRECATED_SINCE(5,3)
     , settingsRestoredOnClose(true)
 #endif
     , isBreakEnabled(false)
 #if defined(Q_OS_WINCE)
     , handle(INVALID_HANDLE_VALUE)
-    , parityErrorOccurred(false)
     , eventNotifier(0)
 #elif defined(Q_OS_WIN32)
     , handle(INVALID_HANDLE_VALUE)
-    , parityErrorOccurred(false)
     , readChunkBuffer(ReadChunkSize, 0)
+    , communicationStarted(false)
     , writeStarted(false)
     , readStarted(false)
     , notifier(0)
@@ -87,14 +121,6 @@ QSerialPortPrivate::QSerialPortPrivate()
     , writeSequenceStarted(false)
 #endif
 {
-}
-
-int QSerialPortPrivate::timeoutValue(int msecs, int elapsed)
-{
-    if (msecs == -1)
-        return msecs;
-    msecs -= elapsed;
-    return qMax(msecs, 0);
 }
 
 void QSerialPortPrivate::setError(const QSerialPortErrorInfo &errorInfo)
@@ -176,7 +202,7 @@ void QSerialPortPrivate::setError(const QSerialPortErrorInfo &errorInfo)
     used in non-GUI threads, to avoid freezing the user interface.
 
     For more details about these approaches, refer to the
-    \l {Examples}{example} applications.
+    \l {Qt Serial Port Examples}{example} applications.
 
     The QSerialPort class can also be used with QTextStream and QDataStream's
     stream operators (operator<<() and operator>>()). There is one issue to be
@@ -371,13 +397,16 @@ void QSerialPortPrivate::setError(const QSerialPortErrorInfo &errorInfo)
                                 QtSerialPort 5.2.
 
     \value ParityError          Parity error detected by the hardware while
-                                reading data.
+                                reading data. This value is obsolete. We strongly
+                                advise against using it in new code.
 
     \value FramingError         Framing error detected by the hardware while
-                                reading data.
+                                reading data. This value is obsolete. We strongly
+                                advise against using it in new code.
 
     \value BreakConditionError  Break condition detected by the hardware on
-                                the input line.
+                                the input line. This value is obsolete. We strongly
+                                advise against using it in new code.
 
     \value WriteError           An I/O error occurred while writing the data.
 
@@ -521,7 +550,7 @@ bool QSerialPort::open(OpenMode mode)
     Q_D(QSerialPort);
 
     if (isOpen()) {
-        d->setError(QSerialPortErrorInfo(QSerialPort::OpenError, tr("Device is already open")));
+        d->setError(QSerialPortErrorInfo(QSerialPort::OpenError));
         return false;
     }
 
@@ -561,7 +590,7 @@ void QSerialPort::close()
 {
     Q_D(QSerialPort);
     if (!isOpen()) {
-        d->setError(QSerialPortErrorInfo(QSerialPort::NotOpenError, tr("Device is not open")));
+        d->setError(QSerialPortErrorInfo(QSerialPort::NotOpenError));
         return;
     }
 
@@ -626,8 +655,8 @@ bool QSerialPort::settingsRestoredOnClose() const
     setting is done automatically in the \l{QSerialPort::open()} method right
     after that the opening of the port succeeds.
 
-    \warning Setting the AllDirections flag is only supported on
-    the Windows, Windows CE platforms.
+    \warning Setting the AllDirections flag is supported on all platforms.
+    Windows and Windows CE support only this mode.
 
     \warning Returns equal baud rate in any direction on Windows, Windows CE.
 
@@ -874,7 +903,7 @@ bool QSerialPort::setDataTerminalReady(bool set)
     Q_D(QSerialPort);
 
     if (!isOpen()) {
-        d->setError(QSerialPortErrorInfo(QSerialPort::NotOpenError, tr("Device is not open")));
+        d->setError(QSerialPortErrorInfo(QSerialPort::NotOpenError));
         qWarning("%s: device not open", Q_FUNC_INFO);
         return false;
     }
@@ -921,7 +950,7 @@ bool QSerialPort::setRequestToSend(bool set)
     Q_D(QSerialPort);
 
     if (!isOpen()) {
-        d->setError(QSerialPortErrorInfo(QSerialPort::NotOpenError, tr("Device is not open")));
+        d->setError(QSerialPortErrorInfo(QSerialPort::NotOpenError));
         qWarning("%s: device not open", Q_FUNC_INFO);
         return false;
     }
@@ -971,7 +1000,7 @@ QSerialPort::PinoutSignals QSerialPort::pinoutSignals()
     Q_D(QSerialPort);
 
     if (!isOpen()) {
-        d->setError(QSerialPortErrorInfo(QSerialPort::NotOpenError, tr("Device is not open")));
+        d->setError(QSerialPortErrorInfo(QSerialPort::NotOpenError));
         qWarning("%s: device not open", Q_FUNC_INFO);
         return QSerialPort::NoSignal;
     }
@@ -1001,7 +1030,7 @@ bool QSerialPort::flush()
     Q_D(QSerialPort);
 
     if (!isOpen()) {
-        d->setError(QSerialPortErrorInfo(QSerialPort::NotOpenError, tr("Device is not open")));
+        d->setError(QSerialPortErrorInfo(QSerialPort::NotOpenError));
         qWarning("%s: device not open", Q_FUNC_INFO);
         return false;
     }
@@ -1023,7 +1052,7 @@ bool QSerialPort::clear(Directions directions)
     Q_D(QSerialPort);
 
     if (!isOpen()) {
-        d->setError(QSerialPortErrorInfo(QSerialPort::NotOpenError, tr("Device is not open")));
+        d->setError(QSerialPortErrorInfo(QSerialPort::NotOpenError));
         qWarning("%s: device not open", Q_FUNC_INFO);
         return false;
     }
@@ -1085,24 +1114,23 @@ bool QSerialPort::setDataErrorPolicy(DataErrorPolicy policy)
     Q_D(QSerialPort);
 
     if (!isOpen()) {
-        d->setError(QSerialPortErrorInfo(QSerialPort::NotOpenError, tr("Device is not open")));
+        d->setError(QSerialPortErrorInfo(QSerialPort::NotOpenError));
         qWarning("%s: device not open", Q_FUNC_INFO);
         return false;
     }
 
-    const bool ret = d->policy == policy || d->setDataErrorPolicy(policy);
-    if (ret && (d->policy != policy)) {
-        d->policy = policy;
-        emit dataErrorPolicyChanged(d->policy);
+    if (policy != QSerialPort::IgnorePolicy) {
+        d->setError(QSerialPortErrorInfo(QSerialPort::UnsupportedOperationError,
+                    tr("The device supports only the ignoring policy")));
+        return false;
     }
 
-    return ret;
+    return true;
 }
 
 QSerialPort::DataErrorPolicy QSerialPort::dataErrorPolicy() const
 {
-    Q_D(const QSerialPort);
-    return d->policy;
+    return QSerialPort::IgnorePolicy;
 }
 #endif // QT_DEPRECATED_SINCE(5, 2)
 
@@ -1311,7 +1339,7 @@ bool QSerialPort::sendBreak(int duration)
     Q_D(QSerialPort);
 
     if (!isOpen()) {
-        d->setError(QSerialPortErrorInfo(QSerialPort::NotOpenError, tr("Device is not open")));
+        d->setError(QSerialPortErrorInfo(QSerialPort::NotOpenError));
         qWarning("%s: device not open", Q_FUNC_INFO);
         return false;
     }
@@ -1341,7 +1369,7 @@ bool QSerialPort::setBreakEnabled(bool set)
     Q_D(QSerialPort);
 
     if (!isOpen()) {
-        d->setError(QSerialPortErrorInfo(QSerialPort::NotOpenError, tr("Device is not open")));
+        d->setError(QSerialPortErrorInfo(QSerialPort::NotOpenError));
         qWarning("%s: device not open", Q_FUNC_INFO);
         return false;
     }
@@ -1373,7 +1401,7 @@ qint64 QSerialPort::readData(char *data, qint64 maxSize)
     Q_UNUSED(data);
     Q_UNUSED(maxSize);
 
-#ifdef Q_OS_WIN32
+#if defined(Q_OS_WIN32)
     // We need try to start async reading to read a remainder from a driver's queue
     // in case we have a limited read buffer size. Because the read notification can
     // be stalled since Windows do not re-triggered an EV_RXCHAR event if a driver's
@@ -1381,6 +1409,12 @@ qint64 QSerialPort::readData(char *data, qint64 maxSize)
     Q_D(QSerialPort);
     if (d->readBufferMaxSize || d->flowControl == QSerialPort::HardwareControl)
         d->startAsyncRead();
+#elif defined(Q_OS_UNIX)
+    // We need try to re-trigger the read notification to read a remainder from a
+    // driver's queue in case we have a limited read buffer size.
+    Q_D(QSerialPort);
+    if (d->readBufferMaxSize && !d->isReadNotificationEnabled())
+        d->setReadNotificationEnabled(true);
 #endif
 
     // return 0 indicating there may be more data in the future

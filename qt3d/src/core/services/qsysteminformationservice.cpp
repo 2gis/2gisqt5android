@@ -34,25 +34,15 @@
 **
 ****************************************************************************/
 
-#include "qsysteminformationservice.h"
 #include "qsysteminformationservice_p.h"
+#include "qsysteminformationservice_p_p.h"
 
 QT_BEGIN_NAMESPACE
 
-namespace Qt3D {
+namespace Qt3DCore {
 
-/*!
-    \class Qt3D::QAbstractServiceProviderPrivate
-    \internal
-*/
-
-/*!
-    \class Qt3D::QSystemInformationServicePrivate
-    \internal
-*/
-
-/*!
-    \class Qt3D::QSystemInformationService
+/* !\internal
+    \class Qt3DCore::QSystemInformationService
     \inmodule Qt3DCore
     \brief Interface for a Qt3D system information service
 
@@ -60,7 +50,7 @@ namespace Qt3D {
     system information service.
 */
 
-/*!
+/*
     Creates an instance of QSystemInformationService, with a \a description for
     the new service. This constructor is protected so only subclasses can
     instantiate a QSystemInformationService object.
@@ -70,7 +60,7 @@ QSystemInformationService::QSystemInformationService(const QString &description)
 {
 }
 
-/*!
+/*
     \internal
 */
 QSystemInformationService::QSystemInformationService(QSystemInformationServicePrivate &dd)
@@ -78,15 +68,15 @@ QSystemInformationService::QSystemInformationService(QSystemInformationServicePr
 {
 }
 
-/*!
-    \fn QStringList Qt3D::QSystemInformationService::aspectNames()
+/*
+    \fn QStringList Qt3DCore::QSystemInformationService::aspectNames() const
 
     Subclasses should override this function and return a string list containing the
     names of all registered aspects.
 */
 
-/*!
-    \fn int threadPoolThreadCount() const
+/*
+    \fn int Qt3DCore::QSystemInformationService::threadPoolThreadCount() const
 
     Subclasses should override this function and return the number of threads in the
     Qt3D task manager's threadpool.

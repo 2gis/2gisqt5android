@@ -33,6 +33,17 @@
 #ifndef QV4ARRAYBUFFER_H
 #define QV4ARRAYBUFFER_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include "qv4object_p.h"
 #include "qv4functionobject_p.h"
 
@@ -47,8 +58,8 @@ struct ArrayBufferCtor : FunctionObject {
 };
 
 struct Q_QML_PRIVATE_EXPORT ArrayBuffer : Object {
-    ArrayBuffer(ExecutionEngine *e, size_t length);
-    ArrayBuffer(ExecutionEngine *e, const QByteArray& array);
+    ArrayBuffer(size_t length);
+    ArrayBuffer(const QByteArray& array);
     ~ArrayBuffer();
     QTypedArrayData<char> *data;
 
@@ -61,8 +72,8 @@ struct ArrayBufferCtor: FunctionObject
 {
     V4_OBJECT2(ArrayBufferCtor, FunctionObject)
 
-    static ReturnedValue construct(Managed *m, CallData *callData);
-    static ReturnedValue call(Managed *that, CallData *callData);
+    static ReturnedValue construct(const Managed *m, CallData *callData);
+    static ReturnedValue call(const Managed *that, CallData *callData);
 
     static ReturnedValue method_isView(CallContext *ctx);
 
@@ -72,6 +83,7 @@ struct Q_QML_PRIVATE_EXPORT ArrayBuffer : Object
 {
     V4_OBJECT2(ArrayBuffer, Object)
     V4_NEEDS_DESTROY
+    V4_PROTOTYPE(arrayBufferPrototype)
 
     QByteArray asByteArray() const;
     uint byteLength() const { return d()->byteLength(); }

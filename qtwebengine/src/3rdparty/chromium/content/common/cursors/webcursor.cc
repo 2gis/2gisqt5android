@@ -80,7 +80,7 @@ void WebCursor::GetCursorInfo(CursorInfo* cursor_info) const {
 #endif
 }
 
-bool WebCursor::Deserialize(PickleIterator* iter) {
+bool WebCursor::Deserialize(base::PickleIterator* iter) {
   int type, hotspot_x, hotspot_y, size_x, size_y, data_len;
   float scale;
   const char* data;
@@ -112,8 +112,12 @@ bool WebCursor::Deserialize(PickleIterator* iter) {
     if (size_x > 0 && size_y > 0) {
       // The * 4 is because the expected format is an array of RGBA pixel
       // values.
-      if (size_x * size_y * 4 > data_len)
+      if (size_x * size_y * 4 != data_len) {
+        LOG(WARNING) << "WebCursor's data length and image size mismatch: "
+                     << size_x << "x" << size_y << "x4 != "
+                     << data_len;
         return false;
+      }
 
       hotspot_.set_x(hotspot_x);
       hotspot_.set_y(hotspot_y);
@@ -132,7 +136,7 @@ bool WebCursor::Deserialize(PickleIterator* iter) {
   return DeserializePlatformData(iter);
 }
 
-bool WebCursor::Serialize(Pickle* pickle) const {
+bool WebCursor::Serialize(base::Pickle* pickle) const {
   if (!pickle->WriteInt(type_) ||
       !pickle->WriteInt(hotspot_.x()) ||
       !pickle->WriteInt(hotspot_.y()) ||

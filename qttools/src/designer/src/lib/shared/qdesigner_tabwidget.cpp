@@ -88,9 +88,9 @@ QTabWidgetEventFilter::QTabWidgetEventFilter(QTabWidget *parent) :
     tabBar()->setAcceptDrops(true);
     tabBar()->installEventFilter(this);
 
-    connect(m_actionInsertPage, SIGNAL(triggered()), this, SLOT(addPage()));
-    connect(m_actionInsertPageAfter, SIGNAL(triggered()), this, SLOT(addPageAfter()));
-    connect(m_actionDeletePage, SIGNAL(triggered()), this, SLOT(removeCurrentPage()));
+    connect(m_actionInsertPage, &QAction::triggered, this, &QTabWidgetEventFilter::addPage);
+    connect(m_actionInsertPageAfter, &QAction::triggered, this, &QTabWidgetEventFilter::addPageAfter);
+    connect(m_actionDeletePage, &QAction::triggered, this, &QTabWidgetEventFilter::removeCurrentPage);
 }
 
 QTabWidgetEventFilter::~QTabWidgetEventFilter()
@@ -168,6 +168,7 @@ bool QTabWidgetEventFilter::eventFilter(QObject *o, QEvent *e)
     if (!fw)
         return false;
 
+    bool handled = true;
     switch (type) {
     case QEvent::MouseButtonDblClick:
         break;
@@ -294,10 +295,11 @@ bool QTabWidgetEventFilter::eventFilter(QObject *o, QEvent *e)
     } break;
 
     default:
+        handled = false;
         break;
     }
 
-    return false;
+    return handled;
 }
 
 void QTabWidgetEventFilter::removeCurrentPage()
@@ -380,7 +382,7 @@ QMenu *QTabWidgetEventFilter::addContextMenuActions(QMenu *popup)
         insertPageMenu->addAction(m_actionInsertPage);
     } else {
         QAction *insertPageAction = popup->addAction(tr("Insert Page"));
-        connect(insertPageAction, SIGNAL(triggered()), this, SLOT(addPage()));
+        connect(insertPageAction, &QAction::triggered, this, &QTabWidgetEventFilter::addPage);
     }
     popup->addSeparator();
     return pageMenu;

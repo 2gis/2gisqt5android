@@ -48,7 +48,6 @@ QT_BEGIN_NAMESPACE
   \brief The QScriptContext class represents a Qt Script function invocation.
 
   \ingroup script
-  \mainclass
 
   A QScriptContext provides access to the `this' object and arguments
   passed to a script function. You typically want to access this

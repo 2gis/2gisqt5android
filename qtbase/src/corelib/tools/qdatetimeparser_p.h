@@ -87,7 +87,7 @@ public:
         first.pos = -1;
         first.count = -1;
         first.zeroesAdded = 0;
-        last.type = FirstSection;
+        last.type = LastSection;
         last.pos = -1;
         last.count = -1;
         last.zeroesAdded = 0;
@@ -252,6 +252,7 @@ public:
     Qt::TimeSpec spec; // spec if used by QDateTimeEdit
     Context context;
 };
+Q_DECLARE_TYPEINFO(QDateTimeParser::SectionNode, Q_PRIMITIVE_TYPE);
 
 Q_CORE_EXPORT bool operator==(const QDateTimeParser::SectionNode &s1, const QDateTimeParser::SectionNode &s2);
 

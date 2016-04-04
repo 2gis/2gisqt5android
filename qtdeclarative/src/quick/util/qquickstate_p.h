@@ -34,18 +34,30 @@
 #ifndef QQUICKSTATE_H
 #define QQUICKSTATE_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include <qqml.h>
 #include <qqmlproperty.h>
 #include <QtCore/qobject.h>
 #include <QtCore/qsharedpointer.h>
 #include <private/qtquickglobal_p.h>
+#include <private/qqmlabstractbinding_p.h>
 
 QT_BEGIN_NAMESPACE
 
 class QQuickStateActionEvent;
-class QQmlAbstractBinding;
 class QQmlBinding;
 class QQmlExpression;
+
 class QQuickStateAction
 {
 public:
@@ -63,8 +75,8 @@ public:
     QVariant fromValue;
     QVariant toValue;
 
-    QQmlAbstractBinding *fromBinding;
-    QWeakPointer<QQmlAbstractBinding> toBinding;
+    QQmlAbstractBinding::Ptr fromBinding;
+    QQmlAbstractBinding::Ptr toBinding;
     QQuickStateActionEvent *event;
 
     //strictly for matching
@@ -80,13 +92,12 @@ public:
     virtual ~QQuickStateActionEvent();
 
     enum EventType { Script, SignalHandler, ParentChange, AnchorChanges };
-    enum Reason { ActualChange, FastForward };
 
     virtual EventType type() const = 0;
 
-    virtual void execute(Reason reason = ActualChange);
+    virtual void execute();
     virtual bool isReversable();
-    virtual void reverse(Reason reason = ActualChange);
+    virtual void reverse();
     virtual void saveOriginals() {}
     virtual bool needsCopy() { return false; }
     virtual void copyOriginals(QQuickStateActionEvent *) {}

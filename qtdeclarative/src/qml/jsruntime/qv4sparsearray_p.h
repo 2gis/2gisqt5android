@@ -34,12 +34,19 @@
 #ifndef QV4SPARSEARRAY_H
 #define QV4SPARSEARRAY_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include "qv4global_p.h"
-#include <QtCore/qmap.h>
-#include "qv4value_inl_p.h"
-#include "qv4scopedvalue_p.h"
-#include "qv4property_p.h"
-#include <assert.h>
+#include <QtCore/qlist.h>
 
 //#define Q_MAP_DEBUG
 #ifdef Q_MAP_DEBUG
@@ -188,7 +195,7 @@ public:
     typedef qptrdiff difference_type;
     typedef int size_type;
 
-#ifndef QT_NO_DEBUG
+#ifdef Q_MAP_DEBUG
     void dump() const;
 #endif
 };
@@ -261,7 +268,7 @@ inline void SparseArray::push_back(uint index, uint len)
     n->value = index;
 }
 
-#ifndef QT_NO_DEBUG
+#ifdef Q_MAP_DEBUG
 inline void SparseArray::dump() const
 {
     const SparseArrayNode *it = begin();
@@ -344,4 +351,4 @@ inline SparseArrayNode *SparseArray::upperBound(uint akey)
 
 QT_END_NAMESPACE
 
-#endif // QMAP_H
+#endif

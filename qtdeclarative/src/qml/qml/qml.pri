@@ -23,7 +23,6 @@ SOURCES += \
     $$PWD/qqmlvaluetype.cpp \
     $$PWD/qqmlaccessors.cpp \
     $$PWD/qqmlxmlhttprequest.cpp \
-    $$PWD/qqmlwatcher.cpp \
     $$PWD/qqmlcleanup.cpp \
     $$PWD/qqmlpropertycache.cpp \
     $$PWD/qqmlnotifier.cpp \
@@ -35,7 +34,6 @@ SOURCES += \
     $$PWD/qqmlimport.cpp \
     $$PWD/qqmllist.cpp \
     $$PWD/qqmllocale.cpp \
-    $$PWD/qqmlabstractexpression.cpp \
     $$PWD/qqmljavascriptexpression.cpp \
     $$PWD/qqmlabstractbinding.cpp \
     $$PWD/qqmlvaluetypeproxybinding.cpp \
@@ -92,7 +90,6 @@ HEADERS += \
     $$PWD/qqmlvaluetype_p.h \
     $$PWD/qqmlaccessors_p.h \
     $$PWD/qqmlxmlhttprequest_p.h \
-    $$PWD/qqmlwatcher_p.h \
     $$PWD/qqmlcleanup_p.h \
     $$PWD/qqmlpropertycache_p.h \
     $$PWD/qqmlnotifier_p.h \
@@ -107,7 +104,6 @@ HEADERS += \
     $$PWD/qqmlscriptstring_p.h \
     $$PWD/qqmllocale_p.h \
     $$PWD/qqmlcomponentattached_p.h \
-    $$PWD/qqmlabstractexpression_p.h \
     $$PWD/qqmljavascriptexpression_p.h \
     $$PWD/qqmlabstractbinding_p.h \
     $$PWD/qqmlvaluetypeproxybinding_p.h \

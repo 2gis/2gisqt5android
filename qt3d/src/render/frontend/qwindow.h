@@ -34,23 +34,26 @@
 **
 ****************************************************************************/
 
-#ifndef QT3D_QWINDOW_H
-#define QT3D_QWINDOW_H
+#ifndef QT3DRENDER_QWINDOW_H
+#define QT3DRENDER_QWINDOW_H
 
 #include <QtGui/qwindow.h>
-#include <Qt3DRenderer/qt3drenderer_global.h>
+#include <Qt3DRender/qt3drender_global.h>
 
 QT_BEGIN_NAMESPACE
 
-namespace Qt3D {
-
-class QEntity;
-class QWindowPrivate;
-class QFrameGraph;
+namespace Qt3DCore {
 class QAbstractAspect;
 class QCamera;
+class QEntity;
+}
 
-class QT3DRENDERERSHARED_EXPORT QWindow : public ::QWindow
+namespace Qt3DRender {
+
+class QWindowPrivate;
+class QFrameGraph;
+
+class QT3DRENDERSHARED_EXPORT QWindow : public ::QWindow
 {
 public:
     explicit QWindow(::QWindow *parent = Q_NULLPTR);
@@ -58,12 +61,12 @@ public:
 
     void setFrameGraph(QFrameGraph *frameGraph);
     QFrameGraph *frameGraph() const;
-    QCamera *defaultCamera();
+    Qt3DCore::QCamera *defaultCamera();
 
-    void registerAspect(QAbstractAspect *aspect);
+    void registerAspect(Qt3DCore::QAbstractAspect *aspect);
     void registerAspect(const QString &name);
 
-    void setRootEntity(QEntity *root);
+    void setRootEntity(Qt3DCore::QEntity *root);
     void show();
 
 protected:
@@ -74,8 +77,8 @@ private:
     Q_DECLARE_PRIVATE(QWindow)
 };
 
-} // Qt3D
+} // namespace Qt3DRender
 
 QT_END_NAMESPACE
 
-#endif // QT3D_QWINDOW_H
+#endif // QT3DRENDER_QWINDOW_H

@@ -34,32 +34,56 @@
 **
 ****************************************************************************/
 
-#ifndef QT3D_CAMERA_P_H
-#define QT3D_CAMERA_P_H
+#ifndef QT3DCORE_CAMERA_P_H
+#define QT3DCORE_CAMERA_P_H
+
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists for the convenience
+// of other Qt classes.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
 
 #include <Qt3DCore/qcameralens.h>
-#include <Qt3DCore/qlookattransform.h>
 #include <Qt3DCore/qtransform.h>
 #include <private/qentity_p.h>
 
 QT_BEGIN_NAMESPACE
 
-namespace Qt3D {
+namespace Qt3DCore {
 
-class QT3DCORESHARED_EXPORT QCameraPrivate : public QEntityPrivate
+class QCameraPrivate : public QEntityPrivate
 {
 public:
     QCameraPrivate();
 
     Q_DECLARE_PUBLIC(QCamera)
 
+    void updateViewMatrix()
+    {
+        QMatrix4x4 m;
+        m.lookAt(m_position, m_viewCenter, m_upVector);
+        m_transform->setMatrix(m);
+    }
+
+    QVector3D m_position;
+    QVector3D m_viewCenter;
+    QVector3D m_upVector;
+
+    QVector3D m_cameraToCenter; // The vector from the camera position to the view center
+    bool m_viewMatrixDirty;
+
+    // Components
     QCameraLens *m_lens;
     QTransform *m_transform;
-    QLookAtTransform *m_lookAt;
 };
 
-} // namespace Qt3D
+} // namespace Qt3DCore
 
 QT_END_NAMESPACE
 
-#endif // QT3D_CAMERA_P_H
+#endif // QT3DCORE_CAMERA_P_H

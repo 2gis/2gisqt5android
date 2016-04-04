@@ -59,7 +59,7 @@ QT_BEGIN_NAMESPACE
 class QTextLayout;
 class QQuickTextDocumentWithImageResources;
 
-class Q_AUTOTEST_EXPORT QQuickTextPrivate : public QQuickImplicitSizeItemPrivate
+class Q_QUICK_PRIVATE_EXPORT QQuickTextPrivate : public QQuickImplicitSizeItemPrivate
 {
     Q_DECLARE_PUBLIC(QQuickText)
 public:
@@ -78,7 +78,7 @@ public:
 
     int lineHeightOffset() const;
     QString elidedText(qreal lineWidth, const QTextLine &line, QTextLine *nextLine = 0) const;
-    void elideFormats(int start, int length, int offset, QList<QTextLayout::FormatRange> *elidedFormats);
+    void elideFormats(int start, int length, int offset, QVector<QTextLayout::FormatRange> *elidedFormats);
 
     void processHoverEvent(QHoverEvent *event);
 
@@ -87,6 +87,15 @@ public:
     struct ExtraData {
         ExtraData();
 
+        qreal padding;
+        qreal topPadding;
+        qreal leftPadding;
+        qreal rightPadding;
+        qreal bottomPadding;
+        bool explicitTopPadding : 1;
+        bool explicitLeftPadding : 1;
+        bool explicitRightPadding : 1;
+        bool explicitBottomPadding : 1;
         qreal lineHeight;
         QQuickTextDocumentWithImageResources *doc;
         QString activeLink;
@@ -160,6 +169,15 @@ public:
     qreal getImplicitWidth() const Q_DECL_OVERRIDE;
     qreal getImplicitHeight() const Q_DECL_OVERRIDE;
 
+    qreal availableWidth() const;
+    qreal availableHeight() const;
+
+    inline qreal padding() const { return extra.isAllocated() ? extra->padding : 0.0; }
+    void setTopPadding(qreal value, bool reset = false);
+    void setLeftPadding(qreal value, bool reset = false);
+    void setRightPadding(qreal value, bool reset = false);
+    void setBottomPadding(qreal value, bool reset = false);
+
     void ensureDoc();
 
     QRectF setupTextLayout(qreal * const baseline);
@@ -176,45 +194,6 @@ public:
     inline int minimumPixelSize() const { return extra.isAllocated() ? extra->minimumPixelSize : 12; }
     inline int minimumPointSize() const { return extra.isAllocated() ? extra->minimumPointSize : 12; }
     static inline QQuickTextPrivate *get(QQuickText *t) { return t->d_func(); }
-};
-
-class QQuickPixmap;
-class QQuickTextDocumentWithImageResources : public QTextDocument, public QTextObjectInterface
-{
-    Q_OBJECT
-    Q_INTERFACES(QTextObjectInterface)
-public:
-    QQuickTextDocumentWithImageResources(QQuickItem *parent);
-    virtual ~QQuickTextDocumentWithImageResources();
-
-    void setText(const QString &);
-    int resourcesLoading() const { return outstanding; }
-
-    QSizeF intrinsicSize(QTextDocument *doc, int posInDocument, const QTextFormat &format);
-    void drawObject(QPainter *p, const QRectF &rect, QTextDocument *doc, int posInDocument, const QTextFormat &format);
-
-    QImage image(const QTextImageFormat &format);
-
-public Q_SLOTS:
-    void clearResources();
-
-Q_SIGNALS:
-    void imagesLoaded();
-
-protected:
-    QVariant loadResource(int type, const QUrl &name);
-
-    QQuickPixmap *loadPixmap(QQmlContext *context, const QUrl &name);
-
-private Q_SLOTS:
-    void reset();
-    void requestFinished();
-
-private:
-    QHash<QUrl, QQuickPixmap *> m_resources;
-
-    int outstanding;
-    static QSet<QUrl> errors;
 };
 
 QT_END_NAMESPACE

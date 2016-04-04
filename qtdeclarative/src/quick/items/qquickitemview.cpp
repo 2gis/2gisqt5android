@@ -71,19 +71,19 @@ FxViewItem::~FxViewItem()
 
 qreal FxViewItem::itemX() const
 {
-    return transitionableItem ? transitionableItem->itemX() : item->x();
+    return transitionableItem ? transitionableItem->itemX() : (item ? item->x() : 0);
 }
 
 qreal FxViewItem::itemY() const
 {
-    return transitionableItem ? transitionableItem->itemY() : item->y();
+    return transitionableItem ? transitionableItem->itemY() : (item ? item->y() : 0);
 }
 
 void FxViewItem::moveTo(const QPointF &pos, bool immediate)
 {
     if (transitionableItem)
         transitionableItem->moveTo(pos, immediate);
-    else
+    else if (item)
         item->setPosition(pos);
 }
 
@@ -91,21 +91,26 @@ void FxViewItem::setVisible(bool visible)
 {
     if (!visible && transitionableItem && transitionableItem->transitionScheduledOrRunning())
         return;
-    QQuickItemPrivate::get(item)->setCulled(!visible);
+    if (item)
+        QQuickItemPrivate::get(item)->setCulled(!visible);
 }
 
 void FxViewItem::trackGeometry(bool track)
 {
     if (track) {
         if (!trackGeom) {
-            QQuickItemPrivate *itemPrivate = QQuickItemPrivate::get(item);
-            itemPrivate->addItemChangeListener(QQuickItemViewPrivate::get(view), QQuickItemPrivate::Geometry);
+            if (item) {
+                QQuickItemPrivate *itemPrivate = QQuickItemPrivate::get(item);
+                itemPrivate->addItemChangeListener(QQuickItemViewPrivate::get(view), QQuickItemPrivate::Geometry);
+            }
             trackGeom = true;
         }
     } else {
         if (trackGeom) {
-            QQuickItemPrivate *itemPrivate = QQuickItemPrivate::get(item);
-            itemPrivate->removeItemChangeListener(QQuickItemViewPrivate::get(view), QQuickItemPrivate::Geometry);
+            if (item) {
+                QQuickItemPrivate *itemPrivate = QQuickItemPrivate::get(item);
+                itemPrivate->removeItemChangeListener(QQuickItemViewPrivate::get(view), QQuickItemPrivate::Geometry);
+            }
             trackGeom = false;
         }
     }
@@ -905,11 +910,7 @@ void QQuickItemViewPrivate::positionViewAtIndex(int index, int mode)
 
     qreal pos = isContentFlowReversed() ? -position() - size() : position();
     FxViewItem *item = visibleItem(idx);
-    qreal maxExtent;
-    if (layoutOrientation() == Qt::Vertical)
-        maxExtent = isContentFlowReversed() ? q->minYExtent()-size(): -q->maxYExtent();
-    else
-        maxExtent = isContentFlowReversed() ? q->minXExtent()-size(): -q->maxXExtent();
+    qreal maxExtent = calculatedMaxExtent();
     if (!item) {
         qreal itemPos = positionAt(idx);
         changedVisibleIndex(idx);
@@ -927,7 +928,7 @@ void QQuickItemViewPrivate::positionViewAtIndex(int index, int mode)
         switch (mode) {
         case QQuickItemView::Beginning:
             pos = itemPos;
-            if (index < 0 && header)
+            if (header && (index < 0 || hasStickyHeader()))
                 pos -= headerSize();
             break;
         case QQuickItemView::Center:
@@ -935,7 +936,7 @@ void QQuickItemViewPrivate::positionViewAtIndex(int index, int mode)
             break;
         case QQuickItemView::End:
             pos = itemPos - size() + item->size();
-            if (index >= model->count() && footer)
+            if (footer && (index >= model->count() || hasStickyFooter()))
                 pos += footerSize();
             break;
         case QQuickItemView::Visible:
@@ -955,11 +956,7 @@ void QQuickItemViewPrivate::positionViewAtIndex(int index, int mode)
             break;
         }
         pos = qMin(pos, maxExtent);
-        qreal minExtent;
-        if (layoutOrientation() == Qt::Vertical)
-            minExtent = isContentFlowReversed() ? q->maxYExtent()-size(): -q->minYExtent();
-        else
-            minExtent = isContentFlowReversed() ? q->maxXExtent()-size(): -q->minXExtent();
+        qreal minExtent = calculatedMinExtent();
         pos = qMax(pos, minExtent);
         moveReason = QQuickItemViewPrivate::Other;
         q->cancelFlick();
@@ -1130,6 +1127,29 @@ qreal QQuickItemViewPrivate::maxExtentForAxis(const AxisData &axisData, bool for
     return extent;
 }
 
+qreal QQuickItemViewPrivate::calculatedMinExtent() const
+{
+    Q_Q(const QQuickItemView);
+    qreal minExtent;
+    if (layoutOrientation() == Qt::Vertical)
+        minExtent = isContentFlowReversed() ? q->maxYExtent() - size(): -q->minYExtent();
+    else
+        minExtent = isContentFlowReversed() ? q->maxXExtent() - size(): -q->minXExtent();
+    return minExtent;
+
+}
+
+qreal QQuickItemViewPrivate::calculatedMaxExtent() const
+{
+    Q_Q(const QQuickItemView);
+    qreal maxExtent;
+    if (layoutOrientation() == Qt::Vertical)
+        maxExtent = isContentFlowReversed() ? q->minYExtent() - size(): -q->maxYExtent();
+    else
+        maxExtent = isContentFlowReversed() ? q->minXExtent() - size(): -q->maxXExtent();
+    return maxExtent;
+}
+
 // for debugging only
 void QQuickItemViewPrivate::checkVisible() const
 {
@@ -1199,7 +1219,7 @@ void QQuickItemView::destroyRemoved()
     for (QList<FxViewItem*>::Iterator it = d->visibleItems.begin();
             it != d->visibleItems.end();) {
         FxViewItem *item = *it;
-        if (item->index == -1 && item->attached->delayRemove() == false) {
+        if (item->index == -1 && (!item->attached || item->attached->delayRemove() == false)) {
             if (d->transitioner && d->transitioner->canTransition(QQuickItemViewTransitioner::RemoveTransition, true)) {
                 // don't remove from visibleItems until next layout()
                 d->runDelayedRemoveTransition = true;
@@ -1277,10 +1297,12 @@ void QQuickItemView::trackedPositionChanged()
             if (trackedPos < pos + d->highlightRangeStart)
                 pos = trackedPos - d->highlightRangeStart;
             if (d->highlightRange != StrictlyEnforceRange) {
-                if (pos > d->endPosition() - d->size())
-                    pos = d->endPosition() - d->size();
-                if (pos < d->startPosition())
-                    pos = d->startPosition();
+                qreal maxExtent = d->calculatedMaxExtent();
+                if (pos > maxExtent)
+                    pos = maxExtent;
+                qreal minExtent = d->calculatedMinExtent();
+                if (pos < minExtent)
+                    pos = minExtent;
             }
         } else {
             if (d->trackedItem != d->currentItem) {
@@ -1344,7 +1366,7 @@ void QQuickItemView::geometryChanged(const QRectF &newGeometry, const QRectF &ol
 {
     Q_D(QQuickItemView);
     d->markExtentsDirty();
-    if (isComponentComplete() && d->isValid())
+    if (isComponentComplete() && (d->isValid() || !d->visibleItems.isEmpty()))
         d->forceLayoutPolish();
     QQuickFlickable::geometryChanged(newGeometry, oldGeometry);
 }
@@ -1641,7 +1663,8 @@ void QQuickItemViewPrivate::updateCurrent(int modelIndex)
     applyPendingChanges();
     if (!q->isComponentComplete() || !isValid() || modelIndex < 0 || modelIndex >= model->count()) {
         if (currentItem) {
-            currentItem->attached->setIsCurrentItem(false);
+            if (currentItem->attached)
+                currentItem->attached->setIsCurrentItem(false);
             releaseItem(currentItem);
             currentItem = 0;
             currentIndex = modelIndex;
@@ -1664,18 +1687,20 @@ void QQuickItemViewPrivate::updateCurrent(int modelIndex)
     int oldCurrentIndex = currentIndex;
     currentIndex = modelIndex;
     currentItem = createItem(modelIndex, false);
-    if (oldCurrentItem && (!currentItem || oldCurrentItem->item != currentItem->item))
+    if (oldCurrentItem && oldCurrentItem->attached && (!currentItem || oldCurrentItem->item != currentItem->item))
         oldCurrentItem->attached->setIsCurrentItem(false);
     if (currentItem) {
         currentItem->item->setFocus(true);
-        currentItem->attached->setIsCurrentItem(true);
+        if (currentItem->attached)
+            currentItem->attached->setIsCurrentItem(true);
         initializeCurrentItem();
     }
 
     updateHighlight();
     if (oldCurrentIndex != currentIndex)
         emit q->currentIndexChanged();
-    if (oldCurrentItem != currentItem)
+    if (oldCurrentItem != currentItem
+            && (!oldCurrentItem || !currentItem || oldCurrentItem->item != currentItem->item))
         emit q->currentItemChanged();
     releaseItem(oldCurrentItem);
 }
@@ -1806,7 +1831,7 @@ void QQuickItemViewPrivate::updateViewport()
 {
     Q_Q(QQuickItemView);
     qreal extra = headerSize() + footerSize();
-    qreal contentSize = isValid() ? (endPosition() - startPosition()) : 0.0;
+    qreal contentSize = isValid() || !visibleItems.isEmpty() ? (endPosition() - startPosition()) : 0.0;
     if (layoutOrientation() == Qt::Vertical)
         q->setContentHeight(contentSize + extra);
     else
@@ -1824,6 +1849,7 @@ void QQuickItemViewPrivate::layout()
     if (!isValid() && !visibleItems.count()) {
         clear();
         setPosition(contentStartOffset());
+        updateViewport();
         if (transitioner)
             transitioner->setPopulateTransitionEnabled(false);
         inLayout = false;
@@ -1967,7 +1993,7 @@ bool QQuickItemViewPrivate::applyModelChanges(ChangeResult *totalInsertionResult
         QQmlChangeSet::Change removal;
         for (QList<FxViewItem*>::Iterator it = visibleItems.begin(); it != visibleItems.end();) {
             FxViewItem *item = *it;
-            if (item->index == -1 && !item->attached->delayRemove()) {
+            if (item->index == -1 && (!item->attached || !item->attached->delayRemove())) {
                 removeItem(item, removal, &removalResult);
                 removedCount++;
                 it = visibleItems.erase(it);
@@ -2007,8 +2033,10 @@ bool QQuickItemViewPrivate::applyModelChanges(ChangeResult *totalInsertionResult
         }
         itemCount += insertions[i].count;
     }
-    for (int i=0; i<newItems.count(); i++)
-        newItems.at(i)->attached->emitAdd();
+    for (int i=0; i<newItems.count(); i++) {
+        if (newItems.at(i)->attached)
+            newItems.at(i)->attached->emitAdd();
+    }
 
     // for each item that was moved directly into the view as a result of a move(),
     // find the index it was moved from in order to set its initial position, so that we
@@ -2040,7 +2068,8 @@ bool QQuickItemViewPrivate::applyModelChanges(ChangeResult *totalInsertionResult
 
     if (currentChanges.currentChanged) {
         if (currentChanges.currentRemoved && currentItem) {
-            currentItem->attached->setIsCurrentItem(false);
+            if (currentItem->item && currentItem->attached)
+                currentItem->attached->setIsCurrentItem(false);
             releaseItem(currentItem);
             currentItem = 0;
         }
@@ -2092,10 +2121,10 @@ bool QQuickItemViewPrivate::applyRemovalChange(const QQmlChangeSet::Change &remo
         } else {
             // removed item
             visibleAffected = true;
-            if (!removal.isMove())
+            if (!removal.isMove() && item->item && item->attached)
                 item->attached->emitRemove();
 
-            if (item->attached->delayRemove() && !removal.isMove()) {
+            if (item->item && item->attached && item->attached->delayRemove() && !removal.isMove()) {
                 item->index = -1;
                 QObject::connect(item->attached, SIGNAL(delayRemoveChanged()), q, SLOT(destroyRemoved()), Qt::QueuedConnection);
                 ++it;
@@ -2352,12 +2381,14 @@ bool QQuickItemViewPrivate::releaseItem(FxViewItem *item)
     item->trackGeometry(false);
 
     QQmlInstanceModel::ReleaseFlags flags = model->release(item->item);
-    if (flags == 0) {
-        // item was not destroyed, and we no longer reference it.
-        QQuickItemPrivate::get(item->item)->setCulled(true);
-        unrequestedItems.insert(item->item, model->indexOf(item->item, q));
-    } else if (flags & QQmlInstanceModel::Destroyed) {
-        item->item->setParentItem(0);
+    if (item->item) {
+        if (flags == 0) {
+            // item was not destroyed, and we no longer reference it.
+            QQuickItemPrivate::get(item->item)->setCulled(true);
+            unrequestedItems.insert(item->item, model->indexOf(item->item, q));
+        } else if (flags & QQmlInstanceModel::Destroyed) {
+            item->item->setParentItem(0);
+        }
     }
     delete item;
     return flags != QQmlInstanceModel::Referenced;
@@ -2421,7 +2452,7 @@ void QQuickItemViewPrivate::updateUnrequestedIndexes()
 
 void QQuickItemViewPrivate::updateUnrequestedPositions()
 {
-    for (QHash<QQuickItem*,int>::const_iterator it = unrequestedItems.begin(), cend = unrequestedItems.end(); it != cend; ++it)
+    for (QHash<QQuickItem*,int>::const_iterator it = unrequestedItems.cbegin(), cend = unrequestedItems.cend(); it != cend; ++it)
         repositionPackageItemAt(it.key(), it.value());
 }
 

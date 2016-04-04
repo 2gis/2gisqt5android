@@ -93,8 +93,8 @@ void tst_qquickfolderlistmodel::checkNoErrors(const QQmlComponent& component)
         QList<QQmlError> errors = component.errors();
         for (int ii = 0; ii < errors.count(); ++ii) {
             const QQmlError &error = errors.at(ii);
-            QByteArray errorStr = QByteArray::number(error.line()) + ":" +
-                                  QByteArray::number(error.column()) + ":" +
+            QByteArray errorStr = QByteArray::number(error.line()) + ':' +
+                                  QByteArray::number(error.column()) + ':' +
                                   error.description().toUtf8();
             qWarning() << errorStr;
         }
@@ -295,11 +295,11 @@ void tst_qquickfolderlistmodel::changeDrive()
 
     flm->setProperty("folder",QUrl::fromLocalFile(dataDir));
     QCOMPARE(flm->property("folder").toUrl(), QUrl::fromLocalFile(dataDir));
-    QTRY_VERIFY(folderChangeSpy.count() == 1);
+    QTRY_COMPARE(folderChangeSpy.count(), 1);
 
     flm->setProperty("folder",QUrl::fromLocalFile("X:/resetfiltering/"));
     QCOMPARE(flm->property("folder").toUrl(), QUrl::fromLocalFile("X:/resetfiltering/"));
-    QTRY_VERIFY(folderChangeSpy.count() == 2);
+    QTRY_COMPARE(folderChangeSpy.count(), 2);
 }
 #endif
 

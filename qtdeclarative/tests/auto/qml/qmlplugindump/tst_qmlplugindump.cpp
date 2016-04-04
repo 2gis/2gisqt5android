@@ -47,6 +47,7 @@ public:
 private slots:
     void initTestCase();
     void builtins();
+    void singleton();
 
 private:
     QString qmlplugindumpPath;
@@ -84,7 +85,7 @@ void tst_qmlplugindump::builtins()
     if (dumper.error() != QProcess::UnknownError
             || dumper.exitStatus() != QProcess::NormalExit) {
         qWarning() << QString("Error while running '%1 %2'").arg(
-                          qmlplugindumpPath, args.join(QLatin1String(" ")));
+                          qmlplugindumpPath, args.join(QLatin1Char(' ')));
     }
 
     if (dumper.error() == QProcess::FailedToStart) {
@@ -100,6 +101,20 @@ void tst_qmlplugindump::builtins()
 
     const QString &result = dumper.readAllStandardOutput();
     QVERIFY(result.contains(QLatin1String("Module {")));
+}
+
+void tst_qmlplugindump::singleton()
+{
+    QProcess dumper;
+    QStringList args;
+    args << QLatin1String("tests.dumper.CompositeSingleton") << QLatin1String("1.0")
+         << QLatin1String(".");
+    dumper.start(qmlplugindumpPath, args);
+    dumper.waitForFinished();
+
+    const QString &result = dumper.readAllStandardOutput();
+    QVERIFY(result.contains(QLatin1String("exports: [\"Singleton 1.0\"]")));
+    QVERIFY(result.contains(QLatin1String("exportMetaObjectRevisions: [0]")));
 }
 
 QTEST_MAIN(tst_qmlplugindump)

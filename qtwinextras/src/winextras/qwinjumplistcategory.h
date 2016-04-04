@@ -55,7 +55,6 @@ public:
         Frequent,
         Tasks
     };
-
     explicit QWinJumpListCategory(const QString &title = QString());
     ~QWinJumpListCategory();
 
@@ -84,6 +83,10 @@ private:
     Q_DECLARE_PRIVATE(QWinJumpListCategory)
     QScopedPointer<QWinJumpListCategoryPrivate> d_ptr;
 };
+
+#ifndef QT_NO_DEBUG_STREAM
+Q_WINEXTRAS_EXPORT QDebug operator<<(QDebug d, const QWinJumpListCategory *);
+#endif
 
 QT_END_NAMESPACE
 

@@ -47,18 +47,19 @@
 
 #include "qquicktextedit_p.h"
 #include "qquickimplicitsizeitem_p_p.h"
-#include "qquicktextcontrol_p.h"
 
 #include <QtQml/qqml.h>
 #include <QtCore/qlist.h>
+#include <private/qlazilyallocated_p.h>
 
 QT_BEGIN_NAMESPACE
 class QTextLayout;
 class QQuickTextDocumentWithImageResources;
 class QQuickTextControl;
 class QQuickTextNode;
+class QQuickTextNodeEngine;
 
-class QQuickTextEditPrivate : public QQuickImplicitSizeItemPrivate
+class Q_QUICK_PRIVATE_EXPORT QQuickTextEditPrivate : public QQuickImplicitSizeItemPrivate
 {
 public:
     Q_DECLARE_PUBLIC(QQuickTextEdit)
@@ -81,10 +82,27 @@ public:
     };
     typedef QList<Node*>::iterator TextNodeIterator;
 
+    struct ExtraData {
+        ExtraData();
+
+        qreal padding;
+        qreal topPadding;
+        qreal leftPadding;
+        qreal rightPadding;
+        qreal bottomPadding;
+        bool explicitTopPadding : 1;
+        bool explicitLeftPadding : 1;
+        bool explicitRightPadding : 1;
+        bool explicitBottomPadding : 1;
+        bool implicitResize : 1;
+    };
+    QLazilyAllocated<ExtraData> extra;
+
 
     QQuickTextEditPrivate()
         : color(QRgb(0xFF000000)), selectionColor(QRgb(0xFF000080)), selectedTextColor(QRgb(0xFFFFFFFF))
-        , textMargin(0.0), xoff(0), yoff(0), font(sourceFont), cursorComponent(0), cursorItem(0), document(0), control(0)
+        , textMargin(0.0), xoff(0), yoff(0)
+        , font(sourceFont), cursorComponent(0), cursorItem(0), document(0), control(0)
         , quickDocument(0), lastSelectionStart(0), lastSelectionEnd(0), lineCount(0)
         , hAlign(QQuickTextEdit::AlignLeft), vAlign(QQuickTextEdit::AlignTop)
         , format(QQuickTextEdit::PlainText), wrapMode(QQuickTextEdit::NoWrap)
@@ -124,12 +142,21 @@ public:
 
     void setNativeCursorEnabled(bool) {}
     void handleFocusEvent(QFocusEvent *event);
-    void addCurrentTextNodeToRoot(QSGTransformNode *, QQuickTextNode*, TextNodeIterator&, int startPos);
+    void addCurrentTextNodeToRoot(QQuickTextNodeEngine *, QSGTransformNode *, QQuickTextNode*, TextNodeIterator&, int startPos);
     QQuickTextNode* createTextNode();
 
 #ifndef QT_NO_IM
     Qt::InputMethodHints effectiveInputMethodHints() const;
 #endif
+
+    inline qreal padding() const { return extra.isAllocated() ? extra->padding : 0.0; }
+    void setTopPadding(qreal value, bool reset = false);
+    void setLeftPadding(qreal value, bool reset = false);
+    void setRightPadding(qreal value, bool reset = false);
+    void setBottomPadding(qreal value, bool reset = false);
+
+    bool isImplicitResizeEnabled() const;
+    void setImplicitResizeEnabled(bool enabled);
 
     QColor color;
     QColor selectionColor;

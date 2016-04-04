@@ -32,8 +32,9 @@
 ****************************************************************************/
 
 #include "qv4persistent_p.h"
-#include "qv4mm_p.h"
+#include <private/qv4mm_p.h>
 #include "qv4object_p.h"
+#include "qv4qobjectwrapper_p.h"
 #include "PageAllocation.h"
 
 using namespace QV4;
@@ -78,11 +79,11 @@ Page *allocatePage(PersistentValueStorage *storage)
     if (p->header.next)
         p->header.next->header.prev = &p->header.next;
     for (int i = 0; i < kEntriesPerPage - 1; ++i) {
-        p->values[i].tag = QV4::Value::Empty_Type;
-        p->values[i].int_32 = i + 1;
+        p->values[i].setTag(QV4::Value::Empty_Type);
+        p->values[i].setInt_32(i + 1);
     }
-    p->values[kEntriesPerPage - 1].tag = QV4::Value::Empty_Type;
-    p->values[kEntriesPerPage - 1].int_32 = -1;
+    p->values[kEntriesPerPage - 1].setTag(QV4::Value::Empty_Type);
+    p->values[kEntriesPerPage - 1].setInt_32(-1);
 
     storage->firstPage = p;
 
@@ -93,15 +94,57 @@ Page *allocatePage(PersistentValueStorage *storage)
 }
 
 
+PersistentValueStorage::Iterator::Iterator(void *p, int idx)
+    : p(p), index(idx)
+{
+    Page *page = static_cast<Page *>(p);
+    if (page)
+        ++page->header.refCount;
+}
+
+PersistentValueStorage::Iterator::Iterator(const PersistentValueStorage::Iterator &o)
+    : p(o.p), index(o.index)
+{
+    Page *page = static_cast<Page *>(p);
+    if (page)
+        ++page->header.refCount;
+}
+
+PersistentValueStorage::Iterator &PersistentValueStorage::Iterator::operator=(const PersistentValueStorage::Iterator &o)
+{
+    Page *page = static_cast<Page *>(p);
+    if (page && !--page->header.refCount)
+        freePage(p);
+    p = o.p;
+    index = o.index;
+    page = static_cast<Page *>(p);
+    if (page)
+        ++page->header.refCount;
+
+    return *this;
+}
+
+PersistentValueStorage::Iterator::~Iterator()
+{
+    Page *page = static_cast<Page *>(p);
+    if (page && !--page->header.refCount)
+        freePage(page);
+}
+
 PersistentValueStorage::Iterator &PersistentValueStorage::Iterator::operator++() {
     while (p) {
         while (index < kEntriesPerPage - 1) {
             ++index;
-            if (static_cast<Page *>(p)->values[index].tag != QV4::Value::Empty_Type)
+            if (static_cast<Page *>(p)->values[index].tag() != QV4::Value::Empty_Type)
                 return *this;
         }
         index = -1;
-        p = static_cast<Page *>(p)->header.next;
+        Page *next = static_cast<Page *>(p)->header.next;
+        if (!--static_cast<Page *>(p)->header.refCount)
+            freePage(p);
+        p = next;
+        if (next)
+            ++next->header.refCount;
     }
     index = 0;
     return *this;
@@ -147,10 +190,10 @@ Value *PersistentValueStorage::allocate()
         p = allocatePage(this);
 
     Value *v = p->values + p->header.freeList;
-    p->header.freeList = v->int_32;
+    p->header.freeList = v->int_32();
     ++p->header.refCount;
 
-    v->val = Encode::undefined();
+    v->setRawValue(Encode::undefined());
 
     return v;
 }
@@ -162,24 +205,19 @@ void PersistentValueStorage::free(Value *v)
 
     Page *p = getPage(v);
 
-    v->tag = QV4::Value::Empty_Type;
-    v->int_32 = p->header.freeList;
+    v->setTag(QV4::Value::Empty_Type);
+    v->setInt_32(p->header.freeList);
     p->header.freeList = v - p->values;
-    if (!--p->header.refCount) {
-        if (p->header.prev)
-            *p->header.prev = p->header.next;
-        if (p->header.next)
-            p->header.next->header.prev = p->header.prev;
-        p->header.alloc.deallocate();
-    }
+    if (!--p->header.refCount)
+        freePage(p);
 }
 
 static void drainMarkStack(QV4::ExecutionEngine *engine, Value *markBase)
 {
     while (engine->jsStackTop > markBase) {
         Heap::Base *h = engine->popForGC();
-        Q_ASSERT (h->gcGetVtable()->markObjects);
-        h->gcGetVtable()->markObjects(h, engine);
+        Q_ASSERT (h->vtable()->markObjects);
+        h->vtable()->markObjects(h, engine);
     }
 }
 
@@ -190,7 +228,7 @@ void PersistentValueStorage::mark(ExecutionEngine *e)
     Page *p = static_cast<Page *>(firstPage);
     while (p) {
         for (int i = 0; i < kEntriesPerPage; ++i) {
-            if (Managed *m = p->values[i].asManaged())
+            if (Managed *m = p->values[i].as<Managed>())
                 m->mark(e);
         }
         drainMarkStack(e, markBase);
@@ -202,6 +240,16 @@ void PersistentValueStorage::mark(ExecutionEngine *e)
 ExecutionEngine *PersistentValueStorage::getEngine(Value *v)
 {
     return getPage(v)->header.engine;
+}
+
+void PersistentValueStorage::freePage(void *page)
+{
+    Page *p = static_cast<Page *>(page);
+    if (p->header.prev)
+        *p->header.prev = p->header.next;
+    if (p->header.next)
+        p->header.next->header.prev = p->header.prev;
+    p->header.alloc.deallocate();
 }
 
 
@@ -312,6 +360,12 @@ WeakValue::WeakValue(const WeakValue &other)
     }
 }
 
+WeakValue::WeakValue(ExecutionEngine *engine, const Value &value)
+{
+    val = engine->memoryManager->m_weakValues->allocate();
+    *val = value;
+}
+
 WeakValue &WeakValue::operator=(const WeakValue &other)
 {
     if (!val) {
@@ -328,7 +382,7 @@ WeakValue &WeakValue::operator=(const WeakValue &other)
 
 WeakValue::~WeakValue()
 {
-    PersistentValueStorage::free(val);
+    free();
 }
 
 void WeakValue::set(ExecutionEngine *engine, const Value &value)
@@ -357,5 +411,23 @@ void WeakValue::markOnce(ExecutionEngine *e)
     if (!val)
         return;
     val->mark(e);
+}
+
+void WeakValue::free()
+{
+    if (!val)
+        return;
+
+    ExecutionEngine *e = engine();
+    if (e && val->as<QObjectWrapper>()) {
+        // Some QV4::QObjectWrapper Value will be freed in WeakValue::~WeakValue() before MemoryManager::sweep() is being called,
+        // in this case we will never have a chance to call detroyObject() on those QV4::QObjectWrapper objects.
+        // Here we don't free these Value immediately, instead we keep track of them to free them later in MemoryManager::sweep()
+        e->memoryManager->m_pendingFreedObjectWrapperValue.push_back(val);
+    } else {
+        PersistentValueStorage::free(val);
+    }
+
+    val = 0;
 }
 

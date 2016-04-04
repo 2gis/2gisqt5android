@@ -254,8 +254,7 @@ void ShellSurface::shell_surface_set_toplevel(Resource *resource)
 
     setSurfaceType(QWaylandSurface::Toplevel);
 
-    if (m_surface->extendedSurface())
-        m_surface->extendedSurface()->setVisibility(QWindow::Windowed, false);
+    m_surface->setVisibility(QWindow::Windowed);
 }
 
 void ShellSurface::shell_surface_set_transient(Resource *resource,
@@ -275,8 +274,7 @@ void ShellSurface::shell_surface_set_transient(Resource *resource,
 
     setSurfaceType(QWaylandSurface::Transient);
 
-    if (m_surface->extendedSurface())
-        m_surface->extendedSurface()->setVisibility(QWindow::AutomaticVisibility, false);
+    m_surface->setVisibility(QWindow::AutomaticVisibility);
 }
 
 void ShellSurface::shell_surface_set_fullscreen(Resource *resource,
@@ -310,8 +308,7 @@ void ShellSurface::shell_surface_set_fullscreen(Resource *resource,
     m_view->setPos(output->geometry().topLeft());
     send_configure(resize_bottom_right, outputSize.width(), outputSize.height());
 
-    if (m_surface->extendedSurface())
-        m_surface->extendedSurface()->setVisibility(QWindow::FullScreen, false);
+    m_surface->setVisibility(QWindow::FullScreen);
 }
 
 void ShellSurface::shell_surface_set_popup(Resource *resource, wl_resource *input_device, uint32_t serial, wl_resource *parent, int32_t x, int32_t y, uint32_t flags)
@@ -329,8 +326,7 @@ void ShellSurface::shell_surface_set_popup(Resource *resource, wl_resource *inpu
 
     setSurfaceType(QWaylandSurface::Popup);
 
-    if (m_surface->extendedSurface())
-        m_surface->extendedSurface()->setVisibility(QWindow::AutomaticVisibility, false);
+    m_surface->setVisibility(QWindow::AutomaticVisibility);
 }
 
 void ShellSurface::shell_surface_set_maximized(Resource *resource,
@@ -360,8 +356,7 @@ void ShellSurface::shell_surface_set_maximized(Resource *resource,
     m_view->setPos(output->availableGeometry().topLeft());
     send_configure(resize_bottom_right, outputSize.width(), outputSize.height());
 
-    if (m_surface->extendedSurface())
-        m_surface->extendedSurface()->setVisibility(QWindow::Maximized, false);
+    m_surface->setVisibility(QWindow::Maximized);
 }
 
 void ShellSurface::shell_surface_pong(Resource *resource,

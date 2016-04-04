@@ -33,6 +33,17 @@
 #ifndef QV4ASSEMBLER_P_H
 #define QV4ASSEMBLER_P_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include "private/qv4global_p.h"
 #include "private/qv4jsir_p.h"
 #include "private/qv4isel_p.h"
@@ -478,7 +489,7 @@ public:
             load64(addr, dest);
         } else {
             QV4::Value undefined = QV4::Primitive::undefinedValue();
-            move(TrustedImm64(undefined.val), dest);
+            move(TrustedImm64(undefined.rawValue()), dest);
         }
     }
 
@@ -491,7 +502,7 @@ public:
             load64(addr, dest);
         } else {
             QV4::Value undefined = QV4::Primitive::undefinedValue();
-            move(TrustedImm64(undefined.val), dest);
+            move(TrustedImm64(undefined.rawValue()), dest);
         }
     }
 
@@ -500,7 +511,7 @@ public:
         Q_UNUSED(argumentNumber);
 
         QV4::Value v = convertToValue(c);
-        move(TrustedImm64(v.val), dest);
+        move(TrustedImm64(v.rawValue()), dest);
     }
 
     void loadArgumentInRegister(IR::Expr* expr, RegisterID dest, int argumentNumber)
@@ -509,7 +520,7 @@ public:
 
         if (!expr) {
             QV4::Value undefined = QV4::Primitive::undefinedValue();
-            move(TrustedImm64(undefined.val), dest);
+            move(TrustedImm64(undefined.rawValue()), dest);
         } else if (IR::Temp *t = expr->asTemp()){
             loadArgumentInRegister(t, dest, argumentNumber);
         } else if (IR::ArgLocal *al = expr->asArgLocal()) {
@@ -565,6 +576,8 @@ public:
         moveIntsToDouble(JSC::ARMRegisters::r0, JSC::ARMRegisters::r1, dest, FPGpr0);
 #elif defined(Q_PROCESSOR_X86)
         moveIntsToDouble(JSC::X86Registers::eax, JSC::X86Registers::edx, dest, FPGpr0);
+#elif defined(Q_PROCESSOR_MIPS)
+        moveIntsToDouble(JSC::MIPSRegisters::v0, JSC::MIPSRegisters::v1, dest, FPGpr0);
 #else
         subPtr(TrustedImm32(sizeof(QV4::Value)), StackPointerRegister);
         Pointer tmp(StackPointerRegister, 0);
@@ -594,6 +607,14 @@ public:
         store32(JSC::ARMRegisters::r0, destination);
         destination.offset += 4;
         store32(JSC::ARMRegisters::r1, destination);
+    }
+#elif defined(Q_PROCESSOR_MIPS)
+    void storeReturnValue(const Pointer &dest)
+    {
+        Pointer destination = dest;
+        store32(JSC::MIPSRegisters::v0, destination);
+        destination.offset += 4;
+        store32(JSC::MIPSRegisters::v1, destination);
     }
 #endif
 
@@ -724,7 +745,7 @@ public:
             moveDouble(source, (FPRegisterID) targetTemp->index);
             return;
         }
-#if QT_POINTER_SIZE == 8
+#ifdef QV4_USE_64_BIT_VALUE_ENCODING
         moveDoubleTo64(source, ReturnValueRegister);
         move(TrustedImm64(QV4::Value::NaNEncodeMask), ScratchRegister);
         xor64(ScratchRegister, ReturnValueRegister);
@@ -735,7 +756,7 @@ public:
         storeDouble(source, ptr);
 #endif
     }
-#if QT_POINTER_SIZE == 8
+#ifdef QV4_USE_64_BIT_VALUE_ENCODING
     // We need to (de)mangle the double
     void loadDouble(Address addr, FPRegisterID dest)
     {
@@ -781,11 +802,11 @@ public:
     void storeValue(QV4::Primitive value, Address destination)
     {
 #ifdef VALUE_FITS_IN_REGISTER
-        store64(TrustedImm64(value.val), destination);
+        store64(TrustedImm64(value.rawValue()), destination);
 #else
-        store32(TrustedImm32(value.int_32), destination);
+        store32(TrustedImm32(value.int_32()), destination);
         destination.offset += 4;
-        store32(TrustedImm32(value.tag), destination);
+        store32(TrustedImm32(value.tag()), destination);
 #endif
     }
 
@@ -820,6 +841,8 @@ public:
         else
 #if OS(WINDOWS) && CPU(X86_64)
             loadArgumentOnStack<argumentNumber>(value, argumentNumber);
+#elif CPU(MIPS) // Stack space for 4 arguments needs to be allocated for MIPS platforms.
+            loadArgumentOnStack<argumentNumber>(value, argumentNumber + 4);
 #else // Sanity:
             loadArgumentOnStack<argumentNumber - RegisterArgumentCount>(value, argumentNumber);
 #endif
@@ -846,7 +869,7 @@ public:
     template <int ArgumentIndex, typename Parameter>
     struct SizeOnStack
     {
-        enum { Size = Select<ArgumentIndex >= RegisterArgumentCount, QT_POINTER_SIZE, 0>::Chosen };
+        enum { Size = Select<ArgumentIndex >= RegisterArgumentCount, sizeof(void*), 0>::Chosen };
     };
 
     template <int ArgumentIndex>
@@ -945,8 +968,8 @@ public:
             tagAddr.offset += 4;
 
             QV4::Primitive v = convertToValue(c);
-            store32(TrustedImm32(v.int_32), addr);
-            store32(TrustedImm32(v.tag), tagAddr);
+            store32(TrustedImm32(v.int_32()), addr);
+            store32(TrustedImm32(v.tag()), tagAddr);
             return Pointer(addr);
         }
 
@@ -961,7 +984,7 @@ public:
     {
         store32(reg, addr);
         addr.offset += 4;
-        store32(TrustedImm32(QV4::Primitive::fromBoolean(0).tag), addr);
+        store32(TrustedImm32(QV4::Primitive::fromBoolean(0).tag()), addr);
     }
 
     void storeBool(RegisterID src, RegisterID dest)
@@ -1005,7 +1028,7 @@ public:
     {
         store32(reg, addr);
         addr.offset += 4;
-        store32(TrustedImm32(QV4::Primitive::fromInt32(0).tag), addr);
+        store32(TrustedImm32(QV4::Primitive::fromInt32(0).tag()), addr);
     }
 
     void storeInt32(RegisterID reg, IR::Expr *target)
@@ -1054,7 +1077,7 @@ public:
     FPRegisterID toDoubleRegister(IR::Expr *e, FPRegisterID target = FPGpr0)
     {
         if (IR::Const *c = e->asConst()) {
-#if QT_POINTER_SIZE == 8
+#ifdef QV4_USE_64_BIT_VALUE_ENCODING
             union {
                 double d;
                 int64_t i;
@@ -1084,7 +1107,7 @@ public:
     RegisterID toInt32Register(IR::Expr *e, RegisterID scratchReg)
     {
         if (IR::Const *c = e->asConst()) {
-            move(TrustedImm32(convertToValue(c).int_32), scratchReg);
+            move(TrustedImm32(convertToValue(c).int_32()), scratchReg);
             return scratchReg;
         }
 
@@ -1123,7 +1146,7 @@ public:
         Pointer tagAddr = addr;
         tagAddr.offset += 4;
         load32(tagAddr, scratchReg);
-        Jump inIntRange = branch32(Equal, scratchReg, TrustedImm32(QV4::Value::_Integer_Type));
+        Jump inIntRange = branch32(Equal, scratchReg, TrustedImm32(QV4::Value::Integer_Type_Internal));
 
         // it's not in signed int range, so load it as a double, and truncate it down
         loadDouble(addr, FPGpr0);

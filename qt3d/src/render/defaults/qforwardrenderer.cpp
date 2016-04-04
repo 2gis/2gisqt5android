@@ -37,24 +37,22 @@
 #include "qforwardrenderer.h"
 #include "qforwardrenderer_p.h"
 
-#include <Qt3DRenderer/qviewport.h>
-#include <Qt3DRenderer/qcameraselector.h>
-#include <Qt3DRenderer/qclearbuffer.h>
-#include <Qt3DRenderer/qannotation.h>
+#include <Qt3DRender/qviewport.h>
+#include <Qt3DRender/qcameraselector.h>
+#include <Qt3DRender/qclearbuffer.h>
+#include <Qt3DRender/qannotation.h>
+#include <Qt3DRender/qfrustumculling.h>
 
 QT_BEGIN_NAMESPACE
 
-namespace Qt3D {
+namespace Qt3DRender {
 
-/*!
-    \class Qt3D::QForwardRendererPrivate
-    \internal
-*/
 QForwardRendererPrivate::QForwardRendererPrivate()
     : QTechniqueFilterPrivate()
     , m_viewport(new QViewport())
     , m_cameraSelector(new QCameraSelector())
     , m_clearBuffer(new QClearBuffer())
+    , m_frustumCulling(new QFrustumCulling())
 {
 }
 
@@ -62,13 +60,14 @@ void QForwardRendererPrivate::init()
 {
     Q_Q(QForwardRenderer);
 
+    m_frustumCulling->setParent(m_clearBuffer);
     m_clearBuffer->setParent(m_cameraSelector);
     m_cameraSelector->setParent(m_viewport);
     m_viewport->setParent(q);
 
     m_viewport->setRect(QRectF(0.0f, 0.0f, 1.0f, 1.0f));
     m_viewport->setClearColor(Qt::white);
-    m_clearBuffer->setBuffers(Qt3D::QClearBuffer::ColorDepthBuffer);
+    m_clearBuffer->setBuffers(QClearBuffer::ColorDepthBuffer);
 
     QAnnotation *forwardRenderingStyle = new QAnnotation(q);
     forwardRenderingStyle->setName(QStringLiteral("renderingStyle"));
@@ -77,33 +76,33 @@ void QForwardRendererPrivate::init()
 }
 
 /*!
-    \class Qt3D::QForwardRenderer
-    \brief The Qt3D::QForwardRenderer provides a default FrameGraph implementation of a forward renderer.
-    \inmodule Qt3DRenderer
+    \class Qt3DRender::QForwardRenderer
+    \brief The Qt3DRender::QForwardRenderer provides a default \l {QFrameGraph}{FrameGraph} implementation of a forward renderer.
+    \inmodule Qt3DRender
     \since 5.5
 
     Forward rendering is how OpenGL is traditionally. It renders directly to the backbuffer
     one object at a time shading each one as it goes.
 
-    Internally the Qt3D::QForwardRenderer is a subclass of Qt3D::QTechniqueFilter.
-    This a is a single leaf Framegraph tree which contains a Qt3D::QViewport, a Qt3D::QCameraSelector
-    and a Qt3D::QClearBuffer.
-    The Qt3D::QForwardRenderer has a default requirement annotation whose name is "renderingStyle" and value "forward".
-    If you need to filter out your techniques, you should do so based on that annocation.
+    Internally the Qt3DRender::QForwardRenderer is a subclass of Qt3DRender::QTechniqueFilter.
+    This a is a single leaf Framegraph tree which contains a Qt3DRender::QViewport, a Qt3DRender::QCameraSelector
+    and a Qt3DRender::QClearBuffer.
+    The Qt3DRender::QForwardRenderer has a default requirement annotation whose name is "renderingStyle" and value "forward".
+    If you need to filter out your techniques, you should do so based on that annotation.
 
-    By default the viewport occupies the whole screen and the clear color is white.
+    By default the viewport occupies the whole screen and the clear color is white. Frustum culling is also enabled.
 */
 
 /*!
-    Constructs a new Qt3D::QForwardRenderer instance with parent object \a parent.
+    Constructs a new Qt3DRender::QForwardRenderer instance with parent object \a parent.
  */
 QForwardRenderer::QForwardRenderer(QNode *parent)
     : QTechniqueFilter(*new QForwardRendererPrivate, parent)
 {
     Q_D(QForwardRenderer);
-    QObject::connect(d->m_viewport, SIGNAL(clearColorChanged()), this, SIGNAL(clearColorChanged()));
-    QObject::connect(d->m_viewport, SIGNAL(rectChanged()), this, SIGNAL(viewportRectChanged()));
-    QObject::connect(d->m_cameraSelector, SIGNAL(cameraChanged()), this, SIGNAL(cameraChanged()));
+    QObject::connect(d->m_viewport, SIGNAL(clearColorChanged(const QColor &)), this, SIGNAL(clearColorChanged(const QColor &)));
+    QObject::connect(d->m_viewport, SIGNAL(rectChanged(const QRectF &)), this, SIGNAL(viewportRectChanged(const QRectF &)));
+    QObject::connect(d->m_cameraSelector, SIGNAL(cameraChanged(Qt3DCore::QEntity *)), this, SIGNAL(cameraChanged(Qt3DCore::QEntity *)));
     d->init();
 }
 
@@ -126,14 +125,19 @@ void QForwardRenderer::setClearColor(const QColor &clearColor)
     d->m_viewport->setClearColor(clearColor);
 }
 
-void QForwardRenderer::setCamera(QEntity *camera)
+/*!
+    Sets the camera which should be used to render the scene to \a camera.
+
+    \note A camera is a QEntity having a QCameraLens as one of its components.
+*/
+void QForwardRenderer::setCamera(Qt3DCore::QEntity *camera)
 {
     Q_D(QForwardRenderer);
     d->m_cameraSelector->setCamera(camera);
 }
 
 /*!
-    \property Qt3D::QForwardRenderer::viewportRect
+    \property Qt3DRender::QForwardRenderer::viewportRect
 
     Holds the current viewport rect.
  */
@@ -144,9 +148,10 @@ QRectF QForwardRenderer::viewportRect() const
 }
 
 /*!
-    \property Qt3D::QForwardRenderer::clearColor
+    \property Qt3DRender::QForwardRenderer::clearColor
+
     Holds the current clearColor.
- */
+*/
 QColor QForwardRenderer::clearColor() const
 {
     Q_D(const QForwardRenderer);
@@ -154,17 +159,18 @@ QColor QForwardRenderer::clearColor() const
 }
 
 /*!
-    \property Qt3D::QForwardRenderer::camera
+    \property Qt3DRender::QForwardRenderer::camera
+
     Holds the current QEntity camera used to render the scene.
 
     \note A camera is a QEntity that has a QCameraLens as one of its components.
- */
-QEntity *QForwardRenderer::camera() const
+*/
+Qt3DCore::QEntity *QForwardRenderer::camera() const
 {
     Q_D(const QForwardRenderer);
     return d->m_cameraSelector->camera();
 }
 
-} // Qt3D
+} // namespace Qt3DRender
 
 QT_END_NAMESPACE

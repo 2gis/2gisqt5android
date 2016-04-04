@@ -195,7 +195,9 @@ void QMenuBarPrivate::updateGeometries()
         for(int j = 0; j < shortcutIndexMap.size(); ++j)
             q->releaseShortcut(shortcutIndexMap.value(j));
         shortcutIndexMap.resize(0); // faster than clear
-        for(int i = 0; i < actions.count(); i++)
+        const int actionsCount = actions.count();
+        shortcutIndexMap.reserve(actionsCount);
+        for (int i = 0; i < actionsCount; i++)
             shortcutIndexMap.append(q->grabShortcut(QKeySequence::mnemonic(actions.at(i)->text())));
     }
 #endif
@@ -636,7 +638,7 @@ void QMenuBar::initStyleOption(QStyleOptionMenuItem *option, const QAction *acti
     \row \li quit or exit
          \li Application Menu | Quit <application name>
          \li If this entry is not found a default Quit item will be
-            created to call QApplication::quit()
+            created to call QCoreApplication::quit()
     \endtable
 
     You can override this behavior by using the QAction::menuRole()
@@ -1120,14 +1122,14 @@ void QMenuBar::keyPressEvent(QKeyEvent *e)
         }
         break; }
 
-    case Qt::Key_Escape:
+    default:
+        key_consumed = false;
+    }
+
+    if (!key_consumed && e->matches(QKeySequence::Cancel)) {
         d->setCurrentAction(0);
         d->setKeyboardMode(false);
         key_consumed = true;
-        break;
-
-    default:
-        key_consumed = false;
     }
 
     if(!key_consumed &&
@@ -1430,7 +1432,7 @@ bool QMenuBar::event(QEvent *e)
     case QEvent::ShortcutOverride: {
         QKeyEvent *kev = static_cast<QKeyEvent*>(e);
         //we only filter out escape if there is a current action
-        if (kev->key() == Qt::Key_Escape && d->currentAction) {
+        if (kev->matches(QKeySequence::Cancel) && d->currentAction) {
             e->accept();
             return true;
         }

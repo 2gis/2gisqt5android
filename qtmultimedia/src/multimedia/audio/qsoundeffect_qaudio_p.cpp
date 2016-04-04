@@ -353,7 +353,8 @@ void PrivateSoundSource::stateChanged(QAudio::State state)
 #ifdef QT_QAUDIO_DEBUG
     qDebug() << this << "stateChanged " << state;
 #endif
-    if (state == QAudio::IdleState && m_runningCount == 0)
+    if ((state == QAudio::IdleState && m_runningCount == 0)
+         || (state == QAudio::StoppedState && m_audioOutput->error() != QAudio::NoError))
         emit soundeffect->stop();
 }
 
@@ -395,6 +396,8 @@ qint64 PrivateSoundSource::readData( char* data, qint64 len)
                 memcpy(data + dataOffset, sampleData + m_offset, sampleSize - m_offset);
                 bytesWritten += sampleSize - m_offset;
                 int wrapLen = periodSize - (sampleSize - m_offset);
+                if (wrapLen > sampleSize)
+                    wrapLen = sampleSize;
 #ifdef QT_QAUDIO_DEBUG
                 qDebug() << "END OF SOUND: bytesWritten=" << bytesWritten << ", offset=" << m_offset
                          << ", part1=" << (sampleSize-m_offset);

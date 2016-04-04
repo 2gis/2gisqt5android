@@ -41,12 +41,10 @@
 
 QT_BEGIN_NAMESPACE
 
-namespace Qt3D {
+using namespace Qt3DCore;
 
-/*!
-    \class Qt3D::QRenderTargetPrivate
-    \internal
-*/
+namespace Qt3DRender {
+
 QRenderTargetPrivate::QRenderTargetPrivate()
     : QComponentPrivate()
 {
@@ -113,6 +111,6 @@ QList<QRenderAttachment *> QRenderTarget::attachments() const
     return d->m_attachments;
 }
 
-} // Qt3D
+} // namespace Qt3DRender
 
 QT_END_NAMESPACE

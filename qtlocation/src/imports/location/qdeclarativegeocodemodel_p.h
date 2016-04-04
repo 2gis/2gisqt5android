@@ -37,6 +37,17 @@
 #ifndef QDECLARATIVEGEOCODEMODEL_H
 #define QDECLARATIVEGEOCODEMODEL_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include "qdeclarativegeoserviceprovider_p.h"
 
 #include <qgeocodereply.h>
@@ -63,7 +74,7 @@ class QDeclarativeGeocodeModel : public QAbstractListModel, public QQmlParserSta
     Q_PROPERTY(QDeclarativeGeoServiceProvider *plugin READ plugin WRITE setPlugin NOTIFY pluginChanged)
     Q_PROPERTY(bool autoUpdate READ autoUpdate WRITE setAutoUpdate NOTIFY autoUpdateChanged)
     Q_PROPERTY(Status status READ status NOTIFY statusChanged)
-    Q_PROPERTY(QString errorString READ errorString NOTIFY errorStringChanged)
+    Q_PROPERTY(QString errorString READ errorString NOTIFY errorChanged)
     Q_PROPERTY(int count READ count NOTIFY countChanged)
     Q_PROPERTY(int limit READ limit WRITE setLimit NOTIFY limitChanged)
     Q_PROPERTY(int offset READ offset WRITE setOffset NOTIFY offsetChanged)
@@ -82,12 +93,17 @@ public:
 
     enum GeocodeError {
         NoError = QGeoCodeReply::NoError,
-        EngineNotSetError = QGeoCodeReply::EngineNotSetError,
-        CommunicationError = QGeoCodeReply::CommunicationError,
+        EngineNotSetError = QGeoCodeReply::EngineNotSetError, //TODO Qt6 consider merge with NotSupportedError
+        CommunicationError = QGeoCodeReply::CommunicationError, //TODO Qt6 merge with Map's ConnectionError
         ParseError = QGeoCodeReply::ParseError,
-        UnsupportedOptionError = QGeoCodeReply::UnsupportedOptionError,
+        UnsupportedOptionError = QGeoCodeReply::UnsupportedOptionError, //TODO Qt6 consider rename UnsupportedOperationError
         CombinationError = QGeoCodeReply::CombinationError,
-        UnknownError = QGeoCodeReply::UnknownError
+        UnknownError = QGeoCodeReply::UnknownError,
+        //we leave gap for future QGeoCodeReply errors
+
+        //QGeoServiceProvider related errors start here
+        UnknownParameterError = 100,
+        MissingRequiredParameterError
     };
 
     enum Roles {
@@ -136,8 +152,7 @@ Q_SIGNALS:
     void countChanged();
     void pluginChanged();
     void statusChanged();
-    void errorStringChanged();
-    void errorChanged();
+    void errorChanged(); //emitted also for errorString notification
     void locationsChanged();
     void autoUpdateChanged();
     void boundsChanged();
@@ -159,8 +174,7 @@ protected Q_SLOTS:
 protected:
     QGeoCodingManager *searchManager();
     void setStatus(Status status);
-    void setErrorString(const QString &error);
-    void setError(GeocodeError error);
+    void setError(GeocodeError error, const QString &errorString);
     bool autoUpdate_;
     bool complete_;
 

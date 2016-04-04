@@ -32,13 +32,15 @@
 ****************************************************************************/
 
 #include "qv4globalobject_p.h"
-#include "qv4mm_p.h"
-#include "qv4value_inl_p.h"
+#include <private/qv4mm_p.h>
+#include "qv4value_p.h"
 #include "qv4context_p.h"
 #include "qv4function_p.h"
 #include "qv4debugging_p.h"
+#include "qv4profiling_p.h"
 #include "qv4script_p.h"
 #include "qv4scopedvalue_p.h"
+#include "qv4string_p.h"
 
 #include <private/qqmljsengine_p.h>
 #include <private/qqmljslexer_p.h>
@@ -47,6 +49,7 @@
 #include <qv4jsir_p.h>
 #include <qv4codegen_p.h>
 #include "private/qlocale_tools_p.h"
+#include "private/qtools_p.h"
 
 #include <QtCore/QDebug>
 #include <QtCore/QString>
@@ -56,25 +59,8 @@
 #include <wtf/MathExtras.h>
 
 using namespace QV4;
-
-
-static inline char toHex(char c)
-{
-    static const char hexnumbers[] = "0123456789ABCDEF";
-    return hexnumbers[c & 0xf];
-}
-
-static int fromHex(QChar ch)
-{
-    ushort c = ch.unicode();
-    if ((c >= '0') && (c <= '9'))
-        return c - '0';
-    if ((c >= 'A') && (c <= 'F'))
-        return c - 'A' + 10;
-    if ((c >= 'a') && (c <= 'f'))
-        return c - 'a' + 10;
-    return -1;
-}
+using QtMiscUtils::toHexUpper;
+using QtMiscUtils::fromHex;
 
 static QString escape(const QString &input)
 {
@@ -93,16 +79,16 @@ static QString escape(const QString &input)
                 output.append(QChar(uc));
             } else {
                 output.append('%');
-                output.append(QLatin1Char(toHex(uc >> 4)));
-                output.append(QLatin1Char(toHex(uc)));
+                output.append(QLatin1Char(toHexUpper(uc >> 4)));
+                output.append(QLatin1Char(toHexUpper(uc)));
             }
         } else {
             output.append('%');
             output.append('u');
-            output.append(QLatin1Char(toHex(uc >> 12)));
-            output.append(QLatin1Char(toHex(uc >> 8)));
-            output.append(QLatin1Char(toHex(uc >> 4)));
-            output.append(QLatin1Char(toHex(uc)));
+            output.append(QLatin1Char(toHexUpper(uc >> 12)));
+            output.append(QLatin1Char(toHexUpper(uc >> 8)));
+            output.append(QLatin1Char(toHexUpper(uc >> 4)));
+            output.append(QLatin1Char(toHexUpper(uc)));
         }
     }
     return output;
@@ -119,10 +105,10 @@ static QString unescape(const QString &input)
         if ((c == '%') && (i + 1 < length)) {
             QChar a = input.at(i);
             if ((a == 'u') && (i + 4 < length)) {
-                int d3 = fromHex(input.at(i+1));
-                int d2 = fromHex(input.at(i+2));
-                int d1 = fromHex(input.at(i+3));
-                int d0 = fromHex(input.at(i+4));
+                int d3 = fromHex(input.at(i+1).unicode());
+                int d2 = fromHex(input.at(i+2).unicode());
+                int d1 = fromHex(input.at(i+3).unicode());
+                int d0 = fromHex(input.at(i+4).unicode());
                 if ((d3 != -1) && (d2 != -1) && (d1 != -1) && (d0 != -1)) {
                     ushort uc = ushort((d3 << 12) | (d2 << 8) | (d1 << 4) | d0);
                     result.append(QChar(uc));
@@ -131,8 +117,8 @@ static QString unescape(const QString &input)
                     result.append(c);
                 }
             } else {
-                int d1 = fromHex(a);
-                int d0 = fromHex(input.at(i+1));
+                int d1 = fromHex(a.unicode());
+                int d0 = fromHex(input.at(i+1).unicode());
                 if ((d1 != -1) && (d0 != -1)) {
                     c = (d1 << 4) | d0;
                     i += 2;
@@ -153,8 +139,8 @@ static const char uriUnescapedReserved[] = "-_.!~*'();/?:@&=+$,#";
 static void addEscapeSequence(QString &output, uchar ch)
 {
     output.append(QLatin1Char('%'));
-    output.append(QLatin1Char(toHex(ch >> 4)));
-    output.append(QLatin1Char(toHex(ch & 0xf)));
+    output.append(QLatin1Char(toHexUpper(ch >> 4)));
+    output.append(QLatin1Char(toHexUpper(ch & 0xf)));
 }
 
 static QString encode(const QString &input, const char *unescapedSet, bool *ok)
@@ -246,8 +232,8 @@ static QString decode(const QString &input, DecodeMode decodeMode, bool *ok)
             if (i + 2 >= length)
                 goto error;
 
-            int d1 = fromHex(input.at(i+1));
-            int d0 = fromHex(input.at(i+2));
+            int d1 = fromHex(input.at(i+1).unicode());
+            int d0 = fromHex(input.at(i+2).unicode());
             if ((d1 == -1) || (d0 == -1))
                 goto error;
 
@@ -281,8 +267,8 @@ static QString decode(const QString &input, DecodeMode decodeMode, bool *ok)
                     if (input.at(i) != percent)
                         goto error;
 
-                    d1 = fromHex(input.at(i+1));
-                    d0 = fromHex(input.at(i+2));
+                    d1 = fromHex(input.at(i+1).unicode());
+                    d0 = fromHex(input.at(i+2).unicode());
                     if ((d1 == -1) || (d0 == -1))
                         goto error;
 
@@ -339,25 +325,24 @@ static QString decode(const QString &input, DecodeMode decodeMode, bool *ok)
 DEFINE_OBJECT_VTABLE(EvalFunction);
 
 Heap::EvalFunction::EvalFunction(QV4::ExecutionContext *scope)
-    : Heap::FunctionObject(scope, scope->d()->engine->id_eval)
+    : Heap::FunctionObject(scope, scope->d()->engine->id_eval())
 {
     Scope s(scope);
     ScopedFunctionObject f(s, this);
-    f->defineReadonlyProperty(s.engine->id_length, Primitive::fromInt32(1));
+    f->defineReadonlyProperty(s.engine->id_length(), Primitive::fromInt32(1));
 }
 
-ReturnedValue EvalFunction::evalCall(CallData *callData, bool directCall)
+ReturnedValue EvalFunction::evalCall(CallData *callData, bool directCall) const
 {
     if (callData->argc < 1)
         return Encode::undefined();
 
     ExecutionEngine *v4 = engine();
     Scope scope(v4);
+    ExecutionContextSaver ctxSaver(scope);
 
-    ScopedContext parentContext(scope, v4->currentContext());
-    ExecutionContextSaver ctxSaver(scope, parentContext);
-
-    ScopedContext ctx(scope, parentContext.getPointer());
+    ExecutionContext *currentContext = v4->currentContext;
+    ExecutionContext *ctx = currentContext;
 
     if (!directCall) {
         // the context for eval should be the global scope, so we fake a root
@@ -372,10 +357,10 @@ ReturnedValue EvalFunction::evalCall(CallData *callData, bool directCall)
     bool inheritContext = !ctx->d()->strictMode;
 
     Script script(ctx, code, QStringLiteral("eval code"));
-    script.strictMode = (directCall && parentContext->d()->strictMode);
+    script.strictMode = (directCall && currentContext->d()->strictMode);
     script.inheritContext = inheritContext;
     script.parse();
-    if (scope.engine->hasException)
+    if (v4->hasException)
         return Encode::undefined();
 
     Function *function = script.function();
@@ -395,14 +380,14 @@ ReturnedValue EvalFunction::evalCall(CallData *callData, bool directCall)
     ctx->d()->strictMode = false;
     ctx->d()->compilationUnit = function->compilationUnit;
 
-    return function->code(ctx->engine(), function->codeData);
+    return Q_V4_PROFILE(ctx->engine(), function);
 }
 
 
-ReturnedValue EvalFunction::call(Managed *that, CallData *callData)
+ReturnedValue EvalFunction::call(const Managed *that, CallData *callData)
 {
     // indirect call
-    return static_cast<EvalFunction *>(that)->evalCall(callData, false);
+    return static_cast<const EvalFunction *>(that)->evalCall(callData, false);
 }
 
 

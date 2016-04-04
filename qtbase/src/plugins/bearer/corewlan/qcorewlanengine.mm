@@ -77,12 +77,11 @@ extern "C" { // Otherwise it won't find CWKeychain* symbols at link time
 - (id) init
 {
     [locker lock];
-    NSAutoreleasePool *autoreleasepool = [[NSAutoreleasePool alloc] init];
+    QMacAutoReleasePool pool;
     notificationCenter = [NSNotificationCenter defaultCenter];
     currentInterface = [CWInterface interfaceWithName:nil];
     [notificationCenter addObserver:self selector:@selector(notificationHandler:) name:CWPowerDidChangeNotification object:nil];
     [locker unlock];
-    [autoreleasepool release];
     return self;
 }
 
@@ -154,7 +153,7 @@ void QScanThread::quit()
 
 void QScanThread::run()
 {
-    NSAutoreleasePool *autoreleasepool = [[NSAutoreleasePool alloc] init];
+    QMacAutoReleasePool pool;
     QStringList found;
     mutex.lock();
     CWInterface *currentInterface = [CWInterface interfaceWithName: QCFString::toNSString(interfaceName)];
@@ -236,7 +235,6 @@ void QScanThread::run()
         }
     }
     emit networksChanged();
-    [autoreleasepool release];
 }
 
 QStringList QScanThread::foundNetwork(const QString &id, const QString &name, const QNetworkConfiguration::StateFlags state, const QString &interfaceName, const QNetworkConfiguration::Purpose purpose)
@@ -276,7 +274,7 @@ void QScanThread::getUserConfigurations()
 {
     QMutexLocker locker(&mutex);
 
-    NSAutoreleasePool *autoreleasepool = [[NSAutoreleasePool alloc] init];
+    QMacAutoReleasePool pool;
     userProfiles.clear();
 
     NSSet *wifiInterfaces = [CWInterface interfaceNames];
@@ -357,7 +355,6 @@ void QScanThread::getUserConfigurations()
             }
         }
     }
-    [autoreleasepool release];
 }
 
 QString QScanThread::getSsidFromNetworkName(const QString &name)
@@ -436,7 +433,7 @@ QCoreWlanEngine::~QCoreWlanEngine()
 void QCoreWlanEngine::initialize()
 {
     QMutexLocker locker(&mutex);
-    NSAutoreleasePool *autoreleasepool = [[NSAutoreleasePool alloc] init];
+    QMacAutoReleasePool pool;
 
     if ([[CWInterface interfaceNames] count] > 0 && !listener) {
         listener = [[QT_MANGLE_NAMESPACE(QNSListener) alloc] init];
@@ -448,7 +445,6 @@ void QCoreWlanEngine::initialize()
     storeSession = NULL;
 
     startNetworkChangeLoop();
-    [autoreleasepool release];
 }
 
 
@@ -469,7 +465,7 @@ bool QCoreWlanEngine::hasIdentifier(const QString &id)
 void QCoreWlanEngine::connectToId(const QString &id)
 {
     QMutexLocker locker(&mutex);
-    NSAutoreleasePool *autoreleasepool = [[NSAutoreleasePool alloc] init];
+    QMacAutoReleasePool pool;
     QString interfaceString = getInterfaceFromId(id);
 
     CWInterface *wifiInterface =
@@ -541,7 +537,6 @@ void QCoreWlanEngine::connectToId(const QString &id)
 
     locker.unlock();
     emit connectionError(id, InterfaceLookupError);
-    [autoreleasepool release];
 }
 
 void QCoreWlanEngine::disconnectFromId(const QString &id)
@@ -554,7 +549,7 @@ void QCoreWlanEngine::disconnectFromId(const QString &id)
         emit connectionError(id, DisconnectionError);
         return;
     }
-    NSAutoreleasePool *autoreleasepool = [[NSAutoreleasePool alloc] init];
+    QMacAutoReleasePool pool;
 
     CWInterface *wifiInterface =
         [CWInterface interfaceWithName: QCFString::toNSString(interfaceString)];
@@ -563,14 +558,13 @@ void QCoreWlanEngine::disconnectFromId(const QString &id)
     [wifiInterface disassociate];
 
     QTimer::singleShot(1000, this,SLOT(checkDisconnect()));
-    [autoreleasepool release];
 }
 
 void QCoreWlanEngine::checkDisconnect()
 {
     QMutexLocker locker(&mutex);
     if (!disconnectedInterfaceString.isEmpty()) {
-        NSAutoreleasePool *autoreleasepool = [[NSAutoreleasePool alloc] init];
+        QMacAutoReleasePool pool;
 
         CWInterface *wifiInterface =
                 [CWInterface interfaceWithName: QCFString::toNSString(disconnectedInterfaceString)];
@@ -582,7 +576,6 @@ void QCoreWlanEngine::checkDisconnect()
             emit connectionError(id, DisconnectionError);
             locker.relock();
         }
-        [autoreleasepool release];
         disconnectedInterfaceString.clear();
     }
 }
@@ -597,7 +590,7 @@ void QCoreWlanEngine::doRequestUpdate()
 {
     QMutexLocker locker(&mutex);
 
-    NSAutoreleasePool *autoreleasepool = [[NSAutoreleasePool alloc] init];
+    QMacAutoReleasePool pool;
 
     NSSet *wifiInterfaces = [CWInterface interfaceNames];
     for (NSString *ifName in wifiInterfaces) {
@@ -607,7 +600,6 @@ void QCoreWlanEngine::doRequestUpdate()
     locker.unlock();
     if ([wifiInterfaces count] == 0)
         networksChanged();
-    [autoreleasepool release];
 }
 
 bool QCoreWlanEngine::isWifiReady(const QString &wifiDeviceName)
@@ -615,12 +607,11 @@ bool QCoreWlanEngine::isWifiReady(const QString &wifiDeviceName)
     QMutexLocker locker(&mutex);
     bool haswifi = false;
     if(hasWifi) {
-        NSAutoreleasePool *autoreleasepool = [[NSAutoreleasePool alloc] init];
+        QMacAutoReleasePool pool;
         CWInterface *defaultInterface = [CWInterface interfaceWithName: QCFString::toNSString(wifiDeviceName)];
         if (defaultInterface.powerOn) {
             haswifi = true;
         }
-        [autoreleasepool release];
     }
     return haswifi;
 }
@@ -814,7 +805,7 @@ quint64 QCoreWlanEngine::bytesReceived(const QString &id)
 quint64 QCoreWlanEngine::startTime(const QString &identifier)
 {
     QMutexLocker locker(&mutex);
-    NSAutoreleasePool *autoreleasepool = [[NSAutoreleasePool alloc] init];
+    QMacAutoReleasePool pool;
     quint64 timestamp = 0;
 
     NSString *filePath = @"/Library/Preferences/SystemConfiguration/com.apple.airport.preferences.plist";
@@ -861,7 +852,6 @@ quint64 QCoreWlanEngine::startTime(const QString &identifier)
             }
         }
     }
-    [autoreleasepool release];
     return timestamp;
 }
 

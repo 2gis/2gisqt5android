@@ -42,7 +42,6 @@
 #include "qqmlexpression.h"
 #include "qqmlcomponent.h"
 #include "qqmlvme_p.h"
-#include <private/qqmlenginedebugservice_p.h>
 #include "qqmlstringconverters_p.h"
 #include "qqmlxmlhttprequest_p.h"
 #include "qqmlscriptstring.h"
@@ -54,11 +53,7 @@
 #include "qqmllist_p.h"
 #include "qqmltypenamecache_p.h"
 #include "qqmlnotifier_p.h"
-#include <private/qqmldebugserver_p.h>
-#include <private/qqmlprofilerservice_p.h>
-#include <private/qv4debugservice_p.h>
-#include <private/qdebugmessageservice_p.h>
-#include <private/qqmlenginecontrolservice_p.h>
+#include <private/qqmldebugconnector_p.h>
 #include "qqmlincubator.h"
 #include "qqmlabstracturlinterceptor.h"
 #include <private/qqmlboundsignal_p.h>
@@ -225,7 +220,6 @@ void QQmlEnginePrivate::activateDesignerMode()
 /*!
     \class QQmlImageProviderBase
     \brief The QQmlImageProviderBase class is used to register image providers in the QML engine.
-    \mainclass
     \inmodule QtQml
 
     Image providers must be registered with the QML engine.  The only information the QML
@@ -247,6 +241,10 @@ void QQmlEnginePrivate::activateDesignerMode()
         The QQuickImageProvider::requestPixmap() method will be called for all image requests.
     \value Texture The Image Provider provides QSGTextureProvider based images.
         The QQuickImageProvider::requestTexture() method will be called for all image requests.
+    \value ImageResponse The Image provider provides QQuickTextureFactory based images.
+        Should only be used in QQuickAsyncImageProvider or its subclasses.
+        The QQuickAsyncImageProvider::requestImageResponse() method will be called for all image requests.
+        Since Qt 5.6
     \omitvalue Invalid
 */
 
@@ -594,7 +592,7 @@ the same object as is returned from the Qt.include() call.
 // Qt.include() is implemented in qv4include.cpp
 
 QQmlEnginePrivate::QQmlEnginePrivate(QQmlEngine *e)
-: propertyCapture(0), rootContext(0), isDebugging(false),
+: propertyCapture(0), rootContext(0),
   profiler(0), outputWarningsToMsgLog(true),
   cleanup(0), erroredBindings(0), inProgressCreations(0),
   workerScriptEngine(0),
@@ -607,8 +605,8 @@ QQmlEnginePrivate::QQmlEnginePrivate(QQmlEngine *e)
 
 QQmlEnginePrivate::~QQmlEnginePrivate()
 {
-    typedef QHash<QPair<QQmlType *, int>, QQmlPropertyCache *>::Iterator TypePropertyCacheIt;
-    typedef QHash<int, QQmlCompiledData *>::Iterator CompositeTypesIt;
+    typedef QHash<QPair<QQmlType *, int>, QQmlPropertyCache *>::const_iterator TypePropertyCacheIt;
+    typedef QHash<int, QQmlCompiledData *>::const_iterator CompositeTypesIt;
 
     if (inProgressCreations)
         qWarning() << QQmlEngine::tr("There are still \"%1\" items in the process of being created at engine destruction.").arg(inProgressCreations);
@@ -627,9 +625,9 @@ QQmlEnginePrivate::~QQmlEnginePrivate()
     if (incubationController) incubationController->d = 0;
     incubationController = 0;
 
-    for (TypePropertyCacheIt iter = typePropertyCache.begin(), end = typePropertyCache.end(); iter != end; ++iter)
+    for (TypePropertyCacheIt iter = typePropertyCache.cbegin(), end = typePropertyCache.cend(); iter != end; ++iter)
         (*iter)->release();
-    for (CompositeTypesIt iter = m_compositeTypes.begin(), end = m_compositeTypes.end(); iter != end; ++iter) {
+    for (CompositeTypesIt iter = m_compositeTypes.cbegin(), end = m_compositeTypes.cend(); iter != end; ++iter) {
         iter.value()->isRegisteredWithEngine = false;
 
         // since unregisterInternalCompositeType() will not be called in this
@@ -664,6 +662,17 @@ void QQmlPrivate::qdeclarativeelement_destructor(QObject *o)
         // get the metaobject anymore.
         d->disconnectNotifiers();
     }
+}
+
+QQmlData::QQmlData()
+    : ownedByQml1(false), ownMemory(true), ownContext(false), indestructible(true), explicitIndestructibleSet(false),
+      hasTaintedV4Object(false), isQueuedForDeletion(false), rootObjectInCreation(false),
+      hasInterceptorMetaObject(false), hasVMEMetaObject(false), parentFrozen(false), bindingBitsSize(0), bindingBits(0), notifyList(0), context(0), outerContext(0),
+      bindings(0), signalHandlers(0), nextContextObject(0), prevContextObject(0),
+      lineNumber(0), columnNumber(0), jsEngineId(0), compiledData(0), deferredData(0),
+      propertyCache(0), guards(0), extendedData(0)
+{
+    init();
 }
 
 void QQmlData::destroyed(QAbstractDeclarativeData *d, QObject *o)
@@ -799,7 +808,7 @@ void QQmlData::markAsDeleted(QObject *o)
     QQmlData::setQueuedForDeletion(o);
 
     QObjectPrivate *p = QObjectPrivate::get(o);
-    for (QList<QObject *>::iterator it = p->children.begin(), end = p->children.end(); it != end; ++it) {
+    for (QList<QObject *>::const_iterator it = p->children.constBegin(), end = p->children.constEnd(); it != end; ++it) {
         QQmlData::markAsDeleted(*it);
     }
 }
@@ -824,14 +833,12 @@ void QQmlData::flushPendingBindingImpl(int coreIndex)
 
     // Find the binding
     QQmlAbstractBinding *b = bindings;
-    while (b && *b->m_mePtr && b->propertyIndex() != coreIndex)
+    while (b && b->targetPropertyIndex() != coreIndex)
         b = b->nextBinding();
 
-    if (b && b->propertyIndex() == coreIndex) {
-        b->clear();
+    if (b && b->targetPropertyIndex() == coreIndex)
         b->setEnabled(true, QQmlPropertyPrivate::BypassInterceptor |
                             QQmlPropertyPrivate::DontRemoveBinding);
-    }
 }
 
 bool QQmlEnginePrivate::baseModulesUninitialized = true;
@@ -861,15 +868,9 @@ void QQmlEnginePrivate::init()
 
     rootContext = new QQmlContext(q,true);
 
-    if (QCoreApplication::instance()->thread() == q->thread() &&
-        QQmlEngineDebugService::isDebuggingEnabled()) {
-        isDebugging = true;
-        QQmlEngineDebugService::instance();
-        QV4DebugService::instance();
-        QQmlProfilerService::instance();
-        QDebugMessageService::instance();
-        QQmlEngineControlService::instance();
-        QQmlDebugServer::instance()->addEngine(q);
+    if (QCoreApplication::instance()->thread() == q->thread() && QQmlDebugConnector::instance()) {
+        QQmlDebugConnector::instance()->open();
+        QQmlDebugConnector::instance()->addEngine(q);
     }
 }
 
@@ -886,7 +887,6 @@ QQuickWorkerScriptEngine *QQmlEnginePrivate::getWorkerScriptEngine()
   \since 5.0
   \inmodule QtQml
   \brief The QQmlEngine class provides an environment for instantiating QML components.
-  \mainclass
 
   Each QML component is instantiated in a QQmlContext.
   QQmlContext's are essential for passing data to QML
@@ -947,8 +947,9 @@ QQmlEngine::QQmlEngine(QQmlEnginePrivate &dd, QObject *parent)
 QQmlEngine::~QQmlEngine()
 {
     Q_D(QQmlEngine);
-    if (d->isDebugging)
-        QQmlDebugServer::instance()->removeEngine(this);
+    QQmlDebugConnector *server = QQmlDebugConnector::instance();
+    if (server)
+        server->removeEngine(this);
 
     d->typeLoader.invalidate();
 
@@ -1237,7 +1238,7 @@ bool QQmlEngine::outputWarningsToStandardError() const
 
   If \a enabled is true, any warning messages generated by QML will be
   output to stderr and emitted by the warnings() signal.  If \a enabled
-  is false, on the warnings() signal will be emitted.  This allows
+  is false, only the warnings() signal will be emitted.  This allows
   applications to handle warning output themselves.
 
   The default value is true.
@@ -1433,7 +1434,8 @@ QObject *qmlAttachedPropertiesObjectById(int id, const QObject *object, bool cre
     if (rv || !create)
         return rv;
 
-    QQmlAttachedPropertiesFunc pf = QQmlMetaType::attachedPropertiesFuncById(id);
+    QQmlEnginePrivate *engine = QQmlEnginePrivate::get(data->context);
+    QQmlAttachedPropertiesFunc pf = QQmlMetaType::attachedPropertiesFuncById(engine, id);
     if (!pf)
         return 0;
 
@@ -1448,8 +1450,10 @@ QObject *qmlAttachedPropertiesObjectById(int id, const QObject *object, bool cre
 QObject *qmlAttachedPropertiesObject(int *idCache, const QObject *object,
                                      const QMetaObject *attachedMetaObject, bool create)
 {
-    if (*idCache == -1)
-        *idCache = QQmlMetaType::attachedPropertiesFuncId(attachedMetaObject);
+    if (*idCache == -1) {
+        QQmlEngine *engine = object ? qmlEngine(object) : 0;
+        *idCache = QQmlMetaType::attachedPropertiesFuncId(engine ? QQmlEnginePrivate::get(engine) : 0, attachedMetaObject);
+    }
 
     if (*idCache == -1 || !object)
         return 0;
@@ -1491,51 +1495,6 @@ Q_QML_EXPORT QObject *qmlAttachedPropertiesObject(int *idCache, const QObject *o
 }
 
 #endif // QT_DEPRECATED_SINCE(5, 1)
-
-QQmlDebuggingEnabler::QQmlDebuggingEnabler(bool printWarning)
-{
-#ifndef QQML_NO_DEBUG_PROTOCOL
-    if (!QQmlEnginePrivate::qml_debugging_enabled
-            && printWarning) {
-        qDebug("QML debugging is enabled. Only use this in a safe environment.");
-    }
-    QQmlEnginePrivate::qml_debugging_enabled = true;
-#else
-    Q_UNUSED(printWarning);
-#endif
-}
-
-/*!
- * \enum QQmlDebuggingEnabler::StartMode
- *
- * Defines the debug server's start behavior. You can interrupt QML engines starting while a debug
- * client is connecting, in order to set breakpoints in or profile startup code.
- *
- * \value DoNotWaitForClient Run any QML engines as usual while the debug services are connecting.
- * \value WaitForClient      If a QML engine starts while the debug services are connecting,
- *                           interrupt it until they are done.
- */
-
-/*!
- * Enables debugging for QML engines created after calling this function. The debug server will
- * listen on \a port at \a hostName and block the QML engine until it receives a connection if
- * \a mode is \c WaitForClient. If \a mode is not specified it won't block and if \a hostName is not
- * specified it will listen on all available interfaces. You can only start one debug server at a
- * time. A debug server may have already been started if the -qmljsdebugger= command line argument
- * was given. This method returns \c true if a new debug server was successfully started, or
- * \c false otherwise.
- */
-bool QQmlDebuggingEnabler::startTcpDebugServer(int port, StartMode mode, const QString &hostName)
-{
-#ifndef QQML_NO_DEBUG_PROTOCOL
-    return QQmlDebugServer::enable(port, port, mode == WaitForClient, hostName);
-#else
-    Q_UNUSED(port);
-    Q_UNUSED(block);
-    Q_UNUSED(hostName);
-    return false;
-#endif
-}
 
 class QQmlDataExtended {
 public:
@@ -1678,12 +1637,11 @@ void QQmlData::destroyed(QObject *object)
 
     QQmlAbstractBinding *binding = bindings;
     while (binding) {
-        QQmlAbstractBinding *next = binding->nextBinding();
         binding->setAddedToObject(false);
-        binding->setNextBinding(0);
-        binding->destroy();
-        binding = next;
+        binding = binding->nextBinding();
     }
+    if (bindings && !bindings->ref.deref())
+        delete bindings;
 
     if (compiledData) {
         compiledData->release();
@@ -1696,9 +1654,9 @@ void QQmlData::destroyed(QObject *object)
         deferredData = 0;
     }
 
-    QQmlAbstractBoundSignal *signalHandler = signalHandlers;
+    QQmlBoundSignal *signalHandler = signalHandlers;
     while (signalHandler) {
-        if (signalHandler->isEvaluating()) {
+        if (signalHandler->isNotifying()) {
             // The object is being deleted during signal handler evaluation.
             // This will cause a crash due to invalid memory access when the
             // evaluation has completed.
@@ -1710,7 +1668,7 @@ void QQmlData::destroyed(QObject *object)
                 if (location.sourceFile.isEmpty())
                     location.sourceFile = QStringLiteral("<Unknown File>");
                 locationString.append(location.sourceFile);
-                locationString.append(QString::fromLatin1(":%0: ").arg(location.line));
+                locationString.append(QStringLiteral(":%0: ").arg(location.line));
                 QString source = expr->expression();
                 if (source.size() > 100) {
                     source.truncate(96);
@@ -1727,7 +1685,7 @@ void QQmlData::destroyed(QObject *object)
                    "%s", object, qPrintable(locationString));
         }
 
-        QQmlAbstractBoundSignal *next = signalHandler->m_nextSignal;
+        QQmlBoundSignal *next = signalHandler->m_nextSignal;
         signalHandler->m_prevSignal = 0;
         signalHandler->m_nextSignal = 0;
         delete signalHandler;
@@ -2140,8 +2098,7 @@ QString QQmlEngine::offlineStoragePath() const
     return d->offlineStoragePath;
 }
 
-QQmlPropertyCache *QQmlEnginePrivate::createCache(QQmlType *type, int minorVersion,
-                                                                  QQmlError &error)
+QQmlPropertyCache *QQmlEnginePrivate::createCache(QQmlType *type, int minorVersion)
 {
     QList<QQmlType *> types;
 
@@ -2203,10 +2160,10 @@ QQmlPropertyCache *QQmlEnginePrivate::createCache(QQmlType *type, int minorVersi
     // Properties override:
     //    * other elements of the same name
 
+#if 0
     bool overloadError = false;
     QString overloadName;
 
-#if 0
     for (QQmlPropertyCache::StringCache::ConstIterator iter = raw->stringCache.begin();
          !overloadError && iter != raw->stringCache.end();
          ++iter) {
@@ -2223,7 +2180,6 @@ QQmlPropertyCache *QQmlEnginePrivate::createCache(QQmlType *type, int minorVersi
                 overloadError = true;
         }
     }
-#endif
 
     if (overloadError) {
         if (hasCopied) raw->release();
@@ -2231,6 +2187,7 @@ QQmlPropertyCache *QQmlEnginePrivate::createCache(QQmlType *type, int minorVersi
         error.setDescription(QLatin1String("Type ") + type->qmlTypeName() + QLatin1Char(' ') + QString::number(type->majorVersion()) + QLatin1Char('.') + QString::number(minorVersion) + QLatin1String(" contains an illegal property \"") + overloadName + QLatin1String("\".  This is an error in the type's implementation."));
         return 0;
     }
+#endif
 
     if (!hasCopied) raw->addref();
     typePropertyCache.insert(qMakePair(type, minorVersion), raw);
@@ -2281,8 +2238,8 @@ bool QQmlEnginePrivate::isList(int t) const
 int QQmlEnginePrivate::listType(int t) const
 {
     Locker locker(this);
-    QHash<int, int>::ConstIterator iter = m_qmlLists.find(t);
-    if (iter != m_qmlLists.end())
+    QHash<int, int>::ConstIterator iter = m_qmlLists.constFind(t);
+    if (iter != m_qmlLists.cend())
         return *iter;
     else
         return QQmlMetaType::listType(t);
@@ -2291,8 +2248,8 @@ int QQmlEnginePrivate::listType(int t) const
 QQmlMetaObject QQmlEnginePrivate::rawMetaObjectForType(int t) const
 {
     Locker locker(this);
-    QHash<int, QQmlCompiledData *>::ConstIterator iter = m_compositeTypes.find(t);
-    if (iter != m_compositeTypes.end()) {
+    QHash<int, QQmlCompiledData *>::ConstIterator iter = m_compositeTypes.constFind(t);
+    if (iter != m_compositeTypes.cend()) {
         return QQmlMetaObject((*iter)->rootPropertyCache);
     } else {
         QQmlType *type = QQmlMetaType::qmlType(t);
@@ -2303,8 +2260,8 @@ QQmlMetaObject QQmlEnginePrivate::rawMetaObjectForType(int t) const
 QQmlMetaObject QQmlEnginePrivate::metaObjectForType(int t) const
 {
     Locker locker(this);
-    QHash<int, QQmlCompiledData *>::ConstIterator iter = m_compositeTypes.find(t);
-    if (iter != m_compositeTypes.end()) {
+    QHash<int, QQmlCompiledData *>::ConstIterator iter = m_compositeTypes.constFind(t);
+    if (iter != m_compositeTypes.cend()) {
         return QQmlMetaObject((*iter)->rootPropertyCache);
     } else {
         QQmlType *type = QQmlMetaType::qmlType(t);
@@ -2315,8 +2272,8 @@ QQmlMetaObject QQmlEnginePrivate::metaObjectForType(int t) const
 QQmlPropertyCache *QQmlEnginePrivate::propertyCacheForType(int t)
 {
     Locker locker(this);
-    QHash<int, QQmlCompiledData*>::ConstIterator iter = m_compositeTypes.find(t);
-    if (iter != m_compositeTypes.end()) {
+    QHash<int, QQmlCompiledData*>::ConstIterator iter = m_compositeTypes.constFind(t);
+    if (iter != m_compositeTypes.cend()) {
         return (*iter)->rootPropertyCache;
     } else {
         QQmlType *type = QQmlMetaType::qmlType(t);
@@ -2328,8 +2285,8 @@ QQmlPropertyCache *QQmlEnginePrivate::propertyCacheForType(int t)
 QQmlPropertyCache *QQmlEnginePrivate::rawPropertyCacheForType(int t)
 {
     Locker locker(this);
-    QHash<int, QQmlCompiledData*>::ConstIterator iter = m_compositeTypes.find(t);
-    if (iter != m_compositeTypes.end()) {
+    QHash<int, QQmlCompiledData*>::ConstIterator iter = m_compositeTypes.constFind(t);
+    if (iter != m_compositeTypes.cend()) {
         return (*iter)->rootPropertyCache;
     } else {
         QQmlType *type = QQmlMetaType::qmlType(t);
@@ -2435,6 +2392,9 @@ bool QQml_isFileCaseCorrect(const QString &fileName, int lengthIn /* = -1 */)
 #if defined(Q_OS_MAC) || defined(Q_OS_WINCE) || defined(Q_OS_WINRT)
     const QString canonical = info.canonicalFilePath();
 #elif defined(Q_OS_WIN)
+    // No difference if the path is qrc based
+    if (absolute[0] == QLatin1Char(':'))
+        return true;
     const QString canonical = shellNormalizeFileName(absolute);
 #endif
 
@@ -2479,6 +2439,8 @@ bool QQml_isFileCaseCorrect(const QString &fileName, int lengthIn /* = -1 */)
     Returns the QQmlEngine associated with \a object, if any.  This is equivalent to
     QQmlEngine::contextForObject(object)->engine(), but more efficient.
 
+    \note Add \c{#include <QtQml>} to use this function.
+
     \sa {QQmlEngine::contextForObject()}{contextForObject()}, qmlContext()
 */
 
@@ -2488,6 +2450,8 @@ bool QQml_isFileCaseCorrect(const QString &fileName, int lengthIn /* = -1 */)
 
     Returns the QQmlContext associated with \a object, if any.  This is equivalent to
     QQmlEngine::contextForObject(object).
+
+    \note Add \c{#include <QtQml>} to use this function.
 
     \sa {QQmlEngine::contextForObject()}{contextForObject()}, qmlEngine()
 */

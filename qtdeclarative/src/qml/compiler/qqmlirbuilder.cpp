@@ -33,7 +33,7 @@
 
 #include "qqmlirbuilder_p.h"
 
-#include <private/qv4value_inl_p.h>
+#include <private/qv4value_p.h>
 #include <private/qv4compileddata_p.h>
 #include <private/qqmljsparser_p.h>
 #include <private/qqmljslexer_p.h>
@@ -1456,10 +1456,8 @@ JSCodeGen::JSCodeGen(const QString &fileName, const QString &sourceCode, QV4::IR
     , _disableAcceleratedLookups(false)
     , _contextObject(0)
     , _scopeObject(0)
-    , _contextObjectTemp(-1)
-    , _scopeObjectTemp(-1)
+    , _qmlContextTemp(-1)
     , _importedScriptsTemp(-1)
-    , _idArrayTemp(-1)
 {
     _module = jsModule;
     _module->setFileName(fileName);
@@ -1592,7 +1590,7 @@ static QV4::IR::Type resolveQmlType(QQmlEnginePrivate *qmlEngine, QV4::IR::Membe
 
     if (member->name->constData()->isUpper()) {
         bool ok = false;
-        int value = type->enumValue(*member->name, &ok);
+        int value = type->enumValue(qmlEngine, *member->name, &ok);
         if (ok) {
             member->setEnumValue(value);
             resolver->clear();
@@ -1617,10 +1615,10 @@ static QV4::IR::Type resolveQmlType(QQmlEnginePrivate *qmlEngine, QV4::IR::Membe
             member->kind = QV4::IR::Member::MemberOfSingletonObject;
             return resolver->resolveMember(qmlEngine, resolver, member);
         }
-    } else if (const QMetaObject *attachedMeta = type->attachedPropertiesType()) {
+    } else if (const QMetaObject *attachedMeta = type->attachedPropertiesType(qmlEngine)) {
         QQmlPropertyCache *cache = qmlEngine->cache(attachedMeta);
         initMetaObjectResolver(resolver, cache);
-        member->setAttachedPropertiesId(type->attachedPropertiesId());
+        member->setAttachedPropertiesId(type->attachedPropertiesId(qmlEngine));
         return resolver->resolveMember(qmlEngine, resolver, member);
     }
 
@@ -1695,7 +1693,8 @@ static QV4::IR::Type resolveMetaObjectProperty(QQmlEnginePrivate *qmlEngine, QV4
         }
     }
 
-    if (qmlEngine && !(resolver->flags & LookupsExcludeProperties)) {
+    if (member->kind != QV4::IR::Member::MemberOfIdObjectsArray && member->kind != QV4::IR::Member::MemberOfSingletonObject &&
+        qmlEngine && !(resolver->flags & LookupsExcludeProperties)) {
         QQmlPropertyData *property = member->property;
         if (!property && metaObject) {
             if (QQmlPropertyData *candidate = metaObject->property(*member->name, /*object*/0, /*context*/0)) {
@@ -1764,24 +1763,14 @@ static void initMetaObjectResolver(QV4::IR::MemberExpressionResolver *resolver, 
 
 void JSCodeGen::beginFunctionBodyHook()
 {
-    _contextObjectTemp = _block->newTemp();
-    _scopeObjectTemp = _block->newTemp();
+    _qmlContextTemp = _block->newTemp();
     _importedScriptsTemp = _block->newTemp();
-    _idArrayTemp = _block->newTemp();
 
 #ifndef V4_BOOTSTRAP
-    QV4::IR::Temp *temp = _block->TEMP(_contextObjectTemp);
-    temp->memberResolver = _function->New<QV4::IR::MemberExpressionResolver>();
-    initMetaObjectResolver(temp->memberResolver, _contextObject);
-    move(temp, _block->NAME(QV4::IR::Name::builtin_qml_context_object, 0, 0));
-
-    temp = _block->TEMP(_scopeObjectTemp);
-    temp->memberResolver = _function->New<QV4::IR::MemberExpressionResolver>();
-    initMetaObjectResolver(temp->memberResolver, _scopeObject);
-    move(temp, _block->NAME(QV4::IR::Name::builtin_qml_scope_object, 0, 0));
+    QV4::IR::Temp *temp = _block->TEMP(_qmlContextTemp);
+    move(temp, _block->NAME(QV4::IR::Name::builtin_qml_context, 0, 0));
 
     move(_block->TEMP(_importedScriptsTemp), _block->NAME(QV4::IR::Name::builtin_qml_imported_scripts_object, 0, 0));
-    move(_block->TEMP(_idArrayTemp), _block->NAME(QV4::IR::Name::builtin_qml_id_array, 0, 0));
 #endif
 }
 
@@ -1807,7 +1796,7 @@ QV4::IR::Expr *JSCodeGen::fallbackNameLookup(const QString &name, int line, int 
     foreach (const IdMapping &mapping, _idObjects)
         if (name == mapping.name) {
             _function->idObjectDependencies.insert(mapping.idIndex);
-            QV4::IR::Expr *s = subscript(_block->TEMP(_idArrayTemp), _block->CONST(QV4::IR::SInt32Type, mapping.idIndex));
+            QV4::IR::Expr *s = _block->MEMBER(_block->TEMP(_qmlContextTemp), _function->newString(name), 0, QV4::IR::Member::MemberOfIdObjectsArray, mapping.idIndex);
             QV4::IR::Temp *result = _block->TEMP(_block->newTemp());
             _block->MOVE(result, s);
             result = _block->TEMP(result->index);
@@ -1857,7 +1846,7 @@ QV4::IR::Expr *JSCodeGen::fallbackNameLookup(const QString &name, int line, int 
         if (propertyExistsButForceNameLookup)
             return 0;
         if (pd) {
-            QV4::IR::Temp *base = _block->TEMP(_scopeObjectTemp);
+            QV4::IR::Temp *base = _block->TEMP(_qmlContextTemp);
             base->memberResolver = _function->New<QV4::IR::MemberExpressionResolver>();
             initMetaObjectResolver(base->memberResolver, _scopeObject);
             return _block->MEMBER(base, _function->newString(name), pd, QV4::IR::Member::MemberOfQmlScopeObject);
@@ -1870,7 +1859,7 @@ QV4::IR::Expr *JSCodeGen::fallbackNameLookup(const QString &name, int line, int 
         if (propertyExistsButForceNameLookup)
             return 0;
         if (pd) {
-            QV4::IR::Temp *base = _block->TEMP(_contextObjectTemp);
+            QV4::IR::Temp *base = _block->TEMP(_qmlContextTemp);
             base->memberResolver = _function->New<QV4::IR::MemberExpressionResolver>();
             initMetaObjectResolver(base->memberResolver, _contextObject);
             return _block->MEMBER(base, _function->newString(name), pd, QV4::IR::Member::MemberOfQmlContextObject);
@@ -1886,17 +1875,17 @@ QV4::IR::Expr *JSCodeGen::fallbackNameLookup(const QString &name, int line, int 
 
 #ifndef V4_BOOTSTRAP
 
-QQmlPropertyData *PropertyResolver::property(const QString &name, bool *notInRevision, QObject *object, QQmlContextData *context)
+QQmlPropertyData *PropertyResolver::property(const QString &name, bool *notInRevision, RevisionCheck check)
 {
     if (notInRevision) *notInRevision = false;
 
-    QQmlPropertyData *d = cache->property(name, object, context);
+    QQmlPropertyData *d = cache->property(name, 0, 0);
 
     // Find the first property
     while (d && d->isFunction())
         d = cache->overrideData(d);
 
-    if (d && !cache->isAllowedInRevision(d)) {
+    if (check != IgnoreRevision && d && !cache->isAllowedInRevision(d)) {
         if (notInRevision) *notInRevision = true;
         return 0;
     } else {
@@ -1905,11 +1894,11 @@ QQmlPropertyData *PropertyResolver::property(const QString &name, bool *notInRev
 }
 
 
-QQmlPropertyData *PropertyResolver::signal(const QString &name, bool *notInRevision, QObject *object, QQmlContextData *context)
+QQmlPropertyData *PropertyResolver::signal(const QString &name, bool *notInRevision)
 {
     if (notInRevision) *notInRevision = false;
 
-    QQmlPropertyData *d = cache->property(name, object, context);
+    QQmlPropertyData *d = cache->property(name, 0, 0);
     if (notInRevision) *notInRevision = false;
 
     while (d && !(d->isFunction()))
@@ -1925,7 +1914,7 @@ QQmlPropertyData *PropertyResolver::signal(const QString &name, bool *notInRevis
     if (name.endsWith(QStringLiteral("Changed"))) {
         QString propName = name.mid(0, name.length() - static_cast<int>(strlen("Changed")));
 
-        d = property(propName, notInRevision, object, context);
+        d = property(propName, notInRevision);
         if (d)
             return cache->signal(d->notifyIndex);
     }

@@ -34,8 +34,19 @@
 **
 ****************************************************************************/
 
-#ifndef QT3D_QASPECTJOBMANAGER_P_H
-#define QT3D_QASPECTJOBMANAGER_P_H
+#ifndef QT3DCORE_QASPECTJOBMANAGER_P_H
+#define QT3DCORE_QASPECTJOBMANAGER_P_H
+
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists for the convenience
+// of other Qt classes.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
 
 #include <private/qabstractaspectjobmanager_p.h>
 #include <Qt3DCore/private/qt3dcore_global_p.h>
@@ -44,15 +55,9 @@
 
 #include <QVector>
 
-#ifdef THREAD_WEAVER
-namespace ThreadWeaver {
-class Queue;
-}
-#endif
-
 QT_BEGIN_NAMESPACE
 
-namespace Qt3D {
+namespace Qt3DCore {
 
 class QThreadPooler;
 class DependencyHandler;
@@ -73,17 +78,12 @@ public:
     void waitForPerThreadFunction(JobFunction func, void *arg) Q_DECL_OVERRIDE;
 
 private:
-#ifdef THREAD_WEAVER
-    // Owned by QAspectJobManager via QObject parent-child
-    ThreadWeaver::Queue *m_weaver;
-#endif
-
     QThreadPooler *m_threadPooler;
     QScopedPointer<DependencyHandler> m_dependencyHandler;
 };
 
-} // namespace Qt3D
+} // namespace Qt3DCore
 
 QT_END_NAMESPACE
 
-#endif // QT3D_QASPECTJOBMANAGER_P_H
+#endif // QT3DCORE_QASPECTJOBMANAGER_P_H

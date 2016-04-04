@@ -114,7 +114,8 @@ public:
     void setAdjustedOffset(qreal offset);
     void regenerate();
     void updateItem(QQuickItem *, qreal);
-    void snapToIndex(int index);
+    enum MovementReason { Other, SetIndex, Mouse };
+    void snapToIndex(int index, MovementReason reason);
     QPointF pointNear(const QPointF &point, qreal *nearPercent=0) const;
     void addVelocitySample(qreal v);
     qreal calcVelocity() const;
@@ -155,7 +156,6 @@ public:
     QQuickTimeLine tl;
     QQuickTimeLineValueProxy<QQuickPathViewPrivate> moveOffset;
     int flickDuration;
-    int firstIndex;
     int pathItems;
     int requestedIndex;
     int cacheSize;
@@ -164,7 +164,6 @@ public:
     QList<QQuickItem *> itemCache;
     QPointer<QQmlInstanceModel> model;
     QVariant modelVariant;
-    enum MovementReason { Other, SetIndex, Mouse };
     MovementReason moveReason;
     enum MovementDirection { Shortest, Negative, Positive };
     MovementDirection moveDirection;

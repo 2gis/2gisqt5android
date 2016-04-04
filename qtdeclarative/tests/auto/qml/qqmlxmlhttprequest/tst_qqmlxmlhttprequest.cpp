@@ -88,6 +88,7 @@ private slots:
     void getAllResponseHeaders_sent();
     void getAllResponseHeaders_args();
     void getBinaryData();
+    void getJsonData();
     void status();
     void status_data();
     void statusText();
@@ -99,6 +100,10 @@ private slots:
     void redirects();
     void nonUtf8();
     void nonUtf8_data();
+
+    // WebDAV
+    void sendPropfind();
+    void sendPropfind_data();
 
     // Attributes
     void document();
@@ -172,7 +177,7 @@ void tst_qqmlxmlhttprequest::callbackException()
     object->setProperty("which", which);
     component.completeCreate();
 
-    QTRY_VERIFY(object->property("threw").toBool() == true);
+    QTRY_VERIFY(object->property("threw").toBool());
 }
 
 // Test that the state value properties on the XMLHttpRequest constructor have the correct values.
@@ -258,7 +263,7 @@ void tst_qqmlxmlhttprequest::open()
     QCOMPARE(object->property("responseText").toBool(), true);
     QCOMPARE(object->property("responseXML").toBool(), true);
 
-    QTRY_VERIFY(object->property("dataOK").toBool() == true);
+    QTRY_VERIFY(object->property("dataOK").toBool());
 }
 
 void tst_qqmlxmlhttprequest::open_data()
@@ -371,7 +376,7 @@ void tst_qqmlxmlhttprequest::setRequestHeader()
     object->setProperty("url", server.urlString("/testdocument.html"));
     component.completeCreate();
 
-    QTRY_VERIFY(object->property("dataOK").toBool() == true);
+    QTRY_VERIFY(object->property("dataOK").toBool());
 }
 
 // Test valid setRequestHeader() calls with different header cases
@@ -389,7 +394,7 @@ void tst_qqmlxmlhttprequest::setRequestHeader_caseInsensitive()
     object->setProperty("url", server.urlString("/testdocument.html"));
     component.completeCreate();
 
-    QTRY_VERIFY(object->property("dataOK").toBool() == true);
+    QTRY_VERIFY(object->property("dataOK").toBool());
 }
 // Test setting headers before open() throws exception
 void tst_qqmlxmlhttprequest::setRequestHeader_unsent()
@@ -454,7 +459,7 @@ void tst_qqmlxmlhttprequest::setRequestHeader_illegalName()
     QCOMPARE(object->property("responseText").toBool(), true);
     QCOMPARE(object->property("responseXML").toBool(), true);
 
-    QTRY_VERIFY(object->property("dataOK").toBool() == true);
+    QTRY_VERIFY(object->property("dataOK").toBool());
 }
 
 // Test that attempting to set a header after a request is sent throws an exception
@@ -474,7 +479,7 @@ void tst_qqmlxmlhttprequest::setRequestHeader_sent()
 
     QCOMPARE(object->property("test").toBool(), true);
 
-    QTRY_VERIFY(object->property("dataOK").toBool() == true);
+    QTRY_VERIFY(object->property("dataOK").toBool());
 }
 
 // Invalid arg count throws exception
@@ -505,7 +510,7 @@ void tst_qqmlxmlhttprequest::send_alreadySent()
     QVERIFY(!object.isNull());
 
     QCOMPARE(object->property("test").toBool(), true);
-    QTRY_VERIFY(object->property("dataOK").toBool() == true);
+    QTRY_VERIFY(object->property("dataOK").toBool());
 }
 
 // Test that sends for GET, HEAD and DELETE ignore data
@@ -525,7 +530,7 @@ void tst_qqmlxmlhttprequest::send_ignoreData()
         object->setProperty("url", server.urlString("/testdocument.html"));
         component.completeCreate();
 
-        QTRY_VERIFY(object->property("dataOK").toBool() == true);
+        QTRY_VERIFY(object->property("dataOK").toBool());
     }
 
     {
@@ -542,7 +547,7 @@ void tst_qqmlxmlhttprequest::send_ignoreData()
         object->setProperty("url", server.urlString("/testdocument.html"));
         component.completeCreate();
 
-        QTRY_VERIFY(object->property("dataOK").toBool() == true);
+        QTRY_VERIFY(object->property("dataOK").toBool());
     }
 
     {
@@ -559,7 +564,7 @@ void tst_qqmlxmlhttprequest::send_ignoreData()
         object->setProperty("url", server.urlString("/testdocument.html"));
         component.completeCreate();
 
-        QTRY_VERIFY(object->property("dataOK").toBool() == true);
+        QTRY_VERIFY(object->property("dataOK").toBool());
     }
 }
 
@@ -581,7 +586,7 @@ void tst_qqmlxmlhttprequest::send_withdata()
     object->setProperty("url", server.urlString("/testdocument.html"));
     component.completeCreate();
 
-    QTRY_VERIFY(object->property("dataOK").toBool() == true);
+    QTRY_VERIFY(object->property("dataOK").toBool());
 }
 
 void tst_qqmlxmlhttprequest::send_withdata_data()
@@ -616,7 +621,7 @@ void tst_qqmlxmlhttprequest::send_options()
     QVERIFY(!object.isNull());
     QString url = server.baseUrl().toString();
     if (url_suffix != "/")
-        url.append("/");
+        url.append(QLatin1Char('/'));
     if (!url_suffix.isEmpty())
         url.append(url_suffix);
     object->setProperty("url", url);
@@ -655,7 +660,7 @@ void tst_qqmlxmlhttprequest::abort_unsent()
     QCOMPARE(object->property("responseText").toBool(), true);
     QCOMPARE(object->property("responseXML").toBool(), true);
 
-    QTRY_VERIFY(object->property("dataOK").toBool() == true);
+    QTRY_VERIFY(object->property("dataOK").toBool());
 }
 
 // Test abort() cancels an open (but unsent) request
@@ -674,7 +679,7 @@ void tst_qqmlxmlhttprequest::abort_opened()
     QCOMPARE(object->property("responseText").toBool(), true);
     QCOMPARE(object->property("responseXML").toBool(), true);
 
-    QTRY_VERIFY(object->property("dataOK").toBool() == true);
+    QTRY_VERIFY(object->property("dataOK").toBool());
 }
 
 // Test abort() aborts in progress send
@@ -700,7 +705,7 @@ void tst_qqmlxmlhttprequest::abort()
     QCOMPARE(object->property("didNotSeeUnsent").toBool(), true);
     QCOMPARE(object->property("endStateUnsent").toBool(), true);
 
-    QTRY_VERIFY(object->property("dataOK").toBool() == true);
+    QTRY_VERIFY(object->property("dataOK").toBool());
 }
 
 void tst_qqmlxmlhttprequest::getResponseHeader()
@@ -725,7 +730,7 @@ void tst_qqmlxmlhttprequest::getResponseHeader()
     QCOMPARE(object->property("readyState").toBool(), true);
     QCOMPARE(object->property("openedState").toBool(), true);
 
-    QTRY_VERIFY(object->property("dataOK").toBool() == true);
+    QTRY_VERIFY(object->property("dataOK").toBool());
 
     QCOMPARE(object->property("headersReceivedState").toBool(), true);
     QCOMPARE(object->property("headersReceivedNullHeader").toBool(), true);
@@ -767,7 +772,7 @@ void tst_qqmlxmlhttprequest::getResponseHeader_args()
     QScopedPointer<QObject> object(component.create());
     QVERIFY(!object.isNull());
 
-    QTRY_VERIFY(object->property("exceptionThrown").toBool() == true);
+    QTRY_VERIFY(object->property("exceptionThrown").toBool());
 }
 
 void tst_qqmlxmlhttprequest::getAllResponseHeaders()
@@ -791,7 +796,7 @@ void tst_qqmlxmlhttprequest::getAllResponseHeaders()
     QCOMPARE(object->property("readyState").toBool(), true);
     QCOMPARE(object->property("openedState").toBool(), true);
 
-    QTRY_VERIFY(object->property("dataOK").toBool() == true);
+    QTRY_VERIFY(object->property("dataOK").toBool());
 
     QCOMPARE(object->property("headersReceivedState").toBool(), true);
     QCOMPARE(object->property("headersReceivedHeader").toBool(), true);
@@ -827,7 +832,7 @@ void tst_qqmlxmlhttprequest::getAllResponseHeaders_args()
     QScopedPointer<QObject> object(component.create());
     QVERIFY(!object.isNull());
 
-    QTRY_VERIFY(object->property("exceptionThrown").toBool() == true);
+    QTRY_VERIFY(object->property("exceptionThrown").toBool());
 }
 
 void tst_qqmlxmlhttprequest::getBinaryData()
@@ -845,7 +850,25 @@ void tst_qqmlxmlhttprequest::getBinaryData()
     component.completeCreate();
 
     QFileInfo fileInfo("data/qml_logo.png");
-    QTRY_VERIFY(object->property("readSize").toInt() == fileInfo.size());
+    QTRY_COMPARE(object->property("readSize").toInt(), fileInfo.size());
+    QCOMPARE(object->property("status").toInt(), 200);
+}
+
+void tst_qqmlxmlhttprequest::getJsonData()
+{
+    TestHTTPServer server;
+    QVERIFY2(server.listen(), qPrintable(server.errorString()));
+    QVERIFY(server.wait(testFileUrl("receive_json_data.expect"),
+                        testFileUrl("receive_binary_data.reply"),
+                        testFileUrl("json.data")));
+
+    QQmlComponent component(&engine, testFileUrl("receiveJsonData.qml"));
+    QScopedPointer<QObject> object(component.beginCreate(engine.rootContext()));
+    QVERIFY(!object.isNull());
+    object->setProperty("url", server.urlString("/json.data"));
+    component.completeCreate();
+
+    QTRY_VERIFY(object->property("result").toBool());
 }
 
 void tst_qqmlxmlhttprequest::status()
@@ -866,7 +889,7 @@ void tst_qqmlxmlhttprequest::status()
     object->setProperty("expectedStatus", status);
     component.completeCreate();
 
-    QTRY_VERIFY(object->property("dataOK").toBool() == true);
+    QTRY_VERIFY(object->property("dataOK").toBool());
 
     QCOMPARE(object->property("unsentException").toBool(), true);
     QCOMPARE(object->property("openedException").toBool(), true);
@@ -905,7 +928,7 @@ void tst_qqmlxmlhttprequest::statusText()
     object->setProperty("expectedStatus", statusText);
     component.completeCreate();
 
-    QTRY_VERIFY(object->property("dataOK").toBool() == true);
+    QTRY_VERIFY(object->property("dataOK").toBool());
 
     QCOMPARE(object->property("unsentException").toBool(), true);
     QCOMPARE(object->property("openedException").toBool(), true);
@@ -945,7 +968,7 @@ void tst_qqmlxmlhttprequest::responseText()
     object->setProperty("expectedText", responseText);
     component.completeCreate();
 
-    QTRY_VERIFY(object->property("dataOK").toBool() == true);
+    QTRY_VERIFY(object->property("dataOK").toBool());
 
     QCOMPARE(object->property("unsent").toBool(), true);
     QCOMPARE(object->property("opened").toBool(), true);
@@ -966,6 +989,7 @@ void tst_qqmlxmlhttprequest::responseText_data()
     QTest::newRow("empty body") << testFileUrl("status.200.reply") << QUrl() << "";
     QTest::newRow("Not Found") << testFileUrl("status.404.reply") << testFileUrl("testdocument.html") << "QML Rocks!\n";
     QTest::newRow("Bad Request") << testFileUrl("status.400.reply") << testFileUrl("testdocument.html") << "QML Rocks!\n";
+    QTest::newRow("Internal server error") << testFileUrl("status.500.reply") << testFileUrl("testdocument.html") << "QML Rocks!\n";
 }
 
 void tst_qqmlxmlhttprequest::nonUtf8()
@@ -981,7 +1005,7 @@ void tst_qqmlxmlhttprequest::nonUtf8()
     object->setProperty("fileName", fileName);
     QMetaObject::invokeMethod(object.data(), "startRequest");
 
-    QTRY_VERIFY(object->property("dataOK").toBool() == true);
+    QTRY_VERIFY(object->property("dataOK").toBool());
 
     QCOMPARE(object->property("responseText").toString(), responseText);
 
@@ -1005,6 +1029,46 @@ void tst_qqmlxmlhttprequest::nonUtf8_data()
 
     QTest::newRow("responseText") << "utf16.html" << uc + '\n' << "";
     QTest::newRow("responseXML") << "utf16.xml" << "<?xml version=\"1.0\" encoding=\"UTF-16\" standalone='yes'?>\n<root>\n" + uc + "\n</root>\n" << QString('\n' + uc + '\n');
+}
+
+void tst_qqmlxmlhttprequest::sendPropfind()
+{
+    const QString prefix = "WebDAV//";
+
+    QFETCH(QString, qml);
+    QFETCH(QString, resource);
+    QFETCH(QString, expectedFile);
+    QFETCH(QString, replyHeader);
+    QFETCH(QString, replyBody);
+
+    TestHTTPServer server;
+    QVERIFY2(server.listen(), qPrintable(server.errorString()));
+
+    QVERIFY(server.wait(testFileUrl(prefix + expectedFile),
+                testFileUrl(prefix + replyHeader),
+                testFileUrl(prefix + replyBody)));
+
+    QQmlComponent component(&engine, testFileUrl(prefix + qml));
+    QScopedPointer<QObject> object(component.beginCreate(engine.rootContext()));
+    QVERIFY(!object.isNull());
+    object->setProperty("url", server.urlString(resource));
+    component.completeCreate();
+
+    QTRY_VERIFY(object->property("xmlTest").toBool());
+    QCOMPARE(object->property("typeTest").toBool(), true);
+}
+
+void tst_qqmlxmlhttprequest::sendPropfind_data()
+{
+    QTest::addColumn<QString>("qml");
+    QTest::addColumn<QString>("resource");
+    QTest::addColumn<QString>("expectedFile");
+    QTest::addColumn<QString>("replyHeader");
+    QTest::addColumn<QString>("replyBody");
+
+    QTest::newRow("Send PROPFIND for file (bigbox, author, DingALing, Random properties). Get response with responseXML.") << "sendPropfind.responseXML.qml" << "/file" << "propfind.file.expect" << "propfind.file.reply.header" << "propfind.file.reply.body";
+    QTest::newRow("Send PROPFIND for file (bigbox, author, DingALing, Random properties). Get response with response.") << "sendPropfind.response.qml" << "/file" << "propfind.file.expect" << "propfind.file.reply.header" << "propfind.file.reply.body";
+    QTest::newRow("Send PROPFIND \"allprop\" request for collection.") << "sendPropfind.collection.allprop.qml" << "/container/" << "propfind.collection.allprop.expect" << "propfind.file.reply.header" << "propfind.collection.allprop.reply.body";
 }
 
 // Test that calling hte XMLHttpRequest methods on a non-XMLHttpRequest object
@@ -1045,7 +1109,7 @@ void tst_qqmlxmlhttprequest::redirects()
         object->setProperty("expectedText", "");
         component.completeCreate();
 
-        QTRY_VERIFY(object->property("done").toBool() == true);
+        QTRY_VERIFY(object->property("done").toBool());
         QCOMPARE(object->property("dataOK").toBool(), true);
     }
 
@@ -1062,7 +1126,7 @@ void tst_qqmlxmlhttprequest::redirects()
         object->setProperty("expectedText", "");
         component.completeCreate();
 
-        QTRY_VERIFY(object->property("done").toBool() == true);
+        QTRY_VERIFY(object->property("done").toBool());
         QCOMPARE(object->property("dataOK").toBool(), true);
     }
 
@@ -1083,7 +1147,7 @@ void tst_qqmlxmlhttprequest::redirects()
             if (object->property("done").toBool()) break;
             QTest::qWait(50);
         }
-        QVERIFY(object->property("done").toBool() == true);
+        QVERIFY(object->property("done").toBool());
 
         QCOMPARE(object->property("dataOK").toBool(), true);
     }
@@ -1095,7 +1159,7 @@ void tst_qqmlxmlhttprequest::responseXML_invalid()
     QScopedPointer<QObject> object(component.create());
     QVERIFY(!object.isNull());
 
-    QTRY_VERIFY(object->property("dataOK").toBool() == true);
+    QTRY_VERIFY(object->property("dataOK").toBool());
 
     QCOMPARE(object->property("xmlNull").toBool(), true);
 }
@@ -1107,7 +1171,7 @@ void tst_qqmlxmlhttprequest::document()
     QScopedPointer<QObject> object(component.create());
     QVERIFY(!object.isNull());
 
-    QTRY_VERIFY(object->property("dataOK").toBool() == true);
+    QTRY_VERIFY(object->property("dataOK").toBool());
 
     QCOMPARE(object->property("xmlTest").toBool(), true);
 }
@@ -1119,7 +1183,7 @@ void tst_qqmlxmlhttprequest::element()
     QScopedPointer<QObject> object(component.create());
     QVERIFY(!object.isNull());
 
-    QTRY_VERIFY(object->property("dataOK").toBool() == true);
+    QTRY_VERIFY(object->property("dataOK").toBool());
 
     QCOMPARE(object->property("xmlTest").toBool(), true);
 }
@@ -1131,7 +1195,7 @@ void tst_qqmlxmlhttprequest::attr()
     QScopedPointer<QObject> object(component.create());
     QVERIFY(!object.isNull());
 
-    QTRY_VERIFY(object->property("dataOK").toBool() == true);
+    QTRY_VERIFY(object->property("dataOK").toBool());
 
     QCOMPARE(object->property("xmlTest").toBool(), true);
 }
@@ -1143,9 +1207,10 @@ void tst_qqmlxmlhttprequest::text()
     QScopedPointer<QObject> object(component.create());
     QVERIFY(!object.isNull());
 
-    QTRY_VERIFY(object->property("dataOK").toBool() == true);
+    QTRY_VERIFY(object->property("dataOK").toBool());
 
     QCOMPARE(object->property("xmlTest").toBool(), true);
+    QCOMPARE(object->property("status").toInt(), 200);
 }
 
 // Test the CDataSection DOM element
@@ -1155,9 +1220,10 @@ void tst_qqmlxmlhttprequest::cdata()
     QScopedPointer<QObject> object(component.create());
     QVERIFY(!object.isNull());
 
-    QTRY_VERIFY(object->property("dataOK").toBool() == true);
+    QTRY_VERIFY(object->property("dataOK").toBool());
 
     QCOMPARE(object->property("xmlTest").toBool(), true);
+    QCOMPARE(object->property("status").toInt(), 200);
 }
 
 void tst_qqmlxmlhttprequest::stateChangeCallingContext()
@@ -1179,7 +1245,7 @@ void tst_qqmlxmlhttprequest::stateChangeCallingContext()
     object->setProperty("serverBaseUrl", server.baseUrl().toString());
     component.completeCreate();
     server.sendDelayedItem();
-    QTRY_VERIFY(object->property("success").toBool() == true);
+    QTRY_VERIFY(object->property("success").toBool());
 }
 
 QTEST_MAIN(tst_qqmlxmlhttprequest)

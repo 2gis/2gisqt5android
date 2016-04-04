@@ -34,8 +34,9 @@
 **
 ****************************************************************************/
 
-import Qt3D 2.0
-import Qt3D.Renderer 2.0
+import QtQuick 2.4 as QQ2
+import Qt3D.Core 2.0
+import Qt3D.Render 2.0
 
 Entity {
     id: root
@@ -86,13 +87,9 @@ Entity {
             source: "assets/obj/trefoil.obj"
         }
 
-//        property SphereMesh mesh: SphereMesh {
-//            radius: 3
-//        }
-
         property Transform transform: Transform {
-            Translate { dx: 0 }
-            Scale { scale: 3 }
+            translation: Qt.vector3d( 0.0, 0.0, 0.0 )
+            scale: 3
         }
 
         property Layer layer: Layer {

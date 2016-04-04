@@ -35,7 +35,7 @@
 #include <QtCore/QDebug>
 #include "qv4regalloc_p.h"
 #include "qv4alloca_p.h"
-#include <private/qv4value_inl_p.h>
+#include <private/qv4value_p.h>
 
 #include <algorithm>
 #if defined(Q_CC_MINGW)
@@ -267,6 +267,7 @@ public:
 
 protected: // IRDecoder
     virtual void callBuiltinInvalid(IR::Name *, IR::ExprList *, IR::Expr *) {}
+    virtual void callBuiltinTypeofQmlContextProperty(IR::Expr *, IR::Member::MemberKind, int, IR::Expr *) {}
     virtual void callBuiltinTypeofMember(IR::Expr *, const QString &, IR::Expr *) {}
     virtual void callBuiltinTypeofSubscript(IR::Expr *, IR::Expr *, IR::Expr *) {}
     virtual void callBuiltinTypeofName(const QString &, IR::Expr *) {}
@@ -295,6 +296,16 @@ protected: // IRDecoder
         addDef(result);
         if (IR::Temp *tempValue = value->asTemp())
             addUses(tempValue, Use::CouldHaveRegister);
+        addUses(args, Use::CouldHaveRegister);
+        addCall();
+    }
+
+    virtual void callQmlContextProperty(IR::Expr *base, IR::Member::MemberKind /*kind*/, int propertyIndex, IR::ExprList *args, IR::Expr *result)
+    {
+        Q_UNUSED(propertyIndex)
+
+        addDef(result);
+        addUses(base->asTemp(), Use::CouldHaveRegister);
         addUses(args, Use::CouldHaveRegister);
         addCall();
     }
@@ -421,7 +432,7 @@ protected: // IRDecoder
         addDef(temp);
     }
 
-    virtual void loadQmlIdArray(IR::Expr *temp)
+    virtual void loadQmlContext(IR::Expr *temp)
     {
         addDef(temp);
         addCall();
@@ -429,20 +440,6 @@ protected: // IRDecoder
 
     virtual void loadQmlImportedScripts(IR::Expr *temp)
     {
-        addDef(temp);
-        addCall();
-    }
-
-    virtual void loadQmlContextObject(Expr *temp)
-    {
-        addDef(temp);
-        addCall();
-    }
-
-    virtual void loadQmlScopeObject(Expr *temp)
-    {
-        Q_UNUSED(temp);
-
         addDef(temp);
         addCall();
     }
@@ -511,10 +508,24 @@ protected: // IRDecoder
         addCall();
     }
 
+    virtual void setQmlContextProperty(IR::Expr *source, IR::Expr *targetBase, IR::Member::MemberKind /*kind*/, int /*propertyIndex*/)
+    {
+        addUses(source->asTemp(), Use::CouldHaveRegister);
+        addUses(targetBase->asTemp(), Use::CouldHaveRegister);
+        addCall();
+    }
+
     virtual void setQObjectProperty(IR::Expr *source, IR::Expr *targetBase, int /*propertyIndex*/)
     {
         addUses(source->asTemp(), Use::CouldHaveRegister);
         addUses(targetBase->asTemp(), Use::CouldHaveRegister);
+        addCall();
+    }
+
+    virtual void getQmlContextProperty(IR::Expr *base, IR::Member::MemberKind /*kind*/, int /*index*/, IR::Expr *target)
+    {
+        addDef(target);
+        addUses(base->asTemp(), Use::CouldHaveRegister);
         addCall();
     }
 
@@ -935,7 +946,7 @@ private:
             return;
 
         while (!_unprocessed.isEmpty()) {
-            const LifeTimeInterval *i = _unprocessed.first();
+            const LifeTimeInterval *i = _unprocessed.constFirst();
             if (i->start() > position)
                 break;
 
@@ -1313,7 +1324,7 @@ void RegisterAllocator::run(IR::Function *function, const Optimizer &opt)
     if (DebugRegAlloc)
         qDebug() << "*** Finished regalloc , result:";
 
-    static bool showCode = !qgetenv("QV4_SHOW_IR").isNull();
+    static const bool showCode = qEnvironmentVariableIsSet("QV4_SHOW_IR");
     if (showCode) {
         QBuffer buf;
         buf.open(QIODevice::WriteOnly);

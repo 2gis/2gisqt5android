@@ -36,20 +36,14 @@
 
 #include "planeentity.h"
 
-#include <Qt3DRenderer/QPlaneMesh>
+#include <Qt3DRender/QPlaneMesh>
 #include <Qt3DCore/QTransform>
-#include <Qt3DCore/QScaleTransform>
-#include <Qt3DCore/QTranslateTransform>
 
-PlaneEntity::PlaneEntity(Qt3D::QNode *parent)
-    : Qt3D::QEntity(new Qt3D::QEntity(parent))
-    , m_mesh(new Qt3D::QPlaneMesh())
-    , m_transform(new Qt3D::QTransform())
-    , m_scaleTransform(new Qt3D::QScaleTransform())
-    , m_translateTransform(new Qt3D::QTranslateTransform())
+PlaneEntity::PlaneEntity(Qt3DCore::QNode *parent)
+    : Qt3DCore::QEntity(new Qt3DCore::QEntity(parent))
+    , m_mesh(new Qt3DRender::QPlaneMesh())
+    , m_transform(new Qt3DCore::QTransform())
 {
-    m_transform->addTransform(m_translateTransform);
-    m_transform->addTransform(m_scaleTransform);
     addComponent(m_mesh);
     addComponent(m_transform);
 }
@@ -58,17 +52,7 @@ PlaneEntity::~PlaneEntity()
 {
 }
 
-Qt3D::QScaleTransform *PlaneEntity::scaleTransform() const
-{
-    return m_scaleTransform;
-}
-
-Qt3D::QTranslateTransform *PlaneEntity::translateTransform() const
-{
-    return m_translateTransform;
-}
-
-Qt3D::QPlaneMesh *PlaneEntity::mesh() const
+Qt3DRender::QPlaneMesh *PlaneEntity::mesh() const
 {
     return m_mesh;
 }

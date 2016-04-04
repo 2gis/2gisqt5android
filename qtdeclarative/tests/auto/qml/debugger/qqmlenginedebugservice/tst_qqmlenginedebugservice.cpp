@@ -87,6 +87,8 @@ public:
 class tst_QQmlEngineDebugService : public QObject
 {
     Q_OBJECT
+public:
+    tst_QQmlEngineDebugService() : m_conn(0), m_dbg(0), m_engine(0), m_rootItem(0) {}
 
 private:
     QmlDebugObjectReference findRootObject(int context = 0,
@@ -349,9 +351,8 @@ void tst_QQmlEngineDebugService::initTestCase()
 
     bool ok = m_conn->waitForConnected();
     QVERIFY(ok);
-    QTRY_VERIFY(QQmlDebugService::hasDebuggingClient());
     m_dbg = new QQmlEngineDebugClient(m_conn);
-    QTRY_VERIFY(m_dbg->state() == QQmlEngineDebugClient::Enabled);
+    QTRY_COMPARE(m_dbg->state(), QQmlEngineDebugClient::Enabled);
 }
 
 void tst_QQmlEngineDebugService::cleanupTestCase()
@@ -372,7 +373,7 @@ void tst_QQmlEngineDebugService::setMethodBody()
     QVariant rv;
     QVERIFY(QMetaObject::invokeMethod(root, "myMethodNoArgs", Qt::DirectConnection,
                                       Q_RETURN_ARG(QVariant, rv)));
-    QVERIFY(rv == QVariant(qreal(3)));
+    QCOMPARE(rv, QVariant(qreal(3)));
 
 
     QVERIFY(m_dbg->setMethodBody(obj.debugId, "myMethodNoArgs", "return 7",
@@ -382,7 +383,7 @@ void tst_QQmlEngineDebugService::setMethodBody()
 
     QVERIFY(QMetaObject::invokeMethod(root, "myMethodNoArgs", Qt::DirectConnection,
                                       Q_RETURN_ARG(QVariant, rv)));
-    QVERIFY(rv == QVariant(qreal(7)));
+    QCOMPARE(rv, QVariant(qreal(7)));
     }
 
     // With args
@@ -390,7 +391,7 @@ void tst_QQmlEngineDebugService::setMethodBody()
     QVariant rv;
     QVERIFY(QMetaObject::invokeMethod(root, "myMethod", Qt::DirectConnection,
                                       Q_RETURN_ARG(QVariant, rv), Q_ARG(QVariant, QVariant(19))));
-    QVERIFY(rv == QVariant(qreal(28)));
+    QCOMPARE(rv, QVariant(qreal(28)));
 
     QVERIFY(m_dbg->setMethodBody(obj.debugId, "myMethod", "return a + 7",
                                  &success));
@@ -399,7 +400,7 @@ void tst_QQmlEngineDebugService::setMethodBody()
 
     QVERIFY(QMetaObject::invokeMethod(root, "myMethod", Qt::DirectConnection,
                                       Q_RETURN_ARG(QVariant, rv), Q_ARG(QVariant, QVariant(19))));
-    QVERIFY(rv == QVariant(qreal(26)));
+    QCOMPARE(rv, QVariant(qreal(26)));
     }
 }
 
@@ -731,7 +732,7 @@ void tst_QQmlEngineDebugService::queryObjectsForLocation()
     QVERIFY(success);
     QVERIFY(QQmlDebugTest::waitForSignal(m_dbg, SIGNAL(result())));
 
-    QVERIFY(m_dbg->objects().count() == 1);
+    QCOMPARE(m_dbg->objects().count(), 1);
     QmlDebugObjectReference obj = m_dbg->objects().first();
 
     // check source as defined in main()
@@ -1018,7 +1019,7 @@ void tst_QQmlEngineDebugService::setBindingForObject()
     mouseAreaObject = m_dbg->object();
     onEnteredRef = findProperty(mouseAreaObject.properties, "onEntered");
     QCOMPARE(onEnteredRef.name, QString("onEntered"));
-    QCOMPARE(onEnteredRef.value,  QVariant("{console.log('hello, world') }"));
+    QCOMPARE(onEnteredRef.value, QVariant("function() { [code] }"));
 }
 
 void tst_QQmlEngineDebugService::resetBindingForObject()
@@ -1224,7 +1225,7 @@ int main(int argc, char *argv[])
     char **_argv = new char*[_argc];
     for (int i = 0; i < argc; ++i)
         _argv[i] = argv[i];
-    char arg[] = "-qmljsdebugger=port:3768";
+    char arg[] = "-qmljsdebugger=port:3768,services:QmlDebugger";
     _argv[_argc - 1] = arg;
 
     QGuiApplication app(_argc, _argv);

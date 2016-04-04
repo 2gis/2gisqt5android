@@ -55,6 +55,10 @@
 
 #include "../../shared/util.h"
 
+#if defined(Q_OS_MAC)
+#include <unistd.h>
+#endif
+
 DEFINE_BOOL_CONFIG_OPTION(qmlCheckTypes, QML_CHECK_TYPES)
 
 static inline bool isCaseSensitiveFileSystem(const QString &path) {
@@ -113,6 +117,7 @@ private slots:
     void idProperty();
     void autoNotifyConnection();
     void assignSignal();
+    void assignSignalFunctionExpression();
     void overrideSignal_data();
     void overrideSignal();
     void dynamicProperties();
@@ -154,6 +159,8 @@ private slots:
     void readonlyObjectProperties();
     void receivers();
     void registeredCompositeType();
+    void registeredCompositeTypeWithEnum();
+    void registeredCompositeTypeWithAttachedProperty();
     void implicitImportsLast();
 
     void basicRemote_data();
@@ -240,6 +247,10 @@ private slots:
 
     void earlyIdObjectAccess();
 
+    void dataAlignment();
+
+    void deleteSingletons();
+
 private:
     QQmlEngine engine;
     QStringList defaultImportPathList;
@@ -275,8 +286,8 @@ private:
         QList<QQmlError> errors = component.errors(); \
         for (int ii = 0; ii < errors.count(); ++ii) { \
             const QQmlError &error = errors.at(ii); \
-            QByteArray errorStr = QByteArray::number(error.line()) + ":" +  \
-                                  QByteArray::number(error.column()) + ":" + \
+            QByteArray errorStr = QByteArray::number(error.line()) + ':' +  \
+                                  QByteArray::number(error.column()) + ':' + \
                                   error.description().toUtf8(); \
             actual << errorStr; \
         } \
@@ -328,7 +339,7 @@ void tst_qqmllanguage::insertedSemicolon()
 
     if(create) {
         QObject *object = component.create();
-        QVERIFY(object == 0);
+        QVERIFY(!object);
     }
 
     VERIFY_ERRORS(errorFile.toLatin1().constData());
@@ -550,7 +561,7 @@ void tst_qqmllanguage::errors()
 
     if (create) {
         QObject *object = component.create();
-        QVERIFY(object == 0);
+        QVERIFY(!object);
     }
 
     VERIFY_ERRORS(errorFile.toLatin1().constData());
@@ -580,7 +591,7 @@ void tst_qqmllanguage::interfaceProperty()
     MyQmlObject *object = qobject_cast<MyQmlObject*>(component.create());
     QVERIFY(object != 0);
     QVERIFY(object->interface());
-    QVERIFY(object->interface()->id == 913);
+    QCOMPARE(object->interface()->id, 913);
 }
 
 void tst_qqmllanguage::interfaceQList()
@@ -589,9 +600,9 @@ void tst_qqmllanguage::interfaceQList()
     VERIFY_ERRORS(0);
     MyContainer *container= qobject_cast<MyContainer*>(component.create());
     QVERIFY(container != 0);
-    QVERIFY(container->getQListInterfaces()->count() == 2);
+    QCOMPARE(container->getQListInterfaces()->count(), 2);
     for(int ii = 0; ii < 2; ++ii)
-        QVERIFY(container->getQListInterfaces()->at(ii)->id == 913);
+        QCOMPARE(container->getQListInterfaces()->at(ii)->id, 913);
 }
 
 void tst_qqmllanguage::assignObjectToSignal()
@@ -630,7 +641,7 @@ void tst_qqmllanguage::assignQmlComponent()
     VERIFY_ERRORS(0);
     MyContainer *object = qobject_cast<MyContainer *>(component.create());
     QVERIFY(object != 0);
-    QVERIFY(object->getChildren()->count() == 1);
+    QCOMPARE(object->getChildren()->count(), 1);
     QObject *child = object->getChildren()->at(0);
     QCOMPARE(child->property("x"), QVariant(10));
     QCOMPARE(child->property("y"), QVariant(11));
@@ -722,17 +733,17 @@ void tst_qqmllanguage::assignLiteralToVariant()
     QCOMPARE(object->property("test11").userType(), (int)QVariant::Bool);
     QCOMPARE(object->property("test12").userType(), (int)QVariant::Vector4D);
 
-    QVERIFY(object->property("test1") == QVariant(1));
-    QVERIFY(object->property("test2") == QVariant((double)1.7));
+    QCOMPARE(object->property("test1"), QVariant(1));
+    QCOMPARE(object->property("test2"), QVariant((double)1.7));
     QVERIFY(object->property("test3") == QVariant(QString(QLatin1String("Hello world!"))));
-    QVERIFY(object->property("test4") == QVariant(QColor::fromRgb(0xFF008800)));
+    QCOMPARE(object->property("test4"), QVariant(QColor::fromRgb(0xFF008800)));
     QVERIFY(object->property("test5") == QVariant(QRectF(10, 10, 10, 10)));
     QVERIFY(object->property("test6") == QVariant(QPointF(10, 10)));
     QVERIFY(object->property("test7") == QVariant(QSizeF(10, 10)));
     QVERIFY(object->property("test8") == QVariant(QVector3D(100, 100, 100)));
-    QVERIFY(object->property("test9") == QVariant(QString(QLatin1String("#FF008800"))));
-    QVERIFY(object->property("test10") == QVariant(bool(true)));
-    QVERIFY(object->property("test11") == QVariant(bool(false)));
+    QCOMPARE(object->property("test9"), QVariant(QString(QLatin1String("#FF008800"))));
+    QCOMPARE(object->property("test10"), QVariant(bool(true)));
+    QCOMPARE(object->property("test11"), QVariant(bool(false)));
     QVERIFY(object->property("test12") == QVariant(QVector4D(100, 100, 100, 100)));
 
     delete object;
@@ -1170,7 +1181,7 @@ void tst_qqmllanguage::customParserTypes()
     VERIFY_ERRORS(0);
     QObject *object = component.create();
     QVERIFY(object != 0);
-    QVERIFY(object->property("count") == QVariant(2));
+    QCOMPARE(object->property("count"), QVariant(2));
 }
 
 // Tests that the root item can be a custom component
@@ -1259,6 +1270,17 @@ void tst_qqmllanguage::assignSignal()
     emit object->basicParameterizedSignal(9);
 }
 
+void tst_qqmllanguage::assignSignalFunctionExpression()
+{
+    QQmlComponent component(&engine, testFileUrl("assignSignalFunctionExpression.qml"));
+    VERIFY_ERRORS(0);
+    MyQmlObject *object = qobject_cast<MyQmlObject *>(component.create());
+    QVERIFY(object != 0);
+    QTest::ignoreMessage(QtWarningMsg, "MyQmlObject::basicSlot");
+    emit object->basicSignal();
+    QTest::ignoreMessage(QtWarningMsg, "MyQmlObject::basicSlotWithArgs(9)");
+    emit object->basicParameterizedSignal(9);
+}
 
 void tst_qqmllanguage::overrideSignal_data()
 {
@@ -1352,7 +1374,7 @@ void tst_qqmllanguage::dynamicObjectProperties()
     QObject *object = component.create();
     QVERIFY(object != 0);
 
-    QVERIFY(object->property("objectProperty") == qVariantFromValue((QObject*)0));
+    QCOMPARE(object->property("objectProperty"), qVariantFromValue((QObject*)0));
     QVERIFY(object->property("objectProperty2") != qVariantFromValue((QObject*)0));
     }
     {
@@ -1661,7 +1683,7 @@ void tst_qqmllanguage::aliasProperties()
         v = object->property("otherAlias");
         QCOMPARE(v.userType(), qMetaTypeId<MyQmlObject*>());
         o = qvariant_cast<MyQmlObject*>(v);
-        QVERIFY(o == 0);
+        QVERIFY(!o);
 
         delete object;
     }
@@ -1691,7 +1713,7 @@ void tst_qqmllanguage::aliasProperties()
         QVERIFY(object2 != 0);
 
         QObject *alias = qvariant_cast<QObject *>(object->property("aliasedObject"));
-        QVERIFY(alias == object2);
+        QCOMPARE(alias, object2);
 
         delete object1;
 
@@ -1700,7 +1722,7 @@ void tst_qqmllanguage::aliasProperties()
         void *a[] = { &alias2, 0, &status };
         QMetaObject::metacall(object, QMetaObject::ReadProperty,
                               object->metaObject()->indexOfProperty("aliasedObject"), a);
-        QVERIFY(alias2 == 0);
+        QVERIFY(!alias2);
     }
 
     // Simple composite type
@@ -2106,50 +2128,50 @@ void tst_qqmllanguage::scriptStringComparison()
     const qreal n = 12.345;
     bool ok;
 
-    QVERIFY(object2->scriptProperty().stringLiteral() == s);
+    QCOMPARE(object2->scriptProperty().stringLiteral(), s);
     QVERIFY(object3->scriptProperty().numberLiteral(&ok) == n && ok);
-    QVERIFY(object1->scriptProperty() == object1->scriptProperty());
-    QVERIFY(object2->scriptProperty() == object2->scriptProperty());
-    QVERIFY(object3->scriptProperty() == object3->scriptProperty());
+    QCOMPARE(object1->scriptProperty(), object1->scriptProperty());
+    QCOMPARE(object2->scriptProperty(), object2->scriptProperty());
+    QCOMPARE(object3->scriptProperty(), object3->scriptProperty());
     QVERIFY(object2->scriptProperty() != object3->scriptProperty());
     QVERIFY(object1->scriptProperty() != object2->scriptProperty());
     QVERIFY(object1->scriptProperty() != object3->scriptProperty());
 
     func.callWithInstance(inst2, QJSValueList() << n);
-    QVERIFY(object2->scriptProperty() == object3->scriptProperty());
+    QCOMPARE(object2->scriptProperty(), object3->scriptProperty());
 
     func.callWithInstance(inst2, QJSValueList() << s);
     QVERIFY(object2->scriptProperty() != object3->scriptProperty());
     func.callWithInstance(inst3, QJSValueList() << s);
-    QVERIFY(object2->scriptProperty() == object3->scriptProperty());
+    QCOMPARE(object2->scriptProperty(), object3->scriptProperty());
 
     func.callWithInstance(inst2, QJSValueList() << QJSValue::UndefinedValue);
     QVERIFY(object2->scriptProperty() != object3->scriptProperty());
     func.callWithInstance(inst3, QJSValueList() << QJSValue::UndefinedValue);
-    QVERIFY(object2->scriptProperty() == object3->scriptProperty());
+    QCOMPARE(object2->scriptProperty(), object3->scriptProperty());
 
     func.callWithInstance(inst2, QJSValueList() << QJSValue::NullValue);
     QVERIFY(object2->scriptProperty() != object3->scriptProperty());
     func.callWithInstance(inst3, QJSValueList() << QJSValue::NullValue);
-    QVERIFY(object2->scriptProperty() == object3->scriptProperty());
+    QCOMPARE(object2->scriptProperty(), object3->scriptProperty());
 
     func.callWithInstance(inst2, QJSValueList() << false);
     QVERIFY(object2->scriptProperty() != object3->scriptProperty());
     func.callWithInstance(inst3, QJSValueList() << false);
-    QVERIFY(object2->scriptProperty() == object3->scriptProperty());
+    QCOMPARE(object2->scriptProperty(), object3->scriptProperty());
 
     func.callWithInstance(inst2, QJSValueList() << true);
     QVERIFY(object2->scriptProperty() != object3->scriptProperty());
     func.callWithInstance(inst3, QJSValueList() << true);
-    QVERIFY(object2->scriptProperty() == object3->scriptProperty());
+    QCOMPARE(object2->scriptProperty(), object3->scriptProperty());
 
     QVERIFY(object1->scriptProperty() != object2->scriptProperty());
     object2->setScriptProperty(object1->scriptProperty());
-    QVERIFY(object1->scriptProperty() == object2->scriptProperty());
+    QCOMPARE(object1->scriptProperty(), object2->scriptProperty());
 
     QVERIFY(object1->scriptProperty() != object3->scriptProperty());
     func.callWithInstance(inst3, QJSValueList() << engine.toScriptValue(object1->scriptProperty()));
-    QVERIFY(object1->scriptProperty() == object3->scriptProperty());
+    QCOMPARE(object1->scriptProperty(), object3->scriptProperty());
 
     // While this are two instances of the same object they are still considered different
     // because the (none literal) script string may access variables which have different
@@ -2525,9 +2547,7 @@ void tst_qqmllanguage::basicRemote()
     QFETCH(QString, type);
     QFETCH(QString, error);
 
-    TestHTTPServer server;
-    QVERIFY2(server.listen(), qPrintable(server.errorString()));
-    server.serveDirectory(dataDirectory());
+    ThreadedTestHTTPServer server(dataDirectory());
 
     url = server.baseUrl().resolved(url);
 
@@ -2572,9 +2592,7 @@ void tst_qqmllanguage::importsRemote()
     QFETCH(QString, type);
     QFETCH(QString, error);
 
-    TestHTTPServer server;
-    QVERIFY2(server.listen(), qPrintable(server.errorString()));
-    server.serveDirectory(dataDirectory());
+    ThreadedTestHTTPServer server(dataDirectory());
 
     qml.replace(QStringLiteral("{{ServerBaseUrl}}"), server.baseUrl().toString());
 
@@ -2667,9 +2685,7 @@ void tst_qqmllanguage::importsInstalledRemote()
     QFETCH(QString, type);
     QFETCH(QString, error);
 
-    TestHTTPServer server;
-    QVERIFY2(server.listen(), qPrintable(server.errorString()));
-    server.serveDirectory(dataDirectory());
+    ThreadedTestHTTPServer server(dataDirectory());
 
     QString serverdir = server.urlString("/lib/");
     engine.setImportPathList(QStringList(defaultImportPathList) << serverdir);
@@ -2734,9 +2750,7 @@ void tst_qqmllanguage::importsPath()
     QFETCH(QString, qml);
     QFETCH(QString, value);
 
-    TestHTTPServer server;
-    QVERIFY2(server.listen(), qPrintable(server.errorString()));
-    server.serveDirectory(dataDirectory());
+    ThreadedTestHTTPServer server(dataDirectory());
 
     for (int i = 0; i < importPath.count(); ++i)
         importPath[i].replace(QStringLiteral("{{ServerBaseUrl}}"), server.baseUrl().toString());
@@ -3158,6 +3172,8 @@ void tst_qqmllanguage::initTestCase()
     qmlRegisterType(testFileUrl("CompositeType.qml"), "Test", 1, 0, "RegisteredCompositeType");
     qmlRegisterType(testFileUrl("CompositeType.DoesNotExist.qml"), "Test", 1, 0, "RegisteredCompositeType2");
     qmlRegisterType(testFileUrl("invalidRoot.1.qml"), "Test", 1, 0, "RegisteredCompositeType3");
+    qmlRegisterType(testFileUrl("CompositeTypeWithEnum.qml"), "Test", 1, 0, "RegisteredCompositeTypeWithEnum");
+    qmlRegisterType(testFileUrl("CompositeTypeWithAttachedProperty.qml"), "Test", 1, 0, "RegisteredCompositeTypeWithAttachedProperty");
 
     // Registering the TestType class in other modules should have no adverse effects
     qmlRegisterType<TestType>("org.qtproject.TestPre", 1, 0, "Test");
@@ -3250,7 +3266,7 @@ void tst_qqmllanguage::registrationOrder()
 
     QObject *o = component.create();
     QVERIFY(o != 0);
-    QVERIFY(o->metaObject() == &MyVersion2Class::staticMetaObject);
+    QCOMPARE(o->metaObject(), &MyVersion2Class::staticMetaObject);
     delete o;
 }
 
@@ -3334,12 +3350,39 @@ void tst_qqmllanguage::registeredCompositeType()
     delete o;
 }
 
+// QTBUG-43582
+void tst_qqmllanguage::registeredCompositeTypeWithEnum()
+{
+    QQmlComponent component(&engine, testFileUrl("registeredCompositeTypeWithEnum.qml"));
+
+    VERIFY_ERRORS(0);
+    QObject *o = component.create();
+    QVERIFY(o != 0);
+
+    QCOMPARE(o->property("enumValue0").toInt(), static_cast<int>(MyCompositeBaseType::EnumValue0));
+    QCOMPARE(o->property("enumValue42").toInt(), static_cast<int>(MyCompositeBaseType::EnumValue42));
+
+    delete o;
+}
+
+// QTBUG-43581
+void tst_qqmllanguage::registeredCompositeTypeWithAttachedProperty()
+{
+    QQmlComponent component(&engine, testFileUrl("registeredCompositeTypeWithAttachedProperty.qml"));
+
+    VERIFY_ERRORS(0);
+    QObject *o = component.create();
+    QVERIFY(o != 0);
+
+    QCOMPARE(o->property("attachedProperty").toString(), QStringLiteral("test"));
+
+    delete o;
+}
+
 // QTBUG-18268
 void tst_qqmllanguage::remoteLoadCrash()
 {
-    TestHTTPServer server;
-    QVERIFY2(server.listen(), qPrintable(server.errorString()));
-    server.serveDirectory(dataDirectory());
+    ThreadedTestHTTPServer server(dataDirectory());
 
     QQmlComponent component(&engine);
     component.setData("import QtQuick 2.0; Text {}", server.url("/remoteLoadCrash.qml"));
@@ -3644,7 +3687,7 @@ void tst_qqmllanguage::compositeSingletonSameEngine()
     QVERIFY(s2 != 0);
     QCOMPARE(s2->property("testProp2"), QVariant(13));
 
-    QVERIFY(s1 == s2);
+    QCOMPARE(s1, s2);
 }
 
 // Checks that the addresses of the composite singletons used in different
@@ -3693,7 +3736,7 @@ void tst_qqmllanguage::compositeSingletonQualifiedNamespace()
     getSingletonInstance(engine, "singletonTest5a.qml", "singletonInstance", &s2);
     QVERIFY(s2 != 0);
 
-    QVERIFY(s1 == s2);
+    QCOMPARE(s1, s2);
 }
 
 // Loads a singleton from a module
@@ -3719,7 +3762,7 @@ void tst_qqmllanguage::compositeSingletonModule()
     getSingletonInstance(engine, "singletonTest6a.qml", "singletonInstance", &s2);
     QVERIFY(s2 != 0);
 
-    QVERIFY(s1 == s2);
+    QCOMPARE(s1, s2);
 }
 
 // Loads a singleton from a module with a higher version
@@ -3745,7 +3788,7 @@ void tst_qqmllanguage::compositeSingletonModuleVersioned()
     getSingletonInstance(engine, "singletonTest7a.qml", "singletonInstance", &s2);
     QVERIFY(s2 != 0);
 
-    QVERIFY(s1 == s2);
+    QCOMPARE(s1, s2);
 }
 
 // Loads a singleton from a module with a qualified namespace
@@ -3771,7 +3814,7 @@ void tst_qqmllanguage::compositeSingletonModuleQualified()
     getSingletonInstance(engine, "singletonTest8a.qml", "singletonInstance", &s2);
     QVERIFY(s2 != 0);
 
-    QVERIFY(s1 == s2);
+    QCOMPARE(s1, s2);
 }
 
 // Tries to instantiate a type with a pragma Singleton and fails
@@ -3828,9 +3871,7 @@ void tst_qqmllanguage::compositeSingletonQmlDirError()
 // Load a remote composite singleton type via qmldir that defines the type as a singleton
 void tst_qqmllanguage::compositeSingletonRemote()
 {
-    TestHTTPServer server;
-    QVERIFY2(server.listen(), qPrintable(server.errorString()));
-    server.serveDirectory(dataDirectory());
+    ThreadedTestHTTPServer server(dataDirectory());
 
     QFile f(testFile("singletonTest15.qml"));
     QVERIFY(f.open(QIODevice::ReadOnly));
@@ -3995,7 +4036,7 @@ void tst_qqmllanguage::propertyCacheInSync()
     QVERIFY(ddata);
     QVERIFY(ddata->propertyCache);
     // Those always have to be in sync and correct.
-    QVERIFY(ddata->propertyCache == vmemoCache);
+    QCOMPARE(ddata->propertyCache, vmemoCache);
     QCOMPARE(anchors->property("margins").toInt(), 50);
 }
 
@@ -4040,6 +4081,32 @@ void tst_qqmllanguage::earlyIdObjectAccess()
     QScopedPointer<QObject> o(component.create());
     QVERIFY(!o.isNull());
     QVERIFY(o->property("success").toBool());
+}
+
+void tst_qqmllanguage::dataAlignment()
+{
+    QVERIFY(sizeof(QQmlVMEMetaData) % sizeof(int) == 0);
+    QVERIFY(sizeof(QQmlVMEMetaData::AliasData) % sizeof(int) == 0);
+    QVERIFY(sizeof(QQmlVMEMetaData::PropertyData) % sizeof(int) == 0);
+    QVERIFY(sizeof(QQmlVMEMetaData::MethodData) % sizeof(int) == 0);
+}
+
+void tst_qqmllanguage::deleteSingletons()
+{
+    QPointer<QObject> singleton;
+    {
+        QQmlEngine tmpEngine;
+        QQmlComponent component(&tmpEngine, testFile("singletonTest5.qml"));
+        VERIFY_ERRORS(0);
+        QObject *o = component.create();
+        QVERIFY(o != 0);
+        QObject *s1 = NULL;
+        getSingletonInstance(o, "singletonInstance", &s1);
+        QVERIFY(s1 != 0);
+        singleton = s1;
+        QVERIFY(singleton.data() != 0);
+    }
+    QVERIFY(singleton.data() == 0);
 }
 
 QTEST_MAIN(tst_qqmllanguage)

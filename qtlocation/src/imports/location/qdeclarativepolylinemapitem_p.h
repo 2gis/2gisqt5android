@@ -37,6 +37,17 @@
 #ifndef QDECLARATIVEPOLYLINEMAPITEM
 #define QDECLARATIVEPOLYLINEMAPITEM
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include "qdeclarativegeomapitembase_p.h"
 #include "qgeomapitemgeometry_p.h"
 
@@ -105,8 +116,14 @@ public:
        //from QuickItem
     virtual QSGNode *updateMapItemPaintNode(QSGNode *, UpdatePaintNodeData *) Q_DECL_OVERRIDE;
 
+    Q_INVOKABLE int pathLength() const;
     Q_INVOKABLE void addCoordinate(const QGeoCoordinate &coordinate);
+    Q_INVOKABLE void insertCoordinate(int index, const QGeoCoordinate &coordinate);
+    Q_INVOKABLE void replaceCoordinate(int index, const QGeoCoordinate &coordinate);
+    Q_INVOKABLE QGeoCoordinate coordinateAt(int index) const;
+    Q_INVOKABLE bool containsCoordinate(const QGeoCoordinate &coordinate);
     Q_INVOKABLE void removeCoordinate(const QGeoCoordinate &coordinate);
+    Q_INVOKABLE void removeCoordinate(int index);
 
     QJSValue path() const;
     virtual void setPath(const QJSValue &value);
@@ -121,9 +138,9 @@ Q_SIGNALS:
 protected:
     void geometryChanged(const QRectF &newGeometry, const QRectF &oldGeometry) Q_DECL_OVERRIDE;
     void setPathFromGeoList(const QList<QGeoCoordinate> &path);
+    void updatePolish() Q_DECL_OVERRIDE;
 
 protected Q_SLOTS:
-    virtual void updateMapItem() Q_DECL_OVERRIDE;
     void updateAfterLinePropertiesChanged();
     virtual void afterViewportChanged(const QGeoMapViewportChangeEvent &event) Q_DECL_OVERRIDE;
 

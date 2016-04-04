@@ -85,6 +85,19 @@ config_gstreamer_photography {
     DEFINES += GST_USE_UNSTABLE_API #prevents warnings because of unstable photography API
 }
 
+config_gstreamer_encodingprofiles {
+    DEFINES += HAVE_GST_ENCODING_PROFILES
+}
+
+config_linux_v4l: {
+    DEFINES += USE_V4L
+
+    HEADERS += \
+        $$PWD/camerabinv4limageprocessing.h
+
+    SOURCES += \
+        $$PWD/camerabinv4limageprocessing.cpp
+}
+
 OTHER_FILES += \
     camerabin.json
-

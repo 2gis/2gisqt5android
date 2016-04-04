@@ -23,6 +23,7 @@
 #include "qsystemdetection.h"
 #include "qtypeinfo.h"
 #include "qtypetraits.h"
+#include "qversiontagging.h"
 #include "qbuffer.h"
 #include "qdatastream.h"
 #include "qdebug.h"
@@ -130,6 +131,7 @@
 #include "qeasingcurve.h"
 #include "qelapsedtimer.h"
 #include "qhash.h"
+#include "qhashfunctions.h"
 #include "qiterator.h"
 #include "qline.h"
 #include "qlinkedlist.h"
@@ -161,6 +163,7 @@
 #include "qtimezone.h"
 #include "qvarlengtharray.h"
 #include "qvector.h"
+#include "qversionnumber.h"
 #include "qxmlstream.h"
 #include "qtcoreversion.h"
 #endif

@@ -6,8 +6,6 @@ project = QtAndroidExtras
 description = Qt Android Extras Reference Documentation
 version = $QT_VERSION
 
-examplesinstallpath = qtandroidextras
-
 qhp.projects = QtAndroidExtras
 
 qhp.QtAndroidExtras.file = qtandroidextras.qhp
@@ -37,7 +35,7 @@ exampledirs += ../../../examples/androidextras \
 examples.fileextensions += *.java
 
 # Specify example install dir under QT_INSTALL_EXAMPLES
-examplesinstallpath = androidextras
+examplesinstallpath = qtandroidextras/androidextras
 
 imagedirs += images
 navigation.landingpage = "Qt Android Extras"

@@ -1925,7 +1925,7 @@ void tst_QObject::property()
     QCOMPARE(object.property("string"), QVariant("String1"));
     QVERIFY(object.setProperty("string", "String2"));
     QCOMPARE(object.property("string"), QVariant("String2"));
-    QVERIFY(!object.setProperty("string", QVariant()));
+    QVERIFY(object.setProperty("string", QVariant()));
 
     const int idx = mo->indexOfProperty("variant");
     QVERIFY(idx != -1);
@@ -2027,7 +2027,7 @@ void tst_QObject::property()
     QCOMPARE(object.property("customString"), QVariant("String1"));
     QVERIFY(object.setProperty("customString", "String2"));
     QCOMPARE(object.property("customString"), QVariant("String2"));
-    QVERIFY(!object.setProperty("customString", QVariant()));
+    QVERIFY(object.setProperty("customString", QVariant()));
 }
 
 void tst_QObject::metamethod()
@@ -5987,7 +5987,7 @@ class GetSenderObject : public QObject
 {
     Q_OBJECT
 public:
-    QObject *accessSender() { return sender(); }
+    using QObject::sender; // make public
 
 public Q_SLOTS:
     void triggerSignal() { Q_EMIT aSignal(); }
@@ -6003,8 +6003,8 @@ struct CountedStruct
     CountedStruct(GetSenderObject *sender) : sender(sender) { ++countedStructObjectsCount; }
     CountedStruct(const CountedStruct &o) : sender(o.sender) { ++countedStructObjectsCount; }
     CountedStruct &operator=(const CountedStruct &) { return *this; }
-    // accessSender here allows us to check if there's a deadlock
-    ~CountedStruct() { --countedStructObjectsCount; if (sender != Q_NULLPTR) (void)sender->accessSender(); }
+    // calling sender() here allows us to check if there's a deadlock
+    ~CountedStruct() { --countedStructObjectsCount; if (sender) (void)sender->sender(); }
     void operator()() const { }
 
     GetSenderObject *sender;
@@ -6396,7 +6396,8 @@ void tst_QObject::noDeclarativeParentChangedOnDestruction()
     QObject *parent = new QObject;
     QObject *child = new QObject;
 
-    QAbstractDeclarativeData dummy;
+    QAbstractDeclarativeDataImpl dummy;
+    dummy.ownedByQml1 = false;
     QObjectPrivate::get(child)->declarativeData = &dummy;
 
     parentChangeCalled = false;

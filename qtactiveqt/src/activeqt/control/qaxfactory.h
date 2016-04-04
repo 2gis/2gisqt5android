@@ -189,7 +189,7 @@ public:
     {}
 
     const QMetaObject *metaObject(const QString &) const { return &T::staticMetaObject; }
-    QStringList featureList() const { return QStringList(QString(T::staticMetaObject.className())); }
+    QStringList featureList() const { return QStringList(QLatin1String(T::staticMetaObject.className())); }
     QObject *createObject(const QString &key)
     {
         const QMetaObject &mo = T::staticMetaObject;
@@ -220,7 +220,7 @@ public:
             factory = new QAxClass<Class>(typeLibID().toString(), appID().toString()); \
             qRegisterMetaType<Class*>(#Class"*"); \
             keys = factory->featureList(); \
-            foreach (const QString &key, keys) { \
+            Q_FOREACH (const QString &key, keys) { \
                 factoryKeys += key; \
                 factories.insert(key, factory); \
                 creatable.insert(key, true); \
@@ -230,7 +230,7 @@ public:
             factory = new QAxClass<Class>(typeLibID().toString(), appID().toString()); \
             qRegisterMetaType<Class*>(#Class"*"); \
             keys = factory->featureList(); \
-            foreach (const QString &key, keys) { \
+            Q_FOREACH (const QString &key, keys) { \
                 factoryKeys += key; \
                 factories.insert(key, factory); \
                 creatable.insert(key, false); \

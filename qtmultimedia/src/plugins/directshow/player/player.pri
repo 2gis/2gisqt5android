@@ -1,5 +1,9 @@
 INCLUDEPATH += $$PWD
 
+LIBS += -lstrmiids -ldmoguids -luuid -lmsdmo -lole32 -loleaut32 -lgdi32
+
+qtHaveModule(widgets): QT += widgets
+
 DEFINES += QMEDIA_DIRECTSHOW_PLAYER
 
 HEADERS += \
@@ -17,7 +21,8 @@ HEADERS += \
         $$PWD/directshowsamplescheduler.h \
         $$PWD/directshowvideorenderercontrol.h \
         $$PWD/mediasamplevideobuffer.h \
-        $$PWD/videosurfacefilter.h
+        $$PWD/videosurfacefilter.h \
+        $$PWD/vmr9videowindowcontrol.h
 
 SOURCES += \
         $$PWD/directshowaudioendpointcontrol.cpp \
@@ -33,14 +38,19 @@ SOURCES += \
         $$PWD/directshowsamplescheduler.cpp \
         $$PWD/directshowvideorenderercontrol.cpp \
         $$PWD/mediasamplevideobuffer.cpp \
-        $$PWD/videosurfacefilter.cpp
+        $$PWD/videosurfacefilter.cpp \
+        $$PWD/vmr9videowindowcontrol.cpp
 
-qtHaveModule(widgets):!simulator {
+config_evr {
+    DEFINES += HAVE_EVR
+
+    include($$PWD/../../common/evr.pri)
+
     HEADERS += \
-        $$PWD/vmr9videowindowcontrol.h
+        $$PWD/directshowevrvideowindowcontrol.h
 
     SOURCES += \
-        $$PWD/vmr9videowindowcontrol.cpp
+        $$PWD/directshowevrvideowindowcontrol.cpp
 }
 
 config_wshellitem {
@@ -48,6 +58,3 @@ config_wshellitem {
 } else {
     DEFINES += QT_NO_SHELLITEM
 }
-
-LIBS += -lstrmiids -ldmoguids -luuid -lmsdmo -lole32 -loleaut32 -lgdi32
-

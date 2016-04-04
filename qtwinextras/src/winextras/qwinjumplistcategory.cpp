@@ -40,6 +40,8 @@
 #include "winshobjidl_p.h"
 #include "windowsguidsdefs_p.h"
 
+#include <QtCore/QDebug>
+
 #include <shlobj.h>
 
 #if defined(_MSC_VER) && _MSC_VER < 1600
@@ -342,5 +344,29 @@ void QWinJumpListCategory::clear()
         d->invalidate();
     }
 }
+
+#ifndef QT_NO_DEBUG_STREAM
+
+QDebug operator<<(QDebug debug, const QWinJumpListCategory *category)
+{
+    QDebugStateSaver saver(debug);
+    debug.nospace();
+    debug.noquote();
+    debug << "QWinJumpListCategory(";
+    if (category) {
+        debug << "type=" << category->type() << ", isVisible="
+            << category->isVisible() << ", title=\"" << category->title()
+            << "\", items=" << category->items();
+    } else {
+        debug << '0';
+    }
+    debug << ')';
+    return debug;
+
+
+    return debug;
+}
+
+#endif // !QT_NO_DEBUG_STREAM
 
 QT_END_NAMESPACE

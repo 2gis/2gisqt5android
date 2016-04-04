@@ -43,6 +43,7 @@ import QtQuick.Controls.Private 1.0
     \inqmlmodule QtQuick.Controls.Styles
     \since 5.1
     \ingroup viewsstyling
+    \ingroup controlsstyling
     \brief Provides custom styling for ScrollView
 */
 Style {
@@ -377,8 +378,8 @@ Style {
             width: __styleData.horizontal ? extent : implicitWidth
             anchors.top: bg.top
             anchors.left: bg.left
-            anchors.topMargin: __styleData.horizontal ? 0 : -handleOverlap + (2 * begin * (bg.height + (2 * handleOverlap) - extent) + range) / (2 * range)
-            anchors.leftMargin: __styleData.horizontal ? -handleOverlap + (2 * begin * (bg.width + (2 * handleOverlap) - extent) + range) / (2 * range) : 0
+            anchors.topMargin: __styleData.horizontal || range === 0 ? 0 : -handleOverlap + (2 * begin * (bg.height + (2 * handleOverlap) - extent) + range) / (2 * range)
+            anchors.leftMargin: __styleData.horizontal && range !== 0 ? -handleOverlap + (2 * begin * (bg.width + (2 * handleOverlap) - extent) + range) / (2 * range) : 0
             sourceComponent: handle
             property QtObject styleData: QtObject {
                 readonly property bool hovered: activeControl === "handle"

@@ -65,6 +65,7 @@ from webkitpy.layout_tests.port import server_process
 from webkitpy.layout_tests.port.factory import PortFactory
 from webkitpy.layout_tests.servers import apache_http
 from webkitpy.layout_tests.servers import pywebsocket
+from webkitpy.layout_tests.servers import wptserve
 
 _log = logging.getLogger(__name__)
 
@@ -101,6 +102,7 @@ class Port(object):
 
         ('mountainlion', 'x86'),
         ('mavericks', 'x86'),
+        ('yosemite', 'x86'),
         ('xp', 'x86'),
         ('win7', 'x86'),
         ('lucid', 'x86'),
@@ -111,13 +113,13 @@ class Port(object):
         )
 
     ALL_BASELINE_VARIANTS = [
-        'mac-mavericks', 'mac-mountainlion', 'mac-retina', 'mac-lion', 'mac-snowleopard',
+        'mac-yosemite', 'mac-mavericks', 'mac-retina', 'mac-mountainlion', 'mac-lion', 'mac-snowleopard',
         'win-win7', 'win-xp',
         'linux-x86_64', 'linux-x86',
     ]
 
     CONFIGURATION_SPECIFIER_MACROS = {
-        'mac': ['snowleopard', 'lion', 'retina', 'mountainlion', 'mavericks'],
+        'mac': ['snowleopard', 'lion', 'mountainlion', 'retina', 'mavericks', 'yosemite'],
         'win': ['xp', 'win7'],
         'linux': ['lucid'],
         'android': ['icecreamsandwich'],
@@ -187,6 +189,8 @@ class Port(object):
         self._helper = None
         self._http_server = None
         self._websocket_server = None
+        self._is_wpt_enabled = hasattr(options, 'enable_wptserve') and options.enable_wptserve
+        self._wpt_server = None
         self._image_differ = None
         self._server_process_constructor = server_process.ServerProcess  # overridable for testing
         self._http_lock = None  # FIXME: Why does this live on the port object?
@@ -221,9 +225,9 @@ class Port(object):
     def buildbot_archives_baselines(self):
         return True
 
-    def additional_drt_flag(self):
+    def additional_driver_flag(self):
         if self.driver_name() == self.CONTENT_SHELL_NAME:
-            return ['--dump-render-tree']
+            return ['--run-layout-test']
         return []
 
     def supports_per_test_timeout(self):
@@ -258,13 +262,23 @@ class Port(object):
             self._pretty_patch_available = self.check_pretty_patch(logging=False)
         return self._pretty_patch_available
 
-    def default_child_processes(self):
-        """Return the number of drivers to use for this port."""
+    def default_batch_size(self):
+        """Return the default batch size to use for this port."""
         if self.get_option('enable_sanitizer'):
-            # ASAN/MSAN/TSAN are more cpu- and memory- intensive than regular
-            # content_shell, and so we need to run fewer of them in parallel.
-            return max(int(self._executive.cpu_count() * 0.75), 1)
+            # ASAN/MSAN/TSAN use more memory than regular content_shell. Their
+            # memory usage may also grow over time, up to a certain point.
+            # Relaunching the driver periodically helps keep it under control.
+            return 40
+        # The default is infinte batch size.
+        return None
+
+    def default_child_processes(self):
+        """Return the number of child processes to use for this port."""
         return self._executive.cpu_count()
+
+    def max_drivers_per_process(self):
+        """The maximum number of drivers a child process can use for this port."""
+        return 2
 
     def default_max_locked_shards(self):
         """Return the number of "locked" shards to run in parallel (like the http tests)."""
@@ -1009,6 +1023,9 @@ class Port(object):
     def perf_results_directory(self):
         return self._build_path()
 
+    def inspector_build_directory(self):
+        return self._build_path('resources', 'inspector')
+
     def default_results_directory(self):
         """Absolute path to the default place to store the test results."""
         try:
@@ -1153,6 +1170,32 @@ class Port(object):
         server = pywebsocket.PyWebSocket(self, self.results_directory())
         server.start()
         self._websocket_server = server
+
+    def is_wpt_enabled(self):
+        """Used as feature flag for WPT Serve feature."""
+        return self._is_wpt_enabled
+
+    def is_wpt_test(self, test):
+        """Whether this test is part of a web-platform-tests which require wptserve servers."""
+        return "web-platform-tests" in test
+
+    def start_wptserve(self):
+        """Start a WPT web server. Raise an error if it can't start or is already running.
+
+        Ports can stub this out if they don't need a WPT web server to be running."""
+        assert not self._wpt_server, 'Already running an http server.'
+        assert self.is_wpt_enabled(), 'Cannot start server if WPT is not enabled.'
+
+        # We currently don't support any output mechanism for the WPT server.
+        server = wptserve.WPTServe(self, self.results_directory())
+        server.start()
+        self._wpt_server = server
+
+    def stop_wptserve(self):
+        """Shut down the WPT server if it is running. Do nothing if it isn't."""
+        if self._wpt_server:
+            self._wpt_server.stop()
+            self._wpt_server = None
 
     def http_server_supports_ipv6(self):
         # Apache < 2.4 on win32 does not support IPv6, nor does cygwin apache.
@@ -1425,7 +1468,7 @@ class Port(object):
                 raise IOError('%s was not found on the system' % config_file_from_env)
             return config_file_from_env
 
-        config_file_name = self._apache_config_file_name_for_platform(sys.platform)
+        config_file_name = self._apache_config_file_name_for_platform()
         return self._filesystem.join(self.layout_tests_dir(), 'http', 'conf', config_file_name)
 
     #
@@ -1435,28 +1478,21 @@ class Port(object):
     # or any of its subclasses.
     #
 
-    # FIXME: This belongs on some platform abstraction instead of Port.
-    def _is_redhat_based(self):
-        return self._filesystem.exists('/etc/redhat-release')
-
-    def _is_debian_based(self):
-        return self._filesystem.exists('/etc/debian_version')
-
     def _apache_version(self):
         config = self._executive.run_command([self.path_to_apache(), '-v'])
         return re.sub(r'(?:.|\n)*Server version: Apache/(\d+\.\d+)(?:.|\n)*', r'\1', config)
 
-    # We pass sys_platform into this method to make it easy to unit test.
-    def _apache_config_file_name_for_platform(self, sys_platform):
-        if sys_platform == 'cygwin':
+    def _apache_config_file_name_for_platform(self):
+        if self.host.platform.is_cygwin():
             return 'cygwin-httpd.conf'  # CYGWIN is the only platform to still use Apache 1.3.
-        if sys_platform.startswith('linux'):
-            if self._is_redhat_based():
-                return 'fedora-httpd-' + self._apache_version() + '.conf'
-            if self._is_debian_based():
-                return 'debian-httpd-' + self._apache_version() + '.conf'
-        # All platforms use apache2 except for CYGWIN (and Mac OS X Tiger and prior, which we no longer support).
-        return "apache2-httpd.conf"
+        if self.host.platform.is_linux():
+            distribution = self.host.platform.linux_distribution()
+
+            custom_configuration_distributions = ['arch', 'debian', 'redhat']
+            if distribution in custom_configuration_distributions:
+                return "%s-httpd-%s.conf" % (distribution, self._apache_version())
+
+        return 'apache2-httpd-' + self._apache_version() + '.conf'
 
     def _path_to_driver(self, configuration=None):
         """Returns the full path to the test driver."""
@@ -1499,7 +1535,7 @@ class Port(object):
         """Returns the port's driver implementation."""
         return driver.Driver
 
-    def _output_contains_sanitizer_messages(self, output):
+    def output_contains_sanitizer_messages(self, output):
         if not output:
             return None
         if 'AddressSanitizer' in output:
@@ -1509,7 +1545,7 @@ class Port(object):
         return None
 
     def _get_crash_log(self, name, pid, stdout, stderr, newer_than):
-        if self._output_contains_sanitizer_messages(stderr):
+        if self.output_contains_sanitizer_messages(stderr):
             # Running the symbolizer script can take a lot of memory, so we need to
             # serialize access to it across all the concurrently running drivers.
 
@@ -1526,8 +1562,19 @@ class Port(object):
 
         name_str = name or '<unknown process name>'
         pid_str = str(pid or '<unknown>')
-        stdout_lines = (stdout or '<empty>').decode('utf8', 'replace').splitlines()
-        stderr_lines = (stderr or '<empty>').decode('utf8', 'replace').splitlines()
+
+        # We require stdout and stderr to be bytestrings, not character strings.
+        if stdout:
+            assert isinstance(stdout, str)
+            stdout_lines = stdout.decode('utf8', 'replace').splitlines()
+        else:
+            stdout_lines = [u'<empty>']
+        if stderr:
+            assert isinstance(stderr, str)
+            stderr_lines = stderr.decode('utf8', 'replace').splitlines()
+        else:
+            stderr_lines = [u'<empty>']
+
         return (stderr, 'crash log for %s (pid %s):\n%s\n%s\n' % (name_str, pid_str,
             '\n'.join(('STDOUT: ' + l) for l in stdout_lines),
             '\n'.join(('STDERR: ' + l) for l in stderr_lines)))
@@ -1544,9 +1591,8 @@ class Port(object):
     def physical_test_suites(self):
         return [
             # For example, to turn on force-compositing-mode in the svg/ directory:
-            # PhysicalTestSuite('svg',
-            #                   ['--force-compositing-mode']),
-            ]
+            # PhysicalTestSuite('svg', ['--force-compositing-mode']),
+        ]
 
     def virtual_test_suites(self):
         if self._virtual_test_suites is None:
@@ -1604,10 +1650,22 @@ class Port(object):
                 return suite.args
         return []
 
+    def lookup_virtual_reference_args(self, test_name):
+        for suite in self.virtual_test_suites():
+            if test_name.startswith(suite.name):
+                return suite.reference_args
+        return []
+
     def lookup_physical_test_args(self, test_name):
         for suite in self.physical_test_suites():
             if test_name.startswith(suite.name):
                 return suite.args
+        return []
+
+    def lookup_physical_reference_args(self, test_name):
+        for suite in self.physical_test_suites():
+            if test_name.startswith(suite.name):
+                return suite.reference_args
         return []
 
     def should_run_as_pixel_test(self, test_input):
@@ -1615,6 +1673,9 @@ class Port(object):
             return False
         if self._options.pixel_test_directories:
             return any(test_input.test_name.startswith(directory) for directory in self._options.pixel_test_directories)
+        # TODO(burnik): Make sure this is the right way to do it.
+        if self.is_wpt_enabled() and self.is_wpt_test(test_input.test_name):
+            return False
         return True
 
     def _modules_to_search_for_symbols(self):
@@ -1712,26 +1773,29 @@ class Port(object):
             platform = self.name()
         return self.path_from_webkit_base('LayoutTests', 'platform', platform)
 
+
 class VirtualTestSuite(object):
-    def __init__(self, prefix=None, base=None, args=None):
+    def __init__(self, prefix=None, base=None, args=None, references_use_default_args=False):
         assert base
         assert args
         assert prefix.find('/') == -1, "Virtual test suites prefixes cannot contain /'s: %s" % prefix
         self.name = 'virtual/' + prefix + '/' + base
         self.base = base
         self.args = args
+        self.reference_args = [] if references_use_default_args else args
         self.tests = {}
 
     def __repr__(self):
-        return "VirtualTestSuite('%s', '%s', %s)" % (self.name, self.base, self.args)
+        return "VirtualTestSuite('%s', '%s', %s, %s)" % (self.name, self.base, self.args, self.reference_args)
 
 
 class PhysicalTestSuite(object):
-    def __init__(self, base, args):
+    def __init__(self, base, args, reference_args=None):
         self.name = base
         self.base = base
         self.args = args
+        self.reference_args = args if reference_args is None else reference_args
         self.tests = set()
 
     def __repr__(self):
-        return "PhysicalTestSuite('%s', '%s', %s)" % (self.name, self.base, self.args)
+        return "PhysicalTestSuite('%s', '%s', %s, %s)" % (self.name, self.base, self.args, self.reference_args)

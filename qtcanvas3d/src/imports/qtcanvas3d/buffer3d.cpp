@@ -46,75 +46,59 @@ QT_CANVAS3D_BEGIN_NAMESPACE
  * \qmltype Canvas3DBuffer
  * \since QtCanvas3D 1.0
  * \inqmlmodule QtCanvas3D
+ * \inherits Canvas3DAbstractObject
  * \brief Contains an OpenGL buffer.
  *
  * An uncreatable QML type that contains an OpenGL buffer. You can get it by calling the
  * \l{Context3D::createBuffer()}{Context3D.createBuffer()} method.
  */
 
-/*!
- * \internal
- */
-CanvasBuffer::CanvasBuffer(QObject *parent) :
-    CanvasAbstractObject(parent),
-    QOpenGLFunctions(),
+CanvasBuffer::CanvasBuffer() :
+    CanvasAbstractObject(0, 0),
+    m_bufferId(0),
     m_bindTarget(CanvasBuffer::UNINITIALIZED)
 {
-    initializeOpenGLFunctions();
-    glGenBuffers(1, &m_bufferId);
+    // Compiler says we need the default constructor, but it is unclear why
 }
 
-/*!
- * \internal
- */
+CanvasBuffer::CanvasBuffer(CanvasGlCommandQueue *queue, QObject *parent) :
+    CanvasAbstractObject(queue, parent),
+    m_bufferId(queue->createResourceId()),
+    m_bindTarget(CanvasBuffer::UNINITIALIZED)
+{
+    queueCommand(CanvasGlCommandQueue::glGenBuffers, m_bufferId);
+}
+
 CanvasBuffer::CanvasBuffer(const CanvasBuffer& other) :
-    CanvasAbstractObject(), // Copying a QObject, leave it parentless..
-    QOpenGLFunctions(),
+    CanvasAbstractObject(other.commandQueue(), 0), // Copying a QObject, leave it parentless..
     m_bufferId(other.m_bufferId),
     m_bindTarget(other.m_bindTarget)
 {
-    initializeOpenGLFunctions();
 }
 
-
-/*!
- * \internal
- */
 CanvasBuffer::~CanvasBuffer()
 {
     // Crashes on exit as V4VM does it's final cleanup without checking of ownerships
     del();
 }
 
-/*!
- * \internal
- */
 void CanvasBuffer::del()
 {
     if (m_bufferId)
-        glDeleteBuffers(1, &m_bufferId);
+        queueCommand(CanvasGlCommandQueue::glDeleteBuffers, m_bufferId);
     m_bufferId = 0;
 }
 
-/*!
- * \internal
- */
 bool CanvasBuffer::isAlive()
 {
-    return m_bufferId;
+    return bool(m_bufferId);
 }
 
-/*!
- * \internal
- */
 CanvasBuffer::bindTarget CanvasBuffer::target()
 {
     return m_bindTarget;
 }
 
-/*!
- * \internal
- */
 void CanvasBuffer::setTarget(bindTarget bindPoint)
 {
     //Q_ASSERT(m_bindTarget == CanvasBuffer::UNINITIALIZED);
@@ -122,17 +106,11 @@ void CanvasBuffer::setTarget(bindTarget bindPoint)
     m_bindTarget = bindPoint;
 }
 
-/*!
- * \internal
- */
-GLuint CanvasBuffer::id()
+GLint CanvasBuffer::id()
 {
     return m_bufferId;
 }
 
-/*!
- * \internal
- */
 QDebug operator<<(QDebug dbg, const CanvasBuffer *buffer)
 {
     if (buffer)

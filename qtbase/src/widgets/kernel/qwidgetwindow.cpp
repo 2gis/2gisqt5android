@@ -45,13 +45,13 @@
 #include <qpa/qplatformtheme.h>
 #include <qpa/qplatformwindow.h>
 #include <private/qgesturemanager_p.h>
+#include <private/qhighdpiscaling_p.h>
 
 QT_BEGIN_NAMESPACE
 
 Q_WIDGETS_EXPORT extern bool qt_tab_all_widgets();
 
 QWidget *qt_button_down = 0; // widget got last button-down
-static QPointer<QWidget> qt_tablet_target = 0;
 
 // popup control
 QWidget *qt_popup_down = 0; // popup that contains the pressed widget
@@ -161,7 +161,7 @@ bool QWidgetWindow::event(QEvent *event)
     if (m_widget->testAttribute(Qt::WA_DontShowOnScreen)) {
         // \a event is uninteresting for QWidgetWindow, the event was probably
         // generated before WA_DontShowOnScreen was set
-        return m_widget->event(event);
+        return QCoreApplication::sendEvent(m_widget, event);
     }
 
     switch (event->type()) {
@@ -303,7 +303,7 @@ bool QWidgetWindow::event(QEvent *event)
         break;
     }
 
-    if (m_widget->event(event) && event->type() != QEvent::Timer)
+    if (QCoreApplication::sendEvent(m_widget, event) && event->type() != QEvent::Timer)
         return true;
 
     return QWindow::event(event);
@@ -445,9 +445,9 @@ void QWidgetWindow::handleMouseEvent(QMouseEvent *event)
                 receiver = popupChild;
             if (receiver != popup)
                 widgetPos = receiver->mapFromGlobal(event->globalPos());
-            QWidget *alien = receiver->childAt(receiver->mapFromGlobal(event->globalPos()));
-            QMouseEvent e(event->type(), widgetPos, event->windowPos(), event->screenPos(), event->button(), event->buttons(), event->modifiers());
-            QGuiApplicationPrivate::setMouseEventSource(&e, QGuiApplicationPrivate::mouseEventSource(event));
+            QWidget *alien = m_widget->childAt(m_widget->mapFromGlobal(event->globalPos()));
+            QMouseEvent e(event->type(), widgetPos, event->windowPos(), event->screenPos(),
+                          event->button(), event->buttons(), event->modifiers(), event->source());
             e.setTimestamp(event->timestamp());
             QApplicationPrivate::sendMouseEvent(receiver, &e, alien, receiver->window(), &qt_button_down, qt_last_mouse_receiver);
             qt_last_mouse_receiver = receiver;
@@ -489,9 +489,9 @@ void QWidgetWindow::handleMouseEvent(QMouseEvent *event)
                         if (globalGeometry.contains(event->globalPos())) {
                             // Use postEvent() to ensure the local QEventLoop terminates when called from QMenu::exec()
                             const QPoint localPos = win->mapFromGlobal(event->globalPos());
-                            QMouseEvent *e = new QMouseEvent(QEvent::MouseButtonPress, localPos, localPos, event->globalPos(), event->button(), event->buttons(), event->modifiers());
+                            QMouseEvent *e = new QMouseEvent(QEvent::MouseButtonPress, localPos, localPos, event->globalPos(),
+                                                             event->button(), event->buttons(), event->modifiers(), event->source());
                             QCoreApplicationPrivate::setEventSpontaneous(e, true);
-                            QGuiApplicationPrivate::setMouseEventSource(e, QGuiApplicationPrivate::mouseEventSource(event));
                             e->setTimestamp(event->timestamp());
                             QCoreApplication::postEvent(win, e);
                         }
@@ -548,11 +548,11 @@ void QWidgetWindow::handleMouseEvent(QMouseEvent *event)
         // The preceding statement excludes MouseButtonPress events which caused
         // creation of a MouseButtonDblClick event. QTBUG-25831
         QMouseEvent translated(event->type(), mapped, event->windowPos(), event->screenPos(),
-                               event->button(), event->buttons(), event->modifiers());
-        QGuiApplicationPrivate::setMouseEventSource(&translated, QGuiApplicationPrivate::mouseEventSource(event));
+                               event->button(), event->buttons(), event->modifiers(), event->source());
         translated.setTimestamp(event->timestamp());
         QApplicationPrivate::sendMouseEvent(receiver, &translated, widget, m_widget,
                                             &qt_button_down, qt_last_mouse_receiver);
+        event->setAccepted(translated.isAccepted());
     }
 #ifndef QT_NO_CONTEXTMENU
     if (event->type() == contextMenuTrigger && event->button() == Qt::RightButton
@@ -673,7 +673,7 @@ void QWidgetWindow::updateNormalGeometry()
      // Ask platform window, default to widget geometry.
     QRect normalGeometry;
     if (const QPlatformWindow *pw = handle())
-        normalGeometry = pw->normalGeometry();
+        normalGeometry = QHighDpi::fromNativePixels(pw->normalGeometry(), this);
     if (!normalGeometry.isValid() && effectiveState(m_widget->windowState()) == Qt::WindowNoState)
         normalGeometry = m_widget->geometry();
     if (normalGeometry.isValid())
@@ -794,7 +794,7 @@ void QWidgetWindow::handleDragLeaveEvent(QDragLeaveEvent *event)
 void QWidgetWindow::handleDropEvent(QDropEvent *event)
 {
     if (m_dragTarget.isNull()) {
-        qWarning() << Q_FUNC_INFO << m_widget << ": No drag target set.";
+        qWarning() << m_widget << ": No drag target set.";
         event->ignore();
         return;
     }
@@ -874,6 +874,7 @@ bool QWidgetWindow::nativeEvent(const QByteArray &eventType, void *message, long
 #ifndef QT_NO_TABLETEVENT
 void QWidgetWindow::handleTabletEvent(QTabletEvent *event)
 {
+    static QPointer<QWidget> qt_tablet_target = 0;
     if (event->type() == QEvent::TabletPress) {
         QWidget *widget = m_widget->childAt(event->pos());
         if (!widget)

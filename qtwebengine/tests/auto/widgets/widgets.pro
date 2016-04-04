@@ -1,13 +1,18 @@
 TEMPLATE = subdirs
 
-CONFIG += ordered
-
 SUBDIRS += \
     qwebengineaccessibility \
-    qwebengineframe \
+    qwebenginedefaultsurfaceformat \
     qwebenginepage \
-    qwebenginehistoryinterface \
-    qwebengineview \
     qwebenginehistory \
+    qwebenginehistoryinterface \
     qwebengineinspector \
+    qwebengineprofile \
     qwebenginescript \
+    qwebenginesettings \
+    qwebengineview
+
+qtHaveModule(positioning) {
+    SUBDIRS += positionplugin
+    qwebenginepage.depends = positionplugin
+}

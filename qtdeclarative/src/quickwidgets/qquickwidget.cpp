@@ -39,8 +39,9 @@
 #include "private/qquickitemchangelistener_p.h"
 #include "private/qquickrendercontrol_p.h"
 
+#include <private/qqmldebugconnector_p.h>
 #include <private/qquickprofiler_p.h>
-#include <private/qqmlinspectorservice_p.h>
+#include <private/qqmldebugserviceinterfaces_p.h>
 #include <private/qqmlmemoryprofiler_p.h>
 
 #include <QtQml/qqmlengine.h>
@@ -95,8 +96,9 @@ void QQuickWidgetPrivate::init(QQmlEngine* e)
     if (!engine.data()->incubationController())
         engine.data()->setIncubationController(offscreenWindow->incubationController());
 
-    if (QQmlDebugService::isDebuggingEnabled())
-        QQmlInspectorService::instance()->addView(q);
+    QQmlInspectorService *service = QQmlDebugConnector::service<QQmlInspectorService>();
+    if (service)
+        service->addView(q);
 
 #ifndef QT_NO_DRAGANDDROP
     q->setAcceptDrops(true);
@@ -142,13 +144,15 @@ QQuickWidgetPrivate::QQuickWidgetPrivate()
     , eventPending(false)
     , updatePending(false)
     , fakeHidden(false)
+    , requestedSamples(0)
 {
 }
 
 QQuickWidgetPrivate::~QQuickWidgetPrivate()
 {
-    if (QQmlDebugService::isDebuggingEnabled())
-        QQmlInspectorService::instance()->removeView(q_func());
+    QQmlInspectorService *service = QQmlDebugConnector::service<QQmlInspectorService>();
+    if (service)
+        service->removeView(q_func());
 
     invalidateRenderControl();
 
@@ -202,6 +206,13 @@ void QQuickWidgetPrivate::itemGeometryChanged(QQuickItem *resizeItem, const QRec
 
 void QQuickWidgetPrivate::render(bool needsSync)
 {
+    // createFramebufferObject() bails out when the size is empty. In this case
+    // we cannot render either.
+    if (!fbo)
+        return;
+
+    Q_ASSERT(context);
+
     if (!context->makeCurrent(offscreenSurface)) {
         qWarning("QQuickWidget: Cannot render due to failing makeCurrent()");
         return;
@@ -241,8 +252,15 @@ void QQuickWidgetPrivate::renderSceneGraph()
     }
 
     Q_ASSERT(offscreenSurface);
+
     render(true);
-    q->update(); // schedule composition
+
+#ifndef QT_NO_GRAPHICSVIEW
+    if (q->window()->graphicsProxyWidget())
+        QWidgetPrivate::nearestGraphicsProxyWidget(q)->update();
+    else
+#endif
+        q->update(); // schedule composition
 }
 
 QImage QQuickWidgetPrivate::grabFramebuffer()
@@ -336,8 +354,8 @@ QObject *QQuickWidgetPrivate::focusObject()
     This limitation only applies when there are other widgets underneath the QQuickWidget
     inside the same window. Making the window semi-transparent, with other applications
     and the desktop visible in the background, is done in the traditional way: Set
-    Qt::WA_TranslucentBackground and change the Qt Quick Scenegraph's clear color to
-    Qt::transparent via setClearColor().
+    Qt::WA_TranslucentBackground on the top-level window, request an alpha channel, and
+    change the Qt Quick Scenegraph's clear color to Qt::transparent via setClearColor().
 
     \sa {Exposing Attributes of C++ Types to QML}, {Qt Quick Widgets Example}, QQuickView
 */
@@ -538,6 +556,9 @@ QQuickWidget::Status QQuickWidget::status() const
     if (!d->component)
         return QQuickWidget::Null;
 
+    if (d->component->status() == QQmlComponent::Ready && !d->root)
+        return QQuickWidget::Error;
+
     return QQuickWidget::Status(d->component->status());
 }
 
@@ -558,6 +579,10 @@ QList<QQmlError> QQuickWidget::errors() const
     if (!d->engine) {
         QQmlError error;
         error.setDescription(QLatin1String("QQuickWidget: invalid qml engine."));
+        errs << error;
+    } else if (d->component && d->component->status() == QQmlComponent::Ready && !d->root) {
+        QQmlError error;
+        error.setDescription(QLatin1String("QQuickWidget: invalid root object."));
         errs << error;
     }
 
@@ -687,6 +712,7 @@ void QQuickWidgetPrivate::handleContextCreationFailure(const QSurfaceFormat &for
 
 void QQuickWidgetPrivate::createContext()
 {
+    Q_Q(QQuickWidget);
     // On hide-show we invalidate() but our context is kept.
     // We nonetheless need to initialize() again.
     const bool reinit = context && !offscreenWindow->openglContext();
@@ -698,11 +724,13 @@ void QQuickWidgetPrivate::createContext()
         context = new QOpenGLContext;
         context->setFormat(offscreenWindow->requestedFormat());
 
-        if (qt_gl_global_share_context()) {
-            context->setShareContext(qt_gl_global_share_context());
-            context->setScreen(context->shareContext()->screen());
+        QOpenGLContext *shareContext = qt_gl_global_share_context();
+        if (!shareContext)
+            shareContext = QWidgetPrivate::get(q->window())->shareContext();
+        if (shareContext) {
+            context->setShareContext(shareContext);
+            context->setScreen(shareContext->screen());
         }
-
         if (!context->create()) {
             const bool isEs = context->isOpenGLES();
             delete context;
@@ -764,7 +792,7 @@ void QQuickWidget::createFramebufferObject()
 
     context->makeCurrent(d->offscreenSurface);
 
-    int samples = d->offscreenWindow->requestedFormat().samples();
+    int samples = d->requestedSamples;
     if (!QOpenGLExtensions(context).hasOpenGLExtension(QOpenGLExtensions::FramebufferMultisample))
         samples = 0;
 
@@ -878,14 +906,15 @@ void QQuickWidgetPrivate::setRootObject(QObject *obj)
     if (QQuickItem *sgItem = qobject_cast<QQuickItem *>(obj)) {
         root = sgItem;
         sgItem->setParentItem(offscreenWindow->contentItem());
+    } else if (qobject_cast<QWindow *>(obj)) {
+        qWarning() << "QQuickWidget does not support using windows as a root item." << endl
+                   << endl
+                   << "If you wish to create your root window from QML, consider using QQmlApplicationEngine instead." << endl;
     } else {
         qWarning() << "QQuickWidget only supports loading of root objects that derive from QQuickItem." << endl
                    << endl
-                   << "If your example is using QML 2, (such as qmlscene) and the .qml file you" << endl
-                   << "loaded has 'import QtQuick 1.0' or 'import Qt 4.7', this error will occur." << endl
-                   << endl
-                   << "To load files with 'import QtQuick 1.0' or 'import Qt 4.7', use the" << endl
-                   << "QDeclarativeView class in the Qt Quick 1 module." << endl;
+                   << "Ensure your QML code is written for QtQuick 2, and uses a root that is or" << endl
+                   << "inherits from QtQuick's Item (not a Timer, QtObject, etc)." << endl;
         delete obj;
         root = 0;
     }
@@ -1072,7 +1101,16 @@ void QQuickWidget::showEvent(QShowEvent *)
     Q_D(QQuickWidget);
     d->updatePending = false;
     d->createContext();
-    d->render(true);
+    if (d->offscreenWindow->openglContext())
+        d->render(true);
+    else
+        triggerUpdate();
+    QWindowPrivate *offscreenPrivate = QWindowPrivate::get(d->offscreenWindow);
+    if (!offscreenPrivate->visible) {
+        offscreenPrivate->visible = true;
+        emit d->offscreenWindow->visibleChanged(true);
+        offscreenPrivate->updateVisibility();
+    }
 }
 
 /*! \reimp */
@@ -1080,6 +1118,12 @@ void QQuickWidget::hideEvent(QHideEvent *)
 {
     Q_D(QQuickWidget);
     d->invalidateRenderControl();
+    QWindowPrivate *offscreenPrivate = QWindowPrivate::get(d->offscreenWindow);
+    if (offscreenPrivate->visible) {
+        offscreenPrivate->visible = false;
+        emit d->offscreenWindow->visibleChanged(false);
+        offscreenPrivate->updateVisibility();
+    }
 }
 
 /*! \reimp */
@@ -1116,17 +1160,36 @@ void QQuickWidget::wheelEvent(QWheelEvent *e)
 }
 #endif
 
-
+/*!
+   \reimp
+*/
 void QQuickWidget::focusInEvent(QFocusEvent * event)
 {
     Q_D(QQuickWidget);
     d->offscreenWindow->focusInEvent(event);
 }
 
+/*!
+   \reimp
+*/
 void QQuickWidget::focusOutEvent(QFocusEvent * event)
 {
     Q_D(QQuickWidget);
     d->offscreenWindow->focusOutEvent(event);
+}
+
+static Qt::WindowState resolveWindowState(Qt::WindowStates states)
+{
+    // No more than one of these 3 can be set
+    if (states & Qt::WindowMinimized)
+        return Qt::WindowMinimized;
+    if (states & Qt::WindowMaximized)
+        return Qt::WindowMaximized;
+    if (states & Qt::WindowFullScreen)
+        return Qt::WindowFullScreen;
+
+    // No state means "windowed" - we ignore Qt::WindowActive
+    return Qt::WindowNoState;
 }
 
 /*! \reimp */
@@ -1158,8 +1221,13 @@ bool QQuickWidget::event(QEvent *e)
         }
         break;
 
+    case QEvent::Show:
     case QEvent::Move:
         d->updatePosition();
+        break;
+
+    case QEvent::WindowStateChange:
+        d->offscreenWindow->setWindowState(resolveWindowState(windowState()));
         break;
 
     default:
@@ -1239,6 +1307,14 @@ void QQuickWidget::setFormat(const QSurfaceFormat &format)
     newFormat.setDepthBufferSize(qMax(newFormat.depthBufferSize(), currentFormat.depthBufferSize()));
     newFormat.setStencilBufferSize(qMax(newFormat.stencilBufferSize(), currentFormat.stencilBufferSize()));
     newFormat.setAlphaBufferSize(qMax(newFormat.alphaBufferSize(), currentFormat.alphaBufferSize()));
+
+    // Do not include the sample count. Requesting a multisampled context is not necessary
+    // since we render into an FBO, never to an actual surface. What's more, attempting to
+    // create a pbuffer with a multisampled config crashes certain implementations. Just
+    // avoid the entire hassle, the result is the same.
+    d->requestedSamples = newFormat.samples();
+    newFormat.setSamples(0);
+
     d->offscreenWindow->setFormat(newFormat);
 }
 
@@ -1268,9 +1344,10 @@ QImage QQuickWidget::grabFramebuffer() const
 /*!
   Sets the clear \a color. By default this is an opaque color.
 
-  To get a semi- or fully transparent QQuickWidget, call this function with \a
-  color set to Qt::transparent and set the Qt::WA_TranslucentBackground widget
-  attribute.
+  To get a semi-transparent QQuickWidget, call this function with
+  \a color set to Qt::transparent, set the Qt::WA_TranslucentBackground
+  widget attribute on the top-level window, and request an alpha
+  channel via setFormat().
 
   \sa QQuickWindow::setColor()
  */

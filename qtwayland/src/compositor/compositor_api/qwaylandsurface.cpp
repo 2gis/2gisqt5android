@@ -71,7 +71,7 @@ QWaylandSurfacePrivate::QWaylandSurfacePrivate(wl_client *wlClient, quint32 id, 
     , closing(false)
     , refCount(1)
     , client(QWaylandClient::fromWlClient(wlClient))
-    , windowType(QWaylandSurface::WindowType::None)
+    , windowType(QWaylandSurface::None)
 {}
 
 
@@ -322,7 +322,9 @@ QList<QWaylandOutput *> QWaylandSurface::outputs() const
     Q_D(const QWaylandSurface);
 
     QList<QWaylandOutput *> list;
-    Q_FOREACH (QtWayland::Output *output, d->outputs())
+    const QList<QtWayland::Output *> outputs = d->outputs();
+    list.reserve(outputs.count());
+    Q_FOREACH (QtWayland::Output *output, outputs)
         list.append(output->waylandOutput());
     return list;
 }
@@ -507,6 +509,32 @@ void QWaylandSurfacePrivate::setType(QWaylandSurface::WindowType type)
         windowType = type;
         emit q->windowTypeChanged(type);
     }
+}
+
+class QWaylandUnmapLockPrivate
+{
+public:
+    QWaylandSurface *surface;
+};
+
+/*!
+    Constructs a QWaylandUnmapLock object.
+
+    The lock will act on the \a surface parameter, and will prevent the surface to
+    be unmapped, retaining the last valid buffer when the client attachs a NULL buffer.
+    The lock will be automatically released when deleted.
+*/
+QWaylandUnmapLock::QWaylandUnmapLock(QWaylandSurface *surface)
+                 : d(new QWaylandUnmapLockPrivate)
+{
+    d->surface = surface;
+    surface->handle()->addUnmapLock(this);
+}
+
+QWaylandUnmapLock::~QWaylandUnmapLock()
+{
+    d->surface->handle()->removeUnmapLock(this);
+    delete d;
 }
 
 QT_END_NAMESPACE

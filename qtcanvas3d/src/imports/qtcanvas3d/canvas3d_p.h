@@ -53,6 +53,8 @@
 #include <QtQuick/QQuickItem>
 #include <QtQuick/QQuickWindow>
 #include <QtGui/QOpenGLFramebufferObject>
+#include <QtCore/QElapsedTimer>
+#include <QtCore/QPointer>
 
 QT_BEGIN_NAMESPACE
 
@@ -60,31 +62,51 @@ class QOffscreenSurface;
 
 QT_CANVAS3D_BEGIN_NAMESPACE
 
-// Logs on high level information about the OpenGL driver and context.
+class CanvasGlCommandQueue;
+class CanvasRenderer;
+
+// Debug: Logs on high level information about the OpenGL driver and context.
 Q_DECLARE_LOGGING_CATEGORY(canvas3dinfo)
 
-// Debug: logs all the calls made in to Canvas3D and Context3D
-// Warning: debugs all warnings on failures in verifications
+// Debug: Logs all the calls made in to Canvas3D and Context3D.
+// Warning: Only logs warnings on failures in verifications.
 Q_DECLARE_LOGGING_CATEGORY(canvas3drendering)
 
-// Debug: Logs all the OpenGL errors, this means calling glGetError()
-// after each OpenGL call and this will cause a negative performance hit.
+// Debug: Aggressive error checking. This means calling glGetError() after each OpenGL call.
+// Since checking for errors is a synchronous call, this will cause a negative performance hit.
+// Warning: All detected GL errors are logged as warnings on this category.
 Q_DECLARE_LOGGING_CATEGORY(canvas3dglerrors)
 
-
-class QT_CANVAS3D_EXPORT Canvas : public QQuickItem, QOpenGLFunctions
+class QT_CANVAS3D_EXPORT Canvas : public QQuickItem
 {
     Q_OBJECT
     Q_DISABLE_COPY(Canvas)
+
+    Q_ENUMS(RenderTarget)
+
     Q_INTERFACES(QQmlParserStatus)
     Q_PROPERTY(CanvasContext *context READ context NOTIFY contextChanged)
     Q_PROPERTY(float devicePixelRatio READ devicePixelRatio NOTIFY devicePixelRatioChanged)
     Q_PROPERTY(uint fps READ fps NOTIFY fpsChanged)
     Q_PROPERTY(QSize pixelSize READ pixelSize WRITE setPixelSize NOTIFY pixelSizeChanged)
-    Q_PROPERTY(int width READ width WRITE setWidth NOTIFY widthChanged)
-    Q_PROPERTY(int height READ height WRITE setHeight NOTIFY heightChanged)
+    Q_PROPERTY(RenderTarget renderTarget READ renderTarget WRITE setRenderTarget NOTIFY renderTargetChanged REVISION 1)
+    Q_PROPERTY(bool renderOnDemand READ renderOnDemand WRITE setRenderOnDemand NOTIFY renderOnDemandChanged REVISION 1)
 
 public:
+    enum RenderTarget {
+        RenderTargetOffscreenBuffer,
+        RenderTargetBackground,
+        RenderTargetForeground
+    };
+
+    // internal
+    enum ContextState {
+        ContextNone,
+        ContextLost,
+        ContextRestoring,
+        ContextAlive
+    };
+
     Canvas(QQuickItem *parent = 0);
     ~Canvas();
 
@@ -92,28 +114,30 @@ public:
     float devicePixelRatio();
     QSize pixelSize();
     void setPixelSize(QSize pixelSize);
-    void createFBOs();
-    void setWidth(int width);
-    int width();
-    void setHeight(int height);
-    int height();
-
-    void bindCurrentRenderTarget();
-    GLuint resolveMSAAFbo();
+    void setRenderTarget(RenderTarget target);
+    RenderTarget renderTarget() const;
+    void setRenderOnDemand(bool enable);
+    bool renderOnDemand() const;
 
     uint fps();
     Q_INVOKABLE int frameTimeMs();
+    Q_REVISION(1) Q_INVOKABLE int frameSetupTimeMs();
 
     Q_INVOKABLE QJSValue getContext(const QString &name);
     Q_INVOKABLE QJSValue getContext(const QString &name, const QVariantMap &options);
     CanvasContext *context();
+    CanvasRenderer *renderer();
 
 public slots:
-    void ready();
-    void shutDown();
-    void renderNext();
+    void requestRender();
+
+private slots:
+    void queueNextRender();
     void queueResizeGL();
     void emitNeedRender();
+    void handleBeforeSynchronizing();
+    void handleRendererFpsChange(uint fps);
+    void handleContextLost();
 
 signals:
     void needRender();
@@ -121,9 +145,10 @@ signals:
     void contextChanged(CanvasContext *context);
     void fpsChanged(uint fps);
     void pixelSizeChanged(QSize pixelSize);
-    void frameTimeChanged(uint frametime);
-    void widthChanged();
-    void heightChanged();
+    void renderTargetChanged();
+    void renderOnDemandChanged();
+    void contextLost();
+    void contextRestored();
 
     void initializeGL();
     void paintGL();
@@ -139,43 +164,44 @@ protected:
 private:
     void setupAntialiasing();
     void updateWindowParameters();
+    void sync();
+    bool firstSync();
 
     bool m_isNeedRenderQueued;
-    bool m_renderNodeReady;
-    QThread *m_mainThread;
-    QThread *m_contextThread;
-    QRectF m_cachedGeometry;
-    CanvasContext *m_context3D;
-    bool m_isFirstRender;
+    bool m_rendererReady;
+    QPointer<CanvasContext> m_context3D;
     QSize m_fboSize;
-    QSize m_initializedSize;
     QSize m_maxSize;
 
-    QOpenGLContext *m_glContext;
-    QOpenGLContext *m_glContextQt;
-    QOpenGLContext *m_glContextShare;
-    QQuickWindow *m_contextWindow;
-
-    uint m_fps;
     uint m_frameTimeMs;
+    uint m_frameSetupTimeMs;
+    QElapsedTimer m_frameTimer;
     int m_maxSamples;
     float m_devicePixelRatio;
 
     bool m_isOpenGLES2;
+    bool m_isCombinedDepthStencilSupported;
     bool m_isSoftwareRendered;
     bool m_runningInDesigner;
     CanvasContextAttributes m_contextAttribs;
     bool m_isContextAttribsSet;
+    bool m_alphaChanged;
     bool m_resizeGLQueued;
+    bool m_allowRenderTargetChange;
+    bool m_renderTargetSyncConnected;
+    RenderTarget m_renderTarget;
+    bool m_renderOnDemand;
 
-    QOpenGLFramebufferObject *m_antialiasFbo;
-    QOpenGLFramebufferObject *m_renderFbo;
-    QOpenGLFramebufferObject *m_displayFbo;
-    QOpenGLFramebufferObjectFormat m_fboFormat;
-    QOpenGLFramebufferObjectFormat m_antialiasFboFormat;
-    QOpenGLFramebufferObject *m_oldDisplayFbo;
+    CanvasRenderer *m_renderer;
 
-    QOffscreenSurface *m_offscreenSurface;
+    GLint m_maxVertexAttribs;
+    int m_contextVersion;
+    QSet<QByteArray> m_extensions;
+
+    uint m_fps;
+
+    ContextState m_contextState;
+    QPointer<QQuickWindow> m_contextWindow; // Not owned
 };
 
 QT_CANVAS3D_END_NAMESPACE

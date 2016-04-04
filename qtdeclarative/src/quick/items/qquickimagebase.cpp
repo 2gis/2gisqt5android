@@ -36,6 +36,7 @@
 
 #include <QtGui/qguiapplication.h>
 #include <QtGui/qscreen.h>
+#include <QtGui/qicon.h>
 
 #include <QtQml/qqmlinfo.h>
 #include <QtQml/qqmlfile.h>
@@ -213,15 +214,27 @@ void QQuickImageBase::load()
         d->devicePixelRatio = 1.0;
 
         QUrl loadUrl = d->url;
-        if (d->url.scheme() == QStringLiteral("image")
-            || d->url.toString().endsWith(QLatin1String(".svg"))
-            || d->url.toString().endsWith(QLatin1String(".svgz"))) {
-            // QQuickImageProvider and SVG can generate a high resolution image when
-            // sourceSize is set. If sourceSize is not set then the provider default size
-            // will be used, as usual.
-            if (!d->sourcesize.isEmpty())
+
+        // QQuickImageProvider and SVG can generate a high resolution image when
+        // sourceSize is set. If sourceSize is not set then the provider default size
+        // will be used, as usual.
+        bool setDevicePixelRatio = false;
+        if (!d->sourcesize.isValid()) {
+            if (loadUrl.scheme() == QStringLiteral("image")) {
+                setDevicePixelRatio = true;
+            } else {
+                QString stringUrl = loadUrl.path(QUrl::PrettyDecoded);
+                if (stringUrl.endsWith(QLatin1String("svg")) ||
+                    stringUrl.endsWith(QLatin1String("svgz"))) {
+                    setDevicePixelRatio = true;
+                }
+            }
+
+            if (setDevicePixelRatio)
                 d->devicePixelRatio = targetDevicePixelRatio;
-        } else {
+        }
+
+        if (!setDevicePixelRatio) {
             // (possible) local file: loadUrl and d->devicePixelRatio will be modified if
             // an "@2x" file is found.
             resolve2xLocalFile(d->url, targetDevicePixelRatio, &loadUrl, &d->devicePixelRatio);
@@ -308,7 +321,7 @@ void QQuickImageBase::itemChange(ItemChange change, const ItemChangeData &value)
 void QQuickImageBase::handleScreenChanged(QScreen* screen)
 {
     // Screen DPI might have changed, reload images on screen change.
-    if (screen && isComponentComplete())
+    if (qmlEngine(this) && screen && isComponentComplete())
         load();
 }
 
@@ -326,27 +339,13 @@ void QQuickImageBase::pixmapChange()
     setImplicitSize(d->pix.width() / d->devicePixelRatio, d->pix.height() / d->devicePixelRatio);
 }
 
-// /path/to/foo.png -> path/too/foo@2x.png
-static QString image2xPath(const QString &path)
-{
-    const int dotIndex = path.lastIndexOf(QLatin1Char('.'));
-    if (dotIndex == -1)
-        return path + QLatin1String("@2x");
-    if (path.contains(QLatin1String("@2x.")))
-        return path;
-
-    QString retinaPath = path;
-    retinaPath.insert(dotIndex, QStringLiteral("@2x"));
-    return retinaPath;
-}
-
 void QQuickImageBase::resolve2xLocalFile(const QUrl &url, qreal targetDevicePixelRatio, QUrl *sourceUrl, qreal *sourceDevicePixelRatio)
 {
     Q_ASSERT(sourceUrl);
     Q_ASSERT(sourceDevicePixelRatio);
 
     // Bail out if "@2x" image loading is disabled, don't change the source url or devicePixelRatio.
-    static bool disable2xImageLoading = !qgetenv("QT_HIGHDPI_DISABLE_2X_IMAGE_LOADING").isEmpty();
+    static const bool disable2xImageLoading = !qEnvironmentVariableIsEmpty("QT_HIGHDPI_DISABLE_2X_IMAGE_LOADING");
     if (disable2xImageLoading)
         return;
 
@@ -357,23 +356,20 @@ void QQuickImageBase::resolve2xLocalFile(const QUrl &url, qreal targetDevicePixe
         return;
 
     // Special case: the url in the QML source refers directly to an "@2x" file.
-    if (localFile.contains(QLatin1String("@2x"))) {
-        *sourceDevicePixelRatio = qreal(2.0);
-        return;
+    int atLocation = localFile.lastIndexOf(QLatin1Char('@'));
+    if (atLocation > 0 && atLocation + 3 < localFile.size()) {
+        if (localFile[atLocation + 1].isDigit()
+                && localFile[atLocation + 2] == QLatin1Char('x')
+                && localFile[atLocation + 3] == QLatin1Char('.')) {
+            *sourceDevicePixelRatio = localFile[atLocation + 1].digitValue();
+            return;
+        }
     }
 
-    // Don't load @2x files non normal-dpi displays.
-    if (!(targetDevicePixelRatio > qreal(1.0)))
-        return;
-
     // Look for an @2x version
-    QString localFile2x = image2xPath(localFile);
-    if (!QFile(localFile2x).exists())
-        return;
-
-    // @2x file found found: Change url and devicePixelRatio
-    *sourceUrl = QUrl::fromLocalFile(localFile2x);
-    *sourceDevicePixelRatio = qreal(2.0);
+    QString localFileX = qt_findAtNxFile(localFile, targetDevicePixelRatio, sourceDevicePixelRatio);
+    if (localFileX != localFile)
+        *sourceUrl = QUrl::fromLocalFile(localFileX);
 }
 
 bool QQuickImageBase::autoTransform() const

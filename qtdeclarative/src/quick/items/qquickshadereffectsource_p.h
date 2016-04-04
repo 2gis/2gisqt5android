@@ -34,6 +34,17 @@
 #ifndef QQUICKSHADEREFFECTSOURCE_P_H
 #define QQUICKSHADEREFFECTSOURCE_P_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include "qquickitem.h"
 #include <QtQuick/qsgtextureprovider.h>
 #include <private/qsgadaptationlayer_p.h>
@@ -66,8 +77,8 @@ class Q_QUICK_PRIVATE_EXPORT QQuickShaderEffectSource : public QQuickItem, publi
     Q_PROPERTY(bool hideSource READ hideSource WRITE setHideSource NOTIFY hideSourceChanged)
     Q_PROPERTY(bool mipmap READ mipmap WRITE setMipmap NOTIFY mipmapChanged)
     Q_PROPERTY(bool recursive READ recursive WRITE setRecursive NOTIFY recursiveChanged)
+    Q_PROPERTY(TextureMirroring textureMirroring READ textureMirroring WRITE setTextureMirroring NOTIFY textureMirroringChanged REVISION 1)
 
-    Q_ENUMS(Format WrapMode)
 public:
     enum WrapMode {
         ClampToEdge,
@@ -75,12 +86,21 @@ public:
         RepeatVertically,
         Repeat
     };
+    Q_ENUM(WrapMode)
 
     enum Format {
         Alpha = GL_ALPHA,
         RGB = GL_RGB,
         RGBA = GL_RGBA
     };
+    Q_ENUM(Format)
+
+    enum TextureMirroring {
+        NoMirroring        = 0x00,
+        MirrorHorizontally = 0x01,
+        MirrorVertically   = 0x02
+    };
+    Q_ENUM(TextureMirroring)
 
     QQuickShaderEffectSource(QQuickItem *parent = 0);
     ~QQuickShaderEffectSource();
@@ -112,6 +132,9 @@ public:
     bool recursive() const;
     void setRecursive(bool enabled);
 
+    TextureMirroring textureMirroring() const;
+    void setTextureMirroring(TextureMirroring mirroring);
+
     bool isTextureProvider() const Q_DECL_OVERRIDE { return true; }
     QSGTextureProvider *textureProvider() const Q_DECL_OVERRIDE;
 
@@ -127,6 +150,7 @@ Q_SIGNALS:
     void hideSourceChanged();
     void mipmapChanged();
     void recursiveChanged();
+    void textureMirroringChanged();
 
     void scheduledUpdateCompleted();
 
@@ -156,6 +180,7 @@ private:
     uint m_mipmap : 1;
     uint m_recursive : 1;
     uint m_grab : 1;
+    uint m_textureMirroring : 2; // Stores TextureMirroring enum
 };
 
 QT_END_NAMESPACE

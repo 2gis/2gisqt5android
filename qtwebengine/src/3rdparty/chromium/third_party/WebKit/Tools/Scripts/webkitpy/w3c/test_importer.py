@@ -41,9 +41,9 @@
       overridden by a -n or --no-overwrite flag
 
     - All files are converted to work in WebKit:
-         1. Paths to testharness.js and vendor-prefix.js files are modified to
-            point to Webkit's copy of them in LayoutTests/resources, using the
-            correct relative path from the new location.
+         1. Paths to testharness.js scripts and vendor-prefix.js files are
+            modified to point to Webkit's copy of them in LayoutTests/resources,
+            using the correct relative path from the new location.
          2. All CSS properties requiring the -webkit-vendor prefix are prefixed
             (the list of what needs prefixes is read from Source/WebCore/CSS/CSSProperties.in).
          3. Each reftest has its own copy of its reference file following
@@ -196,7 +196,14 @@ class TestImporter(object):
             reftests = 0
             jstests = 0
 
-            DIRS_TO_SKIP = ('.git', '.hg')
+            # Files in 'tools' are not for browser testing (e.g., a script for generating test files).
+            # http://testthewebforward.org/docs/test-format-guidelines.html#tools
+            DIRS_TO_SKIP = ('.git', '.hg', 'test-plan', 'tools')
+
+            # Need to copy all files in 'support', including HTML without meta data.
+            # http://testthewebforward.org/docs/test-format-guidelines.html#support-files
+            DIRS_TO_INCLUDE = ('resources', 'support')
+
             if dirs:
                 for d in DIRS_TO_SKIP:
                     if d in dirs:
@@ -219,7 +226,8 @@ class TestImporter(object):
 
             for filename in files:
                 path_full = self.filesystem.join(root, filename)
-                path_base = path_full.replace(self.layout_tests_dir + '/', '')
+                path_base = path_full.replace(directory + '/', '')
+                path_base = self.destination_directory.replace(self.layout_tests_dir + '/', '') + '/' + path_base
                 if path_base in paths_to_skip:
                     if not self.options.dry_run and self.import_in_place:
                         _log.info("  pruning %s" % path_base)
@@ -239,7 +247,7 @@ class TestImporter(object):
                     copy_list.append({'src': fullpath, 'dest': filename})
                     continue
 
-                if root.endswith('resources'):
+                if os.path.basename(root) in DIRS_TO_INCLUDE:
                     copy_list.append({'src': fullpath, 'dest': filename})
                     continue
 
@@ -259,7 +267,10 @@ class TestImporter(object):
                     # Using a naming convention creates duplicate copies of the
                     # reference files.
                     ref_file = os.path.splitext(test_basename)[0] + '-expected'
-                    ref_file += os.path.splitext(test_basename)[1]
+                    # Make sure to use the extension from the *reference*, not
+                    # from the test, because at least flexbox tests use XHTML
+                    # references but HTML tests.
+                    ref_file += os.path.splitext(test_info['reference'])[1]
 
                     copy_list.append({'src': test_info['reference'], 'dest': ref_file, 'reference_support_info': test_info['reference_support_info']})
                     copy_list.append({'src': test_info['test'], 'dest': filename})
@@ -285,7 +296,7 @@ class TestImporter(object):
         port = self.host.port_factory.get()
         w3c_import_expectations_path = self.webkit_finder.path_from_webkit_base('LayoutTests', 'W3CImportExpectations')
         w3c_import_expectations = self.filesystem.read_text_file(w3c_import_expectations_path)
-        parser = TestExpectationParser(port, full_test_list=(), is_lint_mode=False)
+        parser = TestExpectationParser(port, all_tests=(), is_lint_mode=False)
         expectation_lines = parser.parse(w3c_import_expectations_path, w3c_import_expectations)
         for line in expectation_lines:
             if 'SKIP' in line.expectations:
@@ -370,7 +381,7 @@ class TestImporter(object):
                         prefixed_properties.extend(set(converted_file[0]) - set(prefixed_properties))
                         if not self.options.dry_run:
                             outfile = open(new_filepath, 'wb')
-                            outfile.write(converted_file[1])
+                            outfile.write(converted_file[1].encode('utf-8'))
                             outfile.close()
                 else:
                     if not self.import_in_place and not self.options.dry_run:

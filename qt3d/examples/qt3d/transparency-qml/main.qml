@@ -34,8 +34,8 @@
 **
 ****************************************************************************/
 
-import Qt3D 2.0
-import Qt3D.Renderer 2.0
+import Qt3D.Core 2.0
+import Qt3D.Render 2.0
 import QtQuick 2.4 as QQ2
 
 Entity {
@@ -72,12 +72,12 @@ Entity {
 
     Transform {
         id: sphereTransform
-        Translate { dx: 10 }
+        translation: Qt.vector3d(10, 0, 0)
     }
 
     Transform {
         id: cylinderTransform
-        Translate { dx: -10 }
+        translation: Qt.vector3d(-10, 0, 0)
     }
 
     Entity {
@@ -131,9 +131,9 @@ Entity {
             techniques: [
                 Technique
                 {
-                    openGLFilter {
-                        api: OpenGLFilter.Desktop
-                        profile: OpenGLFilter.None
+                    graphicsApiFilter {
+                        api: GraphicsApiFilter.OpenGL
+                        profile: GraphicsApiFilter.NoProfile
                         majorVersion: 2
                         minorVersion: 0
                     }
@@ -155,9 +155,9 @@ Entity {
                 },
                 Technique
                 {
-                    openGLFilter {
-                        api: OpenGLFilter.ES
-                        profile: OpenGLFilter.None
+                    graphicsApiFilter {
+                        api: GraphicsApiFilter.OpenGLES
+                        profile: GraphicsApiFilter.NoProfile
                         majorVersion: 2
                         minorVersion: 0
                     }

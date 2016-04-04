@@ -112,7 +112,7 @@ WebPageSerializerImpl::SerializeDomParam::SerializeDomParam(const KURL& url,
     , isHTMLDocument(document->isHTMLDocument())
     , haveSeenDocType(false)
     , haveAddedCharsetDeclaration(false)
-    , skipMetaElement(0)
+    , skipMetaElement(nullptr)
     , isInScriptOrStyleTag(false)
     , haveAddedXMLProcessingDirective(false)
     , haveAddedContentsBeforeEnd(false)
@@ -136,7 +136,7 @@ String WebPageSerializerImpl::preActionBeforeSerializeOpenTag(
             String equiv = meta.httpEquiv();
             if (equalIgnoringCase(equiv, "content-type")) {
                 String content = meta.content();
-                if (content.length() && content.contains("charset", false)) {
+                if (content.length() && content.contains("charset", TextCaseInsensitive)) {
                     // Find META tag declared charset, we need to skip it when
                     // serializing DOM.
                     param->skipMetaElement = element;
@@ -287,6 +287,9 @@ void WebPageSerializerImpl::encodeAndFlushBuffer(
                                        status);
 }
 
+// TODO(yosin): We should utilize |MarkupFormatter| here to share code,
+// especially escaping attribute values, done by |WebEntities| |m_htmlEntities|
+// and |m_xmlEntities|.
 void WebPageSerializerImpl::openTagToString(Element* element,
                                             SerializeDomParam* param)
 {
@@ -315,8 +318,8 @@ void WebPageSerializerImpl::openTagToString(Element* element,
             const QualifiedName& attrName = it->name();
             if (element->hasLegalLinkAttribute(attrName)) {
                 // For links start with "javascript:", we do not change it.
-                if (attrValue.startsWith("javascript:", false)) {
-                    result.append(attrValue);
+                if (attrValue.startsWith("javascript:", TextCaseInsensitive)) {
+                    result.append(m_htmlEntities.convertEntitiesInString(attrValue));
                 } else {
                     // Get the absolute link
                     WebLocalFrameImpl* subFrame = WebLocalFrameImpl::fromFrameOwnerElement(element);
@@ -329,9 +332,9 @@ void WebPageSerializerImpl::openTagToString(Element* element,
                             result.append(param->directoryName);
                             result.append('/');
                         }
-                        result.append(m_localLinks.get(completeURL));
+                        result.append(m_htmlEntities.convertEntitiesInString(m_localLinks.get(completeURL)));
                     } else {
-                        result.append(completeURL);
+                        result.append(m_htmlEntities.convertEntitiesInString(completeURL));
                     }
                 }
             } else {
@@ -465,10 +468,9 @@ void WebPageSerializerImpl::collectTargetFrames()
     if (!m_recursiveSerialization)
         return;
     // Collect all frames inside the specified frame.
-    for (int i = 0; i < static_cast<int>(m_frames.size()); ++i) {
-        WebLocalFrameImpl* currentFrame = m_frames[i];
+    for (WebLocalFrameImpl* frame : m_frames) {
         // Get current using document.
-        Document* currentDoc = currentFrame->frame()->document();
+        Document* currentDoc = frame->frame()->document();
         // Go through sub-frames.
         RefPtrWillBeRawPtr<HTMLAllCollection> all = currentDoc->all();
 

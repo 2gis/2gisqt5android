@@ -1076,7 +1076,7 @@ void tst_QJSValue::toVariant()
         QVariantList listOut = ret.toList();
         QCOMPARE(listOut.size(), listIn.size());
         for (int i = 0; i < listIn.size(); ++i)
-            QVERIFY(listOut.at(i) == listIn.at(i));
+            QCOMPARE(listOut.at(i), listIn.at(i));
         // round-trip conversion
         QJSValue array2 = eng.toScriptValue(ret);
         QVERIFY(array2.isArray());
@@ -2261,7 +2261,7 @@ void tst_QJSValue::castToPointer()
         QCOMPARE(*cp, c);
 
         QBrush *bp = qjsvalue_cast<QBrush*>(v);
-        QVERIFY(bp == 0);
+        QVERIFY(!bp);
 
         QJSValue v2 = eng.toScriptValue(qVariantFromValue(cp));
         QCOMPARE(qjsvalue_cast<QColor*>(v2), cp);
@@ -2436,7 +2436,7 @@ void tst_QJSValue::prettyPrinter()
     QFETCH(QString, function);
     QFETCH(QString, expected);
     QJSEngine eng;
-    QJSValue val = eng.evaluate("(" + function + ")");
+    QJSValue val = eng.evaluate(QLatin1Char('(') + function + QLatin1Char(')'));
     QVERIFY(val.isCallable());
     QString actual = val.toString();
     QSKIP("Function::toString() doesn't give the whole function on v4");
@@ -2465,15 +2465,15 @@ void tst_QJSValue::engineDeleted()
     delete eng;
 
     QVERIFY(v1.isUndefined());
-    QVERIFY(v1.engine() == 0);
+    QVERIFY(!v1.engine());
     QVERIFY(v2.isUndefined());
-    QVERIFY(v2.engine() == 0);
+    QVERIFY(!v2.engine());
     QVERIFY(v3.isUndefined());
-    QVERIFY(v3.engine() == 0);
+    QVERIFY(!v3.engine());
     QVERIFY(v4.isUndefined());
-    QVERIFY(v4.engine() == 0);
+    QVERIFY(!v4.engine());
     QVERIFY(v5.isString()); // was not bound to engine
-    QVERIFY(v5.engine() == 0);
+    QVERIFY(!v5.engine());
 
     QVERIFY(v3.property("foo").isUndefined());
 }

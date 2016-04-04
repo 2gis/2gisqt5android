@@ -38,7 +38,7 @@
 #include <private/qqmlproperty_p.h>
 #include <private/qv8engine_p.h>
 
-#include <private/qv4value_inl_p.h>
+#include <private/qv4value_p.h>
 #include <private/qv4functionobject_p.h>
 
 QT_BEGIN_NAMESPACE
@@ -159,7 +159,9 @@ public:
                 signalIndexes.append(propertyId + signalOffset);
         }
         if (roles.isEmpty()) {
-            for (int propertyId = 0; propertyId < propertyRoles.count(); ++propertyId)
+            const int propertyRolesCount = propertyRoles.count();
+            signalIndexes.reserve(propertyRolesCount);
+            for (int propertyId = 0; propertyId < propertyRolesCount; ++propertyId)
                 signalIndexes.append(propertyId + signalOffset);
         }
 
@@ -219,9 +221,9 @@ public:
             const QByteArray &propertyName = it.key();
 
             QV4::ScopedString name(scope, v4->newString(QString::fromUtf8(propertyName)));
-            QV4::ScopedContext global(scope, v4->rootContext());
-            QV4::ScopedFunctionObject g(scope, v4->memoryManager->alloc<QV4::IndexedBuiltinFunction>(global, propertyId, QQmlDMCachedModelData::get_property));
-            QV4::ScopedFunctionObject s(scope, v4->memoryManager->alloc<QV4::IndexedBuiltinFunction>(global, propertyId, QQmlDMCachedModelData::set_property));
+            QV4::ExecutionContext *global = v4->rootContext();
+            QV4::ScopedFunctionObject g(scope, v4->memoryManager->allocObject<QV4::IndexedBuiltinFunction>(global, propertyId, QQmlDMCachedModelData::get_property));
+            QV4::ScopedFunctionObject s(scope, v4->memoryManager->allocObject<QV4::IndexedBuiltinFunction>(global, propertyId, QQmlDMCachedModelData::set_property));
             p->setGetter(g);
             p->setSetter(s);
             proto->insertMember(name, p, QV4::Attr_Accessor|QV4::Attr_NotEnumerable|QV4::Attr_NotConfigurable);
@@ -426,7 +428,7 @@ public:
         }
         QV4::Scope scope(v4);
         QV4::ScopedObject proto(scope, type->prototype.value());
-        QV4::ScopedObject o(scope, proto->engine()->memoryManager->alloc<QQmlDelegateModelItemObject>(proto->engine(), this));
+        QV4::ScopedObject o(scope, proto->engine()->memoryManager->allocObject<QQmlDelegateModelItemObject>(this));
         o->setPrototype(proto);
         ++scriptRef;
         return o.asReturnedValue();
@@ -545,7 +547,7 @@ public:
 
         metaObject = builder.toMetaObject();
         *static_cast<QMetaObject *>(this) = *metaObject;
-        propertyCache = new QQmlPropertyCache(engine, metaObject);
+        propertyCache = new QQmlPropertyCache(QV8Engine::getV4(engine), metaObject);
     }
 };
 
@@ -604,7 +606,7 @@ public:
     {
         QQmlAdaptorModelEngineData *data = engineData(v4);
         QV4::Scope scope(v4);
-        QV4::ScopedObject o(scope, v4->memoryManager->alloc<QQmlDelegateModelItemObject>(v4, this));
+        QV4::ScopedObject o(scope, v4->memoryManager->allocObject<QQmlDelegateModelItemObject>(this));
         QV4::ScopedObject p(scope, data->listItemProto.value());
         o->setPrototype(p);
         ++scriptRef;
@@ -786,8 +788,11 @@ public:
         m_type->release();
     }
 
-    int metaCall(QMetaObject::Call call, int id, void **arguments)
+    int metaCall(QObject *o, QMetaObject::Call call, int id, void **arguments)
     {
+        Q_ASSERT(o == m_data);
+        Q_UNUSED(o);
+
         static const int objectPropertyOffset = QObject::staticMetaObject.propertyCount();
         if (id >= m_type->propertyOffset
                 && (call == QMetaObject::ReadProperty

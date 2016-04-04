@@ -45,6 +45,10 @@ namespace visitedlink {
 class VisitedLinkSlave;
 }
 
+namespace web_cache {
+class WebCacheRenderProcessObserver;
+}
+
 namespace QtWebEngineCore {
 
 class ContentRendererClientQt : public content::ContentRendererClient {
@@ -53,7 +57,7 @@ public:
     ~ContentRendererClientQt();
     virtual void RenderThreadStarted() Q_DECL_OVERRIDE;
     virtual void RenderViewCreated(content::RenderView *render_view) Q_DECL_OVERRIDE;
-
+    virtual void RenderFrameCreated(content::RenderFrame* render_frame) Q_DECL_OVERRIDE;
     virtual bool ShouldSuppressErrorPage(content::RenderFrame *, const GURL &) Q_DECL_OVERRIDE;
     virtual bool HasErrorPage(int httpStatusCode, std::string *errorDomain) Q_DECL_OVERRIDE;
     virtual void GetNavigationErrorStrings(content::RenderView* renderView, blink::WebFrame* frame, const blink::WebURLRequest& failedRequest
@@ -64,6 +68,7 @@ public:
 
 private:
     QScopedPointer<visitedlink::VisitedLinkSlave> m_visitedLinkSlave;
+    QScopedPointer<web_cache::WebCacheRenderProcessObserver> m_webCacheObserver;
 };
 
 } // namespace

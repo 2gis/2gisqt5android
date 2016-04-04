@@ -35,6 +35,7 @@
 #include <private/qqmlpropertycache_p.h>
 #include <private/qqmldata_p.h>
 #include <private/qmetaobjectbuilder_p.h>
+#include <private/qv8engine_p.h>
 #include <qqmlengine.h>
 #include <qdebug.h>
 
@@ -104,6 +105,28 @@ QByteArray QQmlOpenMetaObjectType::propertyName(int idx) const
 QMetaObject *QQmlOpenMetaObjectType::metaObject() const
 {
     return d->mem;
+}
+
+void QQmlOpenMetaObjectType::createProperties(const QVector<QByteArray> &names)
+{
+    for (int i = 0; i < names.count(); ++i) {
+        const QByteArray &name = names.at(i);
+        const int id = d->mob.propertyCount();
+        d->mob.addSignal("__" + QByteArray::number(id) + "()");
+        QMetaPropertyBuilder build = d->mob.addProperty(name, "QVariant", id);
+        propertyCreated(id, build);
+        d->names.insert(name, id);
+    }
+    free(d->mem);
+    d->mem = d->mob.toMetaObject();
+    QSet<QQmlOpenMetaObject*>::iterator it = d->referers.begin();
+    while (it != d->referers.end()) {
+        QQmlOpenMetaObject *omo = *it;
+        *static_cast<QMetaObject *>(omo) = *d->mem;
+        if (d->cache)
+            d->cache->update(omo);
+        ++it;
+    }
 }
 
 int QQmlOpenMetaObjectType::createProperty(const QByteArray &name)
@@ -230,8 +253,18 @@ QQmlOpenMetaObjectType *QQmlOpenMetaObject::type() const
     return d->type;
 }
 
-int QQmlOpenMetaObject::metaCall(QMetaObject::Call c, int id, void **a)
+void QQmlOpenMetaObject::emitPropertyNotification(const QByteArray &propertyName)
 {
+    QHash<QByteArray, int>::ConstIterator iter = d->type->d->names.constFind(propertyName);
+    if (iter == d->type->d->names.constEnd())
+        return;
+    activate(d->object, *iter + d->type->d->signalOffset, 0);
+}
+
+int QQmlOpenMetaObject::metaCall(QObject *o, QMetaObject::Call c, int id, void **a)
+{
+    Q_ASSERT(d->object == o);
+
     if (( c == QMetaObject::ReadProperty || c == QMetaObject::WriteProperty)
             && id >= d->type->d->propertyOffset) {
         int propId = id - d->type->d->propertyOffset;
@@ -245,15 +278,15 @@ int QQmlOpenMetaObject::metaCall(QMetaObject::Call c, int id, void **a)
                 prop.first = propertyWriteValue(propId, *reinterpret_cast<QVariant *>(a[0]));
                 prop.second = true;
                 propertyWritten(propId);
-                activate(d->object, d->type->d->signalOffset + propId, 0);
+                activate(o, d->type->d->signalOffset + propId, 0);
             }
         }
         return -1;
     } else {
         if (d->parent)
-            return d->parent->metaCall(c, id, a);
+            return d->parent->metaCall(o, c, id, a);
         else
-            return d->object->qt_metacall(c, id, a);
+            return o->qt_metacall(c, id, a);
     }
 }
 
@@ -277,8 +310,8 @@ void QQmlOpenMetaObject::setValue(int id, const QVariant &value)
 
 QVariant QQmlOpenMetaObject::value(const QByteArray &name) const
 {
-    QHash<QByteArray, int>::ConstIterator iter = d->type->d->names.find(name);
-    if (iter == d->type->d->names.end())
+    QHash<QByteArray, int>::ConstIterator iter = d->type->d->names.constFind(name);
+    if (iter == d->type->d->names.cend())
         return QVariant();
 
     return d->getData(*iter);
@@ -286,8 +319,8 @@ QVariant QQmlOpenMetaObject::value(const QByteArray &name) const
 
 QVariant &QQmlOpenMetaObject::operator[](const QByteArray &name)
 {
-    QHash<QByteArray, int>::ConstIterator iter = d->type->d->names.find(name);
-    Q_ASSERT(iter != d->type->d->names.end());
+    QHash<QByteArray, int>::ConstIterator iter = d->type->d->names.constFind(name);
+    Q_ASSERT(iter != d->type->d->names.cend());
 
     return d->getData(*iter);
 }
@@ -299,10 +332,10 @@ QVariant &QQmlOpenMetaObject::operator[](int id)
 
 bool QQmlOpenMetaObject::setValue(const QByteArray &name, const QVariant &val)
 {
-    QHash<QByteArray, int>::ConstIterator iter = d->type->d->names.find(name);
+    QHash<QByteArray, int>::ConstIterator iter = d->type->d->names.constFind(name);
 
     int id = -1;
-    if (iter == d->type->d->names.end()) {
+    if (iter == d->type->d->names.cend()) {
         id = createProperty(name.constData(), "") - d->type->d->propertyOffset;
     } else {
         id = *iter;
@@ -337,7 +370,7 @@ void QQmlOpenMetaObject::setCached(bool c)
     QQmlData *qmldata = QQmlData::get(d->object, true);
     if (d->cacheProperties) {
         if (!d->type->d->cache)
-            d->type->d->cache = new QQmlPropertyCache(d->type->d->engine, this);
+            d->type->d->cache = new QQmlPropertyCache(QV8Engine::getV4(d->type->d->engine), this);
         qmldata->propertyCache = d->type->d->cache;
         d->type->d->cache->addref();
     } else {

@@ -36,42 +36,26 @@
 
 #include "renderableentity.h"
 
-RenderableEntity::RenderableEntity(Qt3D::QNode *parent)
-    : Qt3D::QEntity(parent)
-    , m_mesh(new Qt3D::QMesh())
-    , m_transform(new Qt3D::QTransform())
-    , m_rotateTransform(new Qt3D::QRotateTransform())
-    , m_scaleTransform(new Qt3D::QScaleTransform())
-    , m_translateTransform(new Qt3D::QTranslateTransform())
+RenderableEntity::RenderableEntity(Qt3DCore::QNode *parent)
+    : Qt3DCore::QEntity(parent)
+    , m_mesh(new Qt3DRender::QMesh())
+    , m_transform(new Qt3DCore::QTransform())
 {
-    m_transform->addTransform(m_rotateTransform);
-    m_transform->addTransform(m_scaleTransform);
-    m_transform->addTransform(m_translateTransform);
     addComponent(m_mesh);
     addComponent(m_transform);
 }
 
 RenderableEntity::~RenderableEntity()
 {
-
+    QNode::cleanup();
 }
 
-Qt3D::QMesh *RenderableEntity::mesh() const
+Qt3DRender::QMesh *RenderableEntity::mesh() const
 {
     return m_mesh;
 }
 
-Qt3D::QScaleTransform *RenderableEntity::scaleTransform() const
+Qt3DCore::QTransform *RenderableEntity::transform() const
 {
-    return m_scaleTransform;
-}
-
-Qt3D::QTranslateTransform *RenderableEntity::translateTransform() const
-{
-    return m_translateTransform;
-}
-
-Qt3D::QRotateTransform *RenderableEntity::rotateTransform() const
-{
-    return m_rotateTransform;
+    return m_transform;
 }

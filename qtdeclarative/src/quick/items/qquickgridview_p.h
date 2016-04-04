@@ -34,6 +34,17 @@
 #ifndef QQUICKGRIDVIEW_P_H
 #define QQUICKGRIDVIEW_P_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include "qquickitemview_p.h"
 
 
@@ -52,8 +63,6 @@ class Q_AUTOTEST_EXPORT QQuickGridView : public QQuickItemView
 
     Q_PROPERTY(SnapMode snapMode READ snapMode WRITE setSnapMode NOTIFY snapModeChanged)
 
-    Q_ENUMS(SnapMode)
-    Q_ENUMS(Flow)
     Q_CLASSINFO("DefaultProperty", "data")
 
 public:
@@ -61,6 +70,7 @@ public:
         FlowLeftToRight = LeftToRight,
         FlowTopToBottom = TopToBottom
     };
+    Q_ENUM(Flow)
 
     QQuickGridView(QQuickItem *parent=0);
     ~QQuickGridView();
@@ -78,6 +88,7 @@ public:
     void setCellHeight(qreal);
 
     enum SnapMode { NoSnap, SnapToRow, SnapOneRow };
+    Q_ENUM(SnapMode)
     SnapMode snapMode() const;
     void setSnapMode(SnapMode mode);
 

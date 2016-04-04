@@ -33,11 +33,14 @@
 
 
 #include "qv4errorobject_p.h"
-#include "qv4mm_p.h"
+#include <QtCore/qnumeric.h>
+#include <QtCore/qmath.h>
 #include <QtCore/QDateTime>
 #include <QtCore/QStringList>
 #include <QtCore/QDebug>
 
+#include "qv4string_p.h"
+#include <private/qv4mm_p.h>
 #include <private/qqmljsengine_p.h>
 #include <private/qqmljslexer_p.h>
 #include <private/qqmljsparser_p.h>
@@ -58,72 +61,49 @@
 
 using namespace QV4;
 
-Heap::ErrorObject::ErrorObject(InternalClass *ic, QV4::Object *prototype)
-    : Heap::Object(ic, prototype)
-    , stack(Q_NULLPTR)
+Heap::ErrorObject::ErrorObject()
 {
-    Scope scope(ic->engine);
+    Scope scope(internalClass->engine);
     Scoped<QV4::ErrorObject> e(scope, this);
 
-    ScopedString s(scope, scope.engine->newString(QStringLiteral("Error")));
-    e->defineDefaultProperty(QStringLiteral("name"), s);
+    if (internalClass == scope.engine->errorProtoClass)
+        return;
+
+    *propertyData(QV4::ErrorObject::Index_Stack) = scope.engine->getStackFunction();
+    *propertyData(QV4::ErrorObject::Index_Stack + QV4::Object::SetterOffset) = Encode::undefined();
+    *propertyData(QV4::ErrorObject::Index_FileName) = Encode::undefined();
+    *propertyData(QV4::ErrorObject::Index_LineNumber) = Encode::undefined();
 }
 
-Heap::ErrorObject::ErrorObject(InternalClass *ic, QV4::Object *prototype, const Value &message, ErrorType t)
-    : Heap::Object(ic, prototype)
+Heap::ErrorObject::ErrorObject(const Value &message, ErrorType t)
 {
     errorType = t;
 
-    Scope scope(ic->engine);
+    Scope scope(internalClass->engine);
     Scoped<QV4::ErrorObject> e(scope, this);
 
-    e->defineAccessorProperty(QStringLiteral("stack"), QV4::ErrorObject::method_get_stack, 0);
+    *propertyData(QV4::ErrorObject::Index_Stack) = scope.engine->getStackFunction();
+    *propertyData(QV4::ErrorObject::Index_Stack + QV4::Object::SetterOffset) = Encode::undefined();
+
+    e->d()->stackTrace = scope.engine->stackTrace();
+    if (!e->d()->stackTrace.isEmpty()) {
+        *propertyData(QV4::ErrorObject::Index_FileName) = scope.engine->newString(e->d()->stackTrace.at(0).source);
+        *propertyData(QV4::ErrorObject::Index_LineNumber) = Primitive::fromInt32(e->d()->stackTrace.at(0).line);
+    }
 
     if (!message.isUndefined())
-        e->defineDefaultProperty(QStringLiteral("message"), message);
-    ScopedString s(scope);
-    e->defineDefaultProperty(QStringLiteral("name"), (s = scope.engine->newString(e->className())));
-
-    e->d()->stackTrace = scope.engine->stackTrace();
-    if (!e->d()->stackTrace.isEmpty()) {
-        e->defineDefaultProperty(QStringLiteral("fileName"), (s = scope.engine->newString(e->d()->stackTrace.at(0).source)));
-        e->defineDefaultProperty(QStringLiteral("lineNumber"), Primitive::fromInt32(e->d()->stackTrace.at(0).line));
-    }
+        *propertyData(QV4::ErrorObject::Index_Message) = message;
 }
 
-Heap::ErrorObject::ErrorObject(InternalClass *ic, QV4::Object *prototype, const QString &message, ErrorObject::ErrorType t)
-    : Heap::Object(ic, prototype)
+Heap::ErrorObject::ErrorObject(const Value &message, const QString &fileName, int line, int column, ErrorObject::ErrorType t)
 {
     errorType = t;
 
-    Scope scope(ic->engine);
+    Scope scope(internalClass->engine);
     Scoped<QV4::ErrorObject> e(scope, this);
-    ScopedString s(scope);
 
-    e->defineAccessorProperty(QStringLiteral("stack"), QV4::ErrorObject::method_get_stack, 0);
-
-    ScopedValue v(scope, scope.engine->newString(message));
-    e->defineDefaultProperty(QStringLiteral("message"), v);
-    e->defineDefaultProperty(QStringLiteral("name"), (s = scope.engine->newString(e->className())));
-
-    e->d()->stackTrace = scope.engine->stackTrace();
-    if (!e->d()->stackTrace.isEmpty()) {
-        e->defineDefaultProperty(QStringLiteral("fileName"), (s = scope.engine->newString(e->d()->stackTrace.at(0).source)));
-        e->defineDefaultProperty(QStringLiteral("lineNumber"), Primitive::fromInt32(e->d()->stackTrace.at(0).line));
-    }
-}
-
-Heap::ErrorObject::ErrorObject(InternalClass *ic, QV4::Object *prototype, const QString &message, const QString &fileName, int line, int column, ErrorObject::ErrorType t)
-    : Heap::Object(ic, prototype)
-{
-    errorType = t;
-
-    Scope scope(ic->engine);
-    Scoped<QV4::ErrorObject> e(scope, this);
-    ScopedString s(scope);
-
-    e->defineAccessorProperty(QStringLiteral("stack"), QV4::ErrorObject::method_get_stack, 0);
-    e->defineDefaultProperty(QStringLiteral("name"), (s = scope.engine->newString(e->className())));
+    *propertyData(QV4::ErrorObject::Index_Stack) = scope.engine->getStackFunction();
+    *propertyData(QV4::ErrorObject::Index_Stack + QV4::Object::SetterOffset) = Encode::undefined();
 
     e->d()->stackTrace = scope.engine->stackTrace();
     StackFrame frame;
@@ -133,12 +113,33 @@ Heap::ErrorObject::ErrorObject(InternalClass *ic, QV4::Object *prototype, const 
     e->d()->stackTrace.prepend(frame);
 
     if (!e->d()->stackTrace.isEmpty()) {
-        e->defineDefaultProperty(QStringLiteral("fileName"), (s = scope.engine->newString(e->d()->stackTrace.at(0).source)));
-        e->defineDefaultProperty(QStringLiteral("lineNumber"), Primitive::fromInt32(e->d()->stackTrace.at(0).line));
+        *propertyData(QV4::ErrorObject::Index_FileName) = scope.engine->newString(e->d()->stackTrace.at(0).source);
+        *propertyData(QV4::ErrorObject::Index_LineNumber) = Primitive::fromInt32(e->d()->stackTrace.at(0).line);
     }
 
-    ScopedValue v(scope, scope.engine->newString(message));
-    e->defineDefaultProperty(QStringLiteral("message"), v);
+    if (!message.isUndefined())
+        *propertyData(QV4::ErrorObject::Index_Message) = message;
+}
+
+const char *ErrorObject::className(Heap::ErrorObject::ErrorType t)
+{
+    switch (t) {
+    case Heap::ErrorObject::Error:
+        return "Error";
+    case Heap::ErrorObject::EvalError:
+        return "EvalError";
+    case Heap::ErrorObject::RangeError:
+        return "RangeError";
+    case Heap::ErrorObject::ReferenceError:
+        return "ReferenceError";
+    case Heap::ErrorObject::SyntaxError:
+        return "SyntaxError";
+    case Heap::ErrorObject::TypeError:
+        return "TypeError";
+    case Heap::ErrorObject::URIError:
+        return "URIError";
+    }
+    Q_UNREACHABLE();
 }
 
 ReturnedValue ErrorObject::method_get_stack(CallContext *ctx)
@@ -178,58 +179,43 @@ DEFINE_OBJECT_VTABLE(ErrorObject);
 
 DEFINE_OBJECT_VTABLE(SyntaxErrorObject);
 
-Heap::SyntaxErrorObject::SyntaxErrorObject(ExecutionEngine *engine, const Value &msg)
-    : Heap::ErrorObject(engine->emptyClass, engine->syntaxErrorPrototype.asObject(), msg, SyntaxError)
+Heap::SyntaxErrorObject::SyntaxErrorObject(const Value &msg)
+    : Heap::ErrorObject(msg, SyntaxError)
 {
 }
 
-Heap::SyntaxErrorObject::SyntaxErrorObject(ExecutionEngine *engine, const QString &msg, const QString &fileName, int lineNumber, int columnNumber)
-    : Heap::ErrorObject(engine->emptyClass, engine->syntaxErrorPrototype.asObject(), msg, fileName, lineNumber, columnNumber, SyntaxError)
+Heap::SyntaxErrorObject::SyntaxErrorObject(const Value &msg, const QString &fileName, int lineNumber, int columnNumber)
+    : Heap::ErrorObject(msg, fileName, lineNumber, columnNumber, SyntaxError)
 {
 }
 
-Heap::EvalErrorObject::EvalErrorObject(ExecutionEngine *engine, const Value &message)
-    : Heap::ErrorObject(engine->emptyClass, engine->evalErrorPrototype.asObject(), message, EvalError)
+Heap::EvalErrorObject::EvalErrorObject(const Value &message)
+    : Heap::ErrorObject(message, EvalError)
 {
 }
 
-Heap::RangeErrorObject::RangeErrorObject(ExecutionEngine *engine, const Value &message)
-    : Heap::ErrorObject(engine->emptyClass, engine->rangeErrorPrototype.asObject(), message, RangeError)
+Heap::RangeErrorObject::RangeErrorObject(const Value &message)
+    : Heap::ErrorObject(message, RangeError)
 {
 }
 
-Heap::RangeErrorObject::RangeErrorObject(ExecutionEngine *engine, const QString &message)
-    : Heap::ErrorObject(engine->emptyClass, engine->rangeErrorPrototype.asObject(), message, RangeError)
+Heap::ReferenceErrorObject::ReferenceErrorObject(const Value &message)
+    : Heap::ErrorObject(message, ReferenceError)
 {
 }
 
-Heap::ReferenceErrorObject::ReferenceErrorObject(ExecutionEngine *engine, const Value &message)
-    : Heap::ErrorObject(engine->emptyClass, engine->referenceErrorPrototype.asObject(), message, ReferenceError)
+Heap::ReferenceErrorObject::ReferenceErrorObject(const Value &msg, const QString &fileName, int lineNumber, int columnNumber)
+    : Heap::ErrorObject(msg, fileName, lineNumber, columnNumber, ReferenceError)
 {
 }
 
-Heap::ReferenceErrorObject::ReferenceErrorObject(ExecutionEngine *engine, const QString &message)
-    : Heap::ErrorObject(engine->emptyClass, engine->referenceErrorPrototype.asObject(), message, ReferenceError)
+Heap::TypeErrorObject::TypeErrorObject(const Value &message)
+    : Heap::ErrorObject(message, TypeError)
 {
 }
 
-Heap::ReferenceErrorObject::ReferenceErrorObject(ExecutionEngine *engine, const QString &msg, const QString &fileName, int lineNumber, int columnNumber)
-    : Heap::ErrorObject(engine->emptyClass, engine->referenceErrorPrototype.asObject(), msg, fileName, lineNumber, columnNumber, ReferenceError)
-{
-}
-
-Heap::TypeErrorObject::TypeErrorObject(ExecutionEngine *engine, const Value &message)
-    : Heap::ErrorObject(engine->emptyClass, engine->typeErrorPrototype.asObject(), message, TypeError)
-{
-}
-
-Heap::TypeErrorObject::TypeErrorObject(ExecutionEngine *engine, const QString &message)
-    : Heap::ErrorObject(engine->emptyClass, engine->typeErrorPrototype.asObject(), message, TypeError)
-{
-}
-
-Heap::URIErrorObject::URIErrorObject(ExecutionEngine *engine, const Value &message)
-    : Heap::ErrorObject(engine->emptyClass, engine->uRIErrorPrototype.asObject(), message, URIError)
+Heap::URIErrorObject::URIErrorObject(const Value &message)
+    : Heap::ErrorObject(message, URIError)
 {
 }
 
@@ -251,16 +237,16 @@ Heap::ErrorCtor::ErrorCtor(QV4::ExecutionContext *scope, const QString &name)
 {
 }
 
-ReturnedValue ErrorCtor::construct(Managed *m, CallData *callData)
+ReturnedValue ErrorCtor::construct(const Managed *m, CallData *callData)
 {
-    Scope scope(static_cast<ErrorCtor *>(m)->engine());
+    Scope scope(static_cast<const ErrorCtor *>(m)->engine());
     ScopedValue v(scope, callData->argument(0));
-    return Encode(scope.engine->newErrorObject(v));
+    return ErrorObject::create<ErrorObject>(scope.engine, v)->asReturnedValue();
 }
 
-ReturnedValue ErrorCtor::call(Managed *that, CallData *callData)
+ReturnedValue ErrorCtor::call(const Managed *that, CallData *callData)
 {
-    return static_cast<Object *>(that)->construct(callData);
+    return static_cast<const Object *>(that)->construct(callData);
 }
 
 Heap::EvalErrorCtor::EvalErrorCtor(QV4::ExecutionContext *scope)
@@ -268,11 +254,11 @@ Heap::EvalErrorCtor::EvalErrorCtor(QV4::ExecutionContext *scope)
 {
 }
 
-ReturnedValue EvalErrorCtor::construct(Managed *m, CallData *callData)
+ReturnedValue EvalErrorCtor::construct(const Managed *m, CallData *callData)
 {
-    Scope scope(static_cast<EvalErrorCtor *>(m)->engine());
+    Scope scope(static_cast<const EvalErrorCtor *>(m)->engine());
     ScopedValue v(scope, callData->argument(0));
-    return (scope.engine->memoryManager->alloc<EvalErrorObject>(scope.engine, v))->asReturnedValue();
+    return ErrorObject::create<EvalErrorObject>(scope.engine, v)->asReturnedValue();
 }
 
 Heap::RangeErrorCtor::RangeErrorCtor(QV4::ExecutionContext *scope)
@@ -280,11 +266,11 @@ Heap::RangeErrorCtor::RangeErrorCtor(QV4::ExecutionContext *scope)
 {
 }
 
-ReturnedValue RangeErrorCtor::construct(Managed *m, CallData *callData)
+ReturnedValue RangeErrorCtor::construct(const Managed *m, CallData *callData)
 {
-    Scope scope(static_cast<RangeErrorCtor *>(m)->engine());
+    Scope scope(static_cast<const RangeErrorCtor *>(m)->engine());
     ScopedValue v(scope, callData->argument(0));
-    return (scope.engine->memoryManager->alloc<RangeErrorObject>(scope.engine, v))->asReturnedValue();
+    return ErrorObject::create<RangeErrorObject>(scope.engine, v)->asReturnedValue();
 }
 
 Heap::ReferenceErrorCtor::ReferenceErrorCtor(QV4::ExecutionContext *scope)
@@ -292,11 +278,11 @@ Heap::ReferenceErrorCtor::ReferenceErrorCtor(QV4::ExecutionContext *scope)
 {
 }
 
-ReturnedValue ReferenceErrorCtor::construct(Managed *m, CallData *callData)
+ReturnedValue ReferenceErrorCtor::construct(const Managed *m, CallData *callData)
 {
-    Scope scope(static_cast<ReferenceErrorCtor *>(m)->engine());
+    Scope scope(static_cast<const ReferenceErrorCtor *>(m)->engine());
     ScopedValue v(scope, callData->argument(0));
-    return (scope.engine->memoryManager->alloc<ReferenceErrorObject>(scope.engine, v))->asReturnedValue();
+    return ErrorObject::create<ReferenceErrorObject>(scope.engine, v)->asReturnedValue();
 }
 
 Heap::SyntaxErrorCtor::SyntaxErrorCtor(QV4::ExecutionContext *scope)
@@ -304,11 +290,11 @@ Heap::SyntaxErrorCtor::SyntaxErrorCtor(QV4::ExecutionContext *scope)
 {
 }
 
-ReturnedValue SyntaxErrorCtor::construct(Managed *m, CallData *callData)
+ReturnedValue SyntaxErrorCtor::construct(const Managed *m, CallData *callData)
 {
-    Scope scope(static_cast<SyntaxErrorCtor *>(m)->engine());
+    Scope scope(static_cast<const SyntaxErrorCtor *>(m)->engine());
     ScopedValue v(scope, callData->argument(0));
-    return (scope.engine->memoryManager->alloc<SyntaxErrorObject>(scope.engine, v))->asReturnedValue();
+    return ErrorObject::create<SyntaxErrorObject>(scope.engine, v)->asReturnedValue();
 }
 
 Heap::TypeErrorCtor::TypeErrorCtor(QV4::ExecutionContext *scope)
@@ -316,11 +302,11 @@ Heap::TypeErrorCtor::TypeErrorCtor(QV4::ExecutionContext *scope)
 {
 }
 
-ReturnedValue TypeErrorCtor::construct(Managed *m, CallData *callData)
+ReturnedValue TypeErrorCtor::construct(const Managed *m, CallData *callData)
 {
-    Scope scope(static_cast<TypeErrorCtor *>(m)->engine());
+    Scope scope(static_cast<const TypeErrorCtor *>(m)->engine());
     ScopedValue v(scope, callData->argument(0));
-    return (scope.engine->memoryManager->alloc<TypeErrorObject>(scope.engine, v))->asReturnedValue();
+    return ErrorObject::create<TypeErrorObject>(scope.engine, v)->asReturnedValue();
 }
 
 Heap::URIErrorCtor::URIErrorCtor(QV4::ExecutionContext *scope)
@@ -328,41 +314,43 @@ Heap::URIErrorCtor::URIErrorCtor(QV4::ExecutionContext *scope)
 {
 }
 
-ReturnedValue URIErrorCtor::construct(Managed *m, CallData *callData)
+ReturnedValue URIErrorCtor::construct(const Managed *m, CallData *callData)
 {
-    Scope scope(static_cast<URIErrorCtor *>(m)->engine());
+    Scope scope(static_cast<const URIErrorCtor *>(m)->engine());
     ScopedValue v(scope, callData->argument(0));
-    return (scope.engine->memoryManager->alloc<URIErrorObject>(scope.engine, v))->asReturnedValue();
+    return ErrorObject::create<URIErrorObject>(scope.engine, v)->asReturnedValue();
 }
 
-void ErrorPrototype::init(ExecutionEngine *engine, Object *ctor, Object *obj)
+void ErrorPrototype::init(ExecutionEngine *engine, Object *ctor, Object *obj, Heap::ErrorObject::ErrorType t)
 {
     Scope scope(engine);
     ScopedString s(scope);
     ScopedObject o(scope);
-    ctor->defineReadonlyProperty(engine->id_prototype, (o = obj));
-    ctor->defineReadonlyProperty(engine->id_length, Primitive::fromInt32(1));
-    obj->defineDefaultProperty(QStringLiteral("constructor"), (o = ctor));
-    obj->defineDefaultProperty(engine->id_toString, method_toString, 0);
-    obj->defineDefaultProperty(QStringLiteral("message"), (s = engine->newString()));
+    ctor->defineReadonlyProperty(engine->id_prototype(), (o = obj));
+    ctor->defineReadonlyProperty(engine->id_length(), Primitive::fromInt32(1));
+    *obj->propertyData(Index_Constructor) = ctor;
+    *obj->propertyData(Index_Message) = engine->id_empty();
+    *obj->propertyData(Index_Name) = engine->newString(QString::fromLatin1(ErrorObject::className(t)));
+    if (t == Heap::ErrorObject::Error)
+        obj->defineDefaultProperty(engine->id_toString(), method_toString, 0);
 }
 
 ReturnedValue ErrorPrototype::method_toString(CallContext *ctx)
 {
     Scope scope(ctx);
 
-    Object *o = ctx->thisObject().asObject();
+    Object *o = ctx->thisObject().as<Object>();
     if (!o)
         return ctx->engine()->throwTypeError();
 
-    ScopedValue name(scope, o->get(ctx->d()->engine->id_name));
+    ScopedValue name(scope, o->get(ctx->d()->engine->id_name()));
     QString qname;
     if (name->isUndefined())
-        qname = QString::fromLatin1("Error");
+        qname = QStringLiteral("Error");
     else
         qname = name->toQString();
 
-    ScopedString s(scope, ctx->d()->engine->newString(QString::fromLatin1("message")));
+    ScopedString s(scope, ctx->d()->engine->newString(QStringLiteral("message")));
     ScopedValue message(scope, o->get(s));
     QString qmessage;
     if (!message->isUndefined())

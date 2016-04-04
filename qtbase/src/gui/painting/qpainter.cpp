@@ -219,18 +219,18 @@ QTransform QPainterPrivate::viewTransform() const
     return QTransform();
 }
 
-int QPainterPrivate::effectiveDevicePixelRatio() const
+qreal QPainterPrivate::effectiveDevicePixelRatio() const
 {
     // Special cases for devices that does not support PdmDevicePixelRatio go here:
     if (device->devType() == QInternal::Printer)
-        return 1;
+        return qreal(1);
 
-    return qMax(1, device->metric(QPaintDevice::PdmDevicePixelRatio));
+    return qMax(qreal(1), device->devicePixelRatioF());
 }
 
 QTransform QPainterPrivate::hidpiScaleTransform() const
 {
-    int devicePixelRatio = effectiveDevicePixelRatio();
+    const qreal devicePixelRatio = effectiveDevicePixelRatio();
     return QTransform::fromScale(devicePixelRatio, devicePixelRatio);
 }
 
@@ -3154,7 +3154,7 @@ void QPainter::shear(qreal sh, qreal sv)
 /*!
     \fn void QPainter::rotate(qreal angle)
 
-    Rotates the coordinate system clockwise. The given \a angle parameter uses degree unit.
+    Rotates the coordinate system clockwise. The given \a angle parameter is in degrees.
 
     \sa setWorldTransform(), {QPainter#Coordinate Transformations}{Coordinate Transformations}
 */
@@ -5110,7 +5110,7 @@ void QPainter::drawPixmap(const QPointF &p, const QPixmap &pm)
             x += d->state->matrix.dx();
             y += d->state->matrix.dy();
         }
-        int scale = pm.devicePixelRatio();
+        qreal scale = pm.devicePixelRatio();
         d->engine->drawPixmap(QRectF(x, y, w / scale, h / scale), pm, QRectF(0, 0, w, h));
     }
 }
@@ -7470,7 +7470,7 @@ start_lengthVariant:
         }
     }
 
-    QList<QTextLayout::FormatRange> underlineFormats;
+    QVector<QTextLayout::FormatRange> underlineFormats;
     int length = offset - old_offset;
     if ((hidemnmemonic || showmnemonic) && maxUnderlines > 0) {
         QChar *cout = text.data() + old_offset;
@@ -7526,6 +7526,7 @@ start_lengthVariant:
 
     if (engine.option.tabs().isEmpty() && ta) {
         QList<qreal> tabs;
+        tabs.reserve(tabarraylen);
         for (int i = 0; i < tabarraylen; i++)
             tabs.append(qreal(ta[i]));
         engine.option.setTabArray(tabs);
@@ -7544,7 +7545,7 @@ start_lengthVariant:
         engine.forceJustification = true;
     QTextLayout textLayout(&engine);
     textLayout.setCacheEnabled(true);
-    textLayout.setAdditionalFormats(underlineFormats);
+    textLayout.setFormats(underlineFormats);
 
     if (finalText.isEmpty()) {
         height = fm.height();

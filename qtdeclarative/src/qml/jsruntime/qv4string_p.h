@@ -33,6 +33,17 @@
 #ifndef QV4STRING_H
 #define QV4STRING_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include <QtCore/qstring.h>
 #include "qv4managed_p.h"
 
@@ -187,6 +198,20 @@ protected:
 public:
     static uint toArrayIndex(const QString &str);
 };
+
+template<>
+inline const String *Value::as() const {
+    return isManaged() && m() && m()->vtable()->isString ? static_cast<const String *>(this) : 0;
+}
+
+#ifndef V4_BOOTSTRAP
+template<>
+inline ReturnedValue value_convert<String>(ExecutionEngine *e, const Value &v)
+{
+    return v.toString(e)->asReturnedValue();
+}
+#endif
+
 
 }
 

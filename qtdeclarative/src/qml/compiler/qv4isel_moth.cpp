@@ -350,7 +350,7 @@ void InstructionSelection::run(int functionIndex)
     opt.run(qmlEngine, useTypeInference, /*peelLoops =*/ false);
     if (opt.isInSSA()) {
         static const bool doStackSlotAllocation =
-                qgetenv("QV4_NO_INTERPRETER_STACK_SLOT_ALLOCATION").isEmpty();
+                qEnvironmentVariableIsEmpty("QV4_NO_INTERPRETER_STACK_SLOT_ALLOCATION");
 
         if (doStackSlotAllocation) {
             AllocateStackSlots(opt.lifeTimeIntervals()).forFunction(_function);
@@ -447,7 +447,7 @@ QQmlRefPointer<QV4::CompiledData::CompilationUnit> InstructionSelection::backend
     foreach (IR::Function *irFunction, irModule->functions)
         compilationUnit->codeRefs[i++] = codeRefs[irFunction];
     QQmlRefPointer<QV4::CompiledData::CompilationUnit> result;
-    result.take(compilationUnit.take());
+    result.adopt(compilationUnit.take());
     return result;
 }
 
@@ -459,6 +459,29 @@ void InstructionSelection::callValue(IR::Expr *value, IR::ExprList *args, IR::Ex
     call.dest = getParam(value);
     call.result = getResultParam(result);
     addInstruction(call);
+}
+
+void InstructionSelection::callQmlContextProperty(IR::Expr *base, IR::Member::MemberKind kind, int propertyIndex, IR::ExprList *args, IR::Expr *result)
+{
+    if (kind == IR::Member::MemberOfQmlScopeObject) {
+        Instruction::CallScopeObjectProperty call;
+        call.base = getParam(base);
+        call.index = propertyIndex;
+        prepareCallArgs(args, call.argc);
+        call.callData = callDataStart();
+        call.result = getResultParam(result);
+        addInstruction(call);
+    } else if (kind == IR::Member::MemberOfQmlContextObject) {
+        Instruction::CallContextObjectProperty call;
+        call.base = getParam(base);
+        call.index = propertyIndex;
+        prepareCallArgs(args, call.argc);
+        call.callData = callDataStart();
+        call.result = getResultParam(result);
+        addInstruction(call);
+    } else {
+        Q_ASSERT(false);
+    }
 }
 
 void InstructionSelection::callProperty(IR::Expr *base, const QString &name, IR::ExprList *args,
@@ -565,9 +588,9 @@ void InstructionSelection::loadThisObject(IR::Expr *e)
     addInstruction(load);
 }
 
-void InstructionSelection::loadQmlIdArray(IR::Expr *e)
+void InstructionSelection::loadQmlContext(IR::Expr *e)
 {
-    Instruction::LoadQmlIdArray load;
+    Instruction::LoadQmlContext load;
     load.result = getResultParam(e);
     addInstruction(load);
 }
@@ -575,20 +598,6 @@ void InstructionSelection::loadQmlIdArray(IR::Expr *e)
 void InstructionSelection::loadQmlImportedScripts(IR::Expr *e)
 {
     Instruction::LoadQmlImportedScripts load;
-    load.result = getResultParam(e);
-    addInstruction(load);
-}
-
-void InstructionSelection::loadQmlContextObject(IR::Expr *e)
-{
-    Instruction::LoadQmlContextObject load;
-    load.result = getResultParam(e);
-    addInstruction(load);
-}
-
-void InstructionSelection::loadQmlScopeObject(IR::Expr *e)
-{
-    Instruction::LoadQmlScopeObject load;
     load.result = getResultParam(e);
     addInstruction(load);
 }
@@ -694,6 +703,25 @@ void InstructionSelection::setProperty(IR::Expr *source, IR::Expr *targetBase,
     addInstruction(store);
 }
 
+void InstructionSelection::setQmlContextProperty(IR::Expr *source, IR::Expr *targetBase, IR::Member::MemberKind kind, int propertyIndex)
+{
+    if (kind == IR::Member::MemberOfQmlScopeObject) {
+        Instruction::StoreScopeObjectProperty store;
+        store.base = getParam(targetBase);
+        store.propertyIndex = propertyIndex;
+        store.source = getParam(source);
+        addInstruction(store);
+    } else if (kind == IR::Member::MemberOfQmlContextObject) {
+        Instruction::StoreContextObjectProperty store;
+        store.base = getParam(targetBase);
+        store.propertyIndex = propertyIndex;
+        store.source = getParam(source);
+        addInstruction(store);
+    } else {
+        Q_ASSERT(false);
+    }
+}
+
 void InstructionSelection::setQObjectProperty(IR::Expr *source, IR::Expr *targetBase, int propertyIndex)
 {
     Instruction::StoreQObjectProperty store;
@@ -701,6 +729,31 @@ void InstructionSelection::setQObjectProperty(IR::Expr *source, IR::Expr *target
     store.propertyIndex = propertyIndex;
     store.source = getParam(source);
     addInstruction(store);
+}
+
+void InstructionSelection::getQmlContextProperty(IR::Expr *source, IR::Member::MemberKind kind, int index, IR::Expr *target)
+{
+    if (kind == IR::Member::MemberOfQmlScopeObject) {
+        Instruction::LoadScopeObjectProperty load;
+        load.base = getParam(source);
+        load.propertyIndex = index;
+        load.result = getResultParam(target);
+        addInstruction(load);
+    } else if (kind == IR::Member::MemberOfQmlContextObject) {
+        Instruction::LoadContextObjectProperty load;
+        load.base = getParam(source);
+        load.propertyIndex = index;
+        load.result = getResultParam(target);
+        addInstruction(load);
+    } else if (kind == IR::Member::MemberOfIdObjectsArray) {
+        Instruction::LoadIdObject load;
+        load.base = getParam(source);
+        load.index = index;
+        load.result = getResultParam(target);
+        addInstruction(load);
+    } else {
+        Q_ASSERT(false);
+    }
 }
 
 void InstructionSelection::getQObjectProperty(IR::Expr *base, int propertyIndex, bool captureRequired, bool isSingletonProperty, int attachedPropertiesId, IR::Expr *target)
@@ -1124,6 +1177,25 @@ void InstructionSelection::callBuiltinInvalid(IR::Name *func, IR::ExprList *args
     addInstruction(call);
 }
 
+void InstructionSelection::callBuiltinTypeofQmlContextProperty(IR::Expr *base, IR::Member::MemberKind kind, int propertyIndex, IR::Expr *result)
+{
+    if (kind == IR::Member::MemberOfQmlScopeObject) {
+        Instruction::CallBuiltinTypeofScopeObjectProperty call;
+        call.base = getParam(base);
+        call.index = propertyIndex;
+        call.result = getResultParam(result);
+        addInstruction(call);
+    } else if (kind == IR::Member::MemberOfQmlContextObject) {
+        Instruction::CallBuiltinTypeofContextObjectProperty call;
+        call.base = getParam(base);
+        call.index = propertyIndex;
+        call.result = getResultParam(result);
+        addInstruction(call);
+    } else {
+        Q_UNREACHABLE();
+    }
+}
+
 void InstructionSelection::callBuiltinTypeofMember(IR::Expr *base, const QString &name,
                                                    IR::Expr *result)
 {
@@ -1444,7 +1516,7 @@ ptrdiff_t InstructionSelection::addInstructionHelper(Instr::Type type, Instr &in
 void InstructionSelection::patchJumpAddresses()
 {
     typedef QHash<IR::BasicBlock *, QVector<ptrdiff_t> >::ConstIterator PatchIt;
-    for (PatchIt i = _patches.begin(), ei = _patches.end(); i != ei; ++i) {
+    for (PatchIt i = _patches.cbegin(), ei = _patches.cend(); i != ei; ++i) {
         Q_ASSERT(_addrs.contains(i.key()));
         ptrdiff_t target = _addrs.value(i.key());
 

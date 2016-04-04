@@ -37,22 +37,25 @@
 #ifndef QWEBENGINEPROFILE_H
 #define QWEBENGINEPROFILE_H
 
-#include "qtwebenginewidgetsglobal.h"
+#include <QtWebEngineWidgets/qtwebenginewidgetsglobal.h>
 
-#include <QObject>
-#include <QScopedPointer>
-#include <QString>
+#include <QtCore/qobject.h>
+#include <QtCore/qscopedpointer.h>
+#include <QtCore/qstring.h>
 
 QT_BEGIN_NAMESPACE
 
 class QObject;
 class QUrl;
+class QWebEngineCookieStore;
 class QWebEngineDownloadItem;
 class QWebEnginePage;
 class QWebEnginePagePrivate;
 class QWebEngineProfilePrivate;
 class QWebEngineSettings;
 class QWebEngineScriptCollection;
+class QWebEngineUrlRequestInterceptor;
+class QWebEngineUrlSchemeHandler;
 
 class QWEBENGINEWIDGETS_EXPORT QWebEngineProfile : public QObject {
     Q_OBJECT
@@ -87,11 +90,17 @@ public:
     HttpCacheType httpCacheType() const;
     void setHttpCacheType(QWebEngineProfile::HttpCacheType);
 
+    void setHttpAcceptLanguage(const QString &httpAcceptLanguage);
+    QString httpAcceptLanguage() const;
+
     PersistentCookiesPolicy persistentCookiesPolicy() const;
     void setPersistentCookiesPolicy(QWebEngineProfile::PersistentCookiesPolicy);
 
     int httpCacheMaximumSize() const;
     void setHttpCacheMaximumSize(int maxSize);
+
+    QWebEngineCookieStore* cookieStore();
+    void setRequestInterceptor(QWebEngineUrlRequestInterceptor *interceptor);
 
     void clearAllVisitedLinks();
     void clearVisitedLinks(const QList<QUrl> &urls);
@@ -100,12 +109,22 @@ public:
     QWebEngineSettings *settings() const;
     QWebEngineScriptCollection *scripts() const;
 
+    const QWebEngineUrlSchemeHandler *urlSchemeHandler(const QByteArray &) const;
+    void installUrlSchemeHandler(const QByteArray &scheme, QWebEngineUrlSchemeHandler *);
+    void removeUrlScheme(const QByteArray &scheme);
+    void removeUrlSchemeHandler(QWebEngineUrlSchemeHandler *);
+    void removeAllUrlSchemeHandlers();
+
     static QWebEngineProfile *defaultProfile();
 
 Q_SIGNALS:
     void downloadRequested(QWebEngineDownloadItem *download);
 
+private Q_SLOTS:
+    void destroyedUrlSchemeHandler(QWebEngineUrlSchemeHandler *obj);
+
 private:
+    Q_DISABLE_COPY(QWebEngineProfile)
     Q_DECLARE_PRIVATE(QWebEngineProfile)
     QWebEngineProfile(QWebEngineProfilePrivate *, QObject *parent = 0);
 

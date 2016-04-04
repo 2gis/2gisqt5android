@@ -34,6 +34,17 @@
 #ifndef QQUICKTEXTEDIT_P_H
 #define QQUICKTEXTEDIT_P_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include "qquickimplicitsizeitem_p.h"
 
 #include <QtGui/qtextoption.h>
@@ -47,12 +58,6 @@ class QTextBlock;
 class Q_QUICK_PRIVATE_EXPORT QQuickTextEdit : public QQuickImplicitSizeItem
 {
     Q_OBJECT
-    Q_ENUMS(VAlignment)
-    Q_ENUMS(HAlignment)
-    Q_ENUMS(TextFormat)
-    Q_ENUMS(WrapMode)
-    Q_ENUMS(SelectionMode)
-    Q_ENUMS(RenderType)
 
     Q_PROPERTY(QString text READ text WRITE setText NOTIFY textChanged)
     Q_PROPERTY(QColor color READ color WRITE setColor NOTIFY colorChanged)
@@ -91,8 +96,13 @@ class Q_QUICK_PRIVATE_EXPORT QQuickTextEdit : public QQuickImplicitSizeItem
     Q_PROPERTY(bool inputMethodComposing READ isInputMethodComposing NOTIFY inputMethodComposingChanged)
     Q_PROPERTY(QUrl baseUrl READ baseUrl WRITE setBaseUrl RESET resetBaseUrl NOTIFY baseUrlChanged)
     Q_PROPERTY(RenderType renderType READ renderType WRITE setRenderType NOTIFY renderTypeChanged)
-    Q_PROPERTY(QQuickTextDocument *textDocument READ textDocument FINAL REVISION 1)
+    Q_PROPERTY(QQuickTextDocument *textDocument READ textDocument CONSTANT FINAL REVISION 1)
     Q_PROPERTY(QString hoveredLink READ hoveredLink NOTIFY linkHovered REVISION 2)
+    Q_PROPERTY(qreal padding READ padding WRITE setPadding RESET resetPadding NOTIFY paddingChanged REVISION 6)
+    Q_PROPERTY(qreal topPadding READ topPadding WRITE setTopPadding RESET resetTopPadding NOTIFY topPaddingChanged REVISION 6)
+    Q_PROPERTY(qreal leftPadding READ leftPadding WRITE setLeftPadding RESET resetLeftPadding NOTIFY leftPaddingChanged REVISION 6)
+    Q_PROPERTY(qreal rightPadding READ rightPadding WRITE setRightPadding RESET resetRightPadding NOTIFY rightPaddingChanged REVISION 6)
+    Q_PROPERTY(qreal bottomPadding READ bottomPadding WRITE setBottomPadding RESET resetBottomPadding NOTIFY bottomPaddingChanged REVISION 6)
 
 public:
     QQuickTextEdit(QQuickItem *parent=0);
@@ -103,18 +113,21 @@ public:
         AlignHCenter = Qt::AlignHCenter,
         AlignJustify = Qt::AlignJustify
     };
+    Q_ENUM(HAlignment)
 
     enum VAlignment {
         AlignTop = Qt::AlignTop,
         AlignBottom = Qt::AlignBottom,
         AlignVCenter = Qt::AlignVCenter
     };
+    Q_ENUM(VAlignment)
 
     enum TextFormat {
         PlainText = Qt::PlainText,
         RichText = Qt::RichText,
         AutoText = Qt::AutoText
     };
+    Q_ENUM(TextFormat)
 
     enum WrapMode { NoWrap = QTextOption::NoWrap,
                     WordWrap = QTextOption::WordWrap,
@@ -122,15 +135,18 @@ public:
                     WrapAtWordBoundaryOrAnywhere = QTextOption::WrapAtWordBoundaryOrAnywhere, // COMPAT
                     Wrap = QTextOption::WrapAtWordBoundaryOrAnywhere
                   };
+    Q_ENUM(WrapMode)
 
     enum SelectionMode {
         SelectCharacters,
         SelectWords
     };
+    Q_ENUM(SelectionMode)
 
     enum RenderType { QtRendering,
                       NativeRendering
                     };
+    Q_ENUM(RenderType)
 
     QString text() const;
     void setText(const QString &);
@@ -247,6 +263,26 @@ public:
 
     Q_REVISION(3) Q_INVOKABLE QString linkAt(qreal x, qreal y) const;
 
+    qreal padding() const;
+    void setPadding(qreal padding);
+    void resetPadding();
+
+    qreal topPadding() const;
+    void setTopPadding(qreal padding);
+    void resetTopPadding();
+
+    qreal leftPadding() const;
+    void setLeftPadding(qreal padding);
+    void resetLeftPadding();
+
+    qreal rightPadding() const;
+    void setRightPadding(qreal padding);
+    void resetRightPadding();
+
+    qreal bottomPadding() const;
+    void setBottomPadding(qreal padding);
+    void resetBottomPadding();
+
 Q_SIGNALS:
     void textChanged();
     void contentSizeChanged();
@@ -259,11 +295,11 @@ Q_SIGNALS:
     void selectionColorChanged(const QColor &color);
     void selectedTextColorChanged(const QColor &color);
     void fontChanged(const QFont &font);
-    void horizontalAlignmentChanged(HAlignment alignment);
-    void verticalAlignmentChanged(VAlignment alignment);
+    void horizontalAlignmentChanged(QQuickTextEdit::HAlignment alignment);
+    void verticalAlignmentChanged(QQuickTextEdit::VAlignment alignment);
     void wrapModeChanged();
     void lineCountChanged();
-    void textFormatChanged(TextFormat textFormat);
+    void textFormatChanged(QQuickTextEdit::TextFormat textFormat);
     void readOnlyChanged(bool isReadOnly);
     void cursorVisibleChanged(bool isCursorVisible);
     void cursorDelegateChanged();
@@ -272,7 +308,7 @@ Q_SIGNALS:
     void textMarginChanged(qreal textMargin);
     Q_REVISION(1) void selectByKeyboardChanged(bool selectByKeyboard);
     void selectByMouseChanged(bool selectByMouse);
-    void mouseSelectionModeChanged(SelectionMode mode);
+    void mouseSelectionModeChanged(QQuickTextEdit::SelectionMode mode);
     void linkActivated(const QString &link);
     Q_REVISION(2) void linkHovered(const QString &link);
     void canPasteChanged();
@@ -283,6 +319,12 @@ Q_SIGNALS:
     void baseUrlChanged();
     void inputMethodHintsChanged();
     void renderTypeChanged();
+    Q_REVISION(6) void editingFinished();
+    Q_REVISION(6) void paddingChanged();
+    Q_REVISION(6) void topPaddingChanged();
+    Q_REVISION(6) void leftPaddingChanged();
+    Q_REVISION(6) void rightPaddingChanged();
+    Q_REVISION(6) void bottomPaddingChanged();
 
 public Q_SLOTS:
     void selectAll();
@@ -321,6 +363,8 @@ private:
     void invalidateFontCaches();
 
 protected:
+    QQuickTextEdit(QQuickTextEditPrivate &dd, QQuickItem *parent = 0);
+
     void geometryChanged(const QRectF &newGeometry,
                          const QRectF &oldGeometry) Q_DECL_OVERRIDE;
 

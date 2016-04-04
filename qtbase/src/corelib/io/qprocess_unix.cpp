@@ -92,8 +92,8 @@ QT_END_NAMESPACE
 #include <private/qthread_p.h>
 #include <qfile.h>
 #include <qfileinfo.h>
+#include <qdir.h>
 #include <qlist.h>
-#include <qhash.h>
 #include <qmutex.h>
 #include <qsemaphore.h>
 #include <qsocketnotifier.h>
@@ -204,8 +204,8 @@ bool QProcessPrivate::openChannel(Channel &channel)
             channel.pipe[1] = -1;
             if ( (channel.pipe[0] = qt_safe_open(fname, O_RDONLY)) != -1)
                 return true;    // success
-
-            q->setErrorString(QProcess::tr("Could not open input redirection for reading"));
+            setErrorAndEmit(QProcess::FailedToStart,
+                            QProcess::tr("Could not open input redirection for reading"));
         } else {
             int mode = O_WRONLY | O_CREAT;
             if (channel.append)
@@ -217,12 +217,9 @@ bool QProcessPrivate::openChannel(Channel &channel)
             if ( (channel.pipe[1] = qt_safe_open(fname, mode, 0666)) != -1)
                 return true; // success
 
-            q->setErrorString(QProcess::tr("Could not open output redirection for writing"));
+            setErrorAndEmit(QProcess::FailedToStart,
+                            QProcess::tr("Could not open input redirection for reading"));
         }
-
-        // could not open file
-        processError = QProcess::FailedToStart;
-        emit q->error(processError);
         cleanup();
         return false;
     } else {
@@ -331,9 +328,7 @@ void QProcessPrivate::startProcess()
         !openChannel(stdoutChannel) ||
         !openChannel(stderrChannel) ||
         qt_create_pipe(childStartedPipe) != 0) {
-        processError = QProcess::FailedToStart;
-        q->setErrorString(qt_error_string(errno));
-        emit q->error(processError);
+        setErrorAndEmit(QProcess::FailedToStart, qt_error_string(errno));
         cleanup();
         return;
     }
@@ -368,11 +363,14 @@ void QProcessPrivate::startProcess()
             static QBasicMutex cfbundleMutex;
             QMutexLocker lock(&cfbundleMutex);
             QCFType<CFBundleRef> bundle = CFBundleCreate(0, url);
-            url = CFBundleCopyExecutableURL(bundle);
+            // 'executableURL' can be either relative or absolute ...
+            QCFType<CFURLRef> executableURL = CFBundleCopyExecutableURL(bundle);
+            // not to depend on caching - make sure it's always absolute.
+            url = CFURLCopyAbsoluteURL(executableURL);
         }
         if (url) {
-            QCFString str = CFURLCopyFileSystemPath(url, kCFURLPOSIXPathStyle);
-            encodedProgramName += "/Contents/MacOS/" + QCFString::toQString(str).toUtf8();
+            const QCFString str = CFURLCopyFileSystemPath(url, kCFURLPOSIXPathStyle);
+            encodedProgramName += (QDir::separator() + QDir(program).relativeFilePath(QCFString::toQString(str))).toUtf8();
         }
     }
 #endif
@@ -406,7 +404,7 @@ void QProcessPrivate::startProcess()
     char **path = 0;
     int pathc = 0;
     if (!program.contains(QLatin1Char('/'))) {
-        const QString pathEnv = QString::fromLocal8Bit(::getenv("PATH"));
+        const QString pathEnv = QString::fromLocal8Bit(qgetenv("PATH"));
         if (!pathEnv.isEmpty()) {
             QStringList pathEntries = pathEnv.split(QLatin1Char(':'), QString::SkipEmptyParts);
             if (!pathEntries.isEmpty()) {
@@ -459,9 +457,8 @@ void QProcessPrivate::startProcess()
         qDebug("fork failed: %s", qPrintable(qt_error_string(lastForkErrno)));
 #endif
         q->setProcessState(QProcess::NotRunning);
-        processError = QProcess::FailedToStart;
-        q->setErrorString(QProcess::tr("Resource error (fork failure): %1").arg(qt_error_string(lastForkErrno)));
-        emit q->error(processError);
+        setErrorAndEmit(QProcess::FailedToStart,
+                        QProcess::tr("Resource error (fork failure): %1").arg(qt_error_string(lastForkErrno)));
         cleanup();
         return;
     }
@@ -679,9 +676,9 @@ void QProcessPrivate::execChild(const char *workingDir, char **path, char **argv
     qt_safe_close(childStartedPipe[0]);
 
     // enter the working directory
-    if (workingDir) {
-        if (QT_CHDIR(workingDir) == -1)
-            qWarning("QProcessPrivate::execChild() failed to chdir to %s", workingDir);
+    if (workingDir && QT_CHDIR(workingDir) == -1) {
+        // failed, stop the process
+        goto report_errno;
     }
 
     // this is a virtual call, and it base behavior is to do nothing.
@@ -710,6 +707,7 @@ void QProcessPrivate::execChild(const char *workingDir, char **path, char **argv
     }
 
     // notify failure
+report_errno:
     QString error = qt_error_string(errno);
 #if defined (QPROCESS_DEBUG)
     fprintf(stderr, "QProcessPrivate::execChild() failed (%s), notifying parent process\n", qPrintable(error));
@@ -720,7 +718,7 @@ void QProcessPrivate::execChild(const char *workingDir, char **path, char **argv
 }
 #endif
 
-bool QProcessPrivate::processStarted()
+bool QProcessPrivate::processStarted(QString *errorMessage)
 {
     ushort buf[errorBufferMax];
     int i = qt_safe_read(childStartedPipe[0], &buf, sizeof buf);
@@ -737,8 +735,8 @@ bool QProcessPrivate::processStarted()
 #endif
 
     // did we read an error message?
-    if (i > 0)
-        q_func()->setErrorString(QString((const QChar *)buf, i / sizeof(QChar)));
+    if ((i > 0) && errorMessage)
+        *errorMessage = QString((const QChar *)buf, i / sizeof(QChar));
 
     return i <= 0;
 }
@@ -809,8 +807,6 @@ void QProcessPrivate::killProcess()
 
 bool QProcessPrivate::waitForStarted(int msecs)
 {
-    Q_Q(QProcess);
-
 #if defined (QPROCESS_DEBUG)
     qDebug("QProcessPrivate::waitForStarted(%d) waiting for child to start (fd = %d)", msecs,
            childStartedPipe[0]);
@@ -820,8 +816,7 @@ bool QProcessPrivate::waitForStarted(int msecs)
     FD_ZERO(&fds);
     FD_SET(childStartedPipe[0], &fds);
     if (qt_select_msecs(childStartedPipe[0] + 1, &fds, 0, msecs) == 0) {
-        processError = QProcess::Timedout;
-        q->setErrorString(QProcess::tr("Process operation timed out"));
+        setError(QProcess::Timedout);
 #if defined (QPROCESS_DEBUG)
         qDebug("QProcessPrivate::waitForStarted(%d) == false (timed out)", msecs);
 #endif
@@ -848,7 +843,6 @@ QList<QSocketNotifier *> QProcessPrivate::defaultNotifiers() const
 
 bool QProcessPrivate::waitForReadyRead(int msecs)
 {
-    Q_Q(QProcess);
 #if defined (QPROCESS_DEBUG)
     qDebug("QProcessPrivate::waitForReadyRead(%d)", msecs);
 #endif
@@ -891,8 +885,7 @@ bool QProcessPrivate::waitForReadyRead(int msecs)
             break;
         }
         if (ret == 0) {
-            processError = QProcess::Timedout;
-            q->setErrorString(QProcess::tr("Process operation timed out"));
+            setError(QProcess::Timedout);
             return false;
         }
 
@@ -928,7 +921,6 @@ bool QProcessPrivate::waitForReadyRead(int msecs)
 
 bool QProcessPrivate::waitForBytesWritten(int msecs)
 {
-    Q_Q(QProcess);
 #if defined (QPROCESS_DEBUG)
     qDebug("QProcessPrivate::waitForBytesWritten(%d)", msecs);
 #endif
@@ -973,8 +965,7 @@ bool QProcessPrivate::waitForBytesWritten(int msecs)
         }
 
         if (ret == 0) {
-            processError = QProcess::Timedout;
-            q->setErrorString(QProcess::tr("Process operation timed out"));
+            setError(QProcess::Timedout);
             return false;
         }
 
@@ -1003,7 +994,6 @@ bool QProcessPrivate::waitForBytesWritten(int msecs)
 
 bool QProcessPrivate::waitForFinished(int msecs)
 {
-    Q_Q(QProcess);
 #if defined (QPROCESS_DEBUG)
     qDebug("QProcessPrivate::waitForFinished(%d)", msecs);
 #endif
@@ -1047,8 +1037,7 @@ bool QProcessPrivate::waitForFinished(int msecs)
             break;
         }
         if (ret == 0) {
-            processError = QProcess::Timedout;
-            q->setErrorString(QProcess::tr("Process operation timed out"));
+            setError(QProcess::Timedout);
             return false;
         }
 
@@ -1188,7 +1177,7 @@ bool QProcessPrivate::startDetached(const QString &program, const QStringList &a
             argv[arguments.size() + 1] = 0;
 
             if (!program.contains(QLatin1Char('/'))) {
-                const QString path = QString::fromLocal8Bit(::getenv("PATH"));
+                const QString path = QString::fromLocal8Bit(qgetenv("PATH"));
                 if (!path.isEmpty()) {
                     QStringList pathEntries = path.split(QLatin1Char(':'));
                     for (int k = 0; k < pathEntries.size(); ++k) {

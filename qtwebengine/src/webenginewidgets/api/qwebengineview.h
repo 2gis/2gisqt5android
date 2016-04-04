@@ -113,13 +113,18 @@ Q_SIGNALS:
     void selectionChanged();
     void urlChanged(const QUrl&);
     void iconUrlChanged(const QUrl&);
+    void renderProcessTerminated(QWebEnginePage::RenderProcessTerminationStatus terminationStatus,
+                             int exitCode);
 
 protected:
     virtual QWebEngineView *createWindow(QWebEnginePage::WebWindowType type);
     virtual void contextMenuEvent(QContextMenuEvent*) Q_DECL_OVERRIDE;
     virtual bool event(QEvent*) Q_DECL_OVERRIDE;
+    virtual void showEvent(QShowEvent *) Q_DECL_OVERRIDE;
+    virtual void hideEvent(QHideEvent *) Q_DECL_OVERRIDE;
 
 private:
+    Q_DISABLE_COPY(QWebEngineView)
     Q_DECLARE_PRIVATE(QWebEngineView)
     QScopedPointer<QWebEngineViewPrivate> d_ptr;
 

@@ -1,5 +1,41 @@
 defineTest(isPlatformSupported) {
-  !win32-msvc2013: !contains(QT_CONFIG, c++11) {
+  linux {
+    !gcc:!clang {
+      skipBuild("Qt WebEngine on Linux requires clang or GCC.")
+      return(false)
+    }
+    gcc:!clang:!isGCCVersionSupported(): return(false)
+  } else:win32 {
+    winrt {
+      skipBuild("WinRT is not supported.")
+      return(false)
+    }
+    msvc {
+      !equals(MSVC_VER, "12.0"):!equals(MSVC_VER, "14.0") {
+        skipBuild("Qt WebEngine on Windows requires MSVC 2013 or MSVC 2015.")
+        return(false)
+      }
+    } else {
+      skipBuild("Qt WebEngine on Windows requires MSVC 2013 or MSVC 2015.")
+      return(false)
+    }
+  } else:osx {
+    lessThan(QMAKE_XCODE_VERSION, 5.1) {
+      skipBuild("Using XCode version $$QMAKE_XCODE_VERSION, but at least version 5.1 is required to build Qt WebEngine.")
+      return(false)
+    }
+    # We require OS X 10.9 (darwin version 13.0.0) or newer
+    darwin_major_version = $$section(QMAKE_HOST.version, ., 0, 0)
+    lessThan(darwin_major_version, 13) {
+      skipBuild("Qt WebEngine requires OS X version 10.9 or newer.")
+      return(false)
+    }
+  } else {
+    skipBuild("Unknown platform. Qt WebEngine only supports Linux, Windows, and OS X.")
+    return(false)
+  }
+
+  !contains(QT_CONFIG, c++11) {
     skipBuild("C++11 support is required in order to build chromium.")
     return(false)
   }
@@ -7,26 +43,23 @@ defineTest(isPlatformSupported) {
     skipBuild("Static builds of QtWebEngine aren't supported.")
     return(false)
   }
-  osx:lessThan(QMAKE_XCODE_VERSION, 5.1) {
-    skipBuild("Using xcode version $$QMAKE_XCODE_VERSION, but at least version 5.1 is required to build Qt WebEngine.")
-    return(false)
-  }
-
-  linux-g++*:!isGCCVersionSupported(): return(false)
   !isPythonVersionSupported(): return(false)
-  linux-g++*|win32-msvc2013|macx-clang: return(true)
-  boot2qt: return(true)
-
-  skipBuild("Qt WebEngine can currently only be built for Linux (GCC), Windows (MSVC 2013), OS X (XCode 5.1+) or Qt for Device Creation.")
-  return(false)
+  return(true)
 }
 
 defineTest(isPythonVersionSupported) {
-  python_major_version = $$system('python -c "import sys; print sys.version_info.major"')
-  python_minor_version = $$system('python -c "import sys; print sys.version_info.minor"')
-  lessThan(python_major_version, 3): greaterThan(python_major_version, 1): greaterThan(python_minor_version, 6): return(true)
-  skipBuild("Using Python version "$$python_major_version"."$$python_minor_version", but Python version 2 (2.7 or later) is required to build Qt WebEngine.")
-  return(false)
+    python_error_msg = "Python version 2 (2.7 or later) is required to build Qt WebEngine."
+    python_major_version = $$system('python -c "import sys; print(sys.version_info[0])"')
+    greaterThan(python_major_version, 2) {
+        skipBuild("Python version 3 is not supported by Chromium.")
+        skipBuild($$python_error_msg)
+        return(false)
+    }
+    python_minor_version = $$system('python -c "import sys; print(sys.version_info[1])"')
+    greaterThan(python_major_version, 1): greaterThan(python_minor_version, 6): return(true)
+    skipBuild("Using Python version "$$python_major_version"."$$python_minor_version".")
+    skipBuild($$python_error_msg)
+    return(false)
 }
 
 defineTest(isGCCVersionSupported) {
@@ -142,18 +175,40 @@ defineReplace(which) {
   return($$out)
 }
 
-defineReplace(findOrBuildNinja) {
-    # If NINJA_PATH env var is set, prefer that.
-    # Fallback to locating our own bootstrapped ninja.
-    out = $(NINJA_PATH)
-    !exists($$out) {
-      out = $$absolute_path("$${getChromiumSrcDir()}/../ninja/ninja", "$$QTWEBENGINE_ROOT")
-      win32: out = $$system_path($${out}.exe)
+defineTest(use?) {
+    contains(WEBENGINE_CONFIG, use_$$lower($$1)): return(true)
+    return(false)
+}
 
-      # If we did not find ninja, then we bootstrap it.
-      !exists($$out): system("cd $$dirname(out) && python configure.py --bootstrap")
+defineReplace(findOrBuildNinja) {
+  # If NINJA_PATH env var is set, prefer that.
+  # Fallback to locating our own bootstrapped ninja.
+  out = $(NINJA_PATH)
+  !exists($$out) {
+    src_3rd_party_dir = $$absolute_path("$${getChromiumSrcDir()}/../", "$$QTWEBENGINE_ROOT")
+
+    out = $$shadowed($$absolute_path("ninja/ninja", "$$src_3rd_party_dir"))
+    win32: out = $${out}.exe
+
+    out = $$system_path($$out)
+    # If we did not find ninja, then we bootstrap it.
+    !exists($$out) {
+      # If we are making a shadow build, copy the ninja sources to the build directory.
+      !equals(PWD, $${OUT_PWD}) {
+        log("Build directory is different from source directory - copying ninja sources to the build tree...")
+        shadow_3rd_party_path = $$system_path($$shadowed($$src_3rd_party_dir))
+
+        !exists($$dirname(out)): mkpath($$dirname(out))
+        copy_dir_files {
+          system("$$QMAKE_COPY_DIR $$system_quote($$system_path($$absolute_path("ninja", "$$src_3rd_party_dir"))) $$system_quote($$dirname(out))")
+        } else {
+          system("$$QMAKE_COPY_DIR $$system_quote($$system_path($$absolute_path("ninja", "$$src_3rd_party_dir"))) $$system_quote($$shadow_3rd_party_path)")
+        }
+      }
+      system("cd $$system_quote($$dirname(out)) && python configure.py --bootstrap")
     }
-    return($$out)
+  }
+  return($$out)
 }
 
 defineTest(skipBuild) {

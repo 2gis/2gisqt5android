@@ -33,10 +33,24 @@
 #ifndef QMLJS_ENVIRONMENT_H
 #define QMLJS_ENVIRONMENT_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include "qv4global_p.h"
 #include "qv4managed_p.h"
 
 QT_BEGIN_NAMESPACE
+
+class QQmlContextData;
+class QObject;
 
 namespace QV4 {
 
@@ -45,6 +59,8 @@ struct CompilationUnit;
 struct Function;
 }
 
+struct QmlContextWrapper;
+struct Identifier;
 struct CallContext;
 struct CatchContext;
 struct WithContext;
@@ -74,9 +90,9 @@ struct ExecutionContext : Base {
         Type_GlobalContext = 0x1,
         Type_CatchContext = 0x2,
         Type_WithContext = 0x3,
-        Type_SimpleCallContext = 0x4,
-        Type_CallContext = 0x5,
-        Type_QmlContext = 0x6
+        Type_QmlContext = 0x4,
+        Type_SimpleCallContext = 0x5,
+        Type_CallContext = 0x6
     };
 
     inline ExecutionContext(ExecutionEngine *engine, ContextType t);
@@ -84,8 +100,7 @@ struct ExecutionContext : Base {
     CallData *callData;
 
     ExecutionEngine *engine;
-    ExecutionContext *parent;
-    ExecutionContext *outer;
+    Pointer<ExecutionContext> outer;
     Lookup *lookups;
     CompiledData::CompilationUnit *compilationUnit;
 
@@ -93,6 +108,18 @@ struct ExecutionContext : Base {
     bool strictMode : 8;
     int lineNumber;
 };
+
+inline
+ExecutionContext::ExecutionContext(ExecutionEngine *engine, ContextType t)
+    : engine(engine)
+    , outer(0)
+    , lookups(0)
+    , compilationUnit(0)
+    , type(t)
+    , strictMode(false)
+    , lineNumber(-1)
+{}
+
 
 struct CallContext : ExecutionContext {
     CallContext(ExecutionEngine *engine, ContextType t = Type_SimpleCallContext)
@@ -102,29 +129,34 @@ struct CallContext : ExecutionContext {
         locals = 0;
         activation = 0;
     }
-    CallContext(ExecutionEngine *engine, QV4::Object *qml, QV4::FunctionObject *function);
 
-    FunctionObject *function;
+    Pointer<FunctionObject> function;
     Value *locals;
-    Object *activation;
+    Pointer<Object> activation;
 };
 
 struct GlobalContext : ExecutionContext {
     GlobalContext(ExecutionEngine *engine);
-    Object *global;
+    Pointer<Object> global;
 };
 
 struct CatchContext : ExecutionContext {
-    CatchContext(ExecutionEngine *engine, QV4::String *exceptionVarName, const Value &exceptionValue);
-    StringValue exceptionVarName;
+    CatchContext(ExecutionContext *outerContext, String *exceptionVarName, const Value &exceptionValue);
+    Pointer<String> exceptionVarName;
     Value exceptionValue;
 };
 
 struct WithContext : ExecutionContext {
-    WithContext(ExecutionEngine *engine, QV4::Object *with);
-    Object *withObject;
+    WithContext(ExecutionContext *outerContext, Object *with);
+    Pointer<Object> withObject;
 };
 
+struct QmlContextWrapper;
+
+struct QmlContext : ExecutionContext {
+    QmlContext(QV4::ExecutionContext *outerContext, QV4::QmlContextWrapper *qml);
+    Pointer<QmlContextWrapper> qml;
+};
 
 }
 
@@ -139,16 +171,17 @@ struct Q_QML_EXPORT ExecutionContext : public Managed
 
     ExecutionEngine *engine() const { return d()->engine; }
 
-    Heap::CallContext *newCallContext(FunctionObject *f, CallData *callData);
-    Heap::WithContext *newWithContext(Object *with);
-    Heap::CatchContext *newCatchContext(String *exceptionVarName, const Value &exceptionValue);
-    Heap::CallContext *newQmlContext(FunctionObject *f, Object *qml);
+    Heap::CallContext *newCallContext(const FunctionObject *f, CallData *callData);
+    Heap::WithContext *newWithContext(Heap::Object *with);
+    Heap::CatchContext *newCatchContext(Heap::String *exceptionVarName, ReturnedValue exceptionValue);
+    Heap::QmlContext *newQmlContext(QmlContextWrapper *qml);
+    Heap::QmlContext *newQmlContext(QQmlContextData *context, QObject *scopeObject);
 
     void createMutableBinding(String *name, bool deletable);
 
     void setProperty(String *name, const Value &value);
     ReturnedValue getProperty(String *name);
-    ReturnedValue getPropertyAndBase(String *name, Heap::Object **base);
+    ReturnedValue getPropertyAndBase(String *name, Value *base);
     bool deleteProperty(String *name);
 
     inline CallContext *asCallContext();
@@ -160,7 +193,7 @@ struct Q_QML_EXPORT ExecutionContext : public Managed
 
     static void markObjects(Heap::Base *m, ExecutionEngine *e);
 
-    const Value &thisObject() const {
+    Value &thisObject() const {
         return d()->callData->thisObject;
     }
     int argc() const {
@@ -174,7 +207,7 @@ struct Q_QML_EXPORT ExecutionContext : public Managed
     }
 };
 
-struct CallContext : public ExecutionContext
+struct Q_QML_EXPORT CallContext : public ExecutionContext
 {
     V4_MANAGED(CallContext, ExecutionContext)
 
@@ -206,6 +239,16 @@ struct CatchContext : public ExecutionContext
 struct WithContext : public ExecutionContext
 {
     V4_MANAGED(WithContext, ExecutionContext)
+};
+
+struct QmlContext : public ExecutionContext
+{
+    V4_MANAGED(QmlContext, ExecutionContext)
+
+    QObject *qmlScope() const;
+    QQmlContextData *qmlContext() const;
+
+    void takeContextOwnership();
 };
 
 inline CallContext *ExecutionContext::asCallContext()

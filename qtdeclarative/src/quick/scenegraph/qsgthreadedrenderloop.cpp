@@ -54,7 +54,8 @@
 #include <private/qquickanimatorcontroller_p.h>
 
 #include <private/qquickprofiler_p.h>
-#include <private/qqmldebugservice_p.h>
+#include <private/qqmldebugserviceinterfaces_p.h>
+#include <private/qqmldebugconnector_p.h>
 
 #include <private/qquickshadereffectnode_p.h>
 
@@ -147,6 +148,9 @@ const QEvent::Type WM_TryRelease        = QEvent::Type(QEvent::User + 4);
 // called.
 const QEvent::Type WM_Grab              = QEvent::Type(QEvent::User + 5);
 
+// Passed by the window when there is a render job to run
+const QEvent::Type WM_PostJob           = QEvent::Type(QEvent::User + 6);
+
 template <typename T> T *windowFor(const QList<T> &list, QQuickWindow *window)
 {
     for (int i=0; i<list.size(); ++i) {
@@ -200,6 +204,14 @@ public:
     QImage *image;
 };
 
+class WMJobEvent : public WMWindowEvent
+{
+public:
+    WMJobEvent(QQuickWindow *c, QRunnable *postedJob)
+        : WMWindowEvent(c, WM_PostJob), job(postedJob) {}
+    ~WMJobEvent() { delete job; }
+    QRunnable *job;
+};
 
 class QSGRenderThreadEventQueue : public QQueue<QEvent *>
 {
@@ -345,7 +357,6 @@ bool QSGRenderThread::event(QEvent *e)
         if (window) {
             QQuickWindowPrivate::get(window)->fireAboutToStop();
             qCDebug(QSG_LOG_RENDERLOOP) << QSG_RT_PAD << "- window removed";
-            gl->doneCurrent();
             window = 0;
         }
         waitCondition.wakeOne();
@@ -396,24 +407,40 @@ bool QSGRenderThread::event(QEvent *e)
     case WM_Grab: {
         qCDebug(QSG_LOG_RENDERLOOP) << QSG_RT_PAD << "WM_Grab";
         WMGrabEvent *ce = static_cast<WMGrabEvent *>(e);
-        Q_ASSERT(ce->window == window);
+        Q_ASSERT(ce->window);
+        Q_ASSERT(ce->window == window || !window);
         mutex.lock();
-        if (window) {
-            gl->makeCurrent(window);
+        if (ce->window) {
+            gl->makeCurrent(ce->window);
 
             qCDebug(QSG_LOG_RENDERLOOP) << QSG_RT_PAD << "- sync scene graph";
-            QQuickWindowPrivate *d = QQuickWindowPrivate::get(window);
+            QQuickWindowPrivate *d = QQuickWindowPrivate::get(ce->window);
             d->syncSceneGraph();
 
             qCDebug(QSG_LOG_RENDERLOOP) << QSG_RT_PAD << "- rendering scene graph";
-            QQuickWindowPrivate::get(window)->renderSceneGraph(windowSize);
+            QQuickWindowPrivate::get(ce->window)->renderSceneGraph(ce->window->size());
 
             qCDebug(QSG_LOG_RENDERLOOP) << QSG_RT_PAD << "- grabbing result";
-            *ce->image = qt_gl_read_framebuffer(windowSize * window->effectiveDevicePixelRatio(), false, false);
+            bool alpha = ce->window->format().alphaBufferSize() > 0 && ce->window->color().alpha() != 255;
+            *ce->image = qt_gl_read_framebuffer(windowSize * ce->window->effectiveDevicePixelRatio(), alpha, alpha);
         }
         qCDebug(QSG_LOG_RENDERLOOP) << QSG_RT_PAD << "- waking gui to handle result";
         waitCondition.wakeOne();
         mutex.unlock();
+        return true;
+    }
+
+    case WM_PostJob: {
+        qCDebug(QSG_LOG_RENDERLOOP) << QSG_RT_PAD << "WM_PostJob";
+        WMJobEvent *ce = static_cast<WMJobEvent *>(e);
+        Q_ASSERT(ce->window == window);
+        if (window) {
+            gl->makeCurrent(window);
+            ce->job->run();
+            delete ce->job;
+            ce->job = 0;
+            qCDebug(QSG_LOG_RENDERLOOP) << QSG_RT_PAD << "- job done";
+        }
         return true;
     }
 
@@ -666,7 +693,7 @@ void QSGRenderThread::run()
     qCDebug(QSG_LOG_RENDERLOOP) << QSG_RT_PAD << "run()";
     animatorDriver = sgrc->sceneGraphContext()->createAnimationDriver(0);
     animatorDriver->install();
-    if (QQmlDebugService::isDebuggingEnabled())
+    if (QQmlDebugConnector::service<QQmlProfilerService>())
         QQuickProfiler::registerAnimationCallback();
 
     while (active) {
@@ -993,20 +1020,20 @@ void QSGThreadedRenderLoop::maybeUpdate(Window *w)
     if (!QCoreApplication::instance())
         return;
 
+    if (!w || !w->thread->isRunning())
+        return;
+
     QThread *current = QThread::currentThread();
     if (current != QCoreApplication::instance()->thread() && (current != w->thread || !m_lockedForSync)) {
         qWarning() << "Updates can only be scheduled from GUI thread or from QQuickItem::updatePaintNode()";
         return;
     }
 
-    if (!w || !w->thread->isRunning()) {
-        return;
-    }
     qCDebug(QSG_LOG_RENDERLOOP) << "update from item" << w->window;
 
     // Call this function from the Gui thread later as startTimer cannot be
     // called from the render thread.
-    if (QThread::currentThread() == w->thread) {
+    if (current == w->thread) {
         qCDebug(QSG_LOG_RENDERLOOP) << "- on render thread";
         w->updateDuringSync = true;
         return;
@@ -1242,6 +1269,18 @@ QImage QSGThreadedRenderLoop::grab(QQuickWindow *window)
     return result;
 }
 
+/*!
+ * Posts a new job event to the render thread.
+ * Returns true if posting succeeded.
+ */
+void QSGThreadedRenderLoop::postJob(QQuickWindow *window, QRunnable *job)
+{
+    Window *w = windowFor(m_windows, window);
+    if (w && w->thread && w->thread->window)
+        w->thread->postEvent(new WMJobEvent(window, job));
+    else
+        delete job;
+}
 
 #include "qsgthreadedrenderloop.moc"
 

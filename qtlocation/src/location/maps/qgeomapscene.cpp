@@ -36,7 +36,7 @@
 ****************************************************************************/
 #include "qgeomapscene_p.h"
 #include "qgeocameradata_p.h"
-#include "qgeotilecache_p.h"
+#include "qabstractgeotilecache_p.h"
 #include "qgeotilespec_p.h"
 #include <QtPositioning/private/qdoublevector3d_p.h>
 #include <QtCore/private/qobject_p.h>
@@ -154,6 +154,12 @@ void QGeoMapScene::setVisibleTiles(const QSet<QGeoTileSpec> &tiles)
 {
     Q_D(QGeoMapScene);
     d->setVisibleTiles(tiles);
+}
+
+const QSet<QGeoTileSpec> &QGeoMapScene::visibleTiles() const
+{
+    Q_D(const QGeoMapScene);
+    return d->m_visibleTiles;
 }
 
 void QGeoMapScene::addTile(const QGeoTileSpec &spec, QSharedPointer<QGeoTileTexture> texture)
@@ -325,14 +331,8 @@ void QGeoMapScenePrivate::addTile(const QGeoTileSpec &spec, QSharedPointer<QGeoT
     m_textures.insert(spec, texture);
 }
 
-// return true if new tiles introduced in [tiles]
 void QGeoMapScenePrivate::setVisibleTiles(const QSet<QGeoTileSpec> &tiles)
 {
-    Q_Q(QGeoMapScene);
-
-    // detect if new tiles introduced
-    bool newTilesIntroduced = !m_visibleTiles.contains(tiles);
-
     // work out the tile bounds for the new scene
     setTileBounds(tiles);
 
@@ -344,8 +344,6 @@ void QGeoMapScenePrivate::setVisibleTiles(const QSet<QGeoTileSpec> &tiles)
         removeTiles(toRemove);
 
     m_visibleTiles = tiles;
-    if (newTilesIntroduced)
-        emit q->newTilesVisible(m_visibleTiles);
 }
 
 void QGeoMapScenePrivate::removeTiles(const QSet<QGeoTileSpec> &oldTiles)
@@ -584,7 +582,7 @@ public:
 
     ~QGeoMapRootNode()
     {
-        qDeleteAll(textures.values());
+        qDeleteAll(textures);
     }
 
     void setClipRect(const QRect &rect)

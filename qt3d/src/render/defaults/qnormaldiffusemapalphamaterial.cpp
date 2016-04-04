@@ -37,15 +37,15 @@
 #include "qnormaldiffusemapalphamaterial.h"
 #include "qnormaldiffusemapalphamaterial_p.h"
 
-#include <Qt3DRenderer/qeffect.h>
-#include <Qt3DRenderer/qtexture.h>
-#include <Qt3DRenderer/qtechnique.h>
-#include <Qt3DRenderer/qparameter.h>
-#include <Qt3DRenderer/qshaderprogram.h>
-#include <Qt3DRenderer/qrenderpass.h>
-#include <Qt3DRenderer/qopenglfilter.h>
-#include <Qt3DRenderer/qalphacoverage.h>
-#include <Qt3DRenderer/qdepthtest.h>
+#include <Qt3DRender/qeffect.h>
+#include <Qt3DRender/qtexture.h>
+#include <Qt3DRender/qtechnique.h>
+#include <Qt3DRender/qparameter.h>
+#include <Qt3DRender/qshaderprogram.h>
+#include <Qt3DRender/qrenderpass.h>
+#include <Qt3DRender/qgraphicsapifilter.h>
+#include <Qt3DRender/qalphacoverage.h>
+#include <Qt3DRender/qdepthtest.h>
 
 #include <QUrl>
 #include <QVector3D>
@@ -53,13 +53,9 @@
 
 QT_BEGIN_NAMESPACE
 
-namespace Qt3D {
+namespace Qt3DRender {
 
 
-/*!
-    \class Qt3D::QNormalDiffuseMapAlphaMaterialPrivate
-    \internal
-*/
 QNormalDiffuseMapAlphaMaterialPrivate::QNormalDiffuseMapAlphaMaterialPrivate()
     : QNormalDiffuseMapMaterialPrivate()
     , m_alphaCoverage(new QAlphaCoverage())
@@ -74,20 +70,20 @@ void QNormalDiffuseMapAlphaMaterialPrivate::init()
     m_normalDiffuseGL2ES2Shader->setVertexShaderCode(QShaderProgram::loadSource(QUrl(QStringLiteral("qrc:/shaders/es2/normaldiffusemap.vert"))));
     m_normalDiffuseGL2ES2Shader->setFragmentShaderCode(QShaderProgram::loadSource(QUrl(QStringLiteral("qrc:/shaders/es2/normaldiffusemapalpha.frag"))));
 
-    m_normalDiffuseGL3Technique->openGLFilter()->setApi(QOpenGLFilter::Desktop);
-    m_normalDiffuseGL3Technique->openGLFilter()->setMajorVersion(3);
-    m_normalDiffuseGL3Technique->openGLFilter()->setMinorVersion(1);
-    m_normalDiffuseGL3Technique->openGLFilter()->setProfile(QOpenGLFilter::Core);
+    m_normalDiffuseGL3Technique->graphicsApiFilter()->setApi(QGraphicsApiFilter::OpenGL);
+    m_normalDiffuseGL3Technique->graphicsApiFilter()->setMajorVersion(3);
+    m_normalDiffuseGL3Technique->graphicsApiFilter()->setMinorVersion(1);
+    m_normalDiffuseGL3Technique->graphicsApiFilter()->setProfile(QGraphicsApiFilter::CoreProfile);
 
-    m_normalDiffuseGL2Technique->openGLFilter()->setApi(QOpenGLFilter::Desktop);
-    m_normalDiffuseGL2Technique->openGLFilter()->setMajorVersion(2);
-    m_normalDiffuseGL2Technique->openGLFilter()->setMinorVersion(0);
-    m_normalDiffuseGL2Technique->openGLFilter()->setProfile(QOpenGLFilter::None);
+    m_normalDiffuseGL2Technique->graphicsApiFilter()->setApi(QGraphicsApiFilter::OpenGL);
+    m_normalDiffuseGL2Technique->graphicsApiFilter()->setMajorVersion(2);
+    m_normalDiffuseGL2Technique->graphicsApiFilter()->setMinorVersion(0);
+    m_normalDiffuseGL2Technique->graphicsApiFilter()->setProfile(QGraphicsApiFilter::NoProfile);
 
-    m_normalDiffuseES2Technique->openGLFilter()->setApi(QOpenGLFilter::ES);
-    m_normalDiffuseES2Technique->openGLFilter()->setMajorVersion(2);
-    m_normalDiffuseES2Technique->openGLFilter()->setMinorVersion(0);
-    m_normalDiffuseES2Technique->openGLFilter()->setProfile(QOpenGLFilter::None);
+    m_normalDiffuseES2Technique->graphicsApiFilter()->setApi(QGraphicsApiFilter::OpenGLES);
+    m_normalDiffuseES2Technique->graphicsApiFilter()->setMajorVersion(2);
+    m_normalDiffuseES2Technique->graphicsApiFilter()->setMinorVersion(0);
+    m_normalDiffuseES2Technique->graphicsApiFilter()->setProfile(QGraphicsApiFilter::NoProfile);
 
     m_depthTest->setFunc(QDepthTest::Less);
 
@@ -116,8 +112,6 @@ void QNormalDiffuseMapAlphaMaterialPrivate::init()
     m_normalDiffuseEffect->addParameter(m_normalParameter);
     m_normalDiffuseEffect->addParameter(m_specularParameter);
     m_normalDiffuseEffect->addParameter(m_shininessParameter);
-    m_normalDiffuseEffect->addParameter(m_lightPositionParameter);
-    m_normalDiffuseEffect->addParameter(m_lightIntensityParameter);
     m_normalDiffuseEffect->addParameter(m_textureScaleParameter);
 
     q_func()->setEffect(m_normalDiffuseEffect);
@@ -125,11 +119,11 @@ void QNormalDiffuseMapAlphaMaterialPrivate::init()
 
 
 /*!
-    \class Qt3D::QNormalDiffuseMapAlphaMaterial
+    \class Qt3DRender::QNormalDiffuseMapAlphaMaterial
     \brief The QNormalDiffuseMapAlphaMaterial provides a default implementation of the phong lighting and bump effect where the diffuse light component
     is read from a texture map and the normals of the mesh being rendered from a normal texture map. In addition, it defines an alpha to coverage and
     a depth test to be performed in the rendering pass.
-    \inmodule Qt3DRenderer
+    \inmodule Qt3DRender
     \since 5.5
 
     The specular lighting effect is based on the combination of 3 lighting components ambient, diffuse and specular.
@@ -145,9 +139,8 @@ void QNormalDiffuseMapAlphaMaterialPrivate::init()
     This material uses an effect with a single render pass approach and performs per fragment lighting.
     Techniques are provided for OpenGL 2, OpenGL 3 or above as well as OpenGL ES 2.
 */
-
 /*!
-    Constructs a new Qt3D::QNormalDiffuseMapAlphaMaterial instance with parent object \a parent.
+    Constructs a new Qt3DRender::QNormalDiffuseMapAlphaMaterial instance with parent object \a parent.
 */
 QNormalDiffuseMapAlphaMaterial::QNormalDiffuseMapAlphaMaterial(QNode *parent)
     : QNormalDiffuseMapMaterial(*new QNormalDiffuseMapAlphaMaterialPrivate, parent)
@@ -161,6 +154,6 @@ QNormalDiffuseMapAlphaMaterial::~QNormalDiffuseMapAlphaMaterial()
 {
 }
 
-} // Qt3D
+} // namespace Qt3DRender
 
 QT_END_NAMESPACE

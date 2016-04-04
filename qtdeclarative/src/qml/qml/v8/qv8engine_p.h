@@ -60,9 +60,10 @@
 #include <private/qqmlpropertycache_p.h>
 
 #include <private/qv4qobjectwrapper_p.h>
-#include <private/qv4value_inl_p.h>
+#include <private/qv4value_p.h>
 #include <private/qv4object_p.h>
 #include <private/qv4identifier_p.h>
+#include <private/qqmlcontextwrapper_p.h>
 
 QT_BEGIN_NAMESPACE
 
@@ -101,26 +102,24 @@ namespace QV4 {
         return rv; \
     } \
 
-// Used to allow a QObject method take and return raw V8 handles without having to expose
-// v8 in the public API.
+// Used to allow a QObject method take and return raw V4 handles without having to expose
+// 48 in the public API.
 // Use like this:
 //     class MyClass : public QObject {
 //         Q_OBJECT
 //         ...
-//         Q_INVOKABLE void myMethod(QQmlV8Function*);
+//         Q_INVOKABLE void myMethod(QQmlV4Function*);
 //     };
 // The QQmlV8Function - and consequently the arguments and return value - only remains
 // valid during the call.  If the return value isn't set within myMethod(), the will return
 // undefined.
 class QV8Engine;
-// ### GC
+
 class QQmlV4Function
 {
 public:
     int length() const { return callData->argc; }
     QV4::ReturnedValue operator[](int idx) { return (idx < callData->argc ? callData->args[idx].asReturnedValue() : QV4::Encode::undefined()); }
-    QQmlContextData *context() { return ctx; }
-    QV4::ReturnedValue qmlGlobal() { return callData->thisObject.asReturnedValue(); }
     void setReturnValue(QV4::ReturnedValue rv) { *retVal = rv; }
     QV4::ExecutionEngine *v4engine() const { return e; }
 private:
@@ -129,16 +128,14 @@ private:
     QQmlV4Function(const QQmlV4Function &);
     QQmlV4Function &operator=(const QQmlV4Function &);
 
-    QQmlV4Function(QV4::CallData *callData, QV4::Value *retVal,
-                   const QV4::Value &global, QQmlContextData *c, QV4::ExecutionEngine *e)
-        : callData(callData), retVal(retVal), ctx(c), e(e)
+    QQmlV4Function(QV4::CallData *callData, QV4::Value *retVal, QV4::ExecutionEngine *e)
+        : callData(callData), retVal(retVal), e(e)
     {
-        callData->thisObject.val = global.asReturnedValue();
+        callData->thisObject = QV4::Encode::undefined();
     }
 
     QV4::CallData *callData;
     QV4::Value *retVal;
-    QQmlContextData *ctx;
     QV4::ExecutionEngine *e;
 };
 
@@ -163,8 +160,6 @@ class QQmlContextData;
 class Q_QML_PRIVATE_EXPORT QV8Engine
 {
     friend class QJSEngine;
-    // ### GC
-    typedef QSet<QV4::Heap::Object *> V8ObjectSet;
 public:
     static QV8Engine* get(QJSEngine* q) { Q_ASSERT(q); return q->handle(); }
 //    static QJSEngine* get(QV8Engine* d) { Q_ASSERT(d); return d->q; }
@@ -191,8 +186,6 @@ public:
 
     Deletable *listModelData() { return m_listModelData; }
     void setListModelData(Deletable *d) { if (m_listModelData) delete m_listModelData; m_listModelData = d; }
-
-    QQmlContextData *callingContext();
 
     void freezeObject(const QV4::Value &value);
 
@@ -223,8 +216,6 @@ protected:
     QQmlEngine *m_engine;
 
     QV4::ExecutionEngine *m_v4Engine;
-
-    QV4::PersistentValue m_freezeObject;
 
     void *m_xmlHttpRequestData;
 

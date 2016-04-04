@@ -50,7 +50,7 @@ QuickTestEvent::~QuickTestEvent()
 
 bool QuickTestEvent::keyPress(int key, int modifiers, int delay)
 {
-    QWindow *window = eventWindow();
+    QWindow *window = activeWindow();
     if (!window)
         return false;
     QTest::keyPress(window, Qt::Key(key), Qt::KeyboardModifiers(modifiers), delay);
@@ -59,7 +59,7 @@ bool QuickTestEvent::keyPress(int key, int modifiers, int delay)
 
 bool QuickTestEvent::keyRelease(int key, int modifiers, int delay)
 {
-    QWindow *window = eventWindow();
+    QWindow *window = activeWindow();
     if (!window)
         return false;
     QTest::keyRelease(window, Qt::Key(key), Qt::KeyboardModifiers(modifiers), delay);
@@ -68,7 +68,7 @@ bool QuickTestEvent::keyRelease(int key, int modifiers, int delay)
 
 bool QuickTestEvent::keyClick(int key, int modifiers, int delay)
 {
-    QWindow *window = eventWindow();
+    QWindow *window = activeWindow();
     if (!window)
         return false;
     QTest::keyClick(window, Qt::Key(key), Qt::KeyboardModifiers(modifiers), delay);
@@ -78,7 +78,7 @@ bool QuickTestEvent::keyClick(int key, int modifiers, int delay)
 bool QuickTestEvent::keyPressChar(const QString &character, int modifiers, int delay)
 {
     QTEST_ASSERT(character.length() == 1);
-    QWindow *window = eventWindow();
+    QWindow *window = activeWindow();
     if (!window)
         return false;
     QTest::keyPress(window, character[0].toLatin1(), Qt::KeyboardModifiers(modifiers), delay);
@@ -88,7 +88,7 @@ bool QuickTestEvent::keyPressChar(const QString &character, int modifiers, int d
 bool QuickTestEvent::keyReleaseChar(const QString &character, int modifiers, int delay)
 {
     QTEST_ASSERT(character.length() == 1);
-    QWindow *window = eventWindow();
+    QWindow *window = activeWindow();
     if (!window)
         return false;
     QTest::keyRelease(window, character[0].toLatin1(), Qt::KeyboardModifiers(modifiers), delay);
@@ -98,7 +98,7 @@ bool QuickTestEvent::keyReleaseChar(const QString &character, int modifiers, int
 bool QuickTestEvent::keyClickChar(const QString &character, int modifiers, int delay)
 {
     QTEST_ASSERT(character.length() == 1);
-    QWindow *window = eventWindow();
+    QWindow *window = activeWindow();
     if (!window)
         return false;
     QTest::keyClick(window, character[0].toLatin1(), Qt::KeyboardModifiers(modifiers), delay);
@@ -211,7 +211,7 @@ bool QuickTestEvent::mousePress
     (QObject *item, qreal x, qreal y, int button,
      int modifiers, int delay)
 {
-    QWindow *view = eventWindow();
+    QWindow *view = eventWindow(item);
     if (!view)
         return false;
     QtQuickTest::mouseEvent(QtQuickTest::MousePress, view, item,
@@ -226,7 +226,7 @@ bool QuickTestEvent::mouseWheel(
     QObject *item, qreal x, qreal y, int buttons,
     int modifiers, int xDelta, int yDelta, int delay)
 {
-    QWindow *view = eventWindow();
+    QWindow *view = eventWindow(item);
     if (!view)
         return false;
     QtQuickTest::mouseWheel(view, item, Qt::MouseButtons(buttons),
@@ -240,7 +240,7 @@ bool QuickTestEvent::mouseRelease
     (QObject *item, qreal x, qreal y, int button,
      int modifiers, int delay)
 {
-    QWindow *view = eventWindow();
+    QWindow *view = eventWindow(item);
     if (!view)
         return false;
     QtQuickTest::mouseEvent(QtQuickTest::MouseRelease, view, item,
@@ -254,7 +254,7 @@ bool QuickTestEvent::mouseClick
     (QObject *item, qreal x, qreal y, int button,
      int modifiers, int delay)
 {
-    QWindow *view = eventWindow();
+    QWindow *view = eventWindow(item);
     if (!view)
         return false;
     QtQuickTest::mouseEvent(QtQuickTest::MouseClick, view, item,
@@ -268,7 +268,7 @@ bool QuickTestEvent::mouseDoubleClick
     (QObject *item, qreal x, qreal y, int button,
      int modifiers, int delay)
 {
-    QWindow *view = eventWindow();
+    QWindow *view = eventWindow(item);
     if (!view)
         return false;
     QtQuickTest::mouseEvent(QtQuickTest::MouseDoubleClick, view, item,
@@ -282,7 +282,7 @@ bool QuickTestEvent::mouseDoubleClickSequence
     (QObject *item, qreal x, qreal y, int button,
      int modifiers, int delay)
 {
-    QWindow *view = eventWindow();
+    QWindow *view = eventWindow(item);
     if (!view)
         return false;
     QtQuickTest::mouseEvent(QtQuickTest::MouseDoubleClickSequence, view, item,
@@ -295,7 +295,7 @@ bool QuickTestEvent::mouseDoubleClickSequence
 bool QuickTestEvent::mouseMove
     (QObject *item, qreal x, qreal y, int delay, int buttons)
 {
-    QWindow *view = eventWindow();
+    QWindow *view = eventWindow(item);
     if (!view)
         return false;
     QtQuickTest::mouseEvent(QtQuickTest::MouseMove, view, item,
@@ -304,12 +304,23 @@ bool QuickTestEvent::mouseMove
     return true;
 }
 
-QWindow *QuickTestEvent::eventWindow()
+QWindow *QuickTestEvent::eventWindow(QObject *item)
 {
-    QQuickItem *sgitem = qobject_cast<QQuickItem *>(parent());
-    if (sgitem)
-        return sgitem->window();
+    QQuickItem *quickItem = qobject_cast<QQuickItem *>(item);
+    if (quickItem)
+        return quickItem->window();
+
+    QQuickItem *testParentitem = qobject_cast<QQuickItem *>(parent());
+    if (testParentitem)
+        return testParentitem->window();
     return 0;
+}
+
+QWindow *QuickTestEvent::activeWindow()
+{
+    if (QWindow *window = QGuiApplication::focusWindow())
+        return window;
+    return eventWindow();
 }
 
 QT_END_NAMESPACE

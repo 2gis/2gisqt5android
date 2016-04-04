@@ -36,9 +36,13 @@
 #include "qplatformdefs.h"
 
 #include <private/qcoreapplication_p.h>
+#include <private/qcore_unix_p.h>
 
 #if defined(Q_OS_BLACKBERRY)
 #  include <private/qeventdispatcher_blackberry_p.h>
+#elif defined(Q_OS_OSX)
+#  include <private/qeventdispatcher_cf_p.h>
+#  include <private/qeventdispatcher_unix_p.h>
 #else
 #  if !defined(QT_NO_GLIB)
 #    include "../kernel/qeventdispatcher_glib_p.h"
@@ -75,9 +79,6 @@
 #   define old_qDebug qDebug
 #   undef qDebug
 # endif
-#ifdef Q_OS_MACX
-# include <CoreServices/CoreServices.h>
-#endif // Q_OS_MACX
 
 # ifdef old_qDebug
 #   undef qDebug
@@ -225,7 +226,7 @@ QThreadData *QThreadData::current(bool createIfNecessary)
         data->isAdopted = true;
         data->threadId = (Qt::HANDLE)pthread_self();
         if (!QCoreApplicationPrivate::theMainThread)
-            QCoreApplicationPrivate::theMainThread = data->thread;
+            QCoreApplicationPrivate::theMainThread = data->thread.load();
     }
     return data;
 }
@@ -251,14 +252,21 @@ void QThreadPrivate::createEventDispatcher(QThreadData *data)
 {
 #if defined(Q_OS_BLACKBERRY)
     data->eventDispatcher.storeRelease(new QEventDispatcherBlackberry);
-#else
-#if !defined(QT_NO_GLIB)
+#  elif defined(Q_OS_OSX)
+    bool ok = false;
+    int value = qEnvironmentVariableIntValue("QT_EVENT_DISPATCHER_CORE_FOUNDATION", &ok);
+    if (ok && value > 0)
+        data->eventDispatcher.storeRelease(new QEventDispatcherCoreFoundation);
+    else
+        data->eventDispatcher.storeRelease(new QEventDispatcherUNIX);
+#  elif !defined(QT_NO_GLIB)
     if (qEnvironmentVariableIsEmpty("QT_NO_GLIB")
         && qEnvironmentVariableIsEmpty("QT_NO_THREADED_GLIB")
         && QEventDispatcherGlib::versionSupported())
         data->eventDispatcher.storeRelease(new QEventDispatcherGlib);
     else
-#endif
+        data->eventDispatcher.storeRelease(new QEventDispatcherUNIX);
+#else
     data->eventDispatcher.storeRelease(new QEventDispatcherUNIX);
 #endif
 
@@ -313,14 +321,15 @@ void *QThreadPrivate::start(void *arg)
         createEventDispatcher(data);
 
 #if (defined(Q_OS_LINUX) || defined(Q_OS_MAC) || defined(Q_OS_QNX))
-    // sets the name of the current thread.
-    QString objectName = thr->objectName();
+    {
+        // sets the name of the current thread.
+        QString objectName = thr->objectName();
 
-    if (Q_LIKELY(objectName.isEmpty()))
-        setCurrentThreadName(thr->d_func()->thread_id, thr->metaObject()->className());
-    else
-        setCurrentThreadName(thr->d_func()->thread_id, objectName.toLocal8Bit());
-
+        if (Q_LIKELY(objectName.isEmpty()))
+            setCurrentThreadName(thr->d_func()->thread_id, thr->metaObject()->className());
+        else
+            setCurrentThreadName(thr->d_func()->thread_id, objectName.toLocal8Bit());
+    }
 #endif
 
     emit thr->started(QThread::QPrivateSignal());

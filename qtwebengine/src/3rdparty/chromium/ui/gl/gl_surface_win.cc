@@ -7,11 +7,10 @@
 #include <dwmapi.h>
 
 #include "base/command_line.h"
-#include "base/debug/trace_event.h"
 #include "base/logging.h"
 #include "base/memory/scoped_ptr.h"
+#include "base/trace_event/trace_event.h"
 #include "base/win/windows_version.h"
-#include "ui/gfx/frame_time.h"
 #include "ui/gfx/native_widget_types.h"
 #include "ui/gl/gl_bindings.h"
 #include "ui/gl/gl_implementation.h"
@@ -25,15 +24,6 @@
 #define EGL_D3D11_ELSE_D3D9_DISPLAY_ANGLE \
   reinterpret_cast<EGLNativeDisplayType>(-2)
 #endif
-#if !defined(EGL_PLATFORM_ANGLE_ANGLE)
-#define EGL_PLATFORM_ANGLE_ANGLE 0x3201
-#endif
-#if !defined(EGL_PLATFORM_ANGLE_TYPE_ANGLE)
-#define EGL_PLATFORM_ANGLE_TYPE_ANGLE 0x3202
-#endif
-#if !defined(EGL_PLATFORM_ANGLE_TYPE_D3D11_WARP_ANGLE)
-#define EGL_PLATFORM_ANGLE_TYPE_D3D11_WARP_ANGLE 0x3206
-#endif
 
 namespace gfx {
 
@@ -42,17 +32,18 @@ namespace gfx {
 class NativeViewGLSurfaceOSMesa : public GLSurfaceOSMesa {
  public:
   explicit NativeViewGLSurfaceOSMesa(gfx::AcceleratedWidget window);
-  virtual ~NativeViewGLSurfaceOSMesa();
 
   // Implement subset of GLSurface.
-  virtual bool Initialize() override;
-  virtual void Destroy() override;
-  virtual bool IsOffscreen() override;
-  virtual bool SwapBuffers() override;
-  virtual bool SupportsPostSubBuffer() override;
-  virtual bool PostSubBuffer(int x, int y, int width, int height) override;
+  bool Initialize() override;
+  void Destroy() override;
+  bool IsOffscreen() override;
+  gfx::SwapResult SwapBuffers() override;
+  bool SupportsPostSubBuffer() override;
+  gfx::SwapResult PostSubBuffer(int x, int y, int width, int height) override;
 
  private:
+  ~NativeViewGLSurfaceOSMesa() override;
+
   gfx::AcceleratedWidget window_;
   HDC device_context_;
 
@@ -67,9 +58,9 @@ class WinVSyncProvider : public VSyncProvider {
     use_dwm_ = (base::win::GetVersion() >= base::win::VERSION_WIN7);
   }
 
-  virtual ~WinVSyncProvider() {}
+  ~WinVSyncProvider() override {}
 
-  virtual void GetVSyncParameters(const UpdateVSyncCallback& callback) {
+  void GetVSyncParameters(const UpdateVSyncCallback& callback) override {
     TRACE_EVENT0("gpu", "WinVSyncProvider::GetVSyncParameters");
 
     base::TimeTicks timebase;
@@ -84,51 +75,70 @@ class WinVSyncProvider : public VSyncProvider {
       HRESULT result = DwmGetCompositionTimingInfo(NULL, &timing_info);
       if (result == S_OK) {
         dwm_active = true;
-        // If FrameTime is not high resolution, we do not want to translate the
-        // QPC value provided by DWM into the low-resolution timebase, which
-        // would be error prone and jittery. As a fallback, we assume the
-        // timebase is zero.
-        if (gfx::FrameTime::TimestampsAreHighRes()) {
-          timebase = gfx::FrameTime::FromQPCValue(
-              static_cast<LONGLONG>(timing_info.qpcVBlank));
-        }
 
-        // Swap the numerator/denominator to convert frequency to period.
+        // Calculate an interval value using the rateRefresh numerator and
+        // denominator.
+        base::TimeDelta rate_interval;
         if (timing_info.rateRefresh.uiDenominator > 0 &&
             timing_info.rateRefresh.uiNumerator > 0) {
-          interval = base::TimeDelta::FromMicroseconds(
+          // Swap the numerator/denominator to convert frequency to period.
+          rate_interval = base::TimeDelta::FromMicroseconds(
               timing_info.rateRefresh.uiDenominator *
               base::Time::kMicrosecondsPerSecond /
               timing_info.rateRefresh.uiNumerator);
         }
+
+        if (base::TimeTicks::IsHighResolution()) {
+          // qpcRefreshPeriod is very accurate but noisy, and must be used with
+          // a high resolution timebase to avoid frequently missing Vsync.
+          timebase = base::TimeTicks::FromQPCValue(
+              static_cast<LONGLONG>(timing_info.qpcVBlank));
+          interval = base::TimeDelta::FromQPCValue(
+              static_cast<LONGLONG>(timing_info.qpcRefreshPeriod));
+          // Check for interval values that are impossibly low. A 29 microsecond
+          // interval was seen (from a qpcRefreshPeriod of 60).
+          if (interval < base::TimeDelta::FromMilliseconds(1)) {
+            interval = rate_interval;
+          }
+          // Check for the qpcRefreshPeriod interval being improbably small
+          // compared to the rateRefresh calculated interval, as another
+          // attempt at detecting driver bugs.
+          if (!rate_interval.is_zero() && interval < rate_interval / 2) {
+            interval = rate_interval;
+          }
+        } else {
+          // If FrameTime is not high resolution, we do not want to translate
+          // the QPC value provided by DWM into the low-resolution timebase,
+          // which would be error prone and jittery. As a fallback, we assume
+          // the timebase is zero and use rateRefresh, which may be rounded but
+          // isn't noisy like qpcRefreshPeriod, instead. The fact that we don't
+          // have a timebase here may lead to brief periods of jank when our
+          // scheduling becomes offset from the hardware vsync.
+          interval = rate_interval;
+        }
       }
     }
 
-    // Double check DWM values against per-display refresh rates.
-    // When DWM compositing is active all displays are normalized to the
-    // refresh rate of the primary display, and won't composite any faster.
-    // If the display refresh rate is higher than the DWM reported value we will
-    // favor the DWM value because any additional frames produced will be
-    // discarded by the OS. If the display refresh rate is lower, however, we
-    // can use that to limit the frames we produce more intelligently.
-    // If DWM compositing is not active we will always use the display refresh.
-    HMONITOR monitor = MonitorFromWindow(window_, MONITOR_DEFAULTTONEAREST);
-    MONITORINFOEX monitor_info;
-    monitor_info.cbSize = sizeof(MONITORINFOEX);
-    BOOL result = GetMonitorInfo(monitor, &monitor_info);
-    if (result) {
-      DEVMODE display_info;
-      display_info.dmSize = sizeof(DEVMODE);
-      display_info.dmDriverExtra = 0;
-      result = EnumDisplaySettings(monitor_info.szDevice, ENUM_CURRENT_SETTINGS,
-          &display_info);
-      if (result && display_info.dmDisplayFrequency > 1) {
-        base::TimeDelta display_interval = base::TimeDelta::FromMicroseconds(
-            (1.0 / static_cast<double>(display_info.dmDisplayFrequency)) *
-            base::Time::kMicrosecondsPerSecond);
-
-        if (!dwm_active || display_interval > interval) {
-          interval = display_interval;
+    if (!dwm_active) {
+      // When DWM compositing is active all displays are normalized to the
+      // refresh rate of the primary display, and won't composite any faster.
+      // If DWM compositing is disabled, though, we can use the refresh rates
+      // reported by each display, which will help systems that have mis-matched
+      // displays that run at different frequencies.
+      HMONITOR monitor = MonitorFromWindow(window_, MONITOR_DEFAULTTONEAREST);
+      MONITORINFOEX monitor_info;
+      monitor_info.cbSize = sizeof(MONITORINFOEX);
+      BOOL result = GetMonitorInfo(monitor, &monitor_info);
+      if (result) {
+        DEVMODE display_info;
+        display_info.dmSize = sizeof(DEVMODE);
+        display_info.dmDriverExtra = 0;
+        result = EnumDisplaySettings(monitor_info.szDevice,
+            ENUM_CURRENT_SETTINGS, &display_info);
+        if (result && display_info.dmDisplayFrequency > 1) {
+          interval = base::TimeDelta::FromMicroseconds(
+              (1.0 / static_cast<double>(display_info.dmDisplayFrequency)) *
+              base::Time::kMicrosecondsPerSecond);
         }
       }
     }
@@ -198,7 +208,7 @@ bool NativeViewGLSurfaceOSMesa::IsOffscreen() {
   return false;
 }
 
-bool NativeViewGLSurfaceOSMesa::SwapBuffers() {
+gfx::SwapResult NativeViewGLSurfaceOSMesa::SwapBuffers() {
   DCHECK(device_context_);
 
   gfx::Size size = GetSize();
@@ -231,15 +241,17 @@ bool NativeViewGLSurfaceOSMesa::SwapBuffers() {
                 DIB_RGB_COLORS,
                 SRCCOPY);
 
-  return true;
+  return gfx::SwapResult::SWAP_ACK;
 }
 
 bool NativeViewGLSurfaceOSMesa::SupportsPostSubBuffer() {
   return true;
 }
 
-bool NativeViewGLSurfaceOSMesa::PostSubBuffer(
-    int x, int y, int width, int height) {
+gfx::SwapResult NativeViewGLSurfaceOSMesa::PostSubBuffer(int x,
+                                                         int y,
+                                                         int width,
+                                                         int height) {
   DCHECK(device_context_);
 
   gfx::Size size = GetSize();
@@ -272,7 +284,7 @@ bool NativeViewGLSurfaceOSMesa::PostSubBuffer(
                 DIB_RGB_COLORS,
                 SRCCOPY);
 
-  return true;
+  return gfx::SwapResult::SWAP_ACK;
 }
 
 scoped_refptr<GLSurface> GLSurface::CreateViewGLSurface(
@@ -349,10 +361,7 @@ scoped_refptr<GLSurface> GLSurface::CreateOffscreenGLSurface(
 }
 
 EGLNativeDisplayType GetPlatformDefaultEGLNativeDisplay() {
-  if (CommandLine::ForCurrentProcess()->HasSwitch(switches::kDisableD3D11) ||
-      CommandLine::ForCurrentProcess()->HasSwitch(switches::kUseWarp))
-    return GetDC(NULL);
-  return EGL_D3D11_ELSE_D3D9_DISPLAY_ANGLE;
+  return GetDC(NULL);
 }
 
 }  // namespace gfx

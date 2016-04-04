@@ -90,6 +90,13 @@ QQuickTextInput::QQuickTextInput(QQuickItem* parent)
     d->init();
 }
 
+QQuickTextInput::QQuickTextInput(QQuickTextInputPrivate &dd, QQuickItem *parent)
+: QQuickImplicitSizeItem(dd, parent)
+{
+    Q_D(QQuickTextInput);
+    d->init();
+}
+
 QQuickTextInput::~QQuickTextInput()
 {
 }
@@ -219,6 +226,16 @@ QString QQuickTextInputPrivate::realText() const
     The family name is case insensitive and may optionally include a foundry name, e.g. "Helvetica [Cronyx]".
     If the family is available from more than one foundry and the foundry isn't specified, an arbitrary foundry is chosen.
     If the family isn't available a family will be set using the font matching algorithm.
+*/
+
+/*!
+    \qmlproperty string QtQuick::TextInput::font.styleName
+    \since 5.6
+
+    Sets the style name of the font.
+
+    The style name is case insensitive. If set, the font will be matched against style name instead
+    of the font properties \l font.weight, \l font.bold and \l font.italic.
 */
 
 /*!
@@ -786,8 +803,8 @@ QRectF QQuickTextInput::cursorRectangle() const
     QTextLine l = d->m_textLayout.lineForTextPosition(c);
     if (!l.isValid())
         return QRectF();
-    qreal x = l.cursorToX(c) - d->hscroll;
-    qreal y = l.y() - d->vscroll;
+    qreal x = l.cursorToX(c) - d->hscroll + leftPadding();
+    qreal y = l.y() - d->vscroll + topPadding();
     return QRectF(x, y, 1, l.height());
 }
 
@@ -909,189 +926,6 @@ void QQuickTextInput::setAutoScroll(bool b)
     updateCursorRectangle();
     emit autoScrollChanged(d->autoScroll);
 }
-
-#ifndef QT_NO_VALIDATOR
-
-/*!
-    \qmltype IntValidator
-    \instantiates QIntValidator
-    \inqmlmodule QtQuick
-    \ingroup qtquick-text-utility
-    \brief Defines a validator for integer values
-
-    The IntValidator type provides a validator for integer values.
-
-    If no \l locale is set IntValidator uses the \l {QLocale::setDefault()}{default locale} to
-    interpret the number and will accept locale specific digits, group separators, and positive
-    and negative signs.  In addition, IntValidator is always guaranteed to accept a number
-    formatted according to the "C" locale.
-*/
-
-
-QQuickIntValidator::QQuickIntValidator(QObject *parent)
-    : QIntValidator(parent)
-{
-}
-
-/*!
-    \qmlproperty string QtQuick::IntValidator::locale
-
-    This property holds the name of the locale used to interpret the number.
-
-    \sa {QtQml::Qt::locale()}{Qt.locale()}
-*/
-
-QString QQuickIntValidator::localeName() const
-{
-    return locale().name();
-}
-
-void QQuickIntValidator::setLocaleName(const QString &name)
-{
-    if (locale().name() != name) {
-        setLocale(QLocale(name));
-        emit localeNameChanged();
-    }
-}
-
-void QQuickIntValidator::resetLocaleName()
-{
-    QLocale defaultLocale;
-    if (locale() != defaultLocale) {
-        setLocale(defaultLocale);
-        emit localeNameChanged();
-    }
-}
-
-/*!
-    \qmlproperty int QtQuick::IntValidator::top
-
-    This property holds the validator's highest acceptable value.
-    By default, this property's value is derived from the highest signed integer available (typically 2147483647).
-*/
-/*!
-    \qmlproperty int QtQuick::IntValidator::bottom
-
-    This property holds the validator's lowest acceptable value.
-    By default, this property's value is derived from the lowest signed integer available (typically -2147483647).
-*/
-
-/*!
-    \qmltype DoubleValidator
-    \instantiates QDoubleValidator
-    \inqmlmodule QtQuick
-    \ingroup qtquick-text-utility
-    \brief Defines a validator for non-integer numbers
-
-    The DoubleValidator type provides a validator for non-integer numbers.
-
-    Input is accepted if it contains a double that is within the valid range
-    and is in the  correct format.
-
-    Input is accepected but invalid if it contains a double that is outside
-    the range or is in the wrong format; e.g. with too many digits after the
-    decimal point or is empty.
-
-    Input is rejected if it is not a double.
-
-    Note: If the valid range consists of just positive doubles (e.g. 0.0 to
-    100.0) and input is a negative double then it is rejected. If \l notation
-    is set to DoubleValidator.StandardNotation, and  the input contains more
-    digits before the decimal point than a double in the valid range may have,
-    it is also rejected. If \l notation is DoubleValidator.ScientificNotation,
-    and the input is not in the valid range, it is accecpted but invalid. The
-    value may yet become valid by changing the exponent.
-*/
-
-QQuickDoubleValidator::QQuickDoubleValidator(QObject *parent)
-    : QDoubleValidator(parent)
-{
-}
-
-/*!
-    \qmlproperty string QtQuick::DoubleValidator::locale
-
-    This property holds the name of the locale used to interpret the number.
-
-    \sa {QtQml::Qt::locale()}{Qt.locale()}
-*/
-
-QString QQuickDoubleValidator::localeName() const
-{
-    return locale().name();
-}
-
-void QQuickDoubleValidator::setLocaleName(const QString &name)
-{
-    if (locale().name() != name) {
-        setLocale(QLocale(name));
-        emit localeNameChanged();
-    }
-}
-
-void QQuickDoubleValidator::resetLocaleName()
-{
-    QLocale defaultLocale;
-    if (locale() != defaultLocale) {
-        setLocale(defaultLocale);
-        emit localeNameChanged();
-    }
-}
-
-#endif // QT_NO_VALIDATOR
-
-/*!
-    \qmlproperty real QtQuick::DoubleValidator::top
-
-    This property holds the validator's maximum acceptable value.
-    By default, this property contains a value of infinity.
-*/
-/*!
-    \qmlproperty real QtQuick::DoubleValidator::bottom
-
-    This property holds the validator's minimum acceptable value.
-    By default, this property contains a value of -infinity.
-*/
-/*!
-    \qmlproperty int QtQuick::DoubleValidator::decimals
-
-    This property holds the validator's maximum number of digits after the decimal point.
-    By default, this property contains a value of 1000.
-*/
-/*!
-    \qmlproperty enumeration QtQuick::DoubleValidator::notation
-    This property holds the notation of how a string can describe a number.
-
-    The possible values for this property are:
-
-    \list
-    \li DoubleValidator.StandardNotation
-    \li DoubleValidator.ScientificNotation (default)
-    \endlist
-
-    If this property is set to DoubleValidator.ScientificNotation, the written number may have an exponent part (e.g. 1.5E-2).
-*/
-
-/*!
-    \qmltype RegExpValidator
-    \instantiates QRegExpValidator
-    \inqmlmodule QtQuick
-    \ingroup qtquick-text-utility
-    \brief Provides a string validator
-
-    The RegExpValidator type provides a validator, which counts as valid any string which
-    matches a specified regular expression.
-*/
-/*!
-   \qmlproperty regExp QtQuick::RegExpValidator::regExp
-
-   This property holds the regular expression used for validation.
-
-   Note that this property should be a regular expression in JS syntax, e.g /a/ for the regular expression
-   matching "a".
-
-   By default, this property contains a regular expression with the pattern .* that matches any string.
-*/
 
 /*!
     \qmlproperty Validator QtQuick::TextInput::validator
@@ -1373,7 +1207,7 @@ void QQuickTextInput::setInputMethodHints(Qt::InputMethodHints hints)
     If you set a cursorDelegate for a TextInput, this delegate will be used for
     drawing the cursor instead of the standard cursor. An instance of the
     delegate will be created and managed by the TextInput when a cursor is
-    needed, and the x property of delegate instance will be set so as
+    needed, and the x property of the delegate instance will be set so as
     to be one pixel before the top left of the current character.
 
     Note that the root item of the delegate component must be a QQuickItem or
@@ -1489,8 +1323,9 @@ void QQuickTextInput::positionAt(QQmlV4Function *args) const
 
 int QQuickTextInputPrivate::positionAt(qreal x, qreal y, QTextLine::CursorPosition position) const
 {
-    x += hscroll;
-    y += vscroll;
+    Q_Q(const QQuickTextInput);
+    x += hscroll - q->leftPadding();
+    y += vscroll - q->topPadding();
     QTextLine line = m_textLayout.lineAt(0);
     for (int i = 1; i < m_textLayout.lineCount(); ++i) {
         QTextLine nextLine = m_textLayout.lineAt(i);
@@ -1701,7 +1536,8 @@ bool QQuickTextInput::event(QEvent* ev)
             || ke == QKeySequence::SelectEndOfBlock
             || ke == QKeySequence::SelectStartOfDocument
             || ke == QKeySequence::SelectAll
-            || ke == QKeySequence::SelectEndOfDocument) {
+            || ke == QKeySequence::SelectEndOfDocument
+            || ke == QKeySequence::DeleteCompleteLine) {
             ke->accept();
             return true;
         } else if (ke->modifiers() == Qt::NoModifier || ke->modifiers() == Qt::ShiftModifier
@@ -1748,7 +1584,7 @@ void QQuickTextInputPrivate::ensureVisible(int position, int preeditCursor, int 
 {
     Q_Q(QQuickTextInput);
     QTextLine textLine = m_textLayout.lineForTextPosition(position + preeditCursor);
-    const qreal width = qMax<qreal>(0, q->width());
+    const qreal width = qMax<qreal>(0, q->width() - q->leftPadding() - q->rightPadding());
     qreal cix = 0;
     qreal widthUsed = 0;
     if (textLine.isValid()) {
@@ -1811,7 +1647,7 @@ void QQuickTextInputPrivate::updateVerticalScroll()
 #ifndef QT_NO_IM
     const int preeditLength = m_textLayout.preeditAreaText().length();
 #endif
-    const qreal height = qMax<qreal>(0, q->height());
+    const qreal height = qMax<qreal>(0, q->height() - q->topPadding() - q->bottomPadding());
     qreal heightUsed = contentSize.height();
     qreal previousScroll = vscroll;
 
@@ -1879,14 +1715,15 @@ void QQuickTextInput::invalidateFontCaches()
 
 void QQuickTextInput::ensureActiveFocus()
 {
-    Q_D(QQuickTextInput);
-
     bool hadActiveFocus = hasActiveFocus();
     forceActiveFocus();
 #ifndef QT_NO_IM
+    Q_D(QQuickTextInput);
     // re-open input panel on press if already focused
     if (hasActiveFocus() && hadActiveFocus && !d->m_readOnly)
         qGuiApp->inputMethod()->show();
+#else
+    Q_UNUSED(hadActiveFocus);
 #endif
 }
 
@@ -1920,13 +1757,13 @@ QSGNode *QQuickTextInput::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData 
         node->deleteContent();
         node->setMatrix(QMatrix4x4());
 
-        QPointF offset(0, 0);
+        QPointF offset(leftPadding(), topPadding());
         if (d->autoScroll && d->m_textLayout.lineCount() > 0) {
             QFontMetricsF fm(d->font);
             // the y offset is there to keep the baseline constant in case we have script changes in the text.
-            offset = -QPointF(d->hscroll, d->vscroll + d->m_textLayout.lineAt(0).ascent() - fm.ascent());
+            offset += -QPointF(d->hscroll, d->vscroll + d->m_textLayout.lineAt(0).ascent() - fm.ascent());
         } else {
-            offset = -QPointF(d->hscroll, d->vscroll);
+            offset += -QPointF(d->hscroll, d->vscroll);
         }
 
         if (!d->m_textLayout.text().isEmpty()
@@ -2672,6 +2509,20 @@ bool QQuickTextInput::isInputMethodComposing() const
 #endif
 }
 
+QQuickTextInputPrivate::ExtraData::ExtraData()
+    : padding(0)
+    , topPadding(0)
+    , leftPadding(0)
+    , rightPadding(0)
+    , bottomPadding(0)
+    , explicitTopPadding(false)
+    , explicitLeftPadding(false)
+    , explicitRightPadding(false)
+    , explicitBottomPadding(false)
+    , implicitResize(true)
+{
+}
+
 void QQuickTextInputPrivate::init()
 {
     Q_Q(QQuickTextInput);
@@ -2882,12 +2733,81 @@ qreal QQuickTextInputPrivate::getImplicitWidth() const
 
             QTextLine line = layout.createLine();
             line.setLineWidth(INT_MAX);
-            d->implicitWidth = qCeil(line.naturalTextWidth());
+            d->implicitWidth = qCeil(line.naturalTextWidth()) + q->leftPadding() + q->rightPadding();
 
             layout.endLayout();
         }
     }
     return implicitWidth;
+}
+
+void QQuickTextInputPrivate::setTopPadding(qreal value, bool reset)
+{
+    Q_Q(QQuickTextInput);
+    qreal oldPadding = q->topPadding();
+    if (!reset || extra.isAllocated()) {
+        extra.value().topPadding = value;
+        extra.value().explicitTopPadding = !reset;
+    }
+    if ((!reset && !qFuzzyCompare(oldPadding, value)) || (reset && !qFuzzyCompare(oldPadding, padding()))) {
+        updateLayout();
+        emit q->topPaddingChanged();
+    }
+}
+
+void QQuickTextInputPrivate::setLeftPadding(qreal value, bool reset)
+{
+    Q_Q(QQuickTextInput);
+    qreal oldPadding = q->leftPadding();
+    if (!reset || extra.isAllocated()) {
+        extra.value().leftPadding = value;
+        extra.value().explicitLeftPadding = !reset;
+    }
+    if ((!reset && !qFuzzyCompare(oldPadding, value)) || (reset && !qFuzzyCompare(oldPadding, padding()))) {
+        updateLayout();
+        emit q->leftPaddingChanged();
+    }
+}
+
+void QQuickTextInputPrivate::setRightPadding(qreal value, bool reset)
+{
+    Q_Q(QQuickTextInput);
+    qreal oldPadding = q->rightPadding();
+    if (!reset || extra.isAllocated()) {
+        extra.value().rightPadding = value;
+        extra.value().explicitRightPadding = !reset;
+    }
+    if ((!reset && !qFuzzyCompare(oldPadding, value)) || (reset && !qFuzzyCompare(oldPadding, padding()))) {
+        updateLayout();
+        emit q->rightPaddingChanged();
+    }
+}
+
+void QQuickTextInputPrivate::setBottomPadding(qreal value, bool reset)
+{
+    Q_Q(QQuickTextInput);
+    qreal oldPadding = q->bottomPadding();
+    if (!reset || extra.isAllocated()) {
+        extra.value().bottomPadding = value;
+        extra.value().explicitBottomPadding = !reset;
+    }
+    if ((!reset && !qFuzzyCompare(oldPadding, value)) || (reset && !qFuzzyCompare(oldPadding, padding()))) {
+        updateLayout();
+        emit q->bottomPaddingChanged();
+    }
+}
+
+bool QQuickTextInputPrivate::isImplicitResizeEnabled() const
+{
+    return !extra.isAllocated() || extra->implicitResize;
+}
+
+void QQuickTextInputPrivate::setImplicitResizeEnabled(bool enabled)
+{
+    if (!enabled)
+        extra.value().implicitResize = false;
+    else if (extra.isAllocated())
+        extra->implicitResize = true;
 }
 
 void QQuickTextInputPrivate::updateLayout()
@@ -2915,12 +2835,13 @@ void QQuickTextInputPrivate::updateLayout()
         line.setLineWidth(INT_MAX);
         const bool wasInLayout = inLayout;
         inLayout = true;
-        q->setImplicitWidth(qCeil(line.naturalTextWidth()));
+        if (isImplicitResizeEnabled())
+            q->setImplicitWidth(qCeil(line.naturalTextWidth()) + q->leftPadding() + q->rightPadding());
         inLayout = wasInLayout;
         if (inLayout)       // probably the result of a binding loop, but by letting it
             return;         // get this far we'll get a warning to that effect.
     }
-    qreal lineWidth = q->widthValid() ? q->width() : INT_MAX;
+    qreal lineWidth = q->widthValid() ? q->width() - q->leftPadding() - q->rightPadding() : INT_MAX;
     qreal height = 0;
     qreal width = 0;
     do {
@@ -2946,10 +2867,12 @@ void QQuickTextInputPrivate::updateLayout()
     q->polish();
     q->update();
 
-    if (!requireImplicitWidth && !q->widthValid())
-        q->setImplicitSize(width, height);
-    else
-        q->setImplicitHeight(height);
+    if (isImplicitResizeEnabled()) {
+        if (!requireImplicitWidth && !q->widthValid())
+            q->setImplicitSize(width + q->leftPadding() + q->rightPadding(), height + q->topPadding() + q->bottomPadding());
+        else
+            q->setImplicitHeight(height + q->topPadding() + q->bottomPadding());
+    }
 
     updateBaselineOffset();
 
@@ -2971,13 +2894,13 @@ void QQuickTextInputPrivate::updateBaselineOffset()
     QFontMetricsF fm(font);
     qreal yoff = 0;
     if (q->heightValid()) {
-        const qreal surplusHeight = q->height() - contentSize.height();
+        const qreal surplusHeight = q->height() - contentSize.height() - q->topPadding() - q->bottomPadding();
         if (vAlign == QQuickTextInput::AlignBottom)
             yoff = surplusHeight;
         else if (vAlign == QQuickTextInput::AlignVCenter)
             yoff = surplusHeight/2;
     }
-    q->setBaselineOffset(fm.ascent() + yoff);
+    q->setBaselineOffset(fm.ascent() + yoff + q->topPadding());
 }
 
 #ifndef QT_NO_CLIPBOARD
@@ -3345,7 +3268,7 @@ void QQuickTextInputPrivate::processInputMethodEvent(QInputMethodEvent *event)
     m_preeditCursor = event->preeditString().length();
     hasImState = !event->preeditString().isEmpty();
     bool cursorVisible = true;
-    QList<QTextLayout::FormatRange> formats;
+    QVector<QTextLayout::FormatRange> formats;
     for (int i = 0; i < event->attributes().size(); ++i) {
         const QInputMethodEvent::Attribute &a = event->attributes().at(i);
         if (a.type == QInputMethodEvent::Cursor) {
@@ -3364,7 +3287,7 @@ void QQuickTextInputPrivate::processInputMethodEvent(QInputMethodEvent *event)
             }
         }
     }
-    m_textLayout.setAdditionalFormats(formats);
+    m_textLayout.setFormats(formats);
 
     updateDisplayText(/*force*/ true);
     if ((cursorPositionChanged && !emitCursorPositionChanged())
@@ -4273,6 +4196,21 @@ void QQuickTextInputPrivate::processKeyEvent(QKeyEvent* event)
         return;
     }
 
+    if (m_blinkPeriod > 0) {
+        if (m_blinkTimer)
+            q->killTimer(m_blinkTimer);
+
+        m_blinkTimer = q->startTimer(m_blinkPeriod / 2);
+
+        if (m_blinkStatus == 0) {
+            m_blinkStatus = 1;
+
+            updateType = UpdatePaintNode;
+            q->polish();
+            q->update();
+        }
+    }
+
     if (m_echoMode == QQuickTextInput::PasswordEchoOnEdit
         && !m_passwordEchoEditing
         && !m_readOnly
@@ -4391,6 +4329,14 @@ void QQuickTextInputPrivate::processKeyEvent(QKeyEvent* event)
     else if (event == QKeySequence::DeleteStartOfWord) {
         if (!m_readOnly)
             deleteStartOfWord();
+    } else if (event == QKeySequence::DeleteCompleteLine) {
+        if (!m_readOnly) {
+            selectAll();
+#ifndef QT_NO_CLIPBOARD
+            copy();
+#endif
+            del();
+        }
     }
 #endif // QT_NO_SHORTCUT
     else {
@@ -4506,6 +4452,127 @@ void QQuickTextInput::ensureVisible(int position)
     Q_D(QQuickTextInput);
     d->ensureVisible(position);
     updateCursorRectangle(false);
+}
+
+/*!
+    \since 5.6
+    \qmlproperty real QtQuick::TextInput::padding
+    \qmlproperty real QtQuick::TextInput::topPadding
+    \qmlproperty real QtQuick::TextInput::leftPadding
+    \qmlproperty real QtQuick::TextInput::bottomPadding
+    \qmlproperty real QtQuick::TextInput::rightPadding
+
+    These properties hold the padding around the content. This space is reserved
+    in addition to the contentWidth and contentHeight.
+*/
+qreal QQuickTextInput::padding() const
+{
+    Q_D(const QQuickTextInput);
+    return d->padding();
+}
+
+void QQuickTextInput::setPadding(qreal padding)
+{
+    Q_D(QQuickTextInput);
+    if (qFuzzyCompare(d->padding(), padding))
+        return;
+
+    d->extra.value().padding = padding;
+    d->updateLayout();
+    emit paddingChanged();
+    if (!d->extra.isAllocated() || !d->extra->explicitTopPadding)
+        emit topPaddingChanged();
+    if (!d->extra.isAllocated() || !d->extra->explicitLeftPadding)
+        emit leftPaddingChanged();
+    if (!d->extra.isAllocated() || !d->extra->explicitRightPadding)
+        emit rightPaddingChanged();
+    if (!d->extra.isAllocated() || !d->extra->explicitBottomPadding)
+        emit bottomPaddingChanged();
+}
+
+void QQuickTextInput::resetPadding()
+{
+    setPadding(0);
+}
+
+qreal QQuickTextInput::topPadding() const
+{
+    Q_D(const QQuickTextInput);
+    if (d->extra.isAllocated() && d->extra->explicitTopPadding)
+        return d->extra->topPadding;
+    return d->padding();
+}
+
+void QQuickTextInput::setTopPadding(qreal padding)
+{
+    Q_D(QQuickTextInput);
+    d->setTopPadding(padding);
+}
+
+void QQuickTextInput::resetTopPadding()
+{
+    Q_D(QQuickTextInput);
+    d->setTopPadding(0, true);
+}
+
+qreal QQuickTextInput::leftPadding() const
+{
+    Q_D(const QQuickTextInput);
+    if (d->extra.isAllocated() && d->extra->explicitLeftPadding)
+        return d->extra->leftPadding;
+    return d->padding();
+}
+
+void QQuickTextInput::setLeftPadding(qreal padding)
+{
+    Q_D(QQuickTextInput);
+    d->setLeftPadding(padding);
+}
+
+void QQuickTextInput::resetLeftPadding()
+{
+    Q_D(QQuickTextInput);
+    d->setLeftPadding(0, true);
+}
+
+qreal QQuickTextInput::rightPadding() const
+{
+    Q_D(const QQuickTextInput);
+    if (d->extra.isAllocated() && d->extra->explicitRightPadding)
+        return d->extra->rightPadding;
+    return d->padding();
+}
+
+void QQuickTextInput::setRightPadding(qreal padding)
+{
+    Q_D(QQuickTextInput);
+    d->setRightPadding(padding);
+}
+
+void QQuickTextInput::resetRightPadding()
+{
+    Q_D(QQuickTextInput);
+    d->setRightPadding(0, true);
+}
+
+qreal QQuickTextInput::bottomPadding() const
+{
+    Q_D(const QQuickTextInput);
+    if (d->extra.isAllocated() && d->extra->explicitBottomPadding)
+        return d->extra->bottomPadding;
+    return d->padding();
+}
+
+void QQuickTextInput::setBottomPadding(qreal padding)
+{
+    Q_D(QQuickTextInput);
+    d->setBottomPadding(padding);
+}
+
+void QQuickTextInput::resetBottomPadding()
+{
+    Q_D(QQuickTextInput);
+    d->setBottomPadding(0, true);
 }
 
 QT_END_NAMESPACE

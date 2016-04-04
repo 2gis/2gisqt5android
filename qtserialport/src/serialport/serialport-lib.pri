@@ -33,16 +33,16 @@ wince* {
         $$PWD/qserialportinfo_wince.cpp
 }
 
-unix:!symbian {
+unix {
     SOURCES += \
         $$PWD/qserialport_unix.cpp
 
-    !mac {
+    !osx {
         SOURCES += \
             $$PWD/qserialportinfo_unix.cpp
     } else {
         SOURCES += \
-            $$PWD/qserialportinfo_mac.cpp
+            $$PWD/qserialportinfo_osx.cpp
 
         LIBS_PRIVATE += -framework IOKit -framework CoreFoundation
     }

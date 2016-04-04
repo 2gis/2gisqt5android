@@ -39,29 +39,47 @@
 
 #include <Qt3DCore/QEntity>
 #include <Qt3DCore/QTransform>
-#include <Qt3DCore/QScaleTransform>
-#include <Qt3DCore/QRotateTransform>
-#include <Qt3DCore/QTranslateTransform>
-#include <Qt3DRenderer/QMesh>
+#include <Qt3DRender/QMesh>
 
-class TrefoilKnot : public Qt3D::QEntity
+class TrefoilKnot : public Qt3DCore::QEntity
 {
+    Q_OBJECT
+    Q_PROPERTY(float theta READ theta WRITE setTheta NOTIFY thetaChanged)
+    Q_PROPERTY(float phi READ phi WRITE setPhi NOTIFY phiChanged)
+    Q_PROPERTY(float scale READ scale WRITE setScale NOTIFY scaleChanged)
+    Q_PROPERTY(QVector3D position READ position WRITE setPosition NOTIFY positionChanged)
+
 public:
-    explicit TrefoilKnot(Qt3D::QNode *parent = 0);
+    explicit TrefoilKnot(Qt3DCore::QNode *parent = 0);
     ~TrefoilKnot();
 
-    Qt3D::QScaleTransform *scaleTransform() const;
-    Qt3D::QRotateTransform *xaxisRotateTransform() const;
-    Qt3D::QRotateTransform *yaxisRotateTransform() const;
-    Qt3D::QTranslateTransform *translateTransform() const;
+    float theta() const;
+    float phi() const;
+    QVector3D position() const;
+    float scale() const;
+
+public slots:
+    void setTheta(float theta);
+    void setPhi(float phi);
+    void setPosition(QVector3D position);
+    void setScale(float scale);
+
+signals:
+    void thetaChanged(float theta);
+    void phiChanged(float phi);
+    void positionChanged(QVector3D position);
+    void scaleChanged(float scale);
+
+protected:
+    void updateTransform();
 
 private:
-    Qt3D::QMesh *m_mesh;
-    Qt3D::QTransform *m_transform;
-    Qt3D::QScaleTransform *m_scaleTransform;
-    Qt3D::QRotateTransform *m_xaxisRotation;
-    Qt3D::QRotateTransform *m_yaxisRotation;
-    Qt3D::QTranslateTransform *m_translateTransform;
+    Qt3DRender::QMesh *m_mesh;
+    Qt3DCore::QTransform *m_transform;
+    float m_theta;
+    float m_phi;
+    QVector3D m_position;
+    float m_scale;
 };
 
 #endif // TREFOILKNOT_H

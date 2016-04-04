@@ -57,7 +57,7 @@
 QT_BEGIN_NAMESPACE
 
 class QGeoTiledMap;
-class QGeoTileCache;
+class QAbstractGeoTileCache;
 class QGeoTileSpec;
 class QGeoTileFetcher;
 
@@ -68,11 +68,11 @@ public:
     ~QGeoTiledMappingManagerEnginePrivate();
 
     QSize tileSize_;
-    QSet<QGeoTiledMap *> tileMaps_;
+    int m_tileVersion;
     QHash<QGeoTiledMap *, QSet<QGeoTileSpec> > mapHash_;
     QHash<QGeoTileSpec, QSet<QGeoTiledMap *> > tileHash_;
     QGeoTiledMappingManagerEngine::CacheAreas cacheHint_;
-    QGeoTileCache *tileCache_;
+    QAbstractGeoTileCache *tileCache_;
     QGeoTileFetcher *fetcher_;
 
 private:

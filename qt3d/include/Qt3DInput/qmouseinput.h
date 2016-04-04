@@ -1,1 +1,1 @@
-#include "../../src/input/qmouseinput.h"
+#include "../../src/input/frontend/qmouseinput.h"

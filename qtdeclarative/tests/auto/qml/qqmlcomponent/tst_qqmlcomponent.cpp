@@ -110,6 +110,7 @@ private slots:
     void qmlCreateParentReference();
     void async();
     void asyncHierarchy();
+    void asyncForceSync();
     void componentUrlCanonicalization();
     void onDestructionLookup();
     void onDestructionCount();
@@ -157,7 +158,7 @@ void tst_qqmlcomponent::qmlIncubateObject()
     QCOMPARE(object->property("test1").toBool(), true);
     QCOMPARE(object->property("test2").toBool(), false);
 
-    QTRY_VERIFY(object->property("test2").toBool() == true);
+    QTRY_VERIFY(object->property("test2").toBool());
 
     delete object;
 }
@@ -250,7 +251,7 @@ void tst_qqmlcomponent::qmlCreateObjectWithProperties()
 
     QObject *testObject1 = object->property("declarativerectangle").value<QObject*>();
     QVERIFY(testObject1);
-    QVERIFY(testObject1->parent() == object);
+    QCOMPARE(testObject1->parent(), object);
     QCOMPARE(testObject1->property("x").value<int>(), 17);
     QCOMPARE(testObject1->property("y").value<int>(), 17);
     QCOMPARE(testObject1->property("color").value<QColor>(), QColor(255,255,255));
@@ -260,7 +261,7 @@ void tst_qqmlcomponent::qmlCreateObjectWithProperties()
 
     QObject *testObject2 = object->property("declarativeitem").value<QObject*>();
     QVERIFY(testObject2);
-    QVERIFY(testObject2->parent() == object);
+    QCOMPARE(testObject2->parent(), object);
     //QCOMPARE(testObject2->metaObject()->className(), "QDeclarativeItem_QML_2");
     QCOMPARE(testObject2->property("x").value<int>(), 17);
     QCOMPARE(testObject2->property("y").value<int>(), 17);
@@ -371,6 +372,35 @@ void tst_qqmlcomponent::asyncHierarchy()
     delete root;
 }
 
+void tst_qqmlcomponent::asyncForceSync()
+{
+    {
+        // 1) make sure that HTTP URLs cannot be completed synchronously
+        TestHTTPServer server;
+        QVERIFY2(server.listen(), qPrintable(server.errorString()));
+        server.serveDirectory(dataDirectory());
+
+        // ensure that the item hierarchy is compiled correctly.
+        QQmlComponent component(&engine);
+        component.loadUrl(server.url("/TestComponent.2.qml"), QQmlComponent::Asynchronous);
+        QCOMPARE(component.status(), QQmlComponent::Loading);
+        QQmlComponent component2(&engine, server.url("/TestComponent.2.qml"), QQmlComponent::PreferSynchronous);
+        QCOMPARE(component2.status(), QQmlComponent::Loading);
+    }
+    {
+        // 2) make sure that file:// URL can be completed synchronously
+
+        // ensure that the item hierarchy is compiled correctly.
+        QQmlComponent component(&engine);
+        component.loadUrl(testFileUrl("/TestComponent.2.qml"), QQmlComponent::Asynchronous);
+        QCOMPARE(component.status(), QQmlComponent::Loading);
+        QQmlComponent component2(&engine, testFileUrl("/TestComponent.2.qml"), QQmlComponent::PreferSynchronous);
+        QCOMPARE(component2.status(), QQmlComponent::Ready);
+        QCOMPARE(component.status(), QQmlComponent::Loading);
+        QTRY_COMPARE_WITH_TIMEOUT(component.status(), QQmlComponent::Ready, 0);
+    }
+}
+
 void tst_qqmlcomponent::componentUrlCanonicalization()
 {
     // ensure that url canonicalization succeeds so that type information
@@ -418,7 +448,7 @@ void tst_qqmlcomponent::componentUrlCanonicalization()
         QQmlComponent component(&engine, testFileUrl("componentUrlCanonicalization.5.qml"));
         QTest::ignoreMessage(QtWarningMsg, QLatin1String("QQmlComponent: Component is not ready").data());
         QScopedPointer<QObject> object(component.create());
-        QVERIFY(object == 0);
+        QVERIFY(object.isNull());
     }
 }
 

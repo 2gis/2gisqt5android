@@ -54,7 +54,7 @@ QQuickWebEngineHistoryListModelPrivate::~QQuickWebEngineHistoryListModelPrivate(
 int QQuickWebEngineHistoryListModelPrivate::count() const
 {
     if (!adapter())
-        return -1;
+        return 0;
     return adapter()->navigationEntryCount();
 }
 
@@ -65,6 +65,8 @@ int QQuickWebEngineHistoryListModelPrivate::index(int index) const
 
 int QQuickWebEngineHistoryListModelPrivate::offsetForIndex(int index) const
 {
+    if (!adapter())
+        return index;
     return index - adapter()->currentNavigationEntryIndex();
 }
 
@@ -81,7 +83,7 @@ QQuickWebEngineBackHistoryListModelPrivate::QQuickWebEngineBackHistoryListModelP
 int QQuickWebEngineBackHistoryListModelPrivate::count() const
 {
     if (!adapter())
-        return -1;
+        return 0;
     return adapter()->currentNavigationEntryIndex();
 }
 
@@ -104,12 +106,14 @@ QQuickWebEngineForwardHistoryListModelPrivate::QQuickWebEngineForwardHistoryList
 int QQuickWebEngineForwardHistoryListModelPrivate::count() const
 {
     if (!adapter())
-        return -1;
+        return 0;
     return adapter()->navigationEntryCount() - adapter()->currentNavigationEntryIndex() - 1;
 }
 
 int QQuickWebEngineForwardHistoryListModelPrivate::index(int i) const
 {
+    if (!adapter())
+        return i + 1;
     return adapter()->currentNavigationEntryIndex() + i + 1;
 }
 
@@ -117,6 +121,26 @@ int QQuickWebEngineForwardHistoryListModelPrivate::offsetForIndex(int index) con
 {
     return index + 1;
 }
+
+/*!
+    \qmltype WebEngineHistoryListModel
+    \instantiates QQuickWebEngineHistoryListModel
+    \inqmlmodule QtWebEngine
+    \since QtWebEngine 1.1
+
+    \brief A data model that represents the history of a web engine page.
+
+    The WebEngineHistoryListModel type exposes the \e title, \e url, and \e offset roles. The
+    \e title and \e url specify the title and URL of the visited page. The \e offset specifies
+    the position of the page in respect to the current page (0). A positive number indicates that
+    the page was visited after the current page, whereas a negative number indicates that the page
+    was visited before the current page.
+
+    This type is uncreatable, but it can be accessed by using the
+    \l{WebEngineView::navigationHistory}{WebEngineView.navigationHistory} property.
+
+    \sa WebEngineHistory
+*/
 
 QQuickWebEngineHistoryListModel::QQuickWebEngineHistoryListModel()
     : QAbstractListModel()
@@ -185,6 +209,67 @@ QQuickWebEngineHistoryPrivate::~QQuickWebEngineHistoryPrivate()
 {
 }
 
+/*!
+    \qmltype WebEngineHistory
+    \instantiates QQuickWebEngineHistory
+    \inqmlmodule QtWebEngine
+    \since QtWebEngine 1.1
+
+    \brief Provides data models that represent the history of a web engine page.
+
+    The WebEngineHistory type can be accessed by using the
+    \l{WebEngineView::navigationHistory}{WebEngineView.navigationHistory} property.
+
+    The WebEngineHistory type providess the following WebEngineHistoryListModel data model objects:
+
+    \list
+        \li \c backItems, which contains the URLs of visited pages.
+        \li \c forwardItems, which contains the URLs of the pages that were visited after visiting
+            the current page.
+        \li \c items, which contains the URLs of the back and forward items, as well as the URL of
+            the current page.
+    \endlist
+
+    The easiest way to use these models is to use them in a ListView as illustrated by the
+    following code snippet:
+
+    \code
+    ListView {
+        id: historyItemsList
+        anchors.fill: parent
+        model: webEngineView.navigationHistory.items
+        delegate:
+            Text {
+                color: "black"
+                text: model.title + " - " + model.url + " (" + model.offset + ")"
+            }
+    }
+    \endcode
+
+    The ListView shows the content of the corresponding model. The delegate is responsible for the
+    format of the list items. The appearance of each item of the list in the delegate can be defined
+    separately (it is not web engine specific).
+
+    The model roles \e title and \e url specify the title and URL of the visited page. The \e offset
+    role specifies the position of the page in respect to the current page (0). A positive number
+    indicates that the page was visited after the current page, whereas a negative number indicates
+    that the page was visited before the current page.
+
+    The data models can also be used to create a menu, as illustrated by the following code
+    snippet:
+
+    \quotefromfile webengine/quicknanobrowser/BrowserWindow.qml
+    \skipto ToolBar
+    \printuntil onObjectRemoved
+    \printuntil }
+    \printuntil }
+    \printuntil }
+
+    For the complete example, see \l{WebEngine Quick Nano Browser}.
+
+    \sa WebEngineHistoryListModel
+*/
+
 QQuickWebEngineHistory::QQuickWebEngineHistory(QQuickWebEngineViewPrivate *view)
     : d_ptr(new QQuickWebEngineHistoryPrivate(view))
 {
@@ -194,6 +279,13 @@ QQuickWebEngineHistory::~QQuickWebEngineHistory()
 {
 }
 
+/*!
+    \qmlproperty QQuickWebEngineHistoryListModel WebEngineHistory::items
+    \readonly
+    \since QtWebEngine 1.1
+
+    URLs of back items, forward items, and the current item in the history.
+*/
 QQuickWebEngineHistoryListModel *QQuickWebEngineHistory::items() const
 {
     Q_D(const QQuickWebEngineHistory);
@@ -202,6 +294,13 @@ QQuickWebEngineHistoryListModel *QQuickWebEngineHistory::items() const
     return d->m_navigationModel.data();
 }
 
+/*!
+    \qmlproperty QQuickWebEngineHistoryListModel WebEngineHistory::backItems
+    \readonly
+    \since QtWebEngine 1.1
+
+    URLs of visited pages.
+*/
 QQuickWebEngineHistoryListModel *QQuickWebEngineHistory::backItems() const
 {
     Q_D(const QQuickWebEngineHistory);
@@ -210,6 +309,13 @@ QQuickWebEngineHistoryListModel *QQuickWebEngineHistory::backItems() const
     return d->m_backNavigationModel.data();
 }
 
+/*!
+    \qmlproperty QQuickWebEngineHistoryListModel WebEngineHistory::forwardItems
+    \readonly
+    \since QtWebEngine 1.1
+
+    URLs of the pages that were visited after visiting the current page.
+*/
 QQuickWebEngineHistoryListModel *QQuickWebEngineHistory::forwardItems() const
 {
     Q_D(const QQuickWebEngineHistory);

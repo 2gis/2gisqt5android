@@ -35,14 +35,14 @@
 **
 ****************************************************************************/
 
-import Qt3D 2.0
-import Qt3D.Renderer 2.0
+import Qt3D.Core 2.0
+import Qt3D.Render 2.0
 
 Effect {
     id: root
 
     property Texture2D shadowTexture
-    property Light light
+    property PlanetsLight light
 
     parameters: [
         Parameter { name: "lightPosition";  value: root.light.lightPosition },
@@ -51,9 +51,9 @@ Effect {
 
     techniques: [
         Technique {
-            openGLFilter {
-                api: OpenGLFilter.Desktop
-                profile: OpenGLFilter.Core
+            graphicsApiFilter {
+                api: GraphicsApiFilter.OpenGL
+                profile: GraphicsApiFilter.CoreProfile
                 majorVersion: 3
                 minorVersion: 2
             }
@@ -82,8 +82,8 @@ Effect {
             ]
         },
         Technique {
-            openGLFilter {
-                api: OpenGLFilter.Desktop
+            graphicsApiFilter {
+                api: GraphicsApiFilter.OpenGL
                 majorVersion: 2
             }
 
@@ -112,8 +112,8 @@ Effect {
             ]
         },
         Technique {
-            openGLFilter {
-                api: OpenGLFilter.ES
+            graphicsApiFilter {
+                api: GraphicsApiFilter.OpenGLES
                 majorVersion: 2
                 minorVersion: 0
             }

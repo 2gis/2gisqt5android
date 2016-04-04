@@ -109,12 +109,8 @@ QString serialPortLockFilePath(const QString &portName);
 class QSerialPortErrorInfo
 {
 public:
-    explicit QSerialPortErrorInfo(QSerialPort::SerialPortError errorCode = QSerialPort::UnknownError,
-                                  const QString &errorString = QString())
-        : errorCode(errorCode)
-        , errorString(errorString)
-    {
-    }
+    explicit QSerialPortErrorInfo(QSerialPort::SerialPortError newErrorCode = QSerialPort::UnknownError,
+                                  const QString &newErrorString = QString());
     QSerialPort::SerialPortError errorCode;
     QString errorString;
 };
@@ -129,8 +125,6 @@ public:
     };
 
     QSerialPortPrivate();
-
-    static int timeoutValue(int msecs, int elapsed);
 
     bool open(QIODevice::OpenMode mode);
     void close();
@@ -155,7 +149,6 @@ public:
     bool setParity(QSerialPort::Parity parity);
     bool setStopBits(QSerialPort::StopBits stopBits);
     bool setFlowControl(QSerialPort::FlowControl flowControl);
-    bool setDataErrorPolicy(QSerialPort::DataErrorPolicy policy);
 
     QSerialPortErrorInfo getSystemError(int systemErrorCode = -1) const;
 
@@ -166,8 +159,9 @@ public:
     static QString portNameToSystemLocation(const QString &port);
     static QString portNameFromSystemLocation(const QString &location);
 
-    static qint32 baudRateFromSetting(qint32 setting);
+#if defined(Q_OS_UNIX)
     static qint32 settingFromBaudRate(qint32 baudRate);
+#endif
 
     static QList<qint32> standardBaudRates();
 
@@ -181,7 +175,6 @@ public:
     QSerialPort::Parity parity;
     QSerialPort::StopBits stopBits;
     QSerialPort::FlowControl flowControl;
-    QSerialPort::DataErrorPolicy policy;
     bool settingsRestoredOnClose;
     bool isBreakEnabled;
 
@@ -189,12 +182,10 @@ public:
 
     bool initialize(DWORD eventMask);
     bool updateDcb();
-    bool updateCommTimeouts();
 
     bool waitForReadOrWrite(bool *selectForRead, bool *selectForWrite,
                             bool checkRead, bool checkWrite,
                             int msecs);
-    void processIoErrors(bool error);
 
     bool notifyRead();
     bool notifyWrite();
@@ -204,7 +195,6 @@ public:
     COMMTIMEOUTS currentCommTimeouts;
     COMMTIMEOUTS restoredCommTimeouts;
     HANDLE handle;
-    bool parityErrorOccurred;
 
     QThread *eventNotifier;
     QMutex settingsChangeMutex;
@@ -212,9 +202,8 @@ public:
 #elif defined(Q_OS_WIN32)
 
     bool initialize();
-    bool updateDcb();
-    bool updateCommTimeouts();
-    void handleLineStatusErrors();
+    bool setDcb(DCB *dcb);
+    bool getDcb(DCB *dcb);
     OVERLAPPED *waitForNotified(int msecs);
 
     bool completeAsyncCommunication(qint64 bytesTransferred);
@@ -226,16 +215,14 @@ public:
     bool _q_startAsyncWrite();
     void _q_notified(DWORD numberOfBytes, DWORD errorCode, OVERLAPPED *overlapped);
 
-    bool emulateErrorPolicy();
     void emitReadyRead();
 
-    DCB currentDcb;
     DCB restoredDcb;
     COMMTIMEOUTS currentCommTimeouts;
     COMMTIMEOUTS restoredCommTimeouts;
     HANDLE handle;
-    bool parityErrorOccurred;
     QByteArray readChunkBuffer;
+    bool communicationStarted;
     bool writeStarted;
     bool readStarted;
     QWinOverlappedIoNotifier *notifier;
@@ -250,14 +237,11 @@ public:
 #elif defined(Q_OS_UNIX)
 
     bool initialize(QIODevice::OpenMode mode);
-    bool updateTermios();
+    bool setTermios(const termios *tio);
+    bool getTermios(termios *tio);
 
-    QSerialPortErrorInfo setBaudRate_helper(qint32 baudRate,
-            QSerialPort::Directions directions);
-    QSerialPortErrorInfo setCustomBaudRate(qint32 baudRate,
-            QSerialPort::Directions directions);
-    QSerialPortErrorInfo setStandardBaudRate(qint32 baudRate,
-            QSerialPort::Directions directions);
+    bool setCustomBaudRate(qint32 baudRate, QSerialPort::Directions directions);
+    bool setStandardBaudRate(qint32 baudRate, QSerialPort::Directions directions);
 
     bool isReadNotificationEnabled() const;
     void setReadNotificationEnabled(bool enable);
@@ -274,13 +258,11 @@ public:
 #ifndef CMSPAR
     qint64 writePerChar(const char *data, qint64 maxSize);
 #endif
-    qint64 readPerChar(char *data, qint64 maxSize);
 
     bool readNotification();
     bool startAsyncWrite();
     bool completeAsyncWrite();
 
-    struct termios currentTermios;
     struct termios restoredTermios;
     int descriptor;
 

@@ -10,22 +10,24 @@
 #include "base/at_exit.h"
 #include "base/command_line.h"
 #include "base/debug/debugger.h"
-#include "base/debug/trace_event.h"
 #include "base/files/file_path.h"
 #include "base/i18n/icu_util.h"
 #include "base/lazy_instance.h"
 #include "base/logging.h"
 #include "base/memory/scoped_ptr.h"
 #include "base/memory/scoped_vector.h"
-#include "base/metrics/stats_table.h"
+#include "base/metrics/statistics_recorder.h"
 #include "base/path_service.h"
 #include "base/process/launch.h"
 #include "base/process/memory.h"
 #include "base/process/process_handle.h"
 #include "base/profiler/alternate_timer.h"
+#include "base/profiler/scoped_tracker.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
+#include "base/trace_event/trace_event.h"
+#include "components/tracing/startup_tracing.h"
 #include "content/browser/browser_main.h"
 #include "content/common/set_process_title.h"
 #include "content/common/url_schemes.h"
@@ -51,11 +53,7 @@
 #include "ui/base/ui_base_switches.h"
 
 #ifdef V8_USE_EXTERNAL_STARTUP_DATA
-#include "gin/public/isolate_holder.h"
-#endif
-
-#if defined(OS_ANDROID)
-#include "content/public/common/content_descriptors.h"
+#include "gin/v8_initializer.h"
 #endif
 
 #if defined(USE_TCMALLOC)
@@ -81,6 +79,7 @@
 #include <cstring>
 
 #include "base/strings/string_number_conversions.h"
+#include "base/trace_event/trace_event_etw_export_win.h"
 #if !defined(TOOLKIT_QT)
 #include "ui/base/win/atl_module.h"
 #endif
@@ -89,7 +88,10 @@
 #include "base/mac/scoped_nsautorelease_pool.h"
 #if !defined(OS_IOS)
 #include "base/power_monitor/power_monitor_device_source.h"
+#include "content/app/mac/mac_init.h"
+#include "content/browser/browser_io_surface_manager_mac.h"
 #include "content/browser/mach_broker_mac.h"
+#include "content/child/child_io_surface_manager_mac.h"
 #include "content/common/sandbox_init_mac.h"
 #endif  // !OS_IOS
 #endif  // OS_WIN
@@ -101,6 +103,7 @@
 #include "content/public/common/content_descriptors.h"
 
 #if !defined(OS_MACOSX)
+#include "content/public/common/content_descriptors.h"
 #include "content/public/common/zygote_fork_delegate_linux.h"
 #endif
 #if !defined(OS_MACOSX) && !defined(OS_ANDROID)
@@ -213,38 +216,6 @@ static base::ProcessId GetBrowserPid(const base::CommandLine& command_line) {
 }
 #endif
 
-static void InitializeStatsTable(const base::CommandLine& command_line) {
-  // Initialize the Stats Counters table.  With this initialized,
-  // the StatsViewer can be utilized to read counters outside of
-  // Chrome.  These lines can be commented out to effectively turn
-  // counters 'off'.  The table is created and exists for the life
-  // of the process.  It is not cleaned up.
-  if (command_line.HasSwitch(switches::kEnableStatsTable)) {
-    // NOTIMPLEMENTED: we probably need to shut this down correctly to avoid
-    // leaking shared memory regions on posix platforms.
-#if defined(OS_POSIX)
-    // Stats table is in the global file descriptors table on Posix.
-    base::GlobalDescriptors* global_descriptors =
-        base::GlobalDescriptors::GetInstance();
-    base::FileDescriptor table_ident;
-    if (global_descriptors->MaybeGet(kStatsTableSharedMemFd) != -1) {
-      // Open the shared memory file descriptor passed by the browser process.
-      table_ident = base::FileDescriptor(
-          global_descriptors->Get(kStatsTableSharedMemFd), false);
-    }
-#elif defined(OS_WIN)
-    // Stats table is in a named segment on Windows. Use the PID to make this
-    // unique on the system.
-    std::string table_ident =
-      base::StringPrintf("%s-%u", kStatsFilename,
-          static_cast<unsigned int>(GetBrowserPid(command_line)));
-#endif
-    base::StatsTable* stats_table =
-        new base::StatsTable(table_ident, kStatsMaxThreads, kStatsMaxCounters);
-    base::StatsTable::set_current(stats_table);
-  }
-}
-
 class ContentClientInitializer {
  public:
   static void Set(const std::string& process_type,
@@ -314,12 +285,7 @@ int RunZygote(const MainFunctionParams& main_function_params,
   ScopedVector<ZygoteForkDelegate> zygote_fork_delegates;
   if (delegate) {
     delegate->ZygoteStarting(&zygote_fork_delegates);
-    // Each Renderer we spawn will re-attempt initialization of the media
-    // libraries, at which point failure will be detected and handled, so
-    // we do not need to cope with initialization failures here.
-    base::FilePath media_path;
-    if (PathService::Get(DIR_MEDIA_LIBS, &media_path))
-      media::InitializeMediaLibrary(media_path);
+    media::InitializeMediaLibrary();
   }
 
   // This function call can return multiple times, once per fork().
@@ -335,11 +301,6 @@ int RunZygote(const MainFunctionParams& main_function_params,
   std::string process_type =
       command_line.GetSwitchValueASCII(switches::kProcessType);
   ContentClientInitializer::Set(process_type, delegate);
-
-  // The StatsTable must be initialized in each process; we already
-  // initialized for the browser process, now we need to initialize
-  // within the new processes as well.
-  InitializeStatsTable(command_line);
 
   MainFunctionParams main_params(command_line);
   main_params.zygote_child = true;
@@ -488,6 +449,7 @@ class ContentMainRunnerImpl : public ContentMainRunner {
   int Initialize(const ContentMainParams& params) override {
     ui_task_ = params.ui_task;
 
+    base::EnableTerminationOnOutOfMemory();
 #if defined(OS_WIN)
     RegisterInvalidParamHandler();
 #if !defined(TOOLKIT_QT)
@@ -539,6 +501,10 @@ class ContentMainRunnerImpl : public ContentMainRunner {
     }
 #endif  // !OS_MACOSX && USE_TCMALLOC
 
+#if !defined(OS_IOS)
+    base::GlobalDescriptors* g_fds = base::GlobalDescriptors::GetInstance();
+#endif
+
     // On Android,
     // - setlocale() is not supported.
     // - We do not override the signal handlers so that we can get
@@ -557,7 +523,6 @@ class ContentMainRunnerImpl : public ContentMainRunner {
         CHECK(signal(SIGPIPE, SIG_IGN) != SIG_ERR);
     }
 
-    base::GlobalDescriptors* g_fds = base::GlobalDescriptors::GetInstance();
     g_fds->Set(kPrimaryIPCChannel,
                kPrimaryIPCChannel + base::GlobalDescriptors::kBaseDescriptor);
 #endif  // !OS_ANDROID && !OS_IOS
@@ -565,7 +530,8 @@ class ContentMainRunnerImpl : public ContentMainRunner {
 #if defined(OS_LINUX) || defined(OS_OPENBSD)
     g_fds->Set(kCrashDumpSignal,
                kCrashDumpSignal + base::GlobalDescriptors::kBaseDescriptor);
-#endif
+#endif  // OS_LINUX || OS_OPENBSD
+
 
 #endif  // !OS_WIN
 
@@ -586,12 +552,18 @@ class ContentMainRunnerImpl : public ContentMainRunner {
     }
 #endif  // !OS_ANDROID && !OS_IOS
 
-#if defined(OS_MACOSX) && !defined(TOOLKIT_QT)
+    // Don't create this loop on iOS, since the outer loop is already handled
+    // and a loop that's destroyed in shutdown interleaves badly with the event
+    // loop pool on iOS.
+#if defined(OS_MACOSX) && !defined(OS_IOS)
+#if !defined(TOOLKIT_QT)
     // We need this pool for all the objects created before we get to the
     // event loop, but we don't want to leave them hanging around until the
     // app quits. Each "main" needs to flush this pool right before it goes into
     // its main event loop to get rid of the cruft.
     autorelease_pool_.reset(new base::mac::ScopedNSAutoreleasePool());
+#endif
+    InitializeMac();
 #endif
 
     // On Android, the command line is initialized when library is loaded and
@@ -609,11 +581,15 @@ class ContentMainRunnerImpl : public ContentMainRunner {
 
     base::CommandLine::Init(argc, argv);
 
-    if (!delegate_ || delegate_->ShouldEnableTerminationOnHeapCorruption())
-      base::EnableTerminationOnHeapCorruption();
 #if !defined(TOOLKIT_QT)
-    base::EnableTerminationOnOutOfMemory();
+    base::EnableTerminationOnHeapCorruption();
 #endif
+
+    // TODO(yiyaoliu, vadimt): Remove this once crbug.com/453640 is fixed.
+    // Enable profiler recording right after command line is initialized so that
+    // browser startup can be instrumented.
+    if (delegate_ && delegate_->ShouldEnableProfilerRecording())
+      tracked_objects::ScopedTracker::Enable();
 
 #if !defined(OS_IOS)
     SetProcessTitleFromCommandLine(argv);
@@ -664,14 +640,24 @@ class ContentMainRunnerImpl : public ContentMainRunner {
     // Enable startup tracing asap to avoid early TRACE_EVENT calls being
     // ignored.
     if (command_line.HasSwitch(switches::kTraceStartup)) {
-      base::debug::CategoryFilter category_filter(
-          command_line.GetSwitchValueASCII(switches::kTraceStartup));
-      base::debug::TraceLog::GetInstance()->SetEnabled(
-          category_filter,
-          base::debug::TraceLog::RECORDING_MODE,
-          base::debug::TraceOptions(
-              base::debug::RECORD_UNTIL_FULL));
+      base::trace_event::TraceConfig trace_config(
+          command_line.GetSwitchValueASCII(switches::kTraceStartup),
+          base::trace_event::RECORD_UNTIL_FULL);
+      base::trace_event::TraceLog::GetInstance()->SetEnabled(
+          trace_config,
+          base::trace_event::TraceLog::RECORDING_MODE);
+    } else if (process_type != switches::kZygoteProcess) {
+      // There is no need to schedule stopping tracing in this case. Telemetry
+      // will stop tracing on demand later.
+      tracing::EnableStartupTracingIfConfigFileExists();
     }
+
+#if defined(OS_WIN)
+    // Enable exporting of events to ETW if requested on the command line.
+    if (command_line.HasSwitch(switches::kTraceExportEventsToETW))
+      base::trace_event::TraceEventETWExport::EnableETWExport();
+#endif  // OS_WIN
+
 #if !defined(OS_ANDROID)
     // Android tracing started at the beginning of the method.
     // Other OSes have to wait till we get here in order for all the memory
@@ -693,6 +679,18 @@ class ContentMainRunnerImpl : public ContentMainRunner {
     if (!process_type.empty() &&
         (!delegate_ || delegate_->ShouldSendMachPort(process_type))) {
       MachBroker::ChildSendTaskPortToParent();
+    }
+
+    if (!command_line.HasSwitch(switches::kSingleProcess) &&
+        !process_type.empty() && (process_type == switches::kRendererProcess ||
+                                  process_type == switches::kGpuProcess)) {
+      base::mac::ScopedMachSendRight service_port =
+          BrowserIOSurfaceManager::LookupServicePort(getppid());
+      if (service_port.is_valid()) {
+        ChildIOSurfaceManager::GetInstance()->set_service_port(
+            service_port.release());
+        IOSurfaceManager::SetInstance(ChildIOSurfaceManager::GetInstance());
+      }
     }
 #elif defined(OS_WIN)
     SetupCRT(command_line);
@@ -716,7 +714,7 @@ class ContentMainRunnerImpl : public ContentMainRunner {
     }
 #endif
 
-#if defined(USE_NSS)
+#if defined(USE_NSS_CERTS)
     crypto::EarlySetupForNSSInit();
 #endif
 
@@ -725,34 +723,58 @@ class ContentMainRunnerImpl : public ContentMainRunner {
     RegisterContentSchemes(true);
 
 #if defined(OS_ANDROID)
-    int icudata_fd = base::GlobalDescriptors::GetInstance()->MaybeGet(
-        kAndroidICUDataDescriptor);
-    if (icudata_fd != -1)
-      CHECK(base::i18n::InitializeICUWithFileDescriptor(icudata_fd));
-    else
-      CHECK(base::i18n::InitializeICU());
-
-#ifdef V8_USE_EXTERNAL_STARTUP_DATA
-    int v8_natives_fd = base::GlobalDescriptors::GetInstance()->MaybeGet(
-        kV8NativesDataDescriptor);
-    int v8_snapshot_fd = base::GlobalDescriptors::GetInstance()->MaybeGet(
-        kV8SnapshotDataDescriptor);
-    if (v8_natives_fd != -1 && v8_snapshot_fd != -1) {
-      CHECK(gin::IsolateHolder::LoadV8SnapshotFD(v8_natives_fd,
-                                                 v8_snapshot_fd));
+    int icudata_fd = g_fds->MaybeGet(kAndroidICUDataDescriptor);
+    if (icudata_fd != -1) {
+      auto icudata_region = g_fds->GetRegion(kAndroidICUDataDescriptor);
+      CHECK(base::i18n::InitializeICUWithFileDescriptor(icudata_fd,
+                                                        icudata_region));
     } else {
-      CHECK(gin::IsolateHolder::LoadV8Snapshot());
+      CHECK(base::i18n::InitializeICU());
     }
-#endif // V8_USE_EXTERNAL_STARTUP_DATA
-
 #else
     CHECK(base::i18n::InitializeICU());
-#ifdef V8_USE_EXTERNAL_STARTUP_DATA
-    CHECK(gin::IsolateHolder::LoadV8Snapshot());
-#endif // V8_USE_EXTERNAL_STARTUP_DATA
-#endif // OS_ANDROID
+#endif  // OS_ANDROID
 
-    InitializeStatsTable(command_line);
+    base::StatisticsRecorder::Initialize();
+
+#if defined(V8_USE_EXTERNAL_STARTUP_DATA)
+#if defined(OS_POSIX) && !defined(OS_MACOSX)
+#if !defined(OS_ANDROID)
+    // kV8NativesDataDescriptor and kV8SnapshotDataDescriptor could be shared
+    // with child processes via file descriptors. On Android they are set in
+    // ChildProcessService::InternalInitChildProcess, otherwise set them here.
+    if (command_line.HasSwitch(switches::kV8NativesPassedByFD)) {
+      g_fds->Set(
+          kV8NativesDataDescriptor,
+          kV8NativesDataDescriptor + base::GlobalDescriptors::kBaseDescriptor);
+    }
+    if (command_line.HasSwitch(switches::kV8SnapshotPassedByFD)) {
+      g_fds->Set(
+          kV8SnapshotDataDescriptor,
+          kV8SnapshotDataDescriptor + base::GlobalDescriptors::kBaseDescriptor);
+    }
+#endif  // !OS_ANDROID
+    int v8_natives_fd = g_fds->MaybeGet(kV8NativesDataDescriptor);
+    int v8_snapshot_fd = g_fds->MaybeGet(kV8SnapshotDataDescriptor);
+    if (v8_snapshot_fd != -1) {
+      auto v8_snapshot_region = g_fds->GetRegion(kV8SnapshotDataDescriptor);
+      gin::V8Initializer::LoadV8SnapshotFromFD(
+          v8_snapshot_fd, v8_snapshot_region.offset, v8_snapshot_region.size);
+    } else {
+      gin::V8Initializer::LoadV8Snapshot();
+    }
+    if (v8_natives_fd != -1) {
+      auto v8_natives_region = g_fds->GetRegion(kV8NativesDataDescriptor);
+      gin::V8Initializer::LoadV8NativesFromFD(
+          v8_natives_fd, v8_natives_region.offset, v8_natives_region.size);
+    } else {
+      gin::V8Initializer::LoadV8Natives();
+    }
+#else
+    gin::V8Initializer::LoadV8Snapshot();
+    gin::V8Initializer::LoadV8Natives();
+#endif  // OS_POSIX && !OS_MACOSX
+#endif  // V8_USE_EXTERNAL_STARTUP_DATA
 
     if (delegate_)
       delegate_->PreSandboxStartup();
@@ -822,7 +844,7 @@ class ContentMainRunnerImpl : public ContentMainRunner {
 #endif  // _CRTDBG_MAP_ALLOC
 #endif  // OS_WIN
 
-#if defined(OS_MACOSX) && !defined(TOOLKIT_QT)
+#if defined(OS_MACOSX) && !defined(OS_IOS) && !defined(TOOLKIT_QT)
     autorelease_pool_.reset(NULL);
 #endif
 

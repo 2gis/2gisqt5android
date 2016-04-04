@@ -36,7 +36,7 @@
 #include "qv4regexp_p.h"
 #include "qv4regexpobject_p.h"
 #include "qv4objectproto_p.h"
-#include "qv4mm_p.h"
+#include <private/qv4mm_p.h>
 #include "qv4scopedvalue_p.h"
 #include "qv4alloca_p.h"
 #include <QtCore/QDateTime>
@@ -67,68 +67,62 @@ using namespace QV4;
 
 DEFINE_OBJECT_VTABLE(StringObject);
 
-Heap::StringObject::StringObject(InternalClass *ic, QV4::Object *prototype)
-    : Heap::Object(ic, prototype)
+Heap::StringObject::StringObject()
 {
-    Q_ASSERT(vtable == QV4::StringObject::staticVTable());
-    value = ic->engine->newString()->asReturnedValue();
-    tmpProperty.value = Primitive::undefinedValue();
-
-    Scope scope(ic->engine);
-    ScopedObject s(scope, this);
-    s->defineReadonlyProperty(ic->engine->id_length, Primitive::fromInt32(0));
+    Q_ASSERT(vtable() == QV4::StringObject::staticVTable());
+    string = internalClass->engine->id_empty()->d();
+    *propertyData(LengthPropertyIndex) = Primitive::fromInt32(0);
 }
 
-Heap::StringObject::StringObject(ExecutionEngine *engine, const Value &val)
-    : Heap::Object(engine->emptyClass, engine->stringPrototype.asObject())
+Heap::StringObject::StringObject(const QV4::String *str)
 {
-    value = val;
-    Q_ASSERT(value.isString());
-    tmpProperty.value = Primitive::undefinedValue();
-
-    Scope scope(engine);
-    ScopedObject s(scope, this);
-    s->defineReadonlyProperty(engine->id_length, Primitive::fromUInt32(value.stringValue()->toQString().length()));
+    string = str->d();
+    *propertyData(LengthPropertyIndex) = Primitive::fromInt32(length());
 }
 
-Property *Heap::StringObject::getIndex(uint index) const
+Heap::String *Heap::StringObject::getIndex(uint index) const
 {
-    QString str = value.stringValue()->toQString();
+    QString str = string->toQString();
     if (index >= (uint)str.length())
         return 0;
-    tmpProperty.value = Encode(internalClass->engine->newString(str.mid(index, 1)));
-    return &tmpProperty;
+    return internalClass->engine->newString(str.mid(index, 1));
+}
+
+uint Heap::StringObject::length() const
+{
+    return string->len;
 }
 
 bool StringObject::deleteIndexedProperty(Managed *m, uint index)
 {
     ExecutionEngine *v4 = static_cast<StringObject *>(m)->engine();
     Scope scope(v4);
-    Scoped<StringObject> o(scope, m->asStringObject());
+    Scoped<StringObject> o(scope, m->as<StringObject>());
     Q_ASSERT(!!o);
 
-    if (index < static_cast<uint>(o->d()->value.stringValue()->toQString().length())) {
-        if (v4->currentContext()->strictMode)
+    if (index < static_cast<uint>(o->d()->string->toQString().length())) {
+        if (v4->current->strictMode)
             v4->throwTypeError();
         return false;
     }
     return true;
 }
 
-void StringObject::advanceIterator(Managed *m, ObjectIterator *it, Heap::String **name, uint *index, Property *p, PropertyAttributes *attrs)
+void StringObject::advanceIterator(Managed *m, ObjectIterator *it, Value *name, uint *index, Property *p, PropertyAttributes *attrs)
 {
-    *name = (Heap::String *)0;
+    name->setM(0);
     StringObject *s = static_cast<StringObject *>(m);
-    uint slen = s->d()->value.stringValue()->toQString().length();
+    uint slen = s->d()->string->toQString().length();
     if (it->arrayIndex <= slen) {
         while (it->arrayIndex < slen) {
             *index = it->arrayIndex;
             ++it->arrayIndex;
             PropertyAttributes a;
-            Property *pd = s->__getOwnProperty__(*index, &a);
+            Property pd;
+            s->getOwnProperty(*index, &a, &pd);
             if (!(it->flags & ObjectIterator::EnumerableOnly) || a.isEnumerable()) {
                 *attrs = a;
-                p->copy(pd, a);
+                p->copy(&pd, a);
                 return;
             }
         }
@@ -146,8 +140,7 @@ void StringObject::advanceIterator(Managed *m, ObjectIterator *it, Heap::String 
 void StringObject::markObjects(Heap::Base *that, ExecutionEngine *e)
 {
     StringObject::Data *o = static_cast<StringObject::Data *>(that);
-    o->value.stringValue()->mark(e);
-    o->tmpProperty.value.mark(e);
+    o->string->mark(e);
     Object::markObjects(that, e);
 }
 
@@ -158,11 +151,11 @@ Heap::StringCtor::StringCtor(QV4::ExecutionContext *scope)
 {
 }
 
-ReturnedValue StringCtor::construct(Managed *m, CallData *callData)
+ReturnedValue StringCtor::construct(const Managed *m, CallData *callData)
 {
-    ExecutionEngine *v4 = static_cast<Object *>(m)->engine();
+    ExecutionEngine *v4 = static_cast<const Object *>(m)->engine();
     Scope scope(v4);
-    ScopedValue value(scope);
+    ScopedString value(scope);
     if (callData->argc)
         value = callData->args[0].toString(v4);
     else
@@ -170,9 +163,9 @@ ReturnedValue StringCtor::construct(Managed *m, CallData *callData)
     return Encode(v4->newStringObject(value));
 }
 
-ReturnedValue StringCtor::call(Managed *m, CallData *callData)
+ReturnedValue StringCtor::call(const Managed *m, CallData *callData)
 {
-    ExecutionEngine *v4 = static_cast<Object *>(m)->engine();
+    ExecutionEngine *v4 = static_cast<const Object *>(m)->engine();
     Scope scope(v4);
     ScopedValue value(scope);
     if (callData->argc)
@@ -187,13 +180,13 @@ void StringPrototype::init(ExecutionEngine *engine, Object *ctor)
     Scope scope(engine);
     ScopedObject o(scope);
 
-    ctor->defineReadonlyProperty(engine->id_prototype, (o = this));
-    ctor->defineReadonlyProperty(engine->id_length, Primitive::fromInt32(1));
+    ctor->defineReadonlyProperty(engine->id_prototype(), (o = this));
+    ctor->defineReadonlyProperty(engine->id_length(), Primitive::fromInt32(1));
     ctor->defineDefaultProperty(QStringLiteral("fromCharCode"), method_fromCharCode, 1);
 
     defineDefaultProperty(QStringLiteral("constructor"), (o = ctor));
-    defineDefaultProperty(engine->id_toString, method_toString);
-    defineDefaultProperty(engine->id_valueOf, method_toString); // valueOf and toString are identical
+    defineDefaultProperty(engine->id_toString(), method_toString);
+    defineDefaultProperty(engine->id_valueOf(), method_toString); // valueOf and toString are identical
     defineDefaultProperty(QStringLiteral("charAt"), method_charAt, 1);
     defineDefaultProperty(QStringLiteral("charCodeAt"), method_charCodeAt, 1);
     defineDefaultProperty(QStringLiteral("concat"), method_concat, 1);
@@ -220,8 +213,8 @@ static QString getThisString(ExecutionContext *ctx)
     ScopedValue t(scope, ctx->thisObject());
     if (t->isString())
         return t->stringValue()->toQString();
-    if (StringObject *thisString = t->asStringObject())
-        return thisString->d()->value.stringValue()->toQString();
+    if (StringObject *thisString = t->as<StringObject>())
+        return thisString->d()->string->toQString();
     if (t->isUndefined() || t->isNull()) {
         scope.engine->throwTypeError();
         return QString();
@@ -234,10 +227,10 @@ ReturnedValue StringPrototype::method_toString(CallContext *context)
     if (context->thisObject().isString())
         return context->thisObject().asReturnedValue();
 
-    StringObject *o = context->thisObject().asStringObject();
+    StringObject *o = context->thisObject().as<StringObject>();
     if (!o)
         return context->engine()->throwTypeError();
-    return o->d()->value.asReturnedValue();
+    return Encode(o->d()->string);
 }
 
 ReturnedValue StringPrototype::method_charAt(CallContext *context)
@@ -368,7 +361,7 @@ ReturnedValue StringPrototype::method_match(CallContext *context)
     if (!rx) {
         ScopedCallData callData(scope, 1);
         callData->args[0] = regexp;
-        rx = context->d()->engine->regExpCtor.asFunctionObject()->construct(callData);
+        rx = context->d()->engine->regExpCtor()->construct(callData);
     }
 
     if (!rx)
@@ -379,7 +372,7 @@ ReturnedValue StringPrototype::method_match(CallContext *context)
 
     // ### use the standard builtin function, not the one that might be redefined in the proto
     ScopedString execString(scope, scope.engine->newString(QStringLiteral("exec")));
-    ScopedFunctionObject exec(scope, scope.engine->regExpPrototype.asObject()->get(execString));
+    ScopedFunctionObject exec(scope, scope.engine->regExpPrototype()->get(execString));
 
     ScopedCallData callData(scope, 1);
     callData->thisObject = rx;
@@ -470,8 +463,8 @@ ReturnedValue StringPrototype::method_replace(CallContext *ctx)
 {
     Scope scope(ctx);
     QString string;
-    if (StringObject *thisString = ctx->thisObject().asStringObject())
-        string = thisString->d()->value.stringValue()->toQString();
+    if (StringObject *thisString = ctx->thisObject().as<StringObject>())
+        string = thisString->d()->string->toQString();
     else
         string = ctx->thisObject().toQString();
 
@@ -481,12 +474,12 @@ ReturnedValue StringPrototype::method_replace(CallContext *ctx)
     uint allocatedMatchOffsets = 64;
     uint _matchOffsets[64];
     uint *matchOffsets = _matchOffsets;
-    uint nMatchOffsets = 0;
 
     ScopedValue searchValue(scope, ctx->argument(0));
     Scoped<RegExpObject> regExp(scope, searchValue);
     if (regExp) {
         uint offset = 0;
+        uint nMatchOffsets = 0;
 
         // We extract the pointer here to work around a compiler bug on Android.
         Scoped<RegExp> re(scope, regExp->value());
@@ -510,7 +503,7 @@ ReturnedValue StringPrototype::method_replace(CallContext *ctx)
             offset = qMax(offset + 1, matchOffsets[oldSize + 1]);
         }
         if (regExp->global())
-            regExp->lastIndexProperty()->value = Primitive::fromUInt32(0);
+            *regExp->lastIndexProperty() = Primitive::fromUInt32(0);
         numStringMatches = nMatchOffsets / (regExp->value()->captureCount() * 2);
         numCaptures = regExp->value()->captureCount();
     } else {
@@ -519,7 +512,6 @@ ReturnedValue StringPrototype::method_replace(CallContext *ctx)
         int idx = string.indexOf(searchString);
         if (idx != -1) {
             numStringMatches = 1;
-            nMatchOffsets = 2;
             matchOffsets[0] = idx;
             matchOffsets[1] = idx + searchString.length();
         }
@@ -593,7 +585,7 @@ ReturnedValue StringPrototype::method_search(CallContext *ctx)
     if (!regExp) {
         ScopedCallData callData(scope, 1);
         callData->args[0] = regExpValue;
-        regExpValue = ctx->d()->engine->regExpCtor.asFunctionObject()->construct(callData);
+        regExpValue = ctx->d()->engine->regExpCtor()->construct(callData);
         if (scope.engine->hasException)
             return Encode::undefined();
         regExp = regExpValue->as<RegExpObject>();

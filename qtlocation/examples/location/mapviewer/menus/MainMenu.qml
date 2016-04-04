@@ -40,7 +40,7 @@
 
 import QtQuick 2.5
 import QtQuick.Controls 1.4
-import QtLocation 5.5
+import QtLocation 5.6
 
 MenuBar {
     property variant  providerMenu: providerMenu
@@ -125,6 +125,8 @@ MenuBar {
             item.triggered.connect(function() {toggleMapState("FollowMe")})
 
             addItem(qsTr("Language")).triggered.connect(function(){selectTool("Language")})
+            addItem(qsTr("Prefetch Map Data")).triggered.connect(function(){selectTool("Prefetch")})
+            addItem(qsTr("Clear Map Data")).triggered.connect(function(){selectTool("Clear")})
         }
     }
 }

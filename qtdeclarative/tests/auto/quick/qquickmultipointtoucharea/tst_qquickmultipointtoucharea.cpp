@@ -719,7 +719,7 @@ void tst_QQuickMultiPointTouchArea::inFlickable()
     QTest::mouseMove(window.data(), p1);
     QQuickTouchUtils::flush(window.data());
 
-    QVERIFY(flickable->contentY() == 0);
+    QCOMPARE(flickable->contentY(), qreal(0));
     QCOMPARE(point11->pressed(), true);
     QCOMPARE(point12->pressed(), true);
 
@@ -1186,14 +1186,14 @@ void tst_QQuickMultiPointTouchArea::mouseInteraction()
     QPoint p1 = QPoint(100, 100);
     QTest::mousePress(view.data(), (Qt::MouseButton) buttons, 0, p1);
     QCOMPARE(area->property("touchCount").toInt(), accept);
-    QCOMPARE(point1->pressed(), accept);
+    QCOMPARE(point1->pressed(), accept != 0);
     p1 += QPoint(10, 10);
     QTest::mouseMove(view.data(), p1);
-    QCOMPARE(point1->pressed(), accept);
+    QCOMPARE(point1->pressed(), accept != 0);
     QCOMPARE(area->property("touchCount").toInt(), accept);
     p1 += QPoint(10, 10);
     QTest::mouseMove(view.data(), p1);
-    QCOMPARE(point1->pressed(), accept);
+    QCOMPARE(point1->pressed(), accept != 0);
     QCOMPARE(area->property("touchCount").toInt(), accept);
     QTest::mouseRelease(view.data(), (Qt::MouseButton) buttons);
     QCOMPARE(point1->pressed(), false);

@@ -33,10 +33,21 @@
 #ifndef QV4FUNCTIONOBJECT_H
 #define QV4FUNCTIONOBJECT_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include "qv4object_p.h"
 #include "qv4function_p.h"
 #include "qv4context_p.h"
-#include "qv4mm_p.h"
+#include <private/qv4mm_p.h>
 
 QT_BEGIN_NAMESPACE
 
@@ -58,14 +69,14 @@ struct Q_QML_PRIVATE_EXPORT FunctionObject : Object {
     FunctionObject(ExecutionContext *scope, const QString &name = QString(), bool createProto = false);
     FunctionObject(QV4::ExecutionContext *scope, const ReturnedValue name);
     FunctionObject(ExecutionContext *scope, const ReturnedValue name);
-    FunctionObject(InternalClass *ic, QV4::Object *prototype);
+    FunctionObject();
     ~FunctionObject();
 
-    unsigned int formalParameterCount() { return function ? function->compiledFunction->nFormals : 0; }
+    unsigned int formalParameterCount() { return function ? function->nFormals : 0; }
     unsigned int varCount() { return function ? function->compiledFunction->nLocals : 0; }
     bool needsActivation() const { return function ? function->needsActivation() : false; }
 
-    ExecutionContext *scope;
+    Pointer<ExecutionContext> scope;
     Function *function;
 };
 
@@ -74,7 +85,7 @@ struct FunctionCtor : FunctionObject {
 };
 
 struct FunctionPrototype : FunctionObject {
-    FunctionPrototype(InternalClass *ic, QV4::Object *prototype);
+    FunctionPrototype();
 };
 
 struct Q_QML_EXPORT BuiltinFunction : FunctionObject {
@@ -102,9 +113,9 @@ struct ScriptFunction : SimpleScriptFunction {
 
 struct BoundFunction : FunctionObject {
     BoundFunction(QV4::ExecutionContext *scope, QV4::FunctionObject *target, const Value &boundThis, QV4::MemberData *boundArgs);
-    FunctionObject *target;
+    Pointer<FunctionObject> target;
     Value boundThis;
-    MemberData *boundArgs;
+    Pointer<MemberData> boundArgs;
 };
 
 }
@@ -115,14 +126,16 @@ struct Q_QML_EXPORT FunctionObject: Object {
     };
     V4_OBJECT2(FunctionObject, Object)
     Q_MANAGED_TYPE(FunctionObject)
+    V4_INTERNALCLASS(functionClass)
+    V4_PROTOTYPE(functionPrototype)
     V4_NEEDS_DESTROY
 
-    Heap::ExecutionContext *scope() { return d()->scope; }
-    Function *function() { return d()->function; }
+    Heap::ExecutionContext *scope() const { return d()->scope; }
+    Function *function() const { return d()->function; }
 
-    ReturnedValue name();
-    unsigned int formalParameterCount() { return d()->formalParameterCount(); }
-    unsigned int varCount() { return d()->varCount(); }
+    ReturnedValue name() const;
+    unsigned int formalParameterCount() const { return d()->formalParameterCount(); }
+    unsigned int varCount() const { return d()->varCount(); }
 
     void init(String *name, bool createProto);
 
@@ -130,16 +143,14 @@ struct Q_QML_EXPORT FunctionObject: Object {
 
     using Object::construct;
     using Object::call;
-    static ReturnedValue construct(Managed *that, CallData *);
-    static ReturnedValue call(Managed *that, CallData *d);
-
-    static FunctionObject *cast(const Value &v) {
-        return v.asFunctionObject();
-    }
+    static ReturnedValue construct(const Managed *that, CallData *);
+    static ReturnedValue call(const Managed *that, CallData *d);
 
     static Heap::FunctionObject *createScriptFunction(ExecutionContext *scope, Function *function, bool createProto = true);
+    static Heap::FunctionObject *createQmlFunction(QQmlContextData *qmlContext, QObject *scopeObject, QV4::Function *runtimeFunction,
+                                                   const QList<QByteArray> &signalParameters = QList<QByteArray>(), QString *error = 0);
 
-    ReturnedValue protoProperty() { return memberData()->data[Heap::FunctionObject::Index_Prototype].asReturnedValue(); }
+    ReturnedValue protoProperty() { return propertyData(Heap::FunctionObject::Index_Prototype)->asReturnedValue(); }
 
     bool needsActivation() const { return d()->needsActivation(); }
     bool strictMode() const { return d()->function ? d()->function->isStrict() : false; }
@@ -152,16 +163,17 @@ struct Q_QML_EXPORT FunctionObject: Object {
 };
 
 template<>
-inline FunctionObject *value_cast(const Value &v) {
-    return v.asFunctionObject();
+inline const FunctionObject *Value::as() const {
+    return isManaged() && m() && m()->vtable()->isFunctionObject ? reinterpret_cast<const FunctionObject *>(this) : 0;
 }
+
 
 struct FunctionCtor: FunctionObject
 {
     V4_OBJECT2(FunctionCtor, FunctionObject)
 
-    static ReturnedValue construct(Managed *that, CallData *callData);
-    static ReturnedValue call(Managed *that, CallData *callData);
+    static ReturnedValue construct(const Managed *that, CallData *callData);
+    static ReturnedValue call(const Managed *that, CallData *callData);
 };
 
 struct FunctionPrototype: FunctionObject
@@ -181,23 +193,23 @@ struct Q_QML_EXPORT BuiltinFunction: FunctionObject {
 
     static Heap::BuiltinFunction *create(ExecutionContext *scope, String *name, ReturnedValue (*code)(CallContext *))
     {
-        return scope->engine()->memoryManager->alloc<BuiltinFunction>(scope, name, code);
+        return scope->engine()->memoryManager->allocObject<BuiltinFunction>(scope, name, code);
     }
 
-    static ReturnedValue construct(Managed *, CallData *);
-    static ReturnedValue call(Managed *that, CallData *callData);
+    static ReturnedValue construct(const Managed *, CallData *);
+    static ReturnedValue call(const Managed *that, CallData *callData);
 };
 
 struct IndexedBuiltinFunction: FunctionObject
 {
     V4_OBJECT2(IndexedBuiltinFunction, FunctionObject)
 
-    static ReturnedValue construct(Managed *m, CallData *)
+    static ReturnedValue construct(const Managed *m, CallData *)
     {
-        return static_cast<IndexedBuiltinFunction *>(m)->engine()->throwTypeError();
+        return static_cast<const IndexedBuiltinFunction *>(m)->engine()->throwTypeError();
     }
 
-    static ReturnedValue call(Managed *that, CallData *callData);
+    static ReturnedValue call(const Managed *that, CallData *callData);
 };
 
 Heap::IndexedBuiltinFunction::IndexedBuiltinFunction(QV4::ExecutionContext *scope, uint index,
@@ -211,9 +223,10 @@ Heap::IndexedBuiltinFunction::IndexedBuiltinFunction(QV4::ExecutionContext *scop
 
 struct SimpleScriptFunction: FunctionObject {
     V4_OBJECT2(SimpleScriptFunction, FunctionObject)
+    V4_INTERNALCLASS(simpleScriptFunctionClass)
 
-    static ReturnedValue construct(Managed *, CallData *callData);
-    static ReturnedValue call(Managed *that, CallData *callData);
+    static ReturnedValue construct(const Managed *, CallData *callData);
+    static ReturnedValue call(const Managed *that, CallData *callData);
 
     Heap::Object *protoForConstructor();
 };
@@ -221,8 +234,8 @@ struct SimpleScriptFunction: FunctionObject {
 struct ScriptFunction: SimpleScriptFunction {
     V4_OBJECT2(ScriptFunction, FunctionObject)
 
-    static ReturnedValue construct(Managed *, CallData *callData);
-    static ReturnedValue call(Managed *that, CallData *callData);
+    static ReturnedValue construct(const Managed *, CallData *callData);
+    static ReturnedValue call(const Managed *that, CallData *callData);
 };
 
 
@@ -231,15 +244,15 @@ struct BoundFunction: FunctionObject {
 
     static Heap::BoundFunction *create(ExecutionContext *scope, FunctionObject *target, const Value &boundThis, QV4::MemberData *boundArgs)
     {
-        return scope->engine()->memoryManager->alloc<BoundFunction>(scope, target, boundThis, boundArgs);
+        return scope->engine()->memoryManager->allocObject<BoundFunction>(scope, target, boundThis, boundArgs);
     }
 
-    Heap::FunctionObject *target() { return d()->target; }
+    Heap::FunctionObject *target() const { return d()->target; }
     Value boundThis() const { return d()->boundThis; }
     Heap::MemberData *boundArgs() const { return d()->boundArgs; }
 
-    static ReturnedValue construct(Managed *, CallData *d);
-    static ReturnedValue call(Managed *that, CallData *dd);
+    static ReturnedValue construct(const Managed *, CallData *d);
+    static ReturnedValue call(const Managed *that, CallData *dd);
 
     static void markObjects(Heap::Base *that, ExecutionEngine *e);
 };

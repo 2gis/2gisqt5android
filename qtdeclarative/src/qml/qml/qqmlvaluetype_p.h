@@ -209,7 +209,6 @@ struct QQmlEasingValueType
 {
     QEasingCurve v;
     Q_GADGET
-    Q_ENUMS(Type)
 
     Q_PROPERTY(QQmlEasingValueType::Type type READ type WRITE setType FINAL)
     Q_PROPERTY(qreal amplitude READ amplitude WRITE setAmplitude FINAL)
@@ -243,6 +242,7 @@ public:
         SineCurve = QEasingCurve::SineCurve, CosineCurve = QEasingCurve::CosineCurve,
         Bezier = QEasingCurve::BezierSpline
     };
+    Q_ENUM(Type)
 
     Type type() const;
     qreal amplitude() const;

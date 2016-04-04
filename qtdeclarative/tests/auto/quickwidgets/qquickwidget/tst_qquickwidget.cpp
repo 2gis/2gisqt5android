@@ -59,6 +59,7 @@ private slots:
     void engine();
     void readback();
     void renderingSignals();
+    void grabBeforeShow();
 };
 
 
@@ -75,8 +76,12 @@ void tst_qquickwidget::showHide()
 
     window.show();
     QVERIFY(QTest::qWaitForWindowExposed(&window, 5000));
+    QVERIFY(childView->quickWindow()->isVisible());
+    QVERIFY(childView->quickWindow()->visibility() != QWindow::Hidden);
 
-    childView->hide();
+    window.hide();
+    QVERIFY(!childView->quickWindow()->isVisible());
+    QCOMPARE(childView->quickWindow()->visibility(), QWindow::Hidden);
 }
 
 void tst_qquickwidget::reparentAfterShow()
@@ -223,11 +228,12 @@ void tst_qquickwidget::errors()
 {
     QQuickWidget *view = new QQuickWidget;
     QScopedPointer<QQuickWidget> cleanupView(view);
+    QVERIFY(view->errors().isEmpty()); // don't crash
 
     QQmlTestMessageHandler messageHandler;
     view->setSource(testFileUrl("error1.qml"));
-    QVERIFY(view->status() == QQuickWidget::Error);
-    QVERIFY(view->errors().count() == 1);
+    QCOMPARE(view->status(), QQuickWidget::Error);
+    QCOMPARE(view->errors().count(), 1);
 }
 
 void tst_qquickwidget::engine()
@@ -290,6 +296,14 @@ void tst_qquickwidget::renderingSignals()
     QTRY_VERIFY(beforeRenderingSpy.size() > 0);
     QTRY_VERIFY(beforeSyncSpy.size() > 0);
     QTRY_VERIFY(afterRenderingSpy.size() > 0);
+}
+
+// QTBUG-49929, verify that Qt Designer grabbing the contents before drag
+// does not crash due to missing GL contexts or similar.
+void tst_qquickwidget::grabBeforeShow()
+{
+    QQuickWidget widget;
+    QVERIFY(!widget.grab().isNull());
 }
 
 QTEST_MAIN(tst_qquickwidget)

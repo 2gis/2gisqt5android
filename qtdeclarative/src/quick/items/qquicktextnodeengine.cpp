@@ -42,7 +42,8 @@
 #include <QtGui/qtexttable.h>
 #include <QtGui/qtextlist.h>
 
-#include <private/qquicktext_p_p.h>
+#include <private/qquicktext_p.h>
+#include <private/qquicktextdocument_p.h>
 #include <private/qtextdocumentlayout_p.h>
 #include <private/qtextimagehandler_p.h>
 #include <private/qrawfont_p.h>
@@ -882,7 +883,7 @@ void QQuickTextNodeEngine::mergeFormats(QTextLayout *textLayout, QVarLengthArray
     if (textLayout == 0)
         return;
 
-    QList<QTextLayout::FormatRange> additionalFormats = textLayout->additionalFormats();
+    QVector<QTextLayout::FormatRange> additionalFormats = textLayout->formats();
     for (int i=0; i<additionalFormats.size(); ++i) {
         QTextLayout::FormatRange additionalFormat = additionalFormats.at(i);
         if (additionalFormat.format.hasProperty(QTextFormat::ForegroundBrush)

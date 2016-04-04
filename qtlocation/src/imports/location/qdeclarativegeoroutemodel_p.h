@@ -37,6 +37,17 @@
 #ifndef QDECLARATIVEGEOROUTEMODEL_H
 #define QDECLARATIVEGEOROUTEMODEL_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include "qdeclarativegeoserviceprovider_p.h"
 
 #include <QtPositioning/QGeoCoordinate>
@@ -70,7 +81,7 @@ class QDeclarativeGeoRouteModel : public QAbstractListModel, public QQmlParserSt
     Q_PROPERTY(int count READ count NOTIFY countChanged)
     Q_PROPERTY(bool autoUpdate READ autoUpdate WRITE setAutoUpdate NOTIFY autoUpdateChanged)
     Q_PROPERTY(Status status READ status NOTIFY statusChanged)
-    Q_PROPERTY(QString errorString READ errorString NOTIFY errorStringChanged)
+    Q_PROPERTY(QString errorString READ errorString NOTIFY errorChanged)
     Q_PROPERTY(RouteError error READ error NOTIFY errorChanged)
     Q_PROPERTY(QLocale::MeasurementSystem measurementSystem READ measurementSystem WRITE setMeasurementSystem NOTIFY measurementSystemChanged)
 
@@ -94,7 +105,12 @@ public:
         CommunicationError = QGeoRouteReply::CommunicationError,
         ParseError = QGeoRouteReply::ParseError,
         UnsupportedOptionError = QGeoRouteReply::UnsupportedOptionError,
-        UnknownError = QGeoRouteReply::UnknownError
+        UnknownError = QGeoRouteReply::UnknownError,
+        //we leave gap for future QGeoRouteReply errors
+
+        //QGeoServiceProvider related errors start here
+        UnknownParameterError = 100,
+        MissingRequiredParameterError
     };
 
     explicit QDeclarativeGeoRouteModel(QObject *parent = 0);
@@ -136,8 +152,7 @@ Q_SIGNALS:
     void queryChanged();
     void autoUpdateChanged();
     void statusChanged();
-    void errorStringChanged();
-    void errorChanged();
+    void errorChanged(); //emitted also for errorString notification
     void routesChanged();
     void measurementSystemChanged();
 
@@ -154,8 +169,7 @@ private Q_SLOTS:
 
 private:
     void setStatus(Status status);
-    void setErrorString(const QString &error);
-    void setError(RouteError error);
+    void setError(RouteError error, const QString &errorString);
     void abortRequest();
 
     bool complete_;

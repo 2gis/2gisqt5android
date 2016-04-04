@@ -46,6 +46,7 @@ from webkitpy.layout_tests.port import Port, Driver, DriverOutput
 from webkitpy.layout_tests.port.base import VirtualTestSuite
 from webkitpy.layout_tests.port.test import add_unit_tests_to_mock_filesystem, TestPort
 
+
 class PortTest(unittest.TestCase):
     def make_port(self, executive=None, with_tests=False, port_name=None, **kwargs):
         host = MockSystemHost()
@@ -484,6 +485,17 @@ class VirtualTestSuiteTest(unittest.TestCase):
         self.assertEqual(suite.name, 'virtual/suite/base/foo')
         self.assertEqual(suite.base, 'base/foo')
         self.assertEqual(suite.args, ['--args'])
+        self.assertEqual(suite.reference_args, suite.args)
+
+    def test_default_reference_args(self):
+        suite = VirtualTestSuite(prefix='suite', base='base/foo', args=['--args'], references_use_default_args=True)
+        self.assertEqual(suite.args, ['--args'])
+        self.assertEqual(suite.reference_args, [])
+
+    def test_non_default_reference_args(self):
+        suite = VirtualTestSuite(prefix='suite', base='base/foo', args=['--args'], references_use_default_args=False)
+        self.assertEqual(suite.args, ['--args'])
+        self.assertEqual(suite.reference_args, suite.args)
 
     def test_no_slash(self):
         self.assertRaises(AssertionError, VirtualTestSuite, prefix='suite/bar', base='base/foo', args=['--args'])

@@ -34,6 +34,17 @@
 #ifndef QV4PROFILING_H
 #define QV4PROFILING_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include "qv4global_p.h"
 #include "qv4engine_p.h"
 #include "qv4function_p.h"
@@ -104,6 +115,7 @@ public:
     FunctionCallProperties resolve() const;
 
 private:
+    friend bool operator<(const FunctionCall &call1, const FunctionCall &call2);
 
     Function *m_function;
     qint64 m_start;
@@ -155,14 +167,14 @@ public slots:
     void setTimer(const QElapsedTimer &timer) { m_timer = timer; }
 
 signals:
-    void dataReady(const QList<QV4::Profiling::FunctionCallProperties> &,
-                   const QList<QV4::Profiling::MemoryAllocationProperties> &);
+    void dataReady(const QVector<QV4::Profiling::FunctionCallProperties> &,
+                   const QVector<QV4::Profiling::MemoryAllocationProperties> &);
 
 private:
     QV4::ExecutionEngine *m_engine;
     QElapsedTimer m_timer;
     QVector<FunctionCall> m_data;
-    QList<MemoryAllocationProperties> m_memory_data;
+    QVector<MemoryAllocationProperties> m_memory_data;
 
     friend class FunctionCallProfiler;
 };
@@ -202,7 +214,7 @@ Q_DECLARE_TYPEINFO(QV4::Profiling::FunctionCallProperties, Q_MOVABLE_TYPE);
 Q_DECLARE_TYPEINFO(QV4::Profiling::FunctionCall, Q_MOVABLE_TYPE);
 
 QT_END_NAMESPACE
-Q_DECLARE_METATYPE(QList<QV4::Profiling::FunctionCallProperties>)
-Q_DECLARE_METATYPE(QList<QV4::Profiling::MemoryAllocationProperties>)
+Q_DECLARE_METATYPE(QVector<QV4::Profiling::FunctionCallProperties>)
+Q_DECLARE_METATYPE(QVector<QV4::Profiling::MemoryAllocationProperties>)
 
 #endif // QV4PROFILING_H

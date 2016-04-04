@@ -45,6 +45,7 @@ import QtQuick.Window 2.1
     \inqmlmodule QtQuick.Controls
     \since 5.1
     \ingroup views
+    \ingroup controls
     \brief Lays out items with a draggable splitter between each item.
 
     \image splitview.png
@@ -81,7 +82,7 @@ import QtQuick.Window 2.1
         \li \l{Layout::fillHeight}{Layout.fillHeight} (\c true for only one child)
     \endlist
 
-    \note Please import QtQuick.Layout 1.0 in your QML file in order to use the Layout
+    \note import QtQuick.Layouts 1.0 in your QML file in order to use the Layout
     attached properties inside SplitView.
 
     Example:

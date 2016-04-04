@@ -36,26 +36,22 @@
 
 #include "qnormaldiffusespecularmapmaterial.h"
 #include "qnormaldiffusespecularmapmaterial_p.h"
-#include <Qt3DRenderer/qmaterial.h>
-#include <Qt3DRenderer/qeffect.h>
-#include <Qt3DRenderer/qtexture.h>
-#include <Qt3DRenderer/qtechnique.h>
-#include <Qt3DRenderer/qshaderprogram.h>
-#include <Qt3DRenderer/qparameter.h>
-#include <Qt3DRenderer/qrenderpass.h>
-#include <Qt3DRenderer/qopenglfilter.h>
+#include <Qt3DRender/qmaterial.h>
+#include <Qt3DRender/qeffect.h>
+#include <Qt3DRender/qtexture.h>
+#include <Qt3DRender/qtechnique.h>
+#include <Qt3DRender/qshaderprogram.h>
+#include <Qt3DRender/qparameter.h>
+#include <Qt3DRender/qrenderpass.h>
+#include <Qt3DRender/qgraphicsapifilter.h>
 #include <QUrl>
 #include <QVector3D>
 #include <QVector4D>
 
 QT_BEGIN_NAMESPACE
 
-namespace Qt3D {
+namespace Qt3DRender {
 
-/*!
-    \class Qt3D::QNormalDiffuseSpecularMapMaterialPrivate
-    \internal
-*/
 QNormalDiffuseSpecularMapMaterialPrivate::QNormalDiffuseSpecularMapMaterialPrivate()
     : QMaterialPrivate()
     , m_normalDiffuseSpecularEffect(new QEffect())
@@ -67,8 +63,6 @@ QNormalDiffuseSpecularMapMaterialPrivate::QNormalDiffuseSpecularMapMaterialPriva
     , m_normalParameter(new QParameter(QStringLiteral("normalTexture"), m_normalTexture))
     , m_specularParameter(new QParameter(QStringLiteral("specularTexture"), m_specularTexture))
     , m_shininessParameter(new QParameter(QStringLiteral("shininess"), 150.0f))
-    , m_lightPositionParameter(new QParameter(QStringLiteral("lightPosition"), QVector4D(0.0f, 0.0f, 0.0f, 1.0f)))
-    , m_lightIntensityParameter(new QParameter(QStringLiteral("lightIntensity"), QVector3D(1.0f, 1.0f, 1.0f)))
     , m_textureScaleParameter(new QParameter(QStringLiteral("texCoordScale"), 1.0f))
     , m_normalDiffuseSpecularGL3Technique(new QTechnique())
     , m_normalDiffuseSpecularGL2Technique(new QTechnique())
@@ -99,25 +93,38 @@ QNormalDiffuseSpecularMapMaterialPrivate::QNormalDiffuseSpecularMapMaterialPriva
 
 void QNormalDiffuseSpecularMapMaterialPrivate::init()
 {
-    m_normalDiffuseSpecularGL3Shader->setVertexShaderCode(QShaderProgram::loadSource(QUrl(QStringLiteral("qrc:/shaders/gl3/normaldiffusespecularmap.vert"))));
+    connect(m_ambientParameter, &Qt3DRender::QParameter::valueChanged,
+            this, &QNormalDiffuseSpecularMapMaterialPrivate::handleAmbientChanged);
+    connect(m_diffuseParameter, &Qt3DRender::QParameter::valueChanged,
+            this, &QNormalDiffuseSpecularMapMaterialPrivate::handleDiffuseChanged);
+    connect(m_normalParameter, &Qt3DRender::QParameter::valueChanged,
+            this, &QNormalDiffuseSpecularMapMaterialPrivate::handleNormalChanged);
+    connect(m_specularParameter, &Qt3DRender::QParameter::valueChanged,
+            this, &QNormalDiffuseSpecularMapMaterialPrivate::handleSpecularChanged);
+    connect(m_shininessParameter, &Qt3DRender::QParameter::valueChanged,
+            this, &QNormalDiffuseSpecularMapMaterialPrivate::handleShininessChanged);
+    connect(m_textureScaleParameter, &Qt3DRender::QParameter::valueChanged,
+            this, &QNormalDiffuseSpecularMapMaterialPrivate::handleTextureScaleChanged);
+
+    m_normalDiffuseSpecularGL3Shader->setVertexShaderCode(QShaderProgram::loadSource(QUrl(QStringLiteral("qrc:/shaders/gl3/normaldiffusemap.vert"))));
     m_normalDiffuseSpecularGL3Shader->setFragmentShaderCode(QShaderProgram::loadSource(QUrl(QStringLiteral("qrc:/shaders/gl3/normaldiffusespecularmap.frag"))));
-    m_normalDiffuseSpecularGL2ES2Shader->setVertexShaderCode(QShaderProgram::loadSource(QUrl(QStringLiteral("qrc:/shaders/es2/normaldiffusespecularmap.vert"))));
+    m_normalDiffuseSpecularGL2ES2Shader->setVertexShaderCode(QShaderProgram::loadSource(QUrl(QStringLiteral("qrc:/shaders/es2/normaldiffusemap.vert"))));
     m_normalDiffuseSpecularGL2ES2Shader->setFragmentShaderCode(QShaderProgram::loadSource(QUrl(QStringLiteral("qrc:/shaders/es2/normaldiffusespecularmap.frag"))));
 
-    m_normalDiffuseSpecularGL3Technique->openGLFilter()->setApi(QOpenGLFilter::Desktop);
-    m_normalDiffuseSpecularGL3Technique->openGLFilter()->setMajorVersion(3);
-    m_normalDiffuseSpecularGL3Technique->openGLFilter()->setMinorVersion(1);
-    m_normalDiffuseSpecularGL3Technique->openGLFilter()->setProfile(QOpenGLFilter::Core);
+    m_normalDiffuseSpecularGL3Technique->graphicsApiFilter()->setApi(QGraphicsApiFilter::OpenGL);
+    m_normalDiffuseSpecularGL3Technique->graphicsApiFilter()->setMajorVersion(3);
+    m_normalDiffuseSpecularGL3Technique->graphicsApiFilter()->setMinorVersion(1);
+    m_normalDiffuseSpecularGL3Technique->graphicsApiFilter()->setProfile(QGraphicsApiFilter::CoreProfile);
 
-    m_normalDiffuseSpecularGL2Technique->openGLFilter()->setApi(QOpenGLFilter::Desktop);
-    m_normalDiffuseSpecularGL2Technique->openGLFilter()->setMajorVersion(2);
-    m_normalDiffuseSpecularGL2Technique->openGLFilter()->setMinorVersion(0);
-    m_normalDiffuseSpecularGL2Technique->openGLFilter()->setProfile(QOpenGLFilter::None);
+    m_normalDiffuseSpecularGL2Technique->graphicsApiFilter()->setApi(QGraphicsApiFilter::OpenGL);
+    m_normalDiffuseSpecularGL2Technique->graphicsApiFilter()->setMajorVersion(2);
+    m_normalDiffuseSpecularGL2Technique->graphicsApiFilter()->setMinorVersion(0);
+    m_normalDiffuseSpecularGL2Technique->graphicsApiFilter()->setProfile(QGraphicsApiFilter::NoProfile);
 
-    m_normalDiffuseSpecularES2Technique->openGLFilter()->setApi(QOpenGLFilter::ES);
-    m_normalDiffuseSpecularES2Technique->openGLFilter()->setMajorVersion(2);
-    m_normalDiffuseSpecularES2Technique->openGLFilter()->setMinorVersion(0);
-    m_normalDiffuseSpecularES2Technique->openGLFilter()->setProfile(QOpenGLFilter::None);
+    m_normalDiffuseSpecularES2Technique->graphicsApiFilter()->setApi(QGraphicsApiFilter::OpenGLES);
+    m_normalDiffuseSpecularES2Technique->graphicsApiFilter()->setMajorVersion(2);
+    m_normalDiffuseSpecularES2Technique->graphicsApiFilter()->setMinorVersion(0);
+    m_normalDiffuseSpecularES2Technique->graphicsApiFilter()->setProfile(QGraphicsApiFilter::NoProfile);
 
     m_normalDiffuseSpecularGL3RenderPass->setShaderProgram(m_normalDiffuseSpecularGL3Shader);
     m_normalDiffuseSpecularGL2RenderPass->setShaderProgram(m_normalDiffuseSpecularGL2ES2Shader);
@@ -136,18 +143,52 @@ void QNormalDiffuseSpecularMapMaterialPrivate::init()
     m_normalDiffuseSpecularEffect->addParameter(m_normalParameter);
     m_normalDiffuseSpecularEffect->addParameter(m_specularParameter);
     m_normalDiffuseSpecularEffect->addParameter(m_shininessParameter);
-    m_normalDiffuseSpecularEffect->addParameter(m_lightPositionParameter);
-    m_normalDiffuseSpecularEffect->addParameter(m_lightIntensityParameter);
     m_normalDiffuseSpecularEffect->addParameter(m_textureScaleParameter);
 
     q_func()->setEffect(m_normalDiffuseSpecularEffect);
 }
 
+void QNormalDiffuseSpecularMapMaterialPrivate::handleAmbientChanged(const QVariant &var)
+{
+    Q_Q(QNormalDiffuseSpecularMapMaterial);
+    emit q->ambientChanged(var.value<QColor>());
+}
+
+void QNormalDiffuseSpecularMapMaterialPrivate::handleDiffuseChanged(const QVariant &var)
+{
+    Q_Q(QNormalDiffuseSpecularMapMaterial);
+    emit q->diffuseChanged(var.value<QAbstractTextureProvider *>());
+}
+
+void QNormalDiffuseSpecularMapMaterialPrivate::handleNormalChanged(const QVariant &var)
+{
+    Q_Q(QNormalDiffuseSpecularMapMaterial);
+    emit q->normalChanged(var.value<QAbstractTextureProvider *>());
+}
+
+void QNormalDiffuseSpecularMapMaterialPrivate::handleSpecularChanged(const QVariant &var)
+{
+    Q_Q(QNormalDiffuseSpecularMapMaterial);
+    emit q->specularChanged(var.value<QAbstractTextureProvider *>());
+}
+
+void QNormalDiffuseSpecularMapMaterialPrivate::handleShininessChanged(const QVariant &var)
+{
+    Q_Q(QNormalDiffuseSpecularMapMaterial);
+    emit q->shininessChanged(var.toFloat());
+}
+
+void QNormalDiffuseSpecularMapMaterialPrivate::handleTextureScaleChanged(const QVariant &var)
+{
+    Q_Q(QNormalDiffuseSpecularMapMaterial);
+    emit q->textureScaleChanged(var.toFloat());
+}
+
 /*!
-    \class Qt3D::QNormalDiffuseSpecularMapMaterial
+    \class Qt3DRender::QNormalDiffuseSpecularMapMaterial
     \brief The QNormalDiffuseSpecularMapMaterial provides a default implementation of the phong lighting and bump effect where the diffuse and specular light components
     are read from texture maps and the normals of the mesh being rendered from a normal texture map.
-    \inmodule Qt3DRenderer
+    \inmodule Qt3DRender
     \since 5.5
 
     The specular lighting effect is based on the combination of 3 lighting components ambient, diffuse and specular.
@@ -165,18 +206,12 @@ void QNormalDiffuseSpecularMapMaterialPrivate::init()
 */
 
 /*!
-    Constructs a new Qt3D::QNormalDiffuseSpecularMapMaterial instance with parent object \a parent.
+    Constructs a new Qt3DRender::QNormalDiffuseSpecularMapMaterial instance with parent object \a parent.
 */
 QNormalDiffuseSpecularMapMaterial::QNormalDiffuseSpecularMapMaterial(QNode *parent)
     : QMaterial(*new QNormalDiffuseSpecularMapMaterialPrivate, parent)
 {
     Q_D(QNormalDiffuseSpecularMapMaterial);
-    QObject::connect(d->m_ambientParameter, SIGNAL(valueChanged()), this, SIGNAL(ambientChanged()));
-    QObject::connect(d->m_diffuseParameter, SIGNAL(valueChanged()), this, SIGNAL(diffuseChanged()));
-    QObject::connect(d->m_normalParameter, SIGNAL(valueChanged()), this, SIGNAL(normalChanged()));
-    QObject::connect(d->m_specularParameter, SIGNAL(valueChanged()), this, SIGNAL(specularChanged()));
-    QObject::connect(d->m_shininessParameter, SIGNAL(valueChanged()), this, SIGNAL(shininessChanged()));
-    QObject::connect(d->m_textureScaleParameter, SIGNAL(valueChanged()), this, SIGNAL(textureScaleChanged()));
     d->init();
 }
 
@@ -185,26 +220,21 @@ QNormalDiffuseSpecularMapMaterial::QNormalDiffuseSpecularMapMaterial(QNormalDiff
     : QMaterial(dd, parent)
 {
     Q_D(QNormalDiffuseSpecularMapMaterial);
-    QObject::connect(d->m_ambientParameter, SIGNAL(valueChanged()), this, SIGNAL(ambientChanged()));
-    QObject::connect(d->m_diffuseParameter, SIGNAL(valueChanged()), this, SIGNAL(diffuseChanged()));
-    QObject::connect(d->m_normalParameter, SIGNAL(valueChanged()), this, SIGNAL(normalChanged()));
-    QObject::connect(d->m_specularParameter, SIGNAL(valueChanged()), this, SIGNAL(specularChanged()));
-    QObject::connect(d->m_shininessParameter, SIGNAL(valueChanged()), this, SIGNAL(shininessChanged()));
-    QObject::connect(d->m_textureScaleParameter, SIGNAL(valueChanged()), this, SIGNAL(textureScaleChanged()));
     d->init();
 }
 
 /*!
-    Destroys the Qt3D::QNormalDiffuseSpecularMapMaterial instance.
+    Destroys the Qt3DRender::QNormalDiffuseSpecularMapMaterial instance.
 */
 QNormalDiffuseSpecularMapMaterial::~QNormalDiffuseSpecularMapMaterial()
 {
 }
 
 /*!
-    \property Qt3D::QNormalDiffuseSpecularMapMaterial::ambient
+    \property Qt3DRender::QNormalDiffuseSpecularMapMaterial::ambient
+
     Holds the current ambient color.
- */
+*/
 QColor QNormalDiffuseSpecularMapMaterial::ambient() const
 {
     Q_D(const QNormalDiffuseSpecularMapMaterial);
@@ -212,7 +242,7 @@ QColor QNormalDiffuseSpecularMapMaterial::ambient() const
 }
 
 /*!
-    \property Qt3D::QNormalDiffuseSpecularMapMaterial::diffuse
+    \property Qt3DRender::QNormalDiffuseSpecularMapMaterial::diffuse
 
     Holds the current diffuse map texture.
 
@@ -224,7 +254,7 @@ QColor QNormalDiffuseSpecularMapMaterial::ambient() const
         \li Repeat wrap mode
         \li Maximum anisotropy of 16.0
     \endlist
- */
+*/
 QAbstractTextureProvider *QNormalDiffuseSpecularMapMaterial::diffuse() const
 {
     Q_D(const QNormalDiffuseSpecularMapMaterial);
@@ -232,7 +262,7 @@ QAbstractTextureProvider *QNormalDiffuseSpecularMapMaterial::diffuse() const
 }
 
 /*!
-    \property Qt3D::QNormalDiffuseSpecularMapMaterial::normal
+    \property Qt3DRender::QNormalDiffuseSpecularMapMaterial::normal
 
     Holds the current normal map texture.
 
@@ -243,7 +273,7 @@ QAbstractTextureProvider *QNormalDiffuseSpecularMapMaterial::diffuse() const
         \li Repeat wrap mode
         \li Maximum anisotropy of 16.0
     \endlist
- */
+*/
 QAbstractTextureProvider *QNormalDiffuseSpecularMapMaterial::normal() const
 {
     Q_D(const QNormalDiffuseSpecularMapMaterial);
@@ -251,7 +281,7 @@ QAbstractTextureProvider *QNormalDiffuseSpecularMapMaterial::normal() const
 }
 
 /*!
-    \property Qt3D::QNormalDiffuseSpecularMapMaterial::specular
+    \property Qt3DRender::QNormalDiffuseSpecularMapMaterial::specular
 
     Holds the current specular map texture.
 
@@ -263,7 +293,7 @@ QAbstractTextureProvider *QNormalDiffuseSpecularMapMaterial::normal() const
         \li Repeat wrap mode
         \li Maximum anisotropy of 16.0
     \endlist
- */
+*/
 QAbstractTextureProvider *QNormalDiffuseSpecularMapMaterial::specular() const
 {
     Q_D(const QNormalDiffuseSpecularMapMaterial);
@@ -271,10 +301,10 @@ QAbstractTextureProvider *QNormalDiffuseSpecularMapMaterial::specular() const
 }
 
 /*!
-    \property Qt3D::QNormalDiffuseSpecularMapMaterial::shininess
+    \property Qt3DRender::QNormalDiffuseSpecularMapMaterial::shininess
 
     Holds the current shininess as a float value.
- */
+*/
 float QNormalDiffuseSpecularMapMaterial::shininess() const
 {
     Q_D(const QNormalDiffuseSpecularMapMaterial);
@@ -282,10 +312,10 @@ float QNormalDiffuseSpecularMapMaterial::shininess() const
 }
 
 /*!
-    \property Qt3D::QNormalDiffuseSpecularMapMaterial::textureScale
+    \property Qt3DRender::QNormalDiffuseSpecularMapMaterial::textureScale
 
     Holds the current texture scale as a float value.
- */
+*/
 float QNormalDiffuseSpecularMapMaterial::textureScale() const
 {
     Q_D(const QNormalDiffuseSpecularMapMaterial);
@@ -328,6 +358,6 @@ void QNormalDiffuseSpecularMapMaterial::setTextureScale(float textureScale)
     d->m_textureScaleParameter->setValue(textureScale);
 }
 
-} // Qt3D
+} // namespace Qt3DRender
 
 QT_END_NAMESPACE

@@ -50,38 +50,30 @@ QT_CANVAS3D_BEGIN_NAMESPACE
  *
  * Canvas3DContextAttributes is an attribute set that can be given as parameter on first call to
  * Canvas3D object's \l{Canvas3D::getContext}{getContext(string type, Canvas3DContextAttributes options)}
- * method call. It can also be requested from the Context3D later on to verify what exact
- * attributes are in fact enabled/disabled in the created context.
+ * method call.
+ * It can also be requested from the Context3D using Context3D::getContextAttributes() later on
+ * to verify what exact attributes are in fact enabled/disabled in the created context.
  *
  * \sa Context3D, Canvas3D
  */
 
-/*!
- * \internal
- */
 CanvasContextAttributes::CanvasContextAttributes(QObject *parent) :
-    CanvasAbstractObject(parent),
-    m_alpha(false),  // Should be true according to official WebGL spec. But ignored for now.
-    m_depth(false),
+    CanvasAbstractObject(0, parent),
+    m_alpha(true),
+    m_depth(true),
     m_stencil(false),
-    m_antialias(false),
-    m_premultipliedAlpha(false),
+    m_antialias(true),
+    m_premultipliedAlpha(true),
     m_preserveDrawingBuffer(false),
     m_preferLowPowerToHighPerformance(false),
     m_failIfMajorPerformanceCaveat(false)
 {
 }
 
-/*!
- * \internal
- */
 CanvasContextAttributes::~CanvasContextAttributes()
 {
 }
 
-/*!
- * \internal
- */
 void CanvasContextAttributes::setFrom(const QVariantMap &options)
 {
     for (QVariantMap::const_iterator iter = options.begin(); iter != options.end(); ++iter) {
@@ -104,9 +96,6 @@ void CanvasContextAttributes::setFrom(const QVariantMap &options)
     }
 }
 
-/*!
- * \internal
- */
 void CanvasContextAttributes::setFrom(const CanvasContextAttributes &source)
 {
     m_alpha = source.alpha();
@@ -121,7 +110,9 @@ void CanvasContextAttributes::setFrom(const CanvasContextAttributes &source)
 
 /*!
  * \qmlproperty bool Canvas3DContextAttributes::alpha
- * Ignored. Defaults to \c{false}.
+ * Specifies whether the default render target of the Context3D has an alpha channel for the
+ * purposes of blending its contents with overlapping Qt Quick items.
+ * Defaults to \c{true}.
  */
 bool CanvasContextAttributes::alpha()  const
 {
@@ -141,7 +132,7 @@ void CanvasContextAttributes::setAlpha(bool value)
  * \qmlproperty bool Canvas3DContextAttributes::depth
  * Specifies whether a depth attachment is to be created and attached to the default render target
  * of the Context3D.
- * Defaults to \c{false}.
+ * Defaults to \c{true}.
  */
 bool CanvasContextAttributes::depth() const
 {
@@ -180,7 +171,7 @@ void CanvasContextAttributes::setStencil(bool value)
 /*!
  * \qmlproperty bool Canvas3DContextAttributes::antialias
  * Specifies whether antialiasing buffer is created for the default render target of the Context3D.
- * Defaults to \c{false}.
+ * Defaults to \c{true}.
  */
 bool CanvasContextAttributes::antialias() const
 {
@@ -198,7 +189,10 @@ void CanvasContextAttributes::setAntialias(bool value)
 
 /*!
  * \qmlproperty bool Canvas3DContextAttributes::premultipliedAlpha
- * Ignored. Defaults to \c{false}.
+ * Qt Quick always expects premultiplied alpha values when blending Qt Quick items together,
+ * so keeping this property \c{true} is recommended. Setting it to \c{false} can cause
+ * a minor performance impact, as an additional render pass is needed.
+ * Defaults to \c{true}.
  */
 bool CanvasContextAttributes::premultipliedAlpha() const
 {
@@ -216,7 +210,9 @@ void CanvasContextAttributes::setPremultipliedAlpha(bool value)
 
 /*!
  * \qmlproperty bool Canvas3DContextAttributes::preserveDrawingBuffer
- * Ignored. Defaults to \c{false}.
+ * Specifies whether or not the drawing buffer contents are preserved from frame to frame.
+ * Ignored when drawing to the background or the foreground of the Qt Quick scene.
+ * Defaults to \c{false}.
  */
 bool CanvasContextAttributes::preserveDrawingBuffer() const
 {
@@ -268,9 +264,6 @@ void CanvasContextAttributes::setFailIfMajorPerformanceCaveat(bool value)
     emit failIfMajorPerformanceCaveatChanged(value);
 }
 
-/*!
- * \internal
- */
 QDebug operator<<(QDebug dbg, const CanvasContextAttributes &attribs)
 {
     dbg.nospace() << "Canvas3DContextAttributes(\n    alpha:"<< attribs.m_alpha  <<

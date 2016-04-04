@@ -5,11 +5,13 @@
 /* we need to prototype the time functions for Windows CE >= 6.0 */
 #include <crtdefs.h>
 
+#if _WIN32_WCE < 0x800
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 struct tm;
+
 
 time_t time(time_t* timer);
 time_t mktime(struct tm *t);
@@ -19,6 +21,8 @@ struct tm *localtime(const time_t *timer);
 #ifdef __cplusplus
 }   /* closing brace for extern "C" */
 #endif
+
+#endif // _WIN32_WCE < 0x800
 
 #endif /* defined(_WIN32_WCE) && _WIN32_WCE >= 0x600 */
 

@@ -37,8 +37,9 @@
 #include "chromium_overrides.h"
 
 #include "gl_context_qt.h"
-#include "qtwebenginecoreglobal.h"
+#include "qtwebenginecoreglobal_p.h"
 #include "web_contents_view_qt.h"
+
 #include "base/values.h"
 #include "content/browser/renderer_host/pepper/pepper_truetype_font_list.h"
 #include "content/browser/renderer_host/render_widget_host_view_base.h"
@@ -47,6 +48,8 @@
 #include <QGuiApplication>
 #include <QScreen>
 #include <QWindow>
+#include <QFontDatabase>
+#include <QStringList>
 
 #if defined(USE_X11)
 #include "ui/gfx/x/x11_types.h"
@@ -115,8 +118,17 @@ namespace content {
 // content/common/font_list.h
 scoped_ptr<base::ListValue> GetFontList_SlowBlocking()
 {
-    QT_NOT_USED
-    return scoped_ptr<base::ListValue>(new base::ListValue);
+    scoped_ptr<base::ListValue> font_list(new base::ListValue);
+
+     QFontDatabase database;
+     for (auto family : database.families()){
+         base::ListValue* font_item = new base::ListValue();
+         font_item->Append(new base::StringValue(family.toStdString()));
+         font_item->Append(new base::StringValue(family.toStdString()));  // should be localized name.
+         // TODO: Support localized family names.
+         font_list->Append(font_item);
+     }
+    return font_list.Pass();
 }
 
 #if defined(ENABLE_PLUGINS)
@@ -142,39 +154,6 @@ OSExchangeData::Provider* OSExchangeData::CreateProvider()
     return 0;
 }
 
-}
-
-namespace gfx {
-
-// Stubs for these unused functions that are stripped in case
-// of a release aura build but a debug build needs the symbols.
-
-RenderText* RenderText::CreateNativeInstance()
-{
-    QT_NOT_USED;
-    return 0;
-}
-
-#if defined(OS_LINUX)
-PlatformFont* PlatformFont::CreateDefault()
-{
-    QT_NOT_USED;
-    return 0;
-}
-
-PlatformFont* PlatformFont::CreateFromNativeFont(NativeFont)
-{
-    QT_NOT_USED;
-    return 0;
-}
-
-PlatformFont* PlatformFont::CreateFromNameAndSize(const std::string&, int)
-{
-    QT_NOT_USED;
-    return 0;
-}
-#endif
-
-} // namespace gfx
+} // namespace ui
 
 #endif // defined(USE_AURA) && !defined(USE_OZONE)

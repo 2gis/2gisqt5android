@@ -102,29 +102,7 @@ public:
         _ptr = _end = 0;
     }
 
-    template <typename _Tp> _Tp *New() { return new (this->allocate(sizeof(_Tp))) _Tp(); }
-
-    template <typename PoolContentType, typename Visitor>
-    void visitManagedPool(Visitor &visitor)
-    {
-        for (int i = 0; i <= _blockCount; ++i) {
-            char *p = _blocks[i];
-            char *end = p + BLOCK_SIZE;
-            if (i == _blockCount) {
-                Q_ASSERT(_ptr <= end);
-                end = _ptr;
-            }
-
-            Q_ASSERT(p <= end);
-
-            const qptrdiff increment = (sizeof(PoolContentType) + 7) & ~7;
-
-            while (p + increment <= end) {
-                visitor(reinterpret_cast<PoolContentType*>(p));
-                p += increment;
-            }
-        }
-    }
+    template <typename Tp> Tp *New() { return new (this->allocate(sizeof(Tp))) Tp(); }
 
 private:
     void *allocate_helper(size_t size)

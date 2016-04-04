@@ -34,6 +34,17 @@
 #ifndef QQUICKLISTVIEW_P_H
 #define QQUICKLISTVIEW_P_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include "qquickitemview_p.h"
 
 QT_BEGIN_NAMESPACE
@@ -47,8 +58,6 @@ class Q_AUTOTEST_EXPORT QQuickViewSection : public QObject
     Q_PROPERTY(SectionCriteria criteria READ criteria WRITE setCriteria NOTIFY criteriaChanged)
     Q_PROPERTY(QQmlComponent *delegate READ delegate WRITE setDelegate NOTIFY delegateChanged)
     Q_PROPERTY(int labelPositioning READ labelPositioning WRITE setLabelPositioning NOTIFY labelPositioningChanged)
-    Q_ENUMS(SectionCriteria)
-    Q_ENUMS(LabelPositioning)
 public:
     QQuickViewSection(QQuickListView *parent=0);
 
@@ -56,6 +65,7 @@ public:
     void setProperty(const QString &);
 
     enum SectionCriteria { FullString, FirstCharacter };
+    Q_ENUM(SectionCriteria)
     SectionCriteria criteria() const { return m_criteria; }
     void setCriteria(SectionCriteria);
 
@@ -65,6 +75,7 @@ public:
     QString sectionString(const QString &value);
 
     enum LabelPositioning { InlineLabels = 0x01, CurrentLabelAtStart = 0x02, NextLabelAtEnd = 0x04 };
+    Q_ENUM(LabelPositioning)
     int labelPositioning() { return m_labelPositioning; }
     void setLabelPositioning(int pos);
 
@@ -106,10 +117,6 @@ class Q_AUTOTEST_EXPORT QQuickListView : public QQuickItemView
     Q_PROPERTY(HeaderPositioning headerPositioning READ headerPositioning WRITE setHeaderPositioning NOTIFY headerPositioningChanged REVISION 2)
     Q_PROPERTY(FooterPositioning footerPositioning READ footerPositioning WRITE setFooterPositioning NOTIFY footerPositioningChanged REVISION 2)
 
-    Q_ENUMS(Orientation)
-    Q_ENUMS(SnapMode)
-    Q_ENUMS(HeaderPositioning)
-    Q_ENUMS(FooterPositioning)
     Q_CLASSINFO("DefaultProperty", "data")
 
 public:
@@ -120,6 +127,7 @@ public:
     void setSpacing(qreal spacing);
 
     enum Orientation { Horizontal = Qt::Horizontal, Vertical = Qt::Vertical };
+    Q_ENUM(Orientation)
     Orientation orientation() const;
     void setOrientation(Orientation);
 
@@ -140,14 +148,17 @@ public:
     void setHighlightMoveDuration(int) Q_DECL_OVERRIDE;
 
     enum SnapMode { NoSnap, SnapToItem, SnapOneItem };
+    Q_ENUM(SnapMode)
     SnapMode snapMode() const;
     void setSnapMode(SnapMode mode);
 
     enum HeaderPositioning { InlineHeader, OverlayHeader, PullBackHeader };
+    Q_ENUM(HeaderPositioning)
     HeaderPositioning headerPositioning() const;
     void setHeaderPositioning(HeaderPositioning positioning);
 
     enum FooterPositioning { InlineFooter, OverlayFooter, PullBackFooter };
+    Q_ENUM(FooterPositioning)
     FooterPositioning footerPositioning() const;
     void setFooterPositioning(FooterPositioning positioning);
 
@@ -185,7 +196,7 @@ public:
     ~QQuickListViewAttached() {}
 
 public:
-    QQuickItem *m_sectionItem;
+    QPointer<QQuickItem> m_sectionItem;
 };
 
 

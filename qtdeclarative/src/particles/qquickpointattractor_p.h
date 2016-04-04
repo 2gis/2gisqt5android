@@ -33,6 +33,17 @@
 
 #ifndef ATTRACTORAFFECTOR_H
 #define ATTRACTORAFFECTOR_H
+
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
 #include "qquickparticleaffector_p.h"
 
 QT_BEGIN_NAMESPACE
@@ -45,8 +56,6 @@ class QQuickAttractorAffector : public QQuickParticleAffector
     Q_PROPERTY(qreal pointY READ pointY WRITE setPointY NOTIFY pointYChanged)
     Q_PROPERTY(AffectableParameters affectedParameter READ affectedParameter WRITE setAffectedParameter NOTIFY affectedParameterChanged)
     Q_PROPERTY(Proportion proportionalToDistance READ proportionalToDistance WRITE setProportionalToDistance NOTIFY proportionalToDistanceChanged)
-    Q_ENUMS(AffectableParameters)
-    Q_ENUMS(Proportion)
 
 public:
     enum Proportion{
@@ -56,12 +65,14 @@ public:
         InverseLinear,
         InverseQuadratic
     };
+    Q_ENUM(Proportion)
 
     enum AffectableParameters {
         Position,
         Velocity,
         Acceleration
     };
+    Q_ENUM(AffectableParameters)
 
     explicit QQuickAttractorAffector(QQuickItem *parent = 0);
 

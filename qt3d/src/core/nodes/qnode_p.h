@@ -34,24 +34,35 @@
 **
 ****************************************************************************/
 
-#ifndef QT3D_QNODE_P_H
-#define QT3D_QNODE_P_H
+#ifndef QT3DCORE_QNODE_P_H
+#define QT3DCORE_QNODE_P_H
+
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists for the convenience
+// of other Qt classes.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
 
 #include <private/qobject_p.h>
-#include <Qt3DCore/qt3dcore_global.h>
 #include <Qt3DCore/qnode.h>
 #include <Qt3DCore/private/qobservableinterface_p.h>
 #include <Qt3DCore/private/qchangearbiter_p.h>
+#include <Qt3DCore/private/qt3dcore_global_p.h>
 #include "propertychangehandler_p.h"
 
 QT_BEGIN_NAMESPACE
 
-namespace Qt3D {
+namespace Qt3DCore {
 
 class QNode;
 class QAspectEngine;
 
-class QT3DCORESHARED_EXPORT QNodePrivate : public QObjectPrivate, public QObservableInterface
+class QT3DCORE_PRIVATE_EXPORT QNodePrivate : public QObjectPrivate, public QObservableInterface
 {
 public:
     QNodePrivate();
@@ -75,6 +86,7 @@ public:
     mutable QNodeId m_id;
     bool m_blockNotifications;
     bool m_wasCleanedUp;
+    bool m_enabled;
 
     static QNodePrivate *get(QNode *q);
     static void nodePtrDeleter(QNode *q);
@@ -97,8 +109,8 @@ private:
     static QHash<QNodeId, QNode *> m_clonesLookupTable;
 };
 
-} // namespace Qt3D
+} // namespace Qt3DCore
 
 QT_END_NAMESPACE
 
-#endif // QT3D_NODE_P_H
+#endif // QT3DCORE_NODE_P_H

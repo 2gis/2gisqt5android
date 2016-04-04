@@ -14,6 +14,7 @@
 #include "base/logging.h"
 #include "base/mac/bind_objc_block.h"
 #include "base/mac/scoped_nsobject.h"
+#include "base/profiler/scoped_tracker.h"
 #include "base/threading/thread_checker.h"
 #include "content/public/browser/browser_thread.h"
 #import "media/base/mac/avfoundation_glue.h"
@@ -286,12 +287,12 @@ class SuspendObserverDelegate :
 
 SuspendObserverDelegate::SuspendObserverDelegate(DeviceMonitorMacImpl* monitor)
     : avfoundation_monitor_impl_(monitor) {
-  DCHECK(BrowserThread::CurrentlyOn(BrowserThread::UI));
+  DCHECK_CURRENTLY_ON(BrowserThread::UI);
 }
 
 void SuspendObserverDelegate::StartObserver(
       const scoped_refptr<base::SingleThreadTaskRunner>& device_thread) {
-  DCHECK(BrowserThread::CurrentlyOn(BrowserThread::UI));
+  DCHECK_CURRENTLY_ON(BrowserThread::UI);
 
   base::Closure on_device_changed_callback =
       base::Bind(&SuspendObserverDelegate::OnDeviceChanged,
@@ -311,7 +312,7 @@ void SuspendObserverDelegate::StartObserver(
 
 void SuspendObserverDelegate::OnDeviceChanged(
       const scoped_refptr<base::SingleThreadTaskRunner>& device_thread) {
-  DCHECK(BrowserThread::CurrentlyOn(BrowserThread::UI));
+  DCHECK_CURRENTLY_ON(BrowserThread::UI);
   // Enumerate the devices in Device thread and post the consolidation of the
   // new devices and the old ones to be done on UI thread. The devices array
   // is retained in |device_thread| and released in DoOnDeviceChanged().
@@ -323,17 +324,17 @@ void SuspendObserverDelegate::OnDeviceChanged(
 }
 
 void SuspendObserverDelegate::ResetDeviceMonitor() {
-  DCHECK(BrowserThread::CurrentlyOn(BrowserThread::UI));
+  DCHECK_CURRENTLY_ON(BrowserThread::UI);
   avfoundation_monitor_impl_ = NULL;
   [suspend_observer_ clearOnDeviceChangedCallback];
 }
 
 SuspendObserverDelegate::~SuspendObserverDelegate() {
-  DCHECK(BrowserThread::CurrentlyOn(BrowserThread::UI));
+  DCHECK_CURRENTLY_ON(BrowserThread::UI);
 }
 
 void SuspendObserverDelegate::DoStartObserver(NSArray* devices) {
-  DCHECK(BrowserThread::CurrentlyOn(BrowserThread::UI));
+  DCHECK_CURRENTLY_ON(BrowserThread::UI);
   base::scoped_nsobject<NSArray> auto_release(devices);
   for (CrAVCaptureDevice* device in devices) {
     base::scoped_nsobject<CrAVCaptureDevice> device_ptr([device retain]);
@@ -342,7 +343,7 @@ void SuspendObserverDelegate::DoStartObserver(NSArray* devices) {
 }
 
 void SuspendObserverDelegate::DoOnDeviceChanged(NSArray* devices) {
-  DCHECK(BrowserThread::CurrentlyOn(BrowserThread::UI));
+  DCHECK_CURRENTLY_ON(BrowserThread::UI);
   base::scoped_nsobject<NSArray> auto_release(devices);
   std::vector<DeviceInfo> snapshot_devices;
   for (CrAVCaptureDevice* device in devices) {
@@ -364,7 +365,11 @@ void SuspendObserverDelegate::DoOnDeviceChanged(NSArray* devices) {
     snapshot_devices.push_back(DeviceInfo([[device uniqueID] UTF8String],
                                           device_type));
   }
-
+  // Make sure no references are held to |devices| when
+  // ConsolidateDevicesListAndNotify is called since the VideoCaptureManager
+  // and AudioCaptureManagers also enumerates the available devices but on
+  // another thread.
+  auto_release.reset();
   // |avfoundation_monitor_impl_| might have been NULLed asynchronously before
   // arriving at this line.
   if (avfoundation_monitor_impl_) {
@@ -403,7 +408,7 @@ AVFoundationMonitorImpl::AVFoundationMonitorImpl(
     : DeviceMonitorMacImpl(monitor),
       device_task_runner_(device_task_runner),
       suspend_observer_delegate_(new SuspendObserverDelegate(this)) {
-  DCHECK(BrowserThread::CurrentlyOn(BrowserThread::UI));
+  DCHECK_CURRENTLY_ON(BrowserThread::UI);
   NSNotificationCenter* nc = [NSNotificationCenter defaultCenter];
   device_arrival_ =
       [nc addObserverForName:AVFoundationGlue::
@@ -423,7 +428,7 @@ AVFoundationMonitorImpl::AVFoundationMonitorImpl(
 }
 
 AVFoundationMonitorImpl::~AVFoundationMonitorImpl() {
-  DCHECK(BrowserThread::CurrentlyOn(BrowserThread::UI));
+  DCHECK_CURRENTLY_ON(BrowserThread::UI);
   suspend_observer_delegate_->ResetDeviceMonitor();
   NSNotificationCenter* nc = [NSNotificationCenter defaultCenter];
   [nc removeObserver:device_arrival_];
@@ -431,7 +436,7 @@ AVFoundationMonitorImpl::~AVFoundationMonitorImpl() {
 }
 
 void AVFoundationMonitorImpl::OnDeviceChanged() {
-  DCHECK(BrowserThread::CurrentlyOn(BrowserThread::UI));
+  DCHECK_CURRENTLY_ON(BrowserThread::UI);
   suspend_observer_delegate_->OnDeviceChanged(device_task_runner_);
 }
 
@@ -440,7 +445,7 @@ void AVFoundationMonitorImpl::OnDeviceChanged() {
 @implementation CrAVFoundationDeviceObserver
 
 - (id)initWithOnChangedCallback:(const base::Closure&)callback {
-  DCHECK(BrowserThread::CurrentlyOn(BrowserThread::UI));
+  DCHECK_CURRENTLY_ON(BrowserThread::UI);
   if ((self = [super init])) {
     DCHECK(!callback.is_null());
     onDeviceChangedCallback_ = callback;
@@ -449,7 +454,7 @@ void AVFoundationMonitorImpl::OnDeviceChanged() {
 }
 
 - (void)dealloc {
-  DCHECK(BrowserThread::CurrentlyOn(BrowserThread::UI));
+  DCHECK_CURRENTLY_ON(BrowserThread::UI);
   std::set<base::scoped_nsobject<CrAVCaptureDevice> >::iterator it =
       monitoredDevices_.begin();
   while (it != monitoredDevices_.end())
@@ -458,7 +463,7 @@ void AVFoundationMonitorImpl::OnDeviceChanged() {
 }
 
 - (void)startObserving:(base::scoped_nsobject<CrAVCaptureDevice>)device {
-  DCHECK(BrowserThread::CurrentlyOn(BrowserThread::UI));
+  DCHECK_CURRENTLY_ON(BrowserThread::UI);
   DCHECK(device != nil);
   // Skip this device if there are already observers connected to it.
   if (std::find(monitoredDevices_.begin(), monitoredDevices_.end(), device) !=
@@ -477,7 +482,7 @@ void AVFoundationMonitorImpl::OnDeviceChanged() {
 }
 
 - (void)stopObserving:(CrAVCaptureDevice*)device {
-  DCHECK(BrowserThread::CurrentlyOn(BrowserThread::UI));
+  DCHECK_CURRENTLY_ON(BrowserThread::UI);
   DCHECK(device != nil);
 
   std::set<base::scoped_nsobject<CrAVCaptureDevice> >::iterator found =
@@ -488,12 +493,12 @@ void AVFoundationMonitorImpl::OnDeviceChanged() {
 }
 
 - (void)clearOnDeviceChangedCallback {
-  DCHECK(BrowserThread::CurrentlyOn(BrowserThread::UI));
+  DCHECK_CURRENTLY_ON(BrowserThread::UI);
   onDeviceChangedCallback_.Reset();
 }
 
 - (void)removeObservers:(CrAVCaptureDevice*)device {
-  DCHECK(BrowserThread::CurrentlyOn(BrowserThread::UI));
+  DCHECK_CURRENTLY_ON(BrowserThread::UI);
   // Check sanity of |device| via its -observationInfo. http://crbug.com/371271.
   if ([device observationInfo]) {
     [device removeObserver:self
@@ -507,7 +512,7 @@ void AVFoundationMonitorImpl::OnDeviceChanged() {
                       ofObject:(id)object
                         change:(NSDictionary*)change
                        context:(void*)context {
-  DCHECK(BrowserThread::CurrentlyOn(BrowserThread::UI));
+  DCHECK_CURRENTLY_ON(BrowserThread::UI);
   if ([keyPath isEqual:@"suspended"])
     onDeviceChangedCallback_.Run();
   if ([keyPath isEqual:@"connected"])
@@ -531,11 +536,21 @@ void DeviceMonitorMac::StartMonitoring(
     const scoped_refptr<base::SingleThreadTaskRunner>& device_task_runner) {
   DCHECK(thread_checker_.CalledOnValidThread());
   if (AVFoundationGlue::IsAVFoundationSupported()) {
+    // TODO(erikchen): Remove ScopedTracker below once http://crbug.com/458404
+    // is fixed.
+    tracked_objects::ScopedTracker tracking_profile(
+        FROM_HERE_WITH_EXPLICIT_FUNCTION(
+            "458404 DeviceMonitorMac::StartMonitoring::AVFoundation"));
     DVLOG(1) << "Monitoring via AVFoundation";
     device_monitor_impl_.reset(new AVFoundationMonitorImpl(this,
                                                            device_task_runner));
 #ifndef TOOLKIT_QT
   } else {
+    // TODO(erikchen): Remove ScopedTracker below once http://crbug.com/458404
+    // is fixed.
+    tracked_objects::ScopedTracker tracking_profile(
+        FROM_HERE_WITH_EXPLICIT_FUNCTION(
+            "458404 DeviceMonitorMac::StartMonitoring::QTKit"));
     DVLOG(1) << "Monitoring via QTKit";
     device_monitor_impl_.reset(new QTKitMonitorImpl(this));
 #endif

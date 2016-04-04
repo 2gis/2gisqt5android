@@ -5,6 +5,7 @@
 #ifndef CSPSourceList_h
 #define CSPSourceList_h
 
+#include "core/CoreExport.h"
 #include "core/frame/csp/CSPSource.h"
 #include "platform/Crypto.h"
 #include "platform/network/ContentSecurityPolicyParsers.h"
@@ -16,14 +17,14 @@ namespace blink {
 class ContentSecurityPolicy;
 class KURL;
 
-class CSPSourceList {
+class CORE_EXPORT CSPSourceList {
     WTF_MAKE_NONCOPYABLE(CSPSourceList);
 public:
     CSPSourceList(ContentSecurityPolicy*, const String& directiveName);
 
     void parse(const UChar* begin, const UChar* end);
 
-    bool matches(const KURL&) const;
+    bool matches(const KURL&, ContentSecurityPolicy::RedirectStatus = ContentSecurityPolicy::DidNotRedirect) const;
     bool allowInline() const;
     bool allowEval() const;
     bool allowNonce(const String&) const;
@@ -47,6 +48,8 @@ private:
     void addSourceUnsafeEval();
     void addSourceNonce(const String& nonce);
     void addSourceHash(const ContentSecurityPolicyHashAlgorithm&, const DigestValue& hash);
+
+    bool hasSourceMatchInList(const KURL&, ContentSecurityPolicy::RedirectStatus) const;
 
     ContentSecurityPolicy* m_policy;
     Vector<CSPSource> m_list;

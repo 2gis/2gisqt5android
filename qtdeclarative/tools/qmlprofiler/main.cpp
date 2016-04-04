@@ -38,19 +38,23 @@ int main(int argc, char *argv[])
 {
     QmlProfilerApplication app(argc, argv);
 
-    if (!app.parseArguments()) {
-        app.printUsage();
-        return 1;
+    app.parseArguments();
+
+    if (app.isInteractive()) {
+        QThread listenerThread;
+        CommandListener listener;
+        listener.moveToThread(&listenerThread);
+        QObject::connect(&listener, SIGNAL(command(QString)), &app, SLOT(userCommand(QString)));
+        QObject::connect(&app, SIGNAL(readyForCommand()), &listener, SLOT(readCommand()));
+        listenerThread.start();
+        int exitValue = app.exec();
+        listenerThread.quit();
+        // wait for listener to exit
+        listenerThread.wait();
+        return exitValue;
+    } else {
+        int exitValue = app.exec();
+        app.outputData();
+        return exitValue;
     }
-
-    CommandListener listener;
-    QObject::connect(&listener, SIGNAL(command(QString)), &app, SLOT(userCommand(QString)));
-    listener.start();
-
-    int exitValue = app.exec();
-    // wait for listener to exit
-    listener.wait();
-
-
-    return exitValue;
 }

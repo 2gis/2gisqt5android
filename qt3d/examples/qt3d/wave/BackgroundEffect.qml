@@ -34,17 +34,17 @@
 **
 ****************************************************************************/
 
-import Qt3D 2.0
-import Qt3D.Renderer 2.0
+import Qt3D.Core 2.0
+import Qt3D.Render 2.0
 
 Effect {
     id: root
 
     techniques: [
         Technique {
-            openGLFilter {
-                api: OpenGLFilter.Desktop
-                profile: OpenGLFilter.Core
+            graphicsApiFilter {
+                api: GraphicsApiFilter.OpenGL
+                profile: GraphicsApiFilter.CoreProfile
                 majorVersion: 3
                 minorVersion: 1
             }

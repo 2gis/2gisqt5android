@@ -39,6 +39,10 @@
 #include "canvas3dcommon_p.h"
 #include "canvasrendernode_p.h"
 #include "teximage3d_p.h"
+#include "glcommandqueue_p.h"
+#include "canvasglstatedump_p.h"
+#include "renderjob_p.h"
+#include "canvasrenderer_p.h"
 
 #include <QtGui/QGuiApplication>
 #include <QtGui/QOffscreenSurface>
@@ -62,7 +66,7 @@ Q_LOGGING_CATEGORY(canvas3dglerrors, "qt.canvas3d.glerrors")
  *
  * The Canvas3D is a QML element that, when placed in your Qt Quick 2 scene, allows you to
  * get a 3D rendering context and call 3D rendering API calls through that context object.
- * Use of the rendering API requires knowledge of OpenGL like rendering APIs.
+ * Use of the rendering API requires knowledge of OpenGL-like rendering APIs.
  *
  * There are two functions that are called by the Canvas3D implementation:
  * \list
@@ -75,49 +79,41 @@ Q_LOGGING_CATEGORY(canvas3dglerrors, "qt.canvas3d.glerrors")
  * \sa Context3D
  */
 
-/*!
- * \internal
- */
 Canvas::Canvas(QQuickItem *parent):
     QQuickItem(parent),
     m_isNeedRenderQueued(false),
-    m_renderNodeReady(false),
-    m_mainThread(QThread::currentThread()),
-    m_contextThread(0),
-    m_context3D(0),
-    m_isFirstRender(true),
+    m_rendererReady(false),
     m_fboSize(0, 0),
-    m_initializedSize(1, 1),
     m_maxSize(0, 0),
-    m_glContext(0),
-    m_glContextQt(0),
-    m_glContextShare(0),
-    m_contextWindow(0),
-    m_fps(0),
     m_frameTimeMs(0),
+    m_frameSetupTimeMs(0),
     m_maxSamples(0),
     m_devicePixelRatio(1.0f),
     m_isOpenGLES2(false),
+    m_isCombinedDepthStencilSupported(false),
     m_isSoftwareRendered(false),
     m_isContextAttribsSet(false),
+    m_alphaChanged(false),
     m_resizeGLQueued(false),
-    m_antialiasFbo(0),
-    m_renderFbo(0),
-    m_displayFbo(0),
-    m_oldDisplayFbo(0),
-    m_offscreenSurface(0)
+    m_allowRenderTargetChange(true),
+    m_renderTargetSyncConnected(false),
+    m_renderTarget(RenderTargetOffscreenBuffer),
+    m_renderOnDemand(false),
+    m_renderer(0),
+    m_maxVertexAttribs(0),
+    m_contextVersion(0),
+    m_fps(0),
+    m_contextState(ContextNone)
 {
     connect(this, &QQuickItem::windowChanged, this, &Canvas::handleWindowChanged);
-    connect(this, &Canvas::needRender, this, &Canvas::renderNext, Qt::QueuedConnection);
+    connect(this, &Canvas::needRender, this, &Canvas::queueNextRender, Qt::QueuedConnection);
     connect(this, &QQuickItem::widthChanged, this, &Canvas::queueResizeGL, Qt::DirectConnection);
     connect(this, &QQuickItem::heightChanged, this, &Canvas::queueResizeGL, Qt::DirectConnection);
-    connect(this, &QQuickItem::widthChanged, this, &Canvas::widthChanged, Qt::DirectConnection);
-    connect(this, &QQuickItem::heightChanged, this, &Canvas::heightChanged, Qt::DirectConnection);
     setAntialiasing(false);
 
     // Set contents to false in case we are in qml designer to make component look nice
     m_runningInDesigner = QGuiApplication::applicationDisplayName() == "Qml2Puppet";
-    setFlag(ItemHasContents, !m_runningInDesigner);
+    setFlag(ItemHasContents, !(m_runningInDesigner || m_renderTarget != RenderTargetOffscreenBuffer));
 
 #if (QT_VERSION >= QT_VERSION_CHECK(5, 4, 0))
     if (QCoreApplication::testAttribute(Qt::AA_UseSoftwareOpenGL))
@@ -126,112 +122,174 @@ Canvas::Canvas(QQuickItem *parent):
 }
 
 /*!
- * \qmlsignal void Canvas::initializeGL()
+ * \qmlsignal void Canvas3D::initializeGL()
  * Emitted once when Canvas3D is ready and OpenGL state initialization can be done by the client.
  */
 
 /*!
- * \qmlsignal void Canvas::paintGL()
- * Emitted each time a new frame should be drawn to Canvas3D. Driven by the QML scenegraph loop.
+ * \qmlsignal void Canvas3D::paintGL()
+ * Emitted each time a new frame should be drawn to Canvas3D.
+ * Driven by the Qt Quick scenegraph loop.
  */
 
 /*!
- * \internal
+ * \qmlsignal void Canvas3D::contextLost()
+ * Emitted when OpenGL context is lost. This happens whenever the parent window of the Canvas3D
+ * is destroyed (or otherwise loses its context), or Canvas3D is moved to a different window.
+ * Removing Canvas3D from a window and adding it back to the same window doesn't cause context
+ * loss, as long as the window itself stays alive.
+ *
+ * When context is lost, all objects created by Context3D are invalidated.
+ *
+ * \sa contextRestored
  */
+
+/*!
+ * \qmlsignal void Canvas3D::contextRestored()
+ * Emitted when OpenGL context is restored after a loss of context occurred. The Context3D attached
+ * to the canvas needs to be reinitialized, so initializeGL is also emitted after this signal.
+ *
+ * \sa contextLost
+ */
+
 Canvas::~Canvas()
 {
-    shutDown();
+    // Ensure that all JS objects have been destroyed before we destroy the command queue.
+    if (!m_context3D.isNull())
+        delete m_context3D.data();
+
+    if (m_renderer)
+        m_renderer->destroy();
 }
 
 /*!
- * \internal
+ * \qmlproperty RenderTarget Canvas3D::renderTarget
+ * Specifies how the rendering should be done.
+ * \list
+ * \li \c Canvas3D.RenderTargetOffscreenBuffer indicates rendering is done into an offscreen
+ * buffer and the finished texture is used for the Canvas3D item. This is the default target.
+ * \li \c Canvas3D.RenderTargetBackground indicates the rendering is done to the background of the
+ * Qt Quick scene, in response to QQuickWindow::beforeRendering() signal.
+ * \li \c Canvas3D.RenderTargetForeground indicates the rendering is done to the foreground of the
+ * Qt Quick scene, in response to QQuickWindow::afterRendering() signal.
+ * \endlist
+ *
+ * \c Canvas3D.RenderTargetBackground and \c Canvas3D.RenderTargetForeground targets render directly
+ * to the same framebuffer the rest of the Qt Quick scene uses. This will improve performance
+ * on platforms that are fill-rate limited, but using these targets imposes several limitations
+ * on the usage of Canvas3D:
+ *
+ * \list
+ * \li Synchronous Context3D commands are not supported outside
+ * \l{Canvas3D::initializeGL}{Canvas3D.initializeGL()} signal handler when rendering directly
+ * to Qt Quick scene framebuffer, as they cause portions of the command queue to be executed
+ * outside the normal frame render sequence, which interferes with the frame clearing logic.
+ * Using them will usually result in Canvas3D content not rendering properly.
+ * A synchronous command is any Context3D command that requires waiting for Context3D command queue
+ * to finish executing before it returns, such as \l{Context3D::getError}{Context3D.getError()},
+ * \l{Context3D::finish}{Context3D.finish()},
+ * or \l{Context3D::readPixels}{Context3D.readPixels()}. When in doubt, see the individual command
+ * documentation to see if that command is synchronous.
+ * If your application requires synchronous commands outside
+ * \l{Canvas3D::initializeGL}{Canvas3D.initializeGL()} signal handler, you should use
+ * \c{Canvas3D.RenderTargetOffscreenBuffer} render target.
+ *
+ * \li Only Canvas3D items that fill the entire window are supported. Note that you can still
+ * control the actual rendering area by using an appropriate viewport.
+ *
+ * \li The default framebuffer is automatically cleared by Canvas3D every time before the Qt Quick
+ * scene renders a frame, even if there are no Context3D commands queued for that frame.
+ * This requires Canvas3D to store the commands used to draw the previous frame in case the window
+ * is updated by some other component than Canvas3D and use those commands to render the Canvas3D
+ * content for frames that do not have fresh content. Only commands issued inside
+ * \l{Canvas3D::paintGL}{Canvas3D.paintGL()} signal handler are stored this way.
+ * You need to make sure that the content of your \l{Canvas3D::paintGL}{Canvas3D.paintGL()}
+ * signal handler is implemented so that it is safe to execute its commands repeatedly.
+ * Mainly this means making sure you don't use any synchronous commands or commands
+ * that create new persistent OpenGL resources there.
+ *
+ * \li Issuing Context3D commands outside \l{Canvas3D::paintGL}{Canvas3D.paintGL()} and
+ * \l{Canvas3D::initializeGL}{Canvas3D.initializeGL()} signal handlers can in some cases cause
+ * unwanted flickering of Canvas3D content, particularly if on-demand rendering is used.
+ * It is recommended to avoid issuing any Context3D commands outside these two signal handlers.
+ *
+ * \li When drawing to the foreground, you should never issue a
+ * \l{Context3D::clear}{Context3D.clear(Context3D.GL_COLOR_BUFFER_BIT)} command targeting the
+ * default framebuffer, as that will clear all other Qt Quick items from the scene.
+ * Clearing depth and stencil buffers is allowed.
+ *
+ * \li Antialiasing is only supported if the surface format of the window supports multisampling.
+ * You may need to specify the surface format of the window explicitly in your \c{main.cpp}.
+ *
+ * \li You lose the ability to control the z-order of the Canvas3D item itself, as it is always
+ * drawn either behind or in front of all other Qt Quick items.
+ *
+ * \li The context attributes given as Canvas3D.getContext() parameters are ignored and the
+ * corresponding values of the Qt Quick context are used.
+ *
+ * \li Drawing to the background or the foreground doesn't work when Qt Quick is using OpenGL
+ * core profile, as Canvas3D requires either OpenGL 2.x compatibility or OpenGL ES2.
+ * \endlist
+ *
+ * This property can only be modified before the Canvas3D item has been rendered for the first time.
  */
-void Canvas::shutDown()
+void Canvas::setRenderTarget(RenderTarget target)
 {
-    if (!m_glContext)
-        return;
-
-    disconnect(m_contextWindow, 0, this, 0);
-    disconnect(this, 0, this, 0);
-
-    m_glContext->makeCurrent(m_offscreenSurface);
-    delete m_renderFbo;
-    delete m_displayFbo;
-    delete m_antialiasFbo;
-    delete m_context3D;
-    m_glContext->doneCurrent();
-
-    qCDebug(canvas3drendering).nospace() << m_contextThread << m_mainThread;
-
-    if (m_contextThread && m_contextThread != m_mainThread) {
-        m_glContext->deleteLater();
-        m_offscreenSurface->deleteLater();
+    if (m_allowRenderTargetChange) {
+        RenderTarget oldTarget = m_renderTarget;
+        m_renderTarget = target;
+        if (m_renderTarget == RenderTargetOffscreenBuffer)
+            setFlag(ItemHasContents, true);
+        else
+            setFlag(ItemHasContents, false);
+        if (oldTarget != m_renderTarget)
+            emit renderTargetChanged();
+        if (!m_renderTargetSyncConnected && window()
+                && m_renderTarget != RenderTargetOffscreenBuffer) {
+            m_renderTargetSyncConnected = true;
+            connect(window(), &QQuickWindow::beforeSynchronizing,
+                    this, &Canvas::handleBeforeSynchronizing, Qt::DirectConnection);
+            window()->setClearBeforeRendering(false);
+        }
     } else {
-        delete m_glContext;
-        delete m_offscreenSurface;
+        qCWarning(canvas3drendering).nospace() << "Canvas3D::" << __FUNCTION__
+                                               << ": renderTarget property can only be "
+                                               << "modified before Canvas3D item is rendered the "
+                                               << "first time";
     }
-    m_glContext = 0;
-    m_glContextQt = 0;
-    m_glContextShare->deleteLater();
-    m_glContextShare = 0;
+}
+
+Canvas::RenderTarget Canvas::renderTarget() const
+{
+    return m_renderTarget;
 }
 
 /*!
- * \internal
- *
- * Override QQuickItem's setWidth to be able to limit the maximum canvas size to maximum viewport
- * dimensions.
+ * \qmlproperty bool Canvas3D::renderOnDemand
+ * If the value is \c{false}, the render loop runs constantly and
+ * \l{Canvas3D::paintGL}{Canvas3D.paintGL()} signal is emitted once per frame.
+ * If the value is \c{true}, \l{Canvas3D::paintGL}{Canvas3D.paintGL()} is only emitted when
+ * Canvas3D content needs to be re-rendered because a geometry change or some other event
+ * affecting the Canvas3D content occurred.
+ * The application can also request a render using
+ * \l{Canvas3D::requestRender}{Canvas3D.requestRender()} method.
  */
-void Canvas::setWidth(int width)
+void Canvas::setRenderOnDemand(bool enable)
 {
-    int newWidth = width;
-    int maxWidth = m_maxSize.width();
-    if (maxWidth && width > maxWidth) {
-        qCDebug(canvas3drendering).nospace() << "Canvas3D::" << __FUNCTION__
-                                             << "():"
-                                             << "Maximum width exceeded. Limiting to "
-                                             << maxWidth;
-        newWidth = maxWidth;
+    qCDebug(canvas3drendering).nospace() << "Canvas3D::" << __FUNCTION__ << "(" << enable << ")";
+    if (enable != m_renderOnDemand) {
+        m_renderOnDemand = enable;
+        if (m_renderOnDemand)
+            handleRendererFpsChange(0);
+        else
+            emitNeedRender();
+        emit renderOnDemandChanged();
     }
-
-    QQuickItem::setWidth(qreal(newWidth));
 }
 
-/*!
- * \internal
- */
-int Canvas::width()
+bool Canvas::renderOnDemand() const
 {
-    return int(QQuickItem::width());
-}
-
-/*!
- * \internal
- *
- * Override QQuickItem's setHeight to be able to limit the maximum canvas size to maximum viewport
- * dimensions.
- */
-void Canvas::setHeight(int height)
-{
-    int newHeight = height;
-    int maxHeight = m_maxSize.height();
-    if (maxHeight && height > maxHeight) {
-        qCDebug(canvas3drendering).nospace() << "Canvas3D::" << __FUNCTION__
-                                             << "():"
-                                             << "Maximum height exceeded. Limiting to "
-                                             << maxHeight;
-        newHeight = maxHeight;
-    }
-
-    QQuickItem::setHeight(qreal(newHeight));
-}
-
-/*!
- * \internal
- */
-int Canvas::height()
-{
-    return int(QQuickItem::height());
+    return m_renderOnDemand;
 }
 
 /*!
@@ -255,9 +313,6 @@ float Canvas::devicePixelRatio()
  * Returns the 3D rendering context that allows 3D rendering calls to be made.
  * The \a type parameter is ignored for now, but a string is expected to be given.
  */
-/*!
- * \internal
- */
 QJSValue Canvas::getContext(const QString &type)
 {
     QVariantMap map;
@@ -268,15 +323,17 @@ QJSValue Canvas::getContext(const QString &type)
  * \qmlmethod Context3D Canvas3D::getContext(string type, Canvas3DContextAttributes options)
  * Returns the 3D rendering context that allows 3D rendering calls to be made.
  * The \a type parameter is ignored for now, but a string is expected to be given.
+ * If Canvas3D.renderTarget property value is either \c Canvas3D.RenderTargetBackground or
+ * \c Canvas3D.RenderTargetForeground, the \a options parameter is also ignored,
+ * the context attributes of the Qt Quick context are used, and the
+ * \l{Canvas3DContextAttributes::preserveDrawingBuffer}{Canvas3DContextAttributes.preserveDrawingBuffer}
+ * property is forced to \c{false}.
  * The \a options parameter is only parsed when the first call to getContext() is
  * made and is ignored in subsequent calls if given. If the first call is made without
  * giving the \a options parameter, then the context and render target is initialized with
  * default configuration.
  *
- * \sa Canvas3DContextAttributes, Context3D
- */
-/*!
- * \internal
+ * \sa Canvas3DContextAttributes, Context3D, renderTarget
  */
 QJSValue Canvas::getContext(const QString &type, const QVariantMap &options)
 {
@@ -290,7 +347,9 @@ QJSValue Canvas::getContext(const QString &type, const QVariantMap &options)
     if (!m_isContextAttribsSet) {
         // Accept passed attributes only from first call and ignore for subsequent calls
         m_isContextAttribsSet = true;
+        m_alphaChanged = true;
         m_contextAttribs.setFrom(options);
+
         qCDebug(canvas3drendering).nospace()  << "Canvas3D::" << __FUNCTION__
                                               << " Context attribs:" << m_contextAttribs;
 
@@ -304,170 +363,41 @@ QJSValue Canvas::getContext(const QString &type, const QVariantMap &options)
             m_contextAttribs.setDepth(true);
 
         // Ensure ignored attributes are left to their default state
-        m_contextAttribs.setPremultipliedAlpha(false);
         m_contextAttribs.setPreferLowPowerToHighPerformance(false);
         m_contextAttribs.setFailIfMajorPerformanceCaveat(false);
     }
 
-    if (!m_context3D) {
-        // Create the context using current context attributes
+    if (!m_renderer->contextCreated()) {
         updateWindowParameters();
 
-        // Initialize the swap buffer chain
-        if (m_contextAttribs.depth() && m_contextAttribs.stencil() && !m_contextAttribs.antialias())
-            m_fboFormat.setAttachment(QOpenGLFramebufferObject::CombinedDepthStencil);
-        else if (m_contextAttribs.depth() && !m_contextAttribs.antialias())
-            m_fboFormat.setAttachment(QOpenGLFramebufferObject::Depth);
-        else if (m_contextAttribs.stencil() && !m_contextAttribs.antialias())
-            m_fboFormat.setAttachment(QOpenGLFramebufferObject::CombinedDepthStencil);
-        else
-            m_fboFormat.setAttachment(QOpenGLFramebufferObject::NoAttachment);
-
-        if (m_contextAttribs.antialias()) {
-            m_antialiasFboFormat.setSamples(m_maxSamples);
-
-            if (m_antialiasFboFormat.samples() != m_maxSamples) {
-                qCWarning(canvas3drendering).nospace() <<
-                        "Canvas3D::" << __FUNCTION__ <<
-                        " Failed to use " << m_maxSamples <<
-                        " will use " << m_antialiasFboFormat.samples();
-            }
-
-            if (m_contextAttribs.depth() && m_contextAttribs.stencil())
-                m_antialiasFboFormat.setAttachment(QOpenGLFramebufferObject::CombinedDepthStencil);
-            else if (m_contextAttribs.depth())
-                m_antialiasFboFormat.setAttachment(QOpenGLFramebufferObject::Depth);
-            else
-                m_antialiasFboFormat.setAttachment(QOpenGLFramebufferObject::NoAttachment);
-        }
-
-        // Create the offscreen surface
-        QSurfaceFormat surfaceFormat = m_glContextShare->format();
-
-        if (m_isOpenGLES2) {
-            // Some devices report wrong version, so force 2.0 on ES2
-            surfaceFormat.setVersion(2, 0);
-        } else {
-            surfaceFormat.setSwapBehavior(QSurfaceFormat::SingleBuffer);
-            surfaceFormat.setSwapInterval(0);
-        }
-
-        if (m_contextAttribs.alpha())
-            surfaceFormat.setAlphaBufferSize(8);
-        else
-            surfaceFormat.setAlphaBufferSize(0);
-
-        if (m_contextAttribs.depth())
-            surfaceFormat.setDepthBufferSize(24);
-
-        if (m_contextAttribs.stencil())
-            surfaceFormat.setStencilBufferSize(8);
-        else
-            surfaceFormat.setStencilBufferSize(-1);
-
-        if (m_contextAttribs.antialias())
-            surfaceFormat.setSamples(m_antialiasFboFormat.samples());
-
-        m_contextWindow = window();
-        m_contextThread = QThread::currentThread();
-
-        qCDebug(canvas3drendering).nospace() << "Canvas3D::" << __FUNCTION__
-                                             << " Creating QOpenGLContext with surfaceFormat :"
-                                             << surfaceFormat;
-        m_glContext = new QOpenGLContext();
-        m_glContext->setFormat(surfaceFormat);
-
-        // Share with m_glContextShare which in turn shares with m_glContextQt.
-        // In case of threaded rendering both of these live on the render
-        // thread of the scenegraph. m_glContextQt may be current on that
-        // thread at this point, which would fail the context creation with
-        // some drivers. Hence the need for m_glContextShare.
-        m_glContext->setShareContext(m_glContextShare);
-        if (!m_glContext->create()) {
-            qCWarning(canvas3drendering).nospace() << "Canvas3D::" << __FUNCTION__
-                                                   << " Failed to create OpenGL context for FBO";
+        if (!m_renderer->createContext(window(), m_contextAttribs, m_maxVertexAttribs, m_maxSize,
+                                       m_contextVersion, m_extensions,
+                                       m_isCombinedDepthStencilSupported)) {
             return QJSValue(QJSValue::NullValue);
         }
 
-        m_offscreenSurface = new QOffscreenSurface();
-        m_offscreenSurface->setFormat(m_glContext->format());
-        m_offscreenSurface->create();
+        setPixelSize(m_renderer->fboSize());
+    }
 
-        if (!m_glContext->makeCurrent(m_offscreenSurface)) {
-            qCWarning(canvas3drendering).nospace() << "Canvas3D::" << __FUNCTION__
-                                                   << " Failed to make offscreen surface current";
-            return QJSValue(QJSValue::NullValue);
-        }
+    if (!m_context3D) {
+        m_context3D = new CanvasContext(QQmlEngine::contextForObject(this)->engine(),
+                                        m_isOpenGLES2, m_maxVertexAttribs,
+                                        m_contextVersion, m_extensions,
+                                        m_renderer->commandQueue(),
+                                        m_isCombinedDepthStencilSupported);
 
-        // Initialize OpenGL functions using the created GL context
-        initializeOpenGLFunctions();
+        connect(m_renderer, &CanvasRenderer::textureIdResolved,
+                m_context3D.data(), &CanvasContext::handleTextureIdResolved,
+                Qt::QueuedConnection);
 
-        // Get the maximum drawable size
-        GLint viewportDims[2];
-        glGetIntegerv(GL_MAX_VIEWPORT_DIMS, viewportDims);
-        m_maxSize.setWidth(viewportDims[0]);
-        m_maxSize.setHeight(viewportDims[1]);
-
-        // Set the size and create FBOs
-        setPixelSize(m_initializedSize);
-        m_displayFbo->bind();
-        glViewport(0, 0,
-                   m_fboSize.width(),
-                   m_fboSize.height());
-        glScissor(0, 0,
-                  m_fboSize.width(),
-                  m_fboSize.height());
-        m_renderFbo->bind();
-        glViewport(0, 0,
-                   m_fboSize.width(),
-                   m_fboSize.height());
-        glScissor(0, 0,
-                  m_fboSize.width(),
-                  m_fboSize.height());
-
-#if !defined(QT_OPENGL_ES_2)
-        if (!m_isOpenGLES2) {
-            // Make it possible to change point primitive size and use textures with them in
-            // the shaders. These are implicitly enabled in ES2.
-            glEnable(GL_PROGRAM_POINT_SIZE);
-            glEnable(GL_POINT_SPRITE);
-        }
-#endif
-
-        // Verify that width and height are not initially too large, in case width and height
-        // were set before getting GL_MAX_VIEWPORT_DIMS
-        if (width() > m_maxSize.width()) {
-            qCDebug(canvas3drendering).nospace() << "Canvas3D::" << __FUNCTION__
-                                                 << "():"
-                                                 << "Maximum width exceeded. Limiting to "
-                                                 << m_maxSize.width();
-            QQuickItem::setWidth(m_maxSize.width());
-        }
-        if (height() > m_maxSize.height()) {
-            qCDebug(canvas3drendering).nospace() << "Canvas3D::" << __FUNCTION__
-                                                 << "():"
-                                                 << "Maximum height exceeded. Limiting to "
-                                                 << m_maxSize.height();
-            QQuickItem::setHeight(m_maxSize.height());
-        }
-
-        // Create the Context3D
-        m_context3D = new CanvasContext(m_glContext, m_offscreenSurface,
-                                        QQmlEngine::contextForObject(this)->engine(),
-                                        m_fboSize.width(),
-                                        m_fboSize.height(),
-                                        m_isOpenGLES2);
         m_context3D->setCanvas(this);
         m_context3D->setDevicePixelRatio(m_devicePixelRatio);
         m_context3D->setContextAttributes(m_contextAttribs);
 
-        emit contextChanged(m_context3D);
+        emit contextChanged(m_context3D.data());
     }
 
-    glFlush();
-    glFinish();
-
-    return QQmlEngine::contextForObject(this)->engine()->newQObject(m_context3D);
+    return QQmlEngine::contextForObject(this)->engine()->newQObject(m_context3D.data());
 }
 
 /*!
@@ -475,23 +405,16 @@ QJSValue Canvas::getContext(const QString &type, const QVariantMap &options)
  * Specifies the size of the render target surface in physical on-screen pixels used by
  * the 3D rendering.
  */
-/*!
- * \internal
- */
 QSize Canvas::pixelSize()
 {
     return m_fboSize;
 }
 
-/*!
- * \internal
- */
 void Canvas::setPixelSize(QSize pixelSize)
 {
     qCDebug(canvas3drendering).nospace() << "Canvas3D::" << __FUNCTION__
                                          << "(pixelSize:" << pixelSize
                                          << ")";
-
     if (pixelSize.width() > m_maxSize.width()) {
         qCDebug(canvas3drendering).nospace() << "Canvas3D::" << __FUNCTION__
                                              << "():"
@@ -508,133 +431,79 @@ void Canvas::setPixelSize(QSize pixelSize)
         pixelSize.setHeight(m_maxSize.height());
     }
 
-    if (m_fboSize == pixelSize && m_renderFbo != 0)
+    if (pixelSize.width() <= 0)
+        pixelSize.setWidth(1);
+    if (pixelSize.height() <= 0)
+        pixelSize.setHeight(1);
+
+    if (m_fboSize == pixelSize)
         return;
 
     m_fboSize = pixelSize;
-    createFBOs();
 
     // Queue the pixel size signal to next repaint cycle and queue repaint
     queueResizeGL();
     emitNeedRender();
+    emit pixelSizeChanged(pixelSize);
 }
 
-/*!
- * \internal
- */
-void Canvas::createFBOs()
-{
-    qCDebug(canvas3drendering).nospace() << "Canvas3D::" << __FUNCTION__ << "()";
-
-    if (!m_glContext) {
-        qCDebug(canvas3drendering).nospace() << "Canvas3D::" << __FUNCTION__
-                                             << " No OpenGL context created, returning";
-        return;
-    }
-
-    if (!m_offscreenSurface) {
-        qCDebug(canvas3drendering).nospace() << "Canvas3D::" << __FUNCTION__
-                                             << " No offscreen surface created, returning";
-        return;
-    }
-
-    // Ensure context is current
-    m_glContext->makeCurrent(m_offscreenSurface);
-
-    // Store current clear color and the bound texture
-    GLint texBinding2D;
-    GLfloat clearColor[4];
-    glGetIntegerv(GL_TEXTURE_BINDING_2D, &texBinding2D);
-    glGetFloatv(GL_COLOR_CLEAR_VALUE, clearColor);
-
-    // Store existing display FBO, don't delete before next updatePaintNode call
-    // Store existing render and antialias FBO's for a moment so we get new id's for new ones
-    m_oldDisplayFbo = m_displayFbo;
-    QOpenGLFramebufferObject *renderFbo = m_renderFbo;
-    QOpenGLFramebufferObject *antialiasFbo = m_antialiasFbo;
-
-    QOpenGLFramebufferObject *dummyFbo = 0;
-    if (!m_renderFbo) {
-        // Create a dummy FBO to work around a weird GPU driver bug on some platforms that
-        // causes the first FBO created to get corrupted in some cases.
-        dummyFbo = new QOpenGLFramebufferObject(m_fboSize.width(),
-                                                m_fboSize.height(),
-                                                m_fboFormat);
-    }
-
-    // Create FBOs
-    qCDebug(canvas3drendering).nospace() << "Canvas3D::" << __FUNCTION__
-                                         << " Creating front and back FBO's with"
-                                         << " attachment format:" << m_fboFormat.attachment()
-                                         << " and size:" << m_fboSize;
-    m_displayFbo = new QOpenGLFramebufferObject(m_fboSize.width(),
-                                                m_fboSize.height(),
-                                                m_fboFormat);
-    m_renderFbo  = new QOpenGLFramebufferObject(m_fboSize.width(),
-                                                m_fboSize.height(),
-                                                m_fboFormat);
-
-    // Clear the FBOs to prevent random junk appearing on the screen
-    // Note: Viewport may not be changed automatically
-    glClearColor(0,0,0,0);
-    m_displayFbo->bind();
-    glClear(GL_COLOR_BUFFER_BIT);
-    m_renderFbo->bind();
-    glClear(GL_COLOR_BUFFER_BIT);
-
-    qCDebug(canvas3drendering).nospace() << "Canvas3D::" << __FUNCTION__
-                                         << " Render FBO handle:" << m_renderFbo->handle()
-                                         << " isValid:" << m_renderFbo->isValid();
-
-    if (m_contextAttribs.antialias()) {
-        qCDebug(canvas3drendering).nospace() << "Canvas3D::" << __FUNCTION__
-                                             << "Creating MSAA buffer with "
-                                             << m_antialiasFboFormat.samples() << " samples "
-                                             << " and attachment format of "
-                                             << m_antialiasFboFormat.attachment();
-        m_antialiasFbo = new QOpenGLFramebufferObject(
-                    m_fboSize.width(),
-                    m_fboSize.height(),
-                    m_antialiasFboFormat);
-        qCDebug(canvas3drendering).nospace() << "Canvas3D::" << __FUNCTION__
-                                             << " Antialias FBO handle:" << m_antialiasFbo->handle()
-                                             << " isValid:" << m_antialiasFbo->isValid();
-        m_antialiasFbo->bind();
-        glClear(GL_COLOR_BUFFER_BIT);
-    }
-
-    // FBO ids and texture id's have been generated, we can now free the existing ones.
-    delete renderFbo;
-    delete antialiasFbo;
-
-    // Store the correct texture binding
-    glBindTexture(GL_TEXTURE_2D, texBinding2D);
-    glClearColor(clearColor[0], clearColor[1], clearColor[2], clearColor[3]);
-
-    if (m_context3D) {
-        bindCurrentRenderTarget();
-        emitNeedRender();
-    }
-
-    // Get rid of the dummy FBO, it has served its purpose
-    delete dummyFbo;
-}
-
-/*!
- * \internal
- */
 void Canvas::handleWindowChanged(QQuickWindow *window)
 {
     qCDebug(canvas3drendering).nospace() << "Canvas3D::" << __FUNCTION__ << "(" << window << ")";
-    if (!window)
+
+    if (!window) {
+        if (!m_contextWindow.isNull()) {
+            if (m_renderTarget != RenderTargetOffscreenBuffer) {
+                disconnect(m_contextWindow.data(), &QQuickWindow::beforeSynchronizing,
+                           this, &Canvas::handleBeforeSynchronizing);
+            }
+            if (m_renderer) {
+                if (m_renderTarget == RenderTargetForeground) {
+                    disconnect(m_contextWindow.data(), &QQuickWindow::beforeRendering,
+                            m_renderer, &CanvasRenderer::clearBackground);
+                    disconnect(m_contextWindow.data(), &QQuickWindow::afterRendering,
+                            m_renderer, &CanvasRenderer::render);
+                } else {
+                    disconnect(m_contextWindow.data(), &QQuickWindow::beforeRendering,
+                            m_renderer, &CanvasRenderer::render);
+                }
+            }
+        }
         return;
+    }
+
+    if (window != m_contextWindow.data()) {
+        handleContextLost();
+        m_contextWindow = window;
+    } else {
+        // Re-added to same window
+        if (!m_context3D.isNull())
+            m_context3D->markQuickTexturesDirty();
+
+        if (m_renderer) {
+            if (m_renderTarget == RenderTargetForeground) {
+                connect(window, &QQuickWindow::beforeRendering,
+                        m_renderer, &CanvasRenderer::clearBackground, Qt::DirectConnection);
+                connect(window, &QQuickWindow::afterRendering,
+                        m_renderer, &CanvasRenderer::render, Qt::DirectConnection);
+            } else {
+                connect(window, &QQuickWindow::beforeRendering,
+                        m_renderer, &CanvasRenderer::render, Qt::DirectConnection);
+            }
+        }
+    }
+
+    if ((!m_allowRenderTargetChange || !m_renderTargetSyncConnected)
+            && m_renderTarget != RenderTargetOffscreenBuffer) {
+        m_renderTargetSyncConnected = true;
+        connect(window, &QQuickWindow::beforeSynchronizing,
+                this, &Canvas::handleBeforeSynchronizing, Qt::DirectConnection);
+        window->setClearBeforeRendering(false);
+    }
 
     emitNeedRender();
 }
 
-/*!
- * \internal
- */
 void Canvas::geometryChanged(const QRectF &newGeometry, const QRectF &oldGeometry)
 {
     qCDebug(canvas3drendering).nospace() << "Canvas3D::" << __FUNCTION__
@@ -643,14 +512,9 @@ void Canvas::geometryChanged(const QRectF &newGeometry, const QRectF &oldGeometr
                                          << ")";
     QQuickItem::geometryChanged(newGeometry, oldGeometry);
 
-    m_cachedGeometry = newGeometry;
-
     emitNeedRender();
 }
 
-/*!
- * \internal
- */
 void Canvas::itemChange(ItemChange change, const ItemChangeData &value)
 {
     qCDebug(canvas3drendering).nospace() << "Canvas3D::" << __FUNCTION__
@@ -662,17 +526,17 @@ void Canvas::itemChange(ItemChange change, const ItemChangeData &value)
 }
 
 /*!
- * \internal
+ * \qmlproperty Context3D Canvas3D::context
+ * This property can be used to access the context created with getContext() method.
+ *
+ * \sa getContext()
  */
 CanvasContext *Canvas::context()
 {
     qCDebug(canvas3drendering).nospace() << "Canvas3D::" << __FUNCTION__ << "()";
-    return m_context3D;
+    return m_context3D.data();
 }
 
-/*!
- * \internal
- */
 void Canvas::updateWindowParameters()
 {
     qCDebug(canvas3drendering).nospace() << "Canvas3D::" << __FUNCTION__ << "()";
@@ -690,45 +554,97 @@ void Canvas::updateWindowParameters()
         }
     }
 
-    if (m_context3D) {
+    if (!m_context3D.isNull()) {
         if (m_context3D->devicePixelRatio() != m_devicePixelRatio)
             m_context3D->setDevicePixelRatio(m_devicePixelRatio);
     }
 }
 
-/*!
- * \internal
- *
- * Blits the antialias fbo into the final render fbo.
- * Returns the final render fbo handle.
- */
-GLuint Canvas::resolveMSAAFbo()
-{
-    qCDebug(canvas3drendering).nospace() << "Canvas3D::" << __FUNCTION__
-                                         << " Resolving MSAA from FBO:"
-                                         << m_antialiasFbo->handle()
-                                         << " to FBO:" << m_renderFbo->handle();
-    QOpenGLFramebufferObject::blitFramebuffer(m_renderFbo, m_antialiasFbo);
-
-    return m_renderFbo->handle();
-}
-
-/*!
- * \internal
- */
-void Canvas::ready()
+void Canvas::sync()
 {
     qCDebug(canvas3drendering).nospace() << "Canvas3D::" << __FUNCTION__ << "()";
 
-    connect(window(), &QQuickWindow::sceneGraphInvalidated,
-            this, &Canvas::shutDown);
+    m_renderer->setFboSize(m_fboSize);
 
-    update();
+    m_frameTimeMs = uint(m_renderer->previousFrameTime());
+
+    // Update execution queue (GUI thread is locked here)
+    m_renderer->transferCommands();
+
+    // Start queuing up another frame
+    if (!m_renderOnDemand)
+        emitNeedRender();
 }
 
-/*!
- * \internal
- */
+bool Canvas::firstSync()
+{
+    qCDebug(canvas3drendering).nospace() << "Canvas3D::" << __FUNCTION__ << "()";
+
+    if (m_contextState == ContextLost || !m_renderer) {
+        if (m_renderer)
+            m_renderer->destroy();
+
+        m_renderer = new CanvasRenderer();
+        m_contextState = ContextRestoring;
+
+        // Update necessary things to m_context3D
+        if (!m_context3D.isNull()) {
+           m_context3D->setCommandQueue(m_renderer->commandQueue());
+           connect(m_renderer, &CanvasRenderer::textureIdResolved,
+                   m_context3D.data(), &CanvasContext::handleTextureIdResolved,
+                   Qt::QueuedConnection);
+        }
+        connect(m_renderer, &CanvasRenderer::fpsChanged,
+                this, &Canvas::handleRendererFpsChange);
+    }
+
+    if (!m_renderer->qtContextResolved()) {
+        m_allowRenderTargetChange = false;
+        QSize initializedSize = boundingRect().size().toSize();
+        if (initializedSize.width() <= 0)
+            initializedSize.setWidth(1);
+        if (initializedSize.height() <= 0)
+            initializedSize.setHeight(1);
+        m_renderer->resolveQtContext(window(), initializedSize, m_renderTarget);
+        m_isOpenGLES2 = m_renderer->isOpenGLES2();
+
+        if (m_renderTarget != RenderTargetOffscreenBuffer) {
+            m_renderer->getQtContextAttributes(m_contextAttribs);
+            m_isContextAttribsSet = true;
+            m_renderer->init(window(), m_contextAttribs, m_maxVertexAttribs, m_maxSize,
+                             m_contextVersion, m_extensions, m_isCombinedDepthStencilSupported);
+            setPixelSize(m_renderer->fboSize());
+        } else {
+            m_renderer->createContextShare();
+            m_maxSamples = m_renderer->maxSamples();
+        }
+
+        connect(window(), &QQuickWindow::sceneGraphInvalidated,
+                m_renderer, &CanvasRenderer::shutDown, Qt::DirectConnection);
+        connect(window(), &QQuickWindow::sceneGraphInvalidated,
+                this, &Canvas::handleContextLost, Qt::QueuedConnection);
+        connect(window(), &QObject::destroyed, this, &Canvas::handleContextLost);
+
+        if (m_renderTarget == RenderTargetForeground) {
+            connect(window(), &QQuickWindow::beforeRendering,
+                    m_renderer, &CanvasRenderer::clearBackground, Qt::DirectConnection);
+            connect(window(), &QQuickWindow::afterRendering,
+                    m_renderer, &CanvasRenderer::render, Qt::DirectConnection);
+        } else {
+            connect(window(), &QQuickWindow::beforeRendering,
+                    m_renderer, &CanvasRenderer::render, Qt::DirectConnection);
+        }
+
+        return true;
+    }
+    return false;
+}
+
+CanvasRenderer *Canvas::renderer()
+{
+    return m_renderer;
+}
+
 QSGNode *Canvas::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData *data)
 {
     qCDebug(canvas3drendering).nospace() << "Canvas3D::" << __FUNCTION__
@@ -736,125 +652,85 @@ QSGNode *Canvas::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData *data)
                                          << oldNode <<", " << data
                                          << ")";
     updateWindowParameters();
-    m_initializedSize = boundingRect().size().toSize();
+    QSize initializedSize = boundingRect().size().toSize();
     qCDebug(canvas3drendering).nospace() << "Canvas3D::" << __FUNCTION__
-                                         << " size:" << m_initializedSize
+                                         << " size:" << initializedSize
                                          << " devicePixelRatio:" << m_devicePixelRatio;
     if (m_runningInDesigner
-            || m_initializedSize.width() < 0
-            || m_initializedSize.height() < 0
+            || initializedSize.width() < 0
+            || initializedSize.height() < 0
             || !window()) {
         delete oldNode;
         qCDebug(canvas3drendering).nospace() << "Canvas3D::" << __FUNCTION__
                                              << " Returns null";
+
+        m_rendererReady = false;
         return 0;
     }
 
     CanvasRenderNode *node = static_cast<CanvasRenderNode *>(oldNode);
 
-    if (!m_glContextQt) {
-        m_glContextQt = window()->openglContext();
-        m_isOpenGLES2 = m_glContextQt->isOpenGLES();
-
-        QSurfaceFormat surfaceFormat = m_glContextQt->format();
-        // Some devices report wrong version, so force 2.0 on ES2
-        if (m_isOpenGLES2)
-            surfaceFormat.setVersion(2, 0);
-
-        if (!m_isOpenGLES2 || surfaceFormat.majorVersion() >= 3)
-            m_maxSamples = 4;
-
-        m_glContextShare = new QOpenGLContext;
-        m_glContextShare->setFormat(surfaceFormat);
-        m_glContextShare->setShareContext(m_glContextQt);
-        QSurface *surface = m_glContextQt->surface();
-        m_glContextQt->doneCurrent();
-        if (!m_glContextShare->create())
-            qCWarning(canvas3drendering) << "Failed to create share context";
-        m_glContextQt->makeCurrent(surface);
-        ready();
+    if (firstSync()) {
+        update();
         return 0;
     }
 
     if (!node) {
-        node = new CanvasRenderNode(this, window());
+        node = new CanvasRenderNode(window());
 
         /* Set up connections to get the production of FBO textures in sync with vsync on the
          * main thread.
          *
-         * When a new texture is ready on the rendering thread, we use a direct connection to
-         * the texture node to let it know a new texture can be used. The node will then
-         * emit pendingNewTexture which we bind to QQuickWindow::update to schedule a redraw.
+         * When the OpenGL commands for rendering the new texture are queued in queueNextRender(),
+         * QQuickItem::update() is called to trigger updatePaintNode() call (this function).
+         * QQuickWindow::update() is also queued to actually cause the redraw to happen.
          *
-         * When the scene graph starts rendering the next frame, the prepareNode() function
-         * is used to update the node with the new texture. Once it completes, it emits
-         * textureInUse() which we connect to the FBO rendering thread's renderNext() to have
-         * it start producing content into its current "back buffer".
+         * The queued OpenGL commands are transferred into the execution queue below. This is safe
+         * because GUI thread is blocked at this point. After we have transferred the commands
+         * for execution, we emit needRender() signal to trigger queueing of the commands for
+         * the next frame.
          *
-         * This FBO rendering pipeline is throttled by vsync on the scene graph rendering thread.
+         * The queued commands are actually executed in the render thread in response to
+         * QQuickWindow::beforeRendering() signal, which is connected to
+         * CanvasRenderer::render() slot.
+         *
+         * When executing commands, an internalTextureComplete command indicates a complete frame.
+         * The render buffers are swapped at that point and the node texture is updated via direct
+         * connected CanvasRenderer::textureReady() signal.
+         *
+         * This rendering pipeline is throttled by vsync on the scene graph rendering thread.
          */
-        connect(this, &Canvas::textureReady,
+        connect(m_renderer, &CanvasRenderer::textureReady,
                 node, &CanvasRenderNode::newTexture,
                 Qt::DirectConnection);
 
-        connect(node, &CanvasRenderNode::pendingNewTexture,
-                window(), &QQuickWindow::update,
-                Qt::QueuedConnection);
-
-        connect(window(), &QQuickWindow::beforeRendering,
-                node, &CanvasRenderNode::prepareNode,
-                Qt::DirectConnection);
-
-        connect(node, &CanvasRenderNode::textureInUse,
-                this, &Canvas::emitNeedRender,
-                Qt::QueuedConnection);
-
-        // Get the production of FBO textures started..
+        m_rendererReady = true;
         emitNeedRender();
-
-        update();
     }
 
-    node->setRect(boundingRect());
-    emitNeedRender();
+    if (m_alphaChanged) {
+        node->setAlpha(m_contextAttribs.alpha());
+        m_alphaChanged = false;
+    }
 
-    m_renderNodeReady = true;
+    sync();
+
+    node->setRect(boundingRect());
 
     return node;
 }
 
 /*!
- * \internal
- */
-void Canvas::bindCurrentRenderTarget()
-{
-    qCDebug(canvas3drendering).nospace() << "Canvas3D::" << __FUNCTION__ << "()";
-
-    if (m_context3D->currentFramebuffer() == 0) {
-        // Bind default framebuffer
-        if (m_antialiasFbo) {
-            qCDebug(canvas3drendering).nospace() << "Canvas3D::" << __FUNCTION__
-                                                 << " Binding current FBO to antialias FBO:"
-                                                 << m_antialiasFbo->handle();
-            m_antialiasFbo->bind();
-        } else {
-            qCDebug(canvas3drendering).nospace() << "Canvas3D::" << __FUNCTION__
-                                                 << " Binding current FBO to render FBO:"
-                                                 << m_renderFbo->handle();
-            m_renderFbo->bind();
-        }
-    } else {
-        qCDebug(canvas3drendering).nospace() << "Canvas3D::" << __FUNCTION__
-                                             << " Binding current FBO to current Context3D FBO:"
-                                             << m_context3D->currentFramebuffer();
-        glBindFramebuffer(GL_FRAMEBUFFER, m_context3D->currentFramebuffer());
-    }
-}
-
-/*!
  * \qmlproperty int Canvas3D::fps
- * This property specifies the current frames per seconds, the value is calculated every
- * 500 ms.
+ * This property specifies the current number of frames rendered per second.
+ * The value is recalculated every 500 ms, as long as any rendering is done.
+ *
+ * \note This property only gets updated after a Canvas3D frame is rendered, so if no frames
+ * are being drawn, this property value won't change.
+ * It is also based on the number of Canvas3D frames actually rendered since the value was
+ * last updated, so it may not accurately reflect the actual rendering performance when
+ * If \l{Canvas3D::renderOnDemand}{Canvas3D.renderOnDemand} property is \c{true}.
+ *
  * \sa frameTimeMs
  */
 uint Canvas::fps()
@@ -863,22 +739,41 @@ uint Canvas::fps()
 }
 
 /*!
- * \qmlmethod int Canvas3D::frameTimeMs()
- * This method returns the number of milliseconds the last rendered frame took to process. Before
- * any frames have been rendered this method returns 0. This time is measured from the point
- * the paintGL() signal was sent to the time glFinish() returns. This excludes the time it
- * takes to present the frame on screen.
- * \sa fps
+   \qmlmethod int Canvas3D::frameTimeMs()
+
+   This method returns the number of milliseconds the renderer took to process the OpenGL portion
+   of the rendering for the previous frame.
+   Before any frames have been rendered this method returns 0.
+   This time is measured from the point OpenGL commands are transferred to render thread to the time
+   glFinish() returns, so it doesn't include the time spent parsing JavaScript, nor the time
+   the scene graph takes to present the frame to the screen.
+   This value is updated for the previous frame when the next frame OpenGL command transfer is done.
+
+   \sa fps, frameSetupTimeMs
 */
 int Canvas::frameTimeMs()
 {
-    return m_frameTimeMs;
+    return int(m_frameTimeMs);
 }
 
 /*!
- * \internal
- */
-void Canvas::renderNext()
+   \qmlmethod int Canvas3D::frameSetupTimeMs()
+   \since QtCanvas3D 1.1
+
+   This method returns the number of milliseconds Canvas3D took to process the PaintGL signal
+   for the previous frame. Before any frames have been rendered this method returns 0.
+   This time doesn't include time spent on actual OpenGL rendering of the frame, nor the time
+   the scene graph takes to present the frame to the screen.
+   This value is updated after PaintGL signal handler returns.
+
+   \sa fps, frameTimeMs
+*/
+int Canvas::frameSetupTimeMs()
+{
+    return int(m_frameSetupTimeMs);
+}
+
+void Canvas::queueNextRender()
 {
     qCDebug(canvas3drendering).nospace() << "Canvas3D::" << __FUNCTION__ << "()";
 
@@ -886,20 +781,29 @@ void Canvas::renderNext()
 
     updateWindowParameters();
 
-    // Don't try to do anything before the render node has been created
-    if (!m_renderNodeReady) {
+    // Don't try to do anything before the renderer/node are ready
+    if (!m_rendererReady || !window()) {
         qCDebug(canvas3drendering).nospace() << "Canvas3D::" << __FUNCTION__
-                                             << " Render node not ready, returning";
+                                             << " Renderer or window not ready, returning";
         return;
     }
 
-    if (!m_glContext) {
-        // Call the initialize function from QML/JavaScript until it calls the getContext()
-        // that in turn creates the buffers.
-        // Allow the JavaScript code to call the getContext() to create the context object and FBOs
+    if (m_context3D.isNull() || m_contextState == ContextRestoring) {
+        // Call the initialize function from QML/JavaScript. It'll call the getContext()
+        // that in turn creates the renderer context.
         qCDebug(canvas3drendering).nospace() << "Canvas3D::" << __FUNCTION__
-                                             << " Emit inigGL() signal";
+                                             << " Emit initializeGL() signal";
+
+        if (!m_context3D.isNull()) {
+            m_context3D->setContextLostState(false);
+            emit contextRestored();
+        }
+
+        // Call init on JavaScript side to queue the user's GL initialization commands.
+        // The initial context creation get will also initialize the context command queue.
         emit initializeGL();
+
+        m_contextState = ContextAlive;
 
         if (!m_isContextAttribsSet) {
             qCDebug(canvas3drendering).nospace() << "Canvas3D::" << __FUNCTION__
@@ -907,18 +811,12 @@ void Canvas::renderNext()
             return;
         }
 
-        if (!m_glContext) {
+        if (!m_renderer->contextCreated()) {
             qCDebug(canvas3drendering).nospace() << "Canvas3D::" << __FUNCTION__
                                                  << " QOpenGLContext not created, returning";
             return;
         }
     }
-
-    // We have a GL context, make it current
-    m_glContext->makeCurrent(m_offscreenSurface);
-
-    // Bind the correct render target FBO
-    bindCurrentRenderTarget();
 
     // Signal changes in pixel size
     if (m_resizeGLQueued) {
@@ -928,97 +826,31 @@ void Canvas::renderNext()
         m_resizeGLQueued = false;
     }
 
-    // Ensure we have correct clip rect set in the context
-    QRect viewport = m_context3D->glViewportRect();
-    glViewport(viewport.x(), viewport.y(), viewport.width(), viewport.height());
-    qCDebug(canvas3drendering).nospace() << "Canvas3D::" << __FUNCTION__
-                                         << " Viewport set to " << viewport;
-
-    // Check that we're complete component before drawing
-    if (!isComponentComplete()) {
-        qCDebug(canvas3drendering).nospace() << "Canvas3D::" << __FUNCTION__
-                                             << " Component is not complete, skipping drawing";
-        return;
-    }
-
-    // Check if any images are loaded and need to be notified while the correct
-    // GL context is current.
+    // Check if any images are loaded and need to be notified
     QQmlEngine *engine = QQmlEngine::contextForObject(this)->engine();
     CanvasTextureImageFactory::factory(engine)->notifyLoadedImages();
 
-    static QElapsedTimer frameTimer;
-    frameTimer.start();
-
-    // Call render in QML JavaScript side
+    // Call render in QML JavaScript side to queue the user's GL rendering commands.
     qCDebug(canvas3drendering).nospace() << "Canvas3D::" << __FUNCTION__
                                          << " Emit paintGL() signal";
+
+    if (m_renderTarget != RenderTargetOffscreenBuffer)
+        m_renderer->commandQueue()->queueCommand(CanvasGlCommandQueue::internalBeginPaint);
+
+    m_frameTimer.start();
     emit paintGL();
+    m_frameSetupTimeMs = m_frameTimer.elapsed();
 
-    if (m_contextAttribs.antialias())
-        resolveMSAAFbo();
+    // Indicate texture completion point by queueing internalTextureComplete command
+    m_renderer->commandQueue()->queueCommand(CanvasGlCommandQueue::internalTextureComplete);
 
-    // We need to flush the contents to the FBO before posting
-    // the texture to the other thread, otherwise, we might
-    // get unexpected results.
-    glFlush();
-    glFinish();
-
-    m_frameTimeMs = frameTimer.elapsed();
-
-    // Update frames per second reading after glFinish()
-    static QElapsedTimer timer;
-    static int frames;
-
-    if (frames == 0) {
-        timer.start();
-    } else if (timer.elapsed() > 500) {
-        qreal avgtime = timer.elapsed() / (qreal) frames;
-        uint avgFps = uint(1000.0 / avgtime);
-        if (avgFps != m_fps) {
-            m_fps = avgFps;
-            emit fpsChanged(avgFps);
-        }
-
-        timer.start();
-        frames = 0;
+    if (m_renderTarget == RenderTargetOffscreenBuffer) {
+        // Trigger updatePaintNode() and actual frame draw
+        update();
     }
-    ++frames;
-
-    // Swap
-    qSwap(m_renderFbo, m_displayFbo);
-    qCDebug(canvas3drendering).nospace() << "Canvas3D::" << __FUNCTION__
-                                         << " Displaying texture:"
-                                         << m_displayFbo->texture()
-                                         << " from FBO:" << m_displayFbo->handle();
-
-    if (m_contextAttribs.preserveDrawingBuffer()) {
-        // Copy the content of display fbo to the render fbo
-        GLint texBinding2D;
-        glGetIntegerv(GL_TEXTURE_BINDING_2D, &texBinding2D);
-
-        m_displayFbo->bind();
-        glBindTexture(GL_TEXTURE_2D, m_renderFbo->texture());
-
-        glCopyTexImage2D(GL_TEXTURE_2D, 0, m_displayFbo->format().internalTextureFormat(),
-                         0, 0, m_fboSize.width(), m_fboSize.height(), 0);
-
-        glBindTexture(GL_TEXTURE_2D, texBinding2D);
-    }
-
-    // FBO ids and texture id's have been generated, we can now free the old display FBO
-    delete m_oldDisplayFbo;
-    m_oldDisplayFbo = 0;
-
-    // Rebind default FBO
-    QOpenGLFramebufferObject::bindDefault();
-
-    // Notify the render node of new texture
-    emit textureReady(m_displayFbo->texture(), m_fboSize, m_devicePixelRatio);
+    window()->update();
 }
 
-/*!
- * \internal
- */
 void Canvas::queueResizeGL()
 {
     qCDebug(canvas3drendering).nospace() << "Canvas3D::" << __FUNCTION__ << "()";
@@ -1027,8 +859,17 @@ void Canvas::queueResizeGL()
 }
 
 /*!
- * \internal
+ * \qmlmethod void Canvas3D::requestRender()
+ * Queues a new frame for rendering when \l{Canvas3D::renderOnDemand}{Canvas3D.renderOnDemand}
+ * property is \c{true}.
+ * Does nothing when \l{Canvas3D::renderOnDemand}{Canvas3D.renderOnDemand} property is \c{false}.
  */
+void Canvas::requestRender()
+{
+    if (m_renderOnDemand)
+        emitNeedRender();
+}
+
 void Canvas::emitNeedRender()
 {
     qCDebug(canvas3drendering).nospace() << "Canvas3D::" << __FUNCTION__ << "()";
@@ -1041,6 +882,50 @@ void Canvas::emitNeedRender()
 
     m_isNeedRenderQueued = true;
     emit needRender();
+}
+
+void Canvas::handleBeforeSynchronizing()
+{
+    qCDebug(canvas3drendering).nospace() << "Canvas3D::" << __FUNCTION__ << "()";
+
+    updateWindowParameters();
+
+    if (firstSync()) {
+        m_rendererReady = true;
+        emitNeedRender();
+        return;
+    }
+
+    sync();
+}
+
+void Canvas::handleRendererFpsChange(uint fps)
+{
+    if (fps != m_fps) {
+        m_fps = fps;
+        emit fpsChanged(m_fps);
+    }
+}
+
+void Canvas::handleContextLost()
+{
+    if (m_contextState == ContextAlive || m_contextState == ContextRestoring) {
+        m_contextState = ContextLost;
+        m_rendererReady = false;
+        m_fboSize = QSize(0, 0);
+
+        if (!m_contextWindow.isNull()) {
+            disconnect(m_contextWindow.data(), &QQuickWindow::sceneGraphInvalidated,
+                       this, &Canvas::handleContextLost);
+            disconnect(m_contextWindow.data(), &QObject::destroyed,
+                        this, &Canvas::handleContextLost);
+        }
+
+        if (!m_context3D.isNull())
+            m_context3D->setContextLostState(true);
+
+        emit contextLost();
+    }
 }
 
 QT_CANVAS3D_END_NAMESPACE

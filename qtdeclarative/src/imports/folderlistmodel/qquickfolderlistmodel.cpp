@@ -197,7 +197,7 @@ QString QQuickFolderListModelPrivate::resolvePath(const QUrl &path)
     QUrl localUrl = QUrl(localPath);
     QString fullPath = localUrl.path();
     if (localUrl.scheme().length())
-      fullPath = localUrl.scheme() + ":" + fullPath;
+      fullPath = localUrl.scheme() + QLatin1Char(':') + fullPath;
     return QDir::cleanPath(fullPath);
 }
 
@@ -786,6 +786,20 @@ QVariant QQuickFolderListModel::get(int idx, const QString &property) const
         return data(index(idx, 0), role);
     else
         return QVariant();
+}
+
+/*!
+    \qmlmethod int FolderListModel::indexOf(url file)
+    \since 5.6
+
+    Get the index of the given file URL if the model contains it,
+    or -1 if not.
+*/
+int QQuickFolderListModel::indexOf(const QUrl &file) const
+{
+    Q_D(const QQuickFolderListModel);
+    FileProperty toFind(QFileInfo(file.toLocalFile()));
+    return d->data.indexOf(toFind);
 }
 
 #include "moc_qquickfolderlistmodel.cpp"

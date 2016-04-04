@@ -35,7 +35,6 @@
 
 #include <qdir.h>
 #include <qfileinfo.h>
-#include <qhash.h>
 
 #ifndef QT_BOOTSTRAPPED
 #include <qobject.h>
@@ -183,7 +182,7 @@ QT_BEGIN_NAMESPACE
          \li "C:/Users/<USER>/AppData/Local/<APPNAME>/cache"
     \row \li GenericDataLocation
          \li "~/Library/Application Support", "/Library/Application Support"
-         \li "C:/Users/<USER>/AppData/Local", "C:/ProgramData"
+         \li "C:/Users/<USER>/AppData/Local", "C:/ProgramData", "<APPDIR>", "<APPDIR>/data"
     \row \li RuntimeLocation
          \li "~/Library/Application Support"
          \li "C:/Users/<USER>"
@@ -523,13 +522,8 @@ QString QStandardPaths::findExecutable(const QString &executableName, const QStr
     QStringList searchPaths = paths;
     if (paths.isEmpty()) {
         QByteArray pEnv = qgetenv("PATH");
-#if defined(Q_OS_WIN)
-        const QLatin1Char pathSep(';');
-#else
-        const QLatin1Char pathSep(':');
-#endif
         // Remove trailing slashes, which occur on Windows.
-        const QStringList rawPaths = QString::fromLocal8Bit(pEnv.constData()).split(pathSep, QString::SkipEmptyParts);
+        const QStringList rawPaths = QString::fromLocal8Bit(pEnv.constData()).split(QDir::listSeparator(), QString::SkipEmptyParts);
         searchPaths.reserve(rawPaths.size());
         foreach (const QString &rawPath, rawPaths) {
             QString cleanPath = QDir::cleanPath(rawPath);

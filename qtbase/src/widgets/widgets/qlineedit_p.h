@@ -114,7 +114,7 @@ public:
         QAction *action;
         int flags;
     };
-    typedef QList<SideWidgetEntry> SideWidgetEntryList;
+    typedef QVector<SideWidgetEntry> SideWidgetEntryList;
 
     QLineEditPrivate()
         : control(0), frame(1), contextMenuEnabled(1), cursorVisible(0),
@@ -139,6 +139,7 @@ public:
     QRect adjustedControlRect(const QRect &) const;
 
     int xToPos(int x, QTextLine::CursorPosition = QTextLine::CursorBetweenCharacters) const;
+    bool inSelection(int x) const;
     QRect cursorRect() const;
     void setCursorVisible(bool visible);
 
@@ -228,6 +229,7 @@ private:
     int lastTextSize;
     mutable QSize m_iconSize;
 };
+Q_DECLARE_TYPEINFO(QLineEditPrivate::SideWidgetEntry, Q_PRIMITIVE_TYPE);
 
 static bool isSideWidgetVisible(const QLineEditPrivate::SideWidgetEntry &e)
 {

@@ -34,17 +34,27 @@
 #ifndef QDECLARATIVEAUDIOSAMPLE_P_H
 #define QDECLARATIVEAUDIOSAMPLE_P_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include <QtQml/qqml.h>
-#include <QtQml/qqmlcomponent.h>
 
 QT_BEGIN_NAMESPACE
 
 class QSoundBuffer;
+class QDeclarativeAudioEngine;
 
-class QDeclarativeAudioSample : public QObject, public QQmlParserStatus
+class QDeclarativeAudioSample : public QObject
 {
     Q_OBJECT
-    Q_INTERFACES(QQmlParserStatus)
     Q_PROPERTY(QString name READ name WRITE setName)
     Q_PROPERTY(QUrl source READ source WRITE setSource)
     Q_PROPERTY(bool preloaded READ isPreloaded WRITE setPreloaded)
@@ -54,9 +64,6 @@ class QDeclarativeAudioSample : public QObject, public QQmlParserStatus
 public:
     QDeclarativeAudioSample(QObject *parent = 0);
     ~QDeclarativeAudioSample();
-
-    void classBegin();
-    void componentComplete();
 
     QString name() const;
     void setName(const QString& name);
@@ -69,6 +76,9 @@ public:
 
     bool isPreloaded() const;
     void setPreloaded(bool preloaded);
+
+    QDeclarativeAudioEngine *engine() const;
+    void setEngine(QDeclarativeAudioEngine *);
 
     bool isLoaded() const;
 
@@ -85,13 +95,12 @@ public Q_SLOTS:
 
 private:
     Q_DISABLE_COPY(QDeclarativeAudioSample);
-    bool m_complete;
     QString m_name;
     QUrl m_url;
     bool m_streaming;
     bool m_preloaded;
-
     QSoundBuffer *m_soundBuffer;
+    QDeclarativeAudioEngine *m_engine;
 };
 
 QT_END_NAMESPACE

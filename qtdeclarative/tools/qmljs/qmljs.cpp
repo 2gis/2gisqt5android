@@ -44,6 +44,7 @@
 #include "private/qv4mm_p.h"
 #include "private/qv4context_p.h"
 #include "private/qv4script_p.h"
+#include "private/qv4string_p.h"
 
 #ifdef V4_ENABLE_JIT
 #  include "private/qv4isel_masm_p.h"
@@ -72,7 +73,7 @@ struct Print: FunctionObject
     };
     V4_OBJECT(FunctionObject)
 
-    static ReturnedValue call(Managed *, CallData *callData)
+    static ReturnedValue call(const Managed *, CallData *callData)
     {
         for (int i = 0; i < callData->argc; ++i) {
             QString s = callData->args[i].toQStringNoThrow();
@@ -98,9 +99,9 @@ struct GC: public FunctionObject
     };
     V4_OBJECT(FunctionObject)
 
-    static ReturnedValue call(Managed *m, CallData *)
+    static ReturnedValue call(const Managed *m, CallData *)
     {
-        static_cast<GC *>(m)->engine()->memoryManager->runGC();
+        static_cast<const GC *>(m)->engine()->memoryManager->runGC();
         return Encode::undefined();
     }
 };
@@ -113,7 +114,7 @@ static void showException(QV4::ExecutionContext *ctx, const QV4::Value &exceptio
 {
     QV4::Scope scope(ctx);
     QV4::ScopedValue ex(scope, exception);
-    QV4::ErrorObject *e = ex->asErrorObject();
+    QV4::ErrorObject *e = ex->as<QV4::ErrorObject>();
     if (!e) {
         std::cerr << "Uncaught exception: " << qPrintable(ex->toQString()) << std::endl;
     } else {
@@ -125,8 +126,8 @@ static void showException(QV4::ExecutionContext *ctx, const QV4::Value &exceptio
     foreach (const QV4::StackFrame &frame, trace) {
         std::cerr << "    at " << qPrintable(frame.function) << " (" << qPrintable(frame.source);
         if (frame.line >= 0)
-            std::cerr << ":" << frame.line;
-        std::cerr << ")" << std::endl;
+            std::cerr << ':' << frame.line;
+        std::cerr << ')' << std::endl;
     }
 }
 
@@ -187,11 +188,10 @@ int main(int argc, char *argv[])
         QV4::Scope scope(&vm);
         QV4::ScopedContext ctx(scope, vm.rootContext());
 
-        QV4::ScopedObject globalObject(scope, vm.globalObject());
-        QV4::ScopedObject print(scope, vm.memoryManager->alloc<builtins::Print>(ctx));
-        globalObject->put(QV4::ScopedString(scope, vm.newIdentifier(QStringLiteral("print"))).getPointer(), print);
-        QV4::ScopedObject gc(scope, vm.memoryManager->alloc<builtins::GC>(ctx));
-        globalObject->put(QV4::ScopedString(scope, vm.newIdentifier(QStringLiteral("gc"))).getPointer(), gc);
+        QV4::ScopedObject print(scope, vm.memoryManager->allocObject<builtins::Print>(vm.rootContext()));
+        vm.globalObject->put(QV4::ScopedString(scope, vm.newIdentifier(QStringLiteral("print"))).getPointer(), print);
+        QV4::ScopedObject gc(scope, vm.memoryManager->allocObject<builtins::GC>(ctx));
+        vm.globalObject->put(QV4::ScopedString(scope, vm.newIdentifier(QStringLiteral("gc"))).getPointer(), gc);
 
         foreach (const QString &fn, args) {
             QFile file(fn);

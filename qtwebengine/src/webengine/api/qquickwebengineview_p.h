@@ -71,18 +71,24 @@ class QQuickWebEngineTestSupport;
 
 class Q_WEBENGINE_PRIVATE_EXPORT QQuickWebEngineFullScreenRequest {
     Q_GADGET
+    Q_PROPERTY(QUrl origin READ origin)
     Q_PROPERTY(bool toggleOn READ toggleOn)
 public:
     QQuickWebEngineFullScreenRequest();
-    QQuickWebEngineFullScreenRequest(QQuickWebEngineViewPrivate *viewPrivate, bool toggleOn);
+    QQuickWebEngineFullScreenRequest(QQuickWebEngineViewPrivate *viewPrivate, const QUrl &origin, bool toggleOn);
 
     Q_INVOKABLE void accept();
-    bool toggleOn() { return m_toggleOn; }
+    Q_INVOKABLE void reject();
+    QUrl origin() const { return m_origin; }
+    bool toggleOn() const { return m_toggleOn; }
 
 private:
-    QQuickWebEngineViewPrivate *viewPrivate;
-    bool m_toggleOn;
+    QQuickWebEngineViewPrivate *m_viewPrivate;
+    const QUrl m_origin;
+    const bool m_toggleOn;
 };
+
+#define LATEST_WEBENGINEVIEW_REVISION 2
 
 class Q_WEBENGINE_PRIVATE_EXPORT QQuickWebEngineView : public QQuickItem {
     Q_OBJECT
@@ -100,18 +106,13 @@ class Q_WEBENGINE_PRIVATE_EXPORT QQuickWebEngineView : public QQuickItem {
     Q_PROPERTY(QQuickWebEngineHistory *navigationHistory READ navigationHistory CONSTANT FINAL REVISION 1)
     Q_PROPERTY(QQmlWebChannel *webChannel READ webChannel WRITE setWebChannel NOTIFY webChannelChanged REVISION 1)
     Q_PROPERTY(QQmlListProperty<QQuickWebEngineScript> userScripts READ userScripts FINAL REVISION 1)
+    Q_PROPERTY(bool activeFocusOnPress READ activeFocusOnPress WRITE setActiveFocusOnPress NOTIFY activeFocusOnPressChanged REVISION 2)
+    Q_PROPERTY(QColor backgroundColor READ backgroundColor WRITE setBackgroundColor NOTIFY backgroundColorChanged REVISION 2)
 
 #ifdef ENABLE_QML_TESTSUPPORT_API
     Q_PROPERTY(QQuickWebEngineTestSupport *testSupport READ testSupport WRITE setTestSupport FINAL)
 #endif
 
-    Q_ENUMS(NavigationRequestAction);
-    Q_ENUMS(NavigationType);
-    Q_ENUMS(LoadStatus);
-    Q_ENUMS(ErrorDomain);
-    Q_ENUMS(NewViewDestination);
-    Q_ENUMS(Feature);
-    Q_ENUMS(JavaScriptConsoleMessageLevel);
     Q_FLAGS(FindFlags);
 
 public:
@@ -129,6 +130,8 @@ public:
     bool isFullScreen() const;
     qreal zoomFactor() const;
     void setZoomFactor(qreal arg);
+    QColor backgroundColor() const;
+    void setBackgroundColor(const QColor &color);
 
     QQuickWebEngineViewExperimental *experimental() const;
 
@@ -139,6 +142,7 @@ public:
         // we can expose extra actions in experimental.
         IgnoreRequest = 0xFF
     };
+    Q_ENUM(NavigationRequestAction)
 
     // must match WebContentsAdapterClient::NavigationType
     enum NavigationType {
@@ -149,6 +153,7 @@ public:
         ReloadNavigation,
         OtherNavigation
     };
+    Q_ENUM(NavigationType)
 
     enum LoadStatus {
         LoadStartedStatus,
@@ -156,6 +161,7 @@ public:
         LoadSucceededStatus,
         LoadFailedStatus
     };
+    Q_ENUM(LoadStatus)
 
     enum ErrorDomain {
          NoErrorDomain,
@@ -166,6 +172,7 @@ public:
          FtpErrorDomain,
          DnsErrorDomain
     };
+    Q_ENUM(ErrorDomain)
 
     enum NewViewDestination {
         NewViewInWindow,
@@ -173,6 +180,7 @@ public:
         NewViewInDialog,
         NewViewInBackgroundTab
     };
+    Q_ENUM(NewViewDestination)
 
     enum Feature {
         MediaAudioCapture,
@@ -180,6 +188,50 @@ public:
         MediaAudioVideoCapture,
         Geolocation
     };
+    Q_ENUM(Feature)
+
+    enum WebAction {
+        NoWebAction = - 1,
+        Back,
+        Forward,
+        Stop,
+        Reload,
+
+        Cut,
+        Copy,
+        Paste,
+
+        Undo,
+        Redo,
+        SelectAll,
+        ReloadAndBypassCache,
+
+        PasteAndMatchStyle,
+
+        OpenLinkInThisWindow,
+        OpenLinkInNewWindow,
+        OpenLinkInNewTab,
+        CopyLinkToClipboard,
+        DownloadLinkToDisk,
+
+        CopyImageToClipboard,
+        CopyImageUrlToClipboard,
+        DownloadImageToDisk,
+
+        CopyMediaUrlToClipboard,
+        ToggleMediaControls,
+        ToggleMediaLoop,
+        ToggleMediaPlayPause,
+        ToggleMediaMute,
+        DownloadMediaToDisk,
+
+        InspectElement,
+        ExitFullScreen,
+        RequestClose,
+
+        WebActionCount
+    };
+    Q_ENUM(WebAction)
 
     // must match WebContentsAdapterClient::JavaScriptConsoleMessageLevel
     enum JavaScriptConsoleMessageLevel {
@@ -187,6 +239,16 @@ public:
         WarningMessageLevel,
         ErrorMessageLevel
     };
+    Q_ENUM(JavaScriptConsoleMessageLevel)
+
+    // must match WebContentsAdapterClient::RenderProcessTerminationStatus
+    enum RenderProcessTerminationStatus {
+        NormalTerminationStatus = 0,
+        AbnormalTerminationStatus,
+        CrashedTerminationStatus,
+        KilledTerminationStatus
+    };
+    Q_ENUM(RenderProcessTerminationStatus)
 
     enum FindFlag {
         FindBackward = 1,
@@ -211,6 +273,8 @@ public:
     void setTestSupport(QQuickWebEngineTestSupport *testSupport);
 #endif
 
+    bool activeFocusOnPress() const;
+
 public Q_SLOTS:
     void runJavaScript(const QString&, const QJSValue & = QJSValue());
     void loadHtml(const QString &html, const QUrl &baseUrl = QUrl());
@@ -223,6 +287,11 @@ public Q_SLOTS:
     Q_REVISION(1) void findText(const QString &subString, FindFlags options = 0, const QJSValue &callback = QJSValue());
     Q_REVISION(1) void fullScreenCancelled();
     Q_REVISION(1) void grantFeaturePermission(const QUrl &securityOrigin, Feature, bool granted);
+    Q_REVISION(2) void setActiveFocusOnPress(bool arg);
+    Q_REVISION(2) void triggerWebAction(WebAction action);
+
+private Q_SLOTS:
+    void lazyInitialize();
 
 Q_SIGNALS:
     void titleChanged();
@@ -241,7 +310,10 @@ Q_SIGNALS:
     Q_REVISION(1) void zoomFactorChanged(qreal arg);
     Q_REVISION(1) void profileChanged();
     Q_REVISION(1) void webChannelChanged();
-
+    Q_REVISION(2) void activeFocusOnPressChanged(bool);
+    Q_REVISION(2) void backgroundColorChanged();
+    Q_REVISION(2) void renderProcessTerminated(RenderProcessTerminationStatus terminationStatus, int exitCode);
+    Q_REVISION(2) void windowCloseRequested();
 
 protected:
     void geometryChanged(const QRectF &newGeometry, const QRectF &oldGeometry);

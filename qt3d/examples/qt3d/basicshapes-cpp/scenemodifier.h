@@ -40,23 +40,20 @@
 #include <QtCore/QObject>
 
 #include <Qt3DCore/qentity.h>
-#include <Qt3DCore/qscaletransform.h>
-#include <Qt3DCore/qrotatetransform.h>
 #include <Qt3DCore/qtransform.h>
-#include <Qt3DCore/QTranslateTransform>
 
-#include <Qt3DRenderer/QTorusMesh>
-#include <Qt3DRenderer/QCylinderMesh>
-#include <Qt3DRenderer/QCuboidMesh>
-#include <Qt3DRenderer/QSphereMesh>
-#include <Qt3DRenderer/QPhongMaterial>
+#include <Qt3DRender/QTorusMesh>
+#include <Qt3DRender/QCylinderMesh>
+#include <Qt3DRender/QCuboidMesh>
+#include <Qt3DRender/QSphereMesh>
+#include <Qt3DRender/QPhongMaterial>
 
 class SceneModifier : public QObject
 {
     Q_OBJECT
 
 public:
-    explicit SceneModifier(Qt3D::QEntity *rootEntity);
+    explicit SceneModifier(Qt3DCore::QEntity *rootEntity);
     ~SceneModifier();
 
 public slots:
@@ -66,12 +63,12 @@ public slots:
     void enableSphere(bool enabled);
 
 private:
-    Qt3D::QEntity *m_rootEntity;
-    Qt3D::QTorusMesh *m_torus;
-    Qt3D::QEntity *m_cylinderEntity;
-    Qt3D::QEntity *m_torusEntity;
-    Qt3D::QEntity *m_cuboidEntity;
-    Qt3D::QEntity *m_sphereEntity;
+    Qt3DCore::QEntity *m_rootEntity;
+    Qt3DRender::QTorusMesh *m_torus;
+    Qt3DCore::QEntity *m_cylinderEntity;
+    Qt3DCore::QEntity *m_torusEntity;
+    Qt3DCore::QEntity *m_cuboidEntity;
+    Qt3DCore::QEntity *m_sphereEntity;
 };
 
 #endif // SCENEMODIFIER_H

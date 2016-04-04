@@ -52,6 +52,7 @@ public:
 
 Q_SIGNALS:
     void newConnection(QUrl requestUrl);
+    void newConnection(QNetworkRequest request);
 
 private Q_SLOTS:
     void onNewConnection();
@@ -87,6 +88,7 @@ void EchoServer::onNewConnection()
     QWebSocket *pSocket = m_pWebSocketServer->nextPendingConnection();
 
     Q_EMIT newConnection(pSocket->requestUrl());
+    Q_EMIT newConnection(pSocket->request());
 
     connect(pSocket, SIGNAL(textMessageReceived(QString)), this, SLOT(processTextMessage(QString)));
     connect(pSocket, SIGNAL(binaryMessageReceived(QByteArray)), this, SLOT(processBinaryMessage(QByteArray)));
@@ -140,6 +142,7 @@ private Q_SLOTS:
     void tst_sendTextMessage();
     void tst_sendBinaryMessage();
     void tst_errorString();
+    void tst_openRequest();
     void tst_moveToThread();
     void tst_moveToThreadNoWarning();
 #ifndef QT_NO_NETWORKPROXY
@@ -427,11 +430,9 @@ void tst_QWebSocket::tst_sendTextMessage()
 
     socket.open(url);
 
-    if (socketConnectedSpy.count() == 0)
-        QVERIFY(socketConnectedSpy.wait(500));
+    QTRY_COMPARE(socketConnectedSpy.count(), 1);
     QCOMPARE(socketError.count(), 0);
     QCOMPARE(socket.state(), QAbstractSocket::ConnectedState);
-    QCOMPARE(serverConnectedSpy.count(), 1);
     QList<QVariant> arguments = serverConnectedSpy.takeFirst();
     QUrl urlConnected = arguments.at(0).toUrl();
     QCOMPARE(urlConnected, url);
@@ -463,8 +464,7 @@ void tst_QWebSocket::tst_sendTextMessage()
     socket.open(QUrl(QStringLiteral("ws://") + echoServer.hostAddress().toString() +
                      QStringLiteral(":") + QString::number(echoServer.port())));
 
-    if (socketConnectedSpy.count() == 0)
-        QVERIFY(socketConnectedSpy.wait(500));
+    QTRY_COMPARE(socketConnectedSpy.count(), 1);
     QCOMPARE(socket.state(), QAbstractSocket::ConnectedState);
 
     socket.sendTextMessage(QStringLiteral("Hello world!"));
@@ -508,8 +508,7 @@ void tst_QWebSocket::tst_sendBinaryMessage()
     socket.open(QUrl(QStringLiteral("ws://") + echoServer.hostAddress().toString() +
                      QStringLiteral(":") + QString::number(echoServer.port())));
 
-    if (socketConnectedSpy.count() == 0)
-        QVERIFY(socketConnectedSpy.wait(500));
+    QTRY_COMPARE(socketConnectedSpy.count(), 1);
     QCOMPARE(socket.state(), QAbstractSocket::ConnectedState);
 
     socket.sendBinaryMessage(QByteArrayLiteral("Hello world!"));
@@ -539,8 +538,7 @@ void tst_QWebSocket::tst_sendBinaryMessage()
     socket.open(QUrl(QStringLiteral("ws://") + echoServer.hostAddress().toString() +
                      QStringLiteral(":") + QString::number(echoServer.port())));
 
-    if (socketConnectedSpy.count() == 0)
-        QVERIFY(socketConnectedSpy.wait(500));
+    QTRY_COMPARE(socketConnectedSpy.count(), 1);
     QCOMPARE(socket.state(), QAbstractSocket::ConnectedState);
 
     socket.sendBinaryMessage(QByteArrayLiteral("Hello world!"));
@@ -573,14 +571,38 @@ void tst_QWebSocket::tst_errorString()
 
     socket.open(QUrl(QStringLiteral("ws://someserver.on.mars:9999")));
 
-    if (errorSpy.count() == 0)
-        errorSpy.wait(500);
-    QCOMPARE(errorSpy.count(), 1);
+    QTRY_COMPARE(errorSpy.count(), 1);
     QList<QVariant> arguments = errorSpy.takeFirst();
     QAbstractSocket::SocketError socketError =
             qvariant_cast<QAbstractSocket::SocketError>(arguments.at(0));
     QCOMPARE(socketError, QAbstractSocket::HostNotFoundError);
     QCOMPARE(socket.errorString(), QStringLiteral("Host not found"));
+}
+
+void tst_QWebSocket::tst_openRequest()
+{
+    EchoServer echoServer;
+
+    QWebSocket socket;
+
+    QSignalSpy socketConnectedSpy(&socket, SIGNAL(connected()));
+    QSignalSpy serverRequestSpy(&echoServer, SIGNAL(newConnection(QNetworkRequest)));
+
+    QUrl url = QUrl(QStringLiteral("ws://") + echoServer.hostAddress().toString() +
+                    QLatin1Char(':') + QString::number(echoServer.port()));
+    url.addQueryItem("queryitem", "with encoded characters");
+    QNetworkRequest req(url);
+    req.setRawHeader("X-Custom-Header", "A custom header");
+    socket.open(req);
+
+    QTRY_COMPARE(socketConnectedSpy.count(), 1);
+    QTRY_COMPARE(serverRequestSpy.count(), 1);
+    QCOMPARE(socket.state(), QAbstractSocket::ConnectedState);
+    QList<QVariant> arguments = serverRequestSpy.takeFirst();
+    QNetworkRequest requestConnected = arguments.at(0).value<QNetworkRequest>();
+    QCOMPARE(requestConnected.url(), req.url());
+    QCOMPARE(requestConnected.rawHeader("X-Custom-Header"), req.rawHeader("X-Custom-Header"));
+    socket.close();
 }
 
 class WebSocket : public QWebSocket
@@ -668,7 +690,7 @@ void tst_QWebSocket::tst_moveToThread()
 
     socket->asyncClose();
 
-    QCOMPARE(timer.isActive(), false);
+    QTRY_COMPARE_WITH_TIMEOUT(loop.isRunning(), false, 200);
     QCOMPARE(socket->receivedMessage, textMessage);
 
     socket->deleteLater();

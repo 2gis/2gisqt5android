@@ -33,6 +33,7 @@
 #include "qv4arraybuffer_p.h"
 #include "qv4typedarray_p.h"
 #include "qv4dataview_p.h"
+#include "qv4string_p.h"
 
 using namespace QV4;
 
@@ -44,9 +45,9 @@ Heap::ArrayBufferCtor::ArrayBufferCtor(QV4::ExecutionContext *scope)
 {
 }
 
-ReturnedValue ArrayBufferCtor::construct(Managed *m, CallData *callData)
+ReturnedValue ArrayBufferCtor::construct(const Managed *m, CallData *callData)
 {
-    ExecutionEngine *v4 = static_cast<Object *>(m)->engine();
+    ExecutionEngine *v4 = static_cast<const Object *>(m)->engine();
 
     Scope scope(v4);
     ScopedValue l(scope, callData->argument(0));
@@ -57,14 +58,14 @@ ReturnedValue ArrayBufferCtor::construct(Managed *m, CallData *callData)
     if (len != dl)
         return v4->throwRangeError(QLatin1String("ArrayBuffer constructor: invalid length"));
 
-    Scoped<ArrayBuffer> a(scope, v4->memoryManager->alloc<ArrayBuffer>(v4, len));
+    Scoped<ArrayBuffer> a(scope, v4->newArrayBuffer(len));
     if (scope.engine->hasException)
         return Encode::undefined();
     return a.asReturnedValue();
 }
 
 
-ReturnedValue ArrayBufferCtor::call(Managed *that, CallData *callData)
+ReturnedValue ArrayBufferCtor::call(const Managed *that, CallData *callData)
 {
     return construct(that, callData);
 }
@@ -82,22 +83,20 @@ ReturnedValue ArrayBufferCtor::method_isView(CallContext *ctx)
 }
 
 
-Heap::ArrayBuffer::ArrayBuffer(ExecutionEngine *e, size_t length)
-    : Heap::Object(e->emptyClass, e->arrayBufferPrototype.asObject())
+Heap::ArrayBuffer::ArrayBuffer(size_t length)
 {
     data = QTypedArrayData<char>::allocate(length + 1);
     if (!data) {
         data = 0;
-        e->throwRangeError(QStringLiteral("ArrayBuffer: out of memory"));
+        internalClass->engine->throwRangeError(QStringLiteral("ArrayBuffer: out of memory"));
         return;
     }
     data->size = int(length);
     memset(data->data(), 0, length + 1);
 }
 
-Heap::ArrayBuffer::ArrayBuffer(ExecutionEngine *e, const QByteArray& array)
-    : Heap::Object(e->emptyClass, e->arrayBufferPrototype.asObject())
-    , data(const_cast<QByteArray&>(array).data_ptr())
+Heap::ArrayBuffer::ArrayBuffer(const QByteArray& array)
+    : data(const_cast<QByteArray&>(array).data_ptr())
 {
     data->ref.ref();
 }
@@ -138,10 +137,10 @@ void ArrayBufferPrototype::init(ExecutionEngine *engine, Object *ctor)
 {
     Scope scope(engine);
     ScopedObject o(scope);
-    ctor->defineReadonlyProperty(engine->id_length, Primitive::fromInt32(1));
-    ctor->defineReadonlyProperty(engine->id_prototype, (o = this));
+    ctor->defineReadonlyProperty(engine->id_length(), Primitive::fromInt32(1));
+    ctor->defineReadonlyProperty(engine->id_prototype(), (o = this));
     ctor->defineDefaultProperty(QStringLiteral("isView"), ArrayBufferCtor::method_isView, 1);
-    defineDefaultProperty(engine->id_constructor, (o = ctor));
+    defineDefaultProperty(engine->id_constructor(), (o = ctor));
     defineAccessorProperty(QStringLiteral("byteLength"), method_get_byteLength, 0);
     defineDefaultProperty(QStringLiteral("slice"), method_slice, 2);
 }
@@ -172,7 +171,7 @@ ReturnedValue ArrayBufferPrototype::method_slice(CallContext *ctx)
     double first = (start < 0) ? qMax(a->d()->data->size + start, 0.) : qMin(start, (double)a->d()->data->size);
     double final = (end < 0) ? qMax(a->d()->data->size + end, 0.) : qMin(end, (double)a->d()->data->size);
 
-    ScopedFunctionObject constructor(scope, a->get(scope.engine->id_constructor));
+    ScopedFunctionObject constructor(scope, a->get(scope.engine->id_constructor()));
     if (!constructor)
         return scope.engine->throwTypeError();
 

@@ -39,7 +39,7 @@
 #ifndef GL_SURFACE_QT_H_
 #define GL_SURFACE_QT_H_
 
-#include "ui/gfx/size.h"
+#include "ui/gfx/geometry/size.h"
 #include "ui/gl/gl_surface.h"
 
 #include <QtCore/qcompilerdetection.h> // Needed for Q_DECL_OVERRIDE
@@ -56,7 +56,7 @@ public:
     virtual void* GetDisplay() Q_DECL_OVERRIDE;
     virtual void* GetConfig() Q_DECL_OVERRIDE;
     virtual bool IsOffscreen() Q_DECL_OVERRIDE;
-    virtual bool SwapBuffers() Q_DECL_OVERRIDE;
+    virtual gfx::SwapResult SwapBuffers() Q_DECL_OVERRIDE;
     virtual gfx::Size GetSize() Q_DECL_OVERRIDE;
 
 protected:

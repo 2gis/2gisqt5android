@@ -36,25 +36,38 @@
 
 #include "canvasrendernode_p.h"
 #include "canvas3d_p.h"
+#include "glcommandqueue_p.h"
+
 #include <QtGui/QOpenGLContext>
+#include <QtGui/QOpenGLFunctions>
 #include <QtGui/QOpenGLFramebufferObject>
 
 QT_BEGIN_NAMESPACE
 QT_CANVAS3D_BEGIN_NAMESPACE
 
-CanvasRenderNode::CanvasRenderNode(Canvas *canvas, QQuickWindow *window) :
+CanvasRenderNode::CanvasRenderNode(QQuickWindow *window) :
     QObject(),
     QSGSimpleTextureNode(),
-    m_canvas(canvas),
-    m_id(0),
-    m_size(0,0),
+    m_defaultTexture(0),
     m_texture(0),
-    m_window(window)
+    m_window(window),
+    m_textureOptions(QQuickWindow::TextureHasAlphaChannel)
 {
     qCDebug(canvas3drendering).nospace() << "CanvasRenderNode::" << __FUNCTION__;
 
-    // Our texture node must have a texture, so use the default 0 texture.
-    m_texture = m_window->createTextureFromId(0, QSize(1, 1));
+    // Our texture node must have a texture, so use a default fully transparent one pixel
+    // texture. This way we don't get a black screen for a moment at startup, but instead show
+    // whatever is behind the canvas.
+    QOpenGLFunctions *funcs = QOpenGLContext::currentContext()->functions();
+    funcs->glGenTextures(1, &m_defaultTexture);
+    funcs->glBindTexture(GL_TEXTURE_2D, m_defaultTexture);
+    uchar buf[4] = { 0, 0, 0, 0 };
+    funcs->glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 1, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE, &buf);
+
+    QQuickWindow::CreateTextureOptions defaultTextureOptions = QQuickWindow::CreateTextureOptions(
+            QQuickWindow::TextureHasAlphaChannel | QQuickWindow::TextureOwnsGLTexture);
+    m_texture = m_window->createTextureFromId(m_defaultTexture, QSize(1, 1), defaultTextureOptions);
+
     setTexture(m_texture);
     setFiltering(QSGTexture::Linear);
     setTextureCoordinatesTransform(QSGSimpleTextureNode::MirrorVertically);
@@ -65,46 +78,32 @@ CanvasRenderNode::~CanvasRenderNode()
     delete m_texture;
 }
 
+void CanvasRenderNode::setAlpha(bool alpha)
+{
+     m_textureOptions = alpha
+             ? QQuickWindow::TextureHasAlphaChannel
+             : QQuickWindow::CreateTextureOption(0);
+}
+
+// Called in render thread as a response to CanvasRenderer::textureReady signal.
 void CanvasRenderNode::newTexture(int id, const QSize &size)
 {
     qCDebug(canvas3drendering).nospace() << "CanvasRenderNode::" << __FUNCTION__
                                          << "(" << id << ", " << size << ")";
-    m_mutex.lock();
-    m_id = id;
-    m_size = size;
-    m_mutex.unlock();
-
-    // We cannot call QQuickWindow::update directly here, as this is only allowed
-    // from the rendering thread or GUI thread.
-    emit pendingNewTexture();
-}
-
-// Before the scene graph starts to render, we update to the pending texture
-void CanvasRenderNode::prepareNode()
-{
-    qCDebug(canvas3drendering).nospace() << "CanvasRenderNode::" << __FUNCTION__;
-    m_mutex.lock();
-    int newId = m_id;
-    QSize size = m_size;
-    m_id = 0;
-    m_mutex.unlock();
-
-    if (newId) {
+    if (id) {
         qCDebug(canvas3drendering).nospace() << "CanvasRenderNode::" << __FUNCTION__
-                                             << " showing new texture:" << newId
+                                             << " showing new texture:" << id
                                              << " size:" << size
                                              << " targetRect:" << rect();
+
         delete m_texture;
-        m_texture = m_window->createTextureFromId(newId, size);
+        m_texture = m_window->createTextureFromId(id, size, m_textureOptions);
         setTexture(m_texture);
+
         qCDebug(canvas3drendering).nospace() << "CanvasRenderNode::" << __FUNCTION__
                                              << " SGTexture size:" << m_texture->textureSize()
                                              << " normalizedTextureSubRect:"
                                              << m_texture->normalizedTextureSubRect();
-
-        // This will notify the main thread that the texture is now being rendered
-        // and it can start rendering to the other one.
-        emit textureInUse();
     } else {
         qCDebug(canvas3drendering).nospace() << "CanvasRenderNode::" << __FUNCTION__
                                              << " showing previous texture";

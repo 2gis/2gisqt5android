@@ -41,7 +41,6 @@
 #include <QtQuick/private/qsgdefaultglyphnode_p.h>
 #include <QtQuick/private/qsgdistancefieldglyphnode_p.h>
 #include <QtQuick/private/qsgdistancefieldglyphnode_p_p.h>
-#include <QtQuick/private/qsgshareddistancefieldglyphcache_p.h>
 #include <QtQuick/private/qsgatlastexture_p.h>
 #include <QtQuick/private/qsgrenderloop_p.h>
 #include <QtQuick/private/qsgdefaultlayer_p.h>
@@ -60,14 +59,9 @@
 #include <QtQuick/private/qsgtexture_p.h>
 #include <QtGui/private/qguiapplication_p.h>
 #include <QtCore/private/qabstractanimation_p.h>
-#include <qpa/qplatformintegration.h>
-
-#include <qpa/qplatformsharedgraphicscache.h>
 
 #include <private/qobject_p.h>
 #include <qmutex.h>
-
-#include <private/qqmlprofilerservice_p.h>
 
 DEFINE_BOOL_CONFIG_OPTION(qmlDisableDistanceField, QML_DISABLE_DISTANCEFIELD)
 
@@ -140,8 +134,8 @@ static bool qsg_useConsistentTiming()
 {
     static int use = -1;
     if (use < 0) {
-        QByteArray fixed = qgetenv("QSG_FIXED_ANIMATION_STEP");
-        use = !(fixed.isEmpty() || fixed == "no");
+        use = !qEnvironmentVariableIsEmpty("QSG_FIXED_ANIMATION_STEP") && qgetenv("QSG_FIXED_ANIMATION_STEP") != "no"
+            ? 1 : 0;
         qCDebug(QSG_LOG_INFO, "Using %s", bool(use) ? "fixed animation steps" : "sg animation driver");
     }
     return bool(use);
@@ -303,15 +297,16 @@ QSGContext::QSGContext(QObject *parent) :
     QObject(*(new QSGContextPrivate), parent)
 {
     Q_D(QSGContext);
-    QByteArray mode = qgetenv("QSG_DISTANCEFIELD_ANTIALIASING");
-    if (!mode.isEmpty())
+    if (Q_UNLIKELY(!qEnvironmentVariableIsEmpty("QSG_DISTANCEFIELD_ANTIALIASING"))) {
+        const QByteArray mode = qgetenv("QSG_DISTANCEFIELD_ANTIALIASING");
         d->distanceFieldAntialiasingDecided = true;
-    if (mode == "subpixel")
-        d->distanceFieldAntialiasing = QSGGlyphNode::HighQualitySubPixelAntialiasing;
-    else if (mode == "subpixel-lowq")
-        d->distanceFieldAntialiasing = QSGGlyphNode::LowQualitySubPixelAntialiasing;
-    else if (mode == "gray")
-        d->distanceFieldAntialiasing = QSGGlyphNode::GrayAntialiasing;
+        if (mode == "subpixel")
+            d->distanceFieldAntialiasing = QSGGlyphNode::HighQualitySubPixelAntialiasing;
+        else if (mode == "subpixel-lowq")
+            d->distanceFieldAntialiasing = QSGGlyphNode::LowQualitySubPixelAntialiasing;
+        else if (mode == "gray")
+            d->distanceFieldAntialiasing = QSGGlyphNode::GrayAntialiasing;
+    }
 
     // Adds compatibility with Qt 5.3 and earlier's QSG_RENDER_TIMING
     if (qEnvironmentVariableIsSet("QSG_RENDER_TIMING")) {
@@ -339,12 +334,14 @@ void QSGContext::renderContextInitialized(QSGRenderContext *renderContext)
 
     d->mutex.lock();
     if (d->antialiasingMethod == UndecidedAntialiasing) {
-        QByteArray aaType = qgetenv("QSG_ANTIALIASING_METHOD");
-        if (aaType == "msaa") {
-            d->antialiasingMethod = MsaaAntialiasing;
-        } else if (aaType == "vertex") {
-            d->antialiasingMethod = VertexAntialiasing;
-        } else {
+        if (Q_UNLIKELY(qEnvironmentVariableIsSet("QSG_ANTIALIASING_METHOD"))) {
+            const QByteArray aaType = qgetenv("QSG_ANTIALIASING_METHOD");
+            if (aaType == "msaa")
+                d->antialiasingMethod = MsaaAntialiasing;
+            else if (aaType == "vertex")
+                d->antialiasingMethod = VertexAntialiasing;
+        }
+        if (d->antialiasingMethod == UndecidedAntialiasing) {
             if (renderContext->openglContext()->format().samples() > 0)
                 d->antialiasingMethod = MsaaAntialiasing;
             else
@@ -572,35 +569,7 @@ QSGDistanceFieldGlyphCache *QSGRenderContext::distanceFieldGlyphCache(const QRaw
 
     QSGDistanceFieldGlyphCache *cache = m_distanceFieldCacheManager->cache(font);
     if (!cache) {
-        QPlatformIntegration *platformIntegration = QGuiApplicationPrivate::platformIntegration();
-        if (platformIntegration != 0
-            && platformIntegration->hasCapability(QPlatformIntegration::SharedGraphicsCache)) {
-            QFontEngine *fe = QRawFontPrivate::get(font)->fontEngine;
-            if (!fe->faceId().filename.isEmpty()) {
-                QByteArray keyName = fe->faceId().filename;
-                if (font.style() != QFont::StyleNormal)
-                    keyName += QByteArray(" I");
-                if (font.weight() != QFont::Normal)
-                    keyName += ' ' + QByteArray::number(font.weight());
-                keyName += QByteArray(" DF");
-                QPlatformSharedGraphicsCache *sharedGraphicsCache =
-                        platformIntegration->createPlatformSharedGraphicsCache(keyName);
-
-                if (sharedGraphicsCache != 0) {
-                    sharedGraphicsCache->ensureCacheInitialized(keyName,
-                                                                QPlatformSharedGraphicsCache::OpenGLTexture,
-                                                                QPlatformSharedGraphicsCache::Alpha8);
-
-                    cache = new QSGSharedDistanceFieldGlyphCache(keyName,
-                                                                 sharedGraphicsCache,
-                                                                 m_distanceFieldCacheManager,
-                                                                 openglContext(),
-                                                                 font);
-                }
-            }
-        }
-        if (!cache)
-            cache = new QSGDefaultDistanceFieldGlyphCache(m_distanceFieldCacheManager, openglContext(), font);
+        cache = new QSGDefaultDistanceFieldGlyphCache(m_distanceFieldCacheManager, openglContext(), font);
         m_distanceFieldCacheManager->insertCache(font, cache);
     }
 
@@ -676,7 +645,7 @@ void QSGRenderContext::invalidate()
     qDeleteAll(m_texturesToDelete);
     m_texturesToDelete.clear();
 
-    qDeleteAll(m_textures.values());
+    qDeleteAll(m_textures);
     m_textures.clear();
 
     /* The cleanup of the atlas textures is a bit intriguing.
@@ -767,22 +736,26 @@ QSGDepthStencilBufferManager *QSGRenderContext::depthStencilBufferManager()
     will be called with \a image as argument.
  */
 
-QSGTexture *QSGRenderContext::createTexture(const QImage &image) const
+QSGTexture *QSGRenderContext::createTexture(const QImage &image, uint flags) const
 {
-    if (!openglContext())
-        return 0;
-    QSGTexture *t = m_atlasManager->create(image);
-    if (t)
-        return t;
-    return createTextureNoAtlas(image);
-}
+    bool atlas = flags & CreateTexture_Atlas;
+    bool mipmap = flags & CreateTexture_Mipmap;
+    bool alpha = flags & CreateTexture_Alpha;
 
-QSGTexture *QSGRenderContext::createTextureNoAtlas(const QImage &image) const
-{
-    QSGPlainTexture *t = new QSGPlainTexture();
-    if (!image.isNull())
-        t->setImage(image);
-    return t;
+    // The atlas implementation is only supported from the render thread and
+    // does not support mipmaps.
+    if (!mipmap && atlas && openglContext() && QThread::currentThread() == openglContext()->thread()) {
+        QSGTexture *t = m_atlasManager->create(image, alpha);
+        if (t)
+            return t;
+    }
+
+    QSGPlainTexture *texture = new QSGPlainTexture();
+    texture->setImage(image);
+    if (texture->hasAlphaChannel() && !alpha)
+        texture->setHasAlphaChannel(false);
+
+    return texture;
 }
 
 /*!

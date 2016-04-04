@@ -39,12 +39,10 @@
 
 #include <Qt3DCore/QEntity>
 #include <Qt3DCore/QTransform>
-#include <Qt3DCore/QTranslateTransform>
-#include <Qt3DCore/QScaleTransform>
-#include <Qt3DRenderer/QCuboidMesh>
-#include <Qt3DRenderer/QPhongMaterial>
+#include <Qt3DRender/QCuboidMesh>
+#include <Qt3DRender/QPhongMaterial>
 
-class BoxEntity : public Qt3D::QEntity
+class BoxEntity : public Qt3DCore::QEntity
 {
     Q_OBJECT
 
@@ -65,18 +63,16 @@ public Q_SLOTS:
     void setRadius(float arg);
 
 Q_SIGNALS:
-    void diffuseColorChanged();
+    void diffuseColorChanged(const QColor &);
     void angleChanged();
     void radiusChanged();
 
 private:
     void updateTransformation();
 
-    Qt3D::QTransform *m_transform;
-    Qt3D::QTranslateTransform *m_translate;
-    Qt3D::QScaleTransform *m_scale;
-    Qt3D::QCuboidMesh *m_mesh;
-    Qt3D::QPhongMaterial *m_material;
+    Qt3DCore::QTransform *m_transform;
+    Qt3DRender::QCuboidMesh *m_mesh;
+    Qt3DRender::QPhongMaterial *m_material;
     float m_angle;
     float m_radius;
 };

@@ -50,7 +50,7 @@
 
 #include <QtQml/qqmllist.h>
 
-#include <private/qv4value_inl_p.h>
+#include <private/qv4value_p.h>
 #include <private/qv4object_p.h>
 
 QT_BEGIN_NAMESPACE
@@ -62,7 +62,7 @@ namespace QV4 {
 namespace Heap {
 
 struct QmlListWrapper : Object {
-    QmlListWrapper(ExecutionEngine *engine);
+    QmlListWrapper();
     ~QmlListWrapper();
     QPointer<QObject> object;
     QQmlListProperty<QObject> property;
@@ -81,10 +81,10 @@ struct Q_QML_EXPORT QmlListWrapper : Object
 
     QVariant toVariant() const;
 
-    static ReturnedValue get(Managed *m, String *name, bool *hasProperty);
-    static ReturnedValue getIndexed(Managed *m, uint index, bool *hasProperty);
+    static ReturnedValue get(const Managed *m, String *name, bool *hasProperty);
+    static ReturnedValue getIndexed(const Managed *m, uint index, bool *hasProperty);
     static void put(Managed *m, String *name, const Value &value);
-    static void advanceIterator(Managed *m, ObjectIterator *it, Heap::String **name, uint *index, Property *p, PropertyAttributes *attributes);
+    static void advanceIterator(Managed *m, ObjectIterator *it, Value *name, uint *index, Property *p, PropertyAttributes *attributes);
 };
 
 }

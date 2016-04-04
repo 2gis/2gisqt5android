@@ -33,6 +33,7 @@
 
 #include "qv4dataview_p.h"
 #include "qv4arraybuffer_p.h"
+#include "qv4string_p.h"
 
 #include "qendian.h"
 
@@ -46,9 +47,9 @@ Heap::DataViewCtor::DataViewCtor(QV4::ExecutionContext *scope)
 {
 }
 
-ReturnedValue DataViewCtor::construct(Managed *m, CallData *callData)
+ReturnedValue DataViewCtor::construct(const Managed *m, CallData *callData)
 {
-    Scope scope(static_cast<Object *>(m)->engine());
+    Scope scope(static_cast<const Object *>(m)->engine());
     Scoped<ArrayBuffer> buffer(scope, callData->argument(0));
     if (!buffer)
         return scope.engine->throwTypeError();
@@ -61,7 +62,7 @@ ReturnedValue DataViewCtor::construct(Managed *m, CallData *callData)
     if (bo != byteOffset || bl != byteLength || byteOffset + byteLength > bufferLength)
         return scope.engine->throwRangeError(QStringLiteral("DataView: constructor arguments out of range"));
 
-    Scoped<DataView> a(scope, scope.engine->memoryManager->alloc<DataView>(scope.engine));
+    Scoped<DataView> a(scope, scope.engine->memoryManager->allocObject<DataView>());
     a->d()->buffer = buffer->d();
     a->d()->byteLength = byteLength;
     a->d()->byteOffset = byteOffset;
@@ -69,18 +70,9 @@ ReturnedValue DataViewCtor::construct(Managed *m, CallData *callData)
 
 }
 
-ReturnedValue DataViewCtor::call(Managed *that, CallData *callData)
+ReturnedValue DataViewCtor::call(const Managed *that, CallData *callData)
 {
     return construct(that, callData);
-}
-
-
-Heap::DataView::DataView(ExecutionEngine *e)
-    : Heap::Object(e->emptyClass, e->dataViewPrototype.asObject()),
-      buffer(0),
-      byteLength(0),
-      byteOffset(0)
-{
 }
 
 
@@ -94,30 +86,38 @@ void DataViewPrototype::init(ExecutionEngine *engine, Object *ctor)
 {
     Scope scope(engine);
     ScopedObject o(scope);
-    ctor->defineReadonlyProperty(engine->id_length, Primitive::fromInt32(3));
-    ctor->defineReadonlyProperty(engine->id_prototype, (o = this));
-    defineDefaultProperty(engine->id_constructor, (o = ctor));
+    ctor->defineReadonlyProperty(engine->id_length(), Primitive::fromInt32(3));
+    ctor->defineReadonlyProperty(engine->id_prototype(), (o = this));
+    defineDefaultProperty(engine->id_constructor(), (o = ctor));
     defineAccessorProperty(QStringLiteral("buffer"), method_get_buffer, 0);
     defineAccessorProperty(QStringLiteral("byteLength"), method_get_byteLength, 0);
     defineAccessorProperty(QStringLiteral("byteOffset"), method_get_byteOffset, 0);
 
     defineDefaultProperty(QStringLiteral("getInt8"), method_getChar<signed char>, 0);
-    defineDefaultProperty(QStringLiteral("getUInt8"), method_getChar<unsigned char>, 0);
+    defineDefaultProperty(QStringLiteral("getUint8"), method_getChar<unsigned char>, 0);
     defineDefaultProperty(QStringLiteral("getInt16"), method_get<short>, 0);
-    defineDefaultProperty(QStringLiteral("getUInt16"), method_get<unsigned short>, 0);
+    defineDefaultProperty(QStringLiteral("getUint16"), method_get<unsigned short>, 0);
     defineDefaultProperty(QStringLiteral("getInt32"), method_get<int>, 0);
-    defineDefaultProperty(QStringLiteral("getUInt32"), method_get<unsigned int>, 0);
+    defineDefaultProperty(QStringLiteral("getUint32"), method_get<unsigned int>, 0);
     defineDefaultProperty(QStringLiteral("getFloat32"), method_getFloat<float>, 0);
     defineDefaultProperty(QStringLiteral("getFloat64"), method_getFloat<double>, 0);
 
     defineDefaultProperty(QStringLiteral("setInt8"), method_setChar<signed char>, 0);
-    defineDefaultProperty(QStringLiteral("setUInt8"), method_setChar<unsigned char>, 0);
+    defineDefaultProperty(QStringLiteral("setUint8"), method_setChar<unsigned char>, 0);
     defineDefaultProperty(QStringLiteral("setInt16"), method_set<short>, 0);
-    defineDefaultProperty(QStringLiteral("setUInt16"), method_set<unsigned short>, 0);
+    defineDefaultProperty(QStringLiteral("setUint16"), method_set<unsigned short>, 0);
     defineDefaultProperty(QStringLiteral("setInt32"), method_set<int>, 0);
-    defineDefaultProperty(QStringLiteral("setUInt32"), method_set<unsigned int>, 0);
+    defineDefaultProperty(QStringLiteral("setUint32"), method_set<unsigned int>, 0);
     defineDefaultProperty(QStringLiteral("setFloat32"), method_setFloat<float>, 0);
     defineDefaultProperty(QStringLiteral("setFloat64"), method_setFloat<double>, 0);
+
+    // For backword compatibility
+    defineDefaultProperty(QStringLiteral("getUInt8"), method_getChar<unsigned char>, 0);
+    defineDefaultProperty(QStringLiteral("getUInt16"), method_get<unsigned short>, 0);
+    defineDefaultProperty(QStringLiteral("getUInt32"), method_get<unsigned int>, 0);
+    defineDefaultProperty(QStringLiteral("setUInt8"), method_setChar<unsigned char>, 0);
+    defineDefaultProperty(QStringLiteral("setUInt16"), method_set<unsigned short>, 0);
+    defineDefaultProperty(QStringLiteral("setUInt32"), method_set<unsigned int>, 0);
 }
 
 ReturnedValue DataViewPrototype::method_get_buffer(CallContext *ctx)

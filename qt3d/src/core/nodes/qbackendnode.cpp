@@ -36,18 +36,14 @@
 
 #include "qbackendnode.h"
 #include "qbackendnode_p.h"
-#include "qbackendnodefactory.h"
+#include "qbackendnodefactory_p.h"
 #include "qaspectengine.h"
 #include "qnode.h"
 
 QT_BEGIN_NAMESPACE
 
-namespace Qt3D {
+namespace Qt3DCore {
 
-/*!
-    \class Qt3D::QBackendNodePrivate
-    \internal
-*/
 QBackendNodePrivate::QBackendNodePrivate(QBackendNode::Mode mode)
     : q_ptr(Q_NULLPTR)
     , m_mode(mode)

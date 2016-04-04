@@ -88,7 +88,7 @@ void EnginioPlugin::initializeEngine(QQmlEngine *engine, const char *uri)
   \instantiates EnginioOAuth2Authentication
   \inqmlmodule Enginio
   \ingroup engino-qml
-  \target EnginioOAuth2AuthenticationQml
+  \keyword EnginioOAuth2AuthenticationQml
   \brief Represents a user that is authenticated directly by the backend using OAuth2 standard.
 
   This component can authenticate a user by verifying the user's login and password.

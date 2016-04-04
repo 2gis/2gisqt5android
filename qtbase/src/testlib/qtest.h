@@ -51,6 +51,9 @@
 #include <QtCore/qsize.h>
 #include <QtCore/qrect.h>
 
+#ifdef QT_NETWORK_LIB
+#  include <QtNetwork/qhostaddress.h>
+#endif
 
 QT_BEGIN_NAMESPACE
 
@@ -162,6 +165,23 @@ template<> inline char *toString(const QVariant &v)
     return qstrdup(vstring.constData());
 }
 
+#ifdef QT_NETWORK_LIB
+template<> inline char *toString(const QHostAddress &addr)
+{
+    switch (addr.protocol()) {
+    case QAbstractSocket::UnknownNetworkLayerProtocol:
+        return qstrdup("<unknown address (parse error)>");
+    case QAbstractSocket::AnyIPProtocol:
+        return qstrdup("QHostAddress::Any");
+    case QAbstractSocket::IPv4Protocol:
+    case QAbstractSocket::IPv6Protocol:
+        break;
+    }
+
+    return qstrdup(addr.toString().toLatin1().constData());
+}
+#endif
+
 template<>
 inline bool qCompare(QString const &t1, QLatin1String const &t2, const char *actual,
                     const char *expected, const char *file, int line)
@@ -205,7 +225,7 @@ inline bool qCompare(QList<T> const &t1, QList<T> const &t2, const char *actual,
             delete [] val2;
         }
     }
-    return compare_helper(isOk, msg, 0, 0, actual, expected, file, line);
+    return compare_helper(isOk, msg, Q_NULLPTR, Q_NULLPTR, actual, expected, file, line);
 }
 
 template <>

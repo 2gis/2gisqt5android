@@ -48,12 +48,8 @@ using namespace QV4;
 
 DEFINE_OBJECT_VTABLE(QmlTypeWrapper);
 
-Heap::QmlTypeWrapper::QmlTypeWrapper(ExecutionEngine *engine)
-    : Heap::Object(engine)
-    , mode(IncludeEnums)
-    , type(Q_NULLPTR)
-    , typeNamespace(Q_NULLPTR)
-    , importNamespace(Q_NULLPTR)
+Heap::QmlTypeWrapper::QmlTypeWrapper()
+    : mode(IncludeEnums)
 {
 }
 
@@ -103,7 +99,7 @@ ReturnedValue QmlTypeWrapper::create(QV4::ExecutionEngine *engine, QObject *o, Q
     Q_ASSERT(t);
     Scope scope(engine);
 
-    Scoped<QmlTypeWrapper> w(scope, engine->memoryManager->alloc<QmlTypeWrapper>(engine));
+    Scoped<QmlTypeWrapper> w(scope, engine->memoryManager->allocObject<QmlTypeWrapper>());
     w->d()->mode = mode; w->d()->object = o; w->d()->type = t;
     return w.asReturnedValue();
 }
@@ -117,26 +113,26 @@ ReturnedValue QmlTypeWrapper::create(QV4::ExecutionEngine *engine, QObject *o, Q
     Q_ASSERT(importNamespace);
     Scope scope(engine);
 
-    Scoped<QmlTypeWrapper> w(scope, engine->memoryManager->alloc<QmlTypeWrapper>(engine));
+    Scoped<QmlTypeWrapper> w(scope, engine->memoryManager->allocObject<QmlTypeWrapper>());
     w->d()->mode = mode; w->d()->object = o; w->d()->typeNamespace = t; w->d()->importNamespace = importNamespace;
     t->addref();
     return w.asReturnedValue();
 }
 
 
-ReturnedValue QmlTypeWrapper::get(Managed *m, String *name, bool *hasProperty)
+ReturnedValue QmlTypeWrapper::get(const Managed *m, String *name, bool *hasProperty)
 {
     Q_ASSERT(m->as<QmlTypeWrapper>());
 
-    QV4::ExecutionEngine *v4 = static_cast<QmlTypeWrapper *>(m)->engine();
+    QV4::ExecutionEngine *v4 = static_cast<const QmlTypeWrapper *>(m)->engine();
     QV4::Scope scope(v4);
 
-    Scoped<QmlTypeWrapper> w(scope, static_cast<QmlTypeWrapper *>(m));
+    Scoped<QmlTypeWrapper> w(scope, static_cast<const QmlTypeWrapper *>(m));
 
     if (hasProperty)
         *hasProperty = true;
 
-    QQmlContextData *context = v4->v8Engine->callingContext();
+    QQmlContextData *context = v4->callingQmlContext();
 
     QObject *object = w->d()->object;
 
@@ -182,14 +178,14 @@ ReturnedValue QmlTypeWrapper::get(Managed *m, String *name, bool *hasProperty)
 
             if (name->startsWithUpper()) {
                 bool ok = false;
-                int value = type->enumValue(name, &ok);
+                int value = type->enumValue(QQmlEnginePrivate::get(v4->qmlEngine()), name, &ok);
                 if (ok)
                     return QV4::Primitive::fromInt32(value).asReturnedValue();
 
                 // Fall through to base implementation
 
             } else if (w->d()->object) {
-                QObject *ao = qmlAttachedPropertiesObjectById(type->attachedPropertiesId(), object);
+                QObject *ao = qmlAttachedPropertiesObjectById(type->attachedPropertiesId(QQmlEnginePrivate::get(v4->qmlEngine())), object);
                 if (ao)
                     return QV4::QObjectWrapper::getQmlProperty(v4, context, ao, name, QV4::QObjectWrapper::IgnoreRevision, hasProperty);
 
@@ -240,12 +236,13 @@ void QmlTypeWrapper::put(Managed *m, String *name, const Value &value)
         return;
 
     QV4::Scope scope(v4);
-    QQmlContextData *context = v4->v8Engine->callingContext();
+    QQmlContextData *context = v4->callingQmlContext();
 
     QQmlType *type = w->d()->type;
     if (type && !type->isSingleton() && w->d()->object) {
         QObject *object = w->d()->object;
-        QObject *ao = qmlAttachedPropertiesObjectById(type->attachedPropertiesId(), object);
+        QQmlEngine *e = scope.engine->qmlEngine();
+        QObject *ao = qmlAttachedPropertiesObjectById(type->attachedPropertiesId(QQmlEnginePrivate::get(e)), object);
         if (ao)
             QV4::QObjectWrapper::setQmlProperty(v4, context, ao, name, QV4::QObjectWrapper::IgnoreRevision, value);
     } else if (type && type->isSingleton()) {

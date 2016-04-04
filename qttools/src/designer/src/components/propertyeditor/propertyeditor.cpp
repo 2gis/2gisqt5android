@@ -56,9 +56,8 @@
 #include <qdesigner_propertycommand_p.h>
 #include <metadatabase_p.h>
 #include <iconloader_p.h>
-#ifdef Q_OS_WIN
-#  include <widgetfactory_p.h>
-#endif
+#include <widgetfactory_p.h>
+
 #include <QtWidgets/QAction>
 #include <QtWidgets/QLineEdit>
 #include <QtWidgets/QMenu>
@@ -261,11 +260,13 @@ PropertyEditor::PropertyEditor(QDesignerFormEditorInterface *core, QWidget *pare
 
     actionGroup->addAction(m_treeAction);
     actionGroup->addAction(m_buttonAction);
-    connect(actionGroup, SIGNAL(triggered(QAction*)), this, SLOT(slotViewTriggered(QAction*)));
+    connect(actionGroup, &QActionGroup::triggered,
+            this, &PropertyEditor::slotViewTriggered);
 
     // Add actions
     QActionGroup *addDynamicActionGroup = new QActionGroup(this);
-    connect(addDynamicActionGroup, SIGNAL(triggered(QAction*)), this, SLOT(slotAddDynamicProperty(QAction*)));
+    connect(addDynamicActionGroup, &QActionGroup::triggered,
+            this, &PropertyEditor::slotAddDynamicProperty);
 
     QMenu *addDynamicActionMenu = new QMenu(this);
     m_addDynamicAction->setMenu(addDynamicActionMenu);
@@ -282,7 +283,7 @@ PropertyEditor::PropertyEditor(QDesignerFormEditorInterface *core, QWidget *pare
     addDynamicActionMenu->addAction(addDynamicAction);
     // remove
     m_removeDynamicAction->setEnabled(false);
-    connect(m_removeDynamicAction, SIGNAL(triggered()), this, SLOT(slotRemoveDynamicProperty()));
+    connect(m_removeDynamicAction, &QAction::triggered, this, &PropertyEditor::slotRemoveDynamicProperty);
     // Configure
     QAction *configureAction = new QAction(tr("Configure Property Editor"), this);
     configureAction->setIcon(createIconSet(QStringLiteral("configure.png")));
@@ -290,10 +291,10 @@ PropertyEditor::PropertyEditor(QDesignerFormEditorInterface *core, QWidget *pare
     configureAction->setMenu(configureMenu);
 
     m_sortingAction->setCheckable(true);
-    connect(m_sortingAction, SIGNAL(toggled(bool)), this, SLOT(slotSorting(bool)));
+    connect(m_sortingAction, &QAction::toggled, this, &PropertyEditor::slotSorting);
 
     m_coloringAction->setCheckable(true);
-    connect(m_coloringAction, SIGNAL(toggled(bool)), this, SLOT(slotColoring(bool)));
+    connect(m_coloringAction, &QAction::toggled, this, &PropertyEditor::slotColoring);
 
     configureMenu->addAction(m_sortingAction);
     configureMenu->addAction(m_coloringAction);
@@ -314,17 +315,19 @@ PropertyEditor::PropertyEditor(QDesignerFormEditorInterface *core, QWidget *pare
     buttonScroll->setWidgetResizable(true);
     buttonScroll->setWidget(m_buttonBrowser);
     m_buttonIndex = m_stackedWidget->addWidget(buttonScroll);
-    connect(m_buttonBrowser, SIGNAL(currentItemChanged(QtBrowserItem*)), this, SLOT(slotCurrentItemChanged(QtBrowserItem*)));
+    connect(m_buttonBrowser, &QtAbstractPropertyBrowser::currentItemChanged,
+            this, &PropertyEditor::slotCurrentItemChanged);
 
     m_treeBrowser = new QtTreePropertyBrowser(m_stackedWidget);
     m_treeBrowser->setRootIsDecorated(false);
     m_treeBrowser->setPropertiesWithoutValueMarked(true);
     m_treeBrowser->setResizeMode(QtTreePropertyBrowser::Interactive);
     m_treeIndex = m_stackedWidget->addWidget(m_treeBrowser);
-    connect(m_treeBrowser, SIGNAL(currentItemChanged(QtBrowserItem*)), this, SLOT(slotCurrentItemChanged(QtBrowserItem*)));
+    connect(m_treeBrowser, &QtAbstractPropertyBrowser::currentItemChanged,
+            this, &PropertyEditor::slotCurrentItemChanged);
     m_filterWidget->setPlaceholderText(tr("Filter"));
     m_filterWidget->setClearButtonEnabled(true);
-    connect(m_filterWidget, SIGNAL(textChanged(QString)), this, SLOT(setFilter(QString)));
+    connect(m_filterWidget, &QLineEdit::textChanged, this, &PropertyEditor::setFilter);
 
     QVBoxLayout *layout = new QVBoxLayout(this);
     layout->addWidget(toolBar);
@@ -345,9 +348,12 @@ PropertyEditor::PropertyEditor(QDesignerFormEditorInterface *core, QWidget *pare
     m_currentBrowser = m_treeBrowser;
     m_treeAction->setChecked(true);
 
-    connect(m_groupFactory, SIGNAL(resetProperty(QtProperty*)), this, SLOT(slotResetProperty(QtProperty*)));
-    connect(m_treeFactory, SIGNAL(resetProperty(QtProperty*)), this, SLOT(slotResetProperty(QtProperty*)));
-    connect(variantManager, SIGNAL(valueChanged(QtProperty*,QVariant,bool)), this, SLOT(slotValueChanged(QtProperty*,QVariant,bool)));
+    connect(m_groupFactory, &DesignerEditorFactory::resetProperty,
+            this, &PropertyEditor::slotResetProperty);
+    connect(m_treeFactory, &DesignerEditorFactory::resetProperty,
+            this, &PropertyEditor::slotResetProperty);
+    connect(m_propertyManager, &DesignerPropertyManager::valueChanged,
+            this, &PropertyEditor::slotValueChanged);
 
     // retrieve initial settings
     QDesignerSettingsInterface *settings = m_core->settingsManager();
@@ -902,22 +908,36 @@ QString PropertyEditor::realClassName(QObject *object) const
     return className;
 }
 
-static QString msgUnsupportedType(const QString &propertyName, unsigned type)
+static const char *typeName(int type)
+{
+    if (type == qMetaTypeId<PropertySheetStringValue>())
+        type = QVariant::String;
+    if (type < int(QVariant::UserType))
+        return QVariant::typeToName(static_cast<QVariant::Type>(type));
+    if (type == qMetaTypeId<PropertySheetIconValue>())
+        return "QIcon";
+    if (type == qMetaTypeId<PropertySheetPixmapValue>())
+        return "QPixmap";
+    if (type == qMetaTypeId<PropertySheetKeySequenceValue>())
+        return "QKeySequence";
+    if (type == qMetaTypeId<PropertySheetFlagValue>())
+        return "QFlags";
+    if (type == qMetaTypeId<PropertySheetEnumValue>())
+        return "enum";
+    if (type == QVariant::Invalid)
+        return "invalid";
+    if (type == QVariant::UserType)
+        return "user type";
+    return Q_NULLPTR;
+}
+
+static QString msgUnsupportedType(const QString &propertyName, int type)
 {
     QString rc;
     QTextStream str(&rc);
-    str << "The property \"" << propertyName << "\" of type " << type;
-    if (type == QVariant::Invalid) {
-        str << " (invalid) ";
-    } else {
-        if (type < QVariant::UserType) {
-            if (const char *typeName = QVariant::typeToName(static_cast<QVariant::Type>(type)))
-                str << " (" << typeName << ") ";
-        } else {
-            str << " (user type) ";
-        }
-    }
-    str << " is not supported yet!";
+    const char *typeS = typeName(type);
+    str << "The property \"" << propertyName << "\" of type ("
+        << (typeS ? typeS : "unknown") << ") is not supported yet!";
     return rc;
 }
 
@@ -991,6 +1011,9 @@ void PropertyEditor::setObject(QObject *object)
     m_groups.clear();
 
     if (m_propertySheet) {
+        const QString className = WidgetFactory::classNameOf(formWindow->core(), m_object);
+        const QDesignerCustomWidgetData customData = formWindow->core()->pluginManager()->customWidgetData(className);
+
         QtProperty *lastProperty = 0;
         QtProperty *lastGroup = 0;
         const int propertyCount = m_propertySheet->count();
@@ -1041,6 +1064,17 @@ void PropertyEditor::setObject(QObject *object)
             if (property != 0) {
                 const bool dynamicProperty = (dynamicSheet && dynamicSheet->isDynamicProperty(i))
                             || (sheet && sheet->isDefaultDynamicProperty(i));
+                QString descriptionToolTip;
+                if (!dynamicProperty && !customData.isNull())
+                    descriptionToolTip = customData.propertyToolTip(propertyName);
+                if (descriptionToolTip.isEmpty()) {
+                    if (const char *typeS = typeName(type)) {
+                        descriptionToolTip = propertyName + QLatin1String(" (")
+                            + QLatin1String(typeS) + QLatin1Char(')');
+                    }
+                }
+                if (!descriptionToolTip.isEmpty())
+                    property->setDescriptionToolTip(descriptionToolTip);
                 switch (type) {
                 case QVariant::Palette:
                     setupPaletteProperty(property);

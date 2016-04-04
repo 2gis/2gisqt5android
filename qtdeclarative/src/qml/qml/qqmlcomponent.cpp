@@ -42,8 +42,8 @@
 #include "qqml.h"
 #include "qqmlengine.h"
 #include "qqmlbinding_p.h"
-#include "qqmlglobal_p.h"
-#include <private/qqmlenginedebugservice_p.h>
+#include <private/qqmldebugconnector_p.h>
+#include <private/qqmldebugserviceinterfaces_p.h>
 #include "qqmlincubator.h"
 #include "qqmlincubator_p.h"
 #include <private/qqmljavascriptexpression_p.h>
@@ -53,6 +53,7 @@
 #include <private/qv4functionobject_p.h>
 #include <private/qv4script_p.h>
 #include <private/qv4scopedvalue_p.h>
+#include <private/qv4objectiterator_p.h>
 
 #include <QStack>
 #include <QStringList>
@@ -60,23 +61,6 @@
 #include <QtCore/qdebug.h>
 #include <qqmlinfo.h>
 #include "qqmlmemoryprofiler_p.h"
-
-#define INITIALPROPERTIES_SOURCE \
-        "(function(object, values) {"\
-            "try {"\
-                "for (var property in values) {" \
-                    "try {"\
-                        "var properties = property.split(\".\");"\
-                        "var o = object;"\
-                        "for (var ii = 0; ii < properties.length - 1; ++ii) {"\
-                            "o = o[properties[ii]];"\
-                        "}"\
-                        "o[properties[properties.length - 1]] = values[property];"\
-                    "} catch(e) {}"\
-                "}"\
-            "} catch(e) {}"\
-        "})"
-
 
 namespace {
     QThreadStorage<int> creationDepth;
@@ -98,7 +82,6 @@ V4_DEFINE_EXTENSION(QQmlComponentExtension, componentExtension);
     \class QQmlComponent
     \since 5.0
     \inmodule QtQml
-    \mainclass
 
     \brief The QQmlComponent class encapsulates a QML component definition
 
@@ -306,7 +289,7 @@ V4_DEFINE_EXTENSION(QQmlComponentExtension, componentExtension);
     \value Null This QQmlComponent has no data. Call loadUrl() or setData() to add QML content.
     \value Ready This QQmlComponent is ready and create() may be called.
     \value Loading This QQmlComponent is loading network data.
-    \value Error An error has occurred. Call errors() to retrieve a list of \{QQmlError}{errors}.
+    \value Error An error has occurred. Call errors() to retrieve a list of \l {QQmlError}{errors}.
 */
 
 /*!
@@ -696,7 +679,7 @@ void QQmlComponentPrivate::loadUrl(const QUrl &newUrl, QQmlComponent::Compilatio
 }
 
 /*!
-    Return the list of errors that occurred during the last compile or create
+    Returns the list of errors that occurred during the last compile or create
     operation. An empty list is returned if isError() is not set.
 */
 QList<QQmlError> QQmlComponent::errors() const
@@ -794,8 +777,8 @@ QObject *QQmlComponent::create(QQmlContext *context)
 
 /*!
     This method provides advanced control over component instance creation.
-    In general, programmers should use QQmlComponent::create() to create a
-    component.
+    In general, programmers should use QQmlComponent::create() to create object
+    instances.
 
     Create an object instance from this component. Returns 0 if creation
     failed. \a publicContext specifies the context within which to create the object
@@ -896,10 +879,11 @@ QQmlComponentPrivate::beginCreate(QQmlContextData *context)
         depthIncreased = false;
     }
 
-    if (enginePriv->isDebugging && rv) {
+    QQmlEngineDebugService *service = QQmlDebugConnector::service<QQmlEngineDebugService>();
+    if (service && rv) {
         if (!context->isInternal)
             context->asQQmlContextPrivate()->instances.append(rv);
-        QQmlEngineDebugService::instance()->objectCreated(engine, rv);
+        service->objectCreated(engine, rv);
     }
 
     return rv;
@@ -1075,11 +1059,10 @@ namespace QV4 {
 namespace Heap {
 
 struct QmlIncubatorObject : Object {
-    QmlIncubatorObject(QV4::ExecutionEngine *engine, QQmlIncubator::IncubationMode = QQmlIncubator::Asynchronous);
+    QmlIncubatorObject(QQmlIncubator::IncubationMode = QQmlIncubator::Asynchronous);
     QScopedPointer<QQmlComponentIncubator> incubator;
     QPointer<QObject> parent;
     QV4::Value valuemap;
-    QV4::Value qmlGlobal;
     QV4::Value statusChanged;
 };
 
@@ -1194,6 +1177,46 @@ static void QQmlComponent_setQmlParent(QObject *me, QObject *parent)
     \sa incubateObject()
 */
 
+
+static void setInitialProperties(QV4::ExecutionEngine *engine, const QV4::Value &o, const QV4::Value &v)
+{
+    QV4::Scope scope(engine);
+    QV4::ScopedObject object(scope);
+    QV4::ScopedObject valueMap(scope, v);
+    QV4::ObjectIterator it(scope, valueMap, QV4::ObjectIterator::EnumerableOnly|QV4::ObjectIterator::WithProtoChain);
+    QV4::ScopedString name(scope);
+    QV4::ScopedValue val(scope);
+    if (engine->hasException)
+        return;
+
+    while (1) {
+        name = it.nextPropertyNameAsString(val);
+        if (!name)
+            break;
+        object = o;
+        const QStringList properties = name->toQString().split(QLatin1Char('.'));
+        for (int i = 0; i < properties.length() - 1; ++i) {
+            name = engine->newString(properties.at(i));
+            object = object->get(name);
+            if (engine->hasException || !object) {
+                break;
+            }
+        }
+        if (engine->hasException || !object) {
+            engine->hasException = false;
+            continue;
+        }
+        name = engine->newString(properties.last());
+        object->put(name, val);
+        if (engine->hasException) {
+            engine->hasException = false;
+            continue;
+        }
+    }
+
+    engine->hasException = false;
+}
+
 /*!
     \internal
 */
@@ -1216,7 +1239,7 @@ void QQmlComponent::createObject(QQmlV4Function *args)
 
     if (args->length() >= 2) {
         QV4::ScopedValue v(scope, (*args)[1]);
-        if (!v->asObject() || v->asArrayObject()) {
+        if (!v->as<QV4::Object>() || v->as<QV4::ArrayObject>()) {
             qmlInfo(this) << tr("createObject: value is not an object");
             args->setReturnValue(QV4::Encode::null());
             return;
@@ -1239,16 +1262,8 @@ void QQmlComponent::createObject(QQmlV4Function *args)
     QV4::ScopedValue object(scope, QV4::QObjectWrapper::wrap(v4, rv));
     Q_ASSERT(object->isObject());
 
-    if (!valuemap->isUndefined()) {
-        QV4::ScopedObject qmlglobal(scope, args->qmlGlobal());
-        QV4::ScopedValue f(scope, QV4::Script::evaluate(v4, QString::fromLatin1(INITIALPROPERTIES_SOURCE), qmlglobal));
-        Q_ASSERT(f->asFunctionObject());
-        QV4::ScopedCallData callData(scope, 2);
-        callData->thisObject = v4->globalObject();
-        callData->args[0] = object;
-        callData->args[1] = valuemap;
-        f->asFunctionObject()->call(callData);
-    }
+    if (!valuemap->isUndefined())
+        setInitialProperties(v4, object, valuemap);
 
     d->completeCreate();
 
@@ -1256,10 +1271,7 @@ void QQmlComponent::createObject(QQmlV4Function *args)
     QQmlData::get(rv)->explicitIndestructibleSet = false;
     QQmlData::get(rv)->indestructible = false;
 
-    if (!rv)
-        args->setReturnValue(QV4::Encode::null());
-    else
-        args->setReturnValue(object->asReturnedValue());
+    args->setReturnValue(object->asReturnedValue());
 }
 
 /*!
@@ -1342,7 +1354,7 @@ void QQmlComponent::incubateObject(QQmlV4Function *args)
     if (args->length() >= 2) {
         QV4::ScopedValue v(scope, (*args)[1]);
         if (v->isNull()) {
-        } else if (!v->asObject() || v->asArrayObject()) {
+        } else if (!v->as<QV4::Object>() || v->as<QV4::ArrayObject>()) {
             qmlInfo(this) << tr("createObject: value is not an object");
             args->setReturnValue(QV4::Encode::null());
             return;
@@ -1362,14 +1374,12 @@ void QQmlComponent::incubateObject(QQmlV4Function *args)
 
     QQmlComponentExtension *e = componentExtension(args->v4engine());
 
-    QV4::Scoped<QV4::QmlIncubatorObject> r(scope, v4->memoryManager->alloc<QV4::QmlIncubatorObject>(args->v4engine(), mode));
+    QV4::Scoped<QV4::QmlIncubatorObject> r(scope, v4->memoryManager->allocObject<QV4::QmlIncubatorObject>(mode));
     QV4::ScopedObject p(scope, e->incubationProto.value());
     r->setPrototype(p);
 
-    if (!valuemap->isUndefined()) {
+    if (!valuemap->isUndefined())
         r->d()->valuemap = valuemap;
-        r->d()->qmlGlobal = args->qmlGlobal();
-    }
     r->d()->parent = parent;
 
     QQmlIncubator *incubator = r->d()->incubator.data();
@@ -1383,25 +1393,17 @@ void QQmlComponent::incubateObject(QQmlV4Function *args)
 }
 
 // XXX used by QSGLoader
-void QQmlComponentPrivate::initializeObjectWithInitialProperties(const QV4::Value &qmlGlobal, const QV4::Value &valuemap, QObject *toCreate)
+void QQmlComponentPrivate::initializeObjectWithInitialProperties(const QV4::Value &valuemap, QObject *toCreate)
 {
     QQmlEnginePrivate *ep = QQmlEnginePrivate::get(engine);
     QV4::ExecutionEngine *v4engine = QV8Engine::getV4(ep->v8engine());
     QV4::Scope scope(v4engine);
 
     QV4::ScopedValue object(scope, QV4::QObjectWrapper::wrap(v4engine, toCreate));
-    Q_ASSERT(object->asObject());
+    Q_ASSERT(object->as<QV4::Object>());
 
-    if (!valuemap.isUndefined()) {
-        QV4::ScopedObject qmlGlobalObj(scope, qmlGlobal);
-        QV4::ScopedFunctionObject f(scope, QV4::Script::evaluate(v4engine,
-                                                                 QString::fromLatin1(INITIALPROPERTIES_SOURCE), qmlGlobalObj));
-        QV4::ScopedCallData callData(scope, 2);
-        callData->thisObject = v4engine->globalObject();
-        callData->args[0] = object;
-        callData->args[1] = valuemap;
-        f->call(callData);
-    }
+    if (!valuemap.isUndefined())
+        setInitialProperties(v4engine, object, valuemap);
 }
 
 QQmlComponentExtension::QQmlComponentExtension(QV4::ExecutionEngine *v4)
@@ -1475,10 +1477,8 @@ QQmlComponentExtension::~QQmlComponentExtension()
 {
 }
 
-QV4::Heap::QmlIncubatorObject::QmlIncubatorObject(ExecutionEngine *engine, QQmlIncubator::IncubationMode m)
-    : QV4::Heap::Object(engine)
-    , valuemap(QV4::Primitive::undefinedValue())
-    , qmlGlobal(QV4::Primitive::undefinedValue())
+QV4::Heap::QmlIncubatorObject::QmlIncubatorObject(QQmlIncubator::IncubationMode m)
+    : valuemap(QV4::Primitive::undefinedValue())
     , statusChanged(QV4::Primitive::undefinedValue())
 {
     incubator.reset(new QQmlComponentIncubator(this, m));
@@ -1491,13 +1491,8 @@ void QV4::QmlIncubatorObject::setInitialState(QObject *o)
     if (!d()->valuemap.isUndefined()) {
         QV4::ExecutionEngine *v4 = engine();
         QV4::Scope scope(v4);
-
-        QV4::ScopedFunctionObject f(scope, QV4::Script::evaluate(v4, QString::fromLatin1(INITIALPROPERTIES_SOURCE), d()->qmlGlobal.asObject()));
-        QV4::ScopedCallData callData(scope, 2);
-        callData->thisObject = v4->globalObject();
-        callData->args[0] = QV4::QObjectWrapper::wrap(v4, o);
-        callData->args[1] = d()->valuemap;
-        f->call(callData);
+        QV4::ScopedObject obj(scope, QV4::QObjectWrapper::wrap(v4, o));
+        setInitialProperties(v4, obj, d()->valuemap);
     }
 }
 
@@ -1505,7 +1500,6 @@ void QV4::QmlIncubatorObject::markObjects(QV4::Heap::Base *that, QV4::ExecutionE
 {
     QmlIncubatorObject::Data *o = static_cast<QmlIncubatorObject::Data *>(that);
     o->valuemap.mark(e);
-    o->qmlGlobal.mark(e);
     o->statusChanged.mark(e);
     Object::markObjects(that, e);
 }

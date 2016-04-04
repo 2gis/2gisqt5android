@@ -37,7 +37,6 @@
 #include "qcocoamenubar.h"
 #include "messages.h"
 #include "qcocoahelpers.h"
-#include "qcocoaautoreleasepool.h"
 #include "qt_mac_p.h"
 #include "qcocoaapplication.h" // for custom application category
 #include "qcocoamenuloader.h"
@@ -104,7 +103,7 @@ QCocoaMenuItem::QCocoaMenuItem() :
 
 QCocoaMenuItem::~QCocoaMenuItem()
 {
-    QCocoaAutoReleasePool pool;
+    QMacAutoReleasePool pool;
 
     if (m_menu && COCOA_MENU_ANCESTOR(m_menu) == this)
         SET_COCOA_MENU_ANCESTOR(m_menu, 0);
@@ -139,7 +138,7 @@ void QCocoaMenuItem::setMenu(QPlatformMenu *menu)
             m_menu->setContainingMenuItem(0);
     }
 
-    QCocoaAutoReleasePool pool;
+    QMacAutoReleasePool pool;
     m_menu = static_cast<QCocoaMenu *>(menu);
     if (m_menu) {
         SET_COCOA_MENU_ANCESTOR(m_menu, this);
@@ -198,6 +197,8 @@ void QCocoaMenuItem::setEnabled(bool enabled)
 void QCocoaMenuItem::setNativeContents(WId item)
 {
     NSView *itemView = (NSView *)item;
+    if (m_itemView == itemView)
+        return;
     [m_itemView release];
     m_itemView = [itemView retain];
     [m_itemView setAutoresizesSubviews:YES];
@@ -280,7 +281,7 @@ NSMenuItem *QCocoaMenuItem::sync()
         }
 
         default:
-            qWarning() << Q_FUNC_INFO << "menu item" << m_text << "has unsupported role" << (int)m_role;
+            qWarning() << "menu item" << m_text << "has unsupported role" << (int)m_role;
         }
 
         if (mergeItem) {
@@ -302,8 +303,8 @@ NSMenuItem *QCocoaMenuItem::sync()
 
     if (!m_native) {
         m_native = [[NSMenuItem alloc] initWithTitle:QCFString::toNSString(m_text)
-            action:nil
-                keyEquivalent:@""];
+                                       action:nil
+                                       keyEquivalent:@""];
         [m_native setTag:reinterpret_cast<NSInteger>(this)];
     }
 
@@ -397,7 +398,7 @@ QKeySequence QCocoaMenuItem::mergeAccel()
 void QCocoaMenuItem::syncMerged()
 {
     if (!m_merged) {
-        qWarning() << Q_FUNC_INFO << "Trying to sync a non-merged item";
+        qWarning("Trying to sync a non-merged item");
         return;
     }
     [m_native setTag:reinterpret_cast<NSInteger>(this)];

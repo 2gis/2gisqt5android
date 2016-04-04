@@ -34,15 +34,26 @@
 #ifndef QDECLARATIVEAUDIOCATEGORY_P_H
 #define QDECLARATIVEAUDIOCATEGORY_P_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include <QtQml/qqml.h>
-#include <QtQml/qqmlcomponent.h>
 
 QT_BEGIN_NAMESPACE
 
-class QDeclarativeAudioCategory : public QObject, public QQmlParserStatus
+class QDeclarativeAudioEngine;
+
+class QDeclarativeAudioCategory : public QObject
 {
     Q_OBJECT
-    Q_INTERFACES(QQmlParserStatus)
     Q_PROPERTY(qreal volume READ volume WRITE setVolume NOTIFY volumeChanged)
     Q_PROPERTY(QString name READ name WRITE setName)
 
@@ -50,14 +61,13 @@ public:
     QDeclarativeAudioCategory(QObject *parent = 0);
     ~QDeclarativeAudioCategory();
 
-    void classBegin();
-    void componentComplete();
-
     qreal volume() const;
     void setVolume(qreal volume);
 
     QString name() const;
     void setName(const QString& name);
+
+    void setEngine(QDeclarativeAudioEngine *engine);
 
 Q_SIGNALS:
     void volumeChanged(qreal newVolume);
@@ -72,9 +82,9 @@ public Q_SLOTS:
 
 private:
     Q_DISABLE_COPY(QDeclarativeAudioCategory);
-    bool m_complete;
     QString m_name;
     qreal m_volume;
+    QDeclarativeAudioEngine *m_engine;
 };
 
 QT_END_NAMESPACE

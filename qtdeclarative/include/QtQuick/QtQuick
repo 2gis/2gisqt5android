@@ -2,7 +2,6 @@
 #define QT_QTQUICK_MODULE_H
 #include <QtQuick/QtQuickDepends>
 #include "qtquickglobal.h"
-#include "designersupport.h"
 #include "qquickframebufferobject.h"
 #include "qquickitem.h"
 #include "qquickitemgrabresult.h"

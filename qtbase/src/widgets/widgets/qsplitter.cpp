@@ -58,6 +58,10 @@ QT_BEGIN_NAMESPACE
 
 //#define QSPLITTER_DEBUG
 
+QSplitterPrivate::~QSplitterPrivate()
+{
+}
+
 /*!
     \class QSplitterHandle
     \brief The QSplitterHandle class provides handle functionality for the splitter.
@@ -1498,8 +1502,11 @@ QList<int> QSplitter::sizes() const
     Q_D(const QSplitter);
     ensurePolished();
 
+    const int numSizes = d->list.size();
     QList<int> list;
-    for (int i = 0; i < d->list.size(); ++i) {
+    list.reserve(numSizes);
+
+    for (int i = 0; i < numSizes; ++i) {
         QSplitterLayoutStruct *s = d->list.at(i);
         list.append(d->pick(s->rect.size()));
     }
@@ -1594,8 +1601,10 @@ QByteArray QSplitter::saveState() const
 
     stream << qint32(SplitterMagic);
     stream << qint32(version);
+    const int numSizes = d->list.size();
     QList<int> list;
-    for (int i = 0; i < d->list.size(); ++i) {
+    list.reserve(numSizes);
+    for (int i = 0; i < numSizes; ++i) {
         QSplitterLayoutStruct *s = d->list.at(i);
         list.append(s->sizer);
     }

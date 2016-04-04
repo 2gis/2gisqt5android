@@ -37,9 +37,9 @@
 #include <QObject>
 #include <QtTest/QtTest>
 
-#include <Qt3DCore/QFrameAllocator>
+#include <Qt3DCore/private/qframeallocator_p.h>
 
-using namespace Qt3D;
+using namespace Qt3DCore;
 
 class tst_QFrameAllocator : public QObject
 {

@@ -34,6 +34,17 @@
 #ifndef QV4ISEL_MOTH_P_H
 #define QV4ISEL_MOTH_P_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include <private/qv4global_p.h>
 #include <private/qv4isel_p.h>
 #include <private/qv4isel_util_p.h>
@@ -73,6 +84,7 @@ protected:
     virtual void visitRet(IR::Ret *);
 
     virtual void callBuiltinInvalid(IR::Name *func, IR::ExprList *args, IR::Expr *result);
+    virtual void callBuiltinTypeofQmlContextProperty(IR::Expr *base, IR::Member::MemberKind kind, int propertyIndex, IR::Expr *result);
     virtual void callBuiltinTypeofMember(IR::Expr *base, const QString &name, IR::Expr *result);
     virtual void callBuiltinTypeofSubscript(IR::Expr *base, IR::Expr *index, IR::Expr *result);
     virtual void callBuiltinTypeofName(const QString &name, IR::Expr *result);
@@ -95,6 +107,7 @@ protected:
     virtual void callBuiltinSetupArgumentObject(IR::Expr *result);
     virtual void callBuiltinConvertThisToObject();
     virtual void callValue(IR::Expr *value, IR::ExprList *args, IR::Expr *result);
+    virtual void callQmlContextProperty(IR::Expr *base, IR::Member::MemberKind kind, int propertyIndex, IR::ExprList *args, IR::Expr *result);
     virtual void callProperty(IR::Expr *base, const QString &name, IR::ExprList *args, IR::Expr *result);
     virtual void callSubscript(IR::Expr *base, IR::Expr *index, IR::ExprList *args, IR::Expr *result);
     virtual void convertType(IR::Expr *source, IR::Expr *target);
@@ -102,10 +115,8 @@ protected:
     virtual void constructProperty(IR::Expr *base, const QString &name, IR::ExprList *args, IR::Expr *result);
     virtual void constructValue(IR::Expr *value, IR::ExprList *args, IR::Expr *result);
     virtual void loadThisObject(IR::Expr *e);
-    virtual void loadQmlIdArray(IR::Expr *e);
+    virtual void loadQmlContext(IR::Expr *e);
     virtual void loadQmlImportedScripts(IR::Expr *e);
-    virtual void loadQmlContextObject(IR::Expr *e);
-    virtual void loadQmlScopeObject(IR::Expr *e);
     virtual void loadQmlSingleton(const QString &name, IR::Expr *e);
     virtual void loadConst(IR::Const *sourceConst, IR::Expr *e);
     virtual void loadString(const QString &str, IR::Expr *target);
@@ -115,7 +126,9 @@ protected:
     virtual void initClosure(IR::Closure *closure, IR::Expr *target);
     virtual void getProperty(IR::Expr *base, const QString &name, IR::Expr *target);
     virtual void setProperty(IR::Expr *source, IR::Expr *targetBase, const QString &targetName);
+    virtual void setQmlContextProperty(IR::Expr *source, IR::Expr *targetBase, IR::Member::MemberKind kind, int propertyIndex);
     virtual void setQObjectProperty(IR::Expr *source, IR::Expr *targetBase, int propertyIndex);
+    virtual void getQmlContextProperty(IR::Expr *source, IR::Member::MemberKind kind, int index, IR::Expr *target);
     virtual void getQObjectProperty(IR::Expr *base, int propertyIndex, bool captureRequired, bool isSingleton, int attachedPropertiesId, IR::Expr *target);
     virtual void getElement(IR::Expr *base, IR::Expr *index, IR::Expr *target);
     virtual void setElement(IR::Expr *source, IR::Expr *targetBase, IR::Expr *targetIndex);

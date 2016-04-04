@@ -34,6 +34,17 @@
 #ifndef QQMLLOCALE_H
 #define QQMLLOCALE_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include <qqml.h>
 
 #include <QtCore/qlocale.h>
@@ -71,13 +82,9 @@ private:
 };
 
 
-class Q_AUTOTEST_EXPORT QQmlLocale
+class Q_QML_PRIVATE_EXPORT QQmlLocale
 {
     Q_GADGET
-    Q_ENUMS(MeasurementSystem)
-    Q_ENUMS(FormatType)
-    Q_ENUMS(CurrencySymbolFormat)
-    Q_ENUMS(DayOfWeek)
 
 public:
     ~QQmlLocale();
@@ -88,16 +95,19 @@ public:
         ImperialUSSystem = QLocale::ImperialUSSystem,
         ImperialUKSystem = QLocale::ImperialUKSystem
     };
+    Q_ENUM(MeasurementSystem)
     enum FormatType {
         LongFormat = QLocale::LongFormat,
         ShortFormat = QLocale::ShortFormat,
         NarrowFormat = QLocale::NarrowFormat
     };
+    Q_ENUM(FormatType)
     enum CurrencySymbolFormat {
         CurrencyIsoCode = QLocale::CurrencyIsoCode,
         CurrencySymbol = QLocale::CurrencySymbol,
         CurrencyDisplayName = QLocale::CurrencyDisplayName
     };
+    Q_ENUM(CurrencySymbolFormat)
     // Qt defines Sunday as 7, but JS Date assigns Sunday 0
     enum DayOfWeek {
         Sunday = 0,
@@ -108,6 +118,7 @@ public:
         Friday = Qt::Friday,
         Saturday = Qt::Saturday
     };
+    Q_ENUM(DayOfWeek)
 
     static QV4::ReturnedValue locale(QV4::ExecutionEngine *engine, const QString &localeName);
     static QV4::ReturnedValue wrap(QV4::ExecutionEngine *engine, const QLocale &locale);
@@ -125,7 +136,7 @@ namespace QV4 {
 namespace Heap {
 
 struct QQmlLocaleData : Object {
-    inline QQmlLocaleData(ExecutionEngine *engine);
+    inline QQmlLocaleData() {}
     QLocale locale;
 };
 
@@ -137,7 +148,7 @@ struct QQmlLocaleData : public QV4::Object
     V4_NEEDS_DESTROY
 
     static QLocale *getThisLocale(QV4::CallContext *ctx) {
-        QV4::Object *o = ctx->thisObject().asObject();
+        QV4::Object *o = ctx->thisObject().as<Object>();
         QQmlLocaleData *thisObject = o ? o->as<QQmlLocaleData>() : 0;
         if (!thisObject) {
             ctx->engine()->throwTypeError();
@@ -174,11 +185,6 @@ struct QQmlLocaleData : public QV4::Object
     static QV4::ReturnedValue method_get_amText(QV4::CallContext *ctx);
     static QV4::ReturnedValue method_get_pmText(QV4::CallContext *ctx);
 };
-
-Heap::QQmlLocaleData::QQmlLocaleData(ExecutionEngine *engine)
-    : Heap::Object(engine)
-{
-}
 
 }
 

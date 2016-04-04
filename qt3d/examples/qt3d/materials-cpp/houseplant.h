@@ -43,11 +43,11 @@
 #include <QNormalDiffuseMapMaterial>
 #include <QTextureImage>
 
-class HousePlant : public Qt3D::QEntity
+class HousePlant : public Qt3DCore::QEntity
 {
     Q_OBJECT
 public:
-    explicit HousePlant(Qt3D::QNode *parent = 0);
+    explicit HousePlant(Qt3DCore::QNode *parent = 0);
     ~HousePlant();
 
     enum PotShape {
@@ -71,14 +71,10 @@ public:
     PotShape potShape() const;
     Plant plantType() const;
 
-    void setX(float x);
-    void setY(float y);
-    void setZ(float z);
+    void setPosition(const QVector3D &pos);
     void setScale(float scale);
 
-    float x() const;
-    float y() const;
-    float z() const;
+    QVector3D position() const;
     float scale() const;
 
 private:
@@ -86,16 +82,16 @@ private:
     RenderableEntity *m_plant;
     RenderableEntity *m_cover;
 
-    Qt3D::QNormalDiffuseMapMaterial *m_potMaterial;
-    Qt3D::QNormalDiffuseMapAlphaMaterial *m_plantMaterial;
-    Qt3D::QNormalDiffuseMapMaterial *m_coverMaterial;
+    Qt3DRender::QNormalDiffuseMapMaterial *m_potMaterial;
+    Qt3DRender::QNormalDiffuseMapAlphaMaterial *m_plantMaterial;
+    Qt3DRender::QNormalDiffuseMapMaterial *m_coverMaterial;
 
-    Qt3D::QTextureImage *m_potImage;
-    Qt3D::QTextureImage *m_potNormalImage;
-    Qt3D::QTextureImage *m_plantImage;
-    Qt3D::QTextureImage *m_plantNormalImage;
-    Qt3D::QTextureImage *m_coverImage;
-    Qt3D::QTextureImage *m_coverNormalImage;
+    Qt3DRender::QTextureImage *m_potImage;
+    Qt3DRender::QTextureImage *m_potNormalImage;
+    Qt3DRender::QTextureImage *m_plantImage;
+    Qt3DRender::QTextureImage *m_plantNormalImage;
+    Qt3DRender::QTextureImage *m_coverImage;
+    Qt3DRender::QTextureImage *m_coverNormalImage;
 
     Plant m_plantType;
     PotShape m_potShape;

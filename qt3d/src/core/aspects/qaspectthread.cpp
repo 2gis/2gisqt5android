@@ -34,8 +34,7 @@
 **
 ****************************************************************************/
 
-#include "qaspectthread.h"
-
+#include "qaspectthread_p.h"
 #include "qaspectmanager_p.h"
 
 #include <Qt3DCore/private/corelogging_p.h>
@@ -43,7 +42,7 @@
 
 QT_BEGIN_NAMESPACE
 
-namespace Qt3D {
+namespace Qt3DCore {
 
 QAspectThread::QAspectThread(QObject *parent)
     : QThread(parent),
@@ -87,6 +86,6 @@ void QAspectThread::run()
     qCDebug(Aspects) << "Exiting void QAspectThread::run()";
 }
 
-} // namespace Qt3D
+} // namespace Qt3DCore
 
 QT_END_NAMESPACE

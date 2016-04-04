@@ -92,13 +92,6 @@
         \li \l[QtTestLib]{Qt Test}
         \li Classes for unit testing Qt applications and libraries.
     \row
-        \li \l[QtWebKit]{Qt WebKit} (Deprecated)
-        \li Classes for a WebKit2 based implementation and a QML API.
-            Deprecated in favor of \l[QtWebEngine]{Qt WebEngine}.
-    \row
-        \li \l[QtWebKit]{Qt WebKit Widgets} (Deprecated)
-        \li WebKit1 and QWidget-based classes from Qt 4.
-    \row
         \li \l[QtWidgets]{Qt Widgets}
         \li Classes to extend Qt GUI with C++ widgets.
     \endtable
@@ -140,7 +133,7 @@
         \li
         \li Classes for applications which use ActiveX and COM
     \row
-        \li \l{Enginio Manual}{Enginio}
+        \li \l{Enginio Manual}{Enginio} (Deprecated)
         \li All
         \li All
         \li A Backend-as-a-Service solution to ease the backend development for
@@ -184,6 +177,11 @@
         \li
         \li Plugins for additional image formats: TIFF, MNG, TGA, WBMP.
     \row
+        \li \l[QtLocation]{Qt Location}
+        \li All
+        \li All
+        \li Displays map, navigation, and place content in a QML application.
+    \row
         \li \l[QtMacExtras]{Qt Mac Extras}
         \li All
         \li \l{Qt for OS X}{OS X}
@@ -191,15 +189,14 @@
     \row
         \li \l[QtNfc]{Qt NFC}
         \li All
-        \li \l{Qt for Linux/X11}{Linux}
+        \li \l{Qt for Android}{Android} and \l{Qt for Linux/X11}{Linux}
         \li Provides access to Near-Field communication (NFC) hardware.
     \row
-        \li \l[QtOpenGL]{Qt OpenGL}
+        \li \l[QtOpenGL]{Qt OpenGL} (Deprecated)
         \li
         \li
-        \li OpenGL support classes.
-        \note Provided to ease porting from Qt 4.x. Please use the QOpenGL
-        classes in \l{Qt GUI} for new code
+        \li OpenGL support classes. Deprecated in favor of the \c{QOpenGL*}
+            classes in the \l{Qt GUI} module.
     \row
         \li \l[QtPlatformHeaders]{Qt Platform Headers}
         \li
@@ -210,20 +207,14 @@
     \row
         \li \l[QtPositioning]{Qt Positioning}
         \li All
-        \li
+        \li \l{Qt for Android}{Android}, \l{Qt for iOS}{iOS}, \l{Qt for OS X}{OS X},
+        \l{Qt for Linux/X11}{Linux}, \l{Qt for WinRT}{WinRT}.
         \li Provides access to position, satellite and area monitoring classes.
     \row
         \li \l[QtPrintSupport]{Qt Print Support}
         \li All
         \li
         \li Classes to make printing easier and more portable.
-    \row
-        \li \l{Qt Quick 1 Reference Documentation}{Qt Declarative} (Deprecated)
-        \li All
-        \li
-        \li Qt Declarative is provided for \l{Qt 4.8 Reference Documentation}{Qt 4}
-        compatibility. The documentation is available through the Qt 4.8
-        \l{Qt Quick 1 Reference Documentation}{Qt Quick} documentation.
     \row
         \li \l[QtQuickExtras]{Qt Quick Extras}
         \li All
@@ -239,11 +230,10 @@
         \li \l[QtScript]{Qt Script} (Deprecated)
         \li All
         \li
-        \li Classes for making Qt applications scriptable. Provided for Qt 4.x
-            compatibility. Please use the QJS* classes in the \l{Qt QML} module for
-            new code.
+        \li Classes for making Qt applications scriptable. Deprecated in favor
+            of the \c{QJS*} classes in the \l{Qt QML} module.
     \row
-        \li \l[QtScriptTools]{Qt Script Tools}
+        \li \l[QtScriptTools]{Qt Script Tools} (Deprecated)
         \li All
         \li
         \li Additional components for applications that use \l{Qt Script}.
@@ -280,10 +270,20 @@
         \li \l{Qt for Windows}{Windows}, \l{Qt for Linux/X11}{Linux}, and \l{Qt for OS X}{OS X}.
         \li Provides a C++ API to run web applications using the \l{http://www.chromium.org/Home}{Chromium browser project}.
     \row
+        \li \l[QtWebEngineCore]{Qt WebEngine Core}
+        \li All
+        \li \l{Qt for Windows}{Windows}, \l{Qt for Linux/X11}{Linux}, and \l{Qt for OS X}{OS X}.
+        \li Provides a public API shared by both \l[QtWebEngine]{Qt WebEngine} and \l[QtWebEngineWidgets]{Qt WebEngine Widgets}.
+    \row
         \li \l[QtWebSockets]{Qt WebSockets}
         \li All
         \li All
         \li Provides WebSocket communication compliant with \l{http://tools.ietf.org/html/rfc6455} {RFC 6455}.
+    \row \li \l[QtWebView]{Qt WebView}
+         \li All
+         \li Platforms with a native web engine.
+         \li Displays web content in a QML application by using APIs native to the platform,
+             without the need to include a full web browser stack.
     \row
         \li \l[QtWinExtras]{Qt Windows Extras}
         \li All
@@ -299,8 +299,8 @@
         \li
         \li
         \li C++ implementations of SAX and DOM.
-            \note Deprecated, please use QXmlStreamReader and QXmlStreamWriter
-            for new functionality.
+            \note This module is not required to use QXmlStreamReader and
+            QXmlStreamWriter. They are already part of \l{Qt Core}.
     \row
         \li \l[QtXmlPatterns]{Qt XML Patterns}
         \li
@@ -348,15 +348,21 @@
     \header
         \li Module
         \li Description
-
-    \row \li \l{Qt Location}
-         \li Displays map, navigation, and place content in a QML application.
-    \row \li \l{Qt WebView}
-         \li Displays web content in a QML application by using APIs native to the platform,
-             without the need to include a full web browser stack.
-    \row \li \l[Qt3DCore]{Qt3D Module}{Qt3D}
+    \row \li \l[Qt3D]{Qt 3D}
          \li Functionality for near-realtime simulation systems with support
              for 2D and 3D rendering.
+    \row \li \l[QtSerialBus]{Qt Serial Bus}
+         \li Provides access to serial industrial bus interface. Currently the module supports
+             the CAN bus and Modbus protocols.
+    \row \li \l{Qt Labs Controls}
+         \li Provides lightweight QML types for creating performant user
+             interfaces for embedded and mobile devices. These controls achieve
+             improved efficiency by employing a simplified styling architecture
+             when compared to \l {Qt Quick Controls}, on which the module is based.
+             These types work in conjunction with \l{Qt Quick} and \l{Qt Quick
+             Layouts}.
+    \row \li \l{Qt Wayland Compositor}
+         \li Provides a framework to develop a Wayland compositor.
     \endtable
 
     \section1 Qt Tools

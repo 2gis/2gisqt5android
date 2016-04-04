@@ -34,12 +34,16 @@
 ****************************************************************************/
 
 #include "qgeopositioninfosourcefactory_geoclue.h"
-#include "qgeopositioninfosource_geocluemaster_p.h"
-#ifdef HAS_SATELLITE
+#include "qgeopositioninfosource_geocluemaster.h"
 #include "qgeosatelliteinfosource_geocluemaster.h"
-#endif
+
+#include <QtCore/QLoggingCategory>
 
 Q_DECLARE_METATYPE(QGeoPositionInfo)
+
+Q_LOGGING_CATEGORY(lcPositioningGeoclue, "qt.positioning.geoclue")
+
+QT_BEGIN_NAMESPACE
 
 QGeoPositionInfoSource *QGeoPositionInfoSourceFactoryGeoclue::positionInfoSource(QObject *parent)
 {
@@ -49,17 +53,13 @@ QGeoPositionInfoSource *QGeoPositionInfoSourceFactoryGeoclue::positionInfoSource
 
 QGeoSatelliteInfoSource *QGeoPositionInfoSourceFactoryGeoclue::satelliteInfoSource(QObject *parent)
 {
-#ifdef HAS_SATELLITE
     return new QGeoSatelliteInfoSourceGeoclueMaster(parent);
-#else
-    Q_UNUSED(parent)
-
-    return 0;
-#endif
 }
 
 QGeoAreaMonitorSource *QGeoPositionInfoSourceFactoryGeoclue::areaMonitor(QObject *parent)
 {
-    Q_UNUSED(parent);
+    Q_UNUSED(parent)
     return 0;
 }
+
+QT_END_NAMESPACE

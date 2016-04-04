@@ -50,8 +50,8 @@ class QUrl;
 class QPlatformMenuItem;
 class QQuickItem;
 class QQuickAction;
-class QQuickExclusiveGroup;
-class QQuickMenu;
+class QQuickExclusiveGroup1;
+class QQuickMenu1;
 class QQuickMenuItemContainer;
 
 class QQuickMenuItemType
@@ -88,9 +88,9 @@ public:
     bool visible() const { return m_visible; }
     virtual void setVisible(bool);
 
-    QQuickMenu *parentMenu() const;
+    QQuickMenu1 *parentMenu() const;
     QObject *parentMenuOrMenuBar() const;
-    virtual void setParentMenu(QQuickMenu *parentMenu);
+    virtual void setParentMenu(QQuickMenu1 *parentMenu);
 
     QQuickMenuItemContainer *container() const;
     void setContainer(QQuickMenuItemContainer *);
@@ -107,7 +107,7 @@ public:
 private:
     bool m_visible;
     QQuickMenuItemType::MenuItemType m_type;
-    QQuickMenu *m_parentMenu;
+    QQuickMenu1 *m_parentMenu;
     QQuickMenuItemContainer *m_container;
     QPlatformMenuItem *m_platformItem;
     QPointer<QQuickItem> m_visualItem;
@@ -167,13 +167,13 @@ private:
     QQuickAction *m_action;
 };
 
-class QQuickMenuItem : public QQuickMenuText
+class QQuickMenuItem1 : public QQuickMenuText
 {
     Q_OBJECT
     Q_PROPERTY(QString text READ text WRITE setText NOTIFY textChanged)
     Q_PROPERTY(bool checkable READ checkable WRITE setCheckable NOTIFY checkableChanged)
     Q_PROPERTY(bool checked READ checked WRITE setChecked NOTIFY toggled)
-    Q_PROPERTY(QQuickExclusiveGroup *exclusiveGroup READ exclusiveGroup WRITE setExclusiveGroup NOTIFY exclusiveGroupChanged)
+    Q_PROPERTY(QQuickExclusiveGroup1 *exclusiveGroup READ exclusiveGroup WRITE setExclusiveGroup NOTIFY exclusiveGroupChanged)
     Q_PROPERTY(QVariant shortcut READ shortcut WRITE setShortcut NOTIFY shortcutChanged)
     Q_PROPERTY(QQuickAction *action READ boundAction WRITE setBoundAction NOTIFY actionChanged)
 
@@ -191,8 +191,8 @@ Q_SIGNALS:
     void actionChanged();
 
 public:
-    QQuickMenuItem(QObject *parent = 0);
-    ~QQuickMenuItem();
+    QQuickMenuItem1(QObject *parent = 0);
+    ~QQuickMenuItem1();
 
     void setEnabled(bool enabled);
 
@@ -213,10 +213,10 @@ public:
     bool checked() const;
     void setChecked(bool checked);
 
-    QQuickExclusiveGroup *exclusiveGroup() const;
-    void setExclusiveGroup(QQuickExclusiveGroup *);
+    QQuickExclusiveGroup1 *exclusiveGroup() const;
+    void setExclusiveGroup(QQuickExclusiveGroup1 *);
 
-    void setParentMenu(QQuickMenu *parentMenu);
+    void setParentMenu(QQuickMenu1 *parentMenu);
 
 protected Q_SLOTS:
     void updateShortcut();

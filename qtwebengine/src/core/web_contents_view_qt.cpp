@@ -53,8 +53,10 @@ void WebContentsViewQt::initialize(WebContentsAdapterClient* client)
     m_factoryClient = client;
 
     // Check if a RWHV was created before the initialization.
-    if (m_webContents->GetRenderWidgetHostView())
-        static_cast<RenderWidgetHostViewQt *>(m_webContents->GetRenderWidgetHostView())->setAdapterClient(client);
+    if (auto rwhv = static_cast<RenderWidgetHostViewQt *>(m_webContents->GetRenderWidgetHostView())) {
+        rwhv->setAdapterClient(client);
+        rwhv->SetBackgroundColor(toSk(client->backgroundColor()));
+    }
 }
 
 content::RenderWidgetHostViewBase* WebContentsViewQt::CreateViewForWidget(content::RenderWidgetHost* render_widget_host, bool is_guest_view_hack)
@@ -82,6 +84,14 @@ content::RenderWidgetHostViewBase* WebContentsViewQt::CreateViewForPopupWidget(c
     return view;
 }
 
+void WebContentsViewQt::RenderViewCreated(content::RenderViewHost* host)
+{
+    // The render process is done creating the RenderView and it's ready to be routed
+    // messages at this point.
+    if (m_client)
+        host->GetView()->SetBackgroundColor(toSk(m_client->backgroundColor()));
+}
+
 void WebContentsViewQt::CreateView(const gfx::Size& initial_size, gfx::NativeView context)
 {
     // This is passed through content::WebContents::CreateParams::context either as the native view's client
@@ -103,6 +113,8 @@ void WebContentsViewQt::GetContainerBounds(gfx::Rect* out) const
 
 void WebContentsViewQt::Focus()
 {
+    if (content::RenderWidgetHostView *rwhv = m_webContents->GetRenderWidgetHostView())
+        rwhv->Focus();
     m_client->focusContainer();
 }
 
@@ -111,6 +123,26 @@ void WebContentsViewQt::SetInitialFocus()
     Focus();
 }
 
+ASSERT_ENUMS_MATCH(WebEngineContextMenuData::MediaTypeNone, blink::WebContextMenuData::MediaTypeNone)
+ASSERT_ENUMS_MATCH(WebEngineContextMenuData::MediaTypeImage, blink::WebContextMenuData::MediaTypeImage)
+ASSERT_ENUMS_MATCH(WebEngineContextMenuData::MediaTypeVideo, blink::WebContextMenuData::MediaTypeVideo)
+ASSERT_ENUMS_MATCH(WebEngineContextMenuData::MediaTypeAudio, blink::WebContextMenuData::MediaTypeAudio)
+ASSERT_ENUMS_MATCH(WebEngineContextMenuData::MediaTypeCanvas, blink::WebContextMenuData::MediaTypeCanvas)
+ASSERT_ENUMS_MATCH(WebEngineContextMenuData::MediaTypeFile, blink::WebContextMenuData::MediaTypeFile)
+ASSERT_ENUMS_MATCH(WebEngineContextMenuData::MediaTypePlugin, blink::WebContextMenuData::MediaTypePlugin)
+
+ASSERT_ENUMS_MATCH(WebEngineContextMenuData::MediaNone, blink::WebContextMenuData::MediaNone)
+ASSERT_ENUMS_MATCH(WebEngineContextMenuData::MediaInError, blink::WebContextMenuData::MediaInError)
+ASSERT_ENUMS_MATCH(WebEngineContextMenuData::MediaPaused, blink::WebContextMenuData::MediaPaused)
+ASSERT_ENUMS_MATCH(WebEngineContextMenuData::MediaMuted, blink::WebContextMenuData::MediaMuted)
+ASSERT_ENUMS_MATCH(WebEngineContextMenuData::MediaLoop, blink::WebContextMenuData::MediaLoop)
+ASSERT_ENUMS_MATCH(WebEngineContextMenuData::MediaCanSave, blink::WebContextMenuData::MediaCanSave)
+ASSERT_ENUMS_MATCH(WebEngineContextMenuData::MediaHasAudio, blink::WebContextMenuData::MediaHasAudio)
+ASSERT_ENUMS_MATCH(WebEngineContextMenuData::MediaCanToggleControls, blink::WebContextMenuData::MediaCanToggleControls)
+ASSERT_ENUMS_MATCH(WebEngineContextMenuData::MediaControls, blink::WebContextMenuData::MediaControls)
+ASSERT_ENUMS_MATCH(WebEngineContextMenuData::MediaCanPrint, blink::WebContextMenuData::MediaCanPrint)
+ASSERT_ENUMS_MATCH(WebEngineContextMenuData::MediaCanRotate, blink::WebContextMenuData::MediaCanRotate)
+
 static WebEngineContextMenuData fromParams(const content::ContextMenuParams &params)
 {
     WebEngineContextMenuData ret;
@@ -118,6 +150,11 @@ static WebEngineContextMenuData fromParams(const content::ContextMenuParams &par
     ret.linkUrl = toQt(params.link_url);
     ret.linkText = toQt(params.link_text.data());
     ret.selectedText = toQt(params.selection_text.data());
+    ret.mediaUrl = toQt(params.src_url);
+    ret.mediaType = (WebEngineContextMenuData::MediaType)params.media_type;
+    ret.hasImageContent = params.has_image_contents;
+    ret.mediaFlags = params.media_flags;
+    ret.suggestedFileName = toQt(params.suggested_filename.data());
     return ret;
 }
 

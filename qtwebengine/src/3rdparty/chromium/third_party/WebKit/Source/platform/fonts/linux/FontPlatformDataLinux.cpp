@@ -45,7 +45,7 @@
 namespace blink {
 
 namespace {
-// These functions are also ipmlemented in sandbox_ipc_linux.cc
+// These functions are also implemented in sandbox_ipc_linux.cc
 // Converts gfx::FontRenderParams::Hinting to WebFontRenderStyle::hintStyle.
 // Returns an int for serialization, but the underlying Blink type is a char.
 int ConvertHinting(gfx::FontRenderParams::Hinting hinting) {
@@ -107,7 +107,7 @@ void FontPlatformData::setSubpixelRendering(bool useSubpixelRendering)
     useSkiaSubpixelRendering = useSubpixelRendering;
 }
 
-void FontPlatformData::setupPaint(SkPaint* paint, GraphicsContext* context, const Font*) const
+void FontPlatformData::setupPaint(SkPaint* paint, float deviceScaleFactor, const Font*) const
 {
     paint->setAntiAlias(m_style.useAntiAlias);
     paint->setHinting(static_cast<SkPaint::Hinting>(m_style.hintStyle));
@@ -116,10 +116,8 @@ void FontPlatformData::setupPaint(SkPaint* paint, GraphicsContext* context, cons
     if (m_style.useAntiAlias)
         paint->setLCDRenderText(m_style.useSubpixelRendering);
 
-    // Do not enable subpixel text on low-dpi if full hinting is requested.
-    bool useSubpixelText = RuntimeEnabledFeatures::subpixelFontScalingEnabled()
-        && (paint->getHinting() < SkPaint::kFull_Hinting
-            || (context && context->deviceScaleFactor() > 1.0f));
+    // Do not enable subpixel text on low-dpi if normal or full hinting is requested.
+    bool useSubpixelText = (paint->getHinting() < SkPaint::kNormal_Hinting || deviceScaleFactor > 1.0f);
 
     // TestRunner specifically toggles the subpixel positioning flag.
     if (useSubpixelText && !LayoutTestSupport::isRunningLayoutTest())
@@ -140,11 +138,12 @@ void FontPlatformData::querySystemForRenderStyle(bool useSkiaSubpixelPositioning
 #if OS(ANDROID)
     style.setDefaults();
 #else
-    // If the font name is missing (i.e. probably a web font) or the sandbox is disabled, use the system defaults.
-    if (!m_family.length() || !Platform::current()->sandboxSupport()) {
-        // This is probably a webfont.
+    // If the the sandbox is disabled, we can query font parameters directly.
+    if (!Platform::current()->sandboxSupport()) {
         const int sizeAndStyle = (((int)m_textSize) << 2) | (m_typeface->style() & 3);
-        gfx::FontRenderParamsQuery query(true);
+        gfx::FontRenderParamsQuery query;
+        if (m_family.length())
+            query.families.push_back(m_family.data());
         query.pixel_size = m_textSize;
         query.style = gfx::Font::NORMAL | (sizeAndStyle & 1 ? gfx::Font::BOLD : 0) | (sizeAndStyle & 2 ? gfx::Font::ITALIC : 0);
         const gfx::FontRenderParams params = gfx::GetFontRenderParams(query, NULL);

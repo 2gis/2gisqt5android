@@ -34,18 +34,16 @@
 **
 ****************************************************************************/
 
-import Qt3D 2.0
-import Qt3D.Renderer 2.0
+import Qt3D.Core 2.0
+import Qt3D.Render 2.0
 
 Entity {
     id: root
-    property alias x: translation.dx
-    property alias y: translation.dy
-    property alias z: translation.dz
+    property alias position: transform.translation
     property alias diffuse: material.diffuse
 
     components: [
-        Transform { Translate { id: translation } },
+        Transform { id: transform },
         SphereMesh { radius: 2 },
         PhongMaterial { id: material }
     ]

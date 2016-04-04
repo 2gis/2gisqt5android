@@ -34,6 +34,17 @@
 #ifndef QDECLARATIVEAUDIOENGINE_P_H
 #define QDECLARATIVEAUDIOENGINE_P_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include <QtQml/qqml.h>
 #include <QtQml/qqmlcomponent.h>
 #include <QtQml/qqmlpropertymap.h>
@@ -111,6 +122,11 @@ public:
     QSoundInstance* newSoundInstance(const QString &name);
     void releaseSoundInstance(QSoundInstance* instance);
 
+    Q_REVISION(1) Q_INVOKABLE void addAudioSample(QDeclarativeAudioSample *);
+    Q_REVISION(1) Q_INVOKABLE void addSound(QDeclarativeSound *);
+    Q_REVISION(1) Q_INVOKABLE void addAudioCategory(QDeclarativeAudioCategory *);
+    Q_REVISION(1) Q_INVOKABLE void addAttenuationModel(QDeclarativeAttenuationModel *);
+
 Q_SIGNALS:
     void ready();
     void liveInstanceCountChanged();
@@ -149,6 +165,9 @@ private:
     QList<QDeclarativeSoundInstance*> m_managedDeclSoundInstances;
     QList<QDeclarativeSoundInstance*> m_managedDeclSndInstancePool;
     void releaseManagedDeclarativeSoundInstance(QDeclarativeSoundInstance* declSndInstance);
+
+    void initAudioSample(QDeclarativeAudioSample *);
+    void initSound(QDeclarativeSound *);
 };
 
 QT_END_NAMESPACE

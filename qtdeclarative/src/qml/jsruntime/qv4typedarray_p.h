@@ -33,6 +33,17 @@
 #ifndef QV4TYPEDARRAY_H
 #define QV4TYPEDARRAY_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include "qv4object_p.h"
 #include "qv4functionobject_p.h"
 #include "qv4arraybuffer_p.h"
@@ -69,10 +80,10 @@ struct TypedArray : Object {
         NTypes
     };
 
-    TypedArray(ExecutionEngine *e, Type t);
+    TypedArray(Type t);
 
     const TypedArrayOperations *type;
-    ArrayBuffer *buffer;
+    Pointer<ArrayBuffer> buffer;
     uint byteLength;
     uint byteOffset;
     Type arrayType;
@@ -85,7 +96,7 @@ struct TypedArrayCtor : FunctionObject {
 };
 
 struct TypedArrayPrototype : Object {
-    inline TypedArrayPrototype(ExecutionEngine *e, TypedArray::Type t);
+    inline TypedArrayPrototype(TypedArray::Type t);
     TypedArray::Type type;
 };
 
@@ -95,6 +106,8 @@ struct TypedArrayPrototype : Object {
 struct Q_QML_PRIVATE_EXPORT TypedArray : Object
 {
     V4_OBJECT2(TypedArray, Object)
+
+    static Heap::TypedArray *create(QV4::ExecutionEngine *e, Heap::TypedArray::Type t);
 
     uint byteLength() const {
         return d()->byteLength;
@@ -113,7 +126,7 @@ struct Q_QML_PRIVATE_EXPORT TypedArray : Object
     }
 
     static void markObjects(Heap::Base *that, ExecutionEngine *e);
-    static ReturnedValue getIndexed(Managed *m, uint index, bool *hasProperty);
+    static ReturnedValue getIndexed(const Managed *m, uint index, bool *hasProperty);
     static void putIndexed(Managed *m, uint index, const Value &value);
 };
 
@@ -121,8 +134,8 @@ struct TypedArrayCtor: FunctionObject
 {
     V4_OBJECT2(TypedArrayCtor, FunctionObject)
 
-    static ReturnedValue construct(Managed *m, CallData *callData);
-    static ReturnedValue call(Managed *that, CallData *callData);
+    static ReturnedValue construct(const Managed *m, CallData *callData);
+    static ReturnedValue call(const Managed *that, CallData *callData);
 };
 
 
@@ -142,9 +155,8 @@ struct TypedArrayPrototype : Object
 };
 
 inline
-Heap::TypedArrayPrototype::TypedArrayPrototype(ExecutionEngine *e, TypedArray::Type t)
-    : Heap::Object(e)
-    , type(t)
+Heap::TypedArrayPrototype::TypedArrayPrototype(TypedArray::Type t)
+    : type(t)
 {
 }
 

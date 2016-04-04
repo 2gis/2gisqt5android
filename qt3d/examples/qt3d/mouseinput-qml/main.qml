@@ -34,8 +34,8 @@
 **
 ****************************************************************************/
 
-import Qt3D 2.0
-import Qt3D.Renderer 2.0
+import Qt3D.Core 2.0
+import Qt3D.Render 2.0
 import Qt3D.Input 2.0
 
 Entity {
@@ -85,9 +85,7 @@ Entity {
         property real scaleFactor: 1.0
 
         property Transform transform: Transform {
-            Scale {
-                scale: sphere1.scaleFactor
-            }
+            scale: sphere1.scaleFactor
         }
 
         property MouseInput mouseInput : MouseInput {

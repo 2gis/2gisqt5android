@@ -218,7 +218,6 @@
 #include "private/qhttpsocketengine_p.h"
 #include "qauthenticator.h"
 #include "qdebug.h"
-#include "qhash.h"
 #include "qmutex.h"
 #include "qstringlist.h"
 #include "qurl.h"
@@ -1606,7 +1605,7 @@ QDebug operator<<(QDebug debug, const QNetworkProxy &proxy)
         debug << "Unknown proxy " << int(type);
         break;
     }
-    debug << "\"" << proxy.hostName() << ":" << proxy.port() << "\" ";
+    debug << '"' << proxy.hostName() << ':' << proxy.port() << "\" ";
     QNetworkProxy::Capabilities caps = proxy.capabilities();
     QStringList scaps;
     if (caps & QNetworkProxy::TunnelingCapability)
@@ -1619,7 +1618,7 @@ QDebug operator<<(QDebug debug, const QNetworkProxy &proxy)
         scaps << QStringLiteral("Caching");
     if (caps & QNetworkProxy::HostNameLookupCapability)
         scaps << QStringLiteral("NameLookup");
-    debug << "[" << scaps.join(QLatin1Char(' ')) << "]";
+    debug << '[' << scaps.join(QLatin1Char(' ')) << ']';
     return debug;
 }
 #endif

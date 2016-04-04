@@ -4,5 +4,9 @@ lessThan(QT_MAJOR_VERSION, 5) {
 }
 
 requires(!winrt)
+requires(!ios)
+
+load(configure)
+qtCompileTest(ntddmodm)
 
 load(qt_parts)

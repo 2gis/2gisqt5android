@@ -47,11 +47,13 @@
 
 #include <private/qthread_p.h>
 #include <private/qabstractsocket_p.h>
+#include <private/qeventdispatcher_winrt_p.h>
 
 #ifndef QT_NO_SSL
 #include <QSslSocket>
 #endif
 
+#include <functional>
 #include <wrl.h>
 #include <windows.foundation.collections.h>
 #include <windows.storage.streams.h>
@@ -75,6 +77,21 @@ typedef IAsyncOperationWithProgressCompletedHandler<UINT32, UINT32> SocketWriteC
 typedef IAsyncOperationWithProgress<IBuffer *, UINT32> IAsyncBufferOperation;
 
 QT_BEGIN_NAMESPACE
+
+static QByteArray socketDescription(const QAbstractSocketEngine *s)
+{
+    QByteArray result;
+    if (const QObject *o = s->parent()) {
+        const QString name = o->objectName();
+        if (!name.isEmpty()) {
+            result += '"';
+            result += name.toLocal8Bit();
+            result += "\"/";
+        }
+        result += o->metaObject()->className();
+    }
+    return result;
+}
 
 // Common constructs
 #define Q_CHECK_VALID_SOCKETLAYER(function, returnValue) do { \
@@ -150,16 +167,10 @@ static AsyncStatus opStatus(const ComPtr<T> &op)
 {
     ComPtr<IAsyncInfo> info;
     HRESULT hr = op.As(&info);
-    if (FAILED(hr)) {
-        qErrnoWarning(hr, "Failed to cast op to IAsyncInfo.");
-        return Error;
-    }
+    Q_ASSERT_SUCCEEDED(hr);
     AsyncStatus status;
     hr = info->get_Status(&status);
-    if (FAILED(hr)) {
-        qErrnoWarning(hr, "Failed to get AsyncStatus.");
-        return Error;
-    }
+    Q_ASSERT_SUCCEEDED(hr);
     return status;
 }
 
@@ -265,25 +276,27 @@ bool QNativeSocketEngine::connectToHostByName(const QString &name, quint16 port)
     Q_D(QNativeSocketEngine);
     HStringReference hostNameRef(reinterpret_cast<LPCWSTR>(name.utf16()));
     ComPtr<IHostNameFactory> hostNameFactory;
-    GetActivationFactory(HString::MakeReference(RuntimeClass_Windows_Networking_HostName).Get(),
-                         &hostNameFactory);
+    HRESULT hr = GetActivationFactory(HString::MakeReference(RuntimeClass_Windows_Networking_HostName).Get(),
+                                      &hostNameFactory);
+    Q_ASSERT_SUCCEEDED(hr);
     ComPtr<IHostName> remoteHost;
-    if (FAILED(hostNameFactory->CreateHostName(hostNameRef.Get(), &remoteHost))) {
-        qWarning("QNativeSocketEnginePrivate::nativeConnect:: Could not create hostname");
-        return false;
-    }
+    hr = hostNameFactory->CreateHostName(hostNameRef.Get(), &remoteHost);
+    RETURN_FALSE_IF_FAILED("QNativeSocketEngine::connectToHostByName: Could not create hostname.");
 
     const QString portString = QString::number(port);
     HStringReference portReference(reinterpret_cast<LPCWSTR>(portString.utf16()));
-    HRESULT hr = E_FAIL;
     if (d->socketType == QAbstractSocket::TcpSocket)
         hr = d->tcpSocket()->ConnectAsync(remoteHost.Get(), portReference.Get(), &d->connectOp);
     else if (d->socketType == QAbstractSocket::UdpSocket)
         hr = d->udpSocket()->ConnectAsync(remoteHost.Get(), portReference.Get(), &d->connectOp);
-    if (FAILED(hr)) {
-        qWarning("QNativeSocketEnginePrivate::nativeConnect:: Could not obtain connect action");
+    if (hr == E_ACCESSDENIED) {
+        qErrnoWarning(hr, "QNativeSocketEngine::connectToHostByName: Unable to connect to host (%s:%hu/%s). "
+                          "Please check your manifest capabilities.",
+                      qPrintable(name), port, socketDescription(this).constData());
         return false;
     }
+    Q_ASSERT_SUCCEEDED(hr);
+
     d->socketState = QAbstractSocket::ConnectingState;
     hr = d->connectOp->put_Completed(Callback<IAsyncActionCompletedHandler>(
                                          d, &QNativeSocketEnginePrivate::handleConnectToHost).Get());
@@ -295,68 +308,55 @@ bool QNativeSocketEngine::connectToHostByName(const QString &name, quint16 port)
 bool QNativeSocketEngine::bind(const QHostAddress &address, quint16 port)
 {
     Q_D(QNativeSocketEngine);
+    HRESULT hr;
     ComPtr<IHostName> hostAddress;
+
     if (address != QHostAddress::Any && address != QHostAddress::AnyIPv4 && address != QHostAddress::AnyIPv6) {
         ComPtr<IHostNameFactory> hostNameFactory;
-        GetActivationFactory(HString::MakeReference(RuntimeClass_Windows_Networking_HostName).Get(),
+        hr = GetActivationFactory(HString::MakeReference(RuntimeClass_Windows_Networking_HostName).Get(),
                              &hostNameFactory);
+        Q_ASSERT_SUCCEEDED(hr);
         const QString addressString = address.toString();
         HStringReference addressRef(reinterpret_cast<LPCWSTR>(addressString.utf16()));
-        hostNameFactory->CreateHostName(addressRef.Get(), &hostAddress);
+        hr = hostNameFactory->CreateHostName(addressRef.Get(), &hostAddress);
+        RETURN_FALSE_IF_FAILED("QNativeSocketEngine::bind: Could not create hostname.");
     }
 
-    HRESULT hr;
     QString portQString = port ? QString::number(port) : QString();
     HStringReference portString(reinterpret_cast<LPCWSTR>(portQString.utf16()));
 
     ComPtr<IAsyncAction> op;
     if (d->socketType == QAbstractSocket::TcpSocket) {
-        if (!d->tcpListener
-                && FAILED(RoActivateInstance(HString::MakeReference(RuntimeClass_Windows_Networking_Sockets_StreamSocketListener).Get(),
-                                             &d->tcpListener))) {
-            qWarning("Failed to create listener");
-            return false;
+        if (!d->tcpListener) {
+            hr = RoActivateInstance(HString::MakeReference(RuntimeClass_Windows_Networking_Sockets_StreamSocketListener).Get(),
+                                    &d->tcpListener);
+            Q_ASSERT_SUCCEEDED(hr);
         }
 
-        d->tcpListener->add_ConnectionReceived(Callback<ClientConnectedHandler>(d, &QNativeSocketEnginePrivate::handleClientConnection).Get(), &d->connectionToken);
+        hr = QEventDispatcherWinRT::runOnXamlThread([d]() {
+            return d->tcpListener->add_ConnectionReceived(
+                        Callback<ClientConnectedHandler>(d, &QNativeSocketEnginePrivate::handleClientConnection).Get(),
+                        &d->connectionToken);
+        });
+        Q_ASSERT_SUCCEEDED(hr);
         hr = d->tcpListener->BindEndpointAsync(hostAddress.Get(), portString.Get(), &op);
-        if (FAILED(hr)) {
-            qErrnoWarning(hr, "Unable to bind socket."); // ### Set error message
-            return false;
-        }
     } else if (d->socketType == QAbstractSocket::UdpSocket) {
         hr = d->udpSocket()->BindEndpointAsync(hostAddress.Get(), portString.Get(), &op);
-        if (FAILED(hr)) {
-            qErrnoWarning(hr, "Unable to bind socket."); // ### Set error message
-            return false;
-        }
-        hr = op->put_Completed(Callback<IAsyncActionCompletedHandler>(d, &QNativeSocketEnginePrivate::handleBindCompleted).Get());
-        if (FAILED(hr)) {
-            qErrnoWarning(hr, "Unable to set bind callback.");
-            return false;
-        }
     }
-
-    if (op) {
-        while (opStatus(op) == Started)
-            d->eventLoop.processEvents();
-
-        AsyncStatus status = opStatus(op);
-        if (status == Error || status == Canceled)
-            return false;
-
-        hr = op->GetResults();
-        if (FAILED(hr)) {
-            qErrnoWarning(hr, "Failed to bind socket");
-            return false;
-        }
-
-        d->socketState = QAbstractSocket::BoundState;
-        d->fetchConnectionParameters();
-        return true;
+    if (hr == E_ACCESSDENIED) {
+        qErrnoWarning(hr, "Unable to bind socket (%s:%hu/%s). Please check your manifest capabilities.",
+                      qPrintable(address.toString()), port, socketDescription(this).constData());
+        return false;
     }
+    Q_ASSERT_SUCCEEDED(hr);
 
-    return false;
+    hr = op->put_Completed(Callback<IAsyncActionCompletedHandler>(d, &QNativeSocketEnginePrivate::handleBindCompleted).Get());
+    Q_ASSERT_SUCCEEDED(hr);
+    hr = QWinRTFunctions::await(op);
+    Q_ASSERT_SUCCEEDED(hr);
+
+    d->socketState = QAbstractSocket::BoundState;
+    return d->fetchConnectionParameters();
 }
 
 bool QNativeSocketEngine::listen()
@@ -380,8 +380,10 @@ int QNativeSocketEngine::accept()
     Q_CHECK_STATE(QNativeSocketEngine::accept(), QAbstractSocket::ListeningState, -1);
     Q_CHECK_TYPE(QNativeSocketEngine::accept(), QAbstractSocket::TcpSocket, -1);
 
-    if (d->socketDescriptor == -1 || d->pendingConnections.isEmpty())
+    if (d->socketDescriptor == -1 || d->pendingConnections.isEmpty()) {
+        d->setError(QAbstractSocket::TemporaryError, QNativeSocketEnginePrivate::TemporaryErrorString);
         return -1;
+    }
 
     // Start processing incoming data
     if (d->socketType == QAbstractSocket::TcpSocket) {
@@ -398,12 +400,14 @@ int QNativeSocketEngine::accept()
         ComPtr<IAsyncBufferOperation> op;
         hr = stream->ReadAsync(buffer.Get(), READ_BUFFER_SIZE, InputStreamOptions_Partial, &op);
         if (FAILED(hr)) {
-            qErrnoWarning(hr, "Faild to read from the socket buffer.");
+            qErrnoWarning(hr, "accept(): Failed to read from the socket buffer (%s).",
+                          socketDescription(this).constData());
             return -1;
         }
         hr = op->put_Completed(Callback<SocketReadCompletedHandler>(d, &QNativeSocketEnginePrivate::handleReadyRead).Get());
         if (FAILED(hr)) {
-            qErrnoWarning(hr, "Failed to set socket read callback.");
+            qErrnoWarning(hr, "accept(): Failed to set socket read callback (%s).",
+                          socketDescription(this).constData());
             return -1;
         }
         d->currentConnections.append(socket);
@@ -420,28 +424,46 @@ void QNativeSocketEngine::close()
 {
     Q_D(QNativeSocketEngine);
 
+    if (d->closingDown)
+        return;
+
+    d->closingDown = true;
+
+
+    d->notifyOnRead = false;
+    d->notifyOnWrite = false;
+    d->notifyOnException = false;
+
+    HRESULT hr;
     if (d->connectOp) {
         ComPtr<IAsyncInfo> info;
-        d->connectOp.As(&info);
+        hr = d->connectOp.As(&info);
+        Q_ASSERT_SUCCEEDED(hr);
         if (info) {
-            info->Cancel();
-            info->Close();
+            hr = info->Cancel();
+            Q_ASSERT_SUCCEEDED(hr);
+            hr = info->Close();
+            Q_ASSERT_SUCCEEDED(hr);
         }
     }
 
     if (d->socketDescriptor != -1) {
         ComPtr<IClosable> socket;
         if (d->socketType == QAbstractSocket::TcpSocket) {
-            d->tcpSocket()->QueryInterface(IID_PPV_ARGS(&socket));
-            d->tcpSocket()->Release();
+            hr = d->tcpSocket()->QueryInterface(IID_PPV_ARGS(&socket));
+            Q_ASSERT_SUCCEEDED(hr);
+            hr = d->tcpSocket()->Release();
+            Q_ASSERT_SUCCEEDED(hr);
         } else if (d->socketType == QAbstractSocket::UdpSocket) {
-            d->udpSocket()->QueryInterface(IID_PPV_ARGS(&socket));
-            d->udpSocket()->Release();
+            hr = d->udpSocket()->QueryInterface(IID_PPV_ARGS(&socket));
+            Q_ASSERT_SUCCEEDED(hr);
+            hr = d->udpSocket()->Release();
+            Q_ASSERT_SUCCEEDED(hr);
         }
 
         if (socket) {
-            d->closingDown = true;
-            socket->Close();
+            hr = socket->Close();
+            Q_ASSERT_SUCCEEDED(hr);
             d->socketDescriptor = -1;
         }
         d->socketDescriptor = -1;
@@ -498,6 +520,14 @@ qint64 QNativeSocketEngine::read(char *data, qint64 maxlen)
     if (d->socketType != QAbstractSocket::TcpSocket)
         return -1;
 
+    // There will be a read notification when the socket was closed by the remote host. If that
+    // happens and there isn't anything left in the buffer, we have to return -1 in order to signal
+    // the closing of the socket.
+    if (d->readBytes.pos() == d->readBytes.size() && d->socketState != QAbstractSocket::ConnectedState) {
+        close();
+        return -1;
+    }
+
     QMutexLocker mutexLocker(&d->readMutex);
     return d->readBytes.read(data, maxlen);
 }
@@ -514,7 +544,7 @@ qint64 QNativeSocketEngine::write(const char *data, qint64 len)
         hr = d->tcpSocket()->get_OutputStream(&stream);
     else if (d->socketType == QAbstractSocket::UdpSocket)
         hr = d->udpSocket()->get_OutputStream(&stream);
-    RETURN_IF_FAILED("Failed to get output stream to socket", return -1);
+    Q_ASSERT_SUCCEEDED(hr);
 
     qint64 bytesWritten = writeIOStream(stream, data, len);
     if (bytesWritten < 0)
@@ -525,18 +555,19 @@ qint64 QNativeSocketEngine::write(const char *data, qint64 len)
     return bytesWritten;
 }
 
-qint64 QNativeSocketEngine::readDatagram(char *data, qint64 maxlen, QHostAddress *addr, quint16 *port)
+qint64 QNativeSocketEngine::readDatagram(char *data, qint64 maxlen, QIpPacketHeader *header,
+                                         PacketHeaderOptions)
 {
     Q_D(QNativeSocketEngine);
-    if (d->socketType != QAbstractSocket::UdpSocket || d->pendingDatagrams.isEmpty())
+    if (d->socketType != QAbstractSocket::UdpSocket || d->pendingDatagrams.isEmpty()) {
+        if (header)
+            header->clear();
         return -1;
+    }
 
     WinRtDatagram datagram = d->pendingDatagrams.takeFirst();
-    if (addr)
-        *addr = datagram.address;
-
-    if (port)
-        *port = datagram.port;
+    if (header)
+        *header = datagram.header;
 
     QByteArray readOrigin;
     // Do not read the whole datagram. Put the rest of it back into the "queue"
@@ -547,11 +578,11 @@ qint64 QNativeSocketEngine::readDatagram(char *data, qint64 maxlen, QHostAddress
     } else {
         readOrigin = datagram.data;
     }
-    strcpy(data, readOrigin);
+    memcpy(data, readOrigin, qMin(maxlen, qint64(datagram.data.length())));
     return readOrigin.length();
 }
 
-qint64 QNativeSocketEngine::writeDatagram(const char *data, qint64 len, const QHostAddress &addr, quint16 port)
+qint64 QNativeSocketEngine::writeDatagram(const char *data, qint64 len, const QIpPacketHeader &header)
 {
     Q_D(QNativeSocketEngine);
     if (d->socketType != QAbstractSocket::UdpSocket)
@@ -562,20 +593,21 @@ qint64 QNativeSocketEngine::writeDatagram(const char *data, qint64 len, const QH
 
     HRESULT hr = GetActivationFactory(HString::MakeReference(RuntimeClass_Windows_Networking_HostName).Get(),
                                     &hostNameFactory);
-    RETURN_IF_FAILED("Could not obtain hostname factory", return -1);
-    const QString addressString = addr.toString();
+    Q_ASSERT_SUCCEEDED(hr);
+    const QString addressString = header.destinationAddress.toString();
     HStringReference hostNameRef(reinterpret_cast<LPCWSTR>(addressString.utf16()));
-    hostNameFactory->CreateHostName(hostNameRef.Get(), &remoteHost);
+    hr = hostNameFactory->CreateHostName(hostNameRef.Get(), &remoteHost);
+    RETURN_IF_FAILED("QNativeSocketEngine::writeDatagram: Could not create hostname.", return -1);
 
     ComPtr<IAsyncOperation<IOutputStream *>> streamOperation;
     ComPtr<IOutputStream> stream;
-    const QString portString = QString::number(port);
+    const QString portString = QString::number(header.destinationPort);
     HStringReference portRef(reinterpret_cast<LPCWSTR>(portString.utf16()));
     hr = d->udpSocket()->GetOutputStreamAsync(remoteHost.Get(), portRef.Get(), &streamOperation);
-    RETURN_IF_FAILED("Failed to get output stream to socket", return -1);
+    Q_ASSERT_SUCCEEDED(hr);
 
     hr = QWinRTFunctions::await(streamOperation, stream.GetAddressOf());
-    RETURN_IF_FAILED("Failed to get output stream to socket", return -1);
+    Q_ASSERT_SUCCEEDED(hr);
 
     return writeIOStream(stream, data, len);
 }
@@ -760,32 +792,31 @@ void QNativeSocketEngine::establishRead()
 bool QNativeSocketEnginePrivate::createNewSocket(QAbstractSocket::SocketType socketType, QAbstractSocket::NetworkLayerProtocol &socketProtocol)
 {
     Q_UNUSED(socketProtocol);
+    HRESULT hr;
+
     switch (socketType) {
     case QAbstractSocket::TcpSocket: {
         ComPtr<IStreamSocket> socket;
-        HRESULT hr = RoActivateInstance(HString::MakeReference(RuntimeClass_Windows_Networking_Sockets_StreamSocket).Get(), &socket);
-        if (FAILED(hr)) {
-            qWarning("Failed to create StreamSocket instance");
-            return false;
-        }
+        hr = RoActivateInstance(HString::MakeReference(RuntimeClass_Windows_Networking_Sockets_StreamSocket).Get(), &socket);
+        Q_ASSERT_SUCCEEDED(hr);
         socketDescriptor = qintptr(socket.Detach());
         break;
     }
     case QAbstractSocket::UdpSocket: {
         ComPtr<IDatagramSocket> socket;
-        HRESULT hr = RoActivateInstance(HString::MakeReference(RuntimeClass_Windows_Networking_Sockets_DatagramSocket).Get(), &socket);
-        if (FAILED(hr)) {
-            qWarning("Failed to create stream socket");
-            return false;
-        }
+        hr = RoActivateInstance(HString::MakeReference(RuntimeClass_Windows_Networking_Sockets_DatagramSocket).Get(), &socket);
+        Q_ASSERT_SUCCEEDED(hr);
         socketDescriptor = qintptr(socket.Detach());
-        udpSocket()->add_MessageReceived(Callback<DatagramReceivedHandler>(this, &QNativeSocketEnginePrivate::handleNewDatagram).Get(), &connectionToken);
+        hr = udpSocket()->add_MessageReceived(Callback<DatagramReceivedHandler>(this, &QNativeSocketEnginePrivate::handleNewDatagram).Get(), &connectionToken);
+        Q_ASSERT_SUCCEEDED(hr);
         break;
     }
     default:
         qWarning("Invalid socket type");
         return false;
     }
+
+    this->socketType = socketType;
 
     // Make the socket nonblocking.
     if (!setOption(QAbstractSocketEngine::NonBlockingSocketOption, 1)) {
@@ -814,10 +845,12 @@ QNativeSocketEnginePrivate::~QNativeSocketEnginePrivate()
     if (socketDescriptor == -1 || connectionToken.value == -1)
         return;
 
+    HRESULT hr;
     if (socketType == QAbstractSocket::UdpSocket)
-        udpSocket()->remove_MessageReceived(connectionToken);
+        hr = udpSocket()->remove_MessageReceived(connectionToken);
     else if (socketType == QAbstractSocket::TcpSocket)
-        tcpListener->remove_ConnectionReceived(connectionToken);
+        hr = tcpListener->remove_ConnectionReceived(connectionToken);
+    Q_ASSERT_SUCCEEDED(hr);
 }
 
 void QNativeSocketEnginePrivate::setError(QAbstractSocket::SocketError error, ErrorString errorString) const
@@ -1044,56 +1077,66 @@ bool QNativeSocketEnginePrivate::fetchConnectionParameters()
     peerPort = 0;
     peerAddress.clear();
 
+    HRESULT hr;
     if (socketType == QAbstractSocket::TcpSocket) {
         ComPtr<IHostName> hostName;
         HString tmpHString;
         ComPtr<IStreamSocketInformation> info;
-        if (FAILED(tcpSocket()->get_Information(&info))) {
-            qWarning("QNativeSocketEnginePrivate::fetchConnectionParameters: Could not obtain socket info");
-            return false;
-        }
-        info->get_LocalAddress(&hostName);
+        hr = tcpSocket()->get_Information(&info);
+        Q_ASSERT_SUCCEEDED(hr);
+        hr = info->get_LocalAddress(&hostName);
+        Q_ASSERT_SUCCEEDED(hr);
         if (hostName) {
-            hostName->get_CanonicalName(tmpHString.GetAddressOf());
+            hr = hostName->get_CanonicalName(tmpHString.GetAddressOf());
+            Q_ASSERT_SUCCEEDED(hr);
             localAddress.setAddress(qt_QStringFromHString(tmpHString));
-            info->get_LocalPort(tmpHString.GetAddressOf());
+            hr = info->get_LocalPort(tmpHString.GetAddressOf());
+            Q_ASSERT_SUCCEEDED(hr);
             localPort = qt_QStringFromHString(tmpHString).toInt();
         }
         if (!localPort && tcpListener) {
             ComPtr<IStreamSocketListenerInformation> listenerInfo = 0;
-            tcpListener->get_Information(&listenerInfo);
-            listenerInfo->get_LocalPort(tmpHString.GetAddressOf());
+            hr = tcpListener->get_Information(&listenerInfo);
+            Q_ASSERT_SUCCEEDED(hr);
+            hr = listenerInfo->get_LocalPort(tmpHString.GetAddressOf());
+            Q_ASSERT_SUCCEEDED(hr);
             localPort = qt_QStringFromHString(tmpHString).toInt();
-            localAddress == QHostAddress::Any;
+            localAddress = QHostAddress::Any;
         }
         info->get_RemoteAddress(&hostName);
         if (hostName) {
-            hostName->get_CanonicalName(tmpHString.GetAddressOf());
+            hr = hostName->get_CanonicalName(tmpHString.GetAddressOf());
+            Q_ASSERT_SUCCEEDED(hr);
             peerAddress.setAddress(qt_QStringFromHString(tmpHString));
-            info->get_RemotePort(tmpHString.GetAddressOf());
+            hr = info->get_RemotePort(tmpHString.GetAddressOf());
+            Q_ASSERT_SUCCEEDED(hr);
             peerPort = qt_QStringFromHString(tmpHString).toInt();
         }
     } else if (socketType == QAbstractSocket::UdpSocket) {
         ComPtr<IHostName> hostName;
         HString tmpHString;
         ComPtr<IDatagramSocketInformation> info;
-        if (FAILED(udpSocket()->get_Information(&info))) {
-            qWarning("QNativeSocketEnginePrivate::fetchConnectionParameters: Could not obtain socket information");
-            return false;
-        }
-        info->get_LocalAddress(&hostName);
+        hr = udpSocket()->get_Information(&info);
+        Q_ASSERT_SUCCEEDED(hr);
+        hr = info->get_LocalAddress(&hostName);
+        Q_ASSERT_SUCCEEDED(hr);
         if (hostName) {
-            hostName->get_CanonicalName(tmpHString.GetAddressOf());
+            hr = hostName->get_CanonicalName(tmpHString.GetAddressOf());
+            Q_ASSERT_SUCCEEDED(hr);
             localAddress.setAddress(qt_QStringFromHString(tmpHString));
-            info->get_LocalPort(tmpHString.GetAddressOf());
+            hr = info->get_LocalPort(tmpHString.GetAddressOf());
+            Q_ASSERT_SUCCEEDED(hr);
             localPort = qt_QStringFromHString(tmpHString).toInt();
         }
 
-        info->get_RemoteAddress(&hostName);
+        hr = info->get_RemoteAddress(&hostName);
+        Q_ASSERT_SUCCEEDED(hr);
         if (hostName) {
-            hostName->get_CanonicalName(tmpHString.GetAddressOf());
+            hr = hostName->get_CanonicalName(tmpHString.GetAddressOf());
+            Q_ASSERT_SUCCEEDED(hr);
             peerAddress.setAddress(qt_QStringFromHString(tmpHString));
-            info->get_RemotePort(tmpHString.GetAddressOf());
+            hr = info->get_RemotePort(tmpHString.GetAddressOf());
+            Q_ASSERT_SUCCEEDED(hr);
             peerPort = qt_QStringFromHString(tmpHString).toInt();
         }
     }
@@ -1154,12 +1197,16 @@ void QNativeSocketEnginePrivate::handleConnectionEstablished(IAsyncAction *actio
     // The callback might be triggered several times if we do not cancel/reset it here
     if (connectOp) {
         ComPtr<IAsyncInfo> info;
-        connectOp.As(&info);
+        hr = connectOp.As(&info);
+        Q_ASSERT_SUCCEEDED(hr);
         if (info) {
-            info->Cancel();
-            info->Close();
+            hr = info->Cancel();
+            Q_ASSERT_SUCCEEDED(hr);
+            hr = info->Close();
+            Q_ASSERT_SUCCEEDED(hr);
         }
-        connectOp.Reset();
+        hr = connectOp.Reset();
+        Q_ASSERT_SUCCEEDED(hr);
     }
 
     socketState = QAbstractSocket::ConnectedState;
@@ -1181,8 +1228,16 @@ HRESULT QNativeSocketEnginePrivate::handleReadyRead(IAsyncBufferOperation *async
     if (wasDeleted || isDeletingChildren)
         return S_OK;
 
-    if (status == Error || status == Canceled)
+    // A read in UnconnectedState will close the socket and return -1 and thus tell the caller,
+    // that the connection was closed. The socket cannot be closed here, as the subsequent read
+    // might fail then.
+    if (status == Error || status == Canceled) {
+        setError(QAbstractSocket::NetworkError, RemoteHostClosedErrorString);
+        socketState = QAbstractSocket::UnconnectedState;
+        if (notifyOnRead)
+            emit q->readReady();
         return S_OK;
+    }
 
     ComPtr<IBuffer> buffer;
     HRESULT hr = asyncInfo->GetResults(&buffer);
@@ -1191,7 +1246,13 @@ HRESULT QNativeSocketEnginePrivate::handleReadyRead(IAsyncBufferOperation *async
     UINT32 bufferLength;
     hr = buffer->get_Length(&bufferLength);
     Q_ASSERT_SUCCEEDED(hr);
+    // A zero sized buffer length signals, that the remote host closed the connection. The socket
+    // cannot be closed though, as the following read might have socket descriptor -1 and thus and
+    // the closing of the socket won't be communicated to the caller. So only the error is set. The
+    // actual socket close happens inside of read.
     if (!bufferLength) {
+        setError(QAbstractSocket::NetworkError, RemoteHostClosedErrorString);
+        socketState = QAbstractSocket::UnconnectedState;
         if (notifyOnRead)
             emit q->readReady();
         return S_OK;
@@ -1232,12 +1293,14 @@ HRESULT QNativeSocketEnginePrivate::handleReadyRead(IAsyncBufferOperation *async
     ComPtr<IAsyncBufferOperation> op;
     hr = stream->ReadAsync(buffer.Get(), bufferLength, InputStreamOptions_Partial, &op);
     if (FAILED(hr)) {
-        qErrnoWarning(hr, "Could not read into socket stream buffer.");
+        qErrnoWarning(hr, "handleReadyRead(): Could not read into socket stream buffer (%s).",
+                      socketDescription(q).constData());
         return S_OK;
     }
     hr = op->put_Completed(Callback<SocketReadCompletedHandler>(this, &QNativeSocketEnginePrivate::handleReadyRead).Get());
     if (FAILED(hr)) {
-        qErrnoWarning(hr, "Failed to set socket read callback.");
+        qErrnoWarning(hr, "handleReadyRead(): Failed to set socket read callback (%s).",
+                      socketDescription(q).constData());
         return S_OK;
     }
     return S_OK;
@@ -1257,11 +1320,11 @@ HRESULT QNativeSocketEnginePrivate::handleNewDatagram(IDatagramSocket *socket, I
     remoteHost->get_CanonicalName(remoteHostString.GetAddressOf());
     RETURN_OK_IF_FAILED("Could not obtain remote host's canonical name");
     returnAddress.setAddress(qt_QStringFromHString(remoteHostString));
-    datagram.address = returnAddress;
+    datagram.header.senderAddress = returnAddress;
     HString remotePort;
     hr = args->get_RemotePort(remotePort.GetAddressOf());
     RETURN_OK_IF_FAILED("Could not obtain remote port");
-    datagram.port = qt_QStringFromHString(remotePort).toInt();
+    datagram.header.senderPort = qt_QStringFromHString(remotePort).toInt();
 
     ComPtr<IDataReader> reader;
     hr = args->GetDataReader(&reader);

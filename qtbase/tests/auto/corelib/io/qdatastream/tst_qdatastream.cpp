@@ -50,6 +50,7 @@ public:
     void stream_data(int noOfElements);
 
 public slots:
+    void initTestCase();
     void cleanupTestCase();
 
 private slots:
@@ -243,6 +244,10 @@ private:
     void readqint64(QDataStream *s);
     void readQIcon(QDataStream *s);
     void readQEasingCurve(QDataStream *s);
+
+private:
+    QSharedPointer<QTemporaryDir> m_tempDir;
+    QString m_previousCurrent;
 };
 
 static int NColorRoles[] = {
@@ -264,7 +269,9 @@ static int NColorRoles[] = {
     QPalette::ToolTipText + 1,     // Qt_5_2
     QPalette::ToolTipText + 1,     // Qt_5_3
     QPalette::ToolTipText + 1,     // Qt_5_4
-    0                              // add the correct value for Qt_5_5 here later
+    QPalette::ToolTipText + 1,     // Qt_5_5
+    QPalette::ToolTipText + 1,     // Qt_5_6
+    0                              // add the correct value for Qt_5_7 here later
 };
 
 // Testing get/set functions
@@ -291,10 +298,20 @@ void tst_QDataStream::getSetCheck()
     QCOMPARE(QDataStream::ReadCorruptData, obj1.status());
 }
 
+void tst_QDataStream::initTestCase()
+{
+    m_previousCurrent = QDir::currentPath();
+    m_tempDir = QSharedPointer<QTemporaryDir>(new QTemporaryDir);
+    QVERIFY2(!m_tempDir.isNull(), qPrintable("Could not create temporary directory."));
+    QVERIFY2(QDir::setCurrent(m_tempDir->path()), qPrintable("Could not switch current directory"));
+}
+
 void tst_QDataStream::cleanupTestCase()
 {
     QFile::remove(QLatin1String("qdatastream.out"));
     QFile::remove(QLatin1String("datastream.tmp"));
+
+    QDir::setCurrent(m_previousCurrent);
 }
 
 static int dataIndex(const QString &tag)

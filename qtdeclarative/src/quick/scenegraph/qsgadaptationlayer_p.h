@@ -34,6 +34,17 @@
 #ifndef QSGADAPTATIONLAYER_P_H
 #define QSGADAPTATIONLAYER_P_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include <QtQuick/qsgnode.h>
 #include <QtQuick/qsgtexture.h>
 #include <QtCore/qobject.h>
@@ -160,6 +171,7 @@ public:
     virtual void setFillColor(const QColor &c) = 0;
     virtual void setContentsScale(qreal s) = 0;
     virtual void setFastFBOResizing(bool dynamic) = 0;
+    virtual void setTextureSize(const QSize &size) = 0;
 
     virtual QImage toImage() const = 0;
     virtual void update() = 0;
@@ -195,6 +207,8 @@ public:
     virtual void setFormat(GLenum format) = 0;
     virtual void setHasMipmaps(bool mipmap) = 0;
     virtual void setDevicePixelRatio(qreal ratio) = 0;
+    virtual void setMirrorHorizontal(bool mirror) = 0;
+    virtual void setMirrorVertical(bool mirror) = 0;
     Q_SLOT virtual void markDirtyTexture() = 0;
     Q_SLOT virtual void invalidated() = 0;
 

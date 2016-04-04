@@ -84,50 +84,6 @@ QQuickTextNode::~QQuickTextNode()
     qDeleteAll(m_textures);
 }
 
-#if 0
-void QQuickTextNode::setColor(const QColor &color)
-{
-    if (m_usePixmapCache) {
-        setUpdateFlag(UpdateNodes);
-    } else {
-        for (QSGNode *childNode = firstChild(); childNode; childNode = childNode->nextSibling()) {
-            if (childNode->subType() == GlyphNodeSubType) {
-                QSGGlyphNode *glyphNode = static_cast<QSGGlyphNode *>(childNode);
-                if (glyphNode->color() == m_color)
-                    glyphNode->setColor(color);
-            } else if (childNode->subType() == SolidRectNodeSubType) {
-                QSGSimpleRectNode *solidRectNode = static_cast<QSGSimpleRectNode *>(childNode);
-                if (solidRectNode->color() == m_color)
-                    solidRectNode->setColor(color);
-            }
-        }
-    }
-    m_color = color;
-}
-
-void QQuickTextNode::setStyleColor(const QColor &styleColor)
-{
-    if (m_textStyle != QQuickTextNode::NormalTextStyle) {
-        if (m_usePixmapCache) {
-            setUpdateFlag(UpdateNodes);
-        } else {
-            for (QSGNode *childNode = firstChild(); childNode; childNode = childNode->nextSibling()) {
-                if (childNode->subType() == GlyphNodeSubType) {
-                    QSGGlyphNode *glyphNode = static_cast<QSGGlyphNode *>(childNode);
-                    if (glyphNode->color() == m_styleColor)
-                        glyphNode->setColor(styleColor);
-                } else if (childNode->subType() == SolidRectNodeSubType) {
-                    QSGSimpleRectNode *solidRectNode = static_cast<QSGSimpleRectNode *>(childNode);
-                    if (solidRectNode->color() == m_styleColor)
-                        solidRectNode->setColor(styleColor);
-                }
-            }
-        }
-    }
-    m_styleColor = styleColor;
-}
-#endif
-
 QSGGlyphNode *QQuickTextNode::addGlyphs(const QPointF &position, const QGlyphRun &glyphs, const QColor &color,
                                      QQuickText::TextStyle style, const QColor &styleColor,
                                      QSGNode *parentNode)
@@ -186,17 +142,6 @@ void QQuickTextNode::clearCursor()
     m_cursorNode = 0;
 }
 
-void QQuickTextNode::initEngine(const QColor& textColor, const QColor& selectedTextColor, const QColor& selectionColor, const QColor& anchorColor, const QPointF &position)
-{
-    m_engine.reset(new QQuickTextNodeEngine);
-    m_engine->m_hasContents = false;
-    m_engine->setTextColor(textColor);
-    m_engine->setSelectedTextColor(selectedTextColor);
-    m_engine->setSelectionColor(selectionColor);
-    m_engine->setAnchorColor(anchorColor);
-    m_engine->setPosition(position);
-}
-
 void QQuickTextNode::addRectangleNode(const QRectF &rect, const QColor &color)
 {
     QSGRenderContext *sg = QQuickItemPrivate::get(m_ownerElement)->sceneGraphRenderContext();
@@ -224,7 +169,12 @@ void QQuickTextNode::addTextDocument(const QPointF &position, QTextDocument *tex
                                   const QColor &selectionColor, const QColor &selectedTextColor,
                                   int selectionStart, int selectionEnd)
 {
-    initEngine(textColor, selectedTextColor, selectionColor, anchorColor);
+    QQuickTextNodeEngine engine;
+    engine.setTextColor(textColor);
+    engine.setSelectedTextColor(selectedTextColor);
+    engine.setSelectionColor(selectionColor);
+    engine.setAnchorColor(anchorColor);
+    engine.setPosition(position);
 
     QList<QTextFrame *> frames;
     frames.append(textDocument->rootFrame());
@@ -232,7 +182,7 @@ void QQuickTextNode::addTextDocument(const QPointF &position, QTextDocument *tex
         QTextFrame *textFrame = frames.takeFirst();
         frames.append(textFrame->childFrames());
 
-        m_engine->addFrameDecorations(textDocument, textFrame);
+        engine.addFrameDecorations(textDocument, textFrame);
 
         if (textFrame->firstPosition() > textFrame->lastPosition()
          && textFrame->frameFormat().position() != QTextFrameFormat::InFlow) {
@@ -242,23 +192,23 @@ void QQuickTextNode::addTextDocument(const QPointF &position, QTextDocument *tex
             QRectF rect = a->frameBoundingRect(textFrame);
 
             QTextBlock block = textFrame->firstCursorPosition().block();
-            m_engine->setCurrentLine(block.layout()->lineForTextPosition(pos - block.position()));
-            m_engine->addTextObject(rect.topLeft(), format, QQuickTextNodeEngine::Unselected, textDocument,
+            engine.setCurrentLine(block.layout()->lineForTextPosition(pos - block.position()));
+            engine.addTextObject(rect.topLeft(), format, QQuickTextNodeEngine::Unselected, textDocument,
                                  pos, textFrame->frameFormat().position());
         } else {
             QTextFrame::iterator it = textFrame->begin();
 
             while (!it.atEnd()) {
-                Q_ASSERT(!m_engine->currentLine().isValid());
+                Q_ASSERT(!engine.currentLine().isValid());
 
                 QTextBlock block = it.currentBlock();
-                m_engine->addTextBlock(textDocument, block, position, textColor, anchorColor, selectionStart, selectionEnd);
+                engine.addTextBlock(textDocument, block, position, textColor, anchorColor, selectionStart, selectionEnd);
                 ++it;
             }
         }
     }
 
-    m_engine->addToSceneGraph(this, style, styleColor);
+    engine.addToSceneGraph(this, style, styleColor);
 }
 
 void QQuickTextNode::addTextLayout(const QPointF &position, QTextLayout *textLayout, const QColor &color,
@@ -268,7 +218,12 @@ void QQuickTextNode::addTextLayout(const QPointF &position, QTextLayout *textLay
                                 int selectionStart, int selectionEnd,
                                 int lineStart, int lineCount)
 {
-    initEngine(color, selectedTextColor, selectionColor, anchorColor, position);
+    QQuickTextNodeEngine engine;
+    engine.setTextColor(color);
+    engine.setSelectedTextColor(selectedTextColor);
+    engine.setSelectionColor(selectionColor);
+    engine.setAnchorColor(anchorColor);
+    engine.setPosition(position);
 
 #ifndef QT_NO_IM
     int preeditLength = textLayout->preeditAreaText().length();
@@ -276,7 +231,7 @@ void QQuickTextNode::addTextLayout(const QPointF &position, QTextLayout *textLay
 #endif
 
     QVarLengthArray<QTextLayout::FormatRange> colorChanges;
-    m_engine->mergeFormats(textLayout, &colorChanges);
+    engine.mergeFormats(textLayout, &colorChanges);
 
     lineCount = lineCount >= 0
             ? qMin(lineStart + lineCount, textLayout->lineCount())
@@ -297,11 +252,11 @@ void QQuickTextNode::addTextLayout(const QPointF &position, QTextLayout *textLay
         }
 #endif
 
-        m_engine->setCurrentLine(line);
-        m_engine->addGlyphsForRanges(colorChanges, start, end, selectionStart, selectionEnd);
+        engine.setCurrentLine(line);
+        engine.addGlyphsForRanges(colorChanges, start, end, selectionStart, selectionEnd);
     }
 
-    m_engine->addToSceneGraph(this, style, styleColor);
+    engine.addToSceneGraph(this, style, styleColor);
 }
 
 void QQuickTextNode::deleteContent()
@@ -312,79 +267,5 @@ void QQuickTextNode::deleteContent()
     qDeleteAll(m_textures);
     m_textures.clear();
 }
-
-#if 0
-void QQuickTextNode::updateNodes()
-{
-    return;
-    deleteContent();
-    if (m_text.isEmpty())
-        return;
-
-    if (m_usePixmapCache) {
-        // ### gunnar: port properly
-//        QPixmap pixmap = generatedPixmap();
-//        if (pixmap.isNull())
-//            return;
-
-//        QSGImageNode *pixmapNode = m_context->createImageNode();
-//        pixmapNode->setRect(pixmap.rect());
-//        pixmapNode->setSourceRect(pixmap.rect());
-//        pixmapNode->setOpacity(m_opacity);
-//        pixmapNode->setClampToEdge(true);
-//        pixmapNode->setLinearFiltering(m_linearFiltering);
-
-//        appendChildNode(pixmapNode);
-    } else {
-        if (m_text.isEmpty())
-            return;
-
-        // Implement styling by drawing text several times at slight shifts. shiftForStyle
-        // contains the sequence of shifted positions at which to draw the text. All except
-        // the last will be drawn with styleColor.
-        QList<QPointF> shiftForStyle;
-        switch (m_textStyle) {
-        case OutlineTextStyle:
-            // ### Should be made faster by implementing outline material
-            shiftForStyle << QPointF(-1, 0);
-            shiftForStyle << QPointF(0, -1);
-            shiftForStyle << QPointF(1, 0);
-            shiftForStyle << QPointF(0, 1);
-            break;
-        case SunkenTextStyle:
-            shiftForStyle << QPointF(0, -1);
-            break;
-        case RaisedTextStyle:
-            shiftForStyle << QPointF(0, 1);
-            break;
-        default:
-            break;
-        }
-
-        shiftForStyle << QPointF(0, 0); // Regular position
-        while (!shiftForStyle.isEmpty()) {
-            QPointF shift = shiftForStyle.takeFirst();
-
-            // Use styleColor for all but last shift
-            if (m_richText) {
-                QColor overrideColor = shiftForStyle.isEmpty() ? QColor() : m_styleColor;
-
-                QTextFrame *textFrame = m_textDocument->rootFrame();
-                QPointF p = m_textDocument->documentLayout()->frameBoundingRect(textFrame).topLeft();
-
-                QTextFrame::iterator it = textFrame->begin();
-                while (!it.atEnd()) {
-                    addTextBlock(shift + p, it.currentBlock(), overrideColor);
-                    ++it;
-                }
-            } else {
-                addTextLayout(shift, m_textLayout, shiftForStyle.isEmpty()
-                                                   ? m_color
-                                                   : m_styleColor);
-            }
-        }
-    }
-}
-#endif
 
 QT_END_NAMESPACE

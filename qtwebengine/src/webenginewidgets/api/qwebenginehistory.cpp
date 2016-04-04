@@ -42,6 +42,11 @@
 
 QT_BEGIN_NAMESPACE
 
+/*!
+    \fn QWebEngineHistoryItem::swap(QWebEngineHistoryItem &other)
+    Swaps the history item with the \a other item.
+*/
+
 QWebEngineHistoryItemPrivate::QWebEngineHistoryItemPrivate(QWebEnginePagePrivate *page, int index)
     : page(page)
     , index(index)
@@ -92,6 +97,11 @@ QDateTime QWebEngineHistoryItem::lastVisited() const
     return d->page ? d->page->webContents()->getNavigationEntryTimestamp(d->index) : QDateTime();
 }
 
+/*!
+    Returns the URL of the icon associated with the history item.
+
+    \sa url(), originalUrl(), title()
+*/
 QUrl QWebEngineHistoryItem::iconUrl() const
 {
     Q_D(const QWebEngineHistoryItem);

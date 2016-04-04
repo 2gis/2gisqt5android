@@ -120,23 +120,26 @@ Qt::DropAction QCocoaDrag::drag(QDrag *o)
 
     QPoint hotSpot = m_drag->hotSpot();
     QPixmap pm = dragPixmap(m_drag, hotSpot);
+    QSize pmDeviceIndependentSize = pm.size() / pm.devicePixelRatio();
     NSImage *nsimage = qt_mac_create_nsimage(pm);
+    [nsimage setSize : qt_mac_toNSSize(pmDeviceIndependentSize)];
 
     QMacPasteboard dragBoard((CFStringRef) NSDragPboard, QMacInternalPasteboardMime::MIME_DND);
     m_drag->mimeData()->setData(QLatin1String("application/x-qt-mime-type-name"), QByteArray("dummy"));
     dragBoard.setMimeData(m_drag->mimeData(), QMacPasteboard::LazyRequest);
 
     NSPoint event_location = [m_lastEvent locationInWindow];
-    NSPoint local_point = [m_lastView convertPoint:event_location fromView:nil];
-    local_point.x -= hotSpot.x();
-    CGFloat flippedY = pm.height() - hotSpot.y();
-    local_point.y += flippedY;
-    NSSize mouseOffset = NSMakeSize(0.0, 0.0);
+    NSWindow *theWindow = [m_lastEvent window];
+    Q_ASSERT(theWindow != nil);
+    event_location.x -= hotSpot.x();
+    CGFloat flippedY = pmDeviceIndependentSize.height() - hotSpot.y();
+    event_location.y -= flippedY;
+    NSSize mouseOffset_unused = NSMakeSize(0.0, 0.0);
     NSPasteboard *pboard = [NSPasteboard pasteboardWithName:NSDragPboard];
 
-    [m_lastView dragImage:nsimage
-        at:local_point
-        offset:mouseOffset
+    [theWindow dragImage:nsimage
+        at:event_location
+        offset:mouseOffset_unused
         event:m_lastEvent
         pasteboard:pboard
         source:m_lastView

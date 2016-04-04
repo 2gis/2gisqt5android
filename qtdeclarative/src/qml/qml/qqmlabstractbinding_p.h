@@ -46,6 +46,7 @@
 //
 
 #include <QtCore/qsharedpointer.h>
+#include <QtCore/qshareddata.h>
 #include <private/qtqmlglobal_p.h>
 #include <private/qqmlproperty_p.h>
 #include <private/qpointervaluepair_p.h>
@@ -56,162 +57,83 @@ class QQmlObjectCreator;
 
 class Q_QML_PRIVATE_EXPORT QQmlAbstractBinding
 {
+protected:
+    QQmlAbstractBinding();
 public:
-    enum DestroyMode {
+    virtual ~QQmlAbstractBinding();
 
-        // The binding should disconnect itself upon destroy
-        DisconnectBinding,
+    typedef QExplicitlySharedDataPointer<QQmlAbstractBinding> Ptr;
 
-        // The binding doesn't need to disconnect itself, but it can if it wants to.
-        //
-        // This is used in QQmlData::destroyed() - at the point at which the bindings are
-        // destroyed, the notifiers are already disconnected, so no need to disconnect each
-        // binding again.
-        //
-        // Bindings can use this flag to speed up destruction, especially for v4 bindings
-        // disconnecting a single binding might be slow.
-        KeepBindingConnected
-    };
+    virtual QString expression() const;
 
-    struct VTable {
-        void (*destroy)(QQmlAbstractBinding *, DestroyMode destroyMode);
-        QString (*expression)(const QQmlAbstractBinding *);
-        int (*propertyIndex)(const QQmlAbstractBinding *);
-        QObject *(*object)(const QQmlAbstractBinding *);
-        void (*setEnabled)(QQmlAbstractBinding *, bool, QQmlPropertyPrivate::WriteFlags);
-        void (*update)(QQmlAbstractBinding *, QQmlPropertyPrivate::WriteFlags);
-        void (*retargetBinding)(QQmlAbstractBinding *, QObject *, int);
-    };
-
-    typedef QWeakPointer<QQmlAbstractBinding> Pointer;
-
-    enum BindingType { Binding = 0, ValueTypeProxy = 1 };
-    inline BindingType bindingType() const;
-
-    // Destroy the binding.  Use this instead of calling delete.
-    // Bindings are free to implement their own memory management, so the delete operator is
-    // not necessarily safe.  The default implementation clears the binding, removes it from
-    // the object and calls delete.
-    void destroy(DestroyMode destroyMode = DisconnectBinding)
-    { vtable()->destroy(this, destroyMode); }
-
-    QString expression() const { return vtable()->expression(this); }
+    virtual bool isValueTypeProxy() const;
 
     // Should return the encoded property index for the binding.  Should return this value
     // even if the binding is not enabled or added to an object.
     // Encoding is:  coreIndex | (valueTypeIndex << 16)
-    int propertyIndex() const { return vtable()->propertyIndex(this); }
+    int targetPropertyIndex() const { return m_targetIndex; }
 
     // Should return the object for the binding.  Should return this object even if the
     // binding is not enabled or added to the object.
-    QObject *object() const { return vtable()->object(this); }
+    QObject *targetObject() const { return m_target.data(); }
 
-    void setEnabled(bool e) { setEnabled(e, QQmlPropertyPrivate::DontRemoveBinding); }
-    void setEnabled(bool e, QQmlPropertyPrivate::WriteFlags f) { vtable()->setEnabled(this, e, f); }
-
-    void update() { update(QQmlPropertyPrivate::DontRemoveBinding); }
-    void update(QQmlPropertyPrivate::WriteFlags f) { vtable()->update(this, f); }
+    virtual void setEnabled(bool e, QQmlPropertyPrivate::WriteFlags f = QQmlPropertyPrivate::DontRemoveBinding) = 0;
 
     void addToObject();
     void removeFromObject();
 
-    static inline Pointer getPointer(QQmlAbstractBinding *p);
     static void printBindingLoopError(QQmlProperty &prop);
 
-    // Default implementation for some VTable functions
-    template<typename T>
-    static void default_destroy(QQmlAbstractBinding *, DestroyMode);
-    static QString default_expression(const QQmlAbstractBinding *);
-    static void default_retargetBinding(QQmlAbstractBinding *, QObject *, int);
+    inline QQmlAbstractBinding *nextBinding() const;
+
+
+    struct RefCount {
+        RefCount() : refCount(0) {}
+        int refCount;
+        void ref() { ++refCount; }
+        int deref() { return --refCount; }
+        operator int() const { return refCount; }
+    };
+    RefCount ref;
 
 protected:
-    QQmlAbstractBinding(BindingType);
-    ~QQmlAbstractBinding();
-    void clear();
-
-    // Called by QQmlPropertyPrivate to "move" a binding to a different property.
-    // This is only used for alias properties. The default implementation qFatal()'s
-    // to ensure that the method is never called for binding types that don't support it.
-    void retargetBinding(QObject *o, int i) { vtable()->retargetBinding(this, o, i); }
-
-private:
-    Pointer weakPointer();
-
     friend class QQmlData;
-    friend class QQmlComponentPrivate;
     friend class QQmlValueTypeProxyBinding;
-    friend class QQmlPropertyPrivate;
-    friend class QtSharedPointer::ExternalRefCount<QQmlAbstractBinding>;
-    friend class QV4Bindings;
     friend class QQmlObjectCreator;
-
-    typedef QSharedPointer<QQmlAbstractBinding> SharedPointer;
-    // To save memory, we also store the rarely used weakPointer() instance in here
-    // We also use the flag bits:
-    //    m_mePtr.flag1: added to object
-    QPointerValuePair<QQmlAbstractBinding*, SharedPointer> m_mePtr;
 
     inline void setAddedToObject(bool v);
     inline bool isAddedToObject() const;
 
-    inline QQmlAbstractBinding *nextBinding() const;
     inline void setNextBinding(QQmlAbstractBinding *);
 
+    int m_targetIndex;
+    QFlagPointer<QObject> m_target;
     // Pointer to the next binding in the linked list of bindings.
-    // Being a pointer, the address is always aligned to at least 4 bytes, which means the last two
-    // bits of the pointer are free to be used for something else. They are used to store the binding
-    // type. The binding type serves as an index into the static vTables array, which is used instead
-    // of a compiler-generated vTable. Instead of virtual functions, pointers to static functions in
-    // the vTables array are used for dispatching.
-    // This saves a compiler-generated pointer to a compiler-generated vTable, and thus reduces
-    // the binding object size by sizeof(void*).
-    qintptr m_nextBindingPtr;
-
-    static VTable *vTables[];
-    inline const VTable *vtable() const { return vTables[bindingType()]; }
+    QFlagPointer<QQmlAbstractBinding> m_nextBinding;
 };
-
-QQmlAbstractBinding::Pointer
-QQmlAbstractBinding::getPointer(QQmlAbstractBinding *p)
-{
-    return p ? p->weakPointer() : Pointer();
-}
 
 void QQmlAbstractBinding::setAddedToObject(bool v)
 {
-    m_mePtr.setFlagValue(v);
+    m_nextBinding.setFlagValue(v);
 }
 
 bool QQmlAbstractBinding::isAddedToObject() const
 {
-    return m_mePtr.flag();
+    return m_nextBinding.flag();
 }
 
 QQmlAbstractBinding *QQmlAbstractBinding::nextBinding() const
 {
-    return (QQmlAbstractBinding *)(m_nextBindingPtr & ~0x3);
+    return m_nextBinding.data();
 }
 
 void QQmlAbstractBinding::setNextBinding(QQmlAbstractBinding *b)
 {
-    m_nextBindingPtr = qintptr(b) | (m_nextBindingPtr & 0x3);
-}
-
-QQmlAbstractBinding::BindingType QQmlAbstractBinding::bindingType() const
-{
-    return (BindingType)(m_nextBindingPtr & 0x3);
-}
-
-template<typename T>
-void QQmlAbstractBinding::default_destroy(QQmlAbstractBinding *This, DestroyMode mode)
-{
-    // Assume the binding disconnects itself in the destructor, which for example QQmlBinding
-    // does in the destructor of its base class, QQmlJavaScriptExpression
-    Q_UNUSED(mode);
-
-    This->removeFromObject();
-    This->clear();
-    delete static_cast<T *>(This);
+    if (b)
+        b->ref.ref();
+    if (m_nextBinding.data() && !m_nextBinding->ref.deref())
+        delete m_nextBinding.data();
+    m_nextBinding = b;
 }
 
 QT_END_NAMESPACE

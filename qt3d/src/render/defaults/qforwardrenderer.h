@@ -34,48 +34,49 @@
 **
 ****************************************************************************/
 
-#ifndef QT3D_RENDER_QFORWARDRENDERER_H
-#define QT3D_RENDER_QFORWARDRENDERER_H
+#ifndef QT3DRENDER_RENDER_QFORWARDRENDERER_H
+#define QT3DRENDER_RENDER_QFORWARDRENDERER_H
 
-#include <Qt3DRenderer/qtechniquefilter.h>
+#include <Qt3DRender/qtechniquefilter.h>
 #include <QRectF>
 #include <QColor>
 
 QT_BEGIN_NAMESPACE
 
-namespace Qt3D {
+namespace Qt3DRender {
 
 class QForwardRendererPrivate;
 
-class QT3DRENDERERSHARED_EXPORT QForwardRenderer : public QTechniqueFilter
+class QT3DRENDERSHARED_EXPORT QForwardRenderer : public QTechniqueFilter
 {
     Q_OBJECT
     Q_PROPERTY(QRectF viewportRect READ viewportRect WRITE setViewportRect NOTIFY viewportRectChanged)
     Q_PROPERTY(QColor clearColor READ clearColor WRITE setClearColor NOTIFY clearColorChanged)
-    Q_PROPERTY(QEntity *camera READ camera WRITE setCamera NOTIFY cameraChanged)
+    Q_PROPERTY(Qt3DCore::QEntity *camera READ camera WRITE setCamera NOTIFY cameraChanged)
 public:
-    explicit QForwardRenderer(QNode *parent = 0);
+    explicit QForwardRenderer(Qt3DCore::QNode *parent = 0);
     ~QForwardRenderer();
-
-    void setViewportRect(const QRectF &viewportRect);
-    void setClearColor(const QColor &clearColor);
-    void setCamera(QEntity *camera);
 
     QRectF viewportRect() const;
     QColor clearColor() const;
-    QEntity *camera() const;
+    Qt3DCore::QEntity *camera() const;
+
+public Q_SLOTS:
+    void setViewportRect(const QRectF &viewportRect);
+    void setClearColor(const QColor &clearColor);
+    void setCamera(Qt3DCore::QEntity *camera);
 
 Q_SIGNALS:
-    void viewportRectChanged();
-    void clearColorChanged();
-    void cameraChanged();
+    void viewportRectChanged(const QRectF &viewportRect);
+    void clearColorChanged(const QColor &clearColor);
+    void cameraChanged(Qt3DCore::QEntity *camera);
 
 private:
     Q_DECLARE_PRIVATE(QForwardRenderer)
 };
 
-} // Qt3D
+} // namespace Qt3DRender
 
 QT_END_NAMESPACE
 
-#endif // QT3D_RENDERER_QFORWARDRENDERER_H
+#endif // QT3DRENDER_RENDERER_QFORWARDRENDERER_H

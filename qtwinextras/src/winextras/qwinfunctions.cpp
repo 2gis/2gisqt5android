@@ -191,13 +191,13 @@ QRegion QtWin::fromHRGN(HRGN hrgn)
     if (regionDataSize == 0)
         return QRegion();
 
-    LPRGNDATA regionData = (LPRGNDATA)malloc(regionDataSize);
+    LPRGNDATA regionData = reinterpret_cast<LPRGNDATA>(malloc(regionDataSize));
     if (!regionData)
         return QRegion();
 
     QRegion region;
     if (GetRegionData(hrgn, regionDataSize, regionData) == regionDataSize) {
-        LPRECT pRect = (LPRECT)regionData->Buffer;
+        LPRECT pRect = reinterpret_cast<LPRECT>(regionData->Buffer);
         for (DWORD i = 0; i < regionData->rdh.nCount; ++i)
             region += QRect(pRect[i].left, pRect[i].top,
                             pRect[i].right - pRect[i].left,
@@ -215,11 +215,11 @@ static inline QString errorMessageFromComError(const _com_error &comError)
 {
      TCHAR *message = Q_NULLPTR;
      FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM,
-                   NULL, comError.Error(), MAKELANGID(LANG_NEUTRAL,SUBLANG_DEFAULT),
+                   NULL, DWORD(comError.Error()), MAKELANGID(LANG_NEUTRAL,SUBLANG_DEFAULT),
                    reinterpret_cast<LPWSTR>(&message), 0, NULL);
      if (message) {
          const QString result = QString::fromWCharArray(message).trimmed();
-         LocalFree((HLOCAL)message);
+         LocalFree(message);
          return result;
      }
      if (const WORD wCode = comError.WCode())

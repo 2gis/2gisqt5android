@@ -178,14 +178,22 @@ void QQuickAbstractAnimationPrivate::commence()
     }
 }
 
-QQmlProperty QQuickAbstractAnimationPrivate::createProperty(QObject *obj, const QString &str, QObject *infoObj)
+QQmlProperty QQuickAbstractAnimationPrivate::createProperty(QObject *obj, const QString &str, QObject *infoObj, QString *errorMessage)
 {
     QQmlProperty prop(obj, str, qmlContext(infoObj));
     if (!prop.isValid()) {
-        qmlInfo(infoObj) << QQuickAbstractAnimation::tr("Cannot animate non-existent property \"%1\"").arg(str);
+        const QString message = QQuickAbstractAnimation::tr("Cannot animate non-existent property \"%1\"").arg(str);
+        if (errorMessage)
+            *errorMessage = message;
+        else
+            qmlInfo(infoObj) << message;
         return QQmlProperty();
     } else if (!prop.isWritable()) {
-        qmlInfo(infoObj) << QQuickAbstractAnimation::tr("Cannot animate read-only property \"%1\"").arg(str);
+        const QString message = QQuickAbstractAnimation::tr("Cannot animate read-only property \"%1\"").arg(str);
+        if (errorMessage)
+            *errorMessage = message;
+        else
+            qmlInfo(infoObj) << message;
         return QQmlProperty();
     }
     return prop;
@@ -2179,7 +2187,7 @@ void QQuickPropertyAnimation::setTo(const QVariant &t)
         \li \inlineimage qeasingcurve-incubic.png
     \row
         \li \c Easing.OutCubic
-        \li Easing curve for a cubic (t^3) function: decelerating from zero velocity.
+        \li Easing curve for a cubic (t^3) function: decelerating to zero velocity.
         \li \inlineimage qeasingcurve-outcubic.png
     \row
         \li \c Easing.InOutCubic
@@ -2195,7 +2203,7 @@ void QQuickPropertyAnimation::setTo(const QVariant &t)
         \li \inlineimage qeasingcurve-inquart.png
     \row
         \li \c Easing.OutQuart
-        \li Easing curve for a quartic (t^4) function: decelerating from zero velocity.
+        \li Easing curve for a quartic (t^4) function: decelerating to zero velocity.
         \li \inlineimage qeasingcurve-outquart.png
     \row
         \li \c Easing.InOutQuart
@@ -2211,7 +2219,7 @@ void QQuickPropertyAnimation::setTo(const QVariant &t)
         \li \inlineimage qeasingcurve-inquint.png
     \row
         \li \c Easing.OutQuint
-        \li Easing curve for a quintic (t^5) function: decelerating from zero velocity.
+        \li Easing curve for a quintic (t^5) function: decelerating to zero velocity.
         \li \inlineimage qeasingcurve-outquint.png
     \row
         \li \c Easing.InOutQuint
@@ -2227,7 +2235,7 @@ void QQuickPropertyAnimation::setTo(const QVariant &t)
         \li \inlineimage qeasingcurve-insine.png
     \row
         \li \c Easing.OutSine
-        \li Easing curve for a sinusoidal (sin(t)) function: decelerating from zero velocity.
+        \li Easing curve for a sinusoidal (sin(t)) function: decelerating to zero velocity.
         \li \inlineimage qeasingcurve-outsine.png
     \row
         \li \c Easing.InOutSine
@@ -2243,7 +2251,7 @@ void QQuickPropertyAnimation::setTo(const QVariant &t)
         \li \inlineimage qeasingcurve-inexpo.png
     \row
         \li \c Easing.OutExpo
-        \li Easing curve for an exponential (2^t) function: decelerating from zero velocity.
+        \li Easing curve for an exponential (2^t) function: decelerating to zero velocity.
         \li \inlineimage qeasingcurve-outexpo.png
     \row
         \li \c Easing.InOutExpo
@@ -2259,7 +2267,7 @@ void QQuickPropertyAnimation::setTo(const QVariant &t)
         \li \inlineimage qeasingcurve-incirc.png
     \row
         \li \c Easing.OutCirc
-        \li Easing curve for a circular (sqrt(1-t^2)) function: decelerating from zero velocity.
+        \li Easing curve for a circular (sqrt(1-t^2)) function: decelerating to zero velocity.
         \li \inlineimage qeasingcurve-outcirc.png
     \row
         \li \c Easing.InOutCirc
@@ -2276,7 +2284,7 @@ void QQuickPropertyAnimation::setTo(const QVariant &t)
         \li \inlineimage qeasingcurve-inelastic.png
     \row
         \li \c Easing.OutElastic
-        \li Easing curve for an elastic (exponentially decaying sine wave) function: decelerating from zero velocity.
+        \li Easing curve for an elastic (exponentially decaying sine wave) function: decelerating to zero velocity.
         \br The peak amplitude can be set with the \e amplitude parameter, and the period of decay by the \e period parameter.
         \li \inlineimage qeasingcurve-outelastic.png
     \row
@@ -2309,7 +2317,7 @@ void QQuickPropertyAnimation::setTo(const QVariant &t)
         \li \inlineimage qeasingcurve-inbounce.png
     \row
         \li \c Easing.OutBounce
-        \li Easing curve for a bounce (exponentially decaying parabolic bounce) function: decelerating from zero velocity.
+        \li Easing curve for a bounce (exponentially decaying parabolic bounce) function: decelerating to zero velocity.
         \li \inlineimage qeasingcurve-outbounce.png
     \row
         \li \c Easing.InOutBounce
@@ -2584,18 +2592,28 @@ QQuickStateActions QQuickPropertyAnimation::createTransitionActions(QQuickStateA
     if (defaultTarget && targets.isEmpty())
         targets << defaultTarget;
 
+    bool usingDefaultProperties = false;
     if (props.isEmpty() && !d->defaultProperties.isEmpty()) {
         props << d->defaultProperties.split(QLatin1Char(','));
+        usingDefaultProperties = true;
     }
 
     bool hasExplicit = false;
     //an explicit animation has been specified
     if (d->toIsDefined) {
+        QVector<QString> errorMessages;
+        bool successfullyCreatedDefaultProperty = false;
+
         for (int i = 0; i < props.count(); ++i) {
             for (int j = 0; j < targets.count(); ++j) {
                 QQuickStateAction myAction;
-                myAction.property = d->createProperty(targets.at(j), props.at(i), this);
+                QString errorMessage;
+                const QString propertyName = props.at(i);
+                myAction.property = d->createProperty(targets.at(j), propertyName, this, &errorMessage);
                 if (myAction.property.isValid()) {
+                    if (usingDefaultProperties)
+                        successfullyCreatedDefaultProperty = true;
+
                     if (d->fromIsDefined) {
                         myAction.fromValue = d->from;
                         d->convertVariant(myAction.fromValue, d->interpolatorType ? d->interpolatorType : myAction.property.propertyType());
@@ -2612,8 +2630,15 @@ QQuickStateActions QQuickPropertyAnimation::createTransitionActions(QQuickStateA
                             break;  //### any chance there could be multiples?
                         }
                     }
+                } else {
+                    errorMessages.append(errorMessage);
                 }
             }
+        }
+
+        if (!successfullyCreatedDefaultProperty) {
+            foreach (const QString &errorMessage, errorMessages)
+                qmlInfo(this) << errorMessage;
         }
     }
 

@@ -72,6 +72,10 @@ static WebEngineSettings::Attribute toWebEngineAttribute(QWebEngineSettings::Web
         return WebEngineSettings::ScrollAnimatorEnabled;
     case QWebEngineSettings::ErrorPageEnabled:
         return WebEngineSettings::ErrorPageEnabled;
+    case QWebEngineSettings::PluginsEnabled:
+        return WebEngineSettings::PluginsEnabled;
+    case QWebEngineSettings::FullScreenSupportEnabled:
+        return WebEngineSettings::FullScreenSupportEnabled;
     default:
         return WebEngineSettings::UnsupportedInCoreSettings;
     }

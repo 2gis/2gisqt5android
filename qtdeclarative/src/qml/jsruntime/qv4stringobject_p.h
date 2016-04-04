@@ -33,6 +33,17 @@
 #ifndef QV4STRINGOBJECT_P_H
 #define QV4STRINGOBJECT_P_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include "qv4object_p.h"
 #include "qv4functionobject_p.h"
 #include <QtCore/qnumeric.h>
@@ -44,13 +55,16 @@ namespace QV4 {
 namespace Heap {
 
 struct StringObject : Object {
-    StringObject(InternalClass *ic, QV4::Object *prototype);
-    StringObject(ExecutionEngine *engine, const Value &value);
-    Value value;
+    enum {
+        LengthPropertyIndex = 0
+    };
 
-    Property *getIndex(uint index) const;
-    // ### get rid of tmpProperty
-    mutable Property tmpProperty;
+    StringObject();
+    StringObject(const QV4::String *string);
+    String *string;
+
+    Heap::String *getIndex(uint index) const;
+    uint length() const;
 };
 
 struct StringCtor : FunctionObject {
@@ -62,15 +76,20 @@ struct StringCtor : FunctionObject {
 struct StringObject: Object {
     V4_OBJECT2(StringObject, Object)
     Q_MANAGED_TYPE(StringObject)
+    V4_INTERNALCLASS(stringClass)
+    V4_PROTOTYPE(stringPrototype)
 
-    Property *getIndex(uint index) const {
+    Heap::String *getIndex(uint index) const {
         return d()->getIndex(index);
+    }
+    uint length() const {
+        return d()->length();
     }
 
     static bool deleteIndexedProperty(Managed *m, uint index);
 
 protected:
-    static void advanceIterator(Managed *m, ObjectIterator *it, Heap::String **name, uint *index, Property *p, PropertyAttributes *attrs);
+    static void advanceIterator(Managed *m, ObjectIterator *it, Value *name, uint *index, Property *p, PropertyAttributes *attrs);
     static void markObjects(Heap::Base *that, ExecutionEngine *e);
 };
 
@@ -78,8 +97,8 @@ struct StringCtor: FunctionObject
 {
     V4_OBJECT2(StringCtor, FunctionObject)
 
-    static ReturnedValue construct(Managed *m, CallData *callData);
-    static ReturnedValue call(Managed *that, CallData *callData);
+    static ReturnedValue construct(const Managed *m, CallData *callData);
+    static ReturnedValue call(const Managed *that, CallData *callData);
 };
 
 struct StringPrototype: StringObject

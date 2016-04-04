@@ -49,7 +49,7 @@
 #  include <sys/mount.h>
 #  include <sys/vfs.h>
 #  include <mntent.h>
-#elif defined(Q_OS_LINUX)
+#elif defined(Q_OS_LINUX) || defined(Q_OS_HURD)
 #  include <mntent.h>
 #  include <sys/statvfs.h>
 #elif defined(Q_OS_SOLARIS)
@@ -68,8 +68,8 @@
 
 #if defined(Q_OS_BSD4)
 #  if defined(Q_OS_NETBSD)
-     define QT_STATFSBUF struct statvfs
-     define QT_STATFS    ::statvfs
+#    define QT_STATFSBUF struct statvfs
+#    define QT_STATFS    ::statvfs
 #  else
 #    define QT_STATFSBUF struct statfs
 #    define QT_STATFS    ::statfs
@@ -145,7 +145,7 @@ private:
     QByteArray m_rootPath;
     QByteArray m_fileSystemType;
     QByteArray m_device;
-#elif defined(Q_OS_LINUX)
+#elif defined(Q_OS_LINUX) || defined(Q_OS_HURD)
     FILE *fp;
     mntent mnt;
     QByteArray buffer;
@@ -238,7 +238,7 @@ inline QByteArray QStorageIterator::device() const
 
 #elif defined(Q_OS_ANDROID)
 
-static const char pathMounted[] = "/proc/mounts";
+static const QLatin1String pathMounted("/proc/mounts");
 
 inline QStorageIterator::QStorageIterator()
 {
@@ -287,10 +287,11 @@ inline QByteArray QStorageIterator::device() const
     return m_device;
 }
 
-#elif defined(Q_OS_LINUX)
+#elif defined(Q_OS_LINUX) || defined(Q_OS_HURD)
 
 static const char pathMounted[] = "/etc/mtab";
-static const int bufferSize = 3*PATH_MAX; // 2 paths (mount point+device) and metainfo
+static const int bufferSize = 1024; // 2 paths (mount point+device) and metainfo;
+                                    // should be enough
 
 inline QStorageIterator::QStorageIterator() :
     buffer(QByteArray(bufferSize, 0))
@@ -506,9 +507,16 @@ void QStorageInfoPrivate::retrieveVolumeInfo()
         valid = true;
         ready = true;
 
+#if defined(Q_OS_BSD4) && !defined(Q_OS_NETBSD)
+        bytesTotal = statfs_buf.f_blocks * statfs_buf.f_bsize;
+        bytesFree = statfs_buf.f_bfree * statfs_buf.f_bsize;
+        bytesAvailable = statfs_buf.f_bavail * statfs_buf.f_bsize;
+#else
         bytesTotal = statfs_buf.f_blocks * statfs_buf.f_frsize;
         bytesFree = statfs_buf.f_bfree * statfs_buf.f_frsize;
         bytesAvailable = statfs_buf.f_bavail * statfs_buf.f_frsize;
+#endif
+        blockSize = statfs_buf.f_bsize;
 #if defined(Q_OS_ANDROID) || defined (Q_OS_BSD4)
 #if defined(_STATFS_F_FLAGS)
         readOnly = (statfs_buf.f_flags & ST_RDONLY) != 0;

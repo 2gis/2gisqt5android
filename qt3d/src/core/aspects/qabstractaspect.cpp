@@ -41,6 +41,8 @@
 #include <Qt3DCore/private/qaspectjobmanager_p.h>
 #include <private/qchangearbiter_p.h>
 #include <Qt3DCore/private/qscene_p.h>
+#include <Qt3DCore/private/qnodevisitor_p.h>
+#include <Qt3DCore/qscenepropertychange.h>
 
 QT_BEGIN_NAMESPACE
 
@@ -50,12 +52,8 @@ static QByteArray className(const QMetaObject &obj)
     return QByteArray::fromRawData(obj.className(), int(strlen(obj.className())));
 }
 
-namespace Qt3D {
+namespace Qt3DCore {
 
-/*!
-    \class Qt3D::QAbstractAspectPrivate
-    \internal
-*/
 QAbstractAspectPrivate::QAbstractAspectPrivate()
     : QObjectPrivate()
     , m_root(Q_NULLPTR)
@@ -71,36 +69,73 @@ QAbstractAspectPrivate *QAbstractAspectPrivate::get(QAbstractAspect *aspect)
 }
 
 /*!
-    \class Qt3D::QAbstractAspect
+    \class Qt3DCore::QAbstractAspect
     \inmodule Qt3DCore
     \brief QAbstractAspect is the base class for aspects that provide a vertical slice of behavior.
 */
-QAbstractAspect::QAbstractAspect(AspectType aspectType, QObject *parent)
+QAbstractAspect::QAbstractAspect(QObject *parent)
     : QObject(*new QAbstractAspectPrivate, parent)
 {
-    Q_D(QAbstractAspect);
-    d->m_aspectType = aspectType;
 }
+/*!
+    \typedef Qt3DCore::QAspectJobPtr
+    \relates Qt3DCore::QAbstractAspect
 
-/*! \internal */
+    A shared pointer for QAspectJob.
+*/
+
+/*!
+    \typedef Qt3DCore::QBackendNodeFunctorPtr
+    \relates Qt3DCore::QAbstractAspect
+
+    A shared pointer for QBackendNodeFunctor.
+*/
+
+/*!
+    \internal
+*/
 QAbstractAspect::QAbstractAspect(QAbstractAspectPrivate &dd, QObject *parent)
     : QObject(dd, parent)
 {
 }
-
+/*!
+    Registers backend.
+*/
 void QAbstractAspect::registerBackendType(const QMetaObject &obj, const QBackendNodeFunctorPtr &functor)
 {
     Q_D(QAbstractAspect);
     d->m_backendCreatorFunctors.insert(className(obj), functor);
 }
 
-QBackendNode *QAbstractAspect::createBackendNode(QNode *frontend) const
+void QAbstractAspectPrivate::sceneNodeAdded(QSceneChangePtr &e)
 {
-    Q_D(const QAbstractAspect);
+    QScenePropertyChangePtr propertyChange = e.staticCast<QScenePropertyChange>();
+    QNodePtr nodePtr = propertyChange->value().value<QNodePtr>();
+    QNode *n = nodePtr.data();
+    QNodeVisitor visitor;
+    visitor.traverse(n, this, &QAbstractAspectPrivate::createBackendNode);
+}
+
+void QAbstractAspectPrivate::sceneNodeRemoved(QSceneChangePtr &e)
+{
+    QScenePropertyChangePtr propertyChange = e.staticCast<QScenePropertyChange>();
+    QNodePtr nodePtr = propertyChange->value().value<QNodePtr>();
+    QNode *n = nodePtr.data();
+    clearBackendNode(n);
+}
+
+QVariant QAbstractAspect::executeCommand(const QStringList &args)
+{
+    Q_UNUSED(args);
+    return QVariant();
+}
+
+QBackendNode *QAbstractAspectPrivate::createBackendNode(QNode *frontend) const
+{
     const QMetaObject *metaObj = frontend->metaObject();
     QBackendNodeFunctorPtr functor;
     while (metaObj != Q_NULLPTR && functor.isNull()) {
-        functor = d->m_backendCreatorFunctors.value(className(*metaObj));
+        functor = m_backendCreatorFunctors.value(className(*metaObj));
         metaObj = metaObj->superClass();
     }
     if (!functor.isNull()) {
@@ -113,86 +148,67 @@ QBackendNode *QAbstractAspect::createBackendNode(QNode *frontend) const
         // return a QBackendNode pointer.
         if (backend == Q_NULLPTR)
             return Q_NULLPTR;
-        // Register backendNode with QChangeArbiter
         QBackendNodePrivate *backendPriv = QBackendNodePrivate::get(backend);
         // TO DO: Find a way to specify the changes to observe
-        d->m_arbiter->registerObserver(backendPriv, backend->peerUuid(), AllChanges);
-        if (backend->mode() == QBackendNode::ReadWrite)
-            d->m_arbiter->scene()->addObservable(backendPriv, backend->peerUuid());
+        // Register backendNode with QChangeArbiter
+        if (m_arbiter != Q_NULLPTR) { // Unit tests may not have the arbiter registered
+            m_arbiter->registerObserver(backendPriv, backend->peerUuid(), AllChanges);
+            if (backend->mode() == QBackendNode::ReadWrite)
+                m_arbiter->scene()->addObservable(backendPriv, backend->peerUuid());
+        }
         return backend;
     }
     return Q_NULLPTR;
 }
 
-QBackendNode *QAbstractAspect::getBackendNode(QNode *frontend) const
+void QAbstractAspectPrivate::clearBackendNode(QNode *frontend) const
 {
-    Q_D(const QAbstractAspect);
     const QMetaObject *metaObj = frontend->metaObject();
     QBackendNodeFunctorPtr functor;
 
     while (metaObj != Q_NULLPTR && functor.isNull()) {
-        functor = d->m_backendCreatorFunctors.value(className(*metaObj));
-        metaObj = metaObj->superClass();
-    }
-    if (!functor.isNull())
-        return functor->get(frontend->id());
-    return Q_NULLPTR;
-}
-
-void QAbstractAspect::clearBackendNode(QNode *frontend) const
-{
-    Q_D(const QAbstractAspect);
-    const QMetaObject *metaObj = frontend->metaObject();
-    QBackendNodeFunctorPtr functor;
-
-    while (metaObj != Q_NULLPTR && functor.isNull()) {
-        functor = d->m_backendCreatorFunctors.value(className(*metaObj));
+        functor = m_backendCreatorFunctors.value(className(*metaObj));
         metaObj = metaObj->superClass();
     }
     if (!functor.isNull()) {
         QBackendNode *backend = functor->get(frontend->id());
         if (backend != Q_NULLPTR) {
             QBackendNodePrivate *backendPriv = QBackendNodePrivate::get(backend);
-            d->m_arbiter->unregisterObserver(backendPriv, backend->peerUuid());
+            m_arbiter->unregisterObserver(backendPriv, backend->peerUuid());
             if (backend->mode() == QBackendNode::ReadWrite)
-                d->m_arbiter->scene()->removeObservable(backendPriv, backend->peerUuid());
+                m_arbiter->scene()->removeObservable(backendPriv, backend->peerUuid());
             functor->destroy(frontend->id());
         }
     }
 }
 
-QAbstractAspect::AspectType QAbstractAspect::aspectType() const
+void QAbstractAspectPrivate::registerAspect(QEntity *rootObject)
 {
-    Q_D(const QAbstractAspect);
-    return d->m_aspectType;
-}
-
-void QAbstractAspect::registerAspect(QEntity *rootObject)
-{
-    Q_D(QAbstractAspect);
-    if (rootObject == d->m_root)
+    Q_Q(QAbstractAspect);
+    if (rootObject == m_root)
         return;
 
-    d->m_root = rootObject;
-    setRootEntity(rootObject);
+    m_root = rootObject;
+
+    QNodeVisitor visitor;
+    visitor.traverse(rootObject, this, &QAbstractAspectPrivate::createBackendNode);
+    q->onRootEntityChanged(rootObject);
 }
 
-QServiceLocator *QAbstractAspect::services() const
+QServiceLocator *QAbstractAspectPrivate::services() const
 {
-    Q_D(const QAbstractAspect);
-    return d->m_aspectManager->serviceLocator();
+    return m_aspectManager->serviceLocator();
 }
 
-QAbstractAspectJobManager *QAbstractAspect::jobManager() const
+QAbstractAspectJobManager *QAbstractAspectPrivate::jobManager() const
 {
-    Q_D(const QAbstractAspect);
-    return d->m_jobManager;
+    return m_jobManager;
 }
 
-bool QAbstractAspect::isShuttingDown() const
+QVector<QAspectJobPtr> QAbstractAspectPrivate::jobsToExecute(qint64 time)
 {
-    Q_D(const QAbstractAspect);
-    return d->m_aspectManager->isShuttingDown();
+    Q_Q(QAbstractAspect);
+    return q->jobsToExecute(time);
 }
 
 void QAbstractAspect::onStartup()
@@ -203,6 +219,11 @@ void QAbstractAspect::onShutdown()
 {
 }
 
-} // of namespace Qt3D
+void QAbstractAspect::onRootEntityChanged(QEntity *rootEntity)
+{
+    Q_UNUSED(rootEntity);
+}
+
+} // of namespace Qt3DCore
 
 QT_END_NAMESPACE

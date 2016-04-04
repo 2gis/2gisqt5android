@@ -69,6 +69,8 @@ private slots:
     void resolving();
     void toString_data();
     void toString();
+    void toString_PreferLocalFile_data();
+    void toString_PreferLocalFile();
     void toString_constructed_data();
     void toString_constructed();
     void toAndFromStringList_data();
@@ -79,6 +81,8 @@ private slots:
     void toLocalFile();
     void fromLocalFile_data();
     void fromLocalFile();
+    void fromLocalFileNormalize_data();
+    void fromLocalFileNormalize();
     void macTypes();
     void relative();
     void compat_legacy();
@@ -1048,6 +1052,29 @@ void tst_QUrl::toString()
 
     QCOMPARE(url.adjusted(opt).toString(), string);
 }
+void tst_QUrl::toString_PreferLocalFile_data()
+{
+    QTest::addColumn<QUrl>("url");
+    QTest::addColumn<QString>("string");
+
+#ifdef Q_OS_WIN
+    QTest::newRow("win-drive") << QUrl(QString::fromLatin1("file:///c:/windows/regedit.exe"))
+                               << QString::fromLatin1("c:/windows/regedit.exe");
+    QTest::newRow("win-share") << QUrl(QString::fromLatin1("//Anarki/homes"))
+                               << QString::fromLatin1("//anarki/homes");
+#else
+    QTest::newRow("unix-path") << QUrl(QString::fromLatin1("file:///tmp"))
+                               << QString::fromLatin1("/tmp");
+#endif
+}
+
+void tst_QUrl::toString_PreferLocalFile()
+{
+    QFETCH(QUrl, url);
+    QFETCH(QString, string);
+
+    QCOMPARE(url.toString(QUrl::PreferLocalFile), string);
+}
 
 void tst_QUrl::toAndFromStringList_data()
 {
@@ -1242,16 +1269,6 @@ void tst_QUrl::fromLocalFile_data()
                         << QString::fromLatin1("/");
     QTest::newRow("data7") << QString::fromLatin1("/Mambo <#5>.mp3") << QString::fromLatin1("file:///Mambo <%235>.mp3")
                            << QString::fromLatin1("/Mambo <#5>.mp3");
-    QTest::newRow("data8") << QString::fromLatin1("/a%.txt") << QString::fromLatin1("file:///a%25.txt")
-                           << QString::fromLatin1("/a%.txt");
-    QTest::newRow("data9") << QString::fromLatin1("/a%25.txt") << QString::fromLatin1("file:///a%2525.txt")
-                           << QString::fromLatin1("/a%25.txt");
-    QTest::newRow("data10") << QString::fromLatin1("/%80.txt") << QString::fromLatin1("file:///%2580.txt")
-                            << QString::fromLatin1("/%80.txt");
-    QTest::newRow("data11") << QString::fromLatin1("./a.txt") << QString::fromLatin1("file:a.txt") << QString::fromLatin1("a.txt");
-    QTest::newRow("data12") << QString::fromLatin1("././a.txt") << QString::fromLatin1("file:a.txt") << QString::fromLatin1("a.txt");
-    QTest::newRow("data13") << QString::fromLatin1("b/../a.txt") << QString::fromLatin1("file:a.txt") << QString::fromLatin1("a.txt");
-    QTest::newRow("data14") << QString::fromLatin1("/b/../a.txt") << QString::fromLatin1("file:///a.txt") << QString::fromLatin1("/a.txt");
 }
 
 void tst_QUrl::fromLocalFile()
@@ -1264,6 +1281,41 @@ void tst_QUrl::fromLocalFile()
 
     QCOMPARE(url.toString(QUrl::DecodeReserved), theUrl);
     QCOMPARE(url.path(), thePath);
+}
+
+void tst_QUrl::fromLocalFileNormalize_data()
+{
+    QTest::addColumn<QString>("theFile"); // should support the fromLocalFile/toLocalFile roundtrip (so no //host or windows path)
+    QTest::addColumn<QString>("theUrl");
+    QTest::addColumn<QString>("urlWithNormalizedPath");
+
+    QTest::newRow("data0") << QString::fromLatin1("/a.txt") << QString::fromLatin1("file:///a.txt") << QString::fromLatin1("file:///a.txt");
+    QTest::newRow("data1") << QString::fromLatin1("a.txt") << QString::fromLatin1("file:a.txt") << QString::fromLatin1("file:a.txt");
+    QTest::newRow("data8") << QString::fromLatin1("/a%.txt") << QString::fromLatin1("file:///a%25.txt")
+                           << QString::fromLatin1("file:///a%25.txt");
+    QTest::newRow("data9") << QString::fromLatin1("/a%25.txt") << QString::fromLatin1("file:///a%2525.txt")
+                           << QString::fromLatin1("file:///a%2525.txt");
+    QTest::newRow("data10") << QString::fromLatin1("/%80.txt") << QString::fromLatin1("file:///%2580.txt")
+                            << QString::fromLatin1("file:///%2580.txt");
+    QTest::newRow("data11") << QString::fromLatin1("./a.txt") << QString::fromLatin1("file:./a.txt") << QString::fromLatin1("file:a.txt");
+    QTest::newRow("data12") << QString::fromLatin1("././a.txt") << QString::fromLatin1("file:././a.txt") << QString::fromLatin1("file:a.txt");
+    QTest::newRow("data13") << QString::fromLatin1("b/../a.txt") << QString::fromLatin1("file:b/../a.txt") << QString::fromLatin1("file:a.txt");
+    QTest::newRow("data14") << QString::fromLatin1("/b/../a.txt") << QString::fromLatin1("file:///b/../a.txt") << QString::fromLatin1("file:///a.txt");
+    QTest::newRow("data15") << QString::fromLatin1("/b/.") << QString::fromLatin1("file:///b/.") << QString::fromLatin1("file:///b");
+}
+
+void tst_QUrl::fromLocalFileNormalize()
+{
+    QFETCH(QString, theFile);
+    QFETCH(QString, theUrl);
+    QFETCH(QString, urlWithNormalizedPath);
+
+    QUrl url = QUrl::fromLocalFile(theFile);
+
+    QCOMPARE(url.toString(QUrl::DecodeReserved), theUrl);
+    QCOMPARE(url.toLocalFile(), theFile); // roundtrip
+    QCOMPARE(url.path(), theFile); // works as well as long as we don't test windows paths
+    QCOMPARE(url.toString(QUrl::NormalizePathSegments), urlWithNormalizedPath);
 }
 
 void tst_QUrl::macTypes()
@@ -2960,12 +3012,21 @@ void tst_QUrl::fromUserInputWithCwd_data()
     while (it.hasNext()) {
         it.next();
         QUrl url = QUrl::fromLocalFile(it.filePath());
+        if (it.fileName() == QLatin1String(".")) {
+            url = QUrl::fromLocalFile(QDir::currentPath()
+#ifdef Q_OS_WINRT
+                                      + QLatin1Char('/')
+#endif
+                                      ); // fromUserInput cleans the path
+        }
         QTest::newRow(QString("file-%1").arg(c++).toLatin1()) << it.fileName() << QDir::currentPath() << url << url;
     }
+#ifndef Q_OS_WINRT // WinRT cannot cd outside current / sandbox
     QDir parent = QDir::current();
     QVERIFY(parent.cdUp());
     QUrl parentUrl = QUrl::fromLocalFile(parent.path());
     QTest::newRow("dotdot") << ".." << QDir::currentPath() << parentUrl << parentUrl;
+#endif
 
     QTest::newRow("nonexisting") << "nonexisting" << QDir::currentPath() << QUrl("http://nonexisting") << QUrl::fromLocalFile(QDir::currentPath() + "/nonexisting");
     QTest::newRow("short-url") << "example.org" << QDir::currentPath() << QUrl("http://example.org") << QUrl::fromLocalFile(QDir::currentPath() + "/example.org");
@@ -3021,6 +3082,8 @@ void tst_QUrl::fileName_data()
                               << QString() << "tmp.txt" << "tmp.txt";
     QTest::newRow("encoded") << "print:/specials/Print%20To%20File%20(PDF%252FAcrobat)"
                               << "/specials/" << "Print To File (PDF%252FAcrobat)" << "Print To File (PDF%2FAcrobat)";
+    QTest::newRow("endsWithDot") << "file:///temp/."
+                              << "/temp/" << "." << ".";
 }
 
 void tst_QUrl::fileName()
@@ -3513,7 +3576,7 @@ void tst_QUrl::setComponents_data()
                                       << PrettyDecoded << "/path" << "trash:/path";
     QTest::newRow("path-withdotdot") << QUrl("file:///tmp")
                                       << int(Path) << "//tmp/..///root/." << Tolerant << true
-                                      << PrettyDecoded << "/root" << "file:///root";
+                                      << PrettyDecoded << "/tmp/..///root/." << "file:///tmp/..///root/.";
 
     // the other fields can be present and be empty
     // that is, their delimiters would be present, but there would be nothing to one side

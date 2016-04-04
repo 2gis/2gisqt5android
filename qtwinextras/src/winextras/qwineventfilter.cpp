@@ -66,7 +66,7 @@ bool QWinEventFilter::nativeEventFilter(const QByteArray &, void *message, long 
     QWindow *window = 0;
     switch (msg->message) {
     case WM_DWMCOLORIZATIONCOLORCHANGED :
-        event = new QWinColorizationChangeEvent(msg->wParam, msg->lParam);
+        event = new QWinColorizationChangeEvent(QRgb(msg->wParam), msg->lParam);
         break;
     case WM_DWMCOMPOSITIONCHANGED :
         event = new QWinCompositionChangeEvent(QtWin::isCompositionEnabled());

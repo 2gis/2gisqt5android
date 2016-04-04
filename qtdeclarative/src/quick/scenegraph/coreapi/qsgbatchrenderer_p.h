@@ -34,6 +34,17 @@
 #ifndef QSGBATCHRENDERER_P_H
 #define QSGBATCHRENDERER_P_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include <private/qsgrenderer_p.h>
 #include <private/qsgnodeupdater_p.h>
 #include <private/qdatabuffer_p.h>
@@ -100,6 +111,7 @@ template <typename Type, int PageSize> class Allocator
 {
 public:
     Allocator()
+        : m_freePage(0)
     {
         pages.push_back(new AllocatorPage<Type, PageSize>());
     }
@@ -112,14 +124,21 @@ public:
     Type *allocate()
     {
         AllocatorPage<Type, PageSize> *p = 0;
-        for (int i=0; i<pages.size(); ++i) {
+        for (int i = m_freePage; i < pages.size(); i++) {
             if (pages.at(i)->available > 0) {
                 p = pages.at(i);
+                m_freePage = i;
                 break;
             }
         }
+
+        // we couldn't find a free page from m_freePage to the last page.
+        // either there is no free pages, or there weren't any in the area we
+        // scanned: rescanning is expensive, so let's just assume there isn't
+        // one. when an item is released, we'll reset m_freePage anyway.
         if (!p) {
             p = new AllocatorPage<Type, PageSize>();
+            m_freePage = pages.count();
             pages.push_back(p);
         }
         uint pos = p->blocks[PageSize - p->available];
@@ -151,6 +170,9 @@ public:
             delete page;
             page = pages.back();
         }
+
+        // Reset the free page to force a scan for a new free point.
+        m_freePage = 0;
     }
 
     void release(Type *t)
@@ -172,6 +194,7 @@ public:
     }
 
     QVector<AllocatorPage<Type, PageSize> *> pages;
+    int m_freePage;
 };
 
 
@@ -500,8 +523,8 @@ public:
 
     ShaderManager(QSGRenderContext *ctx) : blitProgram(0), visualizeProgram(0), context(ctx) { }
     ~ShaderManager() {
-        qDeleteAll(rewrittenShaders.values());
-        qDeleteAll(stockShaders.values());
+        qDeleteAll(rewrittenShaders);
+        qDeleteAll(stockShaders);
     }
 
 public Q_SLOTS:
@@ -534,8 +557,8 @@ public:
     };
 
 protected:
-    void nodeChanged(QSGNode *node, QSGNode::DirtyState state);
-    void render();
+    void nodeChanged(QSGNode *node, QSGNode::DirtyState state) Q_DECL_OVERRIDE;
+    void render() Q_DECL_OVERRIDE;
 
 private:
     enum ClipTypeBit
@@ -604,7 +627,7 @@ private:
     void visualizeOverdraw();
     void visualizeOverdraw_helper(Node *node);
     void visualizeDrawGeometry(const QSGGeometry *g);
-    void setCustomRenderMode(const QByteArray &mode);
+    void setCustomRenderMode(const QByteArray &mode) Q_DECL_OVERRIDE;
 
     QSet<Node *> m_taggedRoots;
     QDataBuffer<Element *> m_opaqueRenderList;

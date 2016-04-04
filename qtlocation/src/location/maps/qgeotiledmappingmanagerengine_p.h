@@ -37,6 +37,17 @@
 #ifndef QGEOTILEDMAPPINGMANAGERENGINE_H
 #define QGEOTILEDMAPPINGMANAGERENGINE_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include <QObject>
 #include <QSize>
 #include <QPair>
@@ -53,7 +64,7 @@ class QGeoTileTexture;
 
 class QGeoTileSpec;
 class QGeoTiledMap;
-class QGeoTileCache;
+class QAbstractGeoTileCache;
 
 class Q_LOCATION_EXPORT QGeoTiledMappingManagerEngine : public QGeoMappingManagerEngine
 {
@@ -73,16 +84,16 @@ public:
     QGeoTileFetcher *tileFetcher();
 
     QGeoMap *createMap() Q_DECL_OVERRIDE;
-    void registerMap(QGeoMap *map) Q_DECL_OVERRIDE;
-    void deregisterMap(QGeoMap *map) Q_DECL_OVERRIDE;
+    void releaseMap(QGeoTiledMap *map);
 
     QSize tileSize() const;
+    int tileVersion() const;
 
     void updateTileRequests(QGeoTiledMap *map,
                             const QSet<QGeoTileSpec> &tilesAdded,
                             const QSet<QGeoTileSpec> &tilesRemoved);
 
-    QGeoTileCache *tileCache(); // TODO: check this is still used
+    QAbstractGeoTileCache *tileCache();
     QSharedPointer<QGeoTileTexture> getTileTexture(const QGeoTileSpec &spec);
 
 
@@ -94,14 +105,14 @@ private Q_SLOTS:
 
 Q_SIGNALS:
     void tileError(const QGeoTileSpec &spec, const QString &errorString);
-    void mapVersionChanged();
+    void tileVersionChanged();
 
 protected:
     void setTileFetcher(QGeoTileFetcher *fetcher);
     void setTileSize(const QSize &tileSize);
+    void setTileVersion(int version);
     void setCacheHint(QGeoTiledMappingManagerEngine::CacheAreas cacheHint);
-
-    QGeoTileCache *createTileCacheWithDir(const QString &cacheDirectory);
+    void setTileCache(QAbstractGeoTileCache *cache);
 
 private:
     QGeoTiledMappingManagerEnginePrivate *d_ptr;

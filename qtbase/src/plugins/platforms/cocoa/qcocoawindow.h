@@ -227,6 +227,9 @@ public:
     void updateExposedGeometry();
     QWindow *childWindowAt(QPoint windowPoint);
     bool shouldRefuseKeyWindowAndFirstResponder();
+
+    static QPoint bottomLeftClippedByNSWindowOffsetStatic(QWindow *window);
+    QPoint bottomLeftClippedByNSWindowOffset() const;
 protected:
     void recreateWindow(const QPlatformWindow *parentWindow);
     QCocoaNSWindow *createNSWindow();
@@ -234,7 +237,7 @@ protected:
 
     bool shouldUseNSPanel();
 
-    QRect windowGeometry() const;
+    QRect nativeWindowGeometry() const;
     QCocoaWindow *parentCocoaWindow() const;
     void syncWindowState(Qt::WindowState newState);
     void reinsertChildWindow(QCocoaWindow *child);
@@ -244,6 +247,8 @@ protected:
 public: // for QNSView
     friend class QCocoaBackingStore;
     friend class QCocoaNativeInterface;
+
+    void removeMonitor();
 
     NSView *m_contentView;
     QNSView *m_qtView;
@@ -265,10 +270,10 @@ public: // for QNSView
     QPointer<QWindow> m_enterLeaveTargetWindow;
     bool m_windowUnderMouse;
 
-    bool m_ignoreWindowShouldClose;
     bool m_inConstructor;
     bool m_inSetVisible;
     bool m_inSetGeometry;
+    bool m_inSetStyleMask;
 #ifndef QT_NO_OPENGL
     QCocoaGLContext *m_glContext;
 #endif

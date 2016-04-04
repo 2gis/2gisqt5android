@@ -34,6 +34,17 @@
 #ifndef QQUICKIMAGEBASE_P_H
 #define QQUICKIMAGEBASE_P_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include "qquickimplicitsizeitem_p.h"
 #include <private/qtquickglobal_p.h>
 
@@ -43,7 +54,6 @@ class QQuickImageBasePrivate;
 class Q_QUICK_PRIVATE_EXPORT QQuickImageBase : public QQuickImplicitSizeItem
 {
     Q_OBJECT
-    Q_ENUMS(Status)
 
     Q_PROPERTY(Status status READ status NOTIFY statusChanged)
     Q_PROPERTY(QUrl source READ source WRITE setSource NOTIFY sourceChanged)
@@ -57,6 +67,7 @@ public:
     QQuickImageBase(QQuickItem *parent=0);
     ~QQuickImageBase();
     enum Status { Null, Ready, Loading, Error };
+    Q_ENUM(Status)
     Status status() const;
     qreal progress() const;
 

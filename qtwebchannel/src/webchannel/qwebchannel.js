@@ -193,7 +193,7 @@ function QObject(name, data, webChannel)
         }
         if (!response
             || !response["__QObject*__"]
-            || response["id"] === undefined) {
+            || response.id === undefined) {
             return response;
         }
 
@@ -365,6 +365,7 @@ function QObject(name, data, webChannel)
         }
 
         Object.defineProperty(object, propertyName, {
+            configurable: true,
             get: function () {
                 var propertyValue = object.__propertyCache__[propertyIndex];
                 if (propertyValue === undefined) {

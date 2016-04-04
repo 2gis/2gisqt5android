@@ -46,7 +46,7 @@
 #include <QtCore/QBuffer>
 #include <QtCore/qdatetime.h>
 
-#include <private/qv4value_inl_p.h>
+#include <private/qv4value_p.h>
 #include <private/qv4functionobject_p.h>
 #include <private/qv4scopedvalue_p.h>
 
@@ -222,6 +222,9 @@ QQuickCanvasItemPrivate::~QQuickCanvasItemPrivate()
     operations. The Canvas output may be saved as an image file or serialized
     to a URL.
 
+    Rendering to the Canvas is done using a Context2D object, usually as a
+    result of the \l paint signal.
+
     To define a drawing area in the Canvas item set the \c width and \c height
     properties.  For example, the following code creates a Canvas item which
     has a drawing area with a height of 100 pixels and width of 200 pixels:
@@ -231,6 +234,11 @@ QQuickCanvasItemPrivate::~QQuickCanvasItemPrivate()
         id: mycanvas
         width: 100
         height: 200
+        onPaint: {
+            var ctx = getContext("2d");
+            ctx.fillStyle = Qt.rgba(1, 0, 0, 1);
+            ctx.fillRect(0, 0, width, height);
+        }
     }
     \endqml
 
@@ -255,19 +263,6 @@ QQuickCanvasItemPrivate::~QQuickCanvasItemPrivate()
 
     The default render target is Canvas.Image and the default renderStrategy is
     Canvas.Immediate.
-
-    \section1 Tiled Canvas
-    The Canvas item supports tiled rendering by setting \l canvasSize, \l tileSize
-    and \l canvasWindow properties.
-
-    Tiling allows efficient display of a very large virtual canvas via a smaller
-    canvas window. The actual memory consumption is in relation to the canvas
-    window size.  The painting code can draw within the virtual canvas without
-    handling coordinate system transformations.
-
-    The tiles overlapping with the canvas window may be cached eliminating the
-    need to redraw, which can lead to significantly improved performance in
-    some situations.
 
     \section1 Pixel Operations
     All HTML5 2D context pixel operations are supported. In order to ensure
@@ -431,6 +426,8 @@ void QQuickCanvasItem::setCanvasSize(const QSizeF & size)
 
     By default the tileSize is the same as the canvasSize.
 
+    \obsolete This feature is incomplete. For details, see QTBUG-33129.
+
     \sa canvasSize, canvasWindow
 */
 QSize QQuickCanvasItem::tileSize() const
@@ -463,6 +460,8 @@ void QQuickCanvasItem::setTileSize(const QSize & size)
      If the canvasSize is different to the Canvas item size, the Canvas item
      can display different visible areas by changing the canvas windowSize
      and/or position.
+
+    \obsolete This feature is incomplete. For details, see QTBUG-33129
 
     \sa canvasSize, tileSize
 */
@@ -1000,7 +999,7 @@ void QQuickCanvasItem::loadImage(const QUrl& url)
     if (!d->pixmaps.contains(fullPathUrl)) {
         QQuickPixmap* pix = new QQuickPixmap();
         QQmlRefPointer<QQuickCanvasPixmap> canvasPix;
-        canvasPix.take(new QQuickCanvasPixmap(pix));
+        canvasPix.adopt(new QQuickCanvasPixmap(pix));
         d->pixmaps.insert(fullPathUrl, canvasPix);
 
         pix->load(qmlEngine(this)

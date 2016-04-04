@@ -34,6 +34,17 @@
 #ifndef QQMLOPENMETAOBJECT_H
 #define QQMLOPENMETAOBJECT_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include <QtCore/QMetaObject>
 #include <QtCore/QObject>
 
@@ -54,6 +65,7 @@ public:
     QQmlOpenMetaObjectType(const QMetaObject *base, QQmlEngine *engine);
     ~QQmlOpenMetaObjectType();
 
+    void createProperties(const QVector<QByteArray> &names);
     int createProperty(const QByteArray &name);
 
     int propertyOffset() const;
@@ -101,8 +113,10 @@ public:
 
     QQmlOpenMetaObjectType *type() const;
 
+    void emitPropertyNotification(const QByteArray &propertyName);
+
 protected:
-    virtual int metaCall(QMetaObject::Call _c, int _id, void **_a);
+    virtual int metaCall(QObject *o, QMetaObject::Call _c, int _id, void **_a);
     virtual int createProperty(const char *, const char *);
 
     virtual void propertyRead(int);

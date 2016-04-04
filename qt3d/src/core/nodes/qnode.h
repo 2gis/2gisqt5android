@@ -34,19 +34,20 @@
 **
 ****************************************************************************/
 
-#ifndef QT3D_QNODE_H
-#define QT3D_QNODE_H
+#ifndef QT3DCORE_QNODE_H
+#define QT3DCORE_QNODE_H
 
 #include <QObject>
 #include <Qt3DCore/qt3dcore_global.h>
 #include <Qt3DCore/qnodeid.h>
 #include <Qt3DCore/qscenechange.h>
+#include <Qt3DCore/qabstractnodefactory.h>
 
-#define Q_NODE_NULLPTR static_cast<Qt3D::QNode *>(Q_NULLPTR)
+#define Q_NODE_NULLPTR static_cast<Qt3DCore::QNode *>(Q_NULLPTR)
 
 QT_BEGIN_NAMESPACE
 
-namespace Qt3D {
+namespace Qt3DCore {
 
 class QNode;
 class QNodePrivate;
@@ -56,13 +57,14 @@ class QAspectEngine;
 typedef QList<QNode *> QNodeList;
 typedef QSharedPointer<QNode> QNodePtr;
 
+#define QT3DCORE_QUOTE(str) #str
 #define QT3D_CLONEABLE(Class)                \
+    friend class Qt3DCore::QAbstractNodeFactory;       \
     QNode *doClone() const Q_DECL_OVERRIDE { \
-        Class *clone_ = new Class;            \
+        Class *clone_ = Qt3DCore::QAbstractNodeFactory::createNode<Class>(QT3DCORE_QUOTE(Class)); \
         clone_->copy(this);                   \
         return clone_;                        \
     }
-
 
 // Each QNode subclass should call QNode::cleanup in it dtor
 // QNode::cleanup checks that a flags wasn't set to true,
@@ -71,7 +73,8 @@ typedef QSharedPointer<QNode> QNodePtr;
 class QT3DCORESHARED_EXPORT QNode : public QObject
 {
     Q_OBJECT
-    Q_PROPERTY(Qt3D::QNode *parent READ parentNode WRITE setParent NOTIFY parentChanged)
+    Q_PROPERTY(Qt3DCore::QNode *parent READ parentNode WRITE setParent NOTIFY parentChanged)
+    Q_PROPERTY(bool enabled READ isEnabled WRITE setEnabled NOTIFY enabledChanged)
 public:
     explicit QNode(QNode *parent = 0);
     virtual ~QNode();
@@ -82,8 +85,17 @@ public:
     bool notificationsBlocked() const;
     bool blockNotifications(bool block);
 
-    virtual void setParent(QNode *parent);
     QNodeList childrenNodes() const;
+
+    bool isEnabled() const;
+
+public Q_SLOTS:
+    virtual void setParent(QNode *parent);
+    void setEnabled(bool isEnabled);
+
+Q_SIGNALS:
+    void parentChanged(QObject *parent);
+    void enabledChanged(bool enabled);
 
 protected:
     // Clone should only be made in the main thread
@@ -109,12 +121,9 @@ private:
     friend class QAspectEngine;
     friend class QPostman;
     friend class QScene;
-
-Q_SIGNALS:
-    void parentChanged();
 };
 
-} // namespace Qt3D
+} // namespace Qt3DCore
 
 QT_END_NAMESPACE
 

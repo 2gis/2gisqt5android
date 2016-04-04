@@ -44,6 +44,8 @@
 
 namespace QtWebEngineCore {
 
+class AuthenticationDialogController;
+
 class ResourceDispatcherHostLoginDelegateQt : public content::ResourceDispatcherHostLoginDelegate {
 public:
     ResourceDispatcherHostLoginDelegateQt(net::AuthChallengeInfo *authInfo, net::URLRequest *request);
@@ -52,9 +54,16 @@ public:
     // ResourceDispatcherHostLoginDelegate implementation
     virtual void OnRequestCancelled();
 
+    QUrl url() const;
+    QString realm() const;
+    QString host() const;
+    bool isProxy() const;
+
+    void sendAuthToRequester(bool success, const QString &user, const QString &password);
+
 private:
     void triggerDialog();
-    void sendAuthToRequester(bool success, const QString &user, const QString &password);
+    void destroy();
 
     QUrl m_url;
     QString m_realm;
@@ -64,13 +73,22 @@ private:
     int m_renderProcessId;
     int m_renderFrameId;
 
+    net::AuthChallengeInfo *m_authInfo;
+
     // The request that wants login data.
     // Must only be accessed on the IO thread.
     net::URLRequest *m_request;
+
+    // This member is used to keep authentication dialog controller alive until
+    // authorization is sent or cancelled.
+    QSharedPointer<AuthenticationDialogController> m_dialogController;
 };
 
 class ResourceDispatcherHostDelegateQt : public content::ResourceDispatcherHostDelegate {
 public:
+    virtual bool HandleExternalProtocol(const GURL& url, int child_id, int route_id,
+                                        bool is_main_frame, ui::PageTransition page_transition, bool has_user_gesture) Q_DECL_OVERRIDE;
+
     virtual content::ResourceDispatcherHostLoginDelegate* CreateLoginDelegate(net::AuthChallengeInfo *authInfo, net::URLRequest *request) Q_DECL_OVERRIDE;
 };
 

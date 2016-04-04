@@ -77,7 +77,6 @@ Q_DECLARE_METATYPE(QList<int>)
 
   \ingroup qtjavascript
   \inmodule QtQml
-  \mainclass
 
   \section1 Evaluating Scripts
 
@@ -161,8 +160,82 @@ Q_DECLARE_METATYPE(QList<int>)
 
   \snippet code/src_script_qjsengine.cpp 5
 
-  \sa QJSValue, {Making Applications Scriptable}
+  \section1 Extensions
 
+  QJSEngine provides a compliant ECMAScript implementation. By default,
+  familiar utilities like logging are not available, but they can can be
+  installed via the \l installExtensions() function.
+
+  \sa QJSValue, {Making Applications Scriptable},
+      {List of JavaScript Objects and Functions}
+
+*/
+
+/*!
+    \enum QJSEngine::Extension
+
+    This enum is used to specify extensions to be installed via
+    \l installExtensions().
+
+    \value TranslationExtension Indicates that translation functions (\c qsTr(),
+        for example) should be installed.
+
+    \value ConsoleExtension Indicates that console functions (\c console.log(),
+        for example) should be installed.
+
+    \value GarbageCollectionExtension Indicates that garbage collection
+        functions (\c gc(), for example) should be installed.
+
+    \value AllExtensions Indicates that all extension should be installed.
+
+    \b TranslationExtension
+
+    The relation between script translation functions and C++ translation
+    functions is described in the following table:
+
+    \table
+    \header \li Script Function \li Corresponding C++ Function
+    \row    \li qsTr()       \li QObject::tr()
+    \row    \li QT_TR_NOOP() \li QT_TR_NOOP()
+    \row    \li qsTranslate() \li QCoreApplication::translate()
+    \row    \li QT_TRANSLATE_NOOP() \li QT_TRANSLATE_NOOP()
+    \row    \li qsTrId() \li qtTrId()
+    \row    \li QT_TRID_NOOP() \li QT_TRID_NOOP()
+    \endtable
+
+    This flag also adds an \c arg() function to the string prototype.
+
+    For more information, see the \l {Internationalization with Qt}
+    documentation.
+
+    \b ConsoleExtension
+
+    The \l {Console API}{console} object implements a subset of the
+    \l {https://developer.mozilla.org/en-US/docs/Web/API/Console}{Console API},
+    which provides familiar logging functions, such as \c console.log().
+
+    The list of functions added is as follows:
+
+    \list
+    \li \c console.assert()
+    \li \c console.debug()
+    \li \c console.exception()
+    \li \c console.info()
+    \li \c console.log() (equivalent to \c console.debug())
+    \li \c console.error()
+    \li \c console.time()
+    \li \c console.timeEnd()
+    \li \c console.trace()
+    \li \c console.count()
+    \li \c console.warn()
+    \li \c {print()} (equivalent to \c console.debug())
+    \endlist
+
+    For more information, see the \l {Console API} documentation.
+
+    \b GarbageCollectionExtension
+
+    The \c gc() function is equivalent to calling \l collectGarbage().
 */
 
 QT_BEGIN_NAMESPACE
@@ -235,8 +308,11 @@ void QJSEngine::collectGarbage()
     d->m_v4Engine->memoryManager->runGC();
 }
 
+#if QT_DEPRECATED_SINCE(5, 6)
+
 /*!
   \since 5.4
+  \obsolete
 
   Installs translator functions on the given \a object, or on the Global
   Object if no object is specified.
@@ -260,30 +336,46 @@ void QJSEngine::collectGarbage()
 */
 void QJSEngine::installTranslatorFunctions(const QJSValue &object)
 {
+    installExtensions(TranslationExtension, object);
+}
+
+#endif // QT_DEPRECATED_SINCE(5, 6)
+
+
+/*!
+    \since 5.6
+
+    Installs JavaScript \a extensions to add functionality that is not
+    available in a standard ECMAScript implementation.
+
+    The extensions are installed on the given \a object, or on the
+    \l {globalObject()}{Global Object} if no object is specified.
+
+    Several extensions can be installed at once by \c {OR}-ing the enum values:
+
+    \code
+    installExtensions(QJSEngine::TranslationExtension | QJSEngine::ConsoleExtension);
+    \endcode
+
+    \sa Extension
+*/
+void QJSEngine::installExtensions(QJSEngine::Extensions extensions, const QJSValue &object)
+{
     QV4::ExecutionEngine *otherEngine = QJSValuePrivate::engine(&object);
     if (otherEngine && otherEngine != d->m_v4Engine) {
-        qWarning("QJSEngine: Trying to install a translator function from a different engine");
+        qWarning("QJSEngine: Trying to install extensions from a different engine");
         return;
     }
+
     QV4::Scope scope(d->m_v4Engine);
     QV4::ScopedObject obj(scope);
     QV4::Value *val = QJSValuePrivate::getValue(&object);
     if (val)
         obj = val;
     if (!obj)
-        obj = scope.engine->globalObject();
-#ifndef QT_NO_TRANSLATION
-    obj->defineDefaultProperty(QStringLiteral("qsTranslate"), QV4::GlobalExtensions::method_qsTranslate);
-    obj->defineDefaultProperty(QStringLiteral("QT_TRANSLATE_NOOP"), QV4::GlobalExtensions::method_qsTranslateNoOp);
-    obj->defineDefaultProperty(QStringLiteral("qsTr"), QV4::GlobalExtensions::method_qsTr);
-    obj->defineDefaultProperty(QStringLiteral("QT_TR_NOOP"), QV4::GlobalExtensions::method_qsTrNoOp);
-    obj->defineDefaultProperty(QStringLiteral("qsTrId"), QV4::GlobalExtensions::method_qsTrId);
-    obj->defineDefaultProperty(QStringLiteral("QT_TRID_NOOP"), QV4::GlobalExtensions::method_qsTrIdNoOp);
+        obj = scope.engine->globalObject;
 
-    // string prototype extension
-    scope.engine->stringPrototype.asObject()->defineDefaultProperty(QStringLiteral("arg"),
-                                                          QV4::GlobalExtensions::method_string_arg);
-#endif
+    QV4::GlobalExtensions::init(obj, extensions);
 }
 
 /*!
@@ -318,8 +410,10 @@ QJSValue QJSEngine::evaluate(const QString& program, const QString& fileName, in
 {
     QV4::ExecutionEngine *v4 = d->m_v4Engine;
     QV4::Scope scope(v4);
-    QV4::ScopedContext ctx(scope, v4->currentContext());
-    if (ctx->d() != v4->rootContext())
+    QV4::ExecutionContextSaver saver(scope);
+
+    QV4::ExecutionContext *ctx = v4->currentContext;
+    if (ctx->d() != v4->rootContext()->d())
         ctx = v4->pushGlobalContext();
     QV4::ScopedValue result(scope);
 
@@ -331,8 +425,7 @@ QJSValue QJSEngine::evaluate(const QString& program, const QString& fileName, in
         result = script.run();
     if (scope.engine->hasException)
         result = v4->catchException();
-    if (ctx->d() != v4->rootContext())
-        v4->popContext();
+
     return QJSValue(v4, result->asReturnedValue());
 }
 
@@ -414,7 +507,7 @@ QJSValue QJSEngine::globalObject() const
 {
     Q_D(const QJSEngine);
     QV4::Scope scope(d->m_v4Engine);
-    QV4::ScopedValue v(scope, d->m_v4Engine->globalObject());
+    QV4::ScopedValue v(scope, d->m_v4Engine->globalObject);
     return QJSValue(d->m_v4Engine, v->asReturnedValue());
 }
 
@@ -554,7 +647,7 @@ bool QJSEngine::convertV2(const QJSValue &value, int type, void *ptr)
 
     Creates a QJSValue with the given \a value.
 
-    \sa fromScriptValue(), newVariant()
+    \sa fromScriptValue()
 */
 
 /*! \fn T QJSEngine::fromScriptValue(const QJSValue &value)
@@ -581,7 +674,7 @@ QJSEnginePrivate::~QJSEnginePrivate()
 QQmlPropertyCache *QJSEnginePrivate::createCache(const QMetaObject *mo)
 {
     if (!mo->superClass()) {
-        QQmlPropertyCache *rv = new QQmlPropertyCache(q_func(), mo);
+        QQmlPropertyCache *rv = new QQmlPropertyCache(QV8Engine::getV4(q_func()), mo);
         propertyCache.insert(mo, rv);
         return rv;
     } else {

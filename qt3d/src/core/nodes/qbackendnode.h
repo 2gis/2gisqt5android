@@ -34,8 +34,8 @@
 **
 ****************************************************************************/
 
-#ifndef QT3D_QBACKENDNODE_H
-#define QT3D_QBACKENDNODE_H
+#ifndef QT3DCORE_QBACKENDNODE_H
+#define QT3DCORE_QBACKENDNODE_H
 
 #include <Qt3DCore/qt3dcore_global.h>
 #include <Qt3DCore/qscenechange.h>
@@ -43,7 +43,7 @@
 
 QT_BEGIN_NAMESPACE
 
-namespace Qt3D {
+namespace Qt3DCore {
 
 class QBackendNodeFactory;
 class QBackendNodePrivate;
@@ -87,9 +87,10 @@ protected:
 
     QBackendNode(QBackendNodePrivate &dd);
 
-private:
     Q_DECLARE_PRIVATE(QBackendNode)
     QBackendNodePrivate *d_ptr;
+
+private:
     friend class QBackendScenePropertyChange;
 };
 
@@ -98,4 +99,4 @@ private:
 
 QT_END_NAMESPACE
 
-#endif // QT3D_QBACKENDNODE_H
+#endif // QT3DCORE_QBACKENDNODE_H

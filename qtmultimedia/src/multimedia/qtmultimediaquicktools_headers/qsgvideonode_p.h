@@ -34,6 +34,17 @@
 #ifndef QSGVIDEONODE_P_H
 #define QSGVIDEONODE_P_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include <QtQuick/qsgnode.h>
 #include <private/qtmultimediaquickdefs_p.h>
 
@@ -70,6 +81,8 @@ Q_DECLARE_OPERATORS_FOR_FLAGS(QSGVideoNode::FrameFlags)
 class Q_MULTIMEDIAQUICK_EXPORT QSGVideoNodeFactoryInterface
 {
 public:
+    virtual ~QSGVideoNodeFactoryInterface();
+
     virtual QList<QVideoFrame::PixelFormat> supportedPixelFormats(QAbstractVideoBuffer::HandleType handleType) const = 0;
     virtual QSGVideoNode *createNode(const QVideoSurfaceFormat &format) = 0;
 };

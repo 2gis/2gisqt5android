@@ -16,7 +16,6 @@ load(qt_module)
 QMAKE_CXXFLAGS_WARN_ON -= -Wcast-qual
 
 CONFIG -= precompile_header
-CONFIG -= create_cmake
 CONFIG += link_pkgconfig qpa/genericunixfontdatabase wayland-scanner
 
 !equals(QT_WAYLAND_GL_CONFIG, nogl) {
@@ -46,7 +45,6 @@ WAYLANDCLIENTSOURCES += \
             ../3rdparty/protocol/wayland.xml \
             ../extensions/surface-extension.xml \
             ../extensions/sub-surface-extension.xml \
-            ../extensions/output-extension.xml \
             ../extensions/touch-extension.xml \
             ../extensions/qtkey-extension.xml \
             ../extensions/windowmanager.xml \
@@ -71,16 +69,15 @@ SOURCES +=  qwaylandintegration.cpp \
             qwaylandwlshellsurface.cpp \
             qwaylandxdgshell.cpp \
             qwaylandxdgsurface.cpp \
-            qwaylandextendedoutput.cpp \
             qwaylandextendedsurface.cpp \
             qwaylandsubsurface.cpp \
             qwaylandtouch.cpp \
             qwaylandqtkey.cpp \
             ../shared/qwaylandmimehelper.cpp \
+            ../shared/qwaylandxkb.cpp \
             qwaylandabstractdecoration.cpp \
             qwaylanddecorationfactory.cpp \
             qwaylanddecorationplugin.cpp \
-            qwaylandeventthread.cpp\
             qwaylandwindowmanagerintegration.cpp \
             qwaylandinputcontext.cpp \
             qwaylanddatadevice.cpp \
@@ -104,16 +101,15 @@ HEADERS +=  qwaylandintegration_p.h \
             qwaylandwlshellsurface_p.h \
             qwaylandxdgshell_p.h \
             qwaylandxdgsurface_p.h \
-            qwaylandextendedoutput_p.h \
             qwaylandextendedsurface_p.h \
             qwaylandsubsurface_p.h \
             qwaylandtouch_p.h \
             qwaylandqtkey_p.h \
             ../shared/qwaylandmimehelper.h \
+            ../shared/qwaylandxkb.h \
             qwaylandabstractdecoration_p.h \
             qwaylanddecorationfactory_p.h \
             qwaylanddecorationplugin_p.h \
-            qwaylandeventthread_p.h \
             qwaylandwindowmanagerintegration_p.h \
             qwaylandinputcontext_p.h \
             qwaylanddatadevice_p.h \

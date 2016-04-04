@@ -136,12 +136,12 @@ qint64 QWindowsPipeReader::read(char *data, qint64 maxlen)
         actualReadBufferSize--;
         readSoFar = 1;
     } else {
-        qint64 bytesToRead = qMin(qint64(actualReadBufferSize), maxlen);
+        qint64 bytesToRead = qMin(actualReadBufferSize, maxlen);
         readSoFar = 0;
         while (readSoFar < bytesToRead) {
             const char *ptr = readBuffer.readPointer();
-            int bytesToReadFromThisBlock = qMin(bytesToRead - readSoFar,
-                                                qint64(readBuffer.nextDataBlockSize()));
+            qint64 bytesToReadFromThisBlock = qMin(bytesToRead - readSoFar,
+                                                   readBuffer.nextDataBlockSize());
             memcpy(data + readSoFar, ptr, bytesToReadFromThisBlock);
             readSoFar += bytesToReadFromThisBlock;
             readBuffer.free(bytesToReadFromThisBlock);
@@ -186,8 +186,12 @@ void QWindowsPipeReader::notified(quint32 numberOfBytesRead, quint32 errorCode,
     case ERROR_PIPE_NOT_CONNECTED:
         pipeBroken = true;
         break;
+    case ERROR_OPERATION_ABORTED:
+        if (stopped)
+            break;
+        // fall through
     default:
-        emit winError(errorCode, QLatin1String("QWindowsPipeReader::completeAsyncRead"));
+        emit winError(errorCode, QLatin1String("QWindowsPipeReader::notified"));
         pipeBroken = true;
         break;
     }

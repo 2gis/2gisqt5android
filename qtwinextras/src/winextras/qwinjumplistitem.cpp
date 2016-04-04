@@ -36,6 +36,9 @@
 #include "qwinjumplistitem_p.h"
 #include "qwinjumplistcategory_p.h"
 
+#include <QtCore/QDebug>
+#include <QtCore/QDir>
+
 QT_BEGIN_NAMESPACE
 
 /*!
@@ -255,5 +258,32 @@ QStringList QWinJumpListItem::arguments() const
     Q_D(const QWinJumpListItem);
     return d->arguments;
 }
+
+#ifndef QT_NO_DEBUG_STREAM
+
+QDebug operator<<(QDebug debug, const QWinJumpListItem *item)
+{
+    QDebugStateSaver saver(debug);
+    debug.nospace();
+    debug.noquote();
+    debug << "QWinJumpListItem(";
+    if (item) {
+        debug << "type=" << item->type() << ", title=\"" << item->title()
+            << "\", description=\"" << item->description()
+            << "\", filePath=\"" << QDir::toNativeSeparators(item->filePath())
+            << "\", arguments=";
+        debug.quote();
+        debug << item->arguments();
+        debug.noquote();
+        debug << ", workingDirectory=\"" << QDir::toNativeSeparators(item->workingDirectory())
+            << "\", icon=" << item->icon();
+    } else {
+        debug << '0';
+    }
+    debug << ')';
+    return debug;
+}
+
+#endif // !QT_NO_DEBUG_STREAM
 
 QT_END_NAMESPACE

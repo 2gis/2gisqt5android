@@ -35,6 +35,7 @@
 #include "qv4stringobject_p.h"
 #include "qv4identifier_p.h"
 #include "qv4argumentsobject_p.h"
+#include "qv4string_p.h"
 
 using namespace QV4;
 
@@ -50,7 +51,7 @@ ObjectIterator::ObjectIterator(ExecutionEngine *e, Value *scratch1, Value *scrat
     init(o);
 }
 
-ObjectIterator::ObjectIterator(Scope &scope, Object *o, uint flags)
+ObjectIterator::ObjectIterator(Scope &scope, const Object *o, uint flags)
     : engine(scope.engine)
     , object(scope.alloc(1))
     , current(scope.alloc(1))
@@ -62,14 +63,14 @@ ObjectIterator::ObjectIterator(Scope &scope, Object *o, uint flags)
     init(o);
 }
 
-void ObjectIterator::init(Object *o)
+void ObjectIterator::init(const Object *o)
 {
-    object->m = o ? o->m : 0;
-    current->m = o ? o->m : 0;
+    object->setM(o ? o->m() : 0);
+    current->setM(o ? o->m() : 0);
 
-#if QT_POINTER_SIZE == 4
-    object->tag = QV4::Value::Managed_Type;
-    current->tag = QV4::Value::Managed_Type;
+#ifndef QV4_USE_64_BIT_VALUE_ENCODING
+    object->setTag(QV4::Value::Managed_Type);
+    current->setTag(QV4::Value::Managed_Type);
 #endif
 
     if (object->as<ArgumentsObject>()) {
@@ -78,12 +79,12 @@ void ObjectIterator::init(Object *o)
     }
 }
 
-void ObjectIterator::next(Heap::String **name, uint *index, Property *pd, PropertyAttributes *attrs)
+void ObjectIterator::next(Value *name, uint *index, Property *pd, PropertyAttributes *attrs)
 {
-    *name = 0;
+    name->setM(0);
     *index = UINT_MAX;
 
-    if (!object->asObject()) {
+    if (!object->as<Object>()) {
         *attrs = PropertyAttributes();
         return;
     }
@@ -92,19 +93,19 @@ void ObjectIterator::next(Heap::String **name, uint *index, Property *pd, Proper
     ScopedString n(scope);
 
     while (1) {
-        if (!current->asObject())
+        if (!current->as<Object>())
             break;
 
         while (1) {
-            current->asObject()->advanceIterator(this, name, index, pd, attrs);
+            current->as<Object>()->advanceIterator(this, name, index, pd, attrs);
             if (attrs->isEmpty())
                 break;
             // check the property is not already defined earlier in the proto chain
             if (current->heapObject() != object->heapObject()) {
-                o = object->asObject();
+                o = object->as<Object>();
                 n = *name;
                 bool shadowed = false;
-                while (o->asObject()->d() != current->heapObject()) {
+                while (o->d() != current->heapObject()) {
                     if ((!!n && o->hasOwnProperty(n)) ||
                         (*index != UINT_MAX && o->hasOwnProperty(*index))) {
                         shadowed = true;
@@ -119,9 +120,9 @@ void ObjectIterator::next(Heap::String **name, uint *index, Property *pd, Proper
         }
 
         if (flags & WithProtoChain)
-            current->m = current->objectValue()->prototype();
+            current->setM(current->objectValue()->prototype());
         else
-            current->m = (Heap::Base *)0;
+            current->setM(0);
 
         arrayIndex = 0;
         memberIndex = 0;
@@ -131,7 +132,7 @@ void ObjectIterator::next(Heap::String **name, uint *index, Property *pd, Proper
 
 ReturnedValue ObjectIterator::nextPropertyName(Value *value)
 {
-    if (!object->asObject())
+    if (!object->as<Object>())
         return Encode::null();
 
     PropertyAttributes attrs;
@@ -143,17 +144,17 @@ ReturnedValue ObjectIterator::nextPropertyName(Value *value)
     if (attrs.isEmpty())
         return Encode::null();
 
-    *value = object->objectValue()->getValue(p, attrs);
+    *value = object->objectValue()->getValue(p->value, attrs);
 
     if (!!name)
         return name->asReturnedValue();
-    assert(index < UINT_MAX);
+    Q_ASSERT(index < UINT_MAX);
     return Encode(index);
 }
 
 ReturnedValue ObjectIterator::nextPropertyNameAsString(Value *value)
 {
-    if (!object->asObject())
+    if (!object->as<Object>())
         return Encode::null();
 
     PropertyAttributes attrs;
@@ -165,17 +166,17 @@ ReturnedValue ObjectIterator::nextPropertyNameAsString(Value *value)
     if (attrs.isEmpty())
         return Encode::null();
 
-    *value = object->objectValue()->getValue(p, attrs);
+    *value = object->objectValue()->getValue(p->value, attrs);
 
     if (!!name)
         return name->asReturnedValue();
-    assert(index < UINT_MAX);
+    Q_ASSERT(index < UINT_MAX);
     return Encode(engine->newString(QString::number(index)));
 }
 
 ReturnedValue ObjectIterator::nextPropertyNameAsString()
 {
-    if (!object->asObject())
+    if (!object->as<Object>())
         return Encode::null();
 
     PropertyAttributes attrs;

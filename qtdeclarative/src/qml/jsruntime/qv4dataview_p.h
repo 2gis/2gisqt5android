@@ -33,6 +33,17 @@
 #ifndef QV4DATAVIEW_H
 #define QV4DATAVIEW_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include "qv4object_p.h"
 #include "qv4functionobject_p.h"
 
@@ -47,8 +58,8 @@ struct DataViewCtor : FunctionObject {
 };
 
 struct DataView : Object {
-    DataView(ExecutionEngine *e);
-    ArrayBuffer *buffer;
+    DataView() {}
+    Pointer<ArrayBuffer> buffer;
     uint byteLength;
     uint byteOffset;
 };
@@ -59,13 +70,14 @@ struct DataViewCtor: FunctionObject
 {
     V4_OBJECT2(DataViewCtor, FunctionObject)
 
-    static ReturnedValue construct(Managed *m, CallData *callData);
-    static ReturnedValue call(Managed *that, CallData *callData);
+    static ReturnedValue construct(const Managed *m, CallData *callData);
+    static ReturnedValue call(const Managed *that, CallData *callData);
 };
 
 struct DataView : Object
 {
     V4_OBJECT2(DataView, Object)
+    V4_PROTOTYPE(dataViewPrototype)
 
     static void markObjects(Heap::Base *that, ExecutionEngine *e);
 };

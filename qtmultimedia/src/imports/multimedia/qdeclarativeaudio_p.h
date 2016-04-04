@@ -48,6 +48,7 @@
 #include <QtCore/qbasictimer.h>
 #include <QtQml/qqmlparserstatus.h>
 #include <QtQml/qqml.h>
+#include <QtQml/qjsvalue.h>
 
 #include <qmediaplayer.h>
 
@@ -58,6 +59,7 @@ class QMediaPlayerControl;
 class QMediaService;
 class QMediaServiceProvider;
 class QMetaDataReaderControl;
+class QDeclarativePlaylist;
 class QDeclarativeMediaBaseAnimation;
 class QDeclarativeMediaMetaData;
 class QMediaAvailabilityControl;
@@ -66,6 +68,7 @@ class QDeclarativeAudio : public QObject, public QQmlParserStatus
 {
     Q_OBJECT
     Q_PROPERTY(QUrl source READ source WRITE setSource NOTIFY sourceChanged)
+    Q_PROPERTY(QDeclarativePlaylist *playlist READ playlist WRITE setPlaylist NOTIFY playlistChanged REVISION 1)
     Q_PROPERTY(int loops READ loopCount WRITE setLoopCount NOTIFY loopCountChanged)
     Q_PROPERTY(PlaybackState playbackState READ playbackState NOTIFY playbackStateChanged)
     Q_PROPERTY(bool autoPlay READ autoPlay WRITE setAutoPlay NOTIFY autoPlayChanged)
@@ -85,11 +88,13 @@ class QDeclarativeAudio : public QObject, public QQmlParserStatus
     Q_PROPERTY(QDeclarativeMediaMetaData *metaData READ metaData CONSTANT)
     Q_PROPERTY(QObject *mediaObject READ mediaObject NOTIFY mediaObjectChanged SCRIPTABLE false DESIGNABLE false)
     Q_PROPERTY(Availability availability READ availability NOTIFY availabilityChanged)
+    Q_PROPERTY(AudioRole audioRole READ audioRole WRITE setAudioRole NOTIFY audioRoleChanged REVISION 1)
     Q_ENUMS(Status)
     Q_ENUMS(Error)
     Q_ENUMS(Loop)
     Q_ENUMS(PlaybackState)
     Q_ENUMS(Availability)
+    Q_ENUMS(AudioRole)
     Q_INTERFACES(QQmlParserStatus)
 public:
     enum Status
@@ -134,6 +139,19 @@ public:
         ResourceMissing = QMultimedia::ResourceError
     };
 
+    enum AudioRole {
+        UnknownRole = QAudio::UnknownRole,
+        AccessibilityRole = QAudio::AccessibilityRole,
+        AlarmRole = QAudio::AlarmRole,
+        GameRole = QAudio::GameRole,
+        MusicRole = QAudio::MusicRole,
+        NotificationRole = QAudio::NotificationRole,
+        RingtoneRole = QAudio::RingtoneRole,
+        SonificationRole = QAudio::SonificationRole,
+        VideoRole = QAudio::VideoRole,
+        VoiceCommunicationRole = QAudio::VoiceCommunicationRole
+    };
+
     QDeclarativeAudio(QObject *parent = 0);
     ~QDeclarativeAudio();
 
@@ -152,8 +170,14 @@ public:
 
     Availability availability() const;
 
+    AudioRole audioRole() const;
+    void setAudioRole(AudioRole audioRole);
+
     QUrl source() const;
     void setSource(const QUrl &url);
+
+    QDeclarativePlaylist *playlist() const;
+    void setPlaylist(QDeclarativePlaylist *playlist);
 
     int loopCount() const;
     void setLoopCount(int loopCount);
@@ -191,7 +215,11 @@ public Q_SLOTS:
     void stop();
     void seek(int position);
 
+    Q_REVISION(1) QJSValue supportedAudioRoles() const;
+
 Q_SIGNALS:
+    Q_REVISION(1) void playlistChanged();
+
     void sourceChanged();
     void autoLoadChanged();
     void loopCountChanged();
@@ -218,6 +246,8 @@ Q_SIGNALS:
     void seekableChanged();
     void playbackRateChanged();
 
+    Q_REVISION(1) void audioRoleChanged();
+
     void availabilityChanged(Availability availability);
 
     void errorChanged();
@@ -229,20 +259,24 @@ private Q_SLOTS:
     void _q_error(QMediaPlayer::Error);
     void _q_availabilityChanged(QMultimedia::AvailabilityStatus);
     void _q_statusChanged();
+    void _q_mediaChanged(const QMediaContent&);
 
 private:
     Q_DISABLE_COPY(QDeclarativeAudio)
 
+    QDeclarativePlaylist *m_playlist;
     bool m_autoPlay;
     bool m_autoLoad;
     bool m_loaded;
     bool m_muted;
     bool m_complete;
+    bool m_emitPlaylistChanged;
     int m_loopCount;
     int m_runningCount;
     int m_position;
     qreal m_vol;
     qreal m_playbackRate;
+    AudioRole m_audioRole;
 
     QMediaPlayer::State m_playbackState;
     QMediaPlayer::MediaStatus m_status;

@@ -50,7 +50,9 @@ include("${_Qt5CTestMacros}")
 if(NOT ${CMAKE_VERSION} VERSION_LESS 2.8.9)
     # Requires INCLUDE_DIRECTORIES target property in CMake 2.8.8
     # and POSITION_INDEPENDENT_CODE target property in 2.8.9
-    expect_pass(test_use_modules_function)
+    if (NOT NO_GUI)
+        expect_pass(test_use_modules_function)
+    endif()
     expect_pass(test_umbrella_config)
 else()
     message("CMake version older than 2.8.9 (Found ${CMAKE_VERSION}). Not running test \"test_use_modules_function\" or \"test_umbrella_config\"")
@@ -127,7 +129,7 @@ if (QT_WITH_ANGLE OR (NOT WIN32 AND NOT APPLE AND NOT NO_EGL))
 endif()
 expect_pass(test_opengl_lib)
 
-if (NOT CMAKE_VERSION VERSION_LESS 2.8.11)
+if (NOT CMAKE_VERSION VERSION_LESS 2.8.11 AND NOT NO_WIDGETS)
     expect_pass(test_interface)
 endif()
 

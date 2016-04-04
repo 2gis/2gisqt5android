@@ -34,17 +34,28 @@
 **
 ****************************************************************************/
 
-#ifndef QT3D_QCOMPONENT_P_H
-#define QT3D_QCOMPONENT_P_H
+#ifndef QT3DCORE_QCOMPONENT_P_H
+#define QT3DCORE_QCOMPONENT_P_H
 
-#include <Qt3DCore/qt3dcore_global.h>
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists for the convenience
+// of other Qt classes.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include <private/qnode_p.h>
+#include <private/qt3dcore_global_p.h>
 
 QT_BEGIN_NAMESPACE
 
-namespace Qt3D {
+namespace Qt3DCore {
 
-class QT3DCORESHARED_EXPORT QComponentPrivate : public QNodePrivate
+class QT3DCORE_PRIVATE_EXPORT QComponentPrivate : public QNodePrivate
 {
 public:
     QComponentPrivate();
@@ -54,7 +65,6 @@ public:
 
     Q_DECLARE_PUBLIC(QComponent)
     bool m_shareable;
-    bool m_enabled;
     QVector<QEntity *> m_entities;
 };
 
@@ -62,4 +72,4 @@ public:
 
 QT_END_NAMESPACE
 
-#endif // QT3D_QCOMPONENT_P_H
+#endif // QT3DCORE_QCOMPONENT_P_H

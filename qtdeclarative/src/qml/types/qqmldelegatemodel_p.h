@@ -34,6 +34,17 @@
 #ifndef QQMLDATAMODEL_P_H
 #define QQMLDATAMODEL_P_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include <private/qtqmlglobal_p.h>
 #include <private/qqmllistcompositor_p.h>
 #include <private/qqmlobjectmodel_p.h>
@@ -96,7 +107,7 @@ public:
     ReleaseFlags release(QObject *object);
     void cancel(int index);
     virtual QString stringValue(int index, const QString &role);
-    virtual void setWatchedRoles(QList<QByteArray> roles);
+    virtual void setWatchedRoles(const QList<QByteArray> &roles);
 
     int indexOf(QObject *object, QObject *objectContext) const;
 

@@ -57,16 +57,15 @@
 
 #include <private/qpointervaluepair_p.h>
 #include <private/qqmlabstractbinding_p.h>
-#include <private/qqmlabstractexpression_p.h>
 #include <private/qqmljavascriptexpression_p.h>
 
 QT_BEGIN_NAMESPACE
 
 class QQmlContext;
 class Q_QML_PRIVATE_EXPORT QQmlBinding : public QQmlJavaScriptExpression,
-                                         public QQmlAbstractExpression,
                                          public QQmlAbstractBinding
 {
+    friend class QQmlAbstractBinding;
 public:
     QQmlBinding(const QString &, QObject *, QQmlContext *);
     QQmlBinding(const QQmlScriptString &, QObject *, QQmlContext *);
@@ -74,84 +73,62 @@ public:
     QQmlBinding(const QString &, QObject *, QQmlContextData *,
                 const QString &url, quint16 lineNumber, quint16 columnNumber);
     QQmlBinding(const QV4::Value &, QObject *, QQmlContextData *);
+    ~QQmlBinding();
 
     void setTarget(const QQmlProperty &);
-    void setTarget(QObject *, const QQmlPropertyData &, QQmlContextData *);
-    QQmlProperty property() const;
+    void setTarget(QObject *, const QQmlPropertyData &);
 
     void setNotifyOnValueChanged(bool);
 
-    // Inherited from  QQmlAbstractExpression
+    // Inherited from QQmlJavaScriptExpression
     virtual void refresh();
 
-    // "Inherited" from  QQmlAbstractBinding
-    static QString expression(const QQmlAbstractBinding *);
-    static int propertyIndex(const QQmlAbstractBinding *);
-    static QObject *object(const QQmlAbstractBinding *);
-    static void setEnabled(QQmlAbstractBinding *, bool, QQmlPropertyPrivate::WriteFlags);
-    static void update(QQmlAbstractBinding *, QQmlPropertyPrivate::WriteFlags);
-    static void retargetBinding(QQmlAbstractBinding *, QObject *, int);
-
-    void setEnabled(bool, QQmlPropertyPrivate::WriteFlags flags);
-    void update(QQmlPropertyPrivate::WriteFlags flags);
-    void update() { update(QQmlPropertyPrivate::DontRemoveBinding); }
-
-    QString expression() const;
-    QObject *object() const;
-    int propertyIndex() const;
-    void retargetBinding(QObject *, int);
+    // Inherited from QQmlAbstractBinding
+    virtual void setEnabled(bool, QQmlPropertyPrivate::WriteFlags flags = QQmlPropertyPrivate::DontRemoveBinding);
+    virtual QString expression() const;
+    void update(QQmlPropertyPrivate::WriteFlags flags = QQmlPropertyPrivate::DontRemoveBinding);
 
     typedef int Identifier;
-    static Identifier Invalid;
+    enum {
+        Invalid = -1
+    };
 
     QVariant evaluate();
 
-    static QString expressionIdentifier(QQmlJavaScriptExpression *);
-    static void expressionChanged(QQmlJavaScriptExpression *);
-
-protected:
-    friend class QQmlAbstractBinding;
-    ~QQmlBinding();
+    virtual QString expressionIdentifier();
+    virtual void expressionChanged();
 
 private:
-    QV4::PersistentValue v4function;
-
     inline bool updatingFlag() const;
     inline void setUpdatingFlag(bool);
     inline bool enabledFlag() const;
     inline void setEnabledFlag(bool);
+    QQmlPropertyData getPropertyData() const;
 
-    struct Retarget {
-        QObject *target;
-        int targetProperty;
-    };
+    bool write(const QQmlPropertyData &core,
+                       const QV4::Value &result, bool isUndefined,
+                       QQmlPropertyPrivate::WriteFlags flags);
 
-    QPointerValuePair<QObject, Retarget> m_coreObject;
-    QQmlPropertyData m_core;
-    // We store some flag bits in the following flag pointers.
-    //    m_ctxt:flag1 - updatingFlag
-    //    m_ctxt:flag2 - enabledFlag
-    QFlagPointer<QQmlContextData> m_ctxt;
 };
 
 bool QQmlBinding::updatingFlag() const
 {
-    return m_ctxt.flag();
+    return m_target.flag();
 }
 
 void QQmlBinding::setUpdatingFlag(bool v)
 {
-    m_ctxt.setFlagValue(v);
+    m_target.setFlagValue(v);
 }
 
 bool QQmlBinding::enabledFlag() const
 {
-    return m_ctxt.flag2();
+    return m_target.flag2();
 }
 
 void QQmlBinding::setEnabledFlag(bool v)
 {
-    m_ctxt.setFlag2Value(v);
+    m_target.setFlag2Value(v);
 }
 
 QT_END_NAMESPACE

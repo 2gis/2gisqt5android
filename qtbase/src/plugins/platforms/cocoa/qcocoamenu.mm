@@ -34,7 +34,6 @@
 #include "qcocoamenu.h"
 
 #include "qcocoahelpers.h"
-#include "qcocoaautoreleasepool.h"
 
 #include <QtCore/QtDebug>
 #include <QtCore/qmetaobject.h>
@@ -235,7 +234,7 @@ QCocoaMenu::QCocoaMenu() :
     m_menuBar(0),
     m_containingMenuItem(0)
 {
-    QCocoaAutoReleasePool pool;
+    QMacAutoReleasePool pool;
 
     m_delegate = [[QCocoaMenuDelegate alloc] initWithMenu:this];
     m_nativeItem = [[NSMenuItem alloc] initWithTitle:@"" action:nil keyEquivalent:@""];
@@ -255,7 +254,7 @@ QCocoaMenu::~QCocoaMenu()
     if (m_containingMenuItem)
         m_containingMenuItem->clearMenu(this);
 
-    QCocoaAutoReleasePool pool;
+    QMacAutoReleasePool pool;
     [m_nativeItem setSubmenu:nil];
     [m_nativeMenu release];
     [m_delegate release];
@@ -264,7 +263,7 @@ QCocoaMenu::~QCocoaMenu()
 
 void QCocoaMenu::setText(const QString &text)
 {
-    QCocoaAutoReleasePool pool;
+    QMacAutoReleasePool pool;
     QString stripped = qt_mac_removeAmpersandEscapes(text);
     [m_nativeMenu setTitle:QCFString::toNSString(stripped)];
     [m_nativeItem setTitle:QCFString::toNSString(stripped)];
@@ -286,7 +285,7 @@ void QCocoaMenu::setFont(const QFont &font)
 
 void QCocoaMenu::insertMenuItem(QPlatformMenuItem *menuItem, QPlatformMenuItem *before)
 {
-    QCocoaAutoReleasePool pool;
+    QMacAutoReleasePool pool;
     QCocoaMenuItem *cocoaItem = static_cast<QCocoaMenuItem *>(menuItem);
     QCocoaMenuItem *beforeItem = static_cast<QCocoaMenuItem *>(before);
 
@@ -295,7 +294,7 @@ void QCocoaMenu::insertMenuItem(QPlatformMenuItem *menuItem, QPlatformMenuItem *
         int index = m_menuItems.indexOf(beforeItem);
         // if a before item is supplied, it should be in the menu
         if (index < 0) {
-            qWarning() << Q_FUNC_INFO << "Before menu item not found";
+            qWarning("Before menu item not found");
             return;
         }
         m_menuItems.insert(index, cocoaItem);
@@ -316,7 +315,7 @@ void QCocoaMenu::insertNative(QCocoaMenuItem *item, QCocoaMenuItem *beforeItem)
         return;
 
     if ([item->nsItem() menu]) {
-        qWarning() << Q_FUNC_INFO << "Menu item is already in a menu, remove it from the other menu first before inserting";
+        qWarning("Menu item is already in a menu, remove it from the other menu first before inserting");
         return;
     }
     // if the item we're inserting before is merged, skip along until
@@ -327,7 +326,7 @@ void QCocoaMenu::insertNative(QCocoaMenuItem *item, QCocoaMenuItem *beforeItem)
 
     if (beforeItem) {
         if (beforeItem->isMerged()) {
-            qWarning() << Q_FUNC_INFO << "No non-merged before menu item found";
+            qWarning("No non-merged before menu item found");
             return;
         }
         NSUInteger nativeIndex = [m_nativeMenu indexOfItem:beforeItem->nsItem()];
@@ -340,10 +339,10 @@ void QCocoaMenu::insertNative(QCocoaMenuItem *item, QCocoaMenuItem *beforeItem)
 
 void QCocoaMenu::removeMenuItem(QPlatformMenuItem *menuItem)
 {
-    QCocoaAutoReleasePool pool;
+    QMacAutoReleasePool pool;
     QCocoaMenuItem *cocoaItem = static_cast<QCocoaMenuItem *>(menuItem);
     if (!m_menuItems.contains(cocoaItem)) {
-        qWarning() << Q_FUNC_INFO << "Menu does not contain the item to be removed";
+        qWarning("Menu does not contain the item to be removed");
         return;
     }
 
@@ -353,7 +352,7 @@ void QCocoaMenu::removeMenuItem(QPlatformMenuItem *menuItem)
     m_menuItems.removeOne(cocoaItem);
     if (!cocoaItem->isMerged()) {
         if (m_nativeMenu != [cocoaItem->nsItem() menu]) {
-            qWarning() << Q_FUNC_INFO << "Item to remove does not belong to this menu";
+            qWarning("Item to remove does not belong to this menu");
             return;
         }
         [m_nativeMenu removeItem: cocoaItem->nsItem()];
@@ -370,10 +369,10 @@ QCocoaMenuItem *QCocoaMenu::itemOrNull(int index) const
 
 void QCocoaMenu::syncMenuItem(QPlatformMenuItem *menuItem)
 {
-    QCocoaAutoReleasePool pool;
+    QMacAutoReleasePool pool;
     QCocoaMenuItem *cocoaItem = static_cast<QCocoaMenuItem *>(menuItem);
     if (!m_menuItems.contains(cocoaItem)) {
-        qWarning() << Q_FUNC_INFO << "Item does not belong to this menu";
+        qWarning("Item does not belong to this menu");
         return;
     }
 
@@ -399,7 +398,7 @@ void QCocoaMenu::syncMenuItem(QPlatformMenuItem *menuItem)
 
 void QCocoaMenu::syncSeparatorsCollapsible(bool enable)
 {
-    QCocoaAutoReleasePool pool;
+    QMacAutoReleasePool pool;
     if (enable) {
         bool previousIsSeparator = true; // setting to true kills all the separators placed at the top.
         NSMenuItem *previousItem = nil;
@@ -457,7 +456,7 @@ void QCocoaMenu::setVisible(bool visible)
 
 void QCocoaMenu::showPopup(const QWindow *parentWindow, const QRect &targetRect, const QPlatformMenuItem *item)
 {
-    QCocoaAutoReleasePool pool;
+    QMacAutoReleasePool pool;
 
     QPoint pos =  QPoint(targetRect.left(), targetRect.top() + targetRect.height());
     QCocoaWindow *cocoaWindow = parentWindow ? static_cast<QCocoaWindow *>(parentWindow->handle()) : 0;
@@ -583,7 +582,7 @@ QList<QCocoaMenuItem *> QCocoaMenu::merged() const
 
 void QCocoaMenu::syncModalState(bool modal)
 {
-    QCocoaAutoReleasePool pool;
+    QMacAutoReleasePool pool;
 
     if (!m_enabled)
         modal = true;

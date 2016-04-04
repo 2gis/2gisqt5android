@@ -45,14 +45,14 @@
 // We mean it.
 //
 
-#include "qquickstatechangescript_p.h"
 #include "qquickanimation_p.h"
 
 QT_BEGIN_NAMESPACE
 
-class QQuickStatePrivate;
+class QQuickState;
+class QQuickStateAction;
 class QQuickTransitionManagerPrivate;
-class Q_AUTOTEST_EXPORT QQuickTransitionManager
+class Q_QUICK_PRIVATE_EXPORT QQuickTransitionManager
 {
 public:
     QQuickTransitionManager();

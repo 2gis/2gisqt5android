@@ -36,15 +36,21 @@
 
 #include "qaspectjob.h"
 #include "qaspectjob_p.h"
+#include <QByteArray>
 
 QT_BEGIN_NAMESPACE
 
-namespace Qt3D {
+namespace Qt3DCore {
 
-/*!
-    \class Qt3D::QAspectJobPrivate
-    \internal
-*/
+namespace {
+
+bool isDependencyNull(const QWeakPointer<QAspectJob> &dep)
+{
+    return dep.isNull();
+}
+
+} // anonymous
+
 QAspectJobPrivate::QAspectJobPrivate()
 {
 }
@@ -69,6 +75,24 @@ void QAspectJob::addDependency(QWeakPointer<QAspectJob> dependency)
 {
     Q_D(QAspectJob);
     d->m_dependencies.append(dependency);
+#ifdef QT3DCORE_ASPECT_JOB_DEBUG
+    static int threshold = qMax(1, qgetenv("QT3DCORE_ASPECT_JOB_DEPENDENCY_THRESHOLD").toInt());
+    if (d->m_dependencies.count() > threshold)
+        qWarning() << "Suspicious number of job dependencies found";
+#endif
+}
+
+void QAspectJob::removeDependency(QWeakPointer<QAspectJob> dependency)
+{
+    Q_D(QAspectJob);
+    if (!dependency.isNull()) {
+        d->m_dependencies.removeAll(dependency);
+    } else {
+        d->m_dependencies.erase(std::remove_if(d->m_dependencies.begin(),
+                                               d->m_dependencies.end(),
+                                               isDependencyNull),
+                                d->m_dependencies.end());
+    }
 }
 
 QVector<QWeakPointer<QAspectJob> > QAspectJob::dependencies() const
@@ -77,6 +101,6 @@ QVector<QWeakPointer<QAspectJob> > QAspectJob::dependencies() const
     return d->m_dependencies;
 }
 
-} // namespace Qt3D
+} // namespace Qt3DCore
 
 QT_END_NAMESPACE

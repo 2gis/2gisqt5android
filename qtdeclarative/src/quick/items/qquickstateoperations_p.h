@@ -34,6 +34,17 @@
 #ifndef QQUICKSTATEOPERATIONS_P_H
 #define QQUICKSTATEOPERATIONS_P_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include "qquickitem.h"
 #include "qquickanchors_p.h"
 
@@ -97,9 +108,9 @@ public:
 
     void saveOriginals() Q_DECL_OVERRIDE;
     //virtual void copyOriginals(QQuickStateActionEvent*);
-    void execute(Reason reason = ActualChange) Q_DECL_OVERRIDE;
+    void execute() Q_DECL_OVERRIDE;
     bool isReversable() Q_DECL_OVERRIDE;
-    void reverse(Reason reason = ActualChange) Q_DECL_OVERRIDE;
+    void reverse() Q_DECL_OVERRIDE;
     EventType type() const Q_DECL_OVERRIDE;
     bool override(QQuickStateActionEvent*other) Q_DECL_OVERRIDE;
     void rewind() Q_DECL_OVERRIDE;
@@ -180,9 +191,9 @@ public:
     QQuickItem *object() const;
     void setObject(QQuickItem *);
 
-    void execute(Reason reason = ActualChange) Q_DECL_OVERRIDE;
+    void execute() Q_DECL_OVERRIDE;
     bool isReversable() Q_DECL_OVERRIDE;
-    void reverse(Reason reason = ActualChange) Q_DECL_OVERRIDE;
+    void reverse() Q_DECL_OVERRIDE;
     EventType type() const Q_DECL_OVERRIDE;
     bool override(QQuickStateActionEvent*other) Q_DECL_OVERRIDE;
     bool changesBindings() Q_DECL_OVERRIDE;

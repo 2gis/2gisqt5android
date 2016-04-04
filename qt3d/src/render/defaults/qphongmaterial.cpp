@@ -36,34 +36,28 @@
 
 #include "qphongmaterial.h"
 #include "qphongmaterial_p.h"
-#include <Qt3DRenderer/qmaterial.h>
-#include <Qt3DRenderer/qeffect.h>
-#include <Qt3DRenderer/qtechnique.h>
-#include <Qt3DRenderer/qshaderprogram.h>
-#include <Qt3DRenderer/qparameter.h>
-#include <Qt3DRenderer/qrenderpass.h>
-#include <Qt3DRenderer/qopenglfilter.h>
+#include <Qt3DRender/qmaterial.h>
+#include <Qt3DRender/qeffect.h>
+#include <Qt3DRender/qtechnique.h>
+#include <Qt3DRender/qshaderprogram.h>
+#include <Qt3DRender/qparameter.h>
+#include <Qt3DRender/qrenderpass.h>
+#include <Qt3DRender/qgraphicsapifilter.h>
 #include <QUrl>
 #include <QVector3D>
 #include <QVector4D>
 
 QT_BEGIN_NAMESPACE
 
-namespace Qt3D {
+namespace Qt3DRender {
 
-/*!
-    \class Qt3D::QPhongMaterialPrivate
-    \internal
-*/
 QPhongMaterialPrivate::QPhongMaterialPrivate()
     : QMaterialPrivate()
     , m_phongEffect(new QEffect())
     , m_ambientParameter(new QParameter(QStringLiteral("ka"), QColor::fromRgbF(0.05f, 0.05f, 0.05f, 1.0f)))
     , m_diffuseParameter(new QParameter(QStringLiteral("kd"), QColor::fromRgbF(0.7f, 0.7f, 0.7f, 1.0f)))
-    , m_specularParameter(new QParameter(QStringLiteral("ks"), QColor::fromRgbF(0.95f, 0.95f, 0.95f, 1.0f)))
+    , m_specularParameter(new QParameter(QStringLiteral("ks"), QColor::fromRgbF(0.01f, 0.01f, 0.01f, 1.0f)))
     , m_shininessParameter(new QParameter(QStringLiteral("shininess"), 150.0f))
-    , m_lightPositionParameter(new QParameter(QStringLiteral("lightPosition"), QVector4D(1.0f, 1.0f, 0.0f, 1.0f)))
-    , m_lightIntensityParameter(new QParameter(QStringLiteral("lightIntensity"), QVector3D(1.0f, 1.0f, 1.0f)))
     , m_phongGL3Technique(new QTechnique())
     , m_phongGL2Technique(new QTechnique())
     , m_phongES2Technique(new QTechnique())
@@ -75,10 +69,86 @@ QPhongMaterialPrivate::QPhongMaterialPrivate()
 {
 }
 
+// TODO: Define how lights are properties are set in the shaders. Ideally using a QShaderData
+void QPhongMaterialPrivate::init()
+{
+    connect(m_ambientParameter, &Qt3DRender::QParameter::valueChanged,
+            this, &QPhongMaterialPrivate::handleAmbientChanged);
+    connect(m_diffuseParameter, &Qt3DRender::QParameter::valueChanged,
+            this, &QPhongMaterialPrivate::handleDiffuseChanged);
+    connect(m_specularParameter, &Qt3DRender::QParameter::valueChanged,
+            this, &QPhongMaterialPrivate::handleSpecularChanged);
+    connect(m_shininessParameter, &Qt3DRender::QParameter::valueChanged,
+            this, &QPhongMaterialPrivate::handleShininessChanged);
+
+    m_phongGL3Shader->setVertexShaderCode(QShaderProgram::loadSource(QUrl(QStringLiteral("qrc:/shaders/gl3/phong.vert"))));
+    m_phongGL3Shader->setFragmentShaderCode(QShaderProgram::loadSource(QUrl(QStringLiteral("qrc:/shaders/gl3/phong.frag"))));
+    m_phongGL2ES2Shader->setVertexShaderCode(QShaderProgram::loadSource(QUrl(QStringLiteral("qrc:/shaders/es2/phong.vert"))));
+    m_phongGL2ES2Shader->setFragmentShaderCode(QShaderProgram::loadSource(QUrl(QStringLiteral("qrc:/shaders/es2/phong.frag"))));
+
+    m_phongGL3Technique->graphicsApiFilter()->setApi(QGraphicsApiFilter::OpenGL);
+    m_phongGL3Technique->graphicsApiFilter()->setMajorVersion(3);
+    m_phongGL3Technique->graphicsApiFilter()->setMinorVersion(1);
+    m_phongGL3Technique->graphicsApiFilter()->setProfile(QGraphicsApiFilter::CoreProfile);
+
+    m_phongGL2Technique->graphicsApiFilter()->setApi(QGraphicsApiFilter::OpenGL);
+    m_phongGL2Technique->graphicsApiFilter()->setMajorVersion(2);
+    m_phongGL2Technique->graphicsApiFilter()->setMinorVersion(0);
+    m_phongGL2Technique->graphicsApiFilter()->setProfile(QGraphicsApiFilter::NoProfile);
+
+    m_phongES2Technique->graphicsApiFilter()->setApi(QGraphicsApiFilter::OpenGLES);
+    m_phongES2Technique->graphicsApiFilter()->setMajorVersion(2);
+    m_phongES2Technique->graphicsApiFilter()->setMinorVersion(0);
+    m_phongES2Technique->graphicsApiFilter()->setProfile(QGraphicsApiFilter::NoProfile);
+
+    m_phongGL3RenderPass->setShaderProgram(m_phongGL3Shader);
+    m_phongGL2RenderPass->setShaderProgram(m_phongGL2ES2Shader);
+    m_phongES2RenderPass->setShaderProgram(m_phongGL2ES2Shader);
+
+    m_phongGL3Technique->addPass(m_phongGL3RenderPass);
+    m_phongGL2Technique->addPass(m_phongGL2RenderPass);
+    m_phongES2Technique->addPass(m_phongES2RenderPass);
+
+    m_phongEffect->addTechnique(m_phongGL3Technique);
+    m_phongEffect->addTechnique(m_phongGL2Technique);
+    m_phongEffect->addTechnique(m_phongES2Technique);
+
+    m_phongEffect->addParameter(m_ambientParameter);
+    m_phongEffect->addParameter(m_diffuseParameter);
+    m_phongEffect->addParameter(m_specularParameter);
+    m_phongEffect->addParameter(m_shininessParameter);
+
+    q_func()->setEffect(m_phongEffect);
+}
+
+void QPhongMaterialPrivate::handleAmbientChanged(const QVariant &var)
+{
+    Q_Q(QPhongMaterial);
+    emit q->ambientChanged(var.value<QColor>());
+}
+
+void QPhongMaterialPrivate::handleDiffuseChanged(const QVariant &var)
+{
+    Q_Q(QPhongMaterial);
+    emit q->diffuseChanged(var.value<QColor>());
+}
+
+void QPhongMaterialPrivate::handleSpecularChanged(const QVariant &var)
+{
+    Q_Q(QPhongMaterial);
+    emit q->specularChanged(var.value<QColor>());
+}
+
+void QPhongMaterialPrivate::handleShininessChanged(const QVariant &var)
+{
+    Q_Q(QPhongMaterial);
+    emit q->shininessChanged(var.toFloat());
+}
+
 /*!
-    \class Qt3D::QPhongMaterial
+    \class Qt3DRender::QPhongMaterial
     \brief The QPhongMaterial class provides a default implementation of the phong lighting effect.
-    \inmodule Qt3DRenderer
+    \inmodule Qt3DRender
     \since 5.5
 
     The phong lighting effect is based on the combination of 3 lighting components ambient, diffuse and specular.
@@ -96,7 +166,7 @@ QPhongMaterialPrivate::QPhongMaterialPrivate()
 */
 
 /*!
-    \fn Qt3D::QPhongMaterial::QPhongMaterial(QNode *parent)
+    \fn Qt3DRender::QPhongMaterial::QPhongMaterial(Qt3DCore::QNode *parent)
 
     Constructs a new QPhongMaterial instance with parent object \a parent.
 */
@@ -104,15 +174,11 @@ QPhongMaterial::QPhongMaterial(QNode *parent)
     : QMaterial(*new QPhongMaterialPrivate, parent)
 {
     Q_D(QPhongMaterial);
-    QObject::connect(d->m_ambientParameter, SIGNAL(valueChanged()), this, SIGNAL(ambientChanged()));
-    QObject::connect(d->m_diffuseParameter, SIGNAL(valueChanged()), this, SIGNAL(diffuseChanged()));
-    QObject::connect(d->m_specularParameter, SIGNAL(valueChanged()), this, SIGNAL(specularChanged()));
-    QObject::connect(d->m_shininessParameter, SIGNAL(valueChanged()), this, SIGNAL(shininessChanged()));
     d->init();
 }
 
 /*!
-   \fn Qt3D::QPhongMaterial::~QPhongMaterial()
+   \fn Qt3DRender::QPhongMaterial::~QPhongMaterial()
 
    Destroys the QPhongMaterial.
 */
@@ -121,7 +187,7 @@ QPhongMaterial::~QPhongMaterial()
 }
 
 /*!
-    \property Qt3D::QPhongMaterial::ambient
+    \property Qt3DRender::QPhongMaterial::ambient
 
     Holds the ambient color.
 */
@@ -132,7 +198,7 @@ QColor QPhongMaterial::ambient() const
 }
 
 /*!
-    \property Qt3D::QPhongMaterial::diffuse
+    \property Qt3DRender::QPhongMaterial::diffuse
 
     Holds the diffuse color.
 */
@@ -143,7 +209,7 @@ QColor QPhongMaterial::diffuse() const
 }
 
 /*!
-    \property QColor Qt3D::QPhongMaterial::specular
+    \property Qt3DRender::QPhongMaterial::specular
 
     Holds the specular color.
 */
@@ -154,7 +220,7 @@ QColor QPhongMaterial::specular() const
 }
 
 /*!
-    \property Qt3D::QPhongMaterial::shininess
+    \property Qt3DRender::QPhongMaterial::shininess
 
     Holds the shininess exponent.
 */
@@ -188,51 +254,6 @@ void QPhongMaterial::setShininess(float shininess)
     d->m_shininessParameter->setValue(shininess);
 }
 
-// TODO: Define how lights are properties are set in the shaders. Ideally using a QShaderData
-void QPhongMaterialPrivate::init()
-{
-    m_phongGL3Shader->setVertexShaderCode(QShaderProgram::loadSource(QUrl(QStringLiteral("qrc:/shaders/gl3/phong.vert"))));
-    m_phongGL3Shader->setFragmentShaderCode(QShaderProgram::loadSource(QUrl(QStringLiteral("qrc:/shaders/gl3/phong.frag"))));
-    m_phongGL2ES2Shader->setVertexShaderCode(QShaderProgram::loadSource(QUrl(QStringLiteral("qrc:/shaders/es2/phong.vert"))));
-    m_phongGL2ES2Shader->setFragmentShaderCode(QShaderProgram::loadSource(QUrl(QStringLiteral("qrc:/shaders/es2/phong.frag"))));
-
-    m_phongGL3Technique->openGLFilter()->setApi(QOpenGLFilter::Desktop);
-    m_phongGL3Technique->openGLFilter()->setMajorVersion(3);
-    m_phongGL3Technique->openGLFilter()->setMinorVersion(1);
-    m_phongGL3Technique->openGLFilter()->setProfile(QOpenGLFilter::Core);
-
-    m_phongGL2Technique->openGLFilter()->setApi(QOpenGLFilter::Desktop);
-    m_phongGL2Technique->openGLFilter()->setMajorVersion(2);
-    m_phongGL2Technique->openGLFilter()->setMinorVersion(0);
-    m_phongGL2Technique->openGLFilter()->setProfile(QOpenGLFilter::None);
-
-    m_phongES2Technique->openGLFilter()->setApi(QOpenGLFilter::ES);
-    m_phongES2Technique->openGLFilter()->setMajorVersion(2);
-    m_phongES2Technique->openGLFilter()->setMinorVersion(0);
-    m_phongES2Technique->openGLFilter()->setProfile(QOpenGLFilter::None);
-
-    m_phongGL3RenderPass->setShaderProgram(m_phongGL3Shader);
-    m_phongGL2RenderPass->setShaderProgram(m_phongGL2ES2Shader);
-    m_phongES2RenderPass->setShaderProgram(m_phongGL2ES2Shader);
-
-    m_phongGL3Technique->addPass(m_phongGL3RenderPass);
-    m_phongGL2Technique->addPass(m_phongGL2RenderPass);
-    m_phongES2Technique->addPass(m_phongES2RenderPass);
-
-    m_phongEffect->addTechnique(m_phongGL3Technique);
-    m_phongEffect->addTechnique(m_phongGL2Technique);
-    m_phongEffect->addTechnique(m_phongES2Technique);
-
-    m_phongEffect->addParameter(m_ambientParameter);
-    m_phongEffect->addParameter(m_diffuseParameter);
-    m_phongEffect->addParameter(m_specularParameter);
-    m_phongEffect->addParameter(m_shininessParameter);
-    m_phongEffect->addParameter(m_lightPositionParameter);
-    m_phongEffect->addParameter(m_lightIntensityParameter);
-
-    q_func()->setEffect(m_phongEffect);
-}
-
-} // Qt3D
+} // namespace Qt3DRender
 
 QT_END_NAMESPACE

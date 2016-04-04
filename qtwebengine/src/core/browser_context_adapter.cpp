@@ -36,10 +36,12 @@
 
 #include "browser_context_adapter.h"
 
+#include "content/browser/web_contents/web_contents_impl.h"
 #include "content/public/browser/browser_thread.h"
 #include "browser_context_qt.h"
 #include "content_client_qt.h"
 #include "download_manager_delegate_qt.h"
+#include "permission_manager_qt.h"
 #include "web_engine_context.h"
 #include "web_engine_visited_links_manager.h"
 #include "url_request_context_getter_qt.h"
@@ -50,7 +52,6 @@
 #include <QCoreApplication>
 #include <QDir>
 #include <QString>
-#include <QStringBuilder>
 #include <QStandardPaths>
 
 namespace {
@@ -130,6 +131,23 @@ DownloadManagerDelegateQt *BrowserContextAdapter::downloadManagerDelegate()
     if (!m_downloadManagerDelegate)
         m_downloadManagerDelegate.reset(new DownloadManagerDelegateQt(this));
     return m_downloadManagerDelegate.data();
+}
+
+QWebEngineCookieStore *BrowserContextAdapter::cookieStore()
+{
+    if (!m_cookieStore)
+        m_cookieStore.reset(new QWebEngineCookieStore);
+    return m_cookieStore.data();
+}
+
+QWebEngineUrlRequestInterceptor *BrowserContextAdapter::requestInterceptor()
+{
+    return m_requestInterceptor.data();
+}
+
+void BrowserContextAdapter::setRequestInterceptor(QWebEngineUrlRequestInterceptor *interceptor)
+{
+    m_requestInterceptor = interceptor;
 }
 
 void BrowserContextAdapter::addClient(BrowserContextAdapterClient *adapterClient)
@@ -229,7 +247,13 @@ void BrowserContextAdapter::setHttpUserAgent(const QString &userAgent)
 {
     if (m_httpUserAgent == userAgent)
         return;
-    m_httpUserAgent = userAgent;
+    m_httpUserAgent = userAgent.simplified();
+
+    std::vector<content::WebContentsImpl *> list = content::WebContentsImpl::GetAllWebContents();
+    Q_FOREACH (content::WebContentsImpl *web_contents, list)
+        if (web_contents->GetBrowserContext() == m_browserContext.data())
+            web_contents->SetUserAgentOverride(m_httpUserAgent.toStdString());
+
     if (m_browserContext->url_request_getter_.get())
         m_browserContext->url_request_getter_->updateUserAgent();
 }
@@ -322,7 +346,7 @@ void BrowserContextAdapter::setHttpCacheMaxSize(int maxSize)
         m_browserContext->url_request_getter_->updateHttpCache();
 }
 
-QVector<CustomUrlSchemeHandler*> &BrowserContextAdapter::customUrlSchemeHandlers()
+QHash<QByteArray, QWebEngineUrlSchemeHandler *> &BrowserContextAdapter::customUrlSchemeHandlers()
 {
     return m_customUrlSchemeHandlers;
 }
@@ -330,7 +354,38 @@ QVector<CustomUrlSchemeHandler*> &BrowserContextAdapter::customUrlSchemeHandlers
 void BrowserContextAdapter::updateCustomUrlSchemeHandlers()
 {
     if (m_browserContext->url_request_getter_.get())
-        m_browserContext->url_request_getter_->updateStorageSettings();
+        m_browserContext->url_request_getter_->updateJobFactory();
+}
+
+bool BrowserContextAdapter::removeCustomUrlSchemeHandler(QWebEngineUrlSchemeHandler *handler)
+{
+    bool removedOneOrMore = false;
+    auto it = m_customUrlSchemeHandlers.begin();
+    while (it != m_customUrlSchemeHandlers.end()) {
+        if (it.value() == handler) {
+            it = m_customUrlSchemeHandlers.erase(it);
+            removedOneOrMore = true;
+            continue;
+        }
+        ++it;
+    }
+    if (removedOneOrMore)
+        updateCustomUrlSchemeHandlers();
+    return removedOneOrMore;
+}
+
+QWebEngineUrlSchemeHandler *BrowserContextAdapter::takeCustomUrlSchemeHandler(const QByteArray &scheme)
+{
+    QWebEngineUrlSchemeHandler *handler = m_customUrlSchemeHandlers.take(scheme);
+    if (handler)
+        updateCustomUrlSchemeHandlers();
+    return handler;
+}
+
+void BrowserContextAdapter::addCustomUrlSchemeHandler(const QByteArray &scheme, QWebEngineUrlSchemeHandler *handler)
+{
+    m_customUrlSchemeHandlers.insert(scheme, handler);
+    updateCustomUrlSchemeHandlers();
 }
 
 UserScriptControllerHost *BrowserContextAdapter::userScriptController()
@@ -338,6 +393,33 @@ UserScriptControllerHost *BrowserContextAdapter::userScriptController()
     if (!m_userScriptController)
         m_userScriptController.reset(new UserScriptControllerHost);
     return m_userScriptController.data();
+}
+
+void BrowserContextAdapter::permissionRequestReply(const QUrl &origin, PermissionType type, bool reply)
+{
+    static_cast<PermissionManagerQt*>(browserContext()->GetPermissionManager())->permissionRequestReply(origin, type, reply);
+}
+
+QString BrowserContextAdapter::httpAcceptLanguageWithoutQualities() const
+{
+    const QStringList list = m_httpAcceptLanguage.split(QLatin1Char(','));
+    QString out;
+    Q_FOREACH (const QString& str, list) {
+        if (!out.isEmpty())
+            out.append(QLatin1Char(','));
+        out.append(str.split(QLatin1Char(';')).first());
+    }
+    return out;
+}
+
+QString BrowserContextAdapter::httpAcceptLanguage() const
+{
+    return m_httpAcceptLanguage;
+}
+
+void BrowserContextAdapter::setHttpAcceptLanguage(const QString &httpAcceptLanguage)
+{
+    m_httpAcceptLanguage = httpAcceptLanguage;
 }
 
 } // namespace QtWebEngineCore

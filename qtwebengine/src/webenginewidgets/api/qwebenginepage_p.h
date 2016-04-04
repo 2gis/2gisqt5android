@@ -50,10 +50,10 @@
 
 #include "qwebenginepage.h"
 
+#include "qwebenginecallback_p.h"
 #include "qwebenginescriptcollection.h"
 #include "web_contents_adapter_client.h"
 #include <QtCore/qcompilerdetection.h>
-#include <QSharedData>
 
 namespace QtWebEngineCore {
 class RenderWidgetHostViewQtDelegate;
@@ -66,49 +66,6 @@ class QWebEnginePage;
 class QWebEngineProfile;
 class QWebEngineSettings;
 class QWebEngineView;
-
-class CallbackDirectory {
-public:
-    typedef QtWebEnginePrivate::QWebEngineCallbackPrivateBase<const QVariant&> VariantCallback;
-    typedef QtWebEnginePrivate::QWebEngineCallbackPrivateBase<const QString&> StringCallback;
-    typedef QtWebEnginePrivate::QWebEngineCallbackPrivateBase<bool> BoolCallback;
-
-    ~CallbackDirectory();
-    void registerCallback(quint64 requestId, const QExplicitlySharedDataPointer<VariantCallback> &callback);
-    void registerCallback(quint64 requestId, const QExplicitlySharedDataPointer<StringCallback> &callback);
-    void registerCallback(quint64 requestId, const QExplicitlySharedDataPointer<BoolCallback> &callback);
-    void invoke(quint64 requestId, const QVariant &result);
-    void invoke(quint64 requestId, const QString &result);
-    void invoke(quint64 requestId, bool result);
-
-private:
-    struct CallbackSharedDataPointer {
-        enum {
-            None,
-            Variant,
-            String,
-            Bool
-        } type;
-        union {
-            VariantCallback *variantCallback;
-            StringCallback *stringCallback;
-            BoolCallback *boolCallback;
-        };
-        CallbackSharedDataPointer() : type(None) { }
-        CallbackSharedDataPointer(VariantCallback *callback) : type(Variant), variantCallback(callback) { callback->ref.ref(); }
-        CallbackSharedDataPointer(StringCallback *callback) : type(String), stringCallback(callback) { callback->ref.ref(); }
-        CallbackSharedDataPointer(BoolCallback *callback) : type(Bool), boolCallback(callback) { callback->ref.ref(); }
-        CallbackSharedDataPointer(const CallbackSharedDataPointer &other) : type(other.type), variantCallback(other.variantCallback) { doRef(); }
-        ~CallbackSharedDataPointer() { doDeref(); }
-        operator bool () const { return type != None; }
-
-    private:
-        void doRef();
-        void doDeref();
-    };
-
-    QHash<quint64, CallbackSharedDataPointer> m_callbackMap;
-};
 
 class QWebEnginePagePrivate : public QtWebEngineCore::WebContentsAdapterClient
 {
@@ -129,6 +86,7 @@ public:
     virtual void selectionChanged() Q_DECL_OVERRIDE;
     virtual QRectF viewportRect() const Q_DECL_OVERRIDE;
     virtual qreal dpiScale() const Q_DECL_OVERRIDE;
+    virtual QColor backgroundColor() const Q_DECL_OVERRIDE;
     virtual void loadStarted(const QUrl &provisionalUrl, bool isErrorPage = false) Q_DECL_OVERRIDE;
     virtual void loadCommitted() Q_DECL_OVERRIDE;
     virtual void loadVisuallyCommitted() Q_DECL_OVERRIDE { }
@@ -136,20 +94,22 @@ public:
     virtual void focusContainer() Q_DECL_OVERRIDE;
     virtual void unhandledKeyEvent(QKeyEvent *event) Q_DECL_OVERRIDE;
     virtual void adoptNewWindow(QtWebEngineCore::WebContentsAdapter *newWebContents, WindowOpenDisposition disposition, bool userGesture, const QRect &initialGeometry) Q_DECL_OVERRIDE;
+    virtual bool isBeingAdopted() Q_DECL_OVERRIDE;
     virtual void close() Q_DECL_OVERRIDE;
+    virtual void windowCloseRejected() Q_DECL_OVERRIDE;
     virtual bool contextMenuRequested(const QtWebEngineCore::WebEngineContextMenuData &data) Q_DECL_OVERRIDE;
     virtual void navigationRequested(int navigationType, const QUrl &url, int &navigationRequestAction, bool isMainFrame) Q_DECL_OVERRIDE;
-    virtual void requestFullScreen(bool) Q_DECL_OVERRIDE { }
-    virtual bool isFullScreen() const Q_DECL_OVERRIDE { return false; }
+    virtual void requestFullScreenMode(const QUrl &origin, bool fullscreen) Q_DECL_OVERRIDE;
+    virtual bool isFullScreenMode() const Q_DECL_OVERRIDE;
     virtual void javascriptDialog(QSharedPointer<QtWebEngineCore::JavaScriptDialogController>) Q_DECL_OVERRIDE;
-    virtual void runFileChooser(FileChooserMode, const QString &defaultFileName, const QStringList &acceptedMimeTypes) Q_DECL_OVERRIDE;
+    virtual void runFileChooser(QtWebEngineCore::FilePickerController *controller) Q_DECL_OVERRIDE;
     virtual void didRunJavaScript(quint64 requestId, const QVariant& result) Q_DECL_OVERRIDE;
     virtual void didFetchDocumentMarkup(quint64 requestId, const QString& result) Q_DECL_OVERRIDE;
     virtual void didFetchDocumentInnerText(quint64 requestId, const QString& result) Q_DECL_OVERRIDE;
     virtual void didFindText(quint64 requestId, int matchCount) Q_DECL_OVERRIDE;
     virtual void passOnFocus(bool reverse) Q_DECL_OVERRIDE;
     virtual void javaScriptConsoleMessage(JavaScriptConsoleMessageLevel level, const QString& message, int lineNumber, const QString& sourceID) Q_DECL_OVERRIDE;
-    virtual void authenticationRequired(const QUrl &requestUrl, const QString &realm, bool isProxy, const QString &challengingHost, QString *outUser, QString *outPassword) Q_DECL_OVERRIDE;
+    virtual void authenticationRequired(QSharedPointer<QtWebEngineCore::AuthenticationDialogController>) Q_DECL_OVERRIDE;
     virtual void runMediaAccessPermissionRequest(const QUrl &securityOrigin, MediaRequestFlags requestFlags) Q_DECL_OVERRIDE;
     virtual void runGeolocationPermissionRequest(const QUrl &securityOrigin) Q_DECL_OVERRIDE;
     virtual void runMouseLockPermissionRequest(const QUrl &securityOrigin) Q_DECL_OVERRIDE;
@@ -161,6 +121,9 @@ public:
     virtual void showValidationMessage(const QRect &anchor, const QString &mainText, const QString &subText) Q_DECL_OVERRIDE;
     virtual void hideValidationMessage() Q_DECL_OVERRIDE;
     virtual void moveValidationMessage(const QRect &anchor) Q_DECL_OVERRIDE;
+    virtual void renderProcessTerminated(RenderProcessTerminationStatus terminationStatus,
+                                     int exitCode) Q_DECL_OVERRIDE;
+    virtual void requestGeometryChange(const QRect &geometry) Q_DECL_OVERRIDE;
 
     virtual QtWebEngineCore::BrowserContextAdapter *browserContextAdapter() Q_DECL_OVERRIDE;
 
@@ -168,21 +131,29 @@ public:
     void updateNavigationActions();
     void _q_webActionTriggered(bool checked);
 
+    void wasShown();
+    void wasHidden();
+
     QtWebEngineCore::WebContentsAdapter *webContents() { return adapter.data(); }
     void recreateFromSerializedHistory(QDataStream &input);
+
+    void setFullScreenMode(bool);
 
     QExplicitlySharedDataPointer<QtWebEngineCore::WebContentsAdapter> adapter;
     QWebEngineHistory *history;
     QWebEngineProfile *profile;
     QWebEngineSettings *settings;
     QWebEngineView *view;
-    QSize viewportSize;
     QUrl explicitUrl;
     QtWebEngineCore::WebEngineContextMenuData m_menuData;
     bool isLoading;
     QWebEngineScriptCollection scriptCollection;
+    bool m_isBeingAdopted;
+    QColor m_backgroundColor;
+    bool fullscreenMode;
+    QWebChannel *webChannel;
 
-    mutable CallbackDirectory m_callbacks;
+    mutable QtWebEngineCore::CallbackDirectory m_callbacks;
     mutable QAction *actions[QWebEnginePage::WebActionCount];
 };
 

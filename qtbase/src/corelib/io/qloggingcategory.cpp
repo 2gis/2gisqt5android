@@ -147,8 +147,17 @@ static void setBoolLane(QBasicAtomicInt *atomic, bool enable, int shift)
     \c QT_LOGGING_CONF, and rules set by \c QT_LOGGING_RULES.
 
 
+    Since Qt 5.6, \c QT_LOGGING_RULES may contain multiple rules separated
+    by semicolons:
+
+    \code
+    QT_LOGGING_RULES="*.debug=false;driver.usb.debug=true"
+    \endcode
+
+
     Order of evaluation:
     \list
+    \li [QLibraryInfo::DataPath]/qtlogging.ini
     \li QtProject/qtlogging.ini
     \li \l setFilterRules()
     \li \c QT_LOGGING_CONF

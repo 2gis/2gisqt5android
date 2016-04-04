@@ -39,46 +39,46 @@
 
 #include <Qt3DCore/qentity.h>
 
+#include <Qt3DRender/qmaterial.h>
+#include <Qt3DRender/qmesh.h>
+#include <Qt3DRender/qparametermapping.h>
+#include <Qt3DRender/qrenderpass.h>
+#include <Qt3DRender/qshaderprogram.h>
+#include <Qt3DRender/qtechnique.h>
+#include <Qt3DRender/qrenderaspect.h>
+#include <Qt3DRender/qeffect.h>
+#include <Qt3DRender/qabstractsceneparser.h>
 
-#include <Qt3DRenderer/qmaterial.h>
-#include <Qt3DRenderer/qmesh.h>
-#include <Qt3DRenderer/qparametermapping.h>
-#include <Qt3DRenderer/qrenderpass.h>
-#include <Qt3DRenderer/qshaderprogram.h>
-#include <Qt3DRenderer/qtechnique.h>
-#include <Qt3DRenderer/qrenderaspect.h>
-#include <Qt3DRenderer/qeffect.h>
-
-#include <Qt3DRenderer/private/renderviewjob_p.h>
-#include <Qt3DRenderer/private/blendstate_p.h>
-#include <Qt3DRenderer/private/cameraselectornode_p.h>
-#include <Qt3DRenderer/private/framegraphvisitor_p.h>
-#include <Qt3DRenderer/private/qgraphicscontext_p.h>
-#include <Qt3DRenderer/private/rendercameralens_p.h>
-#include <Qt3DRenderer/private/rendercommand_p.h>
-#include <Qt3DRenderer/private/renderentity_p.h>
-#include <Qt3DRenderer/private/renderlogging_p.h>
-#include <Qt3DRenderer/private/rendermaterial_p.h>
-#include <Qt3DRenderer/private/renderpassfilternode_p.h>
-#include <Qt3DRenderer/private/renderqueue_p.h>
-#include <Qt3DRenderer/private/rendershader_p.h>
-#include <Qt3DRenderer/private/renderstate_p.h>
-#include <Qt3DRenderer/private/rendertechnique_p.h>
-#include <Qt3DRenderer/private/renderthread_p.h>
-#include <Qt3DRenderer/private/renderview_p.h>
-#include <Qt3DRenderer/private/techniquefilternode_p.h>
-#include <Qt3DRenderer/private/texturedatamanager_p.h>
-#include <Qt3DRenderer/private/scenemanager_p.h>
-#include <Qt3DRenderer/private/viewportnode_p.h>
-#include <Qt3DRenderer/private/abstractsceneparser_p.h>
-#include <Qt3DRenderer/private/vsyncframeadvanceservice_p.h>
-#include <Qt3DRenderer/private/buffermanager_p.h>
-#include <Qt3DRenderer/private/loadbufferjob_p.h>
-#include <Qt3DRenderer/private/loadgeometryjob_p.h>
-#include <Qt3DRenderer/private/geometryrenderermanager_p.h>
+#include <Qt3DRender/private/renderviewjob_p.h>
+#include <Qt3DRender/private/renderstates_p.h>
+#include <Qt3DRender/private/cameraselectornode_p.h>
+#include <Qt3DRender/private/framegraphvisitor_p.h>
+#include <Qt3DRender/private/graphicscontext_p.h>
+#include <Qt3DRender/private/cameralens_p.h>
+#include <Qt3DRender/private/rendercommand_p.h>
+#include <Qt3DRender/private/entity_p.h>
+#include <Qt3DRender/private/renderlogging_p.h>
+#include <Qt3DRender/private/material_p.h>
+#include <Qt3DRender/private/renderpassfilternode_p.h>
+#include <Qt3DRender/private/renderqueue_p.h>
+#include <Qt3DRender/private/shader_p.h>
+#include <Qt3DRender/private/buffer_p.h>
+#include <Qt3DRender/private/renderstateset_p.h>
+#include <Qt3DRender/private/technique_p.h>
+#include <Qt3DRender/private/renderthread_p.h>
+#include <Qt3DRender/private/renderview_p.h>
+#include <Qt3DRender/private/techniquefilternode_p.h>
+#include <Qt3DRender/private/viewportnode_p.h>
+#include <Qt3DRender/private/vsyncframeadvanceservice_p.h>
+#include <Qt3DRender/private/pickeventfilter_p.h>
+#include <Qt3DRender/private/managers_p.h>
+#include <Qt3DRender/private/buffermanager_p.h>
+#include <Qt3DRender/private/nodemanagers_p.h>
+#include <Qt3DRender/private/geometryrenderermanager_p.h>
+#include <Qt3DRender/private/openglvertexarrayobject_p.h>
 
 #include <Qt3DCore/qcameralens.h>
-#include <Qt3DCore/private/qaspectmanager_p.h>
+#include <Qt3DCore/private/qeventfilterservice_p.h>
 #include <Qt3DCore/private/qabstractaspectjobmanager_p.h>
 
 #include <QStack>
@@ -97,8 +97,9 @@
 
 QT_BEGIN_NAMESPACE
 
-namespace Qt3D {
+using namespace Qt3DCore;
 
+namespace Qt3DRender {
 namespace Render {
 
 static void logOpenGLDebugMessage(const QOpenGLDebugMessage &debugMessage)
@@ -123,61 +124,56 @@ const QString SCENE_PARSERS_PATH = QStringLiteral("/sceneparsers");
 
     In turn, this will call shutdown which will make the OpenGL context current one last time
     to allow cleanups requiring a call to QOpenGLContext::currentContext to execute properly.
-    At the end of that function, the QGraphicsContext is set to null.
+    At the end of that function, the GraphicsContext is set to null.
 
     At this point though, the QAspectThread is still running its event loop and will only stop
     a short while after.
  */
 
 Renderer::Renderer(QRenderAspect::RenderType type)
-    : m_rendererAspect(Q_NULLPTR)
+    : m_services(Q_NULLPTR)
+    , m_nodesManager(Q_NULLPTR)
     , m_graphicsContext(Q_NULLPTR)
     , m_surface(Q_NULLPTR)
-    , m_cameraManager(new CameraManager())
-    , m_renderNodesManager(new EntityManager())
-    , m_materialManager(new MaterialManager())
-    , m_worldMatrixManager(new MatrixManager())
-    , m_vaoManager(new VAOManager())
-    , m_shaderManager(new ShaderManager())
-    , m_techniqueManager(new TechniqueManager())
-    , m_effectManager(new EffectManager())
-    , m_renderPassManager(new RenderPassManager())
-    , m_textureManager(new TextureManager())
-    , m_textureDataManager(new TextureDataManager())
-    , m_layerManager(new LayerManager())
-    , m_criterionManager(new CriterionManager())
-    , m_frameGraphManager(new FrameGraphManager())
-    , m_transformManager(new TransformManager())
-    , m_renderTargetManager(new RenderTargetManager())
-    , m_sceneManager(new SceneManager())
-    , m_attachmentManager(new AttachmentManager())
-    , m_sortCriterionManager(new SortCriterionManager())
-    , m_parameterManager(new ParameterManager())
-    , m_shaderDataManager(new ShaderDataManager())
-    , m_uboManager(new UBOManager())
-    , m_textureImageManager(new TextureImageManager())
-    , m_bufferManager(new BufferManager())
-    , m_attributeManager(new AttributeManager())
-    , m_geometryManager(new GeometryManager())
-    , m_geometryRendererManager(new GeometryRendererManager)
     , m_renderQueue(new RenderQueue())
     , m_renderThread(type == QRenderAspect::Threaded ? new RenderThread(this) : Q_NULLPTR)
     , m_vsyncFrameAdvanceService(new VSyncFrameAdvanceService())
     , m_debugLogger(Q_NULLPTR)
+    , m_pickEventFilter(new PickEventFilter())
+    , m_exposed(0)
+    , m_glContext(Q_NULLPTR)
+    , m_pickBoundingVolumeJob(Q_NULLPTR)
+    , m_time(0)
 {
     // Set renderer as running - it will wait in the context of the
     // RenderThread for RenderViews to be submitted
     m_running.fetchAndStoreOrdered(1);
     if (m_renderThread)
         m_renderThread->waitForStart();
-
-    loadSceneParsers();
 }
 
 Renderer::~Renderer()
 {
-    // Clean up the TLS allocators
-    destroyAllocators();
+}
+
+qint64 Renderer::time() const
+{
+    return m_time;
+}
+
+void Renderer::setTime(qint64 time)
+{
+    m_time = time;
+}
+
+NodeManagers *Renderer::nodeManagers() const
+{
+    return m_nodesManager;
+}
+
+void Renderer::setOpenGLContext(QOpenGLContext *context)
+{
+    m_glContext = context;
 }
 
 void Renderer::buildDefaultTechnique()
@@ -193,15 +189,15 @@ void Renderer::buildDefaultTechnique()
     QString vertexFileName;
     QString fragmentFileName;
     if (m_graphicsContext->openGLContext()->isOpenGLES()) {
-        vertexFileName = QStringLiteral("qrc:/shaders/es2/diffuse.vert");
-        fragmentFileName = QStringLiteral("qrc:/shaders/es2/diffuse.frag");
+        vertexFileName = QStringLiteral("qrc:/shaders/es2/phong.vert");
+        fragmentFileName = QStringLiteral("qrc:/shaders/es2/phong.frag");
     } else {
         if (m_graphicsContext->openGLContext()->format().profile() == QSurfaceFormat::CoreProfile) {
-            vertexFileName = QStringLiteral("qrc:/shaders/diffuse.vert");
-            fragmentFileName = QStringLiteral("qrc:/shaders/diffuse.frag");
+            vertexFileName = QStringLiteral("qrc:/shaders/gl3/phong.vert");
+            fragmentFileName = QStringLiteral("qrc:/shaders/gl3/phong.frag");
         } else {
-            vertexFileName = QStringLiteral("qrc:/shaders/es2/diffuse.vert");
-            fragmentFileName = QStringLiteral("qrc:/shaders/es2/diffuse.frag");
+            vertexFileName = QStringLiteral("qrc:/shaders/es2/phong.vert");
+            fragmentFileName = QStringLiteral("qrc:/shaders/es2/phong.frag");
         }
     }
     defaultShader->setVertexShaderCode(QShaderProgram::loadSource(QUrl(vertexFileName)));
@@ -219,68 +215,45 @@ void Renderer::buildDefaultTechnique()
 
     m_defaultTechnique->addPass(basicPass);
 
-    // diffuse lighting uniforms
-    QParameter* lightPos = new QParameter(QStringLiteral("lightPos"), QVector4D(10.0f, 10.0f, 0.0f, 1.0f));
-    m_defaultTechnique->addParameter(lightPos);
-    basicPass->addBinding(new QParameterMapping(QStringLiteral("lightPos"), QStringLiteral("lightPosition"), QParameterMapping::Uniform));
-
-    QParameter* lightIntensity = new QParameter(QStringLiteral("lightIntensity"), QVector3D(0.5f, 0.5f, 0.5f));
-    m_defaultTechnique->addParameter(lightIntensity);
+    QParameter* ka = new QParameter(QStringLiteral("ambient"), QVector3D(0.2f, 0.2f, 0.2f));
+    m_defaultTechnique->addParameter(ka);
+    basicPass->addBinding(new QParameterMapping(QStringLiteral("ambient"), QStringLiteral("ka"), QParameterMapping::Uniform));
 
     QParameter* kd = new QParameter(QStringLiteral("diffuse"), QVector3D(1.0f, 0.5f, 0.0f));
     m_defaultTechnique->addParameter(kd);
     basicPass->addBinding(new QParameterMapping(QStringLiteral("diffuse"), QStringLiteral("kd"), QParameterMapping::Uniform));
 
-    QParameter* ka = new QParameter(QStringLiteral("ambient"), QVector3D(0.2f, 0.2f, 0.2f));
-    m_defaultTechnique->addParameter(ka);
-    basicPass->addBinding(new QParameterMapping(QStringLiteral("ambient"), QStringLiteral("ka"), QParameterMapping::Uniform));
+    QParameter* ks = new QParameter(QStringLiteral("specular"), QVector3D(0.01f, 0.01f, 0.01f));
+    m_defaultTechnique->addParameter(ks);
+    basicPass->addBinding(new QParameterMapping(QStringLiteral("specular"), QStringLiteral("ks"), QParameterMapping::Uniform));
 
-}
-
-void Renderer::loadSceneParsers()
-{
-    QString pluginsPath = QLibraryInfo::location(QLibraryInfo::PluginsPath) + SCENE_PARSERS_PATH;
-    QDir sceneParsersPluginDir(pluginsPath);
-
-    Q_FOREACH (QString plugin, sceneParsersPluginDir.entryList(QDir::Files)) {
-        QPluginLoader loader(sceneParsersPluginDir.absoluteFilePath(plugin));
-        AbstractSceneParser *parser = qobject_cast<AbstractSceneParser *>(loader.instance());
-        if (parser != Q_NULLPTR)
-            m_sceneParsers.append(parser);
-        else
-            qWarning() << "Failed to load scene parser plugin " << loader.fileName();
-    }
+    m_defaultTechnique->addParameter(new QParameter(QStringLiteral("shininess"), 150.0f));
 }
 
 void Renderer::buildDefaultMaterial()
 {
     m_defaultMaterial = new QMaterial();
     m_defaultMaterial->setObjectName(QStringLiteral("DefaultMaterial"));
-    m_defaultMaterial->addParameter(new QParameter(QStringLiteral("lightPos"), QVector4D(10.0f, 10.0f, 0.0f, 1.0f)));
-    m_defaultMaterial->addParameter(new QParameter(QStringLiteral("lightIntensity"), QVector3D(0.5f, 0.5f, 0.5f)));
     m_defaultMaterial->addParameter(new QParameter(QStringLiteral("ambient"), QVector3D(0.2f, 0.2f, 0.2f)));
     m_defaultMaterial->addParameter(new QParameter(QStringLiteral("diffuse"), QVector3D(1.0f, 0.5f, 0.0f)));
+    m_defaultMaterial->addParameter(new QParameter(QStringLiteral("specular"), QVector3D(0.01f, 0.01f, 0.01f)));
+    m_defaultMaterial->addParameter(new QParameter(QStringLiteral("shininess"), 150.0f));
 
     QEffect* defEff = new QEffect;
     defEff->addTechnique(m_defaultTechnique);
     m_defaultMaterial->setEffect(defEff);
-
 }
 
-void Renderer::createAllocators()
+void Renderer::createAllocators(QAbstractAspectJobManager *jobManager)
 {
     // Issue a set of jobs to create an allocator in TLS for each worker thread
-    Q_ASSERT(m_rendererAspect);
-    QAbstractAspectJobManager *jobManager = rendererAspect()->jobManager();
     Q_ASSERT(jobManager);
     jobManager->waitForPerThreadFunction(Renderer::createThreadLocalAllocator, this);
 }
 
-void Renderer::destroyAllocators()
+void Renderer::destroyAllocators(Qt3DCore::QAbstractAspectJobManager *jobManager)
 {
     // Issue a set of jobs to destroy the allocator in TLS for each worker thread
-    Q_ASSERT(m_rendererAspect);
-    QAbstractAspectJobManager *jobManager = rendererAspect()->jobManager();
     Q_ASSERT(jobManager);
     jobManager->waitForPerThreadFunction(Renderer::destroyThreadLocalAllocator, this);
 }
@@ -317,7 +290,7 @@ void Renderer::createThreadLocalAllocator(void *renderer)
 /*!
  * Returns the a FrameAllocator for the caller thread.
  */
-QFrameAllocator *Renderer::currentFrameAllocator()
+Qt3DCore::QFrameAllocator *Renderer::currentFrameAllocator()
 {
     // return the QFrameAllocator for the current thread
     // It is never cleared as each renderview when it is destroyed
@@ -342,24 +315,23 @@ void Renderer::destroyThreadLocalAllocator(void *renderer)
 // Called in RenderThread context by the run method of RenderThread
 // RenderThread has locked the mutex already and unlocks it when this
 // method termintates
-void Renderer::initialize(QOpenGLContext *context)
+void Renderer::initialize()
 {
     if (m_renderThread)
         m_waitForWindowToBeSetCondition.wait(mutex());
 
-    QByteArray debugLoggingMode = qgetenv("QT3D_DEBUG_LOGGING");
+    QByteArray debugLoggingMode = qgetenv("QT3DRENDER_DEBUG_LOGGING");
     bool enableDebugLogging = !debugLoggingMode.isEmpty();
 
-    m_graphicsContext.reset(new QGraphicsContext);
+    m_graphicsContext.reset(new GraphicsContext);
     m_graphicsContext->setRenderer(this);
 
     QSurfaceFormat sf = m_surface->format();
     if (enableDebugLogging)
         sf.setOption(QSurfaceFormat::DebugContext);
 
-
-    QOpenGLContext* ctx = context ? context : new QOpenGLContext;
-    if (!context) {
+    QOpenGLContext* ctx = m_glContext ? m_glContext : new QOpenGLContext;
+    if (!m_glContext) {
         qCDebug(Backend) << "Creating OpenGL context with format" << sf;
         ctx->setFormat(sf);
         if (ctx->create())
@@ -406,6 +378,8 @@ void Renderer::shutdown()
 {
     // TO DO: Check that this works with iOs and other cases
     if (m_surface) {
+        m_running.fetchAndStoreOrdered(0);
+
         m_graphicsContext->makeCurrent(m_surface);
         // Stop and destroy the OpenGL logger
         if (m_debugLogger) {
@@ -420,15 +394,21 @@ void Renderer::shutdown()
     }
 }
 
-void Renderer::setFrameGraphRoot(const QNodeId &frameGraphRootUuid)
+void Renderer::setSurfaceExposed(bool exposed)
 {
-    m_frameGraphRootUuid = frameGraphRootUuid;
+    qCDebug(Backend) << "Window exposed: " << exposed;
+    m_exposed.fetchAndStoreOrdered(exposed);
+}
+
+void Renderer::setFrameGraphRoot(const Qt3DCore::QNodeId fgRootId)
+{
+    m_frameGraphRootUuid = fgRootId;
     qCDebug(Backend) << Q_FUNC_INFO << m_frameGraphRootUuid;
 }
 
 Render::FrameGraphNode *Renderer::frameGraphRoot() const
 {
-    FrameGraphNode **fgRoot = m_frameGraphManager->lookupResource(m_frameGraphRootUuid);
+    FrameGraphNode **fgRoot = m_nodesManager->lookupResource<FrameGraphNode*, FrameGraphManager>(m_frameGraphRootUuid);
     if (fgRoot != Q_NULLPTR)
         return *fgRoot;
     return Q_NULLPTR;
@@ -441,13 +421,12 @@ Render::FrameGraphNode *Renderer::frameGraphRoot() const
 // 3) setWindow -> waking Initialize if setSceneGraphRoot was called before
 // 4) Initialize resuming, performing initialization and waking up setSceneGraphRoot
 // 5) setSceneGraphRoot called || setSceneGraphRoot resuming if it was waiting
-void Renderer::setSceneGraphRoot(RenderEntity *sgRoot)
+void Renderer::setSceneRoot(QBackendNodeFactory *factory, Entity *sgRoot)
 {
     Q_ASSERT(sgRoot);
     QMutexLocker lock(&m_mutex); // This waits until initialize and setSurface have been called
     if (m_graphicsContext == Q_NULLPTR) // If initialization hasn't been completed we must wait
         m_waitForInitializationToBeCompleted.wait(&m_mutex);
-
     m_renderSceneRoot = sgRoot;
     if (!m_renderSceneRoot)
         qCWarning(Backend) << "Failed to build render scene";
@@ -457,28 +436,26 @@ void Renderer::setSceneGraphRoot(RenderEntity *sgRoot)
     buildDefaultTechnique();
     buildDefaultMaterial();
 
-    // If that weren't for those lines, the renderer might not event need
-    // to know about the renderer aspect
-    m_rendererAspect->createBackendNode(m_defaultMaterial);
-    m_rendererAspect->createBackendNode(m_defaultMaterial->effect());
-    m_rendererAspect->createBackendNode(m_defaultTechnique);
-    m_rendererAspect->createBackendNode(m_defaultTechnique->renderPasses().first());
-    m_rendererAspect->createBackendNode(m_defaultTechnique->renderPasses().first()->shaderProgram());
+    factory->createBackendNode(m_defaultMaterial);
+    factory->createBackendNode(m_defaultMaterial->effect());
+    factory->createBackendNode(m_defaultTechnique);
+    factory->createBackendNode(m_defaultTechnique->renderPasses().first());
+    factory->createBackendNode(m_defaultTechnique->renderPasses().first()->shaderProgram());
 
     // We create backend resources for all the parameters
     Q_FOREACH (QParameter *p, m_defaultMaterial->parameters())
-        m_rendererAspect->createBackendNode(p);
+        factory->createBackendNode(p);
     Q_FOREACH (QParameter *p, m_defaultTechnique->parameters())
-        m_rendererAspect->createBackendNode(p);
+        factory->createBackendNode(p);
     Q_FOREACH (QParameter *p, m_defaultMaterial->effect()->parameters())
-        m_rendererAspect->createBackendNode(p);
+        factory->createBackendNode(p);
 
 
-    m_defaultMaterialHandle = m_materialManager->lookupHandle(m_defaultMaterial->id());
-    m_defaultEffectHandle = m_effectManager->lookupHandle(m_defaultMaterial->effect()->id());
-    m_defaultTechniqueHandle = m_techniqueManager->lookupHandle(m_defaultTechnique->id());
-    m_defaultRenderPassHandle = m_renderPassManager->lookupHandle(m_defaultTechnique->renderPasses().first()->id());
-    m_defaultRenderShader = m_shaderManager->lookupResource(m_defaultTechnique->renderPasses().first()->shaderProgram()->id());
+    m_defaultMaterialHandle = nodeManagers()->lookupHandle<Material, MaterialManager, HMaterial>(m_defaultMaterial->id());
+    m_defaultEffectHandle = nodeManagers()->lookupHandle<Effect, EffectManager, HEffect>(m_defaultMaterial->effect()->id());
+    m_defaultTechniqueHandle = nodeManagers()->lookupHandle<Technique, TechniqueManager, HTechnique>(m_defaultTechnique->id());
+    m_defaultRenderPassHandle = nodeManagers()->lookupHandle<RenderPass, RenderPassManager, HRenderPass>(m_defaultTechnique->renderPasses().first()->id());
+    m_defaultRenderShader = nodeManagers()->lookupResource<Shader, ShaderManager>(m_defaultTechnique->renderPasses().first()->shaderProgram()->id());
 }
 
 // Called in RenderAspect Thread context
@@ -529,6 +506,12 @@ void Renderer::setSurface(QSurface* surface)
     }
 }
 
+void Renderer::registerEventFilter(QEventFilterService *service)
+{
+    qCDebug(Backend) << Q_FUNC_INFO << QThread::currentThread();
+    service->registerEventFilter(m_pickEventFilter.data(), 1024);
+}
+
 void Renderer::render()
 {
     // Traversing the framegraph tree from root to lead node
@@ -541,37 +524,45 @@ void Renderer::render()
     // Matrice update, bounding volumes computation ...
     // Should be jobs
 
-    // Qt3D has 2 distincts node trees
+    // namespace Qt3DCore has 2 distincts node trees
     // One scene description
     // One framegraph description
 
     while (m_running.load() > 0) {
-        doRender();
+        if (m_exposed.load() > 0)
+            doRender();
+        else
+            QThread::msleep(250);
     }
 }
 
 void Renderer::doRender()
 {
-
     // Render using current device state and renderer configuration
-    submitRenderViews();
+    const bool submissionSucceeded = submitRenderViews();
 
-    // Reset the m_renderQueue so that we won't try to render
-    // with a queue used by a previous frame with corrupted content
-    m_renderQueue->reset();
+    // Only reset renderQueue and proceed to next frame if the submission
+    // succeeded or it we are using a render thread.
 
-    if (m_running.load()) { // Are we still running ?
+    // If submissionSucceeded isn't true this implies that something went wrong
+    // with the rendering and/or the renderqueue is incomplete from some reason
+    // (in the case of scene3d the render jobs may be taking too long ....)
+    if (m_renderThread || submissionSucceeded) {
+        // Reset the m_renderQueue so that we won't try to render
+        // with a queue used by a previous frame with corrupted content
+        // if the current queue was correctly submitted
+        m_renderQueue->reset();
 
-        if (m_renderThread) {
-            // If we are rendering using the render thread, make sure
-            // that all the RenderViews, RenderCommands, UniformValues ...
-            // have been completely destroyed and are leak free
-            // Note: we cannot check for non render thread cases
-            // (scene3d) as we aren't sure a full frame was previously submitted
+        if (m_running.load()) { // Are we still running ?
+            // Make sure that all the RenderViews, RenderCommands,
+            // UniformValues ... have been completely destroyed and are leak
+            // free
+            // Note: we can check for non render thread cases (scene3d)
+            // only when we are sure that a full frame was previously submitted
+            // (submissionSucceeded == true)
             Q_FOREACH (QFrameAllocator *allocator, m_allocators)
                 Q_ASSERT(allocator->isEmpty());
         }
-
         // We allow the RenderTickClock service to proceed to the next frame
         // In turn this will allow the aspect manager to request a new set of jobs
         // to be performed for each aspect
@@ -616,7 +607,7 @@ bool Renderer::canRender() const
 }
 
 // Happens in RenderThread context when all RenderViewJobs are done
-void Renderer::submitRenderViews()
+bool Renderer::submitRenderViews()
 {
     // If we are using a render thread, make sure that
     // we've been told to render before rendering
@@ -626,7 +617,7 @@ void Renderer::submitRenderViews()
         // Early return if we have been unlocked because of
         // shutdown
         if (!m_running.load())
-            return;
+            return false;
 
         // When using Thread rendering, the semaphore should only
         // be released when the frame queue is complete and there's
@@ -643,7 +634,7 @@ void Renderer::submitRenderViews()
         // the frame queue complete at this point
         QMutexLocker locker(&m_mutex);
         if (!m_renderQueue->isFrameQueueComplete())
-            return ;
+            return false;
     }
 
     QElapsedTimer timer;
@@ -656,7 +647,7 @@ void Renderer::submitRenderViews()
     const QVector<Render::RenderView *> renderViews = m_renderQueue->nextFrameQueue();
     if (!canRender()) {
         qDeleteAll(renderViews);
-        return;
+        return false;
     }
 
     const int renderViewsCount = renderViews.size();
@@ -664,7 +655,7 @@ void Renderer::submitRenderViews()
 
     // Early return if there's actually nothing to render
     if (renderViewsCount <= 0)
-        return;
+        return true;
 
     // We might not want to render on the default FBO
     bool boundFboIdValid = false;
@@ -674,7 +665,7 @@ void Renderer::submitRenderViews()
     // Bail out if we cannot make the OpenGL context current (e.g. if the window has been destroyed)
     if (!m_graphicsContext->beginDrawing(m_surface, previousClearColor)) {
         qDeleteAll(renderViews);
-        return;
+        return false;
     }
 
     if (!boundFboIdValid) {
@@ -687,7 +678,7 @@ void Renderer::submitRenderViews()
 
     qCDebug(Memory) << Q_FUNC_INFO << "rendering frame ";
     for (int i = 0; i < renderViewsCount; ++i) {
-        // Initialize QGraphicsContext for drawing
+        // Initialize GraphicsContext for drawing
         // If the RenderView has a RenderStateSet defined
         const RenderView *renderView = renderViews.at(i);
 
@@ -698,7 +689,7 @@ void Renderer::submitRenderViews()
 
         // Set RenderTarget ...
         // Activate RenderTarget
-        m_graphicsContext->activateRenderTarget(m_renderTargetManager->data(renderView->renderTargetHandle()),
+        m_graphicsContext->activateRenderTarget(nodeManagers()->data<RenderTarget, RenderTargetManager>(renderView->renderTargetHandle()),
                                                 renderView->attachmentPack(), boundFboId);
 
         // Set clear color if different
@@ -738,77 +729,54 @@ void Renderer::submitRenderViews()
     queueElapsed = timer.elapsed() - queueElapsed;
     qCDebug(Rendering) << Q_FUNC_INFO << "Submission of Queue in " << queueElapsed << "ms <=> " << queueElapsed / renderViewsCount << "ms per RenderView <=> Avg " << 1000.0f / (queueElapsed * 1.0f/ renderViewsCount * 1.0f) << " RenderView/s";
     qCDebug(Rendering) << Q_FUNC_INFO << "Submission Completed in " << timer.elapsed() << "ms";
+
+    return true;
 }
 
 // Waits to be told to create jobs for the next frame
 // Called by QRenderAspect jobsToExecute context of QAspectThread
-QVector<QAspectJobPtr> Renderer::createRenderBinJobs()
+QVector<Qt3DCore::QAspectJobPtr> Renderer::renderBinJobs()
 {
     // Traverse the current framegraph. For each leaf node create a
     // RenderView and set its configuration then create a job to
     // populate the RenderView with a set of RenderCommands that get
     // their details from the RenderNodes that are visible to the
     // Camera selected by the framegraph configuration
-
     QVector<QAspectJobPtr> renderBinJobs;
 
-    // Do not create any more jobs when the platform surface is gone.
-    if (m_surface) {
-        FrameGraphVisitor visitor;
-        visitor.traverse(frameGraphRoot(), this, &renderBinJobs);
+    FrameGraphVisitor visitor;
+    visitor.traverse(frameGraphRoot(), this, &renderBinJobs);
 
-        // Set target number of RenderViews
-        m_renderQueue->setTargetRenderViewCount(renderBinJobs.size());
-    }
+    // Set target number of RenderViews
+    m_renderQueue->setTargetRenderViewCount(renderBinJobs.size());
     return renderBinJobs;
 }
 
-// Returns a vector of jobs to be performed for dirty buffers
-// 1 dirty buffer == 1 job, all job can be performed in parallel
-QVector<QAspectJobPtr> Renderer::createRenderBufferJobs()
+QAspectJobPtr Renderer::pickBoundingVolumeJob()
 {
-    const QVector<QNodeId> dirtyBuffers = m_bufferManager->dirtyBuffers();
-    QVector<QAspectJobPtr> dirtyBuffersJobs;
-
-    Q_FOREACH (const QNodeId &bufId, dirtyBuffers) {
-        HBuffer bufferHandle = m_bufferManager->lookupHandle(bufId);
-        if (!bufferHandle.isNull()) {
-            // Create new buffer job
-            LoadBufferJobPtr job(new LoadBufferJob(bufferHandle));
-            job->setRenderer(this);
-            dirtyBuffersJobs.push_back(job);
-        }
-    }
-
-    return dirtyBuffersJobs;
-}
-
-QVector<QAspectJobPtr> Renderer::createGeometryRendererJobs()
-{
-    const QVector<QNodeId> dirtyGeometryRenderers = m_geometryRendererManager->dirtyGeometryRenderers();
-    QVector<QAspectJobPtr> dirtyGeometryRendererJobs;
-
-    Q_FOREACH (const QNodeId &geoRendererId, dirtyGeometryRenderers) {
-        HGeometryRenderer geometryRendererHandle = m_geometryRendererManager->lookupHandle(geoRendererId);
-        if (!geometryRendererHandle.isNull()) {
-            LoadGeometryJobPtr job(new LoadGeometryJob(geometryRendererHandle));
-            job->setRenderer(this);
-            dirtyGeometryRendererJobs.push_back(job);
-        }
-    }
-
-    return dirtyGeometryRendererJobs;
+    // Clear any previous dependency not valid anymore
+    if (!m_pickBoundingVolumeJob)
+        m_pickBoundingVolumeJob.reset(new PickBoundingVolumeJob(this));
+    m_pickBoundingVolumeJob->removeDependency(QWeakPointer<QAspectJob>());
+    m_pickBoundingVolumeJob->setRoot(m_renderSceneRoot);
+    return m_pickBoundingVolumeJob;
 }
 
 // Called during while traversing the FrameGraph for each leaf node context of QAspectThread
-QAspectJobPtr Renderer::createRenderViewJob(FrameGraphNode *node, int submitOrderIndex)
+Qt3DCore::QAspectJobPtr Renderer::createRenderViewJob(FrameGraphNode *node, int submitOrderIndex)
 {
     RenderViewJobPtr job(new RenderViewJob);
     job->setRenderer(this);
-    job->setSurfaceSize(m_surface->size());
+    if (m_surface)
+        job->setSurfaceSize(m_surface->size());
     job->setFrameGraphLeafNode(node);
     job->setSubmitOrderIndex(submitOrderIndex);
     return job;
+}
+
+QAbstractFrameAdvanceService *Renderer::frameAdvanceService() const
+{
+    return static_cast<Qt3DCore::QAbstractFrameAdvanceService *>(m_vsyncFrameAdvanceService.data());
 }
 
 // Called by RenderView->submit() in RenderThread context
@@ -821,12 +789,14 @@ void Renderer::executeCommands(const QVector<RenderCommand *> &commands)
 
     // Save the RenderView base stateset
     RenderStateSet *globalState = m_graphicsContext->currentStateSet();
+    OpenGLVertexArrayObject *vao = Q_NULLPTR;
+    HVao previousVaoHandle;
 
     Q_FOREACH (RenderCommand *command, commands) {
 
         // Check if we have a valid GeometryRenderer + Geometry
-        RenderGeometry *rGeometry = m_geometryManager->data(command->m_geometry);
-        RenderGeometryRenderer *rGeometryRenderer = m_geometryRendererManager->data(command->m_geometryRenderer);
+        Geometry *rGeometry = m_nodesManager->data<Geometry, GeometryManager>(command->m_geometry);
+        GeometryRenderer *rGeometryRenderer = m_nodesManager->data<GeometryRenderer, GeometryRendererManager>(command->m_geometryRenderer);
         const bool hasGeometryRenderer = rGeometry != Q_NULLPTR && rGeometryRenderer != Q_NULLPTR && !rGeometry->attributes().isEmpty();
 
         if (!hasGeometryRenderer) {
@@ -834,7 +804,7 @@ void Renderer::executeCommands(const QVector<RenderCommand *> &commands)
             continue;
         }
 
-        RenderShader *shader = m_shaderManager->data(command->m_shader);
+        Shader *shader = m_nodesManager->data<Shader, ShaderManager>(command->m_shader);
         if (shader == Q_NULLPTR) {
             shader = m_defaultRenderShader;
             command->m_parameterAttributeToShaderNames = m_defaultParameterToGLSLAttributeNames;
@@ -844,15 +814,23 @@ void Renderer::executeCommands(const QVector<RenderCommand *> &commands)
         // The VAO should be created only once for a QGeometry and a ShaderProgram
         // Manager should have a VAO Manager that are indexed by QMeshData and Shader
         // RenderCommand should have a handle to the corresponding VAO for the Mesh and Shader
-        QOpenGLVertexArrayObject *vao = Q_NULLPTR;
+        bool needsToBindVAO = false;
+        VAOManager *vaoManager = m_nodesManager->vaoManager();
         if (m_graphicsContext->supportsVAO()) {
-            command->m_vao = m_vaoManager->lookupHandle(QPair<HGeometry, HShader>(command->m_geometry, command->m_shader));
+            command->m_vao = vaoManager->lookupHandle(QPair<HGeometry, HShader>(command->m_geometry, command->m_shader));
+
             if (command->m_vao.isNull()) {
                 qCDebug(Rendering) << Q_FUNC_INFO << "Allocating new VAO";
-                command->m_vao = m_vaoManager->getOrAcquireHandle(QPair<HGeometry, HShader>(command->m_geometry, command->m_shader));
-                *(m_vaoManager->data(command->m_vao)) = new QOpenGLVertexArrayObject();
+                command->m_vao = vaoManager->getOrAcquireHandle(QPair<HGeometry, HShader>(command->m_geometry, command->m_shader));
+                vaoManager->data(command->m_vao)->setVao(new QOpenGLVertexArrayObject());
+                vaoManager->data(command->m_vao)->create();
             }
-            vao = *(m_vaoManager->data(command->m_vao));
+
+            if (previousVaoHandle != command->m_vao) {
+                needsToBindVAO = true;
+                previousVaoHandle = command->m_vao;
+                vao = vaoManager->data(command->m_vao);
+            }
             Q_ASSERT(vao);
         }
 
@@ -866,9 +844,9 @@ void Renderer::executeCommands(const QVector<RenderCommand *> &commands)
         // Uniform and Attributes info from the shader
         // Otherwise we might create a VAO without attribute bindings as the RenderCommand had no way to know about attributes
         // Before the shader was loader
-        RenderAttribute *indexAttribute = Q_NULLPTR;
+        Attribute *indexAttribute = Q_NULLPTR;
         bool specified = false;
-        const bool requiresVAOUpdate = (!vao || !vao->isCreated()) || (rGeometry->isDirty() || rGeometryRenderer->isDirty());
+        const bool requiresVAOUpdate = (!vao || !vao->isSpecified()) || (rGeometry->isDirty() || rGeometryRenderer->isDirty());
         GLsizei primitiveCount = rGeometryRenderer->primitiveCount();
 
         // Append dirty Geometry to temporary vector
@@ -876,17 +854,16 @@ void Renderer::executeCommands(const QVector<RenderCommand *> &commands)
         if (rGeometry->isDirty())
             m_dirtyGeometry.push_back(rGeometry);
 
-        if (!command->m_parameterAttributeToShaderNames.isEmpty()) {
-            specified = true;
-            if (vao) {
-                if (!vao->isCreated())
-                    vao->create();
-                vao->bind();
-                qCDebug(Rendering) << Q_FUNC_INFO << "Creating new VAO";
-            }
+        if (needsToBindVAO && vao) {
+            vao->bind();
+        }
 
+        if (!command->m_parameterAttributeToShaderNames.isEmpty()) {
             // Update or set Attributes and Buffers for the given rGeometry and Command
             indexAttribute = updateBuffersAndAttributes(rGeometry, command, primitiveCount, requiresVAOUpdate);
+            specified = true;
+            if (vao)
+                vao->setSpecified(true);
         }
 
         //// Update program uniforms
@@ -907,11 +884,11 @@ void Renderer::executeCommands(const QVector<RenderCommand *> &commands)
         // All Uniforms for a pass are stored in the QUniformPack of the command
         // Uniforms for Effect, Material and Technique should already have been correctly resolved
         // at that point
-        if (specified || (vao && vao->isCreated())) {
+        if (primitiveCount && (specified || (vao && vao->isSpecified()))) {
             const GLint primType = rGeometryRenderer->primitiveType();
             const bool drawInstanced = rGeometryRenderer->instanceCount() > 1;
             const bool drawIndexed = indexAttribute != Q_NULLPTR;
-            const GLint indexType = drawIndexed ? QGraphicsContext::glDataTypeFromAttributeDataType(indexAttribute->dataType()) : 0;
+            const GLint indexType = drawIndexed ? GraphicsContext::glDataTypeFromAttributeDataType(indexAttribute->dataType()) : 0;
 
             if (rGeometryRenderer->primitiveType() == QGeometryRenderer::Patches)
                 m_graphicsContext->setVerticesPerPatch(rGeometry->verticesPerPatch());
@@ -925,7 +902,7 @@ void Renderer::executeCommands(const QVector<RenderCommand *> &commands)
                     m_graphicsContext->drawElements(primType,
                                                     primitiveCount,
                                                     indexType,
-                                                    reinterpret_cast<void*>(indexAttribute->byteOffset()),
+                                                    reinterpret_cast<void*>(quintptr(indexAttribute->byteOffset())),
                                                     rGeometryRenderer->baseVertex());
 
                 else
@@ -935,7 +912,7 @@ void Renderer::executeCommands(const QVector<RenderCommand *> &commands)
                     m_graphicsContext->drawElementsInstanced(primType,
                                                              primitiveCount,
                                                              indexType,
-                                                             reinterpret_cast<void*>(indexAttribute->byteOffset()),
+                                                             reinterpret_cast<void*>(quintptr(indexAttribute->byteOffset())),
                                                              rGeometryRenderer->instanceCount());
                 else
                     m_graphicsContext->drawArraysInstanced(primType,
@@ -951,11 +928,6 @@ void Renderer::executeCommands(const QVector<RenderCommand *> &commands)
             if (rGeometryRenderer->primitiveRestart())
                 m_graphicsContext->disablePrimitiveRestart();
 
-            // Maybe we could cache the VAO and release it only at the end of the exectute frame
-            // in case we are always reusing the same one ?
-
-            if (vao && vao->isCreated())
-                vao->release();
 
             // Unset dirtiness on rGeometryRenderer only
             // The rGeometry may be shared by several rGeometryRenderer
@@ -965,32 +937,38 @@ void Renderer::executeCommands(const QVector<RenderCommand *> &commands)
         }
     } // end of RenderCommands loop
 
+    // We cache the VAO and release it only at the end of the exectute frame
+    // We try to minimize VAO binding between RenderCommands
+    if (vao)
+        vao->release();
+
     // Reset to the state we were in before executing the render commands
     m_graphicsContext->setCurrentStateSet(globalState);
 
     // Unset dirtiness on Geometry and Attributes
-    Q_FOREACH (RenderAttribute *attribute, m_dirtyAttributes)
+    Q_FOREACH (Attribute *attribute, m_dirtyAttributes)
         attribute->unsetDirty();
     m_dirtyAttributes.clear();
 
-    Q_FOREACH (RenderGeometry *geometry, m_dirtyGeometry)
+    Q_FOREACH (Geometry *geometry, m_dirtyGeometry)
         geometry->unsetDirty();
     m_dirtyGeometry.clear();
 }
 
-RenderAttribute *Renderer::updateBuffersAndAttributes(RenderGeometry *geometry, RenderCommand *command, GLsizei &count, bool forceUpdate)
+Attribute *Renderer::updateBuffersAndAttributes(Geometry *geometry, RenderCommand *command, GLsizei &count, bool forceUpdate)
 {
-    RenderAttribute *indexAttribute = Q_NULLPTR;
+    Attribute *indexAttribute = Q_NULLPTR;
     uint estimatedCount = 0;
 
+    m_dirtyAttributes.reserve(m_dirtyAttributes.size() + geometry->attributes().size());
     Q_FOREACH (const QNodeId &attributeId, geometry->attributes()) {
         // TO DO: Improvement we could store handles and use the non locking policy on the attributeManager
-        RenderAttribute *attribute = attributeManager()->lookupResource(attributeId);
+        Attribute *attribute = m_nodesManager->attributeManager()->lookupResource(attributeId);
 
         if (attribute == Q_NULLPTR)
             continue;
 
-        RenderBuffer *buffer = bufferManager()->lookupResource(attribute->bufferId());
+        Buffer *buffer = m_nodesManager->bufferManager()->lookupResource(attribute->bufferId());
 
         if (buffer == Q_NULLPTR)
             continue;
@@ -999,8 +977,7 @@ RenderAttribute *Renderer::updateBuffersAndAttributes(RenderGeometry *geometry, 
             // Reupload buffer data
             m_graphicsContext->updateBuffer(buffer);
 
-            // Append buffer to temporary vector so that its dirtiness
-            // can be cleared at the end of the frame
+            // Clear dirtiness of buffer so that it is not reuploaded every frame
             buffer->unsetDirty();
         }
 
@@ -1036,18 +1013,23 @@ RenderAttribute *Renderer::updateBuffersAndAttributes(RenderGeometry *geometry, 
     return indexAttribute;
 }
 
-void Renderer::addAllocator(QFrameAllocator *allocator)
+void Renderer::addAllocator(Qt3DCore::QFrameAllocator *allocator)
 {
     QMutexLocker lock(&m_mutex);
     m_allocators.append(allocator);
 }
 
-QOpenGLFilter *Renderer::contextInfo() const
+QList<QMouseEvent> Renderer::pendingPickingEvents() const
+{
+    return m_pickEventFilter->pendingEvents();
+}
+
+QGraphicsApiFilter *Renderer::contextInfo() const
 {
     return m_graphicsContext->contextInfo();
 }
 
 } // namespace Render
-} // namespace Qt3D
+} // namespace Qt3DRender
 
 QT_END_NAMESPACE

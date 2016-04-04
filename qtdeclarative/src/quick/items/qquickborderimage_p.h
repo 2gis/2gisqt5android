@@ -34,6 +34,17 @@
 #ifndef QQUICKBORDERIMAGE_P_H
 #define QQUICKBORDERIMAGE_P_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include "qquickimagebase_p.h"
 
 QT_BEGIN_NAMESPACE
@@ -44,7 +55,6 @@ class QQuickBorderImagePrivate;
 class Q_AUTOTEST_EXPORT QQuickBorderImage : public QQuickImageBase
 {
     Q_OBJECT
-    Q_ENUMS(TileMode)
 
     Q_PROPERTY(QQuickScaleGrid *border READ border CONSTANT)
     Q_PROPERTY(TileMode horizontalTileMode READ horizontalTileMode WRITE setHorizontalTileMode NOTIFY horizontalTileModeChanged)
@@ -59,6 +69,7 @@ public:
     QQuickScaleGrid *border();
 
     enum TileMode { Stretch = Qt::StretchTile, Repeat = Qt::RepeatTile, Round = Qt::RoundTile };
+    Q_ENUM(TileMode)
 
     TileMode horizontalTileMode() const;
     void setHorizontalTileMode(TileMode);

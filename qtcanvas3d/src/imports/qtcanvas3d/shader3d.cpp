@@ -43,77 +43,60 @@ QT_CANVAS3D_BEGIN_NAMESPACE
  * \qmltype Canvas3DShader
  * \since QtCanvas3D 1.0
  * \inqmlmodule QtCanvas3D
+ * \inherits Canvas3DAbstractObject
  * \brief Contains a shader.
  *
  * An uncreatable QML type that contains a shader. You can get it by calling
  * the \l{Context3D::createShader()}{Context3D.createShader()} method.
  */
 
-/*!
- * \internal
- */
-CanvasShader::CanvasShader(QOpenGLShader::ShaderType type, QObject *parent) :
-    CanvasAbstractObject(parent),
-    m_shader(new QOpenGLShader(type, this)),
+CanvasShader::CanvasShader(GLenum type, CanvasGlCommandQueue *queue, QObject *parent) :
+    CanvasAbstractObject(queue, parent),
+    m_shaderId(queue->createResourceId()),
     m_sourceCode("")
 {
+    queueCommand(CanvasGlCommandQueue::glCreateShader, GLint(type), m_shaderId);
 }
 
-/*!
- * \internal
- */
 CanvasShader::~CanvasShader()
 {
-    delete m_shader;
+    del();
 }
 
-/*!
- * \internal
- */
-GLuint CanvasShader::id()
+GLint CanvasShader::id()
 {
-    return m_shader->shaderId();
+    return m_shaderId;
 }
 
-/*!
- * \internal
- */
 bool CanvasShader::isAlive()
 {
-    return bool(m_shader);
+    return bool(m_shaderId);
 }
 
-/*!
- * \internal
- */
 void CanvasShader::del()
 {
-    delete m_shader;
-    m_shader = 0;
+    if (m_shaderId) {
+        queueCommand(CanvasGlCommandQueue::glDeleteShader, m_shaderId);
+        m_shaderId = 0;
+    }
 }
 
-/*!
- * \internal
- */
-QOpenGLShader *CanvasShader::qOGLShader()
-{
-    return m_shader;
-}
-
-/*!
- * \internal
- */
 QString CanvasShader::sourceCode()
 {
     return m_sourceCode;
 }
 
-/*!
- * \internal
- */
 void CanvasShader::setSourceCode(const QString &source)
 {
     m_sourceCode = source;
+}
+
+void CanvasShader::compileShader()
+{
+    if (m_shaderId) {
+        queueCommand(CanvasGlCommandQueue::glCompileShader, new QByteArray(m_sourceCode.toLatin1()),
+                     m_shaderId);
+    }
 }
 
 QT_CANVAS3D_END_NAMESPACE

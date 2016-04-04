@@ -77,6 +77,10 @@ private:
     Q_PRIVATE_SLOT(d_func(), void _q_rebuild())
 };
 
+#ifndef QT_NO_DEBUG_STREAM
+Q_WINEXTRAS_EXPORT QDebug operator<<(QDebug, const QWinJumpList *);
+#endif
+
 QT_END_NAMESPACE
 
 #endif // QWINJUMPLIST_H

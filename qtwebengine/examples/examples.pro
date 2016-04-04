@@ -6,6 +6,8 @@ qtHaveModule(webengine) {
 
 qtHaveModule(webenginewidgets) {
     SUBDIRS += \
-        webenginewidgets/browser \
-        webenginewidgets/fancybrowser
+        webenginewidgets/contentmanipulation \
+        webenginewidgets/cookiebrowser \
+        webenginewidgets/demobrowser \
+        webenginewidgets/markdowneditor
 }

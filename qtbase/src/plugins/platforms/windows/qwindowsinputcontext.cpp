@@ -36,7 +36,6 @@
 #include "qwindowswindow.h"
 #include "qwindowsintegration.h"
 #include "qwindowsmousehandler.h"
-#include "qwindowsscaling.h"
 
 #include <QtCore/QDebug>
 #include <QtCore/QObject>
@@ -84,6 +83,18 @@ static inline void imeNotifyCancelComposition(HWND hwnd)
     ImmNotifyIME(himc, NI_COMPOSITIONSTR, CPS_CANCEL, 0);
     ImmReleaseContext(hwnd, himc);
 }
+
+static inline LCID languageIdFromLocaleId(LCID localeId)
+{
+    return localeId & 0xFFFF;
+}
+
+static inline LCID currentInputLanguageId()
+{
+    return languageIdFromLocaleId(reinterpret_cast<quintptr>(GetKeyboardLayout(0)));
+}
+
+Q_CORE_EXPORT QLocale qt_localeFromLCID(LCID id); // from qlocale_win.cpp
 
 /*!
     \class QWindowsInputContext
@@ -154,7 +165,9 @@ QWindowsInputContext::CompositionContext::CompositionContext() :
 
 QWindowsInputContext::QWindowsInputContext() :
     m_WM_MSIME_MOUSE(RegisterWindowMessage(L"MSIMEMouseOperation")),
-    m_endCompositionRecursionGuard(false)
+    m_endCompositionRecursionGuard(false),
+    m_languageId(currentInputLanguageId()),
+    m_locale(qt_localeFromLCID(m_languageId))
 {
     connect(QGuiApplication::inputMethod(), &QInputMethod::cursorRectangleChanged,
             this, &QWindowsInputContext::cursorRectChanged);
@@ -220,21 +233,24 @@ void QWindowsInputContext::updateEnabled()
         const bool accepted = inputMethodAccepted();
         if (QWindowsContext::verbose > 1)
             qCDebug(lcQpaInputMethods) << __FUNCTION__ << window << "accepted=" << accepted;
-        if (accepted) {
-            // Re-enable IME by associating default context saved on first disabling.
-            if (platformWindow->testFlag(QWindowsWindow::InputMethodDisabled)) {
-                ImmAssociateContext(platformWindow->handle(), QWindowsInputContext::m_defaultContext);
-                platformWindow->clearFlag(QWindowsWindow::InputMethodDisabled);
-            }
-        } else {
-            // Disable IME by associating 0 context. Store context first time.
-            if (!platformWindow->testFlag(QWindowsWindow::InputMethodDisabled)) {
-                const HIMC oldImC = ImmAssociateContext(platformWindow->handle(), 0);
-                platformWindow->setFlag(QWindowsWindow::InputMethodDisabled);
-                if (!QWindowsInputContext::m_defaultContext && oldImC)
-                    QWindowsInputContext::m_defaultContext = oldImC;
-            }
-        }
+            QWindowsInputContext::setWindowsImeEnabled(platformWindow, accepted);
+    }
+}
+
+void QWindowsInputContext::setWindowsImeEnabled(QWindowsWindow *platformWindow, bool enabled)
+{
+    if (!platformWindow || platformWindow->testFlag(QWindowsWindow::InputMethodDisabled) == !enabled)
+        return;
+    if (enabled) {
+        // Re-enable Windows IME by associating default context saved on first disabling.
+        ImmAssociateContext(platformWindow->handle(), QWindowsInputContext::m_defaultContext);
+        platformWindow->clearFlag(QWindowsWindow::InputMethodDisabled);
+    } else {
+        // Disable Windows IME by associating 0 context. Store context first time.
+        const HIMC oldImC = ImmAssociateContext(platformWindow->handle(), 0);
+        platformWindow->setFlag(QWindowsWindow::InputMethodDisabled);
+        if (!QWindowsInputContext::m_defaultContext && oldImC)
+            QWindowsInputContext::m_defaultContext = oldImC;
     }
 }
 
@@ -254,10 +270,9 @@ void QWindowsInputContext::cursorRectChanged()
     if (!m_compositionContext.hwnd)
         return;
     const QInputMethod *inputMethod = QGuiApplication::inputMethod();
-    const QRect cursorRectangleDip = inputMethod->cursorRectangle().toRect();
-    if (!cursorRectangleDip.isValid())
+    const QRect cursorRectangle = inputMethod->cursorRectangle().toRect();
+    if (!cursorRectangle.isValid())
         return;
-    const QRect cursorRectangle = QWindowsScaling::mapToNative(cursorRectangleDip);
 
     qCDebug(lcQpaInputMethods) << __FUNCTION__<< cursorRectangle;
 
@@ -306,11 +321,6 @@ void QWindowsInputContext::invokeAction(QInputMethod::Action action, int cursorP
     const HWND imeWindow = ImmGetDefaultIMEWnd(m_compositionContext.hwnd);
     SendMessage(imeWindow, m_WM_MSIME_MOUSE, MAKELONG(MAKEWORD(MK_LBUTTON, cursorPosition == 0 ? 2 : 1), cursorPosition), (LPARAM)himc);
     ImmReleaseContext(m_compositionContext.hwnd, himc);
-}
-
-QWindowsInputContext *QWindowsInputContext::instance()
-{
-    return static_cast<QWindowsInputContext *>(QWindowsIntegration::instance()->inputContext());
 }
 
 static inline QString getCompositionString(HIMC himc, DWORD dwIndex)
@@ -375,7 +385,7 @@ bool QWindowsInputContext::startComposition(HWND hwnd)
     QWindow *window = QGuiApplication::focusWindow();
     if (!window)
         return false;
-    qCDebug(lcQpaInputMethods) << __FUNCTION__ << fo << window;
+    qCDebug(lcQpaInputMethods) << __FUNCTION__ << fo << window << "language=" << m_languageId;
     if (!fo || QWindowsWindow::handleOf(window) != hwnd)
         return false;
     initContext(hwnd, fo);
@@ -474,7 +484,8 @@ bool QWindowsInputContext::composition(HWND hwnd, LPARAM lParamIn)
     if (lParam & GCS_RESULTSTR) {
         // A fixed result, return the converted string
         event->setCommitString(getCompositionString(himc, GCS_RESULTSTR));
-        endContextComposition();
+        if (!(lParam & GCS_DELTASTART))
+            endContextComposition();
     }
     const bool result = QCoreApplication::sendEvent(m_compositionContext.focusObject, event.data());
     qCDebug(lcQpaInputMethods) << '<' << __FUNCTION__ << "sending markup="
@@ -557,6 +568,21 @@ bool QWindowsInputContext::handleIME_Request(WPARAM wParam,
         break;
     }
     return false;
+}
+
+void QWindowsInputContext::handleInputLanguageChanged(WPARAM wparam, LPARAM lparam)
+{
+    const LCID newLanguageId = languageIdFromLocaleId(lparam);
+    if (newLanguageId == m_languageId)
+        return;
+    const LCID oldLanguageId = m_languageId;
+    m_languageId = newLanguageId;
+    m_locale = qt_localeFromLCID(m_languageId);
+    emitLocaleChanged();
+
+    qCDebug(lcQpaInputMethods) << __FUNCTION__ << hex << showbase
+        << oldLanguageId  << "->" << newLanguageId << "Character set:"
+        << DWORD(wparam) << dec << noshowbase << m_locale;
 }
 
 /*!

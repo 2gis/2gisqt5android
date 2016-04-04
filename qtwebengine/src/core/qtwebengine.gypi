@@ -8,14 +8,19 @@
     'dependencies': [
       '<(chromium_src_dir)/base/base.gyp:base',
       '<(chromium_src_dir)/base/third_party/dynamic_annotations/dynamic_annotations.gyp:dynamic_annotations',
+      '<(chromium_src_dir)/components/components.gyp:devtools_discovery',
+      '<(chromium_src_dir)/components/components.gyp:devtools_http_handler',
       '<(chromium_src_dir)/components/components.gyp:error_page_renderer',
       '<(chromium_src_dir)/components/components.gyp:visitedlink_browser',
       '<(chromium_src_dir)/components/components.gyp:visitedlink_renderer',
+      '<(chromium_src_dir)/components/components.gyp:web_cache_browser',
+      '<(chromium_src_dir)/components/components.gyp:web_cache_renderer',
       '<(chromium_src_dir)/content/content.gyp:content',
       '<(chromium_src_dir)/content/content.gyp:content_app_browser',
       '<(chromium_src_dir)/content/content.gyp:content_browser',
       '<(chromium_src_dir)/content/content.gyp:content_common',
       '<(chromium_src_dir)/content/content.gyp:content_gpu',
+      '<(chromium_src_dir)/content/content.gyp:content_ppapi_plugin',
       '<(chromium_src_dir)/content/content.gyp:content_renderer',
       '<(chromium_src_dir)/content/content.gyp:content_utility',
       '<(chromium_src_dir)/content/app/resources/content_resources.gyp:content_resources',
@@ -81,6 +86,9 @@
             ],
           },
         },
+        'dependencies': [
+          '<(chromium_src_dir)/ui/events/ozone/events_ozone.gyp:events_ozone_evdev'
+        ]
       }],
       ['qt_os=="win32" and qt_gl=="opengl"', {
         'include_dirs': [
@@ -107,6 +115,9 @@
         'dependencies': [
           '<(chromium_src_dir)/build/linux/system.gyp:fontconfig',
         ],
+      }],
+      ['OS=="mac"', {
+        'xcode_settings': {'OTHER_LDFLAGS': ['-Wl,-ObjC']},
       }],
     ],
 }

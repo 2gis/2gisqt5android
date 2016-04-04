@@ -49,12 +49,13 @@
 
 QT_BEGIN_NAMESPACE
 
-QV4Include::QV4Include(const QUrl &url, QV4::ExecutionEngine *engine, QQmlContextData *context,
-                       const QV4::Value &qmlglobal, const QV4::Value &callback)
-    : v4(engine), m_network(0), m_reply(0), m_url(url), m_redirectCount(0), m_context(context)
+QV4Include::QV4Include(const QUrl &url, QV4::ExecutionEngine *engine,
+                       QV4::QmlContext *qmlContext, const QV4::Value &callback)
+    : v4(engine), m_network(0), m_reply(0), m_url(url), m_redirectCount(0)
 {
-    m_qmlglobal.set(engine, qmlglobal);
-    if (callback.asFunctionObject())
+    if (qmlContext)
+        m_qmlContext.set(engine, *qmlContext);
+    if (callback.as<QV4::FunctionObject>())
         m_callbackFunction.set(engine, callback);
 
     m_resultObject.set(v4, resultValue(v4));
@@ -94,14 +95,14 @@ void QV4Include::callback(const QV4::Value &callback, const QV4::Value &status)
 {
     if (!callback.isObject())
         return;
-    QV4::ExecutionEngine *v4 = callback.asObject()->engine();
+    QV4::ExecutionEngine *v4 = callback.as<QV4::Object>()->engine();
     QV4::Scope scope(v4);
     QV4::ScopedFunctionObject f(scope, callback);
     if (!f)
         return;
 
     QV4::ScopedCallData callData(scope, 1);
-    callData->thisObject = v4->globalObject()->asReturnedValue();
+    callData->thisObject = v4->globalObject->asReturnedValue();
     callData->args[0] = status;
     f->call(callData);
     if (scope.hasException())
@@ -142,8 +143,8 @@ void QV4Include::finished()
         QString code = QString::fromUtf8(data);
         QmlIR::Document::removeScriptPragmas(code);
 
-        QV4::ScopedObject qmlglobal(scope, m_qmlglobal.value());
-        QV4::Script script(v4, qmlglobal, code, m_url.toString());
+        QV4::Scoped<QV4::QmlContext> qml(scope, m_qmlContext.value());
+        QV4::Script script(v4, qml, code, m_url.toString());
 
         script.parse();
         if (!scope.engine->hasException)
@@ -176,26 +177,26 @@ QV4::ReturnedValue QV4Include::method_include(QV4::CallContext *ctx)
         return QV4::Encode::undefined();
 
     QV4::Scope scope(ctx->engine());
-    QQmlContextData *context = QV4::QmlContextWrapper::callingContext(scope.engine);
+    QQmlContextData *context = scope.engine->callingQmlContext();
 
     if (!context || !context->isJSContext)
         V4THROW_ERROR("Qt.include(): Can only be called from JavaScript files");
 
     QUrl url(scope.engine->resolvedUrl(ctx->args()[0].toQStringNoThrow()));
+    if (scope.engine->qmlEngine() && scope.engine->qmlEngine()->urlInterceptor())
+        url = scope.engine->qmlEngine()->urlInterceptor()->intercept(url, QQmlAbstractUrlInterceptor::JavaScriptFile);
 
     QV4::ScopedValue callbackFunction(scope, QV4::Primitive::undefinedValue());
-    if (ctx->argc() >= 2 && ctx->args()[1].asFunctionObject())
+    if (ctx->argc() >= 2 && ctx->args()[1].as<QV4::FunctionObject>())
         callbackFunction = ctx->args()[1];
 
     QString localFile = QQmlFile::urlToLocalFileOrQrc(url);
 
     QV4::ScopedValue result(scope);
-    QV4::ScopedObject qmlcontextobject(scope, scope.engine->qmlContextObject());
+    QV4::Scoped<QV4::QmlContext> qmlcontext(scope, scope.engine->qmlContext());
 
     if (localFile.isEmpty()) {
-        QV4Include *i = new QV4Include(url, scope.engine, context,
-                                       qmlcontextobject,
-                                       callbackFunction);
+        QV4Include *i = new QV4Include(url, scope.engine, qmlcontext, callbackFunction);
         result = i->result();
 
     } else {
@@ -203,7 +204,7 @@ QV4::ReturnedValue QV4Include::method_include(QV4::CallContext *ctx)
 
         if (const QQmlPrivate::CachedQmlUnit *cachedUnit = QQmlMetaType::findCachedCompilationUnit(url)) {
             QV4::CompiledData::CompilationUnit *jsUnit = cachedUnit->createCompilationUnit();
-            script.reset(new QV4::Script(scope.engine, qmlcontextobject, jsUnit));
+            script.reset(new QV4::Script(scope.engine, qmlcontext, jsUnit));
         } else {
             QFile f(localFile);
 
@@ -212,7 +213,7 @@ QV4::ReturnedValue QV4Include::method_include(QV4::CallContext *ctx)
                 QString code = QString::fromUtf8(data);
                 QmlIR::Document::removeScriptPragmas(code);
 
-                script.reset(new QV4::Script(scope.engine, qmlcontextobject, code, url.toString()));
+                script.reset(new QV4::Script(scope.engine, qmlcontext, code, url.toString()));
             }
         }
 
@@ -224,7 +225,7 @@ QV4::ReturnedValue QV4Include::method_include(QV4::CallContext *ctx)
                 QV4::ScopedValue ex(scope, scope.engine->catchException());
                 result = resultValue(scope.engine, Exception);
                 QV4::ScopedString exception(scope, scope.engine->newString(QStringLiteral("exception")));
-                result->asObject()->put(exception, ex);
+                result->as<QV4::Object>()->put(exception, ex);
             } else {
                 result = resultValue(scope.engine, Ok);
             }

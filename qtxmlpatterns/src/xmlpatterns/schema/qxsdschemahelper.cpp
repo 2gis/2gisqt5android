@@ -150,19 +150,6 @@ bool XsdSchemaHelper::wildcardAllowsExpandedName(const QXmlName &name, const Xsd
     return true;
 }
 
-// small helper function that should be available in Qt 4.6
-template<class T>
-static inline bool containsSet(const QSet<T> &super, const QSet<T> &sub)
-{
-    QSetIterator<T> it(sub);
-    while (it.hasNext()) {
-        if (!super.contains(it.next()))
-            return false;
-    }
-
-    return true;
-}
-
 bool XsdSchemaHelper::isWildcardSubset(const XsdWildcard::Ptr &wildcard, const XsdWildcard::Ptr &otherWildcard)
 {
     // @see http://www.w3.org/TR/xmlschema11-1/#cos-ns-subset
@@ -178,19 +165,19 @@ bool XsdSchemaHelper::isWildcardSubset(const XsdWildcard::Ptr &wildcard, const X
 
     // 2
     if ((constraint->variety() == XsdWildcard::NamespaceConstraint::Enumeration) && (otherConstraint->variety() == XsdWildcard::NamespaceConstraint::Enumeration)) {
-        if (containsSet<QString>(otherConstraint->namespaces(), constraint->namespaces()))
+        if (otherConstraint->namespaces().contains(constraint->namespaces()))
             return true;
     }
 
     // 3
     if ((constraint->variety() == XsdWildcard::NamespaceConstraint::Enumeration) && (otherConstraint->variety() == XsdWildcard::NamespaceConstraint::Not)) {
-        if (constraint->namespaces().intersect(otherConstraint->namespaces()).isEmpty())
+        if (!constraint->namespaces().intersects(otherConstraint->namespaces()))
             return true;
     }
 
     // 4
     if ((constraint->variety() == XsdWildcard::NamespaceConstraint::Not) && (otherConstraint->variety() == XsdWildcard::NamespaceConstraint::Not)) {
-        if (containsSet<QString>(constraint->namespaces(), otherConstraint->namespaces()))
+        if (constraint->namespaces().contains(otherConstraint->namespaces()))
             return true;
     }
 

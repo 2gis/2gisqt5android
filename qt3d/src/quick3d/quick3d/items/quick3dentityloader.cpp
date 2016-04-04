@@ -34,8 +34,7 @@
 **
 ****************************************************************************/
 
-#include "quick3dentityloader.h"
-#include "quick3dentityloader_p.h"
+#include "quick3dentityloader_p_p.h"
 
 #include <QQmlContext>
 #include <QQmlEngine>
@@ -45,8 +44,7 @@
 
 QT_BEGIN_NAMESPACE
 
-namespace Qt3D {
-
+namespace Qt3DCore {
 namespace Quick {
 
 class Quick3DEntityLoaderIncubator : public QQmlIncubator
@@ -64,7 +62,7 @@ protected:
         Quick3DEntityLoaderPrivate *priv = Quick3DEntityLoaderPrivate::get(m_loader);
 
         switch (status) {
-        case Status::Ready: {
+        case Ready: {
             Q_ASSERT(priv->m_entity == Q_NULLPTR);
             priv->m_entity = qobject_cast<QEntity *>(object());
             Q_ASSERT(priv->m_entity != Q_NULLPTR);
@@ -73,7 +71,7 @@ protected:
             break;
         }
 
-        case Status::Error: {
+        case Error: {
             QQmlEnginePrivate::warning(qmlEngine(m_loader), errors());
             priv->clear();
             emit m_loader->entityChanged();
@@ -91,7 +89,7 @@ private:
 
 /*!
     \qmltype EntityLoader
-    \inqmlmodule Qt3D
+    \inqmlmodule Qt3D.Core
     \since 5.5
 */
 Quick3DEntityLoader::Quick3DEntityLoader(QNode *parent)
@@ -105,7 +103,7 @@ Quick3DEntityLoader::~Quick3DEntityLoader()
 }
 
 /*!
-    \qmlproperty QtQml::QtObject Qt3D::EntityLoader::entity
+    \qmlproperty QtQml::QtObject Qt3DCore::EntityLoader::entity
     \readonly
 */
 QObject *Quick3DEntityLoader::entity() const
@@ -115,7 +113,7 @@ QObject *Quick3DEntityLoader::entity() const
 }
 
 /*!
-    \qmlproperty url Qt3D::EntityLoader::source
+    \qmlproperty url Qt3DCore::EntityLoader::source
 */
 QUrl Quick3DEntityLoader::source() const
 {
@@ -145,10 +143,6 @@ void Quick3DEntityLoader::copy(const QNode *ref)
     d_func()->m_entity->setParent(this);
 }
 
-/*!
-    \class Qt3D::Quick::Quick3DEntityLoaderPrivate
-    \internal
-*/
 Quick3DEntityLoaderPrivate::Quick3DEntityLoaderPrivate()
     : QEntityPrivate(),
       m_incubator(Q_NULLPTR),
@@ -236,10 +230,9 @@ void Quick3DEntityLoaderPrivate::_q_componentStatusChanged(QQmlComponent::Status
     m_component->create(*m_incubator, m_context);
 }
 
-} // Quick
-
-} // Qt3D
+} // namespace Quick
+} // namespace Qt3DCore
 
 QT_END_NAMESPACE
 
-#include "moc_quick3dentityloader.cpp"
+#include "moc_quick3dentityloader_p.cpp"

@@ -33,8 +33,8 @@
 
 import QtQuick 2.0
 import QtTest 1.0
-import QtLocation 5.3
-import QtPositioning 5.3
+import QtLocation 5.6
+import QtPositioning 5.5
 
 Item {
     width:100
@@ -54,9 +54,11 @@ Item {
 
          Behavior on center {
              id: centerBehavior
-
              enabled: false
-             CoordinateAnimation { duration: animationDuration }
+             CoordinateAnimation {
+                 id: coordinateAnimation
+                 duration: animationDuration
+             }
          }
 
          onCenterChanged: {
@@ -83,7 +85,7 @@ Item {
 
     TestCase {
         when: windowShown
-        name: "Coordinate animation"
+        name: "CoordinateAnimation"
 
         function test_coordinate_animation() {
 
@@ -108,7 +110,8 @@ Item {
             // Set to coordinate with animation enabled
             centerBehavior.enabled = true
             map.center = QtPositioning.coordinate(to.latitude, to.longitude)
-            wait(animationDuration * 2)
+            wait(animationDuration)
+            tryCompare(coordinateAnimation,"running",false)
 
             //check correct start position
             compare(coordinateList[0].latitude, from.latitude)

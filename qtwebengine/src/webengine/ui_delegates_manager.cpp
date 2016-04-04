@@ -37,16 +37,17 @@
 #include "ui_delegates_manager.h"
 
 #include "api/qquickwebengineview_p.h"
+#include "authentication_dialog_controller.h"
+#include "file_picker_controller.h"
 #include "javascript_dialog_controller.h"
 
 #include <QAbstractListModel>
 #include <QClipboard>
 #include <QFileInfo>
-#include <QGuiApplication>
+#include <QMimeData>
 #include <QQmlContext>
 #include <QQmlEngine>
 #include <QQmlProperty>
-#include <QStringBuilder>
 
 // Uncomment for QML debugging
 //#define UI_DELEGATES_DEBUG
@@ -57,7 +58,7 @@ namespace QtWebEngineCore {
 #if defined(Q_OS_WIN)
 #define FILE_NAME_CASE_STATEMENT(TYPE, COMPONENT) \
     case UIDelegatesManager::TYPE:\
-        return QStringLiteral(#TYPE L ##".qml");
+        return QString::fromLatin1(#TYPE ##".qml");
 #else
 #define FILE_NAME_CASE_STATEMENT(TYPE, COMPONENT) \
     case UIDelegatesManager::TYPE:\
@@ -105,32 +106,6 @@ const char *defaultPropertyName(QObject *obj)
 MenuItemHandler::MenuItemHandler(QObject *parent)
     : QObject(parent)
 {
-}
-
-
-CopyMenuItem::CopyMenuItem(QObject *parent, const QString &textToCopy)
-    : MenuItemHandler(parent)
-    , m_textToCopy(textToCopy)
-{
-    connect(this, &MenuItemHandler::triggered, this, &CopyMenuItem::onTriggered);
-}
-
-void CopyMenuItem::onTriggered()
-{
-    qApp->clipboard()->setText(m_textToCopy);
-}
-
-NavigateMenuItem::NavigateMenuItem(QObject *parent, const QExplicitlySharedDataPointer<WebContentsAdapter> &adapter, const QUrl &targetUrl)
-    : MenuItemHandler(parent)
-    , m_adapter(adapter)
-    , m_targetUrl(targetUrl)
-{
-    connect(this, &MenuItemHandler::triggered, this, &NavigateMenuItem::onTriggered);
-}
-
-void NavigateMenuItem::onTriggered()
-{
-    m_adapter->load(m_targetUrl);
 }
 
 #define COMPONENT_MEMBER_INIT(TYPE, COMPONENT) \
@@ -234,7 +209,7 @@ QObject *UIDelegatesManager::addMenu(QObject *parentMenu, const QString &title, 
         return 0;
     QQmlContext *context = qmlContext(m_view);
     QObject *menu = menuComponent->beginCreate(context);
-    // Useful when not using Qt Quick Controls' Menu
+    // set visual parent for non-Window-based menus
     if (QQuickItem* item = qobject_cast<QQuickItem*>(menu))
         item->setParentItem(m_view);
 
@@ -272,15 +247,19 @@ void UIDelegatesManager::showDialog(QSharedPointer<JavaScriptDialogController> d
     switch (dialogController->type()) {
     case WebContentsAdapterClient::AlertDialog:
         dialogComponentType = AlertDialog;
-        title = QObject::tr("Javascript Alert - %1").arg(m_view->url().toString());
+        title = tr("Javascript Alert - %1").arg(m_view->url().toString());
         break;
     case WebContentsAdapterClient::ConfirmDialog:
         dialogComponentType = ConfirmDialog;
-        title = QObject::tr("Javascript Confirm - %1").arg(m_view->url().toString());
+        title = tr("Javascript Confirm - %1").arg(m_view->url().toString());
         break;
     case WebContentsAdapterClient::PromptDialog:
         dialogComponentType = PromptDialog;
-        title = QObject::tr("Javascript Prompt - %1").arg(m_view->url().toString());
+        title = tr("Javascript Prompt - %1").arg(m_view->url().toString());
+        break;
+    case WebContentsAdapterClient::UnloadDialog:
+        dialogComponentType = ConfirmDialog;
+        title = tr("Are you sure you want to leave this page?");
         break;
     case WebContentsAdapterClient::InternalAuthorizationDialog:
         dialogComponentType = ConfirmDialog;
@@ -306,6 +285,9 @@ void UIDelegatesManager::showDialog(QSharedPointer<JavaScriptDialogController> d
 
     QQmlContext *context = qmlContext(m_view);
     QObject *dialog = dialogComponent->beginCreate(context);
+    // set visual parent for non-Window-based dialogs
+    if (QQuickItem* item = qobject_cast<QQuickItem*>(dialog))
+        item->setParentItem(m_view);
     dialog->setParent(m_view);
     QQmlProperty textProp(dialog, QStringLiteral("text"));
     textProp.write(dialogController->message());
@@ -341,50 +323,52 @@ void UIDelegatesManager::showDialog(QSharedPointer<JavaScriptDialogController> d
     QMetaObject::invokeMethod(dialog, "open");
 }
 
-namespace {
-class FilePickerController : public QObject {
-    Q_OBJECT
-public:
-    FilePickerController(WebContentsAdapterClient::FileChooserMode, const QExplicitlySharedDataPointer<WebContentsAdapter> &, QObject * = 0);
-
-public Q_SLOTS:
-    void accepted(const QVariant &files);
-    void rejected();
-
-private:
-    QExplicitlySharedDataPointer<WebContentsAdapter> m_adapter;
-    WebContentsAdapterClient::FileChooserMode m_mode;
-
-};
-
-
-FilePickerController::FilePickerController(WebContentsAdapterClient::FileChooserMode mode, const QExplicitlySharedDataPointer<WebContentsAdapter> &adapter, QObject *parent)
-    : QObject(parent)
-    , m_adapter(adapter)
-    , m_mode(mode)
+void UIDelegatesManager::showDialog(QSharedPointer<AuthenticationDialogController> dialogController)
 {
+    Q_ASSERT(!dialogController.isNull());
+
+    if (!ensureComponentLoaded(AuthenticationDialog)) {
+        // Let the controller know it couldn't be loaded
+        qWarning("Failed to load authentication dialog, rejecting.");
+        dialogController->reject();
+        return;
+    }
+
+    QQmlContext *context = qmlContext(m_view);
+    QObject *authenticationDialog = authenticationDialogComponent->beginCreate(context);
+    // set visual parent for non-Window-based dialogs
+    if (QQuickItem* item = qobject_cast<QQuickItem*>(authenticationDialog))
+        item->setParentItem(m_view);
+    authenticationDialog->setParent(m_view);
+
+    QString introMessage;
+    if (dialogController->isProxy()) {
+        introMessage = tr("Connect to proxy \"%1\" using:");
+        introMessage = introMessage.arg(dialogController->host().toHtmlEscaped());
+    } else {
+        const QUrl url = dialogController->url();
+        introMessage = tr("Enter username and password for \"%1\" at %2://%3");
+        introMessage = introMessage.arg(dialogController->realm(), url.scheme(), url.host());
+    }
+    QQmlProperty textProp(authenticationDialog, QStringLiteral("text"));
+    textProp.write(introMessage);
+
+    QQmlProperty acceptSignal(authenticationDialog, QStringLiteral("onAccepted"));
+    QQmlProperty rejectSignal(authenticationDialog, QStringLiteral("onRejected"));
+    CHECK_QML_SIGNAL_PROPERTY(acceptSignal, authenticationDialogComponent->url());
+    CHECK_QML_SIGNAL_PROPERTY(rejectSignal, authenticationDialogComponent->url());
+
+    static int acceptIndex = dialogController->metaObject()->indexOfSlot("accept(QString,QString)");
+    QObject::connect(authenticationDialog, acceptSignal.method(), dialogController.data(), dialogController->metaObject()->method(acceptIndex));
+    static int rejectIndex = dialogController->metaObject()->indexOfSlot("reject()");
+    QObject::connect(authenticationDialog, rejectSignal.method(), dialogController.data(), dialogController->metaObject()->method(rejectIndex));
+
+    authenticationDialogComponent->completeCreate();
+    QMetaObject::invokeMethod(authenticationDialog, "open");
 }
 
-void FilePickerController::accepted(const QVariant &files)
+void UIDelegatesManager::showFilePicker(FilePickerController *controller)
 {
-    QStringList stringList;
-    Q_FOREACH (const QUrl &url, files.value<QList<QUrl> >())
-        stringList.append(url.toLocalFile());
-    m_adapter->filesSelectedInChooser(stringList, m_mode);
-}
-
-void FilePickerController::rejected()
-{
-    m_adapter->filesSelectedInChooser(QStringList(), m_mode);
-}
-
-} // namespace
-
-
-void UIDelegatesManager::showFilePicker(WebContentsAdapterClient::FileChooserMode mode, const QString &defaultFileName, const QStringList &acceptedMimeTypes, const QExplicitlySharedDataPointer<WebContentsAdapter> &adapter)
-{
-    Q_UNUSED(defaultFileName);
-    Q_UNUSED(acceptedMimeTypes);
 
     if (!ensureComponentLoaded(FilePicker))
         return;
@@ -397,23 +381,24 @@ void UIDelegatesManager::showFilePicker(WebContentsAdapterClient::FileChooserMod
     filePickerComponent->completeCreate();
 
     // Fine-tune some properties depending on the mode.
-    switch (mode) {
-    case WebContentsAdapterClient::Open:
+    switch (controller->mode()) {
+    case FilePickerController::Open:
         break;
-    case WebContentsAdapterClient::Save:
+    case FilePickerController::Save:
         filePicker->setProperty("selectExisting", false);
         break;
-    case WebContentsAdapterClient::OpenMultiple:
+    case FilePickerController::OpenMultiple:
         filePicker->setProperty("selectMultiple", true);
         break;
-    case WebContentsAdapterClient::UploadFolder:
+    case FilePickerController::UploadFolder:
         filePicker->setProperty("selectFolder", true);
         break;
     default:
         Q_UNREACHABLE();
     }
 
-    FilePickerController *controller = new FilePickerController(mode, adapter, filePicker);
+    controller->setParent(filePicker);
+
     QQmlProperty filesPickedSignal(filePicker, QStringLiteral("onFilesSelected"));
     CHECK_QML_SIGNAL_PROPERTY(filesPickedSignal, filePickerComponent->url());
     QQmlProperty rejectSignal(filePicker, QStringLiteral("onRejected"));
@@ -464,5 +449,3 @@ void UIDelegatesManager::moveMessageBubble(const QRect &anchor)
 }
 
 } // namespace QtWebEngineCore
-
-#include "ui_delegates_manager.moc"

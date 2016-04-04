@@ -34,7 +34,7 @@
 **
 ****************************************************************************/
 
-#include "quick3dconfiguration.h"
+#include "quick3dconfiguration_p.h"
 #include <QDebug>
 
 #include <Qt3DCore/QAspectEngine>
@@ -46,13 +46,12 @@
 
 QT_BEGIN_NAMESPACE
 
-namespace Qt3D {
-
+namespace Qt3DCore {
 namespace Quick {
 
 /*!
     \qmltype Configuration
-    \inqmlmodule Qt3D
+    \inqmlmodule Qt3D.Core
     \since 5.5
 */
 Quick3DConfiguration::Quick3DConfiguration(QObject *parent)
@@ -71,7 +70,7 @@ void Quick3DConfiguration::setControlledCamera(QCamera *camera)
 }
 
 /*!
-    \qmlproperty Camera Qt3D::Configuration::controlledCamera
+    \qmlproperty Camera Qt3DCore::Configuration::controlledCamera
 */
 QCamera *Quick3DConfiguration::controlledCamera() const
 {
@@ -96,8 +95,7 @@ void Quick3DConfiguration::applyControlledCameraChange()
     }
 }
 
-} // Quick
-
-} // Qt3D
+} // namespace Quick
+} // namespace Qt3DCore
 
 QT_END_NAMESPACE

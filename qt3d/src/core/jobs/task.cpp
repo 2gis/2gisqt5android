@@ -44,7 +44,7 @@
 
 QT_BEGIN_NAMESPACE
 
-namespace Qt3D {
+namespace Qt3DCore {
 
 RunnableInterface::~RunnableInterface()
 {
@@ -66,6 +66,9 @@ void AspectTaskRunnable::run()
 {
     if (m_job)
         m_job->run();
+
+    // We could have an append sub task or something in here
+    // So that a job can post sub jobs ?
 
     if (m_pooler)
         m_pooler->taskFinished(this);
@@ -123,6 +126,6 @@ DependencyHandler *SyncTaskRunnable::dependencyHandler()
     return Q_NULLPTR;
 }
 
-} // namespace Qt3D {
+} // namespace Qt3DCore {
 
 QT_END_NAMESPACE

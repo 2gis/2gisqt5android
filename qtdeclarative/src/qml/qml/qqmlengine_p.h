@@ -85,7 +85,6 @@ class QQmlImportDatabase;
 class QNetworkReply;
 class QNetworkAccessManager;
 class QQmlNetworkAccessManagerFactory;
-class QQmlAbstractBinding;
 class QQmlTypeNameCache;
 class QQmlComponentAttached;
 class QQmlCleanup;
@@ -95,6 +94,7 @@ class QQmlObjectCreator;
 class QDir;
 class QQmlIncubator;
 class QQmlProfiler;
+class QQmlPropertyCapture;
 
 // This needs to be declared here so that the pool for it can live in QQmlEnginePrivate.
 // The inline method definitions are in qqmljavascriptexpression_p.h
@@ -123,21 +123,11 @@ public:
     // is just qmlClearTypeRegistrations (which can't be called while an engine exists)
     static bool baseModulesUninitialized;
 
-    class PropertyCapture {
-    public:
-        inline virtual ~PropertyCapture() {}
-        virtual void captureProperty(QQmlNotifier *) = 0;
-        virtual void captureProperty(QObject *, int, int) = 0;
-    };
-
-    PropertyCapture *propertyCapture;
-    inline void captureProperty(QQmlNotifier *);
-    inline void captureProperty(QObject *, int, int);
+    QQmlPropertyCapture *propertyCapture;
 
     QRecyclePool<QQmlJavaScriptExpressionGuard> jsExpressionGuardPool;
 
     QQmlContext *rootContext;
-    bool isDebugging;
     QQmlProfiler *profiler;
     void enableProfiler();
 
@@ -208,7 +198,7 @@ public:
     inline static void deleteInEngineThread(QQmlEngine *, T *);
 
     // These methods may be called from the loader thread
-    inline QQmlPropertyCache *cache(QQmlType *, int, QQmlError &error);
+    inline QQmlPropertyCache *cache(QQmlType *, int);
     using QJSEnginePrivate::cache;
 
     // These methods may be called from the loader thread
@@ -262,7 +252,7 @@ public:
 
 private:
     // Must be called locked
-    QQmlPropertyCache *createCache(QQmlType *, int, QQmlError &error);
+    QQmlPropertyCache *createCache(QQmlType *, int);
 
     // These members must be protected by a QQmlEnginePrivate::Locker as they are required by
     // the threaded loader.  Only access them through their respective accessor methods.
@@ -346,7 +336,7 @@ Returns a QQmlPropertyCache for \a type with \a minorVersion.
 
 The returned cache is not referenced, so if it is to be stored, call addref().
 */
-QQmlPropertyCache *QQmlEnginePrivate::cache(QQmlType *type, int minorVersion, QQmlError &error)
+QQmlPropertyCache *QQmlEnginePrivate::cache(QQmlType *type, int minorVersion)
 {
     Q_ASSERT(type);
 
@@ -355,7 +345,7 @@ QQmlPropertyCache *QQmlEnginePrivate::cache(QQmlType *type, int minorVersion, QQ
 
     Locker locker(this);
     QQmlPropertyCache *rv = typePropertyCache.value(qMakePair(type, minorVersion));
-    if (!rv) rv = createCache(type, minorVersion, error);
+    if (!rv) rv = createCache(type, minorVersion);
     return rv;
 }
 
@@ -412,18 +402,6 @@ QQmlEnginePrivate *QQmlEnginePrivate::get(QV4::ExecutionEngine *e)
     if (!qmlEngine)
         return 0;
     return get(qmlEngine);
-}
-
-void QQmlEnginePrivate::captureProperty(QQmlNotifier *n)
-{
-    if (propertyCapture)
-        propertyCapture->captureProperty(n);
-}
-
-void QQmlEnginePrivate::captureProperty(QObject *o, int c, int n)
-{
-    if (propertyCapture)
-        propertyCapture->captureProperty(o, c, n);
 }
 
 void QQmlEnginePrivate::setDebugChangesCache(const QHash<QUrl, QByteArray> &changes)

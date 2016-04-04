@@ -4,6 +4,7 @@
 #include "qtwebenginewidgetsglobal.h"
 #include "qwebenginecertificateerror.h"
 #include "qwebenginedownloaditem.h"
+#include "qwebenginefullscreenrequest.h"
 #include "qwebenginehistory.h"
 #include "qwebenginepage.h"
 #include "qwebengineprofile.h"

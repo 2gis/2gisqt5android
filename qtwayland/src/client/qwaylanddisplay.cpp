@@ -33,7 +33,6 @@
 
 #include "qwaylanddisplay_p.h"
 
-#include "qwaylandeventthread_p.h"
 #include "qwaylandintegration_p.h"
 #include "qwaylandwindow_p.h"
 #include "qwaylandscreen_p.h"
@@ -50,7 +49,6 @@
 #include "qwaylandshellintegration_p.h"
 #include "qwaylandclientbufferintegration_p.h"
 
-#include "qwaylandextendedoutput_p.h"
 #include "qwaylandextendedsurface_p.h"
 #include "qwaylandsubsurface_p.h"
 #include "qwaylandtouch_p.h"
@@ -101,6 +99,15 @@ struct ::wl_region *QWaylandDisplay::createRegion(const QRegion &qregion)
     return region;
 }
 
+::wl_subsurface *QWaylandDisplay::createSubSurface(QWaylandWindow *window, QWaylandWindow *parent)
+{
+    if (!mSubCompositor) {
+        return NULL;
+    }
+
+    return mSubCompositor->get_subsurface(window->object(), parent->object());
+}
+
 QWaylandClientBufferIntegration * QWaylandDisplay::clientBufferIntegration() const
 {
     return mWaylandIntegration->clientBufferIntegration();
@@ -126,8 +133,7 @@ QWaylandDisplay::QWaylandDisplay(QWaylandIntegration *waylandIntegration)
     , mLastKeyboardFocusInputDevice(0)
     , mDndSelectionHandler(0)
     , mWindowExtension(0)
-    , mSubSurfaceExtension(0)
-    , mOutputExtension(0)
+    , mSubCompositor(0)
     , mTouchExtension(0)
     , mQtKeyExtension(0)
     , mTextInputManager(0)
@@ -138,20 +144,14 @@ QWaylandDisplay::QWaylandDisplay(QWaylandIntegration *waylandIntegration)
 {
     qRegisterMetaType<uint32_t>("uint32_t");
 
-    mEventThreadObject = new QWaylandEventThread(0);
-    mEventThread = new QThread(this);
-    mEventThread->setObjectName(QStringLiteral("QtWayland"));
-    mEventThreadObject->moveToThread(mEventThread);
-    mEventThread->start();
-
-    mEventThreadObject->displayConnect();
-    mDisplay = mEventThreadObject->display(); //blocks until display is available
+    mDisplay = wl_display_connect(NULL);
+    if (mDisplay == NULL) {
+        qErrnoWarning(errno, "Failed to create display");
+        ::exit(1);
+    }
 
     struct ::wl_registry *registry = wl_display_get_registry(mDisplay);
     init(registry);
-
-    connect(mEventThreadObject, SIGNAL(newEventsRead()), this, SLOT(flushRequests()));
-    connect(mEventThreadObject, &QWaylandEventThread::fatalError, this, &QWaylandDisplay::exitWithError);
 
     mWindowManagerIntegration.reset(new QWaylandWindowManagerIntegration(this));
 
@@ -168,15 +168,28 @@ QWaylandDisplay::~QWaylandDisplay(void)
     }
     mScreens.clear();
     delete mDndSelectionHandler.take();
-    mEventThread->quit();
-    mEventThread->wait();
-    delete mEventThreadObject;
+    wl_display_disconnect(mDisplay);
+}
+
+void QWaylandDisplay::checkError() const
+{
+    int ecode = wl_display_get_error(mDisplay);
+    if ((ecode == EPIPE || ecode == ECONNRESET)) {
+        // special case this to provide a nicer error
+        qWarning("The Wayland connection broke. Did the Wayland compositor die?");
+    } else {
+        qErrnoWarning(ecode, "The Wayland connection experienced a fatal error");
+    }
 }
 
 void QWaylandDisplay::flushRequests()
 {
+    if (wl_display_prepare_read(mDisplay) == 0) {
+        wl_display_read_events(mDisplay);
+    }
+
     if (wl_display_dispatch_pending(mDisplay) < 0) {
-        mEventThreadObject->checkError();
+        checkError();
         exitWithError();
     }
 
@@ -187,7 +200,7 @@ void QWaylandDisplay::flushRequests()
 void QWaylandDisplay::blockingReadEvents()
 {
     if (wl_display_dispatch(mDisplay) < 0) {
-        mEventThreadObject->checkError();
+        checkError();
         exitWithError();
     }
 }
@@ -254,14 +267,10 @@ void QWaylandDisplay::registry_global(uint32_t id, const QString &interface, uin
         mInputDevices.append(inputDevice);
     } else if (interface == QStringLiteral("wl_data_device_manager")) {
         mDndSelectionHandler.reset(new QWaylandDataDeviceManager(this, id));
-    } else if (interface == QStringLiteral("qt_output_extension")) {
-        mOutputExtension.reset(new QtWayland::qt_output_extension(registry, id, 1));
-        foreach (QPlatformScreen *screen, screens())
-            static_cast<QWaylandScreen *>(screen)->createExtendedOutput();
     } else if (interface == QStringLiteral("qt_surface_extension")) {
         mWindowExtension.reset(new QtWayland::qt_surface_extension(registry, id, 1));
-    } else if (interface == QStringLiteral("qt_sub_surface_extension")) {
-        mSubSurfaceExtension.reset(new QtWayland::qt_sub_surface_extension(registry, id, 1));
+    } else if (interface == QStringLiteral("wl_subcompositor")) {
+        mSubCompositor.reset(new QtWayland::wl_subcompositor(registry, id, 1));
     } else if (interface == QStringLiteral("qt_touch_extension")) {
         mTouchExtension.reset(new QWaylandTouchExtension(this, id));
     } else if (interface == QStringLiteral("qt_key_extension")) {

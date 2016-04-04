@@ -36,7 +36,7 @@
 
 #include <QtTest/QtTest>
 #include <QList>
-#include <Qt3DCore/qhandle.h>
+#include <Qt3DCore/private/qhandle_p.h>
 #include <Qt3DCore/private/qresourcemanager_p.h>
 
 class tst_DynamicArrayPolicy : public QObject
@@ -66,19 +66,25 @@ public:
     tst_ArrayResource() : m_value(0)
     {}
 
+    void cleanup() { m_value = 0; }
+
     QAtomicInt m_value;
 };
 
-typedef Qt3D::QHandle<tst_ArrayResource> tHandle;
-typedef Qt3D::QHandle<tst_ArrayResource, 4> tHandle4;
-typedef Qt3D::QHandle<tst_ArrayResource, 8> tHandle8;
-typedef Qt3D::QHandle<tst_ArrayResource, 16> tHandle16;
+QT_BEGIN_NAMESPACE
+Q_DECLARE_RESOURCE_INFO(tst_ArrayResource, Q_REQUIRES_CLEANUP)
+QT_END_NAMESPACE
+
+typedef Qt3DCore::QHandle<tst_ArrayResource> tHandle;
+typedef Qt3DCore::QHandle<tst_ArrayResource, 4> tHandle4;
+typedef Qt3DCore::QHandle<tst_ArrayResource, 8> tHandle8;
+typedef Qt3DCore::QHandle<tst_ArrayResource, 16> tHandle16;
 
 void tst_DynamicArrayPolicy::createResourcesManager()
 {
-    Qt3D::QResourceManager<tst_ArrayResource, int, 16> manager16;
-    Qt3D::QResourceManager<tst_ArrayResource, int, 4> manager4;
-    Qt3D::QResourceManager<tst_ArrayResource, int, 8> manager8;
+    Qt3DCore::QResourceManager<tst_ArrayResource, int, 16> manager16;
+    Qt3DCore::QResourceManager<tst_ArrayResource, int, 4> manager4;
+    Qt3DCore::QResourceManager<tst_ArrayResource, int, 8> manager8;
     QVERIFY(manager16.maxResourcesEntries() == 65535);
     QVERIFY(manager8.maxResourcesEntries() == 255);
     QVERIFY(manager4.maxResourcesEntries() == 15);
@@ -90,7 +96,7 @@ void tst_DynamicArrayPolicy::createResourcesManager()
  */
 void tst_DynamicArrayPolicy::acquireResources()
 {
-    Qt3D::QResourceManager<tst_ArrayResource, uint, 4> manager;
+    Qt3DCore::QResourceManager<tst_ArrayResource, uint, 4> manager;
 
     QList<tHandle4> handles;
 
@@ -110,7 +116,7 @@ void tst_DynamicArrayPolicy::acquireResources()
 void tst_DynamicArrayPolicy::getResources()
 {
 
-    Qt3D::QResourceManager<tst_ArrayResource, int, 8> manager;
+    Qt3DCore::QResourceManager<tst_ArrayResource, int, 8> manager;
     QList<tst_ArrayResource *> resources;
     QList<tHandle8> handles;
 
@@ -141,7 +147,7 @@ void tst_DynamicArrayPolicy::getResources()
  */
 void tst_DynamicArrayPolicy::registerResourcesResize()
 {
-    Qt3D::QResourceManager<tst_ArrayResource, uint, 16> manager;
+    Qt3DCore::QResourceManager<tst_ArrayResource, uint, 16> manager;
     QList<tHandle16> handles;
 
     for (uint i = 0; i < 2; i++) {
@@ -169,7 +175,7 @@ void tst_DynamicArrayPolicy::registerResourcesResize()
  */
 void tst_DynamicArrayPolicy::removeResource()
 {
-    Qt3D::QResourceManager<tst_ArrayResource, int> manager;
+    Qt3DCore::QResourceManager<tst_ArrayResource, int> manager;
 
     QList<tst_ArrayResource *> resources;
     QList<tHandle> handles;
@@ -193,7 +199,7 @@ void tst_DynamicArrayPolicy::removeResource()
  */
 void tst_DynamicArrayPolicy::resetResource()
 {
-    Qt3D::QResourceManager<tst_ArrayResource, uint> manager;
+    Qt3DCore::QResourceManager<tst_ArrayResource, uint> manager;
 
     QList<tst_ArrayResource *> resources;
     QList<tHandle16> handles;
@@ -220,7 +226,7 @@ void tst_DynamicArrayPolicy::resetResource()
 
 void tst_DynamicArrayPolicy::lookupResource()
 {
-    Qt3D::QResourceManager<tst_ArrayResource, uint> manager;
+    Qt3DCore::QResourceManager<tst_ArrayResource, uint> manager;
 
     QList<tst_ArrayResource *> resources;
     QList<tHandle16> handles;
@@ -245,7 +251,7 @@ void tst_DynamicArrayPolicy::lookupResource()
 
 void tst_DynamicArrayPolicy::releaseResource()
 {
-    Qt3D::QResourceManager<tst_ArrayResource, uint> manager;
+    Qt3DCore::QResourceManager<tst_ArrayResource, uint> manager;
     QList<tst_ArrayResource *> resources;
 
     for (int i = 0; i < 5; i++) {
@@ -267,11 +273,11 @@ class tst_Thread : public QThread
     Q_OBJECT
 public:
 
-    typedef Qt3D::QResourceManager<tst_ArrayResource,
+    typedef Qt3DCore::QResourceManager<tst_ArrayResource,
     int,
     16,
-    Qt3D::ArrayAllocatingPolicy,
-    Qt3D::ObjectLevelLockingPolicy> Manager;
+    Qt3DCore::ArrayAllocatingPolicy,
+    Qt3DCore::ObjectLevelLockingPolicy> Manager;
 
     tst_Thread()
         : QThread()
@@ -338,11 +344,11 @@ class tst_Thread2 : public QThread
     Q_OBJECT
 public:
 
-    typedef Qt3D::QResourceManager<tst_ArrayResource,
+    typedef Qt3DCore::QResourceManager<tst_ArrayResource,
     int,
     16,
-    Qt3D::ArrayAllocatingPolicy,
-    Qt3D::ObjectLevelLockingPolicy> Manager;
+    Qt3DCore::ArrayAllocatingPolicy,
+    Qt3DCore::ObjectLevelLockingPolicy> Manager;
 
     tst_Thread2(int releaseAbove = 7)
         : QThread()
@@ -414,7 +420,7 @@ void tst_DynamicArrayPolicy::heavyDutyMultiThreadedAccessRelease()
 
 void tst_DynamicArrayPolicy::maximumNumberOfResources()
 {
-    Qt3D::QResourceManager<tst_ArrayResource, uint> manager;
+    Qt3DCore::QResourceManager<tst_ArrayResource, uint> manager;
 
     QList<tst_ArrayResource *> resources;
     QList<tHandle16> handles;

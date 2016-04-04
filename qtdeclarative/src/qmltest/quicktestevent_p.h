@@ -34,6 +34,17 @@
 #ifndef QUICKTESTEVENT_P_H
 #define QUICKTESTEVENT_P_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include <QtQuickTest/quicktestglobal.h>
 #include <QtCore/qobject.h>
 #include <QtGui/QWindow>
@@ -73,7 +84,8 @@ public Q_SLOTS:
 #endif
 
 private:
-    QWindow *eventWindow();
+    QWindow *eventWindow(QObject *item = 0);
+    QWindow *activeWindow();
 };
 
 QT_END_NAMESPACE

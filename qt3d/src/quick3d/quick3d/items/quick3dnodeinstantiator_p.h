@@ -35,22 +35,33 @@
 **
 ****************************************************************************/
 
-#ifndef QT3D_QUICK_NODEINSTANTIATOR_H
-#define QT3D_QUICK_NODEINSTANTIATOR_H
+#ifndef QT3D_QUICK_NODEINSTANTIATOR_P_H
+#define QT3D_QUICK_NODEINSTANTIATOR_P_H
 
-#include <Qt3DQuick/qt3dquick_global.h>
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists for the convenience
+// of other Qt classes.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
+#include <Qt3DQuick/private/qt3dquick_global_p.h>
 #include <Qt3DCore/qnode.h>
 #include <QtQml/qqmlcomponent.h>
 #include <QtQml/qqmlparserstatus.h>
 
 QT_BEGIN_NAMESPACE
 
-namespace Qt3D {
+namespace Qt3DCore {
 namespace Quick {
 
 class Quick3DNodeInstantiatorPrivate;
 
-class QT3DQUICKSHARED_EXPORT Quick3DNodeInstantiator : public QNode, public QQmlParserStatus
+class QT3DQUICKSHARED_PRIVATE_EXPORT Quick3DNodeInstantiator : public QNode, public QQmlParserStatus
 {
     Q_OBJECT
 
@@ -111,8 +122,8 @@ private:
 };
 
 } // namespace Quick
-} // namespace Qt3D
+} // namespace Qt3DCore
 
 QT_END_NAMESPACE
 
-#endif // QT3D_QUICK_NODEINSTANTIATOR_H
+#endif // QT3D_QUICK_NODEINSTANTIATOR_P_H

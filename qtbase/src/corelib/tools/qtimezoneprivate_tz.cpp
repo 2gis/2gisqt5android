@@ -637,6 +637,7 @@ void QTzTimeZonePrivate::init(const QByteArray &ianaId)
     }
 
     // Now for each transition time calculate our rule and save them
+    m_tranTimes.reserve(tranList.count());
     foreach (const QTzTransition &tz_tran, tranList) {
         QTzTransitionTime tran;
         QTzTransitionRule rule;
@@ -916,6 +917,13 @@ QByteArray QTzTimeZonePrivate::systemTimeZoneId() const
     QByteArray ianaId = qgetenv("TZ");
     if (!ianaId.isEmpty() && ianaId.at(0) == ':')
         ianaId = ianaId.mid(1);
+
+    // The TZ value can be ":/etc/localtime" which libc considers
+    // to be a "default timezone", in which case it will be read
+    // by one of the blocks below, so unset it here so it is not
+    // considered as a valid/found ianaId
+    if (ianaId == "/etc/localtime")
+        ianaId.clear();
 
     // On Debian Etch and later /etc/localtime is real file with name held in /etc/timezone
     if (ianaId.isEmpty()) {

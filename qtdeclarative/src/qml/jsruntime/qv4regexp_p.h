@@ -33,6 +33,17 @@
 #ifndef QV4REGEXP_H
 #define QV4REGEXP_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include <QString>
 #include <QVector>
 
@@ -133,8 +144,7 @@ inline RegExpCacheKey::RegExpCacheKey(const RegExp::Data *re)
 inline uint qHash(const RegExpCacheKey& key, uint seed = 0) Q_DECL_NOTHROW
 { return qHash(key.pattern, seed); }
 
-// ### GC
-class RegExpCache : public QHash<RegExpCacheKey, Heap::RegExp*>
+class RegExpCache : public QHash<RegExpCacheKey, WeakValue>
 {
 public:
     ~RegExpCache();

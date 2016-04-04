@@ -36,7 +36,6 @@
 ****************************************************************************/
 
 #include "quick3dnodeinstantiator_p.h"
-#include "quick3dnodeinstantiator_p_p.h"
 
 #include <QtQml/QQmlContext>
 #include <QtQml/QQmlComponent>
@@ -44,14 +43,41 @@
 #include <QtQml/QQmlError>
 #include <QtQml/private/qqmlobjectmodel_p.h>
 #include <QtQml/private/qqmldelegatemodel_p.h>
+#include <private/qnode_p.h>
+#include <private/qqmlchangeset_p.h>
+#include <private/qqmlobjectmodel_p.h>
 
 QT_BEGIN_NAMESPACE
 
-namespace Qt3D {
+namespace Qt3DCore {
 namespace Quick {
 
+class Quick3DNodeInstantiatorPrivate : public QNodePrivate
+{
+    Q_DECLARE_PUBLIC(Quick3DNodeInstantiator)
+
+public:
+    Quick3DNodeInstantiatorPrivate();
+    ~Quick3DNodeInstantiatorPrivate();
+
+    void clear();
+    void regenerate();
+    void makeModel();
+    void _q_createdItem(int, QObject *);
+    void _q_modelUpdated(const QQmlChangeSet &, bool);
+
+    bool m_componentComplete:1;
+    bool m_effectiveReset:1;
+    bool m_active:1;
+    bool m_async:1;
+    bool m_ownModel:1;
+    QVariant m_model;
+    QQmlInstanceModel *m_instanceModel;
+    QQmlComponent *m_delegate;
+    QVector<QPointer<QObject> > m_objects;
+};
+
 /*!
-    \class Qt3D::Quick::Quick3DNodeInstantiatorPrivate
     \internal
 */
 Quick3DNodeInstantiatorPrivate::Quick3DNodeInstantiatorPrivate()
@@ -195,8 +221,7 @@ void Quick3DNodeInstantiatorPrivate::makeModel()
 
 /*!
     \qmltype NodeInstantiator
-    \instantiates Quick3DNodeInstantiator
-    \inqmlmodule Qt3D
+    \inqmlmodule Qt3D.Core
     \brief Dynamically creates nodes.
     \since 5.5
 
@@ -222,7 +247,7 @@ Quick3DNodeInstantiator::~Quick3DNodeInstantiator()
 }
 
 /*!
-    \qmlsignal Qt3D::NodeInstantiator::objectAdded(int index, QtObject node)
+    \qmlsignal Qt3D.Core::NodeInstantiator::objectAdded(int index, QtObject node)
 
     This signal is emitted when a node is added to the NodeInstantiator. The \a index
     parameter holds the index which the node has been given, and the \a node
@@ -232,11 +257,11 @@ Quick3DNodeInstantiator::~Quick3DNodeInstantiator()
 */
 
 /*!
-    \qmlsignal Qt3D::NodeInstantiator::objectRemoved(int index, QtObject object)
+    \qmlsignal Qt3D.Core::NodeInstantiator::objectRemoved(int index, QtObject object)
 
     This signal is emitted when an object is removed from the Instantiator. The \a index
     parameter holds the index which the object had been given, and the \a object
-    parameter holds the \l QtObject that has been removed.
+    parameter holds the \l [QML] {QtQml::}{QtObject} that has been removed.
 
     Do not keep a reference to \a object if it was created by this Instantiator, as
     in these cases it will be deleted shortly after the signal is handled.
@@ -244,7 +269,7 @@ Quick3DNodeInstantiator::~Quick3DNodeInstantiator()
     The corresponding handler is \c onObjectRemoved.
 */
 /*!
-    \qmlproperty bool Qt3D::NodeInstantiator::active
+    \qmlproperty bool Qt3D.Core::NodeInstantiator::active
 
     When active is \c true, and the delegate component is ready, the Instantiator will
     create objects according to the model. When active is \c false, no objects
@@ -269,7 +294,7 @@ void Quick3DNodeInstantiator::setActive(bool newVal)
 }
 
 /*!
-    \qmlproperty bool Qt3D::NodeInstantiator::asynchronous
+    \qmlproperty bool Qt3D.Core::NodeInstantiator::asynchronous
 
     When asynchronous is true the Instantiator will attempt to create objects
     asynchronously. This means that objects may not be available immediately,
@@ -277,7 +302,7 @@ void Quick3DNodeInstantiator::setActive(bool newVal)
 
     You can use the objectAdded signal to respond to items being created.
 
-    Default is false.
+    Default is \c false.
 */
 bool Quick3DNodeInstantiator::isAsync() const
 {
@@ -296,7 +321,7 @@ void Quick3DNodeInstantiator::setAsync(bool newVal)
 
 
 /*!
-    \qmlproperty int Qt3D::NodeInstantiator::count
+    \qmlproperty int Qt3D.Core::NodeInstantiator::count
     \readonly
 
     The number of objects the Instantiator is currently managing.
@@ -309,7 +334,7 @@ int Quick3DNodeInstantiator::count() const
 }
 
 /*!
-    \qmlproperty QtQml::Component Qt3D::NodeInstantiator::delegate
+    \qmlproperty QtQml::Component Qt3D.Core::NodeInstantiator::delegate
     \default
 
     The component used to create all objects.
@@ -346,7 +371,7 @@ void Quick3DNodeInstantiator::setDelegate(QQmlComponent *c)
 }
 
 /*!
-    \qmlproperty variant Qt3D::NodeInstantiator::model
+    \qmlproperty variant Qt3D.Core::NodeInstantiator::model
 
     This property can be set to any of the supported \l {qml-data-models}{data models}:
 
@@ -421,7 +446,7 @@ void Quick3DNodeInstantiator::setModel(const QVariant &v)
 }
 
 /*!
-    \qmlproperty QtQml::QtObject Qt3D::NodeInstantiator::object
+    \qmlproperty QtQml::QtObject Qt3D.Core::NodeInstantiator::object
     \readonly
 
     This is a reference to the first created object, intended as a convenience
@@ -436,7 +461,7 @@ QObject *Quick3DNodeInstantiator::object() const
 }
 
 /*!
-    \qmlmethod QtQml::QtObject Qt3D::NodeInstantiator::objectAt(int index)
+    \qmlmethod QtQml::QtObject Qt3D.Core::NodeInstantiator::objectAt(int index)
 
     Returns a reference to the object with the given \a index.
 */
@@ -492,7 +517,7 @@ void Quick3DNodeInstantiator::copy(const QNode *ref)
 }
 
 } // namespace Quick
-} // namespace Qt3D
+} // namespace Qt3DCore
 
 QT_END_NAMESPACE
 

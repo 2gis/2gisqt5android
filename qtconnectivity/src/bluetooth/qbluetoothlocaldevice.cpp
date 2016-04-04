@@ -97,19 +97,16 @@ QT_BEGIN_NAMESPACE
 
 */
 
-namespace {
-class LocalDeviceRegisterMetaTypes
+void registerQBluetoothLocalDeviceMetaType()
 {
-public:
-    LocalDeviceRegisterMetaTypes()
-    {
+    static bool initDone = false;
+    if (!initDone) {
         qRegisterMetaType<QBluetoothLocalDevice::HostMode>();
         qRegisterMetaType<QBluetoothLocalDevice::Pairing>();
         qRegisterMetaType<QBluetoothLocalDevice::Error>();
+        initDone = true;
     }
-} _registerLocalDeviceMetaTypes;
 }
-
 
 #ifndef QT_OSX_BLUETOOTH
 
@@ -281,7 +278,7 @@ bool QBluetoothLocalDevice::isValid() const
   \fn QBluetoothLocalDevice::requestPairing(const QBluetoothAddress &address, Pairing pairing)
 
   Set the \a pairing status with \a address.  The results are returned by the signal, pairingFinished().
-  On BlackBerry AuthorizedPaired is not possible and will have the same behavior as Paired.
+  On Android and OS X, AuthorizedPaired is not possible and will have the same behavior as Paired.
 
   On OS X, it is not possible to unpair a device. If Unpaired is requested, \l pairingFinished()
   is immediately emitted although the device remains paired. It is possible to request the pairing

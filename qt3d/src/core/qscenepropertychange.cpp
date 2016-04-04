@@ -36,23 +36,20 @@
 
 #include "qscenepropertychange.h"
 #include "qscenepropertychange_p.h"
-#include <Qt3DCore/qframeallocator.h>
+#include <Qt3DCore/private/qframeallocator_p.h>
 
 QT_BEGIN_NAMESPACE
 
-namespace Qt3D {
+namespace Qt3DCore {
 
 /*!
-    \class Qt3D::QScenePropertyChange
+    \class Qt3DCore::QScenePropertyChange
+    \inmodule Qt3DCore
 */
 
 QFrameAllocator *QScenePropertyChangePrivate::m_allocator = new QFrameAllocator(128, sizeof(QScenePropertyChange), sizeof(QScenePropertyChangePrivate) * 2);
 QMutex QScenePropertyChangePrivate::m_mutex;
 
-/*!
-    \class Qt3D::QScenePropertyChangePrivate
-    \internal
-*/
 QScenePropertyChangePrivate::QScenePropertyChangePrivate()
     : QSceneChangePrivate()
 {

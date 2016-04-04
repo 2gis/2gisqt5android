@@ -34,15 +34,15 @@
 **
 ****************************************************************************/
 
-#ifndef QT3D_COMPONENT_H
-#define QT3D_COMPONENT_H
+#ifndef QT3DCORE_COMPONENT_H
+#define QT3DCORE_COMPONENT_H
 
 #include <Qt3DCore/qnode.h>
 #include <Qt3DCore/qt3dcore_global.h>
 
 QT_BEGIN_NAMESPACE
 
-namespace Qt3D {
+namespace Qt3DCore {
 
 class QComponentPrivate;
 
@@ -50,34 +50,32 @@ class QT3DCORESHARED_EXPORT QComponent : public QNode
 {
     Q_OBJECT
     Q_PROPERTY(bool shareable READ shareable WRITE setShareable NOTIFY shareableChanged)
-    Q_PROPERTY(bool enabled READ isEnabled WRITE setEnabled NOTIFY enabledChanged)
 
 public:
     explicit QComponent(QNode *parent = 0);
     ~QComponent();
 
     bool shareable() const;
-    void setShareable(bool shareable);
-
-    bool isEnabled() const;
-    void setEnabled(bool enabled);
 
     QVector<QEntity *> entities() const;
+
+public Q_SLOTS:
+    void setShareable(bool shareable);
+
+Q_SIGNALS:
+    void shareableChanged(bool shareable);
+    void enabledChanged(bool enabled);
 
 protected:
     QComponent(QComponentPrivate &dd, QNode *parent = 0);
     void copy(const QNode *ref) Q_DECL_OVERRIDE;
 
-Q_SIGNALS:
-    void shareableChanged();
-    void enabledChanged();
-
 private:
     Q_DECLARE_PRIVATE(QComponent)
 };
 
-} // namespace Qt3D
+} // namespace Qt3DCore
 
 QT_END_NAMESPACE
 
-#endif // QT3D_COMPONENT_H
+#endif // QT3DCORE_COMPONENT_H

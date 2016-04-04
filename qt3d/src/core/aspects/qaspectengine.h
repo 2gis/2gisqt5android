@@ -34,16 +34,17 @@
 **
 ****************************************************************************/
 
-#ifndef QT3D_QASPECTENGINE_H
-#define QT3D_QASPECTENGINE_H
+#ifndef QT3DCORE_QASPECTENGINE_H
+#define QT3DCORE_QASPECTENGINE_H
 
 #include <QObject>
-#include <Qt3DCore/QAspectFactory>
 #include <QList>
+
+#include <Qt3DCore/qt3dcore_global.h>
 
 QT_BEGIN_NAMESPACE
 
-namespace Qt3D {
+namespace Qt3DCore {
 
 class QAbstractAspect;
 class QAspectThread;
@@ -58,14 +59,8 @@ public:
     explicit QAspectEngine(QObject *parent = 0);
     ~QAspectEngine();
 
-    void initialize();
-    void shutdown();
-
     void setRootEntity(QEntity *root);
     QSharedPointer<QEntity> rootEntity() const;
-
-    QAspectFactory aspectFactory() const;
-    void setAspectFactory(const QAspectFactory &factory);
 
     void setData(const QVariantMap &data);
     void registerAspect(QAbstractAspect *aspect);
@@ -73,17 +68,15 @@ public:
 
     QList<QAbstractAspect*> aspects() const;
 
-protected:
-    Q_DECLARE_PRIVATE(QAspectEngine)
-    QAspectEngine(QAspectEnginePrivate &dd, QObject *parent = 0);
+    QVariant executeCommand(const QString &command);
 
 private:
-    void initNodeTree(QNode *node);
+    Q_DECLARE_PRIVATE(QAspectEngine)
 };
 
-} // namespace Qt3D
+} // namespace Qt3DCore
 
 QT_END_NAMESPACE
 
 
-#endif // QT3D_QASPECTENGINE_H
+#endif // QT3DCORE_QASPECTENGINE_H

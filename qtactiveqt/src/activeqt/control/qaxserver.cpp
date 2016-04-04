@@ -248,7 +248,7 @@ HRESULT UpdateRegistry(BOOL bRegister)
     // we try to create the ActiveX widgets later on...
     bool delete_qApp = false;
     if (!qApp) {
-        int argc = 0;
+        static int argc = 0; // static lifetime, since it's passed as reference to QApplication, which has a lifetime exceeding the stack frame
         (void)new QApplication(argc, 0);
         delete_qApp = true;
     }
@@ -330,7 +330,7 @@ HRESULT UpdateRegistry(BOOL bRegister)
                         QString extension;
                         while (mime.contains(QLatin1Char(':'))) {
                             extension = mime.mid(mime.lastIndexOf(QLatin1Char(':')) + 1);
-                            mime.chop(extension.length() - 1);
+                            mime.chop(extension.length() + 1);
                             // Prepend '.' before extension, if required.
                             extension = extension.trimmed();
                             if (!extension.startsWith(dot))
@@ -1147,7 +1147,7 @@ extern "C" HRESULT __stdcall DumpIDL(const QString &outfile, const QString &ver)
     // dummy application to create widgets
     bool delete_qApp = false;
     if (!qApp) {
-        int argc=0;
+        static int argc = 0; // static lifetime, since it's passed as reference to QApplication, which has a lifetime exceeding the stack frame
         (void)new QApplication(argc, 0);
         delete_qApp = true;
     }

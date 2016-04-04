@@ -576,7 +576,6 @@ void QQuickLoader::setSource(QQmlV4Function *args)
     if (!ipv->isUndefined()) {
         d->disposeInitialPropertyValues();
         d->initialPropertyValues.set(args->v4engine(), ipv);
-        d->qmlGlobalForIpv.set(args->v4engine(), args->qmlGlobal());
     }
 
     setSource(sourceUrl, false); // already cleared and set ipv above.
@@ -642,11 +641,11 @@ void QQuickLoaderPrivate::setInitialState(QObject *obj)
 
     QQmlComponentPrivate *d = QQmlComponentPrivate::get(component);
     Q_ASSERT(d && d->engine);
-    QV4::ExecutionEngine *v4 = qmlGlobalForIpv.engine();
+    QV4::ExecutionEngine *v4 = QV8Engine::getV4(d->engine);
     Q_ASSERT(v4);
     QV4::Scope scope(v4);
     QV4::ScopedValue ipv(scope, initialPropertyValues.value());
-    d->initializeObjectWithInitialProperties(*qmlGlobalForIpv.valueRef(), ipv, obj);
+    d->initializeObjectWithInitialProperties(ipv, obj);
 }
 
 void QQuickLoaderIncubator::statusChanged(Status status)
@@ -932,7 +931,7 @@ QUrl QQuickLoaderPrivate::resolveSourceUrl(QQmlV4Function *args)
     if (arg.isEmpty())
         return QUrl();
 
-    QQmlContextData *context = args->context();
+    QQmlContextData *context = scope.engine->callingQmlContext();
     Q_ASSERT(context);
     return context->resolvedUrl(QUrl(arg));
 }
@@ -943,7 +942,7 @@ QV4::ReturnedValue QQuickLoaderPrivate::extractInitialPropertyValues(QQmlV4Funct
     QV4::ScopedValue valuemap(scope, QV4::Primitive::undefinedValue());
     if (args->length() >= 2) {
         QV4::ScopedValue v(scope, (*args)[1]);
-        if (!v->isObject() || v->asArrayObject()) {
+        if (!v->isObject() || v->as<QV4::ArrayObject>()) {
             *error = true;
             qmlInfo(loader) << QQuickLoader::tr("setSource: value is not an object");
         } else {

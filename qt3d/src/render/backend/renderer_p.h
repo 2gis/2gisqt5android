@@ -35,14 +35,28 @@
 **
 ****************************************************************************/
 
-#ifndef QT3D_RENDER_RENDERER_H
-#define QT3D_RENDER_RENDERER_H
+#ifndef QT3DRENDER_RENDER_RENDERER_H
+#define QT3DRENDER_RENDER_RENDERER_H
 
-#include <Qt3DRenderer/qrenderaspect.h>
-#include <Qt3DRenderer/qtechnique.h>
-#include <Qt3DRenderer/private/quniformvalue_p.h>
-#include <Qt3DRenderer/private/handle_types_p.h>
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists for the convenience
+// of other Qt classes.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
+#include <Qt3DRender/qrenderaspect.h>
+#include <Qt3DRender/qtechnique.h>
+#include <Qt3DRender/private/quniformvalue_p.h>
+#include <Qt3DRender/private/handle_types_p.h>
+#include <Qt3DRender/private/abstractrenderer_p.h>
 #include <Qt3DCore/qaspectjob.h>
+#include <Qt3DRender/private/qt3drender_global_p.h>
+#include <Qt3DRender/private/pickboundingvolumejob_p.h>
 
 #include <QHash>
 #include <QMatrix4x4>
@@ -62,126 +76,100 @@ QT_BEGIN_NAMESPACE
 
 class QSurface;
 class QOpenGLDebugLogger;
+class QMouseEvent;
 
-namespace Qt3D {
+namespace Qt3DCore {
+class QEntity;
+class QFrameAllocator;
+class QEventFilterService;
+}
+
+namespace Qt3DRender {
 
 class QCamera;
-class QEntity;
 class QMaterial;
 class QShaderProgram;
 class QMesh;
 class QRenderPass;
 class QAbstractShapeMesh;
-class QFrameAllocator;
-class QOpenGLFilter;
-class AbstractSceneParser;
+class QGraphicsApiFilter;
+class QAbstractSceneParser;
 
 namespace Render {
 
-class RenderCameraLens;
-class QGraphicsContext;
+class CameraLens;
+class GraphicsContext;
 class FrameGraphNode;
-class RenderMaterial;
-class RenderTechnique;
-class RenderShader;
-class RenderEntity;
+class Material;
+class Technique;
+class Shader;
+class Entity;
 class RenderCommand;
-class CameraManager;
-class EntityManager;
 class RenderQueue;
 class RenderView;
-class MaterialManager;
-class MatrixManager;
-class VAOManager;
-class ShaderManager;
-class TechniqueManager;
-class EffectManager;
-class RenderPassManager;
-class RenderEffect;
-class RenderRenderPass;
-class TextureManager;
-class TextureDataManager;
-class LayerManager;
-class LightManager;
+class Effect;
+class RenderPass;
 class RenderThread;
-class CriterionManager;
-class FrameGraphManager;
-class TransformManager;
 class RenderStateSet;
-class RenderTargetManager;
-class SceneManager;
-class AttachmentManager;
-class SortCriterionManager;
-class ParameterManager;
-class ShaderDataManager;
-class UBOManager;
-class TextureImageManager;
 class VSyncFrameAdvanceService;
-class BufferManager;
-class AttributeManager;
-class GeometryManager;
-class GeometryRendererManager;
+class PickEventFilter;
+class NodeManagers;
 
-class Renderer
+class QT3DRENDERSHARED_PRIVATE_EXPORT Renderer : public AbstractRenderer
 {
 public:
     explicit Renderer(QRenderAspect::RenderType type);
     ~Renderer();
 
-    void setQRenderAspect(QRenderAspect *aspect) { m_rendererAspect = aspect; }
-    QRenderAspect *rendererAspect() const { return m_rendererAspect; }
+    API api() const Q_DECL_OVERRIDE { return AbstractRenderer::OpenGL; }
 
-    void createAllocators();
-    void destroyAllocators();
+    qint64 time() const Q_DECL_OVERRIDE;
+    void setTime(qint64 time) Q_DECL_OVERRIDE;
 
-    QFrameAllocator *currentFrameAllocator();
+    void setSurface(QSurface *s) Q_DECL_OVERRIDE;
+    void setNodeManagers(NodeManagers *managers) Q_DECL_OVERRIDE { m_nodesManager = managers; }
+    void setServices(Qt3DCore::QServiceLocator *services) Q_DECL_OVERRIDE { m_services = services; }
+    void setSurfaceExposed(bool exposed) Q_DECL_OVERRIDE;
 
-    QThreadStorage<QFrameAllocator *> *tlsAllocators();
+    QSurface *surface() const Q_DECL_OVERRIDE { return m_surface; }
+    NodeManagers *nodeManagers() const Q_DECL_OVERRIDE;
+    Qt3DCore::QServiceLocator *services() const Q_DECL_OVERRIDE { return m_services; }
 
-    void setFrameGraphRoot(const QNodeId &fgRoot);
-    Render::FrameGraphNode *frameGraphRoot() const;
+    void initialize() Q_DECL_OVERRIDE;
+    void shutdown() Q_DECL_OVERRIDE;
+    void createAllocators(Qt3DCore::QAbstractAspectJobManager *jobManager) Q_DECL_OVERRIDE;
+    void destroyAllocators(Qt3DCore::QAbstractAspectJobManager *jobManager) Q_DECL_OVERRIDE;
 
-    void setSceneGraphRoot(RenderEntity *sgRoot);
-    RenderEntity *renderSceneRoot() const { return m_renderSceneRoot; }
+    void render() Q_DECL_OVERRIDE;
+    void doRender() Q_DECL_OVERRIDE;
 
-    void render();
-    void doRender();
+    bool isRunning() const Q_DECL_OVERRIDE { return m_running.load(); }
 
-    QVector<QAspectJobPtr> createRenderBinJobs();
-    QVector<QAspectJobPtr> createRenderBufferJobs();
-    QVector<QAspectJobPtr> createGeometryRendererJobs();
-    QAspectJobPtr createRenderViewJob(FrameGraphNode *node, int submitOrderIndex);
+    void setSceneRoot(Qt3DCore::QBackendNodeFactory *factory, Entity *sgRoot) Q_DECL_OVERRIDE;
+    Entity *sceneRoot() const Q_DECL_OVERRIDE { return m_renderSceneRoot; }
+
+    void setFrameGraphRoot(const Qt3DCore::QNodeId fgRootId) Q_DECL_OVERRIDE;
+    FrameGraphNode *frameGraphRoot() const Q_DECL_OVERRIDE;
+
+    QVector<Qt3DCore::QAspectJobPtr> renderBinJobs() Q_DECL_OVERRIDE;
+    Qt3DCore::QAspectJobPtr pickBoundingVolumeJob() Q_DECL_OVERRIDE;
+
+    Qt3DCore::QAspectJobPtr createRenderViewJob(FrameGraphNode *node, int submitOrderIndex);
+
+    Qt3DCore::QAbstractFrameAdvanceService *frameAdvanceService() const Q_DECL_OVERRIDE;
+
+    void registerEventFilter(Qt3DCore::QEventFilterService *service) Q_DECL_OVERRIDE;
+
     void executeCommands(const QVector<RenderCommand *> &commands);
-    RenderAttribute *updateBuffersAndAttributes(RenderGeometry *geometry, RenderCommand *command, GLsizei &count, bool forceUpdate);
-    void addAllocator(QFrameAllocator *allocator);
+    Attribute *updateBuffersAndAttributes(Geometry *geometry, RenderCommand *command, GLsizei &count, bool forceUpdate);
 
-    inline CameraManager *cameraManager() const { return m_cameraManager; }
-    inline EntityManager *renderNodesManager() const { return m_renderNodesManager; }
-    inline MaterialManager *materialManager() const { return m_materialManager; }
-    inline MatrixManager *worldMatrixManager() const { return m_worldMatrixManager; }
-    inline VAOManager *vaoManager() const { return m_vaoManager; }
-    inline ShaderManager *shaderManager() const { return m_shaderManager; }
-    inline TechniqueManager *techniqueManager() const { return m_techniqueManager; }
-    inline EffectManager *effectManager() const { return m_effectManager; }
-    inline RenderPassManager *renderPassManager() const { return m_renderPassManager; }
-    inline TextureManager *textureManager() const { return m_textureManager; }
-    inline TextureDataManager *textureDataManager() const { return m_textureDataManager; }
-    inline LayerManager *layerManager() const { return m_layerManager; }
-    inline CriterionManager *criterionManager() const { return m_criterionManager; }
-    inline FrameGraphManager *frameGraphManager() const { return m_frameGraphManager; }
-    inline TransformManager *transformManager() const { return m_transformManager; }
-    inline RenderTargetManager *renderTargetManager() const { return m_renderTargetManager; }
-    inline SceneManager *sceneManager() const { return m_sceneManager; }
-    inline AttachmentManager *attachmentManager() const { return m_attachmentManager; }
-    inline SortCriterionManager *sortCriterionManager() const { return m_sortCriterionManager; }
-    inline ParameterManager *parameterManager() const { return m_parameterManager; }
-    inline ShaderDataManager *shaderDataManager() const { return m_shaderDataManager; }
-    inline UBOManager *uboManager() const { return m_uboManager; }
-    inline TextureImageManager *textureImageManager() const { return m_textureImageManager; }
-    inline BufferManager *bufferManager() const { return m_bufferManager; }
-    inline AttributeManager *attributeManager() const { return m_attributeManager; }
-    inline GeometryManager *geometryManager() const { return m_geometryManager; }
-    inline GeometryRendererManager *geometryRendererManager() const { return m_geometryRendererManager; }
+    void setOpenGLContext(QOpenGLContext *context);
+    QGraphicsApiFilter *contextInfo() const;
+
+    void addAllocator(Qt3DCore::QFrameAllocator *allocator);
+
+    Qt3DCore::QFrameAllocator *currentFrameAllocator();
+    QThreadStorage<Qt3DCore::QFrameAllocator *> *tlsAllocators();
 
     inline HMaterial defaultMaterialHandle() const { return m_defaultMaterialHandle; }
     inline HEffect defaultEffectHandle() const { return m_defaultEffectHandle; }
@@ -189,35 +177,34 @@ public:
     inline HRenderPass defaultRenderPassHandle() const { return m_defaultRenderPassHandle; }
     inline RenderStateSet *defaultRenderState() const { return m_defaultRenderStateSet; }
 
-    inline QList<AbstractSceneParser *> sceneParsers() const { return m_sceneParsers; }
-    inline VSyncFrameAdvanceService *vsyncFrameAdvanceService() const { return m_vsyncFrameAdvanceService.data(); }
 
-    QOpenGLFilter *contextInfo() const;
+    QList<QMouseEvent> pendingPickingEvents() const;
 
-    void setSurface(QSurface *s);
 
     void enqueueRenderView(RenderView *renderView, int submitOrder);
-    void submitRenderViews();
-
-    void initialize(QOpenGLContext *context = Q_NULLPTR);
-    void shutdown();
+    bool submitRenderViews();
 
     QMutex* mutex() { return &m_mutex; }
-    bool isRunning() const { return m_running.load(); }
 
+
+#ifdef QT3D_RENDER_UNIT_TESTS
+public:
+#else
 private:
+#endif
     bool canRender() const;
 
-    QRenderAspect *m_rendererAspect;
+    Qt3DCore::QServiceLocator *m_services;
+    NodeManagers *m_nodesManager;
 
     // Frame graph root
-    QNodeId m_frameGraphRootUuid;
+    Qt3DCore::QNodeId m_frameGraphRootUuid;
 
-    RenderEntity *m_renderSceneRoot;
+    Entity *m_renderSceneRoot;
 
-    QHash<QMaterial*, RenderMaterial*> m_materialHash;
-    QHash<QTechnique *, RenderTechnique*> m_techniqueHash;
-    QHash<QShaderProgram*, RenderShader*> m_shaderHash;
+    QHash<QMaterial*, Material*> m_materialHash;
+    QHash<QTechnique *, Technique*> m_techniqueHash;
+    QHash<QShaderProgram*, Shader*> m_shaderHash;
 
     QMaterial* m_defaultMaterial;
     QTechnique* m_defaultTechnique;
@@ -229,40 +216,14 @@ private:
 
     // Fail safe values that we can use if a RenderCommand
     // is missing a shader
-    RenderShader *m_defaultRenderShader;
+    Shader *m_defaultRenderShader;
     RenderStateSet *m_defaultRenderStateSet;
     QHash<QString, QString> m_defaultParameterToGLSLAttributeNames;
     QUniformPack m_defaultUniformPack;
 
-    QScopedPointer<QGraphicsContext> m_graphicsContext;
+    QScopedPointer<GraphicsContext> m_graphicsContext;
     QSurface *m_surface;
-    CameraManager *m_cameraManager;
-    EntityManager *m_renderNodesManager;
-    MaterialManager *m_materialManager;
-    MatrixManager *m_worldMatrixManager;
-    VAOManager *m_vaoManager;
-    ShaderManager *m_shaderManager;
-    TechniqueManager *m_techniqueManager;
-    EffectManager *m_effectManager;
-    RenderPassManager *m_renderPassManager;
-    TextureManager *m_textureManager;
-    TextureDataManager *m_textureDataManager;
-    LayerManager *m_layerManager;
-    CriterionManager *m_criterionManager;
-    FrameGraphManager *m_frameGraphManager;
-    TransformManager *m_transformManager;
-    RenderTargetManager *m_renderTargetManager;
-    SceneManager *m_sceneManager;
-    AttachmentManager *m_attachmentManager;
-    SortCriterionManager *m_sortCriterionManager;
-    ParameterManager *m_parameterManager;
-    ShaderDataManager *m_shaderDataManager;
-    UBOManager *m_uboManager;
-    TextureImageManager *m_textureImageManager;
-    BufferManager *m_bufferManager;
-    AttributeManager *m_attributeManager;
-    GeometryManager *m_geometryManager;
-    GeometryRendererManager *m_geometryRendererManager;
+
 
     RenderQueue *m_renderQueue;
     QScopedPointer<RenderThread> m_renderThread;
@@ -270,7 +231,6 @@ private:
 
     void buildDefaultMaterial();
     void buildDefaultTechnique();
-    void loadSceneParsers();
 
     QMutex m_mutex;
     QSemaphore m_submitRenderViewsSemaphore;
@@ -279,21 +239,26 @@ private:
 
     static void createThreadLocalAllocator(void *renderer);
     static void destroyThreadLocalAllocator(void *renderer);
-    QThreadStorage<QFrameAllocator *> m_tlsAllocators;
+    QThreadStorage<Qt3DCore::QFrameAllocator *> m_tlsAllocators;
 
     QAtomicInt m_running;
 
     QScopedPointer<QOpenGLDebugLogger> m_debugLogger;
-    QList<AbstractSceneParser *> m_sceneParsers;
-    QVector<QFrameAllocator *> m_allocators;
+    QScopedPointer<PickEventFilter> m_pickEventFilter;
+    QVector<Qt3DCore::QFrameAllocator *> m_allocators;
 
-    QVector<RenderAttribute *> m_dirtyAttributes;
-    QVector<RenderGeometry *> m_dirtyGeometry;
+    QVector<Attribute *> m_dirtyAttributes;
+    QVector<Geometry *> m_dirtyGeometry;
+    QAtomicInt m_exposed;
+    QOpenGLContext *m_glContext;
+    PickBoundingVolumeJobPtr m_pickBoundingVolumeJob;
+
+    qint64 m_time;
 };
 
 } // namespace Render
-} // namespace Qt3D
+} // namespace Qt3DRender
 
 QT_END_NAMESPACE
 
-#endif // QT3D_RENDER_RENDERER_H
+#endif // QT3DRENDER_RENDER_RENDERER_H

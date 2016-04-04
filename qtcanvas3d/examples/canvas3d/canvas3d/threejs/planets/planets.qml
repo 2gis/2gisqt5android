@@ -91,9 +91,7 @@ Item {
             info.opacity = 0.5;
         }
 
-        GLCode.setOldPlanet();
-        GLCode.setLookAtOffset();
-        GLCode.setCameraOffset();
+        GLCode.prepareFocusedPlanetAnimation();
 
         lookAtOffsetAnimation.restart();
         cameraOffsetAnimation.restart();

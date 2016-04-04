@@ -33,7 +33,6 @@
 
 #include "qcocoaintegration.h"
 
-#include "qcocoaautoreleasepool.h"
 #include "qcocoawindow.h"
 #include "qcocoabackingstore.h"
 #include "qcocoanativeinterface.h"
@@ -48,7 +47,9 @@
 #include "qcocoamimetypes.h"
 #include "qcocoaaccessibility.h"
 
+#include <qpa/qplatforminputcontextfactory_p.h>
 #include <qpa/qplatformaccessibility.h>
+#include <qpa/qplatforminputcontextfactory_p.h>
 #include <QtCore/qcoreapplication.h>
 
 #include <IOKit/graphics/IOGraphicsLib.h>
@@ -137,9 +138,19 @@ void QCocoaScreen::updateGeometry()
 
 qreal QCocoaScreen::devicePixelRatio() const
 {
-    QCocoaAutoReleasePool pool;
+    QMacAutoReleasePool pool;
     NSScreen * screen = osScreen();
     return qreal(screen ? [screen backingScaleFactor] : 1.0);
+}
+
+QPlatformScreen::SubpixelAntialiasingType QCocoaScreen::subpixelAntialiasingTypeHint() const
+{
+    QPlatformScreen::SubpixelAntialiasingType type = QPlatformScreen::subpixelAntialiasingTypeHint();
+    if (type == QPlatformScreen::Subpixel_None) {
+        // Every OSX machine has RGB pixels unless a peculiar or rotated non-Apple screen is attached
+        type = QPlatformScreen::Subpixel_RGB;
+    }
+    return type;
 }
 
 QWindow *QCocoaScreen::topLevelAt(const QPoint &point) const
@@ -244,11 +255,25 @@ QPixmap QCocoaScreen::grabWindow(WId window, int x, int y, int width, int height
     return windowPixmap;
 }
 
+static QCocoaIntegration::Options parseOptions(const QStringList &paramList)
+{
+    QCocoaIntegration::Options options;
+    foreach (const QString &param, paramList) {
+#ifndef QT_NO_FREETYPE
+        if (param == QLatin1String("fontengine=freetype"))
+            options |= QCocoaIntegration::UseFreeTypeFontEngine;
+        else
+#endif
+            qWarning() << "Unknown option" << param;
+    }
+    return options;
+}
+
 QCocoaIntegration *QCocoaIntegration::mInstance = 0;
 
-QCocoaIntegration::QCocoaIntegration()
-    : mFontDb(new QCoreTextFontDatabase())
-    , mInputContext(new QCocoaInputContext)
+QCocoaIntegration::QCocoaIntegration(const QStringList &paramList)
+    : mOptions(parseOptions(paramList))
+    , mFontDb(new QCoreTextFontDatabase(mOptions.testFlag(UseFreeTypeFontEngine)))
 #ifndef QT_NO_ACCESSIBILITY
     , mAccessibility(new QCocoaAccessibility)
 #endif
@@ -262,8 +287,12 @@ QCocoaIntegration::QCocoaIntegration()
         qWarning("Creating multiple Cocoa platform integrations is not supported");
     mInstance = this;
 
+    QString icStr = QPlatformInputContextFactory::requested();
+    icStr.isNull() ? mInputContext.reset(new QCocoaInputContext)
+                   : mInputContext.reset(QPlatformInputContextFactory::create(icStr));
+
     initResources();
-    QCocoaAutoReleasePool pool;
+    QMacAutoReleasePool pool;
 
     qApp->setAttribute(Qt::AA_DontUseNativeMenuBar, false);
 
@@ -314,7 +343,7 @@ QCocoaIntegration::~QCocoaIntegration()
 
     qt_resetNSApplicationSendEvent();
 
-    QCocoaAutoReleasePool pool;
+    QMacAutoReleasePool pool;
     if (!QCoreApplication::testAttribute(Qt::AA_MacPluginApplication)) {
         // remove the apple event handlers installed by QCocoaApplicationDelegate
         QCocoaApplicationDelegate *delegate = [QCocoaApplicationDelegate sharedDelegate];
@@ -340,6 +369,11 @@ QCocoaIntegration::~QCocoaIntegration()
 QCocoaIntegration *QCocoaIntegration::instance()
 {
     return mInstance;
+}
+
+QCocoaIntegration::Options QCocoaIntegration::options() const
+{
+    return mOptions;
 }
 
 /*!
@@ -463,19 +497,17 @@ QCocoaNativeInterface *QCocoaIntegration::nativeInterface() const
     return mNativeInterface.data();
 }
 
-QCocoaInputContext *QCocoaIntegration::inputContext() const
+QPlatformInputContext *QCocoaIntegration::inputContext() const
 {
     return mInputContext.data();
 }
 
+#ifndef QT_NO_ACCESSIBILITY
 QCocoaAccessibility *QCocoaIntegration::accessibility() const
 {
-#ifndef QT_NO_ACCESSIBILITY
     return mAccessibility.data();
-#else
-    return 0;
-#endif
 }
+#endif
 
 QCocoaClipboard *QCocoaIntegration::clipboard() const
 {

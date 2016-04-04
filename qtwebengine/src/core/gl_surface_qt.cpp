@@ -44,7 +44,7 @@
 
 #include <QGuiApplication>
 #include "gl_context_qt.h"
-#include "qtwebenginecoreglobal.h"
+#include "qtwebenginecoreglobal_p.h"
 
 #include "base/logging.h"
 #include "base/memory/scoped_ptr.h"
@@ -439,11 +439,11 @@ bool GLSurfaceQt::IsOffscreen()
     return true;
 }
 
-bool GLSurfaceQt::SwapBuffers()
+gfx::SwapResult GLSurfaceQt::SwapBuffers()
 {
     LOG(ERROR) << "Attempted to call SwapBuffers on a pbuffer.";
     Q_UNREACHABLE();
-    return false;
+    return gfx::SwapResult::SWAP_FAILED;
 }
 
 gfx::Size GLSurfaceQt::GetSize()
@@ -531,6 +531,17 @@ GLSurface::CreateViewGLSurface(gfx::AcceleratedWidget window)
 {
     QT_NOT_USED
     return NULL;
+}
+
+std::string DriverEGL::GetPlatformExtensions()
+{
+    EGLDisplay display = GLContextHelper::getEGLDisplay();
+    if (display == EGL_NO_DISPLAY)
+        return "";
+
+    DCHECK(g_driver_egl.fn.eglQueryStringFn);
+    const char* str = g_driver_egl.fn.eglQueryStringFn(display, EGL_EXTENSIONS);
+    return str ? std::string(str) : "";
 }
 
 }  // namespace gfx

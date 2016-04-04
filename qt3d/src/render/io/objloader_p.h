@@ -37,6 +37,17 @@
 #ifndef OBJLOADER_H
 #define OBJLOADER_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists for the convenience
+// of other Qt classes.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include <QVector>
 #include <QVector2D>
 #include <QVector3D>
@@ -49,7 +60,7 @@ QT_BEGIN_NAMESPACE
 class QString;
 class QIODevice;
 
-namespace Qt3D {
+namespace Qt3DRender {
 
 class QGeometry;
 
@@ -97,8 +108,8 @@ public:
     bool hasTextureCoordinates() const { return !m_texCoords.isEmpty(); }
     bool hasTangents() const { return !m_tangents.isEmpty(); }
 
-    bool load( const QString& fileName );
-    bool load( ::QIODevice* ioDev );
+    bool load( const QString& fileName, const QString& subMesh = QString() );
+    bool load( ::QIODevice* ioDev, const QString& subMesh = QString() );
 
     QVector<QVector3D> vertices() const { return m_points; }
     QVector<QVector3D> normals() const { return m_normals; }

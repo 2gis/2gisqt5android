@@ -36,10 +36,11 @@
 
 #include <QtTest/QtTest>
 #include <Qt3DCore/qentity.h>
+#include <Qt3DCore/private/qentity_p.h>
 #include <Qt3DCore/qcomponent.h>
 #include <QtCore/qscopedpointer.h>
 
-using namespace Qt3D;
+using namespace Qt3DCore;
 
 class tst_Entity : public QObject
 {
@@ -66,11 +67,11 @@ private slots:
     void verifyCopy();
 };
 
-class MyQComponent : public Qt3D::QComponent
+class MyQComponent : public Qt3DCore::QComponent
 {
     Q_OBJECT
 public:
-    explicit MyQComponent(Qt3D::QNode *parent = 0)
+    explicit MyQComponent(Qt3DCore::QNode *parent = 0)
         : QComponent(parent)
     {}
 
@@ -84,14 +85,14 @@ protected:
 };
 
 
-class MyEntity : public Qt3D::QEntity
+class MyEntity : public Qt3DCore::QEntity
 {
 public:
-    explicit MyEntity(Qt3D::QNode *parent = 0)
+    explicit MyEntity(Qt3DCore::QNode *parent = 0)
         : QEntity(parent)
     {}
 
-    void makeCopyOf(Qt3D::QEntity *other)
+    void makeCopyOf(Qt3DCore::QEntity *other)
     {
         QEntity::copy(other);
     }
@@ -119,7 +120,7 @@ void tst_Entity::constructionDestruction()
 void tst_Entity::addComponentSingleParentSingleAggregation()
 {
     // GIVEN
-    QScopedPointer<Qt3D::QEntity> entity(new QEntity());
+    QScopedPointer<Qt3DCore::QEntity> entity(new QEntity());
     MyQComponent *comp = new MyQComponent(entity.data());
     QCoreApplication::processEvents();
 
@@ -142,8 +143,8 @@ void tst_Entity::addComponentSingleParentSingleAggregation()
 void tst_Entity::addComponentSingleParentSeveralAggregations()
 {
     // GIVEN
-    QScopedPointer<Qt3D::QEntity> entity1(new QEntity());
-    QScopedPointer<Qt3D::QEntity> entity2(new QEntity());
+    QScopedPointer<Qt3DCore::QEntity> entity1(new QEntity());
+    QScopedPointer<Qt3DCore::QEntity> entity2(new QEntity());
 
     MyQComponent *comp1 = new MyQComponent(entity1.data());
     MyQComponent *comp2 = new MyQComponent(entity1.data());
@@ -193,8 +194,8 @@ void tst_Entity::addComponentSingleParentSeveralAggregations()
 void tst_Entity::addComponentsSeveralParentsSingleAggregations()
 {
     // GIVEN
-    QScopedPointer<Qt3D::QEntity> entity1(new QEntity());
-    QScopedPointer<Qt3D::QEntity> entity2(new QEntity());
+    QScopedPointer<Qt3DCore::QEntity> entity1(new QEntity());
+    QScopedPointer<Qt3DCore::QEntity> entity2(new QEntity());
 
     MyQComponent *comp1 = new MyQComponent(entity1.data());
     MyQComponent *comp2 = new MyQComponent(entity1.data());
@@ -241,8 +242,8 @@ void tst_Entity::addComponentsSeveralParentsSingleAggregations()
 void tst_Entity::addComponentsSeveralParentsSeveralAggregations()
 {
     // GIVEN
-    QScopedPointer<Qt3D::QEntity> entity1(new QEntity());
-    QScopedPointer<Qt3D::QEntity> entity2(new QEntity());
+    QScopedPointer<Qt3DCore::QEntity> entity1(new QEntity());
+    QScopedPointer<Qt3DCore::QEntity> entity2(new QEntity());
 
     MyQComponent *comp1 = new MyQComponent(entity1.data());
     MyQComponent *comp2 = new MyQComponent(entity1.data());
@@ -292,7 +293,7 @@ void tst_Entity::addComponentsSeveralParentsSeveralAggregations()
 void tst_Entity::removeComponentSingleParentSingleAggregation()
 {
     // GIVEN
-    QScopedPointer<Qt3D::QEntity> entity(new QEntity());
+    QScopedPointer<Qt3DCore::QEntity> entity(new QEntity());
     MyQComponent *comp = new MyQComponent(entity.data());
     QCoreApplication::processEvents();
     entity->addComponent(comp);
@@ -316,8 +317,8 @@ void tst_Entity::removeComponentSingleParentSingleAggregation()
 void tst_Entity::removeComponentSingleParentSeveralAggregations()
 {
     // GIVEN
-    QScopedPointer<Qt3D::QEntity> entity1(new QEntity());
-    QScopedPointer<Qt3D::QEntity> entity2(new QEntity());
+    QScopedPointer<Qt3DCore::QEntity> entity1(new QEntity());
+    QScopedPointer<Qt3DCore::QEntity> entity2(new QEntity());
 
     MyQComponent *comp1 = new MyQComponent(entity1.data());
     MyQComponent *comp2 = new MyQComponent(entity1.data());
@@ -391,8 +392,8 @@ void tst_Entity::removeComponentSingleParentSeveralAggregations()
 void tst_Entity::removeComponentsSeveralParentsSingleAggreation()
 {
     // GIVEN
-    QScopedPointer<Qt3D::QEntity> entity1(new QEntity());
-    QScopedPointer<Qt3D::QEntity> entity2(new QEntity());
+    QScopedPointer<Qt3DCore::QEntity> entity1(new QEntity());
+    QScopedPointer<Qt3DCore::QEntity> entity2(new QEntity());
 
     MyQComponent *comp1 = new MyQComponent(entity1.data());
     MyQComponent *comp2 = new MyQComponent(entity1.data());
@@ -443,8 +444,8 @@ void tst_Entity::removeComponentsSeveralParentsSingleAggreation()
 void tst_Entity::removeComponentsSeveralParentsSeveralAggregations()
 {
     // GIVEN
-    QScopedPointer<Qt3D::QEntity> entity1(new QEntity());
-    QScopedPointer<Qt3D::QEntity> entity2(new QEntity());
+    QScopedPointer<Qt3DCore::QEntity> entity1(new QEntity());
+    QScopedPointer<Qt3DCore::QEntity> entity2(new QEntity());
 
     MyQComponent *comp1 = new MyQComponent(entity1.data());
     MyQComponent *comp2 = new MyQComponent(entity1.data());
@@ -519,7 +520,7 @@ void tst_Entity::removeComponentsSeveralParentsSeveralAggregations()
 void tst_Entity::addSeveralTimesSameComponent()
 {
     // GIVEN
-    QScopedPointer<Qt3D::QEntity> entity(new QEntity());
+    QScopedPointer<Qt3DCore::QEntity> entity(new QEntity());
     MyQComponent *comp = new MyQComponent(entity.data());
     QCoreApplication::processEvents();
     entity->addComponent(comp);
@@ -543,7 +544,7 @@ void tst_Entity::addSeveralTimesSameComponent()
 void tst_Entity::removeSeveralTimesSameComponent()
 {
     // GIVEN
-    QScopedPointer<Qt3D::QEntity> entity(new QEntity());
+    QScopedPointer<Qt3DCore::QEntity> entity(new QEntity());
     MyQComponent *comp = new MyQComponent(entity.data());
     QCoreApplication::processEvents();
     entity->addComponent(comp);
@@ -565,10 +566,16 @@ void tst_Entity::removeSeveralTimesSameComponent()
     QCOMPARE(comp->entities().size(), 0);
 }
 
+Qt3DCore::QNodeId parentEntityId(Qt3DCore::QEntity *entity)
+{
+    Qt3DCore::QEntityPrivate *d = static_cast<Qt3DCore::QEntityPrivate*>(Qt3DCore::QNodePrivate::get(entity));
+    return d->parentEntityId();
+}
+
 void tst_Entity::verifyCopy()
 {
     // GIVEN
-    QScopedPointer<Qt3D::QEntity> root(new Qt3D::QEntity());
+    QScopedPointer<Qt3DCore::QEntity> root(new Qt3DCore::QEntity());
     MyEntity *parentLessEntity = new MyEntity();
     MyEntity *parentedEntity = new MyEntity(root.data());
 
@@ -577,9 +584,9 @@ void tst_Entity::verifyCopy()
     // THEN
     QVERIFY(root->id() != parentLessEntity->id());
     QVERIFY(root->id() != parentedEntity->id());
-    QVERIFY(root->parentEntityId().isNull());
-    QVERIFY(!parentedEntity->parentEntityId().isNull());
-    QVERIFY(parentLessEntity->parentEntityId().isNull());
+    QVERIFY(parentEntityId(root.data()).isNull());
+    QVERIFY(!parentEntityId(parentedEntity).isNull());
+    QVERIFY(parentEntityId(parentLessEntity).isNull());
 
     // WHEN
     MyEntity *parentedEntityCopy = new MyEntity();
@@ -587,7 +594,7 @@ void tst_Entity::verifyCopy()
 
     // THEN
     QVERIFY(parentedEntityCopy->id() == parentedEntity->id());
-    QVERIFY(parentedEntityCopy->parentEntityId() == parentedEntity->parentEntityId());
+    QVERIFY(parentEntityId(parentedEntityCopy) == parentEntityId(parentedEntity));
 
     // WHEN
     MyEntity *parentLessEntityCopy = new MyEntity();
@@ -595,7 +602,7 @@ void tst_Entity::verifyCopy()
 
     // THEN
     QVERIFY(parentLessEntityCopy->id() == parentLessEntity->id());
-    QVERIFY(parentLessEntityCopy->parentEntityId() == parentLessEntity->parentEntityId());
+    QVERIFY(parentEntityId(parentLessEntityCopy) == parentEntityId(parentLessEntity));
 }
 
 

@@ -34,8 +34,8 @@
 **
 ****************************************************************************/
 
-import Qt3D 2.0
-import Qt3D.Renderer 2.0
+import Qt3D.Core 2.0
+import Qt3D.Render 2.0
 import Qt3D.Input 2.0
 import QtQuick 2.2 as QQ2
 
@@ -47,8 +47,8 @@ Entity {
     FrameGraph {
         id : external_forward_renderer
         activeFrameGraph: MyForwardRenderer {
-            mainCameraViewport: mainView.camera
-            detailCameraViewport: detailCamera ? detailView.camera : mainView.camera
+            mainCamera: mainView.camera
+            detailCamera: root.detailCamera ? detailView.camera : mainView.camera
             clearColor: "black"
         }
     }
@@ -59,7 +59,7 @@ Entity {
         id: keyboardInput
         controller: keyboardController
         focus: true
-        onTabPressed: detailCamera = !detailCamera;
+        onTabPressed: root.detailCamera = !root.detailCamera;
     }
 
     components: [external_forward_renderer, keyboardInput]

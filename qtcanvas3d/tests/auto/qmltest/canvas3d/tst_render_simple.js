@@ -82,6 +82,32 @@ function initializeGL(canvas) {
 function paintGL(canvas) {
     gl.clear(gl.COLOR_BUFFER_BIT);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
+    var err = 0;
+    if (canvas.renderTarget === Canvas3D.RenderTargetOffscreenBuffer)
+        err = gl.getError();
+    return (err === 0);
+
+}
+
+function resizeGL(canvas)
+{
+    var pixelRatio = canvas.devicePixelRatio;
+    canvas.pixelSize = Qt.size(canvas.width * pixelRatio,
+                               canvas.height * pixelRatio);
+
+    if (gl) {
+        gl.viewport(0, 0,
+                    canvas.width * canvas.devicePixelRatio,
+                    canvas.height * canvas.devicePixelRatio);
+    }
+}
+
+function getWidth() {
+    return gl.drawingBufferWidth
+}
+
+function getHeight() {
+    return gl.drawingBufferHeight
 }
 
 function initShaders()
@@ -121,4 +147,45 @@ function compileShader(str, type) {
     }
 
     return shader;
+}
+
+function checkInvalidations() {
+    if (shaderProgram.invalidated === false)
+        return false;
+    if (buffer.invalidated === false)
+        return false;
+    if (vertexShader.invalidated === false)
+        return false;
+    if (fragmentShader.invalidated === false)
+        return false;
+    return true;
+}
+
+function checkContextLost() {
+    var lostStatus = gl.isContextLost();
+    if (lostStatus === true) {
+        return checkInvalidations();
+    } else {
+        return false;
+    }
+}
+
+function checkContextRestored() {
+    var lostStatus = gl.isContextLost();
+    if (lostStatus === false) {
+        // All old objects should still be invalid, initializeGL will validate them
+        return checkInvalidations();
+    } else {
+        return false;
+    }
+}
+
+function checkContextLostError() {
+    var err = gl.getError();
+    if (err === gl.CONTEXT_LOST_WEBGL) {
+        err = gl.getError();
+        if (err === gl.NO_ERROR)
+            return true;
+    }
+    return false;
 }

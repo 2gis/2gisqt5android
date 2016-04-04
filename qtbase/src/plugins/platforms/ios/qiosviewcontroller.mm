@@ -143,7 +143,7 @@
 
     if (uiWindow.screen != [UIScreen mainScreen] && self.subviews.count == 1) {
         // Removing the last view of an external screen, go back to mirror mode
-        uiWindow.screen = nil;
+        uiWindow.screen = [UIScreen mainScreen];
         uiWindow.hidden = YES;
     }
 }
@@ -296,13 +296,13 @@
 
 // -------------------------------------------------------------------------
 
--(BOOL)shouldAutorotate
+- (BOOL)shouldAutorotate
 {
     return m_screen && m_screen->uiScreen() == [UIScreen mainScreen] && !self.lockedOrientation;
 }
 
 #if QT_IOS_PLATFORM_SDK_EQUAL_OR_ABOVE(__IPHONE_6_0)
--(NSUInteger)supportedInterfaceOrientations
+- (NSUInteger)supportedInterfaceOrientations
 {
     // As documented by Apple in the iOS 6.0 release notes, setStatusBarOrientation:animated:
     // only works if the supportedInterfaceOrientations of the view controller is 0, making
@@ -315,7 +315,7 @@
 #endif
 
 #if QT_IOS_DEPLOYMENT_TARGET_BELOW(__IPHONE_6_0)
--(BOOL)shouldAutorotateToInterfaceOrientation:(UIInterfaceOrientation)interfaceOrientation
+- (BOOL)shouldAutorotateToInterfaceOrientation:(UIInterfaceOrientation)interfaceOrientation
 {
     Q_UNUSED(interfaceOrientation);
     return [self shouldAutorotate];

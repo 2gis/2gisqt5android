@@ -53,6 +53,7 @@
 #include <QtCore/QString>
 #include <QtCore/QBitArray>
 #include <QtCore/qurl.h>
+#include <QtCore/QVarLengthArray>
 #include <qglobal.h>
 
 #if defined(CONST) && defined(Q_OS_WIN)
@@ -113,6 +114,23 @@ struct Jump;
 struct CJump;
 struct Ret;
 struct Phi;
+
+template<class T, int Prealloc>
+class VarLengthArray: public QVarLengthArray<T, Prealloc>
+{
+public:
+    bool removeOne(const T &element)
+    {
+        for (int i = 0; i < this->size(); ++i) {
+            if (this->at(i) == element) {
+                this->remove(i);
+                return true;
+            }
+        }
+
+        return false;
+    }
+};
 
 // Flag pointer:
 // * The first flag indicates whether the meta object is final.
@@ -337,10 +355,8 @@ struct Name: Expr {
         builtin_define_object_literal,
         builtin_setup_argument_object,
         builtin_convert_this_to_object,
-        builtin_qml_id_array,
-        builtin_qml_imported_scripts_object,
-        builtin_qml_context_object,
-        builtin_qml_scope_object
+        builtin_qml_context,
+        builtin_qml_imported_scripts_object
     };
 
     const QString *id;
@@ -368,18 +384,18 @@ struct Q_AUTOTEST_EXPORT Temp: Expr {
         StackSlot
     };
 
-    // Used when temp is used as base in member expression
-    MemberExpressionResolver *memberResolver;
-
     unsigned index      : 28;
     unsigned isReadOnly :  1;
     unsigned kind       :  3;
 
+    // Used when temp is used as base in member expression
+    MemberExpressionResolver *memberResolver;
+
     Temp()
-        : memberResolver(0)
-        , index((1 << 28) - 1)
+        : index((1 << 28) - 1)
         , isReadOnly(0)
         , kind(Invalid)
+        , memberResolver(0)
     {}
 
     void init(unsigned kind, unsigned index)
@@ -558,13 +574,18 @@ struct Member: Expr {
         MemberOfEnum,
         MemberOfQmlScopeObject,
         MemberOfQmlContextObject,
-        MemberOfSingletonObject
+        MemberOfIdObjectsArray,
+        MemberOfSingletonObject,
     };
 
     Expr *base;
     const QString *name;
     QQmlPropertyData *property;
-    int attachedPropertiesIdOrEnumValue; // depending on kind
+    union {  // depending on kind
+        int attachedPropertiesId;
+        int enumValue;
+        int idIndex;
+    };
     uchar freeOfSideEffects : 1;
 
     // This is set for example for for QObject properties. All sorts of extra behavior
@@ -577,20 +598,20 @@ struct Member: Expr {
 
     void setEnumValue(int value) {
         kind = MemberOfEnum;
-        attachedPropertiesIdOrEnumValue = value;
+        enumValue = value;
     }
 
     void setAttachedPropertiesId(int id) {
-        Q_ASSERT(kind != MemberOfEnum);
-        attachedPropertiesIdOrEnumValue = id;
+        Q_ASSERT(kind != MemberOfEnum && kind != MemberOfIdObjectsArray);
+        attachedPropertiesId = id;
     }
 
-    void init(Expr *base, const QString *name, QQmlPropertyData *property = 0, uchar kind = UnspecifiedMember, int attachedPropertiesIdOrEnumValue = 0)
+    void init(Expr *base, const QString *name, QQmlPropertyData *property = 0, uchar kind = UnspecifiedMember, int index = 0)
     {
         this->base = base;
         this->name = name;
         this->property = property;
-        this->attachedPropertiesIdOrEnumValue = attachedPropertiesIdOrEnumValue;
+        this->idIndex = index;
         this->freeOfSideEffects = false;
         this->inhibitTypeConversionOnWrite = property != 0;
         this->kind = kind;
@@ -768,10 +789,13 @@ private:
     Q_DISABLE_COPY(BasicBlock)
 
 public:
+    typedef VarLengthArray<BasicBlock *, 4> IncomingEdges;
+    typedef VarLengthArray<BasicBlock *, 2> OutgoingEdges;
+
     Function *function;
     BasicBlock *catchBlock;
-    QVector<BasicBlock *> in;
-    QVector<BasicBlock *> out;
+    IncomingEdges in;
+    OutgoingEdges out;
     QQmlJS::AST::SourceLocation nextLocation;
 
     BasicBlock(Function *function, BasicBlock *catcher)
@@ -782,10 +806,7 @@ public:
         , _isExceptionHandler(false)
         , _groupStart(false)
         , _isRemoved(false)
-    {
-        in.reserve(2);
-        out.reserve(2);
-    }
+    {}
     ~BasicBlock();
 
     const QVector<Stmt *> &statements() const

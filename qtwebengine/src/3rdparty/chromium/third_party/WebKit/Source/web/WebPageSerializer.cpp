@@ -72,7 +72,7 @@ KURL getSubResourceURLFromElement(Element* element)
 
     String value = element->getAttribute(attributeName);
     // Ignore javascript content.
-    if (value.isEmpty() || value.stripWhiteSpace().startsWith("javascript:", false))
+    if (value.isEmpty() || value.stripWhiteSpace().startsWith("javascript:", TextCaseInsensitive))
         return KURL();
 
     return element->document().completeURL(value);
@@ -149,12 +149,31 @@ void retrieveResourcesForFrame(LocalFrame* frame,
     }
 }
 
+class MHTMLPageSerializerDelegate final : public PageSerializer::Delegate {
+public:
+    ~MHTMLPageSerializerDelegate() override;
+    bool shouldIgnoreAttribute(const Attribute&) override;
+};
+
+
+MHTMLPageSerializerDelegate::~MHTMLPageSerializerDelegate()
+{
+}
+
+bool MHTMLPageSerializerDelegate::shouldIgnoreAttribute(const Attribute& attribute)
+{
+    // TODO(fgorski): Presence of srcset attribute causes MHTML to not display images, as only the value of src
+    // is pulled into the archive. Discarding srcset prevents the problem. Long term we should make sure to MHTML
+    // plays nicely with srcset.
+    return attribute.localName() == HTMLNames::srcsetAttr;
+}
+
 } // namespace
 
 void WebPageSerializer::serialize(WebView* view, WebVector<WebPageSerializer::Resource>* resourcesParam)
 {
     Vector<SerializedResource> resources;
-    PageSerializer serializer(&resources);
+    PageSerializer serializer(&resources, PassOwnPtr<PageSerializer::Delegate>(nullptr));
     serializer.serialize(toWebViewImpl(view)->page());
 
     Vector<Resource> result;
@@ -173,7 +192,7 @@ void WebPageSerializer::serialize(WebView* view, WebVector<WebPageSerializer::Re
 static PassRefPtr<SharedBuffer> serializePageToMHTML(Page* page, MHTMLArchive::EncodingPolicy encodingPolicy)
 {
     Vector<SerializedResource> resources;
-    PageSerializer serializer(&resources);
+    PageSerializer serializer(&resources, adoptPtr(new MHTMLPageSerializerDelegate));
     serializer.serialize(page);
     Document* document = page->deprecatedLocalMainFrame()->document();
     return MHTMLArchive::generateMHTMLData(resources, encodingPolicy, document->title(), document->suggestedMIMEType());
@@ -249,19 +268,23 @@ bool WebPageSerializer::retrieveAllResources(WebView* view,
 
 WebString WebPageSerializer::generateMetaCharsetDeclaration(const WebString& charset)
 {
+    // TODO(yosin) We should call |PageSerializer::metaCharsetDeclarationOf()|.
     String charsetString = "<meta http-equiv=\"Content-Type\" content=\"text/html; charset=" + static_cast<const String&>(charset) + "\">";
     return charsetString;
 }
 
 WebString WebPageSerializer::generateMarkOfTheWebDeclaration(const WebURL& url)
 {
-    return String::format("\n<!-- saved from url=(%04d)%s -->\n",
-                          static_cast<int>(url.spec().length()),
-                          url.spec().data());
+    StringBuilder builder;
+    builder.append("\n<!-- ");
+    builder.append(PageSerializer::markOfTheWebDeclaration(url));
+    builder.append(" -->\n");
+    return builder.toString();
 }
 
 WebString WebPageSerializer::generateBaseTagDeclaration(const WebString& baseTarget)
 {
+    // TODO(yosin) We should call |PageSerializer::baseTagDeclarationOf()|.
     if (baseTarget.isEmpty())
         return String("<base href=\".\">");
     String baseString = "<base href=\".\" target=\"" + static_cast<const String&>(baseTarget) + "\">";

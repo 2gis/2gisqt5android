@@ -34,23 +34,23 @@
 **
 ****************************************************************************/
 
-#ifndef QT3D_QITEMMODELBUFFER_H
-#define QT3D_QITEMMODELBUFFER_H
+#ifndef QT3DRENDER_QITEMMODELBUFFER_H
+#define QT3DRENDER_QITEMMODELBUFFER_H
 
 #include <QObject>
-#include <Qt3DRenderer/qt3drenderer_global.h>
+#include <Qt3DRender/qt3drender_global.h>
 
-#include <Qt3DRenderer/qbuffer.h>
-#include <Qt3DRenderer/qattribute.h>
+#include <Qt3DRender/qbuffer.h>
+#include <Qt3DRender/qattribute.h>
 
 #include <QAbstractItemModel>
 #include <QMap>
 
 QT_BEGIN_NAMESPACE
 
-namespace Qt3D {
+namespace Qt3DRender {
 
-class QT3DRENDERERSHARED_EXPORT QItemModelBuffer : public QObject
+class QT3DRENDERSHARED_EXPORT QItemModelBuffer : public QObject
 {
     Q_OBJECT
 public:
@@ -98,8 +98,8 @@ private:
     bool validateRoles();
 };
 
-} // namespace Qt3D
+} // namespace Qt3DRender
 
 QT_END_NAMESPACE
 
-#endif // QT3D_QITEMMODELBUFFER_H
+#endif // QT3DRENDER_QITEMMODELBUFFER_H

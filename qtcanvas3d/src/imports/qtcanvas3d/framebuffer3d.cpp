@@ -43,78 +43,54 @@ QT_CANVAS3D_BEGIN_NAMESPACE
  * \qmltype Canvas3DFrameBuffer
  * \since QtCanvas3D 1.0
  * \inqmlmodule QtCanvas3D
+ * \inherits Canvas3DAbstractObject
  * \brief Contains an OpenGL framebuffer.
  *
  * An uncreatable QML type that contains an OpenGL framebuffer object. You can get it by calling the
  * \l{Context3D::createFramebuffer()}{Context3D.createFramebuffer()} method.
  */
 
-/*!
- * \internal
- */
-CanvasFrameBuffer::CanvasFrameBuffer(QObject *parent) :
-    CanvasAbstractObject(parent),
-    m_framebufferId(0),
+CanvasFrameBuffer::CanvasFrameBuffer(CanvasGlCommandQueue *queue, QObject *parent) :
+    CanvasAbstractObject(queue, parent),
+    m_framebufferId(queue->createResourceId()),
     m_texture(0)
 {
-    initializeOpenGLFunctions();
-    glGenFramebuffers(1, &m_framebufferId);
+    queueCommand(CanvasGlCommandQueue::glGenFramebuffers, m_framebufferId);
 }
 
-/*!
- * \internal
- */
 CanvasFrameBuffer::~CanvasFrameBuffer()
 {
     del();
 }
 
-/*!
- * \internal
- */
 bool CanvasFrameBuffer::isAlive()
 {
-    return (m_framebufferId);
+    return bool(m_framebufferId);
 }
 
-/*!
- * \internal
- */
 void CanvasFrameBuffer::del()
 {
     if (m_framebufferId) {
-        glDeleteFramebuffers(1, &m_framebufferId);
+        queueCommand(CanvasGlCommandQueue::glDeleteFramebuffers, m_framebufferId);
         m_framebufferId = 0;
     }
 }
 
-/*!
- * \internal
- */
-GLuint CanvasFrameBuffer::id()
+GLint CanvasFrameBuffer::id()
 {
     return m_framebufferId;
 }
 
-/*!
- * \internal
- */
 void CanvasFrameBuffer::setTexture(CanvasTexture *texture)
 {
     m_texture = texture;
 }
 
-/*!
- * \internal
- */
 CanvasTexture *CanvasFrameBuffer::texture()
 {
     return m_texture;
 }
 
-/*!
- * \internal
- */
 QDebug operator<<(QDebug dbg, const CanvasFrameBuffer *buffer)
 {
     if (buffer)

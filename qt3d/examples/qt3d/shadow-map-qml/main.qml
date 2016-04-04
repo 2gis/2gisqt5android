@@ -34,8 +34,9 @@
 **
 ****************************************************************************/
 
-import Qt3D 2.0
-import Qt3D.Renderer 2.0
+import QtQuick 2.1 as QQ2
+import Qt3D.Core 2.0
+import Qt3D.Render 2.0
 
 Entity {
     id: sceneRoot
@@ -56,7 +57,7 @@ Entity {
         controlledCamera: camera
     }
 
-    Light {
+    ShadowMapLight {
         id: light
     }
 

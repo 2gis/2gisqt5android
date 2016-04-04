@@ -33,9 +33,21 @@
 #ifndef QMLJS_RUNTIME_H
 #define QMLJS_RUNTIME_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include "qv4global_p.h"
-#include "qv4value_inl_p.h"
+#include "qv4value_p.h"
 #include "qv4context_p.h"
+#include "qv4engine_p.h"
 #include "qv4math_p.h"
 
 #include <QtCore/qnumeric.h>
@@ -90,6 +102,8 @@ struct Q_QML_PRIVATE_EXPORT Runtime {
     // call
     static ReturnedValue callGlobalLookup(ExecutionEngine *engine, uint index, CallData *callData);
     static ReturnedValue callActivationProperty(ExecutionEngine *engine, int nameIndex, CallData *callData);
+    static ReturnedValue callQmlScopeObjectProperty(ExecutionEngine *engine, int propertyIndex, CallData *callData);
+    static ReturnedValue callQmlContextObjectProperty(ExecutionEngine *engine, int propertyIndex, CallData *callData);
     static ReturnedValue callProperty(ExecutionEngine *engine, int nameIndex, CallData *callData);
     static ReturnedValue callPropertyLookup(ExecutionEngine *engine, uint index, CallData *callData);
     static ReturnedValue callElement(ExecutionEngine *engine, const Value &index, CallData *callData);
@@ -113,6 +127,8 @@ struct Q_QML_PRIVATE_EXPORT Runtime {
     // typeof
     static ReturnedValue typeofValue(ExecutionEngine *engine, const Value &val);
     static ReturnedValue typeofName(ExecutionEngine *engine, int nameIndex);
+    static ReturnedValue typeofScopeObjectProperty(ExecutionEngine *engine, const Value &context, int propertyIndex);
+    static ReturnedValue typeofContextObjectProperty(ExecutionEngine *engine, const Value &context, int propertyIndex);
     static ReturnedValue typeofMember(ExecutionEngine *engine, const Value &base, int nameIndex);
     static ReturnedValue typeofElement(ExecutionEngine *engine, const Value &base, const Value &index);
 
@@ -206,19 +222,23 @@ struct Q_QML_PRIVATE_EXPORT Runtime {
     static unsigned doubleToUInt(const double &d);
 
     // qml
-    static ReturnedValue getQmlIdArray(NoThrowEngine *ctx);
-    static ReturnedValue getQmlImportedScripts(NoThrowEngine *ctx);
-    static ReturnedValue getQmlContextObject(NoThrowEngine *ctx);
-    static ReturnedValue getQmlScopeObject(NoThrowEngine *ctx);
-    static ReturnedValue getQmlSingleton(NoThrowEngine *ctx, int nameIndex);
+    static ReturnedValue getQmlContext(NoThrowEngine *engine);
+    static ReturnedValue getQmlImportedScripts(NoThrowEngine *engine);
+    static ReturnedValue getQmlSingleton(NoThrowEngine *engine, int nameIndex);
     static ReturnedValue getQmlAttachedProperty(ExecutionEngine *engine, int attachedPropertiesId, int propertyIndex);
+    static ReturnedValue getQmlScopeObjectProperty(ExecutionEngine *engine, const Value &context, int propertyIndex);
+    static ReturnedValue getQmlContextObjectProperty(ExecutionEngine *engine, const Value &context, int propertyIndex);
     static ReturnedValue getQmlQObjectProperty(ExecutionEngine *engine, const Value &object, int propertyIndex, bool captureRequired);
     static ReturnedValue getQmlSingletonQObjectProperty(ExecutionEngine *engine, const Value &object, int propertyIndex, bool captureRequired);
+    static ReturnedValue getQmlIdObject(ExecutionEngine *engine, const Value &context, uint index);
+
+    static void setQmlScopeObjectProperty(ExecutionEngine *engine, const Value &context, int propertyIndex, const Value &value);
+    static void setQmlContextObjectProperty(ExecutionEngine *engine, const Value &context, int propertyIndex, const Value &value);
     static void setQmlQObjectProperty(ExecutionEngine *engine, const Value &object, int propertyIndex, const Value &value);
 };
 
 struct Q_QML_PRIVATE_EXPORT RuntimeHelpers {
-    static ReturnedValue objectDefaultValue(Object *object, int typeHint);
+    static ReturnedValue objectDefaultValue(const Object *object, int typeHint);
     static ReturnedValue toPrimitive(const Value &value, int typeHint);
 
     static double stringToNumber(const QString &s);
@@ -243,7 +263,7 @@ struct Q_QML_PRIVATE_EXPORT RuntimeHelpers {
 #ifndef V4_BOOTSTRAP
 inline ReturnedValue RuntimeHelpers::toPrimitive(const Value &value, int typeHint)
 {
-    Object *o = value.asObject();
+    const Object *o = value.as<Object>();
     if (!o)
         return value.asReturnedValue();
     return RuntimeHelpers::objectDefaultValue(o, typeHint);
@@ -262,7 +282,7 @@ inline ReturnedValue Runtime::uPlus(const Value &value)
     if (value.isNumber())
         return value.asReturnedValue();
     if (value.integerCompatible())
-        return Encode(value.int_32);
+        return Encode(value.int_32());
 
     double n = value.toNumberImpl();
     return Encode(n);
@@ -368,6 +388,15 @@ inline ReturnedValue Runtime::mul(const Value &left, const Value &right)
 inline ReturnedValue Runtime::div(const Value &left, const Value &right)
 {
     TRACE2(left, right);
+
+    if (Value::integerCompatible(left, right)) {
+        int lval = left.integerValue();
+        int rval = right.integerValue();
+        if (rval != 0 && (lval % rval == 0))
+            return Encode(int(lval / rval));
+        else
+            return Encode(double(lval) / rval);
+    }
 
     double lval = left.toNumber();
     double rval = right.toNumber();

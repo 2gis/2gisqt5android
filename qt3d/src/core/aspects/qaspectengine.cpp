@@ -37,7 +37,7 @@
 #include "qaspectengine.h"
 
 #include "qabstractaspect.h"
-#include "qaspectthread.h"
+#include "qaspectthread_p.h"
 #include "qaspectmanager_p.h"
 #include "qchangearbiter_p.h"
 #include "qabstractaspect.h"
@@ -48,29 +48,27 @@
 #include <private/qscene_p.h>
 #include <private/qaspectengine_p.h>
 #include <private/qnode_p.h>
+#include <private/qnodevisitor_p.h>
 #include <private/qscene_p.h>
 #include "qentity.h"
 #include "qcomponent.h"
-#include "qnodevisitor.h"
+#include <Qt3DCore/private/qeventfilterservice_p.h>
+#include <Qt3DCore/private/qservicelocator_p.h>
 
 QT_BEGIN_NAMESPACE
 
-namespace Qt3D {
+namespace Qt3DCore {
 
-/*!
-    \class Qt3D::QAspectEnginePrivate
-    \internal
-*/
 QAspectEnginePrivate::QAspectEnginePrivate()
     : QObjectPrivate()
     , m_postman(Q_NULLPTR)
     , m_scene(Q_NULLPTR)
 {
-    qRegisterMetaType<Qt3D::QAbstractAspect *>();
-    qRegisterMetaType<Qt3D::QObserverInterface *>();
-    qRegisterMetaType<Qt3D::QEntity *>();
-    qRegisterMetaType<Qt3D::QScene *>();
-    qRegisterMetaType<Qt3D::QAbstractPostman *>();
+    qRegisterMetaType<Qt3DCore::QAbstractAspect *>();
+    qRegisterMetaType<Qt3DCore::QObserverInterface *>();
+    qRegisterMetaType<Qt3DCore::QEntity *>();
+    qRegisterMetaType<Qt3DCore::QScene *>();
+    qRegisterMetaType<Qt3DCore::QAbstractPostman *>();
 }
 
 /*!
@@ -111,78 +109,74 @@ QAspectEngine::QAspectEngine(QObject *parent)
     d->m_aspectThread->waitForStart(QThread::HighestPriority);
 }
 
-/*! \internal */
-QAspectEngine::QAspectEngine(QAspectEnginePrivate &dd, QObject *parent)
-    : QObject(dd, parent)
-{
-    Q_D(QAspectEngine);
-    d->m_scene = new QScene(this);
-    d->m_postman = new QPostman(this);
-    d->m_postman->setScene(d->m_scene);
-    d->m_aspectThread = new QAspectThread(this);
-    d->m_aspectThread->waitForStart(QThread::HighestPriority);
-}
-
 QAspectEngine::~QAspectEngine()
 {
     Q_D(QAspectEngine);
-    shutdown();
+    setRootEntity(Q_NULLPTR);
     delete d->m_aspectThread;
     delete d->m_postman;
     delete d->m_scene;
 }
 
-void QAspectEngine::initNodeTree(QNode *node)
+void QAspectEnginePrivate::initNodeTree(QNode *node)
 {
     QNodeVisitor visitor;
-    visitor.traverse(node, d_func(), &QAspectEnginePrivate::initNode, &QAspectEnginePrivate::initEntity);
+    visitor.traverse(node, this, &QAspectEnginePrivate::initNode, &QAspectEnginePrivate::initEntity);
 }
 
-void QAspectEngine::initialize()
+void QAspectEnginePrivate::initialize()
 {
-    Q_D(QAspectEngine);
-    QChangeArbiter *arbiter = d->m_aspectThread->aspectManager()->changeArbiter();
-    d->m_scene->setArbiter(arbiter);
+    QChangeArbiter *arbiter = m_aspectThread->aspectManager()->changeArbiter();
+    m_scene->setArbiter(arbiter);
     QChangeArbiter::createUnmanagedThreadLocalChangeQueue(arbiter);
     QMetaObject::invokeMethod(arbiter,
                               "setPostman",
-                              Q_ARG(Qt3D::QAbstractPostman*, d->m_postman));
+                              Q_ARG(Qt3DCore::QAbstractPostman*, m_postman));
     QMetaObject::invokeMethod(arbiter,
                               "setScene",
-                              Q_ARG(Qt3D::QScene*, d->m_scene));
+                              Q_ARG(Qt3DCore::QScene*, m_scene));
 }
 
-void QAspectEngine::shutdown()
+void QAspectEnginePrivate::shutdown()
 {
-    Q_D(QAspectEngine);
     qCDebug(Aspects) << Q_FUNC_INFO;
 
-    // Unset the root entity
-    setRootEntity(Q_NULLPTR);
-
     // Cleanup the scene before quitting the backend
-    d->m_scene->setArbiter(Q_NULLPTR);
-    QChangeArbiter *arbiter = d->m_aspectThread->aspectManager()->changeArbiter();
+    m_scene->setArbiter(Q_NULLPTR);
+    QChangeArbiter *arbiter = m_aspectThread->aspectManager()->changeArbiter();
     QChangeArbiter::destroyUnmanagedThreadLocalChangeQueue(arbiter);
 
     // Tell the aspect thread to exit
     // This will return only after the aspectManager has
     // exited its exec loop
-    d->m_aspectThread->aspectManager()->quit();
+    m_aspectThread->aspectManager()->quit();
 
     // Wait for thread to exit
-    d->m_aspectThread->wait();
+    m_aspectThread->wait();
 
     qCDebug(Aspects) << Q_FUNC_INFO << "deleting aspects";
     // Deletes aspects in the same thread as the one they were created in
-    qDeleteAll(d->m_aspects);
+    qDeleteAll(m_aspects);
 
     qCDebug(Aspects) << Q_FUNC_INFO << "Shutdown complete";
 }
 
+// Main thread
 void QAspectEngine::setData(const QVariantMap &data)
 {
     Q_D(QAspectEngine);
+
+    // We need to initialize the EventFilterService in the main thread
+    // as we can register event filters only on QObjects of the same thread
+    QObject *eventSource = Q_NULLPTR;
+    const QVariant &eventSourceVariant = data.value(QStringLiteral("eventSource"));
+    if (eventSourceVariant.isValid() &&
+            (eventSource = eventSourceVariant.value<QObject *>()) != Q_NULLPTR) {
+        QEventFilterService *eventFilterService = d->m_aspectThread->aspectManager()->serviceLocator()->eventFilterService();
+        if (eventFilterService != Q_NULLPTR)
+            eventFilterService->initialize(eventSource);
+    }
+
     QMetaObject::invokeMethod(d->m_aspectThread->aspectManager(),
                               "setData",
                               Qt::BlockingQueuedConnection,
@@ -202,7 +196,7 @@ void QAspectEngine::registerAspect(QAbstractAspect *aspect)
     QMetaObject::invokeMethod(d->m_aspectThread->aspectManager(),
                               "registerAspect",
                               Qt::BlockingQueuedConnection,
-                              Q_ARG(Qt3D::QAbstractAspect *, aspect));
+                              Q_ARG(Qt3DCore::QAbstractAspect *, aspect));
 }
 
 /*!
@@ -224,6 +218,37 @@ QList<QAbstractAspect *> QAspectEngine::aspects() const
     return d->m_aspects;
 }
 
+QVariant QAspectEngine::executeCommand(const QString &command)
+{
+    Q_D(QAspectEngine);
+
+    if (command == QLatin1Literal("list aspects")) {
+        if (d->m_aspects.isEmpty())
+            return QLatin1Literal("No loaded aspect");
+
+        QStringList reply;
+        reply << QLatin1Literal("Loaded aspects:");
+        foreach (QAbstractAspect *aspect, d->m_aspects) {
+            const QString name = d->m_factory.aspectName(aspect);
+            if (!name.isEmpty())
+                reply << (QLatin1Literal(" * ") + name);
+            else
+                reply << QLatin1Literal(" * <unnamed>");
+        }
+        return reply.join(QLatin1Char('\n'));
+    }
+
+    QStringList args = command.split(QLatin1Char(' '));
+    QString aspectName = args.takeFirst();
+
+    foreach (QAbstractAspect *aspect, d->m_aspects) {
+        if (aspectName == d->m_factory.aspectName(aspect))
+            return aspect->executeCommand(args);
+    }
+
+    return QVariant();
+}
+
 void QAspectEngine::setRootEntity(QEntity *root)
 {
     qCDebug(Aspects) << "Setting scene root on aspect manager";
@@ -231,14 +256,21 @@ void QAspectEngine::setRootEntity(QEntity *root)
     if (d->m_root == root)
         return;
 
+    const bool shutdownNeeded = d->m_root;
+
     // Set the new root object. This will cause the old tree to be deleted
     // and the deletion of the old frontend tree will cause the backends to
     // free any related resources
     d->m_root.reset(root);
 
+    if (shutdownNeeded)
+        d->shutdown();
+
     // Do we actually have a new scene?
     if (!d->m_root)
         return;
+
+    d->initialize();
 
     // The aspect engine takes ownership of the scene root. We also set the
     // parent of the scene root to be the engine
@@ -248,7 +280,7 @@ void QAspectEngine::setRootEntity(QEntity *root)
     // scene object and adding each node to the scene
     // TODO: We probably need a call symmetric to this one above in order to
     // deregister the nodes from the scene
-    initNodeTree(root);
+    d->initNodeTree(root);
 
     // Finally, tell the aspects about the new scene object tree. This is done
     // in a blocking manner to allow the backends to get synchronized before the
@@ -256,7 +288,7 @@ void QAspectEngine::setRootEntity(QEntity *root)
     QMetaObject::invokeMethod(d->m_aspectThread->aspectManager(),
                               "setRootEntity",
                               Qt::BlockingQueuedConnection,
-                              Q_ARG(Qt3D::QEntity *, root));
+                              Q_ARG(Qt3DCore::QEntity *, root));
     qCDebug(Aspects) << "Done setting scene root on aspect manager";
 }
 
@@ -266,18 +298,6 @@ QSharedPointer<QEntity> QAspectEngine::rootEntity() const
     return d->m_root;
 }
 
-QAspectFactory QAspectEngine::aspectFactory() const
-{
-    Q_D(const QAspectEngine);
-    return d->m_factory;
-}
-
-void QAspectEngine::setAspectFactory(const QAspectFactory &factory)
-{
-    Q_D(QAspectEngine);
-    d->m_factory = factory;
-}
-
-} // namespace Qt3D
+} // namespace Qt3DCore
 
 QT_END_NAMESPACE

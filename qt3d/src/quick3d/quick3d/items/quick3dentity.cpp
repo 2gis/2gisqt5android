@@ -34,19 +34,18 @@
 **
 ****************************************************************************/
 
-#include "quick3dentity.h"
+#include "quick3dentity_p.h"
 #include <Qt3DCore/qcomponent.h>
 
 QT_BEGIN_NAMESPACE
 
-namespace Qt3D {
-
+namespace Qt3DCore {
 namespace Quick {
 
 /*!
     \qmltype Entity
     \inherits Node
-    \inqmlmodule Qt3D
+    \inqmlmodule Qt3D.Core
     \since 5.5
 */
 
@@ -56,12 +55,12 @@ Quick3DEntity::Quick3DEntity(QObject *parent)
 }
 
 /*!
-    \qmlproperty list<Component3D> Qt3D::Entity::components
+    \qmlproperty list<Component3D> Qt3DCore::Entity::components
     \readonly
 */
 QQmlListProperty<QComponent> Quick3DEntity::componentList()
 {
-    return QQmlListProperty<Qt3D::QComponent>(this, 0,
+    return QQmlListProperty<Qt3DCore::QComponent>(this, 0,
                                              Quick3DEntity::qmlAppendComponent,
                                              Quick3DEntity::qmlComponentsCount,
                                              Quick3DEntity::qmlComponentAt,
@@ -97,8 +96,7 @@ void Quick3DEntity::qmlClearComponents(QQmlListProperty<QComponent> *list)
     }
 }
 
-} // Quick
-
-} // Qt3D
+} // namespace Quick
+} // namespace Qt3DCore
 
 QT_END_NAMESPACE

@@ -41,7 +41,9 @@
 #include "web_contents_delegate_qt.h"
 
 #include "browser_context_adapter.h"
+#include "file_picker_controller.h"
 #include "media_capture_devices_dispatcher.h"
+#include "network_delegate_qt.h"
 #include "type_conversion.h"
 #include "web_contents_adapter_client.h"
 #include "web_contents_adapter_p.h"
@@ -49,12 +51,14 @@
 #include "web_engine_settings.h"
 #include "web_engine_visited_links_manager.h"
 
+#include "components/web_cache/browser/web_cache_manager.h"
 #include "content/browser/renderer_host/render_widget_host_impl.h"
 #include "content/public/browser/favicon_status.h"
 #include "content/public/browser/invalidate_type.h"
 #include "content/public/browser/navigation_entry.h"
 #include "content/public/browser/render_view_host.h"
 #include "content/public/browser/render_frame_host.h"
+#include "content/public/browser/render_process_host.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/common/favicon_url.h"
 #include "content/public/common/file_chooser_params.h"
@@ -62,6 +66,8 @@
 #include "content/public/common/url_constants.h"
 #include "content/public/common/web_preferences.h"
 #include "ui/events/latency_info.h"
+
+#include <QDesktopServices>
 
 namespace QtWebEngineCore {
 
@@ -99,6 +105,7 @@ content::WebContents *WebContentsDelegateQt::OpenURLFromTab(content::WebContents
     load_url_params.extra_headers = params.extra_headers;
     load_url_params.should_replace_current_entry = params.should_replace_current_entry;
     load_url_params.is_renderer_initiated = params.is_renderer_initiated;
+    load_url_params.override_user_agent = content::NavigationController::UA_OVERRIDE_TRUE;
 
     if (params.transferred_global_request_id != content::GlobalRequestID())
         load_url_params.transferred_global_request_id = params.transferred_global_request_id;
@@ -107,7 +114,7 @@ content::WebContents *WebContentsDelegateQt::OpenURLFromTab(content::WebContents
     return target;
 }
 
-void WebContentsDelegateQt::NavigationStateChanged(const content::WebContents* source, content::InvalidateTypes changed_flags)
+void WebContentsDelegateQt::NavigationStateChanged(content::WebContents* source, content::InvalidateTypes changed_flags)
 {
     if (changed_flags & content::INVALIDATE_TYPE_URL)
         m_viewClient->urlChanged(toQt(source->GetVisibleURL()));
@@ -126,7 +133,7 @@ void WebContentsDelegateQt::AddNewContents(content::WebContents* source, content
 void WebContentsDelegateQt::CloseContents(content::WebContents *source)
 {
     m_viewClient->close();
-    GetJavaScriptDialogManager()->CancelActiveAndPendingDialogs(source);
+    GetJavaScriptDialogManager(source)->CancelActiveAndPendingDialogs(source);
 }
 
 void WebContentsDelegateQt::LoadProgressChanged(content::WebContents* source, double progress)
@@ -176,13 +183,14 @@ void WebContentsDelegateQt::DidCommitProvisionalLoadForFrame(content::RenderFram
     m_viewClient->loadCommitted();
 }
 
-void WebContentsDelegateQt::DidFailProvisionalLoad(content::RenderFrameHost* render_frame_host, const GURL& validated_url, int error_code, const base::string16& error_description)
+void WebContentsDelegateQt::DidFailProvisionalLoad(content::RenderFrameHost* render_frame_host, const GURL& validated_url, int error_code, const base::string16& error_description, bool was_ignored_by_handler)
 {
-    DidFailLoad(render_frame_host, validated_url, error_code, error_description);
+    DidFailLoad(render_frame_host, validated_url, error_code, error_description, was_ignored_by_handler);
 }
 
-void WebContentsDelegateQt::DidFailLoad(content::RenderFrameHost* render_frame_host, const GURL& validated_url, int error_code, const base::string16& error_description)
+void WebContentsDelegateQt::DidFailLoad(content::RenderFrameHost* render_frame_host, const GURL& validated_url, int error_code, const base::string16& error_description, bool was_ignored_by_handler)
 {
+    Q_UNUSED(was_ignored_by_handler);
     if (m_loadingErrorFrameList.removeOne(render_frame_host->GetRoutingID()) || render_frame_host->GetParent())
         return;
 
@@ -233,36 +241,44 @@ void WebContentsDelegateQt::DidUpdateFaviconURL(const std::vector<content::Favic
     }
 }
 
-content::JavaScriptDialogManager *WebContentsDelegateQt::GetJavaScriptDialogManager()
+content::JavaScriptDialogManager *WebContentsDelegateQt::GetJavaScriptDialogManager(content::WebContents *)
 {
     return JavaScriptDialogManagerQt::GetInstance();
 }
 
-void WebContentsDelegateQt::ToggleFullscreenModeForTab(content::WebContents* web_contents, bool enter_fullscreen)
+void WebContentsDelegateQt::EnterFullscreenModeForTab(content::WebContents *web_contents, const GURL& origin)
 {
-    if (m_viewClient->isFullScreen() != enter_fullscreen) {
-        m_viewClient->requestFullScreen(enter_fullscreen);
-        web_contents->GetRenderViewHost()->WasResized();
-    }
+    Q_UNUSED(web_contents);
+    if (!m_viewClient->isFullScreenMode())
+        m_viewClient->requestFullScreenMode(toQt(origin), true);
+}
+
+void WebContentsDelegateQt::ExitFullscreenModeForTab(content::WebContents *web_contents)
+{
+    if (m_viewClient->isFullScreenMode())
+        m_viewClient->requestFullScreenMode(toQt(web_contents->GetLastCommittedURL().GetOrigin()), false);
 }
 
 bool WebContentsDelegateQt::IsFullscreenForTabOrPending(const content::WebContents* web_contents) const
 {
-    return m_viewClient->isFullScreen();
+    Q_UNUSED(web_contents);
+    return m_viewClient->isFullScreenMode();
 }
 
-ASSERT_ENUMS_MATCH(WebContentsAdapterClient::Open, content::FileChooserParams::Open)
-ASSERT_ENUMS_MATCH(WebContentsAdapterClient::Save, content::FileChooserParams::Save)
+ASSERT_ENUMS_MATCH(FilePickerController::Open, content::FileChooserParams::Open)
+ASSERT_ENUMS_MATCH(FilePickerController::OpenMultiple, content::FileChooserParams::OpenMultiple)
+ASSERT_ENUMS_MATCH(FilePickerController::UploadFolder, content::FileChooserParams::UploadFolder)
+ASSERT_ENUMS_MATCH(FilePickerController::Save, content::FileChooserParams::Save)
 
 void WebContentsDelegateQt::RunFileChooser(content::WebContents *web_contents, const content::FileChooserParams &params)
 {
-    Q_UNUSED(web_contents)
     QStringList acceptedMimeTypes;
     acceptedMimeTypes.reserve(params.accept_types.size());
     for (std::vector<base::string16>::const_iterator it = params.accept_types.begin(); it < params.accept_types.end(); ++it)
         acceptedMimeTypes.append(toQt(*it));
 
-    m_viewClient->runFileChooser(static_cast<WebContentsAdapterClient::FileChooserMode>(params.mode), toQt(params.default_file_name.value()), acceptedMimeTypes);
+    FilePickerController *controller = new FilePickerController(static_cast<FilePickerController::FileChooserMode>(params.mode), web_contents, toQt(params.default_file_name.value()), acceptedMimeTypes);
+    m_viewClient->runFileChooser(controller);
 }
 
 bool WebContentsDelegateQt::AddMessageToConsole(content::WebContents *source, int32 level, const base::string16 &message, int32 line_no, const base::string16 &source_id)
@@ -288,6 +304,17 @@ void WebContentsDelegateQt::RequestMediaAccessPermission(content::WebContents *w
     MediaCaptureDevicesDispatcher::GetInstance()->processMediaAccessRequest(m_viewClient, web_contents, request, callback);
 }
 
+void WebContentsDelegateQt::MoveContents(content::WebContents *source, const gfx::Rect &pos)
+{
+    Q_UNUSED(source)
+    m_viewClient->requestGeometryChange(toQt(pos));
+}
+
+bool WebContentsDelegateQt::IsPopupOrPanel(const content::WebContents *source) const
+{
+    return source->HasOpener();
+}
+
 void WebContentsDelegateQt::UpdateTargetURL(content::WebContents* source, const GURL& url)
 {
     Q_UNUSED(source)
@@ -300,6 +327,11 @@ void WebContentsDelegateQt::DidNavigateAnyFrame(content::RenderFrameHost* render
     if (!params.should_update_history || !m_viewClient->browserContextAdapter()->trackVisitedLinks())
         return;
     m_viewClient->browserContextAdapter()->visitedLinksManager()->addUrl(params.url);
+}
+
+void WebContentsDelegateQt::WasShown()
+{
+    web_cache::WebCacheManager::GetInstance()->ObserveActivity(web_contents()->GetRenderProcessHost()->GetID());
 }
 
 void WebContentsDelegateQt::RequestToLockMouse(content::WebContents *web_contents, bool user_gesture, bool last_unlocked_by_target)
@@ -339,28 +371,21 @@ void WebContentsDelegateQt::allowCertificateError(const QSharedPointer<Certifica
     m_viewClient->allowCertificateError(errorController);
 }
 
-void WebContentsDelegateQt::requestGeolocationPermission(const GURL &requestingFrameOrigin, const base::Callback<void (bool)> &resultCallback)
+void WebContentsDelegateQt::requestGeolocationPermission(const QUrl &requestingOrigin)
 {
-    QUrl url = toQt(requestingFrameOrigin);
-    bool newRequest = !m_geolocationPermissionRequests.contains(url);
-    m_geolocationPermissionRequests[url] = resultCallback;
-    if (newRequest)
-        m_viewClient->runGeolocationPermissionRequest(url);
+    m_viewClient->runGeolocationPermissionRequest(requestingOrigin);
 }
 
-void WebContentsDelegateQt::cancelGeolocationPermissionRequest(const GURL &requestingFrameOrigin)
-{
-    m_geolocationPermissionRequests.remove(toQt(requestingFrameOrigin));
-    // FIXME: Tell the API layer to cancel the permission request?
-}
+extern int pageTransitionToNavigationType(ui::PageTransition transition);
 
-void WebContentsDelegateQt::geolocationPermissionReply(const QUrl &origin, bool permission)
+void WebContentsDelegateQt::launchExternalURL(const QUrl &url, ui::PageTransition page_transition, bool is_main_frame)
 {
-    auto it = m_geolocationPermissionRequests.find(origin);
-    if (it != m_geolocationPermissionRequests.end()) {
-        (*it).Run(permission);
-        m_geolocationPermissionRequests.erase(it);
-    }
+    int navigationRequestAction = WebContentsAdapterClient::AcceptRequest;
+    m_viewClient->navigationRequested(pageTransitionToNavigationType(page_transition), url, navigationRequestAction, is_main_frame);
+#ifndef QT_NO_DESKTOPSERVICES
+    if (navigationRequestAction == WebContentsAdapterClient::AcceptRequest)
+        QDesktopServices::openUrl(url);
+#endif
 }
 
 void WebContentsDelegateQt::ShowValidationMessage(content::WebContents *web_contents, const gfx::Rect &anchor_in_root_view, const base::string16 &main_text, const base::string16 &sub_text)
@@ -379,6 +404,15 @@ void WebContentsDelegateQt::MoveValidationMessage(content::WebContents *web_cont
 {
     Q_UNUSED(web_contents);
     m_viewClient->moveValidationMessage(toQt(anchor_in_root_view));
+}
+
+void WebContentsDelegateQt::BeforeUnloadFired(content::WebContents *tab, bool proceed, bool *proceed_to_fire_unload)
+{
+    Q_UNUSED(tab);
+    Q_ASSERT(proceed_to_fire_unload);
+    *proceed_to_fire_unload = proceed;
+    if (!proceed)
+        m_viewClient->windowCloseRejected();
 }
 
 } // namespace QtWebEngineCore

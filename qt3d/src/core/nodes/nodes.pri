@@ -10,7 +10,9 @@ HEADERS += \
     $$PWD/qbackendnode_p.h \
     $$PWD/qbackendnode.h \
     $$PWD/qnodeid.h \
-    $$PWD/qnodevisitor.h
+    $$PWD/qnodevisitor_p.h \
+    $$PWD/qabstractnodefactory.h \
+    $$PWD/propertychangehandler_p.h
 
 SOURCES += \
     $$PWD/qnode.cpp \
@@ -18,5 +20,6 @@ SOURCES += \
     $$PWD/qentity.cpp \
     $$PWD/qbackendnode.cpp \
     $$PWD/qnodeid.cpp \
-    $$PWD/qnodevisitor.cpp
+    $$PWD/qnodevisitor.cpp \
+    $$PWD/qabstractnodefactory.cpp
 

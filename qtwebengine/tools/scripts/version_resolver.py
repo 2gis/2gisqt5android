@@ -51,9 +51,9 @@ import json
 import urllib2
 import git_submodule as GitSubmodule
 
-chromium_version = '40.0.2214.115'
-chromium_branch = '2214'
-ninja_version = 'v1.5.3'
+chromium_version = '45.0.2454.101'
+chromium_branch = '2454'
+ninja_version = 'v1.6.0'
 
 json_url = 'http://omahaproxy.appspot.com/all.json'
 
@@ -64,6 +64,7 @@ upstream_src_dir = os.path.abspath(snapshot_src_dir + '_upstream')
 submodule_blacklist = [
     'third_party/WebKit/LayoutTests/w3c/csswg-test'
     , 'third_party/WebKit/LayoutTests/w3c/web-platform-tests'
+    , 'third_party/jsoncpp/source'
     , 'chrome/tools/test/reference_build/chrome_mac'
     , 'chrome/tools/test/reference_build/chrome_linux'
     , 'chrome/tools/test/reference_build/chrome_win'
@@ -91,7 +92,7 @@ def readReleaseChannels():
     return channels
 
 def readSubmodules():
-    git_deps = subprocess.check_output(['git', 'show', chromium_version +':.DEPS.git'])
+    git_deps = subprocess.check_output(['git', 'show', chromium_version +':DEPS'])
 
     parser = GitSubmodule.DEPSParser()
     git_submodules = parser.parse(git_deps)

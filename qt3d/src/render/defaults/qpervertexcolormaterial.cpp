@@ -36,30 +36,24 @@
 
 #include "qpervertexcolormaterial.h"
 #include "qpervertexcolormaterial_p.h"
-#include <Qt3DRenderer/qmaterial.h>
-#include <Qt3DRenderer/qeffect.h>
-#include <Qt3DRenderer/qtechnique.h>
-#include <Qt3DRenderer/qshaderprogram.h>
-#include <Qt3DRenderer/qparameter.h>
-#include <Qt3DRenderer/qrenderpass.h>
-#include <Qt3DRenderer/qopenglfilter.h>
+#include <Qt3DRender/qmaterial.h>
+#include <Qt3DRender/qeffect.h>
+#include <Qt3DRender/qtechnique.h>
+#include <Qt3DRender/qshaderprogram.h>
+#include <Qt3DRender/qparameter.h>
+#include <Qt3DRender/qrenderpass.h>
+#include <Qt3DRender/qgraphicsapifilter.h>
 #include <QUrl>
 #include <QVector3D>
 #include <QVector4D>
 
 QT_BEGIN_NAMESPACE
 
-namespace Qt3D {
+namespace Qt3DRender {
 
-/*!
-    \class Qt3D::QPerVertexColorMaterialPrivate
-    \internal
-*/
 QPerVertexColorMaterialPrivate::QPerVertexColorMaterialPrivate()
     : QMaterialPrivate()
     , m_vertexEffect(new QEffect())
-    , m_lightPositionParameter(new QParameter(QStringLiteral("lightPosition"), QVector4D(1.0f, 1.0f, 0.0f, 1.0f)))
-    , m_lightIntensityParameter(new QParameter(QStringLiteral("lightIntensity"), QVector3D(1.0f, 1.0f, 1.0f)))
     , m_vertexGL3Technique(new QTechnique())
     , m_vertexGL2Technique(new QTechnique())
     , m_vertexES2Technique(new QTechnique())
@@ -72,9 +66,9 @@ QPerVertexColorMaterialPrivate::QPerVertexColorMaterialPrivate()
 }
 
 /*!
-    \class Qt3D::QPerVertexColorMaterial
+    \class Qt3DRender::QPerVertexColorMaterial
     \brief The QPerVertexColorMaterial class provides a default implementation for rendering the color properties set for each vertex.
-    \inmodule Qt3DRenderer
+    \inmodule Qt3DRender
     \since 5.5
 
     This lighting effect is based on the combination of 2 lighting components ambient and diffuse. Ambient is set by the vertex color.
@@ -90,7 +84,7 @@ QPerVertexColorMaterialPrivate::QPerVertexColorMaterialPrivate()
 */
 
 /*!
-    \fn Qt3D::QPerVertexColorMaterial::QPerVertexColorMaterial(QNode *parent)
+    \fn Qt3DRender::QPerVertexColorMaterial::QPerVertexColorMaterial(Qt3DCore::QNode *parent)
 
     Constructs a new QPerVertexColorMaterial instance with parent object \a parent.
 */
@@ -102,7 +96,7 @@ QPerVertexColorMaterial::QPerVertexColorMaterial(QNode *parent)
 }
 
 /*!
-   \fn Qt3D::QPerVertexColorMaterial::~QPerVertexColorMaterial()
+   \fn Qt3DRender::QPerVertexColorMaterial::~QPerVertexColorMaterial()
 
    Destroys the QPerVertexColorMaterial
 */
@@ -118,20 +112,20 @@ void QPerVertexColorMaterialPrivate::init()
     m_vertexGL2ES2Shader->setVertexShaderCode(QShaderProgram::loadSource(QUrl(QStringLiteral("qrc:/shaders/es2/pervertexcolor.vert"))));
     m_vertexGL2ES2Shader->setFragmentShaderCode(QShaderProgram::loadSource(QUrl(QStringLiteral("qrc:/shaders/es2/pervertexcolor.frag"))));
 
-    m_vertexGL3Technique->openGLFilter()->setApi(QOpenGLFilter::Desktop);
-    m_vertexGL3Technique->openGLFilter()->setMajorVersion(3);
-    m_vertexGL3Technique->openGLFilter()->setMinorVersion(1);
-    m_vertexGL3Technique->openGLFilter()->setProfile(QOpenGLFilter::Core);
+    m_vertexGL3Technique->graphicsApiFilter()->setApi(QGraphicsApiFilter::OpenGL);
+    m_vertexGL3Technique->graphicsApiFilter()->setMajorVersion(3);
+    m_vertexGL3Technique->graphicsApiFilter()->setMinorVersion(1);
+    m_vertexGL3Technique->graphicsApiFilter()->setProfile(QGraphicsApiFilter::CoreProfile);
 
-    m_vertexGL2Technique->openGLFilter()->setApi(QOpenGLFilter::Desktop);
-    m_vertexGL2Technique->openGLFilter()->setMajorVersion(2);
-    m_vertexGL2Technique->openGLFilter()->setMinorVersion(0);
-    m_vertexGL2Technique->openGLFilter()->setProfile(QOpenGLFilter::None);
+    m_vertexGL2Technique->graphicsApiFilter()->setApi(QGraphicsApiFilter::OpenGL);
+    m_vertexGL2Technique->graphicsApiFilter()->setMajorVersion(2);
+    m_vertexGL2Technique->graphicsApiFilter()->setMinorVersion(0);
+    m_vertexGL2Technique->graphicsApiFilter()->setProfile(QGraphicsApiFilter::NoProfile);
 
-    m_vertexES2Technique->openGLFilter()->setApi(QOpenGLFilter::ES);
-    m_vertexES2Technique->openGLFilter()->setMajorVersion(2);
-    m_vertexES2Technique->openGLFilter()->setMinorVersion(0);
-    m_vertexES2Technique->openGLFilter()->setProfile(QOpenGLFilter::None);
+    m_vertexES2Technique->graphicsApiFilter()->setApi(QGraphicsApiFilter::OpenGLES);
+    m_vertexES2Technique->graphicsApiFilter()->setMajorVersion(2);
+    m_vertexES2Technique->graphicsApiFilter()->setMinorVersion(0);
+    m_vertexES2Technique->graphicsApiFilter()->setProfile(QGraphicsApiFilter::NoProfile);
 
     m_vertexGL3RenderPass->setShaderProgram(m_vertexGL3Shader);
     m_vertexGL2RenderPass->setShaderProgram(m_vertexGL2ES2Shader);
@@ -145,12 +139,9 @@ void QPerVertexColorMaterialPrivate::init()
     m_vertexEffect->addTechnique(m_vertexGL2Technique);
     m_vertexEffect->addTechnique(m_vertexES2Technique);
 
-    m_vertexEffect->addParameter(m_lightPositionParameter);
-    m_vertexEffect->addParameter(m_lightIntensityParameter);
-
     q_func()->setEffect(m_vertexEffect);
 }
 
-} // Qt3D
+} // namespace Qt3DRender
 
 QT_END_NAMESPACE

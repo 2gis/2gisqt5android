@@ -57,6 +57,7 @@ QT_BEGIN_NAMESPACE
 
 class QQmlType;
 class QQmlEngine;
+class QQmlEnginePrivate;
 class QQmlCustomParser;
 class QQmlTypePrivate;
 class QQmlTypeModule;
@@ -91,8 +92,8 @@ public:
     static QObject *toQObject(const QVariant &, bool *ok = 0);
 
     static int listType(int);
-    static int attachedPropertiesFuncId(const QMetaObject *);
-    static QQmlAttachedPropertiesFunc attachedPropertiesFuncById(int);
+    static int attachedPropertiesFuncId(QQmlEnginePrivate *engine, const QMetaObject *);
+    static QQmlAttachedPropertiesFunc attachedPropertiesFuncById(QQmlEnginePrivate *, int);
 
     enum TypeCategory { Unknown, Object, List };
     static TypeCategory typeCategory(int);
@@ -122,6 +123,8 @@ public:
     static QStringList typeRegistrationFailures();
 
     static QMutex *typeRegistrationLock();
+
+    static QString prettyTypeName(const QObject *object);
 };
 
 struct QQmlMetaTypeData;
@@ -166,9 +169,9 @@ public:
     int metaObjectRevision() const;
     bool containsRevisionedAttributes() const;
 
-    QQmlAttachedPropertiesFunc attachedPropertiesFunction() const;
-    const QMetaObject *attachedPropertiesType() const;
-    int attachedPropertiesId() const;
+    QQmlAttachedPropertiesFunc attachedPropertiesFunction(QQmlEnginePrivate *engine) const;
+    const QMetaObject *attachedPropertiesType(QQmlEnginePrivate *engine) const;
+    int attachedPropertiesId(QQmlEnginePrivate *engine) const;
 
     int parserStatusCast() const;
     const char *interfaceIId() const;
@@ -191,7 +194,7 @@ public:
 
         void setQObjectApi(QQmlEngine *, QObject *);
         QObject *qobjectApi(QQmlEngine *) const;
-        void setScriptApi(QQmlEngine *, QJSValue);
+        void setScriptApi(QQmlEngine *, const QJSValue &);
         QJSValue scriptApi(QQmlEngine *) const;
 
         void init(QQmlEngine *);
@@ -204,11 +207,13 @@ public:
 
     QUrl sourceUrl() const;
 
-    int enumValue(const QHashedStringRef &, bool *ok) const;
-    int enumValue(const QHashedCStringRef &, bool *ok) const;
-    int enumValue(const QV4::String *, bool *ok) const;
+    int enumValue(QQmlEnginePrivate *engine, const QHashedStringRef &, bool *ok) const;
+    int enumValue(QQmlEnginePrivate *engine, const QHashedCStringRef &, bool *ok) const;
+    int enumValue(QQmlEnginePrivate *engine, const QV4::String *, bool *ok) const;
 private:
     QQmlType *superType() const;
+    QQmlType *resolveCompositeBaseType(QQmlEnginePrivate *engine) const;
+    int resolveCompositeEnumValue(QQmlEnginePrivate *engine, const QString &name, bool *ok) const;
     friend class QQmlTypePrivate;
     friend struct QQmlMetaTypeData;
 

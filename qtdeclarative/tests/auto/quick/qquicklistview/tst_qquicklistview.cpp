@@ -40,6 +40,7 @@
 #include <QtQml/qqmlcontext.h>
 #include <QtQml/qqmlexpression.h>
 #include <QtQml/qqmlincubator.h>
+#include <QtQuick/private/qquickitemview_p_p.h>
 #include <QtQuick/private/qquicklistview_p.h>
 #include <QtQuick/private/qquicktext_p.h>
 #include <QtQml/private/qqmlobjectmodel_p.h>
@@ -179,8 +180,10 @@ private slots:
     void creationContext();
     void snapToItem_data();
     void snapToItem();
+    void snapOneItemResize_QTBUG_43555();
     void snapOneItem_data();
     void snapOneItem();
+    void snapOneItemCurrentIndexRemoveAnimation();
 
     void QTBUG_9791();
     void QTBUG_11105();
@@ -241,6 +244,16 @@ private slots:
     void QTBUG_39492();
 
     void jsArrayChange();
+    void objectModel();
+
+    void contentHeightWithDelayRemove();
+    void contentHeightWithDelayRemove_data();
+
+    void QTBUG_48044_currentItemNotVisibleAfterTransition();
+    void QTBUG_48870_fastModelUpdates();
+
+    void QTBUG_50105();
+    void QTBUG_50097_stickyHeader_positionViewAtIndex();
 
 private:
     template <class T> void items(const QUrl &source);
@@ -367,7 +380,7 @@ void tst_QQuickListView::cleanupTestCase()
 template <class T>
 void tst_QQuickListView::items(const QUrl &source)
 {
-    QQuickView *window = createView();
+    QScopedPointer<QQuickView> window(createView());
 
     T model;
     model.addItem("Fred", "12345");
@@ -391,7 +404,7 @@ void tst_QQuickListView::items(const QUrl &source)
     QTRY_VERIFY(contentItem != 0);
 
     QMetaObject::invokeMethod(window->rootObject(), "checkProperties");
-    QTRY_VERIFY(testObject->error() == false);
+    QTRY_VERIFY(!testObject->error());
 
     QTRY_VERIFY(listview->highlightItem() != 0);
     QTRY_COMPARE(listview->count(), model.count());
@@ -414,20 +427,20 @@ void tst_QQuickListView::items(const QUrl &source)
     // switch to other delegate
     testObject->setAnimate(true);
     QMetaObject::invokeMethod(window->rootObject(), "checkProperties");
-    QTRY_VERIFY(testObject->error() == false);
+    QTRY_VERIFY(!testObject->error());
     QTRY_VERIFY(listview->currentItem());
 
     // set invalid highlight
     testObject->setInvalidHighlight(true);
     QMetaObject::invokeMethod(window->rootObject(), "checkProperties");
-    QTRY_VERIFY(testObject->error() == false);
+    QTRY_VERIFY(!testObject->error());
     QTRY_VERIFY(listview->currentItem());
-    QTRY_VERIFY(listview->highlightItem() == 0);
+    QTRY_VERIFY(!listview->highlightItem());
 
     // back to normal highlight
     testObject->setInvalidHighlight(false);
     QMetaObject::invokeMethod(window->rootObject(), "checkProperties");
-    QTRY_VERIFY(testObject->error() == false);
+    QTRY_VERIFY(!testObject->error());
     QTRY_VERIFY(listview->currentItem());
     QTRY_VERIFY(listview->highlightItem() != 0);
 
@@ -439,12 +452,11 @@ void tst_QQuickListView::items(const QUrl &source)
     listview->forceLayout();
 
     int itemCount = findItems<QQuickItem>(contentItem, "wrapper").count();
-    QTRY_VERIFY(itemCount == 0);
+    QTRY_COMPARE(itemCount, 0);
 
     QTRY_COMPARE(listview->highlightResizeVelocity(), 1000.0);
     QTRY_COMPARE(listview->highlightMoveVelocity(), 100000.0);
 
-    delete window;
     delete testObject;
 }
 
@@ -452,7 +464,7 @@ void tst_QQuickListView::items(const QUrl &source)
 template <class T>
 void tst_QQuickListView::changed(const QUrl &source)
 {
-    QQuickView *window = createView();
+    QScopedPointer<QQuickView> window(createView());
 
     T model;
     model.addItem("Fred", "12345");
@@ -486,16 +498,15 @@ void tst_QQuickListView::changed(const QUrl &source)
     QTRY_VERIFY(number != 0);
     QTRY_COMPARE(number->text(), model.number(1));
 
-    delete window;
     delete testObject;
 }
 
 template <class T>
 void tst_QQuickListView::inserted(const QUrl &source)
 {
-    QQuickView *window = createView();
+    QScopedPointer<QQuickView> window(createView());
     window->show();
-    QVERIFY(QTest::qWaitForWindowExposed(window));
+    QVERIFY(QTest::qWaitForWindowExposed(window.data()));
 
     T model;
     model.addItem("Fred", "12345");
@@ -563,7 +574,7 @@ void tst_QQuickListView::inserted(const QUrl &source)
     // Insert item outside visible area
     model.insertItem(1, "Hello", "1324");
 
-    QTRY_VERIFY(listview->contentY() == 80);
+    QTRY_COMPARE(listview->contentY(), qreal(80));
 
     // Confirm items positioned correctly
     for (int i = 5; i < 5+15; ++i) {
@@ -582,10 +593,8 @@ void tst_QQuickListView::inserted(const QUrl &source)
 
     QQuickItem *item = findItem<QQuickItem>(contentItem, "wrapper", 0);
     QVERIFY(item);
-    QCOMPARE(item->y(), 0.);
-    QTRY_VERIFY(listview->contentY() == 0);
+    QTRY_COMPARE(item->y() - listview->contentY(), 0.);
 
-    delete window;
     delete testObject;
 }
 
@@ -634,7 +643,8 @@ void tst_QQuickListView::inserted_more(QQuickItemView::VerticalLayoutDirection v
 
     QTRY_COMPARE(listview->property("count").toInt(), model.count());
 
-
+    // FIXME This is NOT checking anything about visibleItems.first()
+#if 0
     // check visibleItems.first() is in correct position
     QQuickItem *item0 = findItem<QQuickItem>(contentItem, "wrapper", 0);
     QVERIFY(item0);
@@ -642,6 +652,7 @@ void tst_QQuickListView::inserted_more(QQuickItemView::VerticalLayoutDirection v
         QCOMPARE(item0->y(), -item0->height() - itemsOffsetAfterMove);
     else
         QCOMPARE(item0->y(), itemsOffsetAfterMove);
+#endif
 
     QList<QQuickItem*> items = findItems<QQuickItem>(contentItem, "wrapper");
     int firstVisibleIndex = -1;
@@ -657,12 +668,21 @@ void tst_QQuickListView::inserted_more(QQuickItemView::VerticalLayoutDirection v
     // Confirm items positioned correctly and indexes correct
     QQuickText *name;
     QQuickText *number;
+    const qreal visibleFromPos = listview->contentY() - listview->displayMarginBeginning() - listview->cacheBuffer();
+    const qreal visibleToPos = listview->contentY() + listview->height() + listview->displayMarginEnd() + listview->cacheBuffer();
     for (int i = firstVisibleIndex; i < model.count() && i < items.count(); ++i) {
         QQuickItem *item = findItem<QQuickItem>(contentItem, "wrapper", i);
         QVERIFY2(item, QTest::toString(QString("Item %1 not found").arg(i)));
         qreal pos = i*20.0 + itemsOffsetAfterMove;
         if (verticalLayoutDirection == QQuickItemView::BottomToTop)
-            pos = -item0->height() - pos;
+            pos = -item->height() - pos;
+        // Items outside the visible area (including cache buffer) should be skipped
+        if (pos > visibleToPos || pos < visibleFromPos) {
+            QTRY_VERIFY2(QQuickItemPrivate::get(item)->culled || item->y() < visibleFromPos || item->y() > visibleToPos,
+                     QTest::toString(QString("index %5, y %1, from %2, to %3, expected pos %4, culled %6").
+                                     arg(item->y()).arg(visibleFromPos).arg(visibleToPos).arg(pos).arg(i).arg(bool(QQuickItemPrivate::get(item)->culled))));
+            continue;
+        }
         QTRY_COMPARE(item->y(), pos);
         name = findItem<QQuickText>(contentItem, "textName", i);
         QVERIFY(name != 0);
@@ -878,7 +898,7 @@ void tst_QQuickListView::insertBeforeVisible_data()
 template <class T>
 void tst_QQuickListView::removed(const QUrl &source, bool /* animated */)
 {
-    QQuickView *window = createView();
+    QScopedPointer<QQuickView> window(createView());
 
     T model;
     for (int i = 0; i < 50; i++)
@@ -892,7 +912,7 @@ void tst_QQuickListView::removed(const QUrl &source, bool /* animated */)
 
     window->setSource(source);
     window->show();
-    QVERIFY(QTest::qWaitForWindowExposed(window));
+    QVERIFY(QTest::qWaitForWindowExposed(window.data()));
 
     QQuickListView *listview = findItem<QQuickListView>(window->rootObject(), "list");
     QTRY_VERIFY(listview != 0);
@@ -916,7 +936,7 @@ void tst_QQuickListView::removed(const QUrl &source, bool /* animated */)
         QQuickItem *item = findItem<QQuickItem>(contentItem, "wrapper", i);
         if (!item) qWarning() << "Item" << i << "not found";
         QTRY_VERIFY(item);
-        QTRY_VERIFY(item->y() == i*20);
+        QTRY_COMPARE(item->y(), qreal(i*20));
     }
 
     // Remove first item (which is the current item);
@@ -968,7 +988,7 @@ void tst_QQuickListView::removed(const QUrl &source, bool /* animated */)
     }
 
     // Remove current index
-    QTRY_VERIFY(listview->currentIndex() == 9);
+    QTRY_COMPARE(listview->currentIndex(), 9);
     QQuickItem *oldCurrent = listview->currentItem();
     model.removeItem(9);
 
@@ -1004,7 +1024,7 @@ void tst_QQuickListView::removed(const QUrl &source, bool /* animated */)
     model.removeItem(6);
 
     QTRY_COMPARE(listview->currentIndex(), 7);
-    QTRY_VERIFY(listview->currentItem() == oldCurrent);
+    QTRY_COMPARE(listview->currentItem(), oldCurrent);
 
     listview->setContentY(80);
     QTRY_COMPARE(QQuickItemPrivate::get(listview)->polishScheduled, false);
@@ -1051,7 +1071,6 @@ void tst_QQuickListView::removed(const QUrl &source, bool /* animated */)
         model.removeItems(model.count() - 1, 1);
     QTRY_VERIFY(findItems<QQuickItem>(contentItem, "wrapper").count() > 16);
 
-    delete window;
     delete testObject;
 }
 
@@ -1245,7 +1264,7 @@ void tst_QQuickListView::removed_more_data()
 template <class T>
 void tst_QQuickListView::clear(const QUrl &source, QQuickItemView::VerticalLayoutDirection verticalLayoutDirection)
 {
-    QQuickView *window = createView();
+    QScopedPointer<QQuickView> window(createView());
 
     T model;
     for (int i = 0; i < 30; i++)
@@ -1259,7 +1278,7 @@ void tst_QQuickListView::clear(const QUrl &source, QQuickItemView::VerticalLayou
 
     window->setSource(source);
     window->show();
-    QVERIFY(QTest::qWaitForWindowExposed(window));
+    QVERIFY(QTest::qWaitForWindowExposed(window.data()));
 
     QQuickListView *listview = findItem<QQuickListView>(window->rootObject(), "list");
     QTRY_VERIFY(listview != 0);
@@ -1272,24 +1291,23 @@ void tst_QQuickListView::clear(const QUrl &source, QQuickItemView::VerticalLayou
     model.clear();
 
     QTRY_COMPARE(findItems<QQuickListView>(contentItem, "wrapper").count(), 0);
-    QTRY_VERIFY(listview->count() == 0);
-    QTRY_VERIFY(listview->currentItem() == 0);
+    QTRY_COMPARE(listview->count(), 0);
+    QTRY_VERIFY(!listview->currentItem());
     if (verticalLayoutDirection == QQuickItemView::TopToBottom)
         QTRY_COMPARE(listview->contentY(), 0.0);
     else
         QTRY_COMPARE(listview->contentY(), -listview->height());
-    QVERIFY(listview->currentIndex() == -1);
+    QCOMPARE(listview->currentIndex(), -1);
 
     QCOMPARE(listview->contentHeight(), 0.0);
 
     // confirm sanity when adding an item to cleared list
     model.addItem("New", "1");
     listview->forceLayout();
-    QTRY_VERIFY(listview->count() == 1);
+    QTRY_COMPARE(listview->count(), 1);
     QVERIFY(listview->currentItem() != 0);
-    QVERIFY(listview->currentIndex() == 0);
+    QCOMPARE(listview->currentIndex(), 0);
 
-    delete window;
     delete testObject;
 }
 
@@ -1782,7 +1800,7 @@ void tst_QQuickListView::multipleChanges_data()
 
 void tst_QQuickListView::swapWithFirstItem()
 {
-    QQuickView *window = createView();
+    QScopedPointer<QQuickView> window(createView());
 
     QaimModel model;
     for (int i = 0; i < 30; i++)
@@ -1796,7 +1814,7 @@ void tst_QQuickListView::swapWithFirstItem()
 
     window->setSource(testFileUrl("listviewtest.qml"));
     window->show();
-    QVERIFY(QTest::qWaitForWindowExposed(window));
+    QVERIFY(QTest::qWaitForWindowExposed(window.data()));
 
     QQuickListView *listview = findItem<QQuickListView>(window->rootObject(), "list");
     QTRY_VERIFY(listview != 0);
@@ -1805,15 +1823,14 @@ void tst_QQuickListView::swapWithFirstItem()
     // ensure content position is stable
     listview->setContentY(0);
     model.moveItem(1, 0);
-    QTRY_VERIFY(listview->contentY() == 0);
+    QTRY_COMPARE(listview->contentY(), qreal(0));
 
     delete testObject;
-    delete window;
 }
 
 void tst_QQuickListView::enforceRange()
 {
-    QQuickView *window = createView();
+    QScopedPointer<QQuickView> window(createView());
 
     QaimModel model;
     for (int i = 0; i < 30; i++)
@@ -1824,7 +1841,7 @@ void tst_QQuickListView::enforceRange()
 
     window->setSource(testFileUrl("listview-enforcerange.qml"));
     window->show();
-    QVERIFY(QTest::qWaitForWindowExposed(window));
+    QVERIFY(QTest::qWaitForWindowExposed(window.data()));
 
     QQuickListView *listview = findItem<QQuickListView>(window->rootObject(), "list");
     QTRY_VERIFY(listview != 0);
@@ -1861,8 +1878,6 @@ void tst_QQuickListView::enforceRange()
 
     ctxt->setContextProperty("testModel", &model2);
     QCOMPARE(listview->count(), 5);
-
-    delete window;
 }
 
 void tst_QQuickListView::enforceRange_withoutHighlight()
@@ -1872,7 +1887,7 @@ void tst_QQuickListView::enforceRange_withoutHighlight()
     // to the correct position (i.e. to the next/previous item, not next/previous section)
     // when moving up/down via incrementCurrentIndex() and decrementCurrentIndex()
 
-    QQuickView *window = createView();
+    QScopedPointer<QQuickView> window(createView());
 
     QaimModel model;
     model.addItem("Item 0", "a");
@@ -1885,7 +1900,7 @@ void tst_QQuickListView::enforceRange_withoutHighlight()
 
     window->setSource(testFileUrl("listview-enforcerange-nohighlight.qml"));
     window->show();
-    QVERIFY(QTest::qWaitForWindowExposed(window));
+    QVERIFY(QTest::qWaitForWindowExposed(window.data()));
 
     QQuickListView *listview = findItem<QQuickListView>(window->rootObject(), "list");
     QTRY_VERIFY(listview != 0);
@@ -1897,24 +1912,22 @@ void tst_QQuickListView::enforceRange_withoutHighlight()
     QTRY_COMPARE(listview->contentY(), expectedPos);
 
     expectedPos += 20 + 10;     // scroll past 1st section and section delegate of 2nd section
-    QTest::keyClick(window, Qt::Key_Down);
+    QTest::keyClick(window.data(), Qt::Key_Down);
 
     QTRY_COMPARE(listview->contentY(), expectedPos);
 
     expectedPos += 20;     // scroll past 1st item of 2nd section
-    QTest::keyClick(window, Qt::Key_Down);
+    QTest::keyClick(window.data(), Qt::Key_Down);
     QTRY_COMPARE(listview->contentY(), expectedPos);
 
     expectedPos += 20 + 10;     // scroll past 2nd item of 2nd section and section delegate of 3rd section
-    QTest::keyClick(window, Qt::Key_Down);
+    QTest::keyClick(window.data(), Qt::Key_Down);
     QTRY_COMPARE(listview->contentY(), expectedPos);
-
-    delete window;
 }
 
 void tst_QQuickListView::spacing()
 {
-    QQuickView *window = createView();
+    QScopedPointer<QQuickView> window(createView());
 
     QaimModel model;
     for (int i = 0; i < 30; i++)
@@ -1928,7 +1941,7 @@ void tst_QQuickListView::spacing()
 
     window->setSource(testFileUrl("listviewtest.qml"));
     window->show();
-    QVERIFY(QTest::qWaitForWindowExposed(window));
+    QVERIFY(QTest::qWaitForWindowExposed(window.data()));
 
     QQuickListView *listview = findItem<QQuickListView>(window->rootObject(), "list");
     QTRY_VERIFY(listview != 0);
@@ -1943,11 +1956,11 @@ void tst_QQuickListView::spacing()
         QQuickItem *item = findItem<QQuickItem>(contentItem, "wrapper", i);
         if (!item) qWarning() << "Item" << i << "not found";
         QTRY_VERIFY(item);
-        QTRY_VERIFY(item->y() == i*20);
+        QTRY_COMPARE(item->y(), qreal(i*20));
     }
 
     listview->setSpacing(10);
-    QTRY_VERIFY(listview->spacing() == 10);
+    QTRY_COMPARE(listview->spacing(), qreal(10));
 
     // Confirm items positioned correctly
     QTRY_VERIFY(findItems<QQuickItem>(contentItem, "wrapper").count() == 11);
@@ -1955,7 +1968,7 @@ void tst_QQuickListView::spacing()
         QQuickItem *item = findItem<QQuickItem>(contentItem, "wrapper", i);
         if (!item) qWarning() << "Item" << i << "not found";
         QTRY_VERIFY(item);
-        QTRY_VERIFY(item->y() == i*30);
+        QTRY_COMPARE(item->y(), qreal(i*30));
     }
 
     listview->setSpacing(0);
@@ -1969,14 +1982,13 @@ void tst_QQuickListView::spacing()
         QTRY_COMPARE(item->y(), i*20.0);
     }
 
-    delete window;
     delete testObject;
 }
 
 template <typename T>
 void tst_QQuickListView::sections(const QUrl &source)
 {
-    QQuickView *window = createView();
+    QScopedPointer<QQuickView> window(createView());
 
     T model;
     for (int i = 0; i < 30; i++)
@@ -1987,7 +1999,7 @@ void tst_QQuickListView::sections(const QUrl &source)
 
     window->setSource(source);
     window->show();
-    QVERIFY(QTest::qWaitForWindowExposed(window));
+    QVERIFY(QTest::qWaitForWindowExposed(window.data()));
 
     QQuickListView *listview = findItem<QQuickListView>(window->rootObject(), "list");
     QTRY_VERIFY(listview != 0);
@@ -2072,13 +2084,11 @@ void tst_QQuickListView::sections(const QUrl &source)
     item = findItem<QQuickItem>(contentItem, "wrapper", 1);
     QTRY_VERIFY(item);
     QTRY_COMPARE(item->height(), 40.0);
-
-    delete window;
 }
 
 void tst_QQuickListView::sectionsDelegate()
 {
-    QQuickView *window = createView();
+    QScopedPointer<QQuickView> window(createView());
 
     QaimModel model;
     for (int i = 0; i < 30; i++)
@@ -2089,7 +2099,7 @@ void tst_QQuickListView::sectionsDelegate()
 
     window->setSource(testFileUrl("listview-sections_delegate.qml"));
     window->show();
-    QVERIFY(QTest::qWaitForWindowExposed(window));
+    QVERIFY(QTest::qWaitForWindowExposed(window.data()));
 
     QQuickListView *listview = findItem<QQuickListView>(window->rootObject(), "list");
     QTRY_VERIFY(listview != 0);
@@ -2168,8 +2178,6 @@ void tst_QQuickListView::sectionsDelegate()
         QVERIFY(item);
         QTRY_COMPARE(item->y(), qreal(i*20*4));
     }
-
-    delete window;
 }
 
 void tst_QQuickListView::sectionsDragOutsideBounds_data()
@@ -2237,7 +2245,7 @@ void tst_QQuickListView::sectionsDelegate_headerVisibility()
 {
     QSKIP("QTBUG-24395");
 
-    QQuickView *window = createView();
+    QScopedPointer<QQuickView> window(createView());
 
     QaimModel model;
     for (int i = 0; i < 30; i++)
@@ -2246,9 +2254,9 @@ void tst_QQuickListView::sectionsDelegate_headerVisibility()
     window->rootContext()->setContextProperty("testModel", &model);
     window->setSource(testFileUrl("listview-sections_delegate.qml"));
     window->show();
-    QVERIFY(QTest::qWaitForWindowExposed(window));
+    QVERIFY(QTest::qWaitForWindowExposed(window.data()));
     window->requestActivate();
-    QTest::qWaitForWindowActive(window);
+    QTest::qWaitForWindowActive(window.data());
 
     QQuickListView *listview = findItem<QQuickListView>(window->rootObject(), "list");
     QTRY_VERIFY(listview != 0);
@@ -2261,16 +2269,14 @@ void tst_QQuickListView::sectionsDelegate_headerVisibility()
     listview->setCurrentIndex(20);
     QTRY_COMPARE(QQuickItemPrivate::get(listview)->polishScheduled, false);
     QTRY_VERIFY(qFuzzyCompare(listview->contentY(), 200.0));
-    QTRY_VERIFY(listview->isMoving() == false);
+    QTRY_VERIFY(!listview->isMoving());
     listview->setCurrentIndex(0);
     QTRY_VERIFY(qFuzzyIsNull(listview->contentY()));
-
-    delete window;
 }
 
 void tst_QQuickListView::sectionsPositioning()
 {
-    QQuickView *window = createView();
+    QScopedPointer<QQuickView> window(createView());
 
     QaimModel model;
     for (int i = 0; i < 30; i++)
@@ -2281,7 +2287,7 @@ void tst_QQuickListView::sectionsPositioning()
 
     window->setSource(testFileUrl("listview-sections_delegate.qml"));
     window->show();
-    QVERIFY(QTest::qWaitForWindowExposed(window));
+    QVERIFY(QTest::qWaitForWindowExposed(window.data()));
     window->rootObject()->setProperty("sectionPositioning", QVariant(int(QQuickViewSection::InlineLabels | QQuickViewSection::CurrentLabelAtStart | QQuickViewSection::NextLabelAtEnd)));
 
     QQuickListView *listview = findItem<QQuickListView>(window->rootObject(), "list");
@@ -2431,17 +2437,15 @@ void tst_QQuickListView::sectionsPositioning()
     model.clear();
     QTRY_VERIFY(!findVisibleChild(contentItem, "sect_aaa")); // section header
     QTRY_VERIFY(!findVisibleChild(contentItem, "sect_new")); // section footer
-
-    delete window;
 }
 
 void tst_QQuickListView::sectionPropertyChange()
 {
-    QQuickView *window = createView();
+    QScopedPointer<QQuickView> window(createView());
 
     window->setSource(testFileUrl("sectionpropertychange.qml"));
     window->show();
-    QVERIFY(QTest::qWaitForWindowExposed(window));
+    QVERIFY(QTest::qWaitForWindowExposed(window.data()));
 
     QQuickListView *listview = findItem<QQuickListView>(window->rootObject(), "list");
     QTRY_VERIFY(listview != 0);
@@ -2497,17 +2501,15 @@ void tst_QQuickListView::sectionPropertyChange()
         QTRY_VERIFY(item);
         QTRY_COMPARE(item->y(), qreal(25. + i*75.));
     }
-
-    delete window;
 }
 
 void tst_QQuickListView::sectionDelegateChange()
 {
-    QQuickView *window = createView();
+    QScopedPointer<QQuickView> window(createView());
 
     window->setSource(testFileUrl("sectiondelegatechange.qml"));
     window->show();
-    QVERIFY(QTest::qWaitForWindowExposed(window));
+    QVERIFY(QTest::qWaitForWindowExposed(window.data()));
 
     QQuickListView *listview = qobject_cast<QQuickListView *>(window->rootObject());
     QVERIFY(listview != 0);
@@ -2537,14 +2539,12 @@ void tst_QQuickListView::sectionDelegateChange()
         QVERIFY(item);
         QTRY_COMPARE(item->y(), qreal(50. + i*75.));
     }
-
-    delete window;
 }
 
 // QTBUG-43873
 void tst_QQuickListView::sectionsItemInsertion()
 {
-    QQuickView *window = createView();
+    QScopedPointer<QQuickView> window(createView());
 
     QaimModel model;
     for (int i = 0; i < 30; i++)
@@ -2555,7 +2555,7 @@ void tst_QQuickListView::sectionsItemInsertion()
 
     window->setSource(testFileUrl("listview-sections_delegate.qml"));
     window->show();
-    QVERIFY(QTest::qWaitForWindowExposed(window));
+    QVERIFY(QTest::qWaitForWindowExposed(window.data()));
 
     QQuickListView *listview = findItem<QQuickListView>(window->rootObject(), "list");
     QTRY_VERIFY(listview != 0);
@@ -2682,7 +2682,7 @@ void tst_QQuickListView::currentIndex()
     listview->setCurrentIndex(20);
     QTRY_VERIFY(listview->verticalVelocity() != 0.0);
     listview->setCurrentIndex(0);
-    QTRY_VERIFY(listview->verticalVelocity() == 0.0);
+    QTRY_COMPARE(listview->verticalVelocity(), 0.0);
 
     // footer should become visible if it is out of view, and then current index is set to count-1
     window->rootObject()->setProperty("showFooter", true);
@@ -2704,7 +2704,7 @@ void tst_QQuickListView::currentIndex()
 
     // turn off auto highlight
     listview->setHighlightFollowsCurrentItem(false);
-    QVERIFY(listview->highlightFollowsCurrentItem() == false);
+    QVERIFY(!listview->highlightFollowsCurrentItem());
 
     QVERIFY(listview->highlightItem());
     qreal hlPos = listview->highlightItem()->y();
@@ -2713,9 +2713,12 @@ void tst_QQuickListView::currentIndex()
     QTRY_COMPARE(listview->highlightItem()->y(), hlPos);
 
     // insert item before currentIndex
+    window->rootObject()->setProperty("currentItemChangedCount", QVariant(0));
     listview->setCurrentIndex(28);
+    QTRY_COMPARE(window->rootObject()->property("currentItemChangedCount").toInt(), 1);
     model.insertItem(0, "Foo", "1111");
     QTRY_COMPARE(window->rootObject()->property("current").toInt(), 29);
+    QCOMPARE(window->rootObject()->property("currentItemChangedCount").toInt(), 1);
 
     // check removing highlight by setting currentIndex to -1;
     listview->setCurrentIndex(-1);
@@ -2808,7 +2811,7 @@ void tst_QQuickListView::keyNavigation()
 
     window->requestActivate();
     QTest::qWaitForWindowActive(window);
-    QTRY_VERIFY(qGuiApp->focusWindow() == window);
+    QTRY_COMPARE(qGuiApp->focusWindow(), window);
 
     QTest::keyClick(window, forwardsKey);
     QCOMPARE(listview->currentIndex(), 1);
@@ -2903,10 +2906,10 @@ void tst_QQuickListView::keyNavigation_data()
 
 void tst_QQuickListView::itemList()
 {
-    QQuickView *window = createView();
+    QScopedPointer<QQuickView> window(createView());
     window->setSource(testFileUrl("itemlist.qml"));
     window->show();
-    QVERIFY(QTest::qWaitForWindowExposed(window));
+    QVERIFY(QTest::qWaitForWindowExposed(window.data()));
 
     QQuickListView *listview = findItem<QQuickListView>(window->rootObject(), "view");
     QTRY_VERIFY(listview != 0);
@@ -2917,7 +2920,7 @@ void tst_QQuickListView::itemList()
     QQmlObjectModel *model = window->rootObject()->findChild<QQmlObjectModel*>("itemModel");
     QTRY_VERIFY(model != 0);
 
-    QTRY_VERIFY(model->count() == 3);
+    QTRY_COMPARE(model->count(), 3);
     QTRY_COMPARE(listview->currentIndex(), 0);
 
     QQuickItem *item = findItem<QQuickItem>(contentItem, "item1");
@@ -2938,16 +2941,14 @@ void tst_QQuickListView::itemList()
     text = findItem<QQuickText>(contentItem, "text3");
     QTRY_VERIFY(text);
     QTRY_COMPARE(text->text(), QLatin1String("index: 2"));
-
-    delete window;
 }
 
 void tst_QQuickListView::itemListFlicker()
 {
-    QQuickView *window = createView();
+    QScopedPointer<QQuickView> window(createView());
     window->setSource(testFileUrl("itemlist-flicker.qml"));
     window->show();
-    QVERIFY(QTest::qWaitForWindowExposed(window));
+    QVERIFY(QTest::qWaitForWindowExposed(window.data()));
 
     QQuickListView *listview = findItem<QQuickListView>(window->rootObject(), "view");
     QTRY_VERIFY(listview != 0);
@@ -2958,7 +2959,7 @@ void tst_QQuickListView::itemListFlicker()
     QQmlObjectModel *model = window->rootObject()->findChild<QQmlObjectModel*>("itemModel");
     QTRY_VERIFY(model != 0);
 
-    QTRY_VERIFY(model->count() == 3);
+    QTRY_COMPARE(model->count(), 3);
     QTRY_COMPARE(listview->currentIndex(), 0);
 
     QQuickItem *item;
@@ -2987,13 +2988,11 @@ void tst_QQuickListView::itemListFlicker()
     QVERIFY(delegateVisible(item));
     QVERIFY(item = findItem<QQuickItem>(contentItem, "item3"));
     QVERIFY(delegateVisible(item));
-
-    delete window;
 }
 
 void tst_QQuickListView::cacheBuffer()
 {
-    QQuickView *window = createView();
+    QScopedPointer<QQuickView> window(createView());
 
     QaimModel model;
     for (int i = 0; i < 90; i++)
@@ -3007,7 +3006,7 @@ void tst_QQuickListView::cacheBuffer()
 
     window->setSource(testFileUrl("listviewtest.qml"));
     window->show();
-    QVERIFY(QTest::qWaitForWindowExposed(window));
+    QVERIFY(QTest::qWaitForWindowExposed(window.data()));
 
     QQuickListView *listview = findItem<QQuickListView>(window->rootObject(), "list");
     QTRY_VERIFY(listview != 0);
@@ -3024,14 +3023,14 @@ void tst_QQuickListView::cacheBuffer()
         QQuickItem *item = findItem<QQuickItem>(contentItem, "wrapper", i);
         if (!item) qWarning() << "Item" << i << "not found";
         QTRY_VERIFY(item);
-        QTRY_VERIFY(item->y() == i*20);
+        QTRY_COMPARE(item->y(), qreal(i*20));
     }
 
     QQmlIncubationController controller;
     window->engine()->setIncubationController(&controller);
 
     testObject->setCacheBuffer(200);
-    QTRY_VERIFY(listview->cacheBuffer() == 200);
+    QTRY_COMPARE(listview->cacheBuffer(), 200);
 
     // items will be created one at a time
     for (int i = itemCount; i < qMin(itemCount+10,model.count()); ++i) {
@@ -3057,7 +3056,7 @@ void tst_QQuickListView::cacheBuffer()
         QQuickItem *item = findItem<QQuickItem>(contentItem, "wrapper", i);
         if (!item) qWarning() << "Item" << i << "not found";
         QTRY_VERIFY(item);
-        QTRY_VERIFY(item->y() == i*20);
+        QTRY_COMPARE(item->y(), qreal(i*20));
     }
 
     // move view and confirm items in view are visible immediately and outside are created async
@@ -3067,7 +3066,7 @@ void tst_QQuickListView::cacheBuffer()
         QQuickItem *item = findItem<QQuickItem>(contentItem, "wrapper", i);
         if (!item) qWarning() << "Item" << i << "not found";
         QVERIFY(item);
-        QVERIFY(item->y() == i*20);
+        QCOMPARE(item->y(), qreal(i*20));
     }
 
     QVERIFY(findItem<QQuickItem>(listview, "wrapper", 32) == 0);
@@ -3092,13 +3091,12 @@ void tst_QQuickListView::cacheBuffer()
     listview->setCacheBuffer(-1);
     QCOMPARE(listview->cacheBuffer(), 200);
 
-    delete window;
     delete testObject;
 }
 
 void tst_QQuickListView::positionViewAtBeginningEnd()
 {
-    QQuickView *window = createView();
+    QScopedPointer<QQuickView> window(createView());
 
     QaimModel model;
     for (int i = 0; i < 40; i++)
@@ -3111,7 +3109,7 @@ void tst_QQuickListView::positionViewAtBeginningEnd()
     ctxt->setContextProperty("testObject", testObject);
     window->show();
     window->setSource(testFileUrl("listviewtest.qml"));
-    QVERIFY(QTest::qWaitForWindowExposed(window));
+    QVERIFY(QTest::qWaitForWindowExposed(window.data()));
 
     QQuickListView *listview = findItem<QQuickListView>(window->rootObject(), "list");
     QTRY_VERIFY(listview != 0);
@@ -3147,7 +3145,6 @@ void tst_QQuickListView::positionViewAtBeginningEnd()
     QVERIFY(listview->highlightItem());
     QCOMPARE(listview->highlightItem()->y(), 20.);
 
-    delete window;
     delete testObject;
 }
 
@@ -3241,7 +3238,7 @@ void tst_QQuickListView::positionViewAtIndex_data()
 
 void tst_QQuickListView::resetModel()
 {
-    QQuickView *window = createView();
+    QScopedPointer<QQuickView> window(createView());
 
     QStringList strings;
     strings << "one" << "two" << "three";
@@ -3252,7 +3249,7 @@ void tst_QQuickListView::resetModel()
 
     window->setSource(testFileUrl("displaylist.qml"));
     window->show();
-    QVERIFY(QTest::qWaitForWindowExposed(window));
+    QVERIFY(QTest::qWaitForWindowExposed(window.data()));
 
     QQuickListView *listview = findItem<QQuickListView>(window->rootObject(), "list");
     QTRY_VERIFY(listview != 0);
@@ -3280,14 +3277,11 @@ void tst_QQuickListView::resetModel()
         QTRY_VERIFY(display != 0);
         QTRY_COMPARE(display->text(), strings.at(i));
     }
-
-    delete window;
 }
 
 void tst_QQuickListView::propertyChanges()
 {
-    QQuickView *window = createView();
-    QTRY_VERIFY(window);
+    QScopedPointer<QQuickView> window(createView());
     window->setSource(testFileUrl("propertychangestest.qml"));
 
     QQuickListView *listView = window->rootObject()->findChild<QQuickListView*>("listView");
@@ -3348,14 +3342,11 @@ void tst_QQuickListView::propertyChanges()
     QTRY_COMPARE(keyNavigationWrapsSpy.count(),1);
     QTRY_COMPARE(cacheBufferSpy.count(),1);
     QTRY_COMPARE(snapModeSpy.count(),1);
-
-    delete window;
 }
 
 void tst_QQuickListView::componentChanges()
 {
-    QQuickView *window = createView();
-    QTRY_VERIFY(window);
+    QScopedPointer<QQuickView> window(createView());
     window->setSource(testFileUrl("propertychangestest.qml"));
 
     QQuickListView *listView = window->rootObject()->findChild<QQuickListView*>("listView");
@@ -3396,14 +3387,11 @@ void tst_QQuickListView::componentChanges()
     QTRY_COMPARE(delegateSpy.count(),1);
     QTRY_COMPARE(headerSpy.count(),1);
     QTRY_COMPARE(footerSpy.count(),1);
-
-    delete window;
 }
 
 void tst_QQuickListView::modelChanges()
 {
-    QQuickView *window = createView();
-    QTRY_VERIFY(window);
+    QScopedPointer<QQuickView> window(createView());
     window->setSource(testFileUrl("propertychangestest.qml"));
 
     QQuickListView *listView = window->rootObject()->findChild<QQuickListView*>("listView");
@@ -3423,16 +3411,14 @@ void tst_QQuickListView::modelChanges()
 
     listView->setModel(QVariant());
     QTRY_COMPARE(modelSpy.count(),2);
-
-    delete window;
 }
 
 void tst_QQuickListView::QTBUG_9791()
 {
-    QQuickView *window = createView();
+    QScopedPointer<QQuickView> window(createView());
     window->setSource(testFileUrl("strictlyenforcerange.qml"));
     window->show();
-    QVERIFY(QTest::qWaitForWindowExposed(window));
+    QVERIFY(QTest::qWaitForWindowExposed(window.data()));
 
     QQuickListView *listview = qobject_cast<QQuickListView*>(window->rootObject());
     QTRY_VERIFY(listview != 0);
@@ -3458,8 +3444,6 @@ void tst_QQuickListView::QTBUG_9791()
 
     // check that view is positioned correctly
     QTRY_COMPARE(listview->contentX(), 590.0);
-
-    delete window;
 }
 
 void tst_QQuickListView::manualHighlight()
@@ -3500,8 +3484,7 @@ void tst_QQuickListView::manualHighlight()
 
 void tst_QQuickListView::QTBUG_11105()
 {
-    QQuickView *window = createView();
-
+    QScopedPointer<QQuickView> window(createView());
     QaimModel model;
     for (int i = 0; i < 30; i++)
         model.addItem("Item" + QString::number(i), "");
@@ -3514,7 +3497,7 @@ void tst_QQuickListView::QTBUG_11105()
 
     window->setSource(testFileUrl("listviewtest.qml"));
     window->show();
-    QVERIFY(QTest::qWaitForWindowExposed(window));
+    QVERIFY(QTest::qWaitForWindowExposed(window.data()));
 
     QQuickListView *listview = findItem<QQuickListView>(window->rootObject(), "list");
     QTRY_VERIFY(listview != 0);
@@ -3528,7 +3511,7 @@ void tst_QQuickListView::QTBUG_11105()
         QQuickItem *item = findItem<QQuickItem>(contentItem, "wrapper", i);
         if (!item) qWarning() << "Item" << i << "not found";
         QTRY_VERIFY(item);
-        QTRY_VERIFY(item->y() == i*20);
+        QTRY_COMPARE(item->y(), qreal(i*20));
     }
 
     listview->positionViewAtIndex(20, QQuickListView::Beginning);
@@ -3543,14 +3526,13 @@ void tst_QQuickListView::QTBUG_11105()
     itemCount = findItems<QQuickItem>(contentItem, "wrapper").count();
     QCOMPARE(itemCount, 5);
 
-    delete window;
     delete testObject;
 }
 
 void tst_QQuickListView::initialZValues()
 {
     QFETCH(QString, fileName);
-    QQuickView *window = createView();
+    QScopedPointer<QQuickView> window(createView());
     window->setSource(testFileUrl(fileName));
     qApp->processEvents();
 
@@ -3574,8 +3556,6 @@ void tst_QQuickListView::initialZValues()
     QQuickText *sectionItem = 0;
     QTRY_VERIFY(sectionItem = findItem<QQuickText>(contentItem, "section"));
     QTRY_COMPARE(sectionItem->z(), listview->property("sectionZ").toReal());
-
-    delete window;
 }
 
 void tst_QQuickListView::initialZValues_data()
@@ -3622,7 +3602,7 @@ void tst_QQuickListView::header()
 
     QQuickText *header = 0;
     QTRY_VERIFY(header = findItem<QQuickText>(contentItem, "header"));
-    QVERIFY(header == listview->headerItem());
+    QCOMPARE(header, listview->headerItem());
 
     QCOMPARE(header->width(), 100.);
     QCOMPARE(header->height(), 30.);
@@ -3660,7 +3640,7 @@ void tst_QQuickListView::header()
     header = findItem<QQuickText>(contentItem, "header2");
     QVERIFY(header);
 
-    QVERIFY(header == listview->headerItem());
+    QCOMPARE(header, listview->headerItem());
 
     QCOMPARE(header->position(), changedHeaderPos);
     QCOMPARE(header->width(), 50.);
@@ -3769,8 +3749,7 @@ void tst_QQuickListView::header_data()
 
 void tst_QQuickListView::header_delayItemCreation()
 {
-    QQuickView *window = createView();
-
+    QScopedPointer<QQuickView> window(createView());
     QaimModel model;
 
     window->rootContext()->setContextProperty("setCurrentToZero", QVariant(false));
@@ -3791,8 +3770,6 @@ void tst_QQuickListView::header_delayItemCreation()
 
     model.clear();
     QTRY_COMPARE(header->y(), -header->height());
-
-    delete window;
 }
 
 void tst_QQuickListView::headerChangesViewport()
@@ -3811,7 +3788,7 @@ void tst_QQuickListView::headerChangesViewport()
 
     QQuickText *header = 0;
     QTRY_VERIFY(header = findItem<QQuickText>(contentItem, "header"));
-    QVERIFY(header == listview->headerItem());
+    QCOMPARE(header, listview->headerItem());
 
     QCOMPARE(header->height(), 20.);
     QCOMPARE(listview->contentHeight(), 20.);
@@ -3862,7 +3839,7 @@ void tst_QQuickListView::footer()
     QQuickText *footer = findItem<QQuickText>(contentItem, "footer");
     QVERIFY(footer);
 
-    QVERIFY(footer == listview->footerItem());
+    QCOMPARE(footer, listview->footerItem());
 
     QCOMPARE(footer->position(), initialFooterPos);
     QCOMPARE(footer->width(), 100.);
@@ -3922,7 +3899,7 @@ void tst_QQuickListView::footer()
     footer = findItem<QQuickText>(contentItem, "footer2");
     QVERIFY(footer);
 
-    QVERIFY(footer == listview->footerItem());
+    QCOMPARE(footer, listview->footerItem());
 
     QCOMPARE(footer->position(), changedFooterPos);
     QCOMPARE(footer->width(), 50.);
@@ -4125,8 +4102,7 @@ void tst_QQuickListView::extents_data()
 void tst_QQuickListView::resetModel_headerFooter()
 {
     // Resetting a model shouldn't crash in views with header/footer
-
-    QQuickView *window = createView();
+    QScopedPointer<QQuickView> window(createView());
 
     QaimModel model;
     for (int i = 0; i < 4; i++)
@@ -4155,20 +4131,17 @@ void tst_QQuickListView::resetModel_headerFooter()
 
     // A reset should not force a new header or footer to be created.
     QQuickItem *newHeader = findItem<QQuickItem>(contentItem, "header");
-    QVERIFY(newHeader == header);
+    QCOMPARE(newHeader, header);
     QCOMPARE(header->y(), -header->height());
 
     QQuickItem *newFooter = findItem<QQuickItem>(contentItem, "footer");
-    QVERIFY(newFooter == footer);
+    QCOMPARE(newFooter, footer);
     QCOMPARE(footer->y(), 30.*4);
-
-    delete window;
 }
 
 void tst_QQuickListView::resizeView()
 {
-    QQuickView *window = createView();
-
+    QScopedPointer<QQuickView> window(createView());
     QaimModel model;
     for (int i = 0; i < 40; i++)
         model.addItem("Item" + QString::number(i), "");
@@ -4181,7 +4154,7 @@ void tst_QQuickListView::resizeView()
 
     window->setSource(testFileUrl("listviewtest.qml"));
     window->show();
-    QVERIFY(QTest::qWaitForWindowExposed(window));
+    QVERIFY(QTest::qWaitForWindowExposed(window.data()));
 
     QQuickListView *listview = findItem<QQuickListView>(window->rootObject(), "list");
     QTRY_VERIFY(listview != 0);
@@ -4241,13 +4214,12 @@ void tst_QQuickListView::resizeView()
         QCOMPARE(delegateVisible(item), i < 6); // inside view visible, outside not visible
     }
 
-    delete window;
     delete testObject;
 }
 
 void tst_QQuickListView::resizeViewAndRepaint()
 {
-    QQuickView *window = createView();
+    QScopedPointer<QQuickView> window(createView());
 
     QaimModel model;
     for (int i = 0; i < 40; i++)
@@ -4259,7 +4231,7 @@ void tst_QQuickListView::resizeViewAndRepaint()
 
     window->setSource(testFileUrl("resizeview.qml"));
     window->show();
-    QVERIFY(QTest::qWaitForWindowExposed(window));
+    QVERIFY(QTest::qWaitForWindowExposed(window.data()));
 
     QQuickListView *listview = findItem<QQuickListView>(window->rootObject(), "list");
     QTRY_VERIFY(listview != 0);
@@ -4276,13 +4248,11 @@ void tst_QQuickListView::resizeViewAndRepaint()
 
     listview->setHeight(100);
     QTRY_VERIFY(!findItem<QQuickItem>(contentItem, "wrapper", 10));
-
-    delete window;
 }
 
 void tst_QQuickListView::sizeLessThan1()
 {
-    QQuickView *window = createView();
+    QScopedPointer<QQuickView> window(createView());
 
     QaimModel model;
     for (int i = 0; i < 30; i++)
@@ -4296,7 +4266,7 @@ void tst_QQuickListView::sizeLessThan1()
 
     window->setSource(testFileUrl("sizelessthan1.qml"));
     window->show();
-    QVERIFY(QTest::qWaitForWindowExposed(window));
+    QVERIFY(QTest::qWaitForWindowExposed(window.data()));
 
     QQuickListView *listview = findItem<QQuickListView>(window->rootObject(), "list");
     QTRY_VERIFY(listview != 0);
@@ -4313,14 +4283,12 @@ void tst_QQuickListView::sizeLessThan1()
         QTRY_COMPARE(item->y(), i*0.5);
     }
 
-    delete window;
     delete testObject;
 }
 
 void tst_QQuickListView::QTBUG_14821()
 {
-    QQuickView *window = createView();
-
+    QScopedPointer<QQuickView> window(createView());
     window->setSource(testFileUrl("qtbug14821.qml"));
     qApp->processEvents();
 
@@ -4335,14 +4303,11 @@ void tst_QQuickListView::QTBUG_14821()
 
     listview->incrementCurrentIndex();
     QCOMPARE(listview->currentIndex(), 0);
-
-    delete window;
 }
 
 void tst_QQuickListView::resizeDelegate()
 {
-    QQuickView *window = createView();
-
+    QScopedPointer<QQuickView> window(createView());
     QStringList strings;
     for (int i = 0; i < 30; ++i)
         strings << QString::number(i);
@@ -4353,7 +4318,7 @@ void tst_QQuickListView::resizeDelegate()
 
     window->setSource(testFileUrl("displaylist.qml"));
     window->show();
-    QVERIFY(QTest::qWaitForWindowExposed(window));
+    QVERIFY(QTest::qWaitForWindowExposed(window.data()));
 
     QQuickListView *listview = findItem<QQuickListView>(window->rootObject(), "list");
     QVERIFY(listview != 0);
@@ -4413,16 +4378,13 @@ void tst_QQuickListView::resizeDelegate()
 
     QTRY_COMPARE(listview->currentItem()->y(), 70.0);
     QTRY_COMPARE(listview->highlightItem()->y(), 70.0);
-
-    delete window;
 }
 
 void tst_QQuickListView::resizeFirstDelegate()
 {
     // QTBUG-20712: Content Y jumps constantly if first delegate height == 0
     // and other delegates have height > 0
-
-    QQuickView *window = createView();
+    QScopedPointer<QQuickView> window(createView());
 
     // bug only occurs when all items in the model are visible
     QaimModel model;
@@ -4437,7 +4399,7 @@ void tst_QQuickListView::resizeFirstDelegate()
 
     window->setSource(testFileUrl("listviewtest.qml"));
     window->show();
-    QVERIFY(QTest::qWaitForWindowExposed(window));
+    QVERIFY(QTest::qWaitForWindowExposed(window.data()));
 
     QQuickListView *listview = findItem<QQuickListView>(window->rootObject(), "list");
     QVERIFY(listview != 0);
@@ -4490,7 +4452,6 @@ void tst_QQuickListView::resizeFirstDelegate()
     }
 
     delete testObject;
-    delete window;
 }
 
 void tst_QQuickListView::repositionResizedDelegate()
@@ -4598,11 +4559,11 @@ void tst_QQuickListView::repositionResizedDelegate_data()
 
 void tst_QQuickListView::QTBUG_16037()
 {
-    QQuickView *window = createView();
+    QScopedPointer<QQuickView> window(createView());
     window->show();
 
     window->setSource(testFileUrl("qtbug16037.qml"));
-    QVERIFY(QTest::qWaitForWindowExposed(window));
+    QVERIFY(QTest::qWaitForWindowExposed(window.data()));
 
     QQuickListView *listview = findItem<QQuickListView>(window->rootObject(), "listview");
     QTRY_VERIFY(listview != 0);
@@ -4612,8 +4573,6 @@ void tst_QQuickListView::QTBUG_16037()
     QMetaObject::invokeMethod(window->rootObject(), "setModel");
 
     QTRY_COMPARE(listview->contentHeight(), 80.0);
-
-    delete window;
 }
 
 void tst_QQuickListView::indexAt_itemAt_data()
@@ -4664,7 +4623,7 @@ void tst_QQuickListView::indexAt_itemAt()
         QVERIFY(item);
     }
     QCOMPARE(listview->indexAt(x,y), index);
-    QVERIFY(listview->itemAt(x,y) == item);
+    QCOMPARE(listview->itemAt(x,y), item);
 
     releaseView(window);
     delete testObject;
@@ -4672,7 +4631,7 @@ void tst_QQuickListView::indexAt_itemAt()
 
 void tst_QQuickListView::incrementalModel()
 {
-    QQuickView *window = createView();
+    QScopedPointer<QQuickView> window(createView());
     QSKIP("QTBUG-30716");
 
     IncrementalModel model;
@@ -4696,8 +4655,6 @@ void tst_QQuickListView::incrementalModel()
 
     listview->forceLayout();
     QTRY_COMPARE(listview->count(), 25);
-
-    delete window;
 }
 
 void tst_QQuickListView::onAdd()
@@ -4712,7 +4669,7 @@ void tst_QQuickListView::onAdd()
     for (int i=0; i<initialItemCount; i++)
         model.addItem("dummy value", "dummy value");
 
-    QQuickView *window = createView();
+    QScopedPointer<QQuickView> window(createView());
     window->setGeometry(0,0,200, delegateHeight * (initialItemCount + itemsToAdd));
     QQmlContext *ctxt = window->rootContext();
     ctxt->setContextProperty("testModel", &model);
@@ -4735,8 +4692,6 @@ void tst_QQuickListView::onAdd()
     QCOMPARE(result.count(), items.count());
     for (int i=0; i<items.count(); i++)
         QCOMPARE(result[i].toString(), items[i].first);
-
-    delete window;
 }
 
 void tst_QQuickListView::onAdd_data()
@@ -4810,11 +4765,11 @@ void tst_QQuickListView::onRemove_data()
 
 void tst_QQuickListView::rightToLeft()
 {
-    QQuickView *window = createView();
+    QScopedPointer<QQuickView> window(createView());
     window->setGeometry(0,0,640,320);
     window->setSource(testFileUrl("rightToLeft.qml"));
     window->show();
-    QVERIFY(QTest::qWaitForWindowExposed(window));
+    QVERIFY(QTest::qWaitForWindowExposed(window.data()));
 
     QVERIFY(window->rootObject() != 0);
     QQuickListView *listview = findItem<QQuickListView>(window->rootObject(), "view");
@@ -4828,7 +4783,7 @@ void tst_QQuickListView::rightToLeft()
     QQmlObjectModel *model = window->rootObject()->findChild<QQmlObjectModel*>("itemModel");
     QTRY_VERIFY(model != 0);
 
-    QTRY_VERIFY(model->count() == 3);
+    QTRY_COMPARE(model->count(), 3);
     QTRY_COMPARE(listview->currentIndex(), 0);
 
     // initial position at first item, right edge aligned
@@ -4858,18 +4813,16 @@ void tst_QQuickListView::rightToLeft()
     // Ensure resizing maintains position relative to right edge
     qobject_cast<QQuickItem*>(window->rootObject())->setWidth(600);
     QTRY_COMPARE(listview->contentX(), -600.);
-
-    delete window;
 }
 
 void tst_QQuickListView::test_mirroring()
 {
-    QQuickView *windowA = createView();
+    QScopedPointer<QQuickView> windowA(createView());
     windowA->setSource(testFileUrl("rightToLeft.qml"));
     QQuickListView *listviewA = findItem<QQuickListView>(windowA->rootObject(), "view");
     QTRY_VERIFY(listviewA != 0);
 
-    QQuickView *windowB = createView();
+    QScopedPointer<QQuickView> windowB(createView());
     windowB->setSource(testFileUrl("rightToLeft.qml"));
     QQuickListView *listviewB = findItem<QQuickListView>(windowB->rootObject(), "view");
     QTRY_VERIFY(listviewA != 0);
@@ -4893,7 +4846,7 @@ void tst_QQuickListView::test_mirroring()
     foreach (const QString objectName, objectNames)
         QCOMPARE(findItem<QQuickItem>(listviewA, objectName)->x(), findItem<QQuickItem>(listviewB, objectName)->x());
 
-    QVERIFY(listviewB->layoutDirection() == listviewB->effectiveLayoutDirection());
+    QCOMPARE(listviewB->layoutDirection(), listviewB->effectiveLayoutDirection());
     QQuickItemPrivate::get(listviewB)->setLayoutMirror(true);
     QVERIFY(listviewB->layoutDirection() != listviewB->effectiveLayoutDirection());
 
@@ -4918,15 +4871,11 @@ void tst_QQuickListView::test_mirroring()
     // LTR == RTL+mirror
     foreach (const QString objectName, objectNames)
         QCOMPARE(findItem<QQuickItem>(listviewA, objectName)->x(), findItem<QQuickItem>(listviewB, objectName)->x());
-
-    delete windowA;
-    delete windowB;
 }
 
 void tst_QQuickListView::margins()
 {
-    QQuickView *window = createView();
-
+    QScopedPointer<QQuickView> window(createView());
     QaimModel model;
     for (int i = 0; i < 50; i++)
         model.addItem("Item" + QString::number(i), "");
@@ -4936,7 +4885,7 @@ void tst_QQuickListView::margins()
 
     window->setSource(testFileUrl("margins.qml"));
     window->show();
-    QVERIFY(QTest::qWaitForWindowExposed(window));
+    QVERIFY(QTest::qWaitForWindowExposed(window.data()));
 
     QQuickListView *listview = findItem<QQuickListView>(window->rootObject(), "list");
     QTRY_VERIFY(listview != 0);
@@ -4984,8 +4933,6 @@ void tst_QQuickListView::margins()
     listview->setBottomMargin(40);
     QCOMPARE(listview->originY(), 20.);
     QTRY_COMPARE(listview->contentY(), pos-10);
-
-    delete window;
 }
 
 // QTBUG-24028
@@ -5034,7 +4981,7 @@ void tst_QQuickListView::marginsResize()
 
     // flick past the end and check content pos still settles on correct extents
     flick(window, flickStart, flickEnd, 180);
-    QTRY_VERIFY(listview->isMoving() == false);
+    QTRY_VERIFY(!listview->isMoving());
     if (orientation == QQuickListView::Vertical)
         QTRY_COMPARE(listview->contentY(), end);
     else
@@ -5049,7 +4996,7 @@ void tst_QQuickListView::marginsResize()
 
     // flick past the beginning and check content pos still settles on correct extents
     flick(window, flickEnd, flickStart, 180);
-    QTRY_VERIFY(listview->isMoving() == false);
+    QTRY_VERIFY(!listview->isMoving());
     if (orientation == QQuickListView::Vertical)
         QTRY_COMPARE(listview->contentY(), start);
     else
@@ -5197,6 +5144,35 @@ void tst_QQuickListView::snapToItem()
         QCOMPARE(listview->contentX(), startExtent);
 
     releaseView(window);
+}
+
+void tst_QQuickListView::snapOneItemResize_QTBUG_43555()
+{
+    QScopedPointer<QQuickView> window(createView());
+    window->resize(QSize(100, 320));
+    window->setResizeMode(QQuickView::SizeRootObjectToView);
+    QQuickViewTestUtil::moveMouseAway(window.data());
+
+    window->setSource(testFileUrl("snapOneItemResize.qml"));
+    window->show();
+    QVERIFY(QTest::qWaitForWindowExposed(window.data()));
+
+    QQuickListView *listview = qobject_cast<QQuickListView*>(window->rootObject());
+    QTRY_VERIFY(listview != 0);
+
+    QSignalSpy currentIndexSpy(listview, SIGNAL(currentIndexChanged()));
+
+    QTRY_COMPARE(QQuickItemPrivate::get(listview)->polishScheduled, false);
+    QTRY_COMPARE(listview->currentIndex(), 5);
+    currentIndexSpy.clear();
+
+    window->resize(QSize(400, 320));
+
+    QTRY_COMPARE(int(listview->width()), 400);
+    QTRY_COMPARE(QQuickItemPrivate::get(listview)->polishScheduled, false);
+
+    QTRY_COMPARE(listview->currentIndex(), 5);
+    QCOMPARE(currentIndexSpy.count(), 0);
 }
 
 void tst_QQuickListView::qAbstractItemModel_package_items()
@@ -5372,7 +5348,7 @@ void tst_QQuickListView::QTBUG_21742()
 
 void tst_QQuickListView::asynchronous()
 {
-    QQuickView *window = createView();
+    QScopedPointer<QQuickView> window(createView());
     window->show();
     QQmlIncubationController controller;
     window->engine()->setIncubationController(&controller);
@@ -5411,8 +5387,6 @@ void tst_QQuickListView::asynchronous()
         QQuickItem *item = findItem<QQuickItem>(contentItem, "wrapper", i);
         QTRY_COMPARE(item->y(), i*50.0);
     }
-
-    delete window;
 }
 
 void tst_QQuickListView::snapOneItem_data()
@@ -5546,10 +5520,32 @@ void tst_QQuickListView::snapOneItem()
     releaseView(window);
 }
 
+void tst_QQuickListView::snapOneItemCurrentIndexRemoveAnimation()
+{
+    QScopedPointer<QQuickView> window(createView());
+    window->setSource(testFileUrl("snapOneItemCurrentIndexRemoveAnimation.qml"));
+    window->show();
+    QVERIFY(QTest::qWaitForWindowExposed(window.data()));
+
+    QQuickListView *listview = qobject_cast<QQuickListView*>(window->rootObject());
+    QTRY_VERIFY(listview != 0);
+
+    QTRY_COMPARE(QQuickItemPrivate::get(listview)->polishScheduled, false);
+    QTRY_COMPARE(listview->currentIndex(), 0);
+    QSignalSpy currentIndexSpy(listview, SIGNAL(currentIndexChanged()));
+
+    QMetaObject::invokeMethod(window->rootObject(), "removeItemZero");
+    QTRY_COMPARE(listview->property("transitionsRun").toInt(), 1);
+
+    QTRY_COMPARE(QQuickItemPrivate::get(listview)->polishScheduled, false);
+
+    QCOMPARE(listview->currentIndex(), 0);
+    QCOMPARE(currentIndexSpy.count(), 0);
+}
+
 void tst_QQuickListView::attachedProperties_QTBUG_32836()
 {
-    QQuickView *window = createView();
-
+    QScopedPointer<QQuickView> window(createView());
     window->setSource(testFileUrl("attachedProperties.qml"));
     window->show();
     qApp->processEvents();
@@ -5576,8 +5572,6 @@ void tst_QQuickListView::attachedProperties_QTBUG_32836()
     QQuickItem *sectionItem = findItem<QQuickItem>(window->rootObject(), "sectionItem");
     QVERIFY(sectionItem);
     QCOMPARE(sectionItem->width(), listview->width());
-
-    delete window;
 }
 
 void tst_QQuickListView::unrequestedVisibility()
@@ -7006,7 +7000,7 @@ void tst_QQuickListView::matchIndexLists(const QVariantList &indexLists, const Q
 void tst_QQuickListView::matchItemsAndIndexes(const QVariantMap &items, const QaimModel &model, const QList<int> &expectedIndexes)
 {
     for (QVariantMap::const_iterator it = items.begin(); it != items.end(); ++it) {
-        QVERIFY(it.value().type() == QVariant::Int);
+        QCOMPARE(it.value().type(), QVariant::Int);
         QString name = it.key();
         int itemIndex = it.value().toInt();
         QVERIFY2(expectedIndexes.contains(itemIndex), QTest::toString(QString("Index %1 not found in expectedIndexes").arg(itemIndex)));
@@ -7020,7 +7014,7 @@ void tst_QQuickListView::matchItemsAndIndexes(const QVariantMap &items, const Qa
 void tst_QQuickListView::matchItemLists(const QVariantList &itemLists, const QList<QQuickItem *> &expectedItems)
 {
     for (int i=0; i<itemLists.count(); i++) {
-        QVERIFY(itemLists[i].type() == QVariant::List);
+        QCOMPARE(itemLists[i].type(), QVariant::List);
         QVariantList current = itemLists[i].toList();
         for (int j=0; j<current.count(); j++) {
             QQuickItem *o = qobject_cast<QQuickItem*>(current[j].value<QObject*>());
@@ -7033,12 +7027,12 @@ void tst_QQuickListView::matchItemLists(const QVariantList &itemLists, const QLi
 
 void tst_QQuickListView::flickBeyondBounds()
 {
-    QQuickView *window = createView();
-    QQuickViewTestUtil::moveMouseAway(window);
+    QScopedPointer<QQuickView> window(createView());
+    QQuickViewTestUtil::moveMouseAway(window.data());
 
     window->setSource(testFileUrl("flickBeyondBoundsBug.qml"));
     window->show();
-    QVERIFY(QTest::qWaitForWindowExposed(window));
+    QVERIFY(QTest::qWaitForWindowExposed(window.data()));
 
 
     QQuickListView *listview = findItem<QQuickListView>(window->rootObject(), "list");
@@ -7049,7 +7043,7 @@ void tst_QQuickListView::flickBeyondBounds()
     QTRY_COMPARE(QQuickItemPrivate::get(listview)->polishScheduled, false);
 
     // Flick view up beyond bounds
-    flick(window, QPoint(10, 10), QPoint(10, -2000), 180);
+    flick(window.data(), QPoint(10, 10), QPoint(10, -2000), 180);
 #ifdef Q_OS_MAC
     QSKIP("Disabled due to flaky behavior on CI system (QTBUG-44493)");
     QTRY_COMPARE(findItems<QQuickItem>(contentItem, "wrapper").count(), 0);
@@ -7062,21 +7056,19 @@ void tst_QQuickListView::flickBeyondBounds()
         QQuickItem *item = findItem<QQuickItem>(contentItem, "wrapper", i);
         if (!item) qWarning() << "Item" << i << "not found";
         QTRY_VERIFY(item);
-        QTRY_VERIFY(item->y() == i*45);
+        QTRY_COMPARE(item->y(), qreal(i*45));
     }
-
-    delete window;
 }
 
 void tst_QQuickListView::destroyItemOnCreation()
 {
     QaimModel model;
-    QQuickView *window = createView();
+    QScopedPointer<QQuickView> window(createView());
     window->rootContext()->setContextProperty("testModel", &model);
 
     window->setSource(testFileUrl("destroyItemOnCreation.qml"));
     window->show();
-    QVERIFY(QTest::qWaitForWindowExposed(window));
+    QVERIFY(QTest::qWaitForWindowExposed(window.data()));
 
 
     QQuickListView *listview = findItem<QQuickListView>(window->rootObject(), "list");
@@ -7092,19 +7084,16 @@ void tst_QQuickListView::destroyItemOnCreation()
 
     QTRY_COMPARE(findItems<QQuickItem>(contentItem, "wrapper").count(), 0);
     QCOMPARE(model.count(), 0);
-
-    delete window;
 }
 
 void tst_QQuickListView::parentBinding()
 {
-    QQuickView *window = createView();
-
+    QScopedPointer<QQuickView> window(createView());
     QQmlTestMessageHandler messageHandler;
 
     window->setSource(testFileUrl("parentBinding.qml"));
     window->show();
-    QTest::qWaitForWindowExposed(window);
+    QTest::qWaitForWindowExposed(window.data());
 
     QQuickListView *listview = qobject_cast<QQuickListView*>(window->rootObject());
     QVERIFY(listview != 0);
@@ -7120,8 +7109,6 @@ void tst_QQuickListView::parentBinding()
 
     // there should be no transient binding error
     QVERIFY2(messageHandler.messages().isEmpty(), qPrintable(messageHandler.messageString()));
-
-    delete window;
 }
 
 void tst_QQuickListView::defaultHighlightMoveDuration()
@@ -7138,7 +7125,7 @@ void tst_QQuickListView::defaultHighlightMoveDuration()
 
 void tst_QQuickListView::accessEmptyCurrentItem_QTBUG_30227()
 {
-    QQuickView *window = createView();
+    QScopedPointer<QQuickView> window(createView());
     window->setSource(testFileUrl("emptymodel.qml"));
 
     QQuickListView *listview = window->rootObject()->findChild<QQuickListView*>();
@@ -7154,7 +7141,7 @@ void tst_QQuickListView::accessEmptyCurrentItem_QTBUG_30227()
 
 void tst_QQuickListView::delayedChanges_QTBUG_30555()
 {
-    QQuickView *window = createView();
+    QScopedPointer<QQuickView> window(createView());
     window->setSource(testFileUrl("delayedChanges.qml"));
 
     QQuickListView *listview = window->rootObject()->findChild<QQuickListView*>();
@@ -7168,21 +7155,19 @@ void tst_QQuickListView::delayedChanges_QTBUG_30555()
 
     QMetaObject::invokeMethod(window->rootObject(), "takeTwo_sync");
     QCOMPARE(listview->count(), 6);
-
-    delete window;
 }
 
 void tst_QQuickListView::outsideViewportChangeNotAffectingView()
 {
-    QQuickView *window = createView();
-    QQuickViewTestUtil::moveMouseAway(window);
+    QScopedPointer<QQuickView> window(createView());
+    QQuickViewTestUtil::moveMouseAway(window.data());
     window->setSource(testFileUrl("outsideViewportChangeNotAffectingView.qml"));
 
     QQuickListView *listview = window->rootObject()->findChild<QQuickListView*>();
     QTRY_VERIFY(listview != 0);
 
     window->show();
-    QVERIFY(QTest::qWaitForWindowExposed(window));
+    QVERIFY(QTest::qWaitForWindowExposed(window.data()));
 
     listview->setContentY(1250);
 
@@ -7204,25 +7189,21 @@ void tst_QQuickListView::outsideViewportChangeNotAffectingView()
     QMetaObject::invokeMethod(window->rootObject(), "resizeThirdItem", Q_ARG(QVariant, 400));
     QTRY_COMPARE(listview->indexAt(0, listview->contentY()), 4);
     QTRY_COMPARE(listview->itemAt(0, listview->contentY())->y(), 1200.);
-
-    delete window;
 }
 
 void tst_QQuickListView::testProxyModelChangedAfterMove()
 {
-    QQuickView *window = createView();
-    QQuickViewTestUtil::moveMouseAway(window);
+    QScopedPointer<QQuickView> window(createView());
+    QQuickViewTestUtil::moveMouseAway(window.data());
     window->setSource(testFileUrl("proxytest.qml"));
 
     QQuickListView *listview = window->rootObject()->findChild<QQuickListView*>();
     QTRY_VERIFY(listview != 0);
 
     window->show();
-    QVERIFY(QTest::qWaitForWindowExposed(window));
+    QVERIFY(QTest::qWaitForWindowExposed(window.data()));
 
     QTRY_COMPARE(listview->count(), 3);
-
-    delete window;
 }
 
 void tst_QQuickListView::typedModel()
@@ -7245,10 +7226,10 @@ void tst_QQuickListView::typedModel()
 
 void tst_QQuickListView::displayMargin()
 {
-    QQuickView *window = createView();
+    QScopedPointer<QQuickView> window(createView());
     window->setSource(testFileUrl("displayMargin.qml"));
     window->show();
-    QVERIFY(QTest::qWaitForWindowExposed(window));
+    QVERIFY(QTest::qWaitForWindowExposed(window.data()));
 
     QQuickListView *listview = window->rootObject()->findChild<QQuickListView*>();
     QVERIFY(listview != 0);
@@ -7276,17 +7257,15 @@ void tst_QQuickListView::displayMargin()
     // the first delegate should now be outside the begin margin
     listview->positionViewAtIndex(4, QQuickListView::Beginning);
     QCOMPARE(delegateVisible(item0), false);
-
-    delete window;
 }
 
 void tst_QQuickListView::negativeDisplayMargin()
 {
     QQuickItem *item;
-    QQuickView *window = createView();
+    QScopedPointer<QQuickView> window(createView());
     window->setSource(testFileUrl("negativeDisplayMargin.qml"));
     window->show();
-    QVERIFY(QTest::qWaitForWindowExposed(window));
+    QVERIFY(QTest::qWaitForWindowExposed(window.data()));
 
     QQuickItem *listview = window->rootObject();
     QQuickListView *innerList = findItem<QQuickListView>(window->rootObject(), "innerList");
@@ -7319,8 +7298,6 @@ void tst_QQuickListView::negativeDisplayMargin()
     listview->setProperty("contentY", 0);
     QTRY_VERIFY(item = findItem<QQuickItem>(content, "delegate", 4));
     QTRY_COMPARE(delegateVisible(item), true);
-
-    delete window;
 }
 
 void tst_QQuickListView::highlightItemGeometryChanges()
@@ -7398,7 +7375,7 @@ void tst_QQuickListView::stickyPositioning()
     QFETCH(QPointF, headerPos);
     QFETCH(QPointF, footerPos);
 
-    QQuickView *window = createView();
+    QQuickView *window = getView();
 
     QaimModel model;
     for (int i = 0; i < 20; i++)
@@ -7441,7 +7418,7 @@ void tst_QQuickListView::stickyPositioning()
         QCOMPARE(actualPos, footerPos);
     }
 
-    delete window;
+    releaseView(window);
 }
 
 void tst_QQuickListView::stickyPositioning_data()
@@ -7468,7 +7445,7 @@ void tst_QQuickListView::stickyPositioning_data()
     QTest::newRow("top header") << "stickyPositioning-header.qml"
             << Qt::Vertical << Qt::LeftToRight << QQuickListView::TopToBottom
             << 0 << QQuickItemView::Beginning << QList<QPointF>()
-            << QPointF(0,-10) << QPointF();
+            << QPointF(0,0) << QPointF();
 
     QTest::newRow("top header: 1/2 up") << "stickyPositioning-header.qml"
             << Qt::Vertical << Qt::LeftToRight << QQuickListView::TopToBottom
@@ -7495,7 +7472,7 @@ void tst_QQuickListView::stickyPositioning_data()
     QTest::newRow("top footer") << "stickyPositioning-footer.qml"
             << Qt::Vertical << Qt::LeftToRight << QQuickListView::BottomToTop
             << 19 << QQuickItemView::End << QList<QPointF>()
-            << QPointF() << QPointF(0,-10);
+            << QPointF() << QPointF(0,0);
 
     QTest::newRow("top footer: 1/2 up") << "stickyPositioning-footer.qml"
             << Qt::Vertical << Qt::LeftToRight << QQuickListView::BottomToTop
@@ -7522,7 +7499,7 @@ void tst_QQuickListView::stickyPositioning_data()
     QTest::newRow("bottom header") << "stickyPositioning-header.qml"
             << Qt::Vertical << Qt::LeftToRight << QQuickListView::BottomToTop
             << 0 << QQuickItemView::Beginning << QList<QPointF>()
-            << QPointF(0,100) << QPointF();
+            << QPointF(0,90) << QPointF();
 
     QTest::newRow("bottom header: 1/2 down") << "stickyPositioning-header.qml"
             << Qt::Vertical << Qt::LeftToRight << QQuickListView::BottomToTop
@@ -7549,7 +7526,7 @@ void tst_QQuickListView::stickyPositioning_data()
     QTest::newRow("bottom footer") << "stickyPositioning-footer.qml"
             << Qt::Vertical << Qt::LeftToRight << QQuickListView::TopToBottom
             << 19 << QQuickItemView::End << QList<QPointF>()
-            << QPointF() << QPointF(0,100);
+            << QPointF() << QPointF(0,90);
 
     QTest::newRow("bottom footer: 1/2 down") << "stickyPositioning-footer.qml"
             << Qt::Vertical << Qt::LeftToRight << QQuickListView::TopToBottom
@@ -7576,7 +7553,7 @@ void tst_QQuickListView::stickyPositioning_data()
     QTest::newRow("top header & bottom footer") << "stickyPositioning-both.qml"
             << Qt::Vertical << Qt::LeftToRight << QQuickListView::TopToBottom
             << 0 << QQuickItemView::Beginning << QList<QPointF>()
-            << QPointF(0,-10) << QPointF(0,90);
+            << QPointF(0,0) << QPointF(0,100);
 
     QTest::newRow("top header & bottom footer: 1/2 up") << "stickyPositioning-both.qml"
             << Qt::Vertical << Qt::LeftToRight << QQuickListView::TopToBottom
@@ -7629,7 +7606,7 @@ void tst_QQuickListView::stickyPositioning_data()
     QTest::newRow("left header") << "stickyPositioning-header.qml"
             << Qt::Horizontal << Qt::LeftToRight << QQuickListView::TopToBottom
             << 0 << QQuickItemView::Beginning << QList<QPointF>()
-            << QPointF(-10,0) << QPointF();
+            << QPointF(0,0) << QPointF();
 
     QTest::newRow("left header: 1/2 left") << "stickyPositioning-header.qml"
             << Qt::Horizontal << Qt::LeftToRight << QQuickListView::TopToBottom
@@ -7656,7 +7633,7 @@ void tst_QQuickListView::stickyPositioning_data()
     QTest::newRow("left footer") << "stickyPositioning-footer.qml"
             << Qt::Horizontal << Qt::RightToLeft << QQuickListView::TopToBottom
             << 19 << QQuickItemView::End << QList<QPointF>()
-            << QPointF() << QPointF(-10,0);
+            << QPointF() << QPointF(0,0);
 
     QTest::newRow("left footer: 1/2 left") << "stickyPositioning-footer.qml"
             << Qt::Horizontal << Qt::RightToLeft << QQuickListView::TopToBottom
@@ -7683,7 +7660,7 @@ void tst_QQuickListView::stickyPositioning_data()
     QTest::newRow("right header") << "stickyPositioning-header.qml"
             << Qt::Horizontal << Qt::RightToLeft << QQuickListView::TopToBottom
             << 0 << QQuickItemView::Beginning << QList<QPointF>()
-            << QPointF(100,0) << QPointF();
+            << QPointF(90,0) << QPointF();
 
     QTest::newRow("right header: 1/2 right") << "stickyPositioning-header.qml"
             << Qt::Horizontal << Qt::RightToLeft << QQuickListView::TopToBottom
@@ -7710,7 +7687,7 @@ void tst_QQuickListView::stickyPositioning_data()
     QTest::newRow("right footer") << "stickyPositioning-footer.qml"
             << Qt::Horizontal << Qt::LeftToRight << QQuickListView::TopToBottom
             << 19 << QQuickItemView::End << QList<QPointF>()
-            << QPointF() << QPointF(100,0);
+            << QPointF() << QPointF(90,0);
 
     QTest::newRow("right footer: 1/2 right") << "stickyPositioning-footer.qml"
             << Qt::Horizontal << Qt::LeftToRight << QQuickListView::TopToBottom
@@ -7737,7 +7714,7 @@ void tst_QQuickListView::stickyPositioning_data()
     QTest::newRow("left header & right footer") << "stickyPositioning-both.qml"
             << Qt::Horizontal << Qt::LeftToRight << QQuickListView::TopToBottom
             << 0 << QQuickItemView::Beginning << QList<QPointF>()
-            << QPointF(-10,0) << QPointF(90,0);
+            << QPointF(0,0) << QPointF(100,0);
 
     QTest::newRow("left header & right footer: 1/2 left") << "stickyPositioning-both.qml"
             << Qt::Horizontal << Qt::LeftToRight << QQuickListView::TopToBottom
@@ -7856,7 +7833,7 @@ void tst_QQuickListView::QTBUG_38209()
 
     // simulate mouse flick
     flick(window.data(), QPoint(200, 200), QPoint(200, 50), 100);
-    QTRY_VERIFY(listview->isMoving() == false);
+    QTRY_VERIFY(!listview->isMoving());
     qreal contentY = listview->contentY();
 
     // flick down
@@ -8061,6 +8038,322 @@ void tst_QQuickListView::jsArrayChange()
     // no change
     view->setModel(QVariant::fromValue(array2));
     QCOMPARE(spy.count(), 1);
+}
+
+static bool compareObjectModel(QQuickListView *listview, QQmlObjectModel *model)
+{
+    if (listview->count() != model->count())
+        return false;
+    for (int i = 0; i < listview->count(); ++i) {
+        listview->setCurrentIndex(i);
+        if (listview->currentItem() != model->get(i))
+            return false;
+    }
+    return true;
+}
+
+void tst_QQuickListView::objectModel()
+{
+    QQmlEngine engine;
+    QQmlComponent component(&engine, testFileUrl("objectmodel.qml"));
+
+    QQuickListView *listview = qobject_cast<QQuickListView *>(component.create());
+    QVERIFY(listview);
+
+    QQmlObjectModel *model = listview->model().value<QQmlObjectModel *>();
+    QVERIFY(model);
+
+    listview->setCurrentIndex(0);
+    QVERIFY(listview->currentItem());
+    QCOMPARE(listview->currentItem()->property("color").toString(), QColor("red").name());
+
+    listview->setCurrentIndex(1);
+    QVERIFY(listview->currentItem());
+    QCOMPARE(listview->currentItem()->property("color").toString(), QColor("green").name());
+
+    listview->setCurrentIndex(2);
+    QVERIFY(listview->currentItem());
+    QCOMPARE(listview->currentItem()->property("color").toString(), QColor("blue").name());
+
+    QQuickItem *item0 = new QQuickItem(listview);
+    item0->setSize(QSizeF(20, 20));
+    model->append(item0);
+    QCOMPARE(model->count(), 4);
+    QVERIFY(compareObjectModel(listview, model));
+
+    QQuickItem *item1 = new QQuickItem(listview);
+    item1->setSize(QSizeF(20, 20));
+    model->insert(0, item1);
+    QCOMPARE(model->count(), 5);
+    QVERIFY(compareObjectModel(listview, model));
+
+    model->move(1, 2, 3);
+    QVERIFY(compareObjectModel(listview, model));
+
+    model->remove(2, 2);
+    QCOMPARE(model->count(), 3);
+    QVERIFY(compareObjectModel(listview, model));
+
+    model->clear();
+    QCOMPARE(model->count(), 0);
+    QCOMPARE(listview->count(), 0);
+
+    delete listview;
+}
+
+void tst_QQuickListView::contentHeightWithDelayRemove_data()
+{
+    QTest::addColumn<bool>("useDelayRemove");
+    QTest::addColumn<QByteArray>("removeFunc");
+    QTest::addColumn<int>("countDelta");
+    QTest::addColumn<qreal>("contentHeightDelta");
+
+    QTest::newRow("remove without delayRemove")
+            << false
+            << QByteArray("takeOne")
+            << -1
+            << qreal(-1 * 100.0);
+
+    QTest::newRow("remove with delayRemove")
+            << true
+            << QByteArray("takeOne")
+            << -1
+            << qreal(-1 * 100.0);
+
+    QTest::newRow("remove with multiple delayRemove")
+            << true
+            << QByteArray("takeThree")
+            << -3
+            << qreal(-3 * 100.0);
+
+    QTest::newRow("clear with delayRemove")
+            << true
+            << QByteArray("takeAll")
+            << -5
+            << qreal(-5 * 100.0);
+}
+
+void tst_QQuickListView::contentHeightWithDelayRemove()
+{
+    QFETCH(bool, useDelayRemove);
+    QFETCH(QByteArray, removeFunc);
+    QFETCH(int, countDelta);
+    QFETCH(qreal, contentHeightDelta);
+
+    QScopedPointer<QQuickView> window(createView());
+    window->setSource(testFileUrl("contentHeightWithDelayRemove.qml"));
+    window->show();
+    QVERIFY(QTest::qWaitForWindowExposed(window.data()));
+
+    QQuickListView *listview = window->rootObject()->findChild<QQuickListView*>();
+    QTRY_VERIFY(listview != 0);
+
+    const int initialCount(listview->count());
+    const int eventualCount(initialCount + countDelta);
+
+    const qreal initialContentHeight(listview->contentHeight());
+    const int eventualContentHeight(qRound(initialContentHeight + contentHeightDelta));
+
+    listview->setProperty("useDelayRemove", useDelayRemove);
+    QMetaObject::invokeMethod(window->rootObject(), removeFunc.constData());
+    QTest::qWait(50);
+    QCOMPARE(listview->count(), eventualCount);
+
+    if (useDelayRemove) {
+        QCOMPARE(qRound(listview->contentHeight()), qRound(initialContentHeight));
+        QTRY_COMPARE(qRound(listview->contentHeight()), eventualContentHeight);
+    } else {
+        QCOMPARE(qRound(listview->contentHeight()), eventualContentHeight);
+    }
+}
+
+void tst_QQuickListView::QTBUG_48044_currentItemNotVisibleAfterTransition()
+{
+    QScopedPointer<QQuickView> window(createView());
+    window->setSource(testFileUrl("qtbug48044.qml"));
+    window->show();
+    QVERIFY(QTest::qWaitForWindowExposed(window.data()));
+
+    QQuickListView *listview = window->rootObject()->findChild<QQuickListView*>();
+    QTRY_VERIFY(listview != 0);
+
+    // Expand 2nd header
+    listview->setProperty("transitionsDone", QVariant(false));
+    QTest::mouseClick(window.data(), Qt::LeftButton, Qt::NoModifier, QPoint(window->width() / 2, 75));
+    QTRY_VERIFY(listview->property("transitionsDone").toBool());
+
+    // Flick listview to the bottom
+    flick(window.data(), QPoint(window->width() / 2, 400), QPoint(window->width() / 2, 0), 100);
+    QTRY_VERIFY(!listview->isMoving());
+
+    // Expand 3rd header
+    listview->setProperty("transitionsDone", QVariant(false));
+    QTest::mouseClick(window.data(), Qt::LeftButton, Qt::NoModifier, QPoint(window->width() / 2, window->height() - 25));
+    QTRY_VERIFY(listview->property("transitionsDone").toBool());
+
+    // Check current item is what we expect
+    QCOMPARE(listview->currentIndex(), 2);
+    QQuickItem *currentItem = listview->currentItem();
+    QVERIFY(currentItem);
+    QVERIFY(currentItem->isVisible());
+
+    // This is the actual test
+    QQuickItemPrivate *currentPriv = QQuickItemPrivate::get(currentItem);
+    QVERIFY(!currentPriv->culled);
+}
+
+static bool testVisibleItems(const QQuickItemViewPrivate *priv, bool *nonUnique, FxViewItem **failItem, int *expectedIdx)
+{
+    QHash<QQuickItem*, int> uniqueItems;
+
+    int skip = 0;
+    for (int i = 0; i < priv->visibleItems.count(); ++i) {
+        FxViewItem *item = priv->visibleItems.at(i);
+        if (!item) {
+            *failItem = Q_NULLPTR;
+            return false;
+        }
+#if 0
+        qDebug() << "\t" << item->index
+                 << item->item
+                 << item->position()
+                 << (!item->item || QQuickItemPrivate::get(item->item)->culled ? "hidden" : "visible");
+#endif
+        if (item->index == -1) {
+            ++skip;
+        } else if (item->index != priv->visibleIndex + i - skip) {
+            *nonUnique = false;
+            *failItem = item;
+            *expectedIdx = priv->visibleIndex + i - skip;
+            return false;
+        } else if (uniqueItems.contains(item->item)) {
+            *nonUnique = true;
+            *failItem = item;
+            *expectedIdx = uniqueItems.find(item->item).value();
+            return false;
+        }
+
+        uniqueItems.insert(item->item, item->index);
+    }
+
+    return true;
+}
+
+class QTBUG_48870_Model : public QAbstractListModel
+{
+    Q_OBJECT
+
+public:
+
+    QTBUG_48870_Model()
+        : QAbstractListModel()
+        , m_rowCount(20)
+    {
+        QTimer *t = new QTimer(this);
+        t->setInterval(500);
+        t->start();
+
+        qsrand(qHash(QDateTime::currentDateTime()));
+        connect(t, &QTimer::timeout, this, &QTBUG_48870_Model::updateModel);
+    }
+
+    int rowCount(const QModelIndex &) const
+    {
+        return m_rowCount;
+    }
+
+    QVariant data(const QModelIndex &, int) const
+    {
+        return QVariant();
+    }
+
+public Q_SLOTS:
+    void updateModel()
+    {
+        if (m_rowCount > 10) {
+            for (int i = 0; i < 10; ++i) {
+                int rnum = qrand() % m_rowCount;
+                beginRemoveRows(QModelIndex(), rnum, rnum);
+                m_rowCount--;
+                endRemoveRows();
+            }
+        }
+        if (m_rowCount < 20) {
+            for (int i = 0; i < 10; ++i) {
+                int rnum = qrand() % m_rowCount;
+                beginInsertRows(QModelIndex(), rnum, rnum);
+                m_rowCount++;
+                endInsertRows();
+            }
+        }
+    }
+
+private:
+    int m_rowCount;
+};
+
+void tst_QQuickListView::QTBUG_48870_fastModelUpdates()
+{
+    QTBUG_48870_Model model;
+
+    QScopedPointer<QQuickView> window(createView());
+    QQmlContext *ctxt = window->rootContext();
+    ctxt->setContextProperty("testModel", &model);
+
+    window->setSource(testFileUrl("qtbug48870.qml"));
+    window->show();
+    QVERIFY(QTest::qWaitForWindowExposed(window.data()));
+
+    QQuickListView *listview = findItem<QQuickListView>(window->rootObject(), "list");
+    QTRY_VERIFY(listview != 0);
+
+    QQuickItemViewPrivate *priv = QQuickItemViewPrivate::get(listview);
+    bool nonUnique;
+    FxViewItem *item = Q_NULLPTR;
+    int expectedIdx;
+    QVERIFY(testVisibleItems(priv, &nonUnique, &item, &expectedIdx));
+
+    for (int i = 0; i < 10; i++) {
+        QTest::qWait(100);
+        QVERIFY2(testVisibleItems(priv, &nonUnique, &item, &expectedIdx),
+                 qPrintable(!item ? QString("Unexpected null item")
+                            : nonUnique ? QString("Non-unique item at %1 and %2").arg(item->index).arg(expectedIdx)
+                                        : QString("Found index %1, expected index is %3").arg(item->index).arg(expectedIdx)));
+        if (i % 3 != 0) {
+            if (i & 1)
+                flick(window.data(), QPoint(100, 200), QPoint(100, 0), 100);
+            else
+                flick(window.data(), QPoint(100, 200), QPoint(100, 400), 100);
+        }
+    }
+}
+
+// infinite loop in overlay header positioning due to undesired rounding in QQuickFlickablePrivate::fixup()
+void tst_QQuickListView::QTBUG_50105()
+{
+    QQmlEngine engine;
+    QQmlComponent component(&engine);
+    component.loadUrl(testFileUrl("qtbug50105.qml"));
+
+    QScopedPointer<QQuickWindow> window(qobject_cast<QQuickWindow *>(component.create()));
+    QVERIFY(window.data());
+    QVERIFY(QTest::qWaitForWindowExposed(window.data()));
+}
+
+void tst_QQuickListView::QTBUG_50097_stickyHeader_positionViewAtIndex()
+{
+    QScopedPointer<QQuickView> window(createView());
+    window->setSource(testFileUrl("qtbug50097.qml"));
+    window->show();
+    QVERIFY(QTest::qWaitForWindowExposed(window.data()));
+
+    QQuickListView *listview = qobject_cast<QQuickListView*>(window->rootObject());
+    QVERIFY(listview != 0);
+    QTRY_COMPARE(listview->contentY(), -100.0); // the header size, since the header is overlaid
+    listview->setProperty("currentPage", 2);
+    QTRY_COMPARE(listview->contentY(), 400.0); // a full page of items down, sans the original negative header position
+    listview->setProperty("currentPage", 1);
+    QTRY_COMPARE(listview->contentY(), -100.0); // back to the same position: header visible, items not under the header.
 }
 
 QTEST_MAIN(tst_QQuickListView)

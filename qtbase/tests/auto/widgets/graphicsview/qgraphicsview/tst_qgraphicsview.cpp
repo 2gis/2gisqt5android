@@ -145,7 +145,7 @@ class tst_QGraphicsView : public QObject
 
 public:
     tst_QGraphicsView()
-        : platformName(qApp->platformName().toLower())
+        : platformName(QGuiApplication::platformName().toLower())
     { }
 private slots:
     void initTestCase();
@@ -255,7 +255,6 @@ private slots:
     void task186827_deleteReplayedItem();
     void task207546_focusCrash();
     void task210599_unsetDragWhileDragging();
-    void task236394_sendShortcutOverrideEvent();
     void task239729_noViewUpdate_data();
     void task239729_noViewUpdate();
     void task239047_fitInViewSmallViewport();
@@ -3369,14 +3368,6 @@ void tst_QGraphicsView::task210599_unsetDragWhileDragging()
     QCOMPARE(basePos, view.mapFromScene(0, 0));
 }
 
-void tst_QGraphicsView::task236394_sendShortcutOverrideEvent()
-{
-    QGraphicsView view;
-    view.show();
-    QKeyEvent event(QEvent::ShortcutOverride, Qt::Key_A, 0, QString("A"));
-    QApplication::sendEvent(&view, &event);
-}
-
 class ChangedListener : public QObject
 {
     Q_OBJECT
@@ -3525,7 +3516,7 @@ void tst_QGraphicsView::embeddedViews()
     v2->QWidget::render(&actual);
     QTransform b = item->transform;
 
-    QVERIFY(a == b);
+    QCOMPARE(a, b);
     delete v1;
 }
 

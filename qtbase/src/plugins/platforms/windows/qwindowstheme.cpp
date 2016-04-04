@@ -43,7 +43,6 @@
 #include "qwindowsintegration.h"
 #include "qt_windows.h"
 #include "qwindowsfontdatabase.h"
-#include "qwindowsscaling.h"
 #ifdef Q_OS_WINCE
 #  include "qplatformfunctions_wince.h"
 #  include "winuser.h"
@@ -68,6 +67,7 @@
 #include <QtGui/QPainter>
 #include <QtGui/QPixmapCache>
 #include <qpa/qwindowsysteminterface.h>
+#include <private/qhighdpiscaling_p.h>
 #include <private/qsystemlibrary_p.h>
 
 #include <algorithm>
@@ -131,7 +131,7 @@ static inline bool booleanSystemParametersInfo(UINT what, bool defaultValue)
     return defaultValue;
 }
 
-static inline bool dWordSystemParametersInfo(UINT what, DWORD defaultValue)
+static inline DWORD dWordSystemParametersInfo(UINT what, DWORD defaultValue)
 {
     DWORD result;
     if (SystemParametersInfo(what, 0, &result, 0))
@@ -393,6 +393,8 @@ QVariant QWindowsTheme::themeHint(ThemeHint hint) const
         return QVariant(booleanSystemParametersInfo(SPI_GETSNAPTODEFBUTTON, false));
     case ContextMenuOnMouseRelease:
         return QVariant(true);
+    case WheelScrollLines:
+        return QVariant(int(dWordSystemParametersInfo(SPI_GETWHEELSCROLLLINES, 3)));
     default:
         break;
     }
@@ -495,7 +497,8 @@ static QPixmap loadIconFromShell32(int resourceId, QSizeF size)
 
 QPixmap QWindowsTheme::standardPixmap(StandardPixmap sp, const QSizeF &size) const
 {
-    const int scaleFactor = QWindowsScaling::factor();
+    const QScreen *primaryScreen = QGuiApplication::primaryScreen();
+    const int scaleFactor = primaryScreen ? qRound(QHighDpiScaling::factor(primaryScreen)) : 1;
     const QSizeF pixmapSize = size * scaleFactor;
     int resourceId = -1;
     LPCTSTR iconName = 0;
@@ -632,7 +635,7 @@ public:
 
     static FakePointer *create(T thing)
     {
-        return reinterpret_cast<FakePointer *>(thing);
+        return reinterpret_cast<FakePointer *>(qintptr(thing));
     }
 
     T operator * () const
@@ -720,6 +723,7 @@ QPixmap QWindowsTheme::fileIconPixmap(const QFileInfo &fileInfo, const QSizeF &s
         iconSize|SHGFI_SYSICONINDEX;
 #endif // Q_OS_WINCE
     unsigned long val = 0;
+#if !defined(QT_NO_WINCE_SHELLSDK)
     if (cacheableDirIcon && useDefaultFolderIcon) {
         flags |= SHGFI_USEFILEATTRIBUTES;
         val = SHGetFileInfo(L"dummy",
@@ -729,6 +733,7 @@ QPixmap QWindowsTheme::fileIconPixmap(const QFileInfo &fileInfo, const QSizeF &s
         val = SHGetFileInfo(reinterpret_cast<const wchar_t *>(filePath.utf16()), 0,
                             &info, sizeof(SHFILEINFO), flags);
     }
+#endif // !QT_NO_WINCE_SHELLSDK
 
     // Even if GetFileInfo returns a valid result, hIcon can be empty in some cases
     if (val && info.hIcon) {

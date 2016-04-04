@@ -34,8 +34,8 @@
 **
 ****************************************************************************/
 
-#ifndef QT3D_CAMERALENS_H
-#define QT3D_CAMERALENS_H
+#ifndef QT3DCORE_CAMERALENS_H
+#define QT3DCORE_CAMERALENS_H
 
 #include <Qt3DCore/qcomponent.h>
 #include <Qt3DCore/qt3dcore_global.h>
@@ -46,7 +46,7 @@
 
 QT_BEGIN_NAMESPACE
 
-namespace Qt3D {
+namespace Qt3DCore {
 
 class QCameraLensPrivate;
 
@@ -69,37 +69,20 @@ public:
     ~QCameraLens();
 
     enum ProjectionType {
-        OrthogonalProjection,
+        OrthographicProjection,
         PerspectiveProjection,
         FrustumProjection
     };
     Q_ENUM(ProjectionType)
 
-    void setProjectionType(ProjectionType projectionType);
     ProjectionType projectionType() const;
-
-    void setNearPlane(float nearPlane);
     float nearPlane() const;
-
-    void setFarPlane(float nearPlane);
     float farPlane() const;
-
-    void setFieldOfView(float fieldOfView);
     float fieldOfView() const;
-
-    void setAspectRatio(float aspectRatio);
     float aspectRatio() const;
-
-    void setLeft(float left);
     float left() const;
-
-    void setRight(float right);
     float right() const;
-
-    void setBottom(float bottom);
     float bottom() const;
-
-    void setTop(float top);
     float top() const;
 
     QMatrix4x4 projectionMatrix() const;
@@ -115,17 +98,28 @@ public:
     void setPerspectiveProjection(float fieldOfView, float aspect,
                                   float nearPlane, float farPlane);
 
+public Q_SLOTS:
+    void setProjectionType(ProjectionType projectionType);
+    void setNearPlane(float nearPlane);
+    void setFarPlane(float farPlane);
+    void setFieldOfView(float fieldOfView);
+    void setAspectRatio(float aspectRatio);
+    void setLeft(float left);
+    void setRight(float right);
+    void setBottom(float bottom);
+    void setTop(float top);
+
 Q_SIGNALS:
-    void projectionTypeChanged();
-    void nearPlaneChanged();
-    void farPlaneChanged();
-    void fieldOfViewChanged();
-    void aspectRatioChanged();
-    void leftChanged();
-    void rightChanged();
-    void bottomChanged();
-    void topChanged();
-    void projectionMatrixChanged();
+    void projectionTypeChanged(QCameraLens::ProjectionType projectionType);
+    void nearPlaneChanged(float nearPlane);
+    void farPlaneChanged(float farPlane);
+    void fieldOfViewChanged(float fieldOfView);
+    void aspectRatioChanged(float aspectRatio);
+    void leftChanged(float left);
+    void rightChanged(float right);
+    void bottomChanged(float bottom);
+    void topChanged(float top);
+    void projectionMatrixChanged(const QMatrix4x4 &projectionMatrix);
 
 protected:
     QCameraLens(QCameraLensPrivate &dd, QNode *parent = 0);

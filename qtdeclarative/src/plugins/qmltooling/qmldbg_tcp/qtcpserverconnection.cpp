@@ -31,136 +31,125 @@
 **
 ****************************************************************************/
 
-#include "qtcpserverconnection.h"
-#include "qpacketprotocol.h"
+#include "qtcpserverconnectionfactory.h"
+#include "qqmldebugserver.h"
 
 #include <QtCore/qplugin.h>
 #include <QtNetwork/qtcpserver.h>
 #include <QtNetwork/qtcpsocket.h>
 
-#include <private/qqmldebugserver_p.h>
-
 QT_BEGIN_NAMESPACE
 
-class QTcpServerConnectionPrivate {
+class QTcpServerConnection : public QQmlDebugServerConnection
+{
+    Q_OBJECT
+    Q_DISABLE_COPY(QTcpServerConnection)
+
 public:
-    QTcpServerConnectionPrivate();
+    QTcpServerConnection();
+    ~QTcpServerConnection();
 
-    int portFrom;
-    int portTo;
-    bool block;
-    QString hostaddress;
-    QTcpSocket *socket;
-    QPacketProtocol *protocol;
-    QTcpServer *tcpServer;
+    void setServer(QQmlDebugServer *server);
+    bool setPortRange(int portFrom, int portTo, bool block, const QString &hostaddress);
+    bool setFileName(const QString &fileName, bool block);
 
-    QQmlDebugServer *debugServer;
+    bool isConnected() const;
+    void disconnect();
+
+    void waitForConnection();
+    void flush();
+
+private slots:
+    void newConnection();
+
+private:
+    bool listen();
+
+    int m_portFrom;
+    int m_portTo;
+    bool m_block;
+    QString m_hostaddress;
+    QTcpSocket *m_socket;
+    QTcpServer *m_tcpServer;
+    QQmlDebugServer *m_debugServer;
 };
 
-QTcpServerConnectionPrivate::QTcpServerConnectionPrivate() :
-    portFrom(0),
-    portTo(0),
-    block(false),
-    socket(0),
-    protocol(0),
-    tcpServer(0),
-    debugServer(0)
-{
-}
-
 QTcpServerConnection::QTcpServerConnection() :
-    d_ptr(new QTcpServerConnectionPrivate)
+    m_portFrom(0),
+    m_portTo(0),
+    m_block(false),
+    m_socket(0),
+    m_tcpServer(0),
+    m_debugServer(0)
 {
-
 }
 
 QTcpServerConnection::~QTcpServerConnection()
 {
     if (isConnected())
         disconnect();
-    delete d_ptr;
 }
 
 void QTcpServerConnection::setServer(QQmlDebugServer *server)
 {
-    Q_D(QTcpServerConnection);
-    d->debugServer = server;
+    m_debugServer = server;
 }
 
 bool QTcpServerConnection::isConnected() const
 {
-    Q_D(const QTcpServerConnection);
-    return d->socket && d->socket->state() == QTcpSocket::ConnectedState;
-}
-
-void QTcpServerConnection::send(const QList<QByteArray> &messages)
-{
-    Q_D(QTcpServerConnection);
-
-    if (!isConnected()
-            || !d->protocol || !d->socket)
-        return;
-
-    foreach (const QByteArray &message, messages) {
-        QPacket pack;
-        pack.writeRawData(message.data(), message.length());
-        d->protocol->send(pack);
-    }
-    d->socket->flush();
+    return m_socket && m_socket->state() == QTcpSocket::ConnectedState;
 }
 
 void QTcpServerConnection::disconnect()
 {
-    Q_D(QTcpServerConnection);
-
-    while (d->socket && d->socket->bytesToWrite() > 0) {
-        if (!d->socket->waitForBytesWritten()) {
+    while (m_socket && m_socket->bytesToWrite() > 0) {
+        if (!m_socket->waitForBytesWritten()) {
             qWarning("QML Debugger: Failed to send remaining %lld bytes on disconnect.",
-                     d->socket->bytesToWrite());
+                     m_socket->bytesToWrite());
             break;
         }
     }
 
-    // protocol might still be processing packages at this point
-    d->protocol->deleteLater();
-    d->protocol = 0;
-    d->socket->deleteLater();
-    d->socket = 0;
-}
-
-bool QTcpServerConnection::waitForMessage()
-{
-    Q_D(QTcpServerConnection);
-    return d->protocol->waitForReadyRead(-1);
+    m_socket->deleteLater();
+    m_socket = 0;
 }
 
 bool QTcpServerConnection::setPortRange(int portFrom, int portTo, bool block,
                                         const QString &hostaddress)
 {
-    Q_D(QTcpServerConnection);
-    d->portFrom = portFrom;
-    d->portTo = portTo;
-    d->block = block;
-    d->hostaddress = hostaddress;
+    m_portFrom = portFrom;
+    m_portTo = portTo;
+    m_block = block;
+    m_hostaddress = hostaddress;
 
     return listen();
 }
 
+bool QTcpServerConnection::setFileName(const QString &fileName, bool block)
+{
+    Q_UNUSED(fileName);
+    Q_UNUSED(block);
+    return false;
+}
+
 void QTcpServerConnection::waitForConnection()
 {
-    Q_D(QTcpServerConnection);
-    d->tcpServer->waitForNewConnection(-1);
+    m_tcpServer->waitForNewConnection(-1);
+}
+
+void QTcpServerConnection::flush()
+{
+    if (m_socket)
+        m_socket->flush();
 }
 
 bool QTcpServerConnection::listen()
 {
-    Q_D(QTcpServerConnection);
-
-    d->tcpServer = new QTcpServer(this);
-    QObject::connect(d->tcpServer, SIGNAL(newConnection()), this, SLOT(newConnection()));
+    m_tcpServer = new QTcpServer(this);
+    QObject::connect(m_tcpServer, SIGNAL(newConnection()), this, SLOT(newConnection()));
     QHostAddress hostaddress;
-    if (!d->hostaddress.isEmpty()) {
-        if (!hostaddress.setAddress(d->hostaddress)) {
+    if (!m_hostaddress.isEmpty()) {
+        if (!hostaddress.setAddress(m_hostaddress)) {
             hostaddress = QHostAddress::Any;
             qDebug("QML Debugger: Incorrect host address provided. So accepting connections "
                      "from any host.");
@@ -168,64 +157,45 @@ bool QTcpServerConnection::listen()
     } else {
         hostaddress = QHostAddress::Any;
     }
-    int port = d->portFrom;
+    int port = m_portFrom;
     do {
-        if (d->tcpServer->listen(hostaddress, port)) {
+        if (m_tcpServer->listen(hostaddress, port)) {
             qDebug("QML Debugger: Waiting for connection on port %d...", port);
             break;
         }
         ++port;
-    } while (port <= d->portTo);
-    if (port > d->portTo) {
-        if (d->portFrom == d->portTo)
-            qWarning("QML Debugger: Unable to listen to port %d.", d->portFrom);
+    } while (port <= m_portTo);
+    if (port > m_portTo) {
+        if (m_portFrom == m_portTo)
+            qWarning("QML Debugger: Unable to listen to port %d.", m_portFrom);
         else
-            qWarning("QML Debugger: Unable to listen to ports %d - %d.", d->portFrom, d->portTo);
+            qWarning("QML Debugger: Unable to listen to ports %d - %d.", m_portFrom, m_portTo);
         return false;
     } else {
         return true;
     }
 }
 
-
-void QTcpServerConnection::readyRead()
-{
-    Q_D(QTcpServerConnection);
-    if (!d->protocol)
-        return;
-
-    QPacket packet = d->protocol->read();
-
-    QByteArray content = packet.data();
-    d->debugServer->receiveMessage(content);
-}
-
 void QTcpServerConnection::newConnection()
 {
-    Q_D(QTcpServerConnection);
-
-    if (d->socket && d->socket->peerPort()) {
+    if (m_socket && m_socket->peerPort()) {
         qWarning("QML Debugger: Another client is already connected.");
-        QTcpSocket *faultyConnection = d->tcpServer->nextPendingConnection();
+        QTcpSocket *faultyConnection = m_tcpServer->nextPendingConnection();
         delete faultyConnection;
         return;
     }
 
-    delete d->socket;
-    d->socket = d->tcpServer->nextPendingConnection();
-    d->socket->setParent(this);
-    d->protocol = new QPacketProtocol(d->socket, this);
-    QObject::connect(d->protocol, SIGNAL(readyRead()), this, SLOT(readyRead()));
-    QObject::connect(d->protocol, SIGNAL(invalidPacket()), this, SLOT(invalidPacket()));
-
-    if (d->block) {
-        d->protocol->waitForReadyRead(-1);
-    }
+    delete m_socket;
+    m_socket = m_tcpServer->nextPendingConnection();
+    m_socket->setParent(this);
+    m_debugServer->setDevice(m_socket);
 }
 
-void QTcpServerConnection::invalidPacket()
+QQmlDebugServerConnection *QTcpServerConnectionFactory::create(const QString &key)
 {
-    qWarning("QML Debugger: Received a corrupted packet! Giving up ...");
+    return (key == QLatin1String("QTcpServerConnection") ? new QTcpServerConnection : 0);
 }
 
 QT_END_NAMESPACE
+
+#include "qtcpserverconnection.moc"

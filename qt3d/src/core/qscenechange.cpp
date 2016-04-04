@@ -40,10 +40,10 @@
 
 QT_BEGIN_NAMESPACE
 
-namespace Qt3D {
+namespace Qt3DCore {
 
 /*!
-    \enum Qt3D::ChangeFlag
+    \enum Qt3DCore::ChangeFlag
 
     The types of change that can be sent and received by Qt3D's change notification system.
 
@@ -58,10 +58,6 @@ namespace Qt3D {
     \value AllChanges Allows an observer to monitor for any of the above changes.
 */
 
-/*!
-    \class Qt3D::QSceneChangePrivate
-    \internal
-*/
 QSceneChangePrivate::QSceneChangePrivate()
     : q_ptr(Q_NULLPTR)
 {

@@ -10,7 +10,6 @@ SOURCES += \
     $$PWD/qv4lookup.cpp \
     $$PWD/qv4identifier.cpp \
     $$PWD/qv4identifiertable.cpp \
-    $$PWD/qv4mm.cpp \
     $$PWD/qv4managed.cpp \
     $$PWD/qv4internalclass.cpp \
     $$PWD/qv4sparsearray.cpp \
@@ -40,7 +39,6 @@ SOURCES += \
     $$PWD/qv4sequenceobject.cpp \
     $$PWD/qv4include.cpp \
     $$PWD/qv4qobjectwrapper.cpp \
-    $$PWD/qv4qmlextensions.cpp \
     $$PWD/qv4vme_moth.cpp \
     $$PWD/qv4profiling.cpp \
     $$PWD/qv4arraybuffer.cpp \
@@ -57,7 +55,6 @@ HEADERS += \
     $$PWD/qv4lookup_p.h \
     $$PWD/qv4identifier_p.h \
     $$PWD/qv4identifiertable_p.h \
-    $$PWD/qv4mm_p.h \
     $$PWD/qv4managed_p.h \
     $$PWD/qv4internalclass_p.h \
     $$PWD/qv4sparsearray_p.h \
@@ -90,7 +87,6 @@ HEADERS += \
     $$PWD/qv4sequenceobject_p.h \
     $$PWD/qv4include_p.h \
     $$PWD/qv4qobjectwrapper_p.h \
-    $$PWD/qv4qmlextensions_p.h \
     $$PWD/qv4vme_moth_p.h \
     $$PWD/qv4profiling_p.h \
     $$PWD/qv4arraybuffer_p.h \
@@ -102,7 +98,7 @@ HEADERS += \
 
 HEADERS += \
     $$PWD/qv4runtime_p.h \
-    $$PWD/qv4value_inl_p.h \
+    $$PWD/qv4value_p.h \
     $$PWD/qv4string_p.h \
     $$PWD/qv4value_p.h
 

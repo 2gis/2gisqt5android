@@ -78,6 +78,7 @@ public slots:
 private slots:
     void getSetCheck();
     void addActionsAndClear();
+    void addActionsConnect();
 
     void keyboardNavigation_data();
     void keyboardNavigation();
@@ -93,6 +94,7 @@ private slots:
 
     void task208001_stylesheet();
     void activeSubMenuPosition();
+    void activeSubMenuPositionExec();
     void task242454_sizeHint();
     void task176201_clear();
     void task250673_activeMultiColumnSubMenuPosition();
@@ -264,6 +266,34 @@ void tst_QMenu::addActionsAndClear()
     QCOMPARE(menus[0]->actions().count(), 0);
 }
 
+static void testFunction() { }
+
+void tst_QMenu::addActionsConnect()
+{
+    QMenu menu;
+    const QString text = QLatin1String("bla");
+    const QIcon icon;
+    menu.addAction(text, &menu, SLOT(deleteLater()));
+    menu.addAction(text, &menu, &QMenu::deleteLater);
+    menu.addAction(text, testFunction);
+    menu.addAction(text, &menu, testFunction);
+    menu.addAction(icon, text, &menu, SLOT(deleteLater()));
+    menu.addAction(icon, text, &menu, &QMenu::deleteLater);
+    menu.addAction(icon, text, testFunction);
+    menu.addAction(icon, text, &menu, testFunction);
+#ifndef QT_NO_SHORTCUT
+    const QKeySequence keySequence(Qt::CTRL + Qt::Key_C);
+    menu.addAction(text, &menu, SLOT(deleteLater()), keySequence);
+    menu.addAction(text, &menu, &QMenu::deleteLater, keySequence);
+    menu.addAction(text, testFunction, keySequence);
+    menu.addAction(text, &menu, testFunction, keySequence);
+    menu.addAction(icon, text, &menu, SLOT(deleteLater()), keySequence);
+    menu.addAction(icon, text, &menu, &QMenu::deleteLater, keySequence);
+    menu.addAction(icon, text, testFunction, keySequence);
+    menu.addAction(icon, text, &menu, testFunction, keySequence);
+#endif // !QT_NO_SHORTCUT
+}
+
 // We have a separate mouseActivation test for Windows mobile
 #ifndef Q_OS_WINCE
 void tst_QMenu::mouseActivation()
@@ -334,8 +364,10 @@ void tst_QMenu::keyboardNavigation_data()
     QTest::newRow("data9") << Qt::Key(Qt::Key_Down) << Qt::KeyboardModifiers(Qt::NoModifier) << 3 << 0 << false << false<< true;
     QTest::newRow("data10") << Qt::Key(Qt::Key_Return) << Qt::KeyboardModifiers(Qt::NoModifier) << 3 << 0 << false << true << false;
 
-    // Test shortcuts.
-    QTest::newRow("shortcut0") << Qt::Key(Qt::Key_V) << Qt::KeyboardModifiers(Qt::AltModifier) << 5 << 0 << true << true << false;
+    if (QGuiApplication::platformName().compare(QLatin1String("xcb"), Qt::CaseInsensitive)) {
+        // Test shortcuts.
+        QTest::newRow("shortcut0") << Qt::Key(Qt::Key_V) << Qt::KeyboardModifiers(Qt::AltModifier) << 5 << 0 << true << true << false;
+    }
 }
 
 void tst_QMenu::keyboardNavigation()
@@ -513,7 +545,7 @@ void tst_QMenu::onStatusTipTimer()
     menu->close(); //goes out of the menu
 
     QCOMPARE(st, QString("sub action"));
-    QVERIFY(menu->isVisible() == false);
+    QVERIFY(!menu->isVisible());
     m_onStatusTipTimerExecuted = true;
 }
 
@@ -661,6 +693,61 @@ void tst_QMenu::activeSubMenuPosition()
     QVERIFY(sub->pos().x() > main->pos().x());
     QCOMPARE(sub->activeAction(), subAction);
 #endif
+}
+
+// QTBUG-49588, QTBUG-48396: activeSubMenuPositionExec() is the same as
+// activeSubMenuPosition(), but uses QMenu::exec(), which produces a different
+// sequence of events. Verify that the sub menu is positioned to the right of the
+// main menu.
+class SubMenuPositionExecMenu : public QMenu
+{
+    Q_OBJECT
+public:
+    SubMenuPositionExecMenu() : QMenu("Menu-Title"), m_timerId(-1), m_timerTick(0)
+    {
+        addAction("Item 1");
+        m_subMenu = addMenu("Submenu");
+        m_subAction = m_subMenu->addAction("Sub-Item1");
+        setActiveAction(m_subMenu->menuAction());
+    }
+
+protected:
+    void showEvent(QShowEvent *e) Q_DECL_OVERRIDE
+    {
+        QVERIFY(m_subMenu->isVisible());
+        QVERIFY2(m_subMenu->x() > x(),
+                 (QByteArray::number(m_subMenu->x()) + ' ' + QByteArray::number(x())).constData());
+        m_timerId = startTimer(50);
+        QMenu::showEvent(e);
+    }
+
+    void timerEvent(QTimerEvent *e) Q_DECL_OVERRIDE
+    {
+        if (e->timerId() == m_timerId) {
+            switch (m_timerTick++) {
+            case 0:
+                m_subMenu->close();
+                break;
+            case 1:
+                close();
+                break;
+            }
+        }
+    }
+
+private:
+    int m_timerId;
+    int m_timerTick;
+    QMenu *m_subMenu;
+    QAction *m_subAction;
+};
+
+void tst_QMenu::activeSubMenuPositionExec()
+{
+#ifndef Q_OS_WINCE
+    SubMenuPositionExecMenu menu;
+    menu.exec(QGuiApplication::primaryScreen()->availableGeometry().center());
+#endif // !Q_OS_WINCE
 }
 
 void tst_QMenu::task242454_sizeHint()

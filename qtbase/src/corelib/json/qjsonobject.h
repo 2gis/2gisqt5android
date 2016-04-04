@@ -100,12 +100,13 @@ public:
         int i;
 
     public:
-        typedef std::bidirectional_iterator_tag iterator_category;
+        typedef std::random_access_iterator_tag iterator_category;
         typedef int difference_type;
         typedef QJsonValue value_type;
         typedef QJsonValueRef reference;
+        typedef QJsonValuePtr pointer;
 
-        Q_DECL_CONSTEXPR inline iterator() : o(0), i(0) {}
+        Q_DECL_CONSTEXPR inline iterator() : o(Q_NULLPTR), i(0) {}
         Q_DECL_CONSTEXPR inline iterator(QJsonObject *obj, int index) : o(obj), i(index) {}
 
         inline QString key() const { return o->keyAt(i); }
@@ -142,12 +143,13 @@ public:
         int i;
 
     public:
-        typedef std::bidirectional_iterator_tag iterator_category;
+        typedef std::random_access_iterator_tag iterator_category;
         typedef int difference_type;
         typedef QJsonValue value_type;
         typedef QJsonValue reference;
+        typedef QJsonValuePtr pointer;
 
-        Q_DECL_CONSTEXPR inline const_iterator() : o(0), i(0) {}
+        Q_DECL_CONSTEXPR inline const_iterator() : o(Q_NULLPTR), i(0) {}
         Q_DECL_CONSTEXPR inline const_iterator(const QJsonObject *obj, int index)
             : o(obj), i(index) {}
         inline const_iterator(const iterator &other)

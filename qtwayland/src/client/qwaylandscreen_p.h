@@ -34,6 +34,17 @@
 #ifndef QWAYLANDSCREEN_H
 #define QWAYLANDSCREEN_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include <qpa/qplatformscreen.h>
 #include <QtWaylandClient/private/qwaylandclientexport_p.h>
 
@@ -45,7 +56,6 @@ namespace QtWaylandClient {
 
 class QWaylandDisplay;
 class QWaylandCursor;
-class QWaylandExtendedOutput;
 
 class Q_WAYLAND_CLIENT_EXPORT QWaylandScreen : public QPlatformScreen, QtWayland::wl_output
 {
@@ -80,9 +90,6 @@ public:
     uint32_t outputId() const { return m_outputId; }
     ::wl_output *output() { return object(); }
 
-    QWaylandExtendedOutput *extendedOutput() const;
-    void createExtendedOutput();
-
     static QWaylandScreen *waylandScreenFromWindow(QWindow *window);
 
 private:
@@ -98,7 +105,6 @@ private:
 
     int m_outputId;
     QWaylandDisplay *mWaylandDisplay;
-    QWaylandExtendedOutput *mExtendedOutput;
     QRect mGeometry;
     int mScale;
     int mDepth;

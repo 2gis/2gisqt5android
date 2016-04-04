@@ -51,12 +51,26 @@ namespace QAudio
     enum Error { NoError, OpenError, IOError, UnderrunError, FatalError };
     enum State { ActiveState, SuspendedState, StoppedState, IdleState };
     enum Mode { AudioInput, AudioOutput };
+
+    enum Role {
+        UnknownRole,
+        MusicRole,
+        VideoRole,
+        VoiceCommunicationRole,
+        AlarmRole,
+        NotificationRole,
+        RingtoneRole,
+        AccessibilityRole,
+        SonificationRole,
+        GameRole
+    };
 }
 
 #ifndef QT_NO_DEBUG_STREAM
 Q_MULTIMEDIA_EXPORT QDebug operator<<(QDebug dbg, QAudio::Error error);
 Q_MULTIMEDIA_EXPORT QDebug operator<<(QDebug dbg, QAudio::State state);
 Q_MULTIMEDIA_EXPORT QDebug operator<<(QDebug dbg, QAudio::Mode mode);
+Q_MULTIMEDIA_EXPORT QDebug operator<<(QDebug dbg, QAudio::Role role);
 #endif
 
 QT_END_NAMESPACE
@@ -64,5 +78,6 @@ QT_END_NAMESPACE
 Q_DECLARE_METATYPE(QAudio::Error)
 Q_DECLARE_METATYPE(QAudio::State)
 Q_DECLARE_METATYPE(QAudio::Mode)
+Q_DECLARE_METATYPE(QAudio::Role)
 
 #endif // QAUDIO_H

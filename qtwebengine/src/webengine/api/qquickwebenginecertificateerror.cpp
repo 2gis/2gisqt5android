@@ -61,13 +61,24 @@ public:
 /*!
     \qmltype WebEngineCertificateError
     \instantiates QQuickWebEngineCertificateError
-    \inqmlmodule QtWebEngine 1.1
+    \inqmlmodule QtWebEngine
     \since QtWebEngine 1.1
 
-    \brief A utility class for accepting or denying certificate exceptions when a certificate error occurs.
+    \brief A utility type for ignoring certificate errors or rejecting erroneous certificates.
 
-    This class contains information about a certificate error that happened and provides a way to accept or
-    deny a certificate exception.
+    This QML type contains information about a certificate error that occurred. The \l error
+    property holds the reason that the error occurred and the \l description property holds a
+    short localized description of the error. The \l url property holds the URL that triggered
+    the error.
+
+    The certificate can be rejected by calling \l rejectCertificate, which will stop loading the
+    web engine request. By default, an invalid certificate will be automatically rejected.
+
+    The certificate error can be ignored by calling \l ignoreCertificateError, which will
+    resume loading the request.
+
+    It is possible to defer the decision of rejecting a certificate by calling \l defer,
+    which is useful when waiting for user input.
 
     \sa WebEngineView::certificateError
 */
@@ -86,8 +97,9 @@ QQuickWebEngineCertificateError::~QQuickWebEngineCertificateError()
 /*!
   \qmlmethod void WebEngineCertificateError::defer()
 
-  This function should be called when there is a need to postpone the decision to ignore or not the certificate error. This is useful to
-  wait for user input. When called it will pause the url request until WebEngineCertificateError::ignoreCertificateError() or
+  This function should be called when there is a need to postpone the decision whether to ignore a
+  certificate error, for example, while waiting for user input. When called, the function pauses the
+  URL request until WebEngineCertificateError::ignoreCertificateError() or
   WebEngineCertificateError::rejectCertificate() is called.
  */
 void QQuickWebEngineCertificateError::defer()
@@ -98,7 +110,7 @@ void QQuickWebEngineCertificateError::defer()
 /*!
   \qmlmethod void WebEngineCertificateError::ignoreCertificateError()
 
-  The certificate error is ignored and the WebEngineView continues to load the requested url.
+  The certificate error is ignored, and the web engine view continues to load the requested URL.
  */
 void QQuickWebEngineCertificateError::ignoreCertificateError()
 {
@@ -114,7 +126,7 @@ void QQuickWebEngineCertificateError::ignoreCertificateError()
 /*!
   \qmlmethod void WebEngineCertificateError::rejectCertificate()
 
-  The WebEngineView stops loading the requested url.
+  The certificate is rejected, and the web engine view stops loading the requested URL.
  */
 void QQuickWebEngineCertificateError::rejectCertificate()
 {
@@ -148,7 +160,8 @@ QUrl QQuickWebEngineCertificateError::url() const
 
     The type of the error.
 
-    \value SslPinnedKeyNotInCertificateChain The certificate did not match the built-in public key pins for the host name.
+    \value SslPinnedKeyNotInCertificateChain The certificate did not match the built-in public keys
+           pinned for the host name.
     \value CertificateCommonNameInvalid The certificate's common name did not match the host name.
     \value CertificateDateInvalid The certificate is not valid at the current date and time.
     \value CertificateAuthorityInvalid The certificate is not signed by a trusted authority.
@@ -184,7 +197,7 @@ QString QQuickWebEngineCertificateError::description() const
     \qmlproperty bool WebEngineCertificateError::overridable
     \readonly
 
-    A boolean that indicates if the certificate error can be overridden and accepted.
+    A boolean that indicates whether the certificate error can be overridden and ignored.
 */
 bool QQuickWebEngineCertificateError::overridable() const
 {

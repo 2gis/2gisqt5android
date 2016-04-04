@@ -34,7 +34,7 @@
 **
 ****************************************************************************/
 
-#include "sphere.h"
+#include "sphere_p.h"
 
 #include <Qt3DCore/qray3d.h>
 
@@ -50,7 +50,7 @@ namespace {
 
 // Intersects ray r = p + td, |d| = 1, with sphere s and, if intersecting,
 // returns true and intersection point q; false otherwise
-bool intersectRaySphere(const Qt3D::QRay3D &ray, const Qt3D::Sphere &s, QVector3D *q = Q_NULLPTR)
+bool intersectRaySphere(const Qt3DCore::QRay3D &ray, const Qt3DRender::Render::Sphere &s, QVector3D *q = Q_NULLPTR)
 {
     const QVector3D p = ray.origin();
     const QVector3D d = ray.direction();
@@ -121,7 +121,7 @@ inline QPair<int, int> findExtremePoints(const QVector<QVector3D> &points)
     return extremeIndices;
 }
 
-inline void sphereFromExtremePoints(Qt3D::Sphere &s, const QVector<QVector3D> &points)
+inline void sphereFromExtremePoints(Qt3DRender::Render::Sphere &s, const QVector<QVector3D> &points)
 {
     // Find two most separated points on any of the basis vectors
     QPair<int, int> extremeIndices = findExtremePoints(points);
@@ -134,7 +134,7 @@ inline void sphereFromExtremePoints(Qt3D::Sphere &s, const QVector<QVector3D> &p
     s.setRadius((q - c).length());
 }
 
-inline void constructRitterSphere(Qt3D::Sphere &s, const QVector<QVector3D> &points)
+inline void constructRitterSphere(Qt3DRender::Render::Sphere &s, const QVector<QVector3D> &points)
 {
     // Calculate the sphere encompassing two axially extreme points
     sphereFromExtremePoints(s, points);
@@ -145,7 +145,9 @@ inline void constructRitterSphere(Qt3D::Sphere &s, const QVector<QVector3D> &poi
 
 } // anonymous namespace
 
-namespace Qt3D {
+namespace Qt3DRender {
+
+namespace Render {
 
 const float Sphere::ms_epsilon = 1.0e-7f;
 
@@ -194,29 +196,30 @@ void Sphere::expandToContain(const Sphere &sphere)
         const float newRadius = 0.5f * (dist + m_radius + sphere.m_radius);
         if (dist > ms_epsilon)
             m_center += d * (newRadius - m_radius) / dist;
+        m_radius = newRadius;
     }
 }
 
-Sphere Sphere::transformed(const QMatrix4x4 &mat)
+Sphere Sphere::transformed(const QMatrix4x4 &mat) const
 {
     // Transform extremities in x, y, and z directions to find extremities
     // of the resulting ellipsoid
-    QVector3D x = mat.mapVector(m_center + QVector3D(m_radius, 0.0f, 0.0f));
-    QVector3D y = mat.mapVector(m_center + QVector3D(0.0f, m_radius, 0.0f));
-    QVector3D z = mat.mapVector(m_center + QVector3D(0.0f, 0.0f, m_radius));
+    QVector3D x = mat.map(m_center + QVector3D(m_radius, 0.0f, 0.0f));
+    QVector3D y = mat.map(m_center + QVector3D(0.0f, m_radius, 0.0f));
+    QVector3D z = mat.map(m_center + QVector3D(0.0f, 0.0f, m_radius));
 
     // Transform center and find maximum radius of ellipsoid
-    QVector3D c = mat.mapVector(m_center);
+    QVector3D c = mat.map(m_center);
     float rSquared = qMax(qMax((x - c).lengthSquared(), (y - c).lengthSquared()), (z - c).lengthSquared());
-    return Sphere(c, sqrt(rSquared));
+    return Sphere(c, sqrt(rSquared), id());
 }
 
-QNodeId Sphere::id() const
+Qt3DCore::QNodeId Sphere::id() const
 {
     return m_id;
 }
 
-bool Sphere::intersects(const QRay3D &ray, QVector3D *q) const
+bool Sphere::intersects(const Qt3DCore::QRay3D &ray, QVector3D *q) const
 {
     return intersectRaySphere(ray, *this, q);
 }
@@ -226,6 +229,8 @@ QBoundingVolume::Type Sphere::type() const
     return QBoundingVolume::Sphere;
 }
 
-}
+} // Render
+
+} // Qt3DRender
 
 QT_END_NAMESPACE

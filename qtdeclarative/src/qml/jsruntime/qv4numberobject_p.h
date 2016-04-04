@@ -33,6 +33,17 @@
 #ifndef QV4NUMBEROBJECT_H
 #define QV4NUMBEROBJECT_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include "qv4object_p.h"
 #include "qv4functionobject_p.h"
 #include <QtCore/qnumeric.h>
@@ -53,8 +64,8 @@ struct NumberCtor: FunctionObject
 {
     V4_OBJECT2(NumberCtor, FunctionObject)
 
-    static ReturnedValue construct(Managed *that, CallData *callData);
-    static ReturnedValue call(Managed *, CallData *callData);
+    static ReturnedValue construct(const Managed *that, CallData *callData);
+    static ReturnedValue call(const Managed *, CallData *callData);
 };
 
 struct NumberPrototype: NumberObject

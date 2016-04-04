@@ -68,8 +68,9 @@ QT_BEGIN_NAMESPACE
 // This struct is somewhat dangerous to use:
 // The messageType is a bit field. You can pack multiple messages into
 // one object, e.g. RangeStart and RangeLocation. Each one will be read
-// independently by toByteArrays. Thus you can only pack messages if their data
-// doesn't overlap. It's up to you to figure that out.
+// independently when converting to QByteArrays. Thus you can only pack
+// messages if their data doesn't overlap. It's up to you to figure that
+// out.
 struct Q_AUTOTEST_EXPORT QQmlProfilerData
 {
     QQmlProfilerData() {}
@@ -98,13 +99,12 @@ struct Q_AUTOTEST_EXPORT QQmlProfilerData
     int messageType;        //bit field of QQmlProfilerService::Message
     int detailType;
 
+    // RangeData prefers detailString; RangeLocation prefers detailUrl.
     QString detailString;   //used by RangeData and possibly by RangeLocation
-    QUrl detailUrl;         //used by RangeLocation, overrides detailString
+    QUrl detailUrl;         //used by RangeLocation and possibly by RangeData
 
     int x;                  //used by RangeLocation
     int y;                  //used by RangeLocation
-
-    void toByteArrays(QList<QByteArray> &messages) const;
 };
 
 Q_DECLARE_TYPEINFO(QQmlProfilerData, Q_MOVABLE_TYPE);
@@ -121,11 +121,11 @@ public:
 
     // Have toByteArrays() construct another RangeData event from the same QString later.
     // This is somewhat pointless but important for backwards compatibility.
-    void startCompiling(const QString &name)
+    void startCompiling(const QUrl &url)
     {
         m_data.append(QQmlProfilerData(m_timer.nsecsElapsed(),
                                        (1 << RangeStart | 1 << RangeLocation | 1 << RangeData),
-                                       1 << Compiling, name, 1, 1));
+                                       1 << Compiling, url, 1, 1));
     }
 
     void startHandlingSignal(const QQmlSourceLocation &location)
@@ -171,24 +171,11 @@ public slots:
     void setTimer(const QElapsedTimer &timer) { m_timer = timer; }
 
 signals:
-    void dataReady(const QList<QQmlProfilerData> &);
+    void dataReady(const QVector<QQmlProfilerData> &);
 
 protected:
     QElapsedTimer m_timer;
-    QVarLengthArray<QQmlProfilerData> m_data;
-};
-
-class QQmlProfilerAdapter : public QQmlAbstractProfilerAdapter {
-    Q_OBJECT
-public:
-    QQmlProfilerAdapter(QQmlProfilerService *service, QQmlEnginePrivate *engine);
-    qint64 sendMessages(qint64 until, QList<QByteArray> &messages);
-
-public slots:
-    void receiveData(const QList<QQmlProfilerData> &new_data);
-
-private:
-    QList<QQmlProfilerData> data;
+    QVector<QQmlProfilerData> m_data;
 };
 
 //
@@ -231,10 +218,10 @@ struct QQmlHandlingSignalProfiler : public QQmlProfilerHelper {
 };
 
 struct QQmlCompilingProfiler : public QQmlProfilerHelper {
-    QQmlCompilingProfiler(QQmlProfiler *profiler, const QString &name) :
+    QQmlCompilingProfiler(QQmlProfiler *profiler, const QUrl &url) :
         QQmlProfilerHelper(profiler)
     {
-        Q_QML_PROFILE(QQmlProfilerDefinitions::ProfileCompiling, profiler, startCompiling(name));
+        Q_QML_PROFILE(QQmlProfilerDefinitions::ProfileCompiling, profiler, startCompiling(url));
     }
 
     ~QQmlCompilingProfiler()
@@ -332,6 +319,6 @@ private:
 };
 
 QT_END_NAMESPACE
-Q_DECLARE_METATYPE(QList<QQmlProfilerData>)
+Q_DECLARE_METATYPE(QVector<QQmlProfilerData>)
 
 #endif // QQMLPROFILER_P_H

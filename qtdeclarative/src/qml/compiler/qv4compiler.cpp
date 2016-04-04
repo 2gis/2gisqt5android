@@ -35,7 +35,7 @@
 #include <qv4compileddata_p.h>
 #include <qv4isel_p.h>
 #include <private/qv4string_p.h>
-#include <private/qv4value_inl_p.h>
+#include <private/qv4value_p.h>
 
 QV4::Compiler::StringTableGenerator::StringTableGenerator()
 {
@@ -44,8 +44,8 @@ QV4::Compiler::StringTableGenerator::StringTableGenerator()
 
 int QV4::Compiler::StringTableGenerator::registerString(const QString &str)
 {
-    QHash<QString, int>::ConstIterator it = stringToId.find(str);
-    if (it != stringToId.end())
+    QHash<QString, int>::ConstIterator it = stringToId.constFind(str);
+    if (it != stringToId.cend())
         return *it;
     stringToId.insert(str, strings.size());
     strings.append(str);
@@ -169,6 +169,7 @@ int QV4::Compiler::JSUnitGenerator::registerJSClass(int count, IR::ExprList *arg
     // ### re-use existing class definitions.
 
     QList<CompiledData::JSClassMember> members;
+    members.reserve(count);
 
     IR::ExprList *it = args;
     for (int i = 0; i < count; ++i, it = it->next) {

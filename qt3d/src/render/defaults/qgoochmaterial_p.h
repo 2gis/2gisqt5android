@@ -34,14 +34,25 @@
 **
 ****************************************************************************/
 
-#ifndef QT3D_RENDER_QGOOCHMATERIAL_P_H
-#define QT3D_RENDER_QGOOCHMATERIAL_P_H
+#ifndef QT3DRENDER_RENDER_QGOOCHMATERIAL_P_H
+#define QT3DRENDER_RENDER_QGOOCHMATERIAL_P_H
 
-#include <Qt3DRenderer/private/qmaterial_p.h>
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists for the convenience
+// of other Qt classes.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
+#include <Qt3DRender/private/qmaterial_p.h>
 
 QT_BEGIN_NAMESPACE
 
-namespace Qt3D {
+namespace Qt3DRender {
 
 class QEffect;
 class QRenderPass;
@@ -52,7 +63,16 @@ class QGoochMaterialPrivate : public QMaterialPrivate
 {
 public:
     QGoochMaterialPrivate();
+
     void init();
+
+    void handleDiffuseChanged(const QVariant &var);
+    void handleSpecularChanged(const QVariant &var);
+    void handleCoolChanged(const QVariant &var);
+    void handleWarmChanged(const QVariant &var);
+    void handleAlphaChanged(const QVariant &var);
+    void handleBetaChanged(const QVariant &var);
+    void handleShininessChanged(const QVariant &var);
 
     QEffect *m_effect;
     QParameter *m_diffuseParameter;
@@ -62,8 +82,6 @@ public:
     QParameter *m_alphaParameter;
     QParameter *m_betaParameter;
     QParameter *m_shininessParameter;
-    QParameter *m_lightPositionParameter;
-    QParameter *m_lightIntensityParameter;
     QTechnique *m_gl3Technique;
     QTechnique *m_gl2Technique;
     QTechnique *m_es2Technique;
@@ -76,9 +94,9 @@ public:
     Q_DECLARE_PUBLIC(QGoochMaterial)
 };
 
-} // Qt3D
+} // namespace Qt3DRender
 
 QT_END_NAMESPACE
 
-#endif // QT3D_RENDER_QGOOCHMATERIAL_P_H
+#endif // QT3DRENDER_RENDER_QGOOCHMATERIAL_P_H
 

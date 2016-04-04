@@ -280,6 +280,8 @@ Item {
         }
 
         function test_sliderOffset() {
+            if (Settings.hasTouchScreen)
+                skip("Fails with touch screens");
             var control = Qt.createQmlObject('import QtQuick.Controls 1.2; Slider {x: 20; y: 20; width: 100; height: 50}', container, '')
             // Don't move slider value if mouse is inside handle regtion
             mouseMove(control, control.width/2, control.height/2)
@@ -309,6 +311,8 @@ Item {
         }
 
         function test_dragThreshold() {
+            if (Settings.hasTouchScreen)
+                skip("Fails with touch screens");
             var control = Qt.createQmlObject('import QtQuick.Controls 1.2; Slider {x: 20; y: 20; width: 100; height: 50}', container, '')
 
             var pt = { x: control.width/2, y: control.height/2 }
@@ -329,6 +333,33 @@ Item {
             verify(control.value < 0.5)
 
             control.destroy()
+        }
+
+        function test_dragRounding() {
+            // Regression test: ends of range should be exact, not 99.99999999 &c.
+            var component = Qt.createComponent("slider/rounder.qml")
+            compare(component.status, Component.Ready)
+            var control = component.createObject(container)
+
+            // Does moving to maximum (100) actually reach it ?
+            mousePress(control, 0, control.waist)
+            mouseMove(control, control.width, control.waist)
+            mouseRelease(control, control.width, control.waist)
+            // Equality checks are dodgy with floats, but this should still be exact:
+            verify(control.value == 100)
+            // Neither of the following caught the bug, with value 100 -1.421e-14
+            // compare(control.value, 100)
+            // fuzzyCompare(control.value, 100, 1e-16)
+
+            // Now check it all works going the other way, too:
+            mousePress(control, control.width, control.waist)
+            mouseMove(control, 0, control.waist)
+            mouseRelease(control, 0, control.waist)
+            verify(control.value == 0)
+
+            // Tidy up.
+            control.destroy()
+            component.destroy()
         }
     }
 }

@@ -34,13 +34,23 @@
 #ifndef QWAYLANDSUBSURFACE_H
 #define QWAYLANDSUBSURFACE_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include <wayland-client.h>
 
 #include <QtCore/qglobal.h>
 
 #include <QtWaylandClient/private/qwaylandclientexport_p.h>
-
-#include <QtWaylandClient/private/qwayland-sub-surface-extension.h>
+#include <QtWaylandClient/private/qwayland-wayland.h>
 
 QT_BEGIN_NAMESPACE
 
@@ -48,18 +58,19 @@ namespace QtWaylandClient {
 
 class QWaylandDisplay;
 class QWaylandWindow;
-class QWaylandSubSurface;
 
-class Q_WAYLAND_CLIENT_EXPORT QWaylandSubSurface : public QtWayland::qt_sub_surface
+class Q_WAYLAND_CLIENT_EXPORT QWaylandSubSurface : public QtWayland::wl_subsurface
 {
 public:
-    QWaylandSubSurface(QWaylandWindow *window, struct ::qt_sub_surface *sub_surface);
+    QWaylandSubSurface(QWaylandWindow *window, QWaylandWindow *parent, ::wl_subsurface *subsurface);
+    ~QWaylandSubSurface();
 
-    void setParent(const QWaylandWindow *parent);
-    void adjustPositionOfChildren();
+    QWaylandWindow *window() const { return m_window; }
+    QWaylandWindow *parent() const { return m_parent; }
 
 private:
     QWaylandWindow *m_window;
+    QWaylandWindow *m_parent;
 };
 
 QT_END_NAMESPACE

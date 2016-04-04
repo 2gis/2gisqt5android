@@ -34,6 +34,17 @@
 #ifndef QQMLNOTIFIER_P_H
 #define QQMLNOTIFIER_P_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include "qqmldata_p.h"
 #include <QtCore/qmetaobject.h>
 #include <private/qmetaobject_p.h>
@@ -63,9 +74,6 @@ class QQmlNotifierEndpoint
     QQmlNotifierEndpoint  *next;
     QQmlNotifierEndpoint **prev;
 public:
-    inline QQmlNotifierEndpoint();
-    inline ~QQmlNotifierEndpoint();
-
     // QQmlNotifierEndpoint can only invoke one of a set of pre-defined callbacks.
     // To add another callback, extend this enum and add the callback to the top
     // of qqmlnotifier.cpp.  Four bits are reserved for the callback, so there can
@@ -77,7 +85,8 @@ public:
         QQmlVMEMetaObjectEndpoint = 3
     };
 
-    inline void setCallback(Callback c) { callback = c; }
+    inline QQmlNotifierEndpoint(Callback callback);
+    inline ~QQmlNotifierEndpoint();
 
     inline bool isConnected();
     inline bool isConnected(QObject *source, int sourceSignal);
@@ -89,6 +98,8 @@ public:
 
     inline bool isNotifying() const;
     inline void cancelNotify();
+
+    inline int signalIndex() const { return sourceSignal; }
 
 private:
     friend class QQmlData;
@@ -135,8 +146,8 @@ void QQmlNotifier::notify()
     if (endpoints) emitNotify(endpoints, args);
 }
 
-QQmlNotifierEndpoint::QQmlNotifierEndpoint()
-: next(0), prev(0), senderPtr(0), callback(None), sourceSignal(-1)
+QQmlNotifierEndpoint::QQmlNotifierEndpoint(Callback callback)
+: next(0), prev(0), senderPtr(0), callback(callback), sourceSignal(-1)
 {
 }
 

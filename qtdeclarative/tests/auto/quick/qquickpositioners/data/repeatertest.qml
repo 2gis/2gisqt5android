@@ -10,8 +10,22 @@ Item {
                     color: "red"
                     width: 50
                     height: 50
-                    z: {if(index == 0){2;}else if(index == 1){1;} else{3;}}
-                    objectName: {if(index == 0){"one";}else if(index == 1){"two";} else{"three";}}
+                    z: {
+                        if (index == 0)
+                            return 2;
+                        else if (index == 1)
+                            return 1;
+                        else
+                            return 3;
+                    }
+                    objectName: {
+                        if (index == 0)
+                            return "one";
+                        else if (index == 1)
+                            return "two";
+                        else
+                            return "three";
+                    }
                 }
             }
         }

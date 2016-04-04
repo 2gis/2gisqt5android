@@ -86,6 +86,7 @@ void QWebEngineViewPrivate::bind(QWebEngineView *view, QWebEnginePage *page)
         QObject::connect(page, &QWebEnginePage::loadProgress, view, &QWebEngineView::loadProgress);
         QObject::connect(page, &QWebEnginePage::loadFinished, view, &QWebEngineView::loadFinished);
         QObject::connect(page, &QWebEnginePage::selectionChanged, view, &QWebEngineView::selectionChanged);
+        QObject::connect(page, &QWebEnginePage::renderProcessTerminated, view, &QWebEngineView::renderProcessTerminated);
     }
 }
 
@@ -106,6 +107,14 @@ QWebEngineViewPrivate::QWebEngineViewPrivate()
     QAccessible::installFactory(&webAccessibleFactory);
 #endif // QT_NO_ACCESSIBILITY
 }
+
+/*!
+    \fn QWebEngineView::renderProcessTerminated(QWebEnginePage::RenderProcessTerminationStatus terminationStatus, int exitCode)
+
+    This signal is emitted when the render process is terminated with a non-zero exit status.
+    \a terminationStatus is the termination status of the process and \a exitCode is the status code
+    with which the process terminated.
+*/
 
 QWebEngineView::QWebEngineView(QWidget *parent)
     : QWidget(parent)
@@ -283,6 +292,24 @@ void QWebEngineView::contextMenuEvent(QContextMenuEvent *event)
 {
     QMenu *menu = page()->createStandardContextMenu();
     menu->popup(event->globalPos());
+}
+
+/*!
+ * \reimp
+ */
+void QWebEngineView::showEvent(QShowEvent *event)
+{
+    QWidget::showEvent(event);
+    page()->d_ptr->wasShown();
+}
+
+/*!
+ * \reimp
+ */
+void QWebEngineView::hideEvent(QHideEvent *event)
+{
+    QWidget::hideEvent(event);
+    page()->d_ptr->wasHidden();
 }
 
 #ifndef QT_NO_ACCESSIBILITY

@@ -158,11 +158,6 @@ static void qt_quickitems_defineModule(const char *uri, int major, int minor)
     qmlRegisterType<QQuickPathView>(uri,major,minor,"PathView");
     qmlRegisterUncreatableType<QQuickBasePositioner>(uri,major,minor,"Positioner",
                                                   QStringLiteral("Positioner is an abstract type that is only available as an attached property."));
-#ifndef QT_NO_VALIDATOR
-    qmlRegisterType<QQuickIntValidator>(uri,major,minor,"IntValidator");
-    qmlRegisterType<QQuickDoubleValidator>(uri,major,minor,"DoubleValidator");
-    qmlRegisterType<QRegExpValidator>(uri,major,minor,"RegExpValidator");
-#endif
     qmlRegisterType<QQuickRectangle>(uri,major,minor,"Rectangle");
     qmlRegisterType<QQuickRepeater>(uri,major,minor,"Repeater");
     qmlRegisterType<QQuickRow>(uri,major,minor,"Row");
@@ -190,9 +185,6 @@ static void qt_quickitems_defineModule(const char *uri, int major, int minor)
     qmlRegisterType<QQuickCurve>();
     qmlRegisterType<QQuickScaleGrid>();
     qmlRegisterType<QQuickTextLine>();
-#ifndef QT_NO_VALIDATOR
-    qmlRegisterType<QValidator>();
-#endif
     qmlRegisterType<QQuickPen>();
     qmlRegisterType<QQuickFlickableVisibleArea>();
     qRegisterMetaType<QQuickAnchorLine>("QQuickAnchorLine");
@@ -269,6 +261,19 @@ static void qt_quickitems_defineModule(const char *uri, int major, int minor)
     qmlRegisterType<QQuickPinchArea, 1>(uri, 2, 5,"PinchArea");
     qmlRegisterType<QQuickImage, 2>(uri, 2, 5,"Image");
     qmlRegisterType<QQuickMouseArea, 2>(uri, 2, 5, "MouseArea");
+
+    qmlRegisterType<QQuickText, 6>(uri, 2, 6, "Text");
+    qmlRegisterType<QQuickTextEdit, 6>(uri, 2, 6, "TextEdit");
+    qmlRegisterType<QQuickTextInput, 6>(uri, 2, 6, "TextInput");
+    qmlRegisterUncreatableType<QQuickBasePositioner, 6>(uri, 2, 6, "Positioner",
+                                                  QStringLiteral("Positioner is an abstract type that is only available as an attached property."));
+    qmlRegisterType<QQuickColumn, 6>(uri, 2, 6, "Column");
+    qmlRegisterType<QQuickRow, 6>(uri, 2, 6, "Row");
+    qmlRegisterType<QQuickGrid, 6>(uri, 2, 6, "Grid");
+    qmlRegisterType<QQuickFlow, 6>(uri, 2, 6, "Flow");
+    qmlRegisterUncreatableType<QQuickEnterKeyAttached, 6>(uri, 2, 6, "EnterKey",
+                                                           QQuickEnterKeyAttached::tr("EnterKey is only available via attached properties"));
+    qmlRegisterType<QQuickShaderEffectSource, 1>(uri, 2, 6, "ShaderEffectSource");
 }
 
 static void initResources()

@@ -5,6 +5,7 @@
 #include "config.h"
 #include "core/frame/csp/CSPSource.h"
 
+#include "core/frame/UseCounter.h"
 #include "core/frame/csp/ContentSecurityPolicy.h"
 #include "platform/weborigin/KURL.h"
 #include "platform/weborigin/KnownPorts.h"
@@ -24,29 +25,48 @@ CSPSource::CSPSource(ContentSecurityPolicy* policy, const String& scheme, const 
 {
 }
 
-bool CSPSource::matches(const KURL& url) const
+bool CSPSource::matches(const KURL& url, ContentSecurityPolicy::RedirectStatus redirectStatus) const
 {
     if (!schemeMatches(url))
         return false;
     if (isSchemeOnly())
         return true;
-    return hostMatches(url) && portMatches(url) && pathMatches(url);
+    bool pathsMatch = (redirectStatus == ContentSecurityPolicy::DidRedirect) || pathMatches(url);
+    return hostMatches(url) && portMatches(url) && pathsMatch;
 }
 
 bool CSPSource::schemeMatches(const KURL& url) const
 {
     if (m_scheme.isEmpty())
         return m_policy->protocolMatchesSelf(url);
+    if (equalIgnoringCase(m_scheme, "http"))
+        return equalIgnoringCase(url.protocol(), "http") || equalIgnoringCase(url.protocol(), "https");
+    if (equalIgnoringCase(m_scheme, "ws"))
+        return equalIgnoringCase(url.protocol(), "ws") || equalIgnoringCase(url.protocol(), "wss");
     return equalIgnoringCase(url.protocol(), m_scheme);
 }
 
 bool CSPSource::hostMatches(const KURL& url) const
 {
     const String& host = url.host();
-    if (equalIgnoringCase(host, m_host))
-        return true;
-    return m_hostWildcard == HasWildcard && host.endsWith("." + m_host, false);
+    Document* document = m_policy->document();
+    bool match;
 
+    bool equalHosts = equalIgnoringCase(host, m_host);
+    if (m_hostWildcard == HasWildcard) {
+        match = host.endsWith("." + m_host, TextCaseInsensitive);
+
+        // Chrome used to, incorrectly, match *.x.y to x.y. This was fixed, but
+        // the following count measures when a match fails that would have
+        // passed the old, incorrect style, in case a lot of sites were
+        // relying on that behavior.
+        if (document && equalHosts)
+            UseCounter::count(*document, UseCounter::CSPSourceWildcardWouldMatchExactHost);
+    } else {
+        match = equalHosts;
+    }
+
+    return match;
 }
 
 bool CSPSource::pathMatches(const KURL& url) const
@@ -57,7 +77,7 @@ bool CSPSource::pathMatches(const KURL& url) const
     String path = decodeURLEscapeSequences(url.path());
 
     if (m_path.endsWith("/"))
-        return path.startsWith(m_path, false);
+        return path.startsWith(m_path, TextCaseInsensitive);
 
     return path == m_path;
 }

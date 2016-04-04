@@ -34,8 +34,8 @@
 **
 ****************************************************************************/
 
-#ifndef QT3D_QTICKCLOCKSERVICE_P_H
-#define QT3D_QTICKCLOCKSERVICE_P_H
+#ifndef QT3DCORE_QTICKCLOCKSERVICE_P_H
+#define QT3DCORE_QTICKCLOCKSERVICE_P_H
 
 //
 //  W A R N I N G
@@ -48,11 +48,11 @@
 // We mean it.
 //
 
-#include "qabstractframeadvanceservice.h"
+#include "qabstractframeadvanceservice_p.h"
 
 QT_BEGIN_NAMESPACE
 
-namespace Qt3D {
+namespace Qt3DCore {
 
 class QTickClockServicePrivate;
 
@@ -73,4 +73,4 @@ public:
 
 QT_END_NAMESPACE
 
-#endif // QT3D_QTICKCLOCKSERVICE_P_H
+#endif // QT3DCORE_QTICKCLOCKSERVICE_P_H

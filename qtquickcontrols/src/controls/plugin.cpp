@@ -112,15 +112,18 @@ static const struct {
 
     { "TextArea", 1, 3 },
 
-    { "TreeView", 1, 4 }
+    { "TreeView", 1, 4 },
+
+    { "TextArea", 1, 5 },
+    { "TreeView", 1, 5 }
 };
 
 void QtQuickControlsPlugin::registerTypes(const char *uri)
 {
     initResources();
     qmlRegisterType<QQuickAction>(uri, 1, 0, "Action");
-    qmlRegisterType<QQuickExclusiveGroup>(uri, 1, 0, "ExclusiveGroup");
-    qmlRegisterType<QQuickMenuItem>(uri, 1, 0, "MenuItem");
+    qmlRegisterType<QQuickExclusiveGroup1>(uri, 1, 0, "ExclusiveGroup");
+    qmlRegisterType<QQuickMenuItem1>(uri, 1, 0, "MenuItem");
     qmlRegisterUncreatableType<QQuickMenuItemType>(uri, 1, 0, "MenuItemType",
                                                    QLatin1String("Do not create objects of type MenuItemType"));
     qmlRegisterType<QQuickMenuSeparator>(uri, 1, 0, "MenuSeparator");
@@ -158,8 +161,8 @@ void QtQuickControlsPlugin::initializeEngine(QQmlEngine *engine, const char *uri
     qmlRegisterType<QQuickTreeModelAdaptor>(private_uri, 1, 0, "TreeModelAdaptor");
     qmlRegisterType<QQuickScenePosListener>(private_uri, 1, 0, "ScenePosListener");
 
-    qmlRegisterType<QQuickMenu>(private_uri, 1, 0, "MenuPrivate");
-    qmlRegisterType<QQuickMenuBar>(private_uri, 1, 0, "MenuBarPrivate");
+    qmlRegisterType<QQuickMenu1>(private_uri, 1, 0, "MenuPrivate");
+    qmlRegisterType<QQuickMenuBar1>(private_uri, 1, 0, "MenuBarPrivate");
     qmlRegisterType<QQuickPopupWindow>(private_uri, 1, 0, "PopupWindow");
 
     qmlRegisterUncreatableType<QAbstractItemModel>(private_uri, 1, 0, "AbstractItemModel",

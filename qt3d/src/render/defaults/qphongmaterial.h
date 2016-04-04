@@ -34,19 +34,19 @@
 **
 ****************************************************************************/
 
-#ifndef QT3D_RENDER_QPHONGMATERIAL_H
-#define QT3D_RENDER_QPHONGMATERIAL_H
+#ifndef QT3DRENDER_RENDER_QPHONGMATERIAL_H
+#define QT3DRENDER_RENDER_QPHONGMATERIAL_H
 
-#include <Qt3DRenderer/qmaterial.h>
+#include <Qt3DRender/qmaterial.h>
 #include <QColor>
 
 QT_BEGIN_NAMESPACE
 
-namespace Qt3D {
+namespace Qt3DRender {
 
 class QPhongMaterialPrivate;
 
-class QT3DRENDERERSHARED_EXPORT QPhongMaterial : public QMaterial
+class QT3DRENDERSHARED_EXPORT QPhongMaterial : public QMaterial
 {
     Q_OBJECT
     Q_PROPERTY(QColor ambient READ ambient WRITE setAmbient NOTIFY ambientChanged)
@@ -55,7 +55,7 @@ class QT3DRENDERERSHARED_EXPORT QPhongMaterial : public QMaterial
     Q_PROPERTY(float shininess READ shininess WRITE setShininess NOTIFY shininessChanged)
 
 public:
-    explicit QPhongMaterial(QNode *parent = 0);
+    explicit QPhongMaterial(Qt3DCore::QNode *parent = 0);
     ~QPhongMaterial();
 
     QColor ambient() const;
@@ -63,23 +63,24 @@ public:
     QColor specular() const;
     float shininess() const;
 
+public Q_SLOTS:
     void setAmbient(const QColor &ambient);
     void setDiffuse(const QColor &diffuse);
     void setSpecular(const QColor &specular);
     void setShininess(float shininess);
 
 Q_SIGNALS:
-    void ambientChanged();
-    void diffuseChanged();
-    void specularChanged();
-    void shininessChanged();
+    void ambientChanged(const QColor &ambient);
+    void diffuseChanged(const QColor &diffuse);
+    void specularChanged(const QColor &specular);
+    void shininessChanged(float shininess);
 
 private:
     Q_DECLARE_PRIVATE(QPhongMaterial)
 };
 
-} // Qt3D
+} // namespace Qt3DRender
 
 QT_END_NAMESPACE
 
-#endif // QT3D_RENDER_QPHONGMATERIAL_H
+#endif // QT3DRENDER_RENDER_QPHONGMATERIAL_H

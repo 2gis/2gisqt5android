@@ -47,6 +47,7 @@
 #include "content/common/gpu/gpu_messages.h"
 #include "content/common/view_messages.h"
 #include "ui/events/gesture_detection/filtered_gesture_provider.h"
+#include "qtwebenginecoreglobal_p.h"
 #include <QMap>
 #include <QPoint>
 #include <QRect>
@@ -125,12 +126,10 @@ public:
     virtual void Hide() Q_DECL_OVERRIDE;
     virtual bool IsShowing() Q_DECL_OVERRIDE;
     virtual gfx::Rect GetViewBounds() const Q_DECL_OVERRIDE;
+    virtual void SetBackgroundColor(SkColor color) Q_DECL_OVERRIDE;
     virtual bool LockMouse() Q_DECL_OVERRIDE;
     virtual void UnlockMouse() Q_DECL_OVERRIDE;
-    virtual void WasShown() Q_DECL_OVERRIDE;
-    virtual void WasHidden() Q_DECL_OVERRIDE;
     virtual void MovePluginWindows(const std::vector<content::WebPluginGeometry>&) Q_DECL_OVERRIDE;
-    virtual void Blur() Q_DECL_OVERRIDE;
     virtual void UpdateCursor(const content::WebCursor&) Q_DECL_OVERRIDE;
     virtual void SetIsLoading(bool) Q_DECL_OVERRIDE;
     virtual void TextInputTypeChanged(ui::TextInputType type, ui::TextInputMode mode, bool can_compose_inline, int flags) Q_DECL_OVERRIDE;
@@ -140,7 +139,7 @@ public:
     virtual void Destroy() Q_DECL_OVERRIDE;
     virtual void SetTooltipText(const base::string16 &tooltip_text) Q_DECL_OVERRIDE;
     virtual void SelectionBoundsChanged(const ViewHostMsg_SelectionBounds_Params&) Q_DECL_OVERRIDE;
-    virtual void CopyFromCompositingSurface(const gfx::Rect& src_subrect, const gfx::Size& dst_size, content::CopyFromCompositingSurfaceCallback& callback, const SkColorType color_type) Q_DECL_OVERRIDE;
+    virtual void CopyFromCompositingSurface(const gfx::Rect& src_subrect, const gfx::Size& dst_size, content::ReadbackRequestCallback& callback, const SkColorType color_type) Q_DECL_OVERRIDE;
     virtual void CopyFromCompositingSurfaceToVideoFrame(const gfx::Rect& src_subrect, const scoped_refptr<media::VideoFrame>& target, const base::Callback<void(bool)>& callback) Q_DECL_OVERRIDE;
     virtual bool CanCopyToVideoFrame() const Q_DECL_OVERRIDE;
     virtual bool HasAcceleratedSurface(const gfx::Size&) Q_DECL_OVERRIDE;

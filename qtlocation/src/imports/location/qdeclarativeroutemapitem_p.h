@@ -37,6 +37,17 @@
 #ifndef QDECLARATIVEROUTEMAPITEM_H_
 #define QDECLARATIVEROUTEMAPITEM_H_
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include "qdeclarativegeomapitembase_p.h"
 #include "qdeclarativegeomap_p.h"
 #include "qdeclarativepolylinemapitem_p.h"
@@ -62,6 +73,9 @@ public:
 
 Q_SIGNALS:
     void routeChanged(const QDeclarativeGeoRoute *route);
+
+private slots:
+    void updateRoutePath();
 
 protected:
     void setPath(const QJSValue &value) Q_DECL_OVERRIDE;

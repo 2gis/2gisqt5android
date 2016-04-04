@@ -34,6 +34,17 @@
 #ifndef QQUICKFLICKABLE_P_H
 #define QQUICKFLICKABLE_P_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include "qquickitem.h"
 #include <private/qtquickglobal_p.h>
 
@@ -93,7 +104,6 @@ class Q_QUICK_PRIVATE_EXPORT QQuickFlickable : public QQuickItem
     Q_PROPERTY(QQmlListProperty<QQuickItem> flickableChildren READ flickableChildren)
     Q_CLASSINFO("DefaultProperty", "flickableData")
 
-    Q_ENUMS(FlickableDirection)
     Q_FLAGS(BoundsBehavior)
 
 public:
@@ -177,6 +187,7 @@ public:
     QQuickItem *contentItem();
 
     enum FlickableDirection { AutoFlickDirection=0x00, HorizontalFlick=0x01, VerticalFlick=0x02, HorizontalAndVerticalFlick=0x03 };
+    Q_ENUM(FlickableDirection)
     FlickableDirection flickableDirection() const;
     void setFlickableDirection(FlickableDirection);
 

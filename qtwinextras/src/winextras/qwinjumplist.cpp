@@ -41,6 +41,7 @@
 #include "winpropkey_p.h"
 
 #include <QDir>
+#include <QtCore/QDebug>
 #include <QCoreApplication>
 #include <qt_windows.h>
 #include <propvarutil.h>
@@ -99,7 +100,7 @@ QWinJumpListPrivate::QWinJumpListPrivate() :
 void QWinJumpListPrivate::warning(const char *function, HRESULT hresult)
 {
     const QString err = QtWin::errorStringFromHresult(hresult);
-    qWarning("QWinJumpList: %s() failed: %#010x, %s.", function, (unsigned)hresult, qPrintable(err));
+    qWarning("QWinJumpList: %s() failed: %#010x, %s.", function, unsigned(hresult), qPrintable(err));
 }
 
 QString QWinJumpListPrivate::iconsDirPath()
@@ -324,8 +325,13 @@ IShellLinkW *QWinJumpListPrivate::toIShellLink(const QWinJumpListItem *item)
     }
 
     const QString args = createArguments(item->arguments());
-    const int iconPathSize = QWinJumpListPrivate::iconsDirPath().size() + sizeof(void *)*2 + 4; // path + ptr-name-in-hex + .ico
-    const int bufferSize = qMax(args.size(), qMax(item->workingDirectory().size(), qMax(item->description().size(), qMax(item->title().size(), qMax(item->filePath().size(), iconPathSize))))) + 1;
+    const int iconPathSize = QWinJumpListPrivate::iconsDirPath().size()
+        + int(sizeof(void *)) * 2 + 4; // path + ptr-name-in-hex + .ico
+    const int bufferSize = qMax(args.size(),
+                                qMax(item->workingDirectory().size(),
+                                     qMax(item->description().size(),
+                                          qMax(item->title().size(),
+                                               qMax(item->filePath().size(), iconPathSize))))) + 1;
     wchar_t *buffer = new wchar_t[bufferSize];
 
     if (!item->description().isEmpty()) {
@@ -562,6 +568,27 @@ void QWinJumpList::clear()
         category->clear();
     d->destroy();
 }
+
+#ifndef QT_NO_DEBUG_STREAM
+
+QDebug operator<<(QDebug debug, const QWinJumpList *jumplist)
+{
+    QDebugStateSaver saver(debug);
+    debug.nospace();
+    debug.noquote();
+    debug << "QWinJumpList(";
+    if (jumplist) {
+        debug << "(identifier=\"" << jumplist->identifier() << "\", recent="
+            << jumplist->recent() << ", frequent=" << jumplist->frequent()
+            << ", tasks=" << jumplist->tasks()
+            << ", categories=" << jumplist->categories();
+    } else {
+        debug << '0';
+    }
+    debug << ')';
+    return debug;
+}
+#endif // !QT_NO_DEBUG_STREAM
 
 QT_END_NAMESPACE
 

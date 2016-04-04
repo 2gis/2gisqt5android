@@ -1,6 +1,0 @@
-<RCC>
-    <qresource prefix="/">
-        <file>createObject.qml</file>
-        <file>createObjectWithScript.qml</file>
-    </qresource>
-</RCC>

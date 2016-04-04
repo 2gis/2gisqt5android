@@ -34,10 +34,12 @@
 #ifndef TESTHTTPSERVER_H
 #define TESTHTTPSERVER_H
 
-#include <QObject>
 #include <QTcpServer>
 #include <QUrl>
 #include <QPair>
+#include <QThread>
+#include <QMutex>
+#include <QWaitCondition>
 
 class TestHTTPServer : public QObject
 {
@@ -46,6 +48,7 @@ public:
     TestHTTPServer();
 
     bool listen();
+    quint16 port() const;
     QUrl baseUrl() const;
     QUrl url(const QString &documentPath) const;
     QString urlString(const QString &documentPath) const;
@@ -81,24 +84,48 @@ private:
     void serveGET(QTcpSocket *, const QByteArray &);
     bool reply(QTcpSocket *, const QByteArray &);
 
-    QList<QPair<QString, Mode> > dirs;
-    QHash<QTcpSocket *, QByteArray> dataCache;
-    QList<QPair<QTcpSocket *, QByteArray> > toSend;
-    QSet<QString> contentSubstitutedFileNames;
+    QList<QPair<QString, Mode> > m_directories;
+    QHash<QTcpSocket *, QByteArray> m_dataCache;
+    QList<QPair<QTcpSocket *, QByteArray> > m_toSend;
+    QSet<QString> m_contentSubstitutedFileNames;
 
     struct WaitData {
         QList <QByteArray>headers;
         QByteArray body;
-    } waitData;
-    QByteArray replyData;
-    QByteArray bodyData;
+    } m_waitData;
+    QByteArray m_replyData;
+    QByteArray m_bodyData;
     QByteArray m_data;
     State m_state;
 
-    QHash<QString,QString> aliases;
-    QHash<QString,QString> redirects;
+    QHash<QString, QString> m_aliases;
+    QHash<QString, QString> m_redirects;
 
-    QTcpServer server;
+    QTcpServer m_server;
+};
+
+class ThreadedTestHTTPServer : public QThread
+{
+    Q_OBJECT
+public:
+    ThreadedTestHTTPServer(const QString &dir, TestHTTPServer::Mode mode = TestHTTPServer::Normal);
+    ThreadedTestHTTPServer(const QHash<QString, TestHTTPServer::Mode> &dirs);
+    ~ThreadedTestHTTPServer();
+
+    QUrl baseUrl() const;
+    QUrl url(const QString &documentPath) const;
+    QString urlString(const QString &documentPath) const;
+
+protected:
+    void run();
+
+private:
+    void start();
+
+    QHash<QString, TestHTTPServer::Mode> m_dirs;
+    quint16 m_port;
+    QMutex m_mutex;
+    QWaitCondition m_condition;
 };
 
 #endif // TESTHTTPSERVER_H

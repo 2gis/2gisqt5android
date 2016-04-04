@@ -38,7 +38,7 @@
 #include "qcomponent.h"
 #include "qabstractaspectjobmanager_p.h"
 
-#include "qsceneobserverinterface.h"
+#include "qsceneobserverinterface_p.h"
 #include <Qt3DCore/private/qscene_p.h>
 #include <Qt3DCore/private/corelogging_p.h>
 #include <QMutexLocker>
@@ -49,16 +49,16 @@
 
 QT_BEGIN_NAMESPACE
 
-namespace Qt3D {
+namespace Qt3DCore {
 
-/*!
-    \class Qt3D::QChangeArbiter
+/* !\internal
+    \class Qt3DCore::QChangeArbiter
     \inmodule Qt3DCore
     \since 5.5
 
     \brief Acts as a message router between observables and observers.
 
-    Observables can be of two types: QNode observables and QObservableInterfaces.
+    Observables can be of two types: QNode observables and \l {QObservableInterface}s.
     QNode notifications are sent from the frontend QNode and delivered to the backend observers.
     QObservableInterface notifications are sent from backend nodes to backend observers and/or to the
     registered QPostman, which in turn delivers the notifications to the target frontend QNode.
@@ -331,6 +331,6 @@ void QChangeArbiter::destroyThreadLocalChangeQueue(void *changeArbiter)
     }
 }
 
-} // namespace Qt3D
+} // namespace Qt3DCore
 
 QT_END_NAMESPACE

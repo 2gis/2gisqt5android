@@ -34,6 +34,17 @@
 #ifndef QQUICKPATH_H
 #define QQUICKPATH_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include <qqml.h>
 
 #include <private/qqmlnullablevalue_p.h>
@@ -265,7 +276,7 @@ public:
         : QQuickCurve(parent), _radiusX(0), _radiusY(0), _useLargeArc(false), _direction(Clockwise) {}
 
     enum ArcDirection { Clockwise, Counterclockwise };
-    Q_ENUMS(ArcDirection)
+    Q_ENUM(ArcDirection)
 
     qreal radiusX() const;
     void setRadiusX(qreal);

@@ -324,7 +324,7 @@ QDebug operator<<(QDebug d, const EnginioReply *reply)
         return d;
     }
     d.nospace();
-    d << "EnginioReply(" << hex << (void *) reply << dec;
+    d << "EnginioReply(" << hex << (const void *) reply << dec;
 
     if (!reply->isError()) {
         d << " success data=" << reply->data();

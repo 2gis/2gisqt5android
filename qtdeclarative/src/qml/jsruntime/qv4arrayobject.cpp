@@ -37,6 +37,7 @@
 #include "qv4scopedvalue_p.h"
 #include "qv4argumentsobject_p.h"
 #include "qv4runtime_p.h"
+#include "qv4string_p.h"
 
 using namespace QV4;
 
@@ -47,9 +48,9 @@ Heap::ArrayCtor::ArrayCtor(QV4::ExecutionContext *scope)
 {
 }
 
-ReturnedValue ArrayCtor::construct(Managed *m, CallData *callData)
+ReturnedValue ArrayCtor::construct(const Managed *m, CallData *callData)
 {
-    ExecutionEngine *v4 = static_cast<ArrayCtor *>(m)->engine();
+    ExecutionEngine *v4 = static_cast<const ArrayCtor *>(m)->engine();
     Scope scope(v4);
     ScopedArrayObject a(scope, v4->newArrayObject());
     uint len;
@@ -72,7 +73,7 @@ ReturnedValue ArrayCtor::construct(Managed *m, CallData *callData)
     return a.asReturnedValue();
 }
 
-ReturnedValue ArrayCtor::call(Managed *that, CallData *callData)
+ReturnedValue ArrayCtor::call(const Managed *that, CallData *callData)
 {
     return construct(that, callData);
 }
@@ -81,11 +82,11 @@ void ArrayPrototype::init(ExecutionEngine *engine, Object *ctor)
 {
     Scope scope(engine);
     ScopedObject o(scope);
-    ctor->defineReadonlyProperty(engine->id_length, Primitive::fromInt32(1));
-    ctor->defineReadonlyProperty(engine->id_prototype, (o = this));
+    ctor->defineReadonlyProperty(engine->id_length(), Primitive::fromInt32(1));
+    ctor->defineReadonlyProperty(engine->id_prototype(), (o = this));
     ctor->defineDefaultProperty(QStringLiteral("isArray"), method_isArray, 1);
     defineDefaultProperty(QStringLiteral("constructor"), (o = ctor));
-    defineDefaultProperty(engine->id_toString, method_toString, 0);
+    defineDefaultProperty(engine->id_toString(), method_toString, 0);
     defineDefaultProperty(QStringLiteral("toLocaleString"), method_toLocaleString, 0);
     defineDefaultProperty(QStringLiteral("concat"), method_concat, 1);
     defineDefaultProperty(QStringLiteral("join"), method_join, 1);
@@ -110,7 +111,7 @@ void ArrayPrototype::init(ExecutionEngine *engine, Object *ctor)
 
 ReturnedValue ArrayPrototype::method_isArray(CallContext *ctx)
 {
-    bool isArray = ctx->argc() && ctx->args()[0].asArrayObject();
+    bool isArray = ctx->argc() && ctx->args()[0].as<ArrayObject>();
     return Encode(isArray);
 }
 
@@ -185,7 +186,7 @@ ReturnedValue ArrayPrototype::method_join(CallContext *ctx)
         r4 = arg->toQString();
 
     ScopedObject self(scope, ctx->thisObject());
-    ScopedValue length(scope, self->get(ctx->d()->engine->id_length));
+    ScopedValue length(scope, self->get(ctx->d()->engine->id_length()));
     const quint32 r2 = length->isUndefined() ? 0 : length->toUInt32();
 
     if (!r2)
@@ -194,7 +195,7 @@ ReturnedValue ArrayPrototype::method_join(CallContext *ctx)
     QString R;
 
     // ### FIXME
-    if (ArrayObject *a = self->asArrayObject()) {
+    if (ArrayObject *a = self->as<ArrayObject>()) {
         ScopedValue e(scope);
         for (uint i = 0; i < a->getLength(); ++i) {
             if (i)
@@ -242,7 +243,7 @@ ReturnedValue ArrayPrototype::method_pop(CallContext *ctx)
 
     if (!len) {
         if (!instance->isArrayObject())
-            instance->put(ctx->d()->engine->id_length, ScopedValue(scope, Primitive::fromInt32(0)));
+            instance->put(ctx->d()->engine->id_length(), ScopedValue(scope, Primitive::fromInt32(0)));
         return Encode::undefined();
     }
 
@@ -256,7 +257,7 @@ ReturnedValue ArrayPrototype::method_pop(CallContext *ctx)
     if (instance->isArrayObject())
         instance->setArrayLength(len - 1);
     else
-        instance->put(ctx->d()->engine->id_length, ScopedValue(scope, Primitive::fromDouble(len - 1)));
+        instance->put(ctx->d()->engine->id_length(), ScopedValue(scope, Primitive::fromDouble(len - 1)));
     return result->asReturnedValue();
 }
 
@@ -282,7 +283,7 @@ ReturnedValue ArrayPrototype::method_push(CallContext *ctx)
         }
         double newLen = l + ctx->argc();
         if (!instance->isArrayObject())
-            instance->put(ctx->d()->engine->id_length, ScopedValue(scope, Primitive::fromDouble(newLen)));
+            instance->put(ctx->d()->engine->id_length(), ScopedValue(scope, Primitive::fromDouble(newLen)));
         else {
             ScopedString str(scope, ctx->d()->engine->newString(QStringLiteral("Array.prototype.push: Overflow")));
             return ctx->engine()->throwRangeError(str);
@@ -303,7 +304,7 @@ ReturnedValue ArrayPrototype::method_push(CallContext *ctx)
     if (instance->isArrayObject())
         instance->setArrayLengthUnchecked(len);
     else
-        instance->put(ctx->d()->engine->id_length, ScopedValue(scope, Primitive::fromDouble(len)));
+        instance->put(ctx->d()->engine->id_length(), ScopedValue(scope, Primitive::fromDouble(len)));
 
     return Encode(len);
 }
@@ -354,7 +355,7 @@ ReturnedValue ArrayPrototype::method_shift(CallContext *ctx)
 
     if (!len) {
         if (!instance->isArrayObject())
-            instance->put(ctx->d()->engine->id_length, ScopedValue(scope, Primitive::fromInt32(0)));
+            instance->put(ctx->d()->engine->id_length(), ScopedValue(scope, Primitive::fromInt32(0)));
         return Encode::undefined();
     }
 
@@ -388,7 +389,7 @@ ReturnedValue ArrayPrototype::method_shift(CallContext *ctx)
     if (instance->isArrayObject())
         instance->setArrayLengthUnchecked(len - 1);
     else
-        instance->put(ctx->d()->engine->id_length, ScopedValue(scope, Primitive::fromDouble(len - 1)));
+        instance->put(ctx->d()->engine->id_length(), ScopedValue(scope, Primitive::fromDouble(len - 1)));
     return result->asReturnedValue();
 }
 
@@ -523,7 +524,7 @@ ReturnedValue ArrayPrototype::method_splice(CallContext *ctx)
     }
 
     ctx->d()->strictMode = true;
-    instance->put(ctx->d()->engine->id_length, ScopedValue(scope, Primitive::fromDouble(len - deleteCount + itemCount)));
+    instance->put(ctx->d()->engine->id_length(), ScopedValue(scope, Primitive::fromDouble(len - deleteCount + itemCount)));
 
     return newArray.asReturnedValue();
 }
@@ -561,7 +562,7 @@ ReturnedValue ArrayPrototype::method_unshift(CallContext *ctx)
     if (instance->isArrayObject())
         instance->setArrayLengthUnchecked(newLen);
     else
-        instance->put(ctx->d()->engine->id_length, ScopedValue(scope, Primitive::fromDouble(newLen)));
+        instance->put(ctx->d()->engine->id_length(), ScopedValue(scope, Primitive::fromDouble(newLen)));
 
     return Encode(newLen);
 }
@@ -619,7 +620,7 @@ ReturnedValue ArrayPrototype::method_indexOf(CallContext *ctx)
         return Encode(-1);
     } else {
         Q_ASSERT(instance->arrayType() == Heap::ArrayData::Simple || instance->arrayType() == Heap::ArrayData::Complex);
-        Heap::SimpleArrayData *sa = static_cast<Heap::SimpleArrayData *>(instance->d()->arrayData);
+        Heap::SimpleArrayData *sa = instance->d()->arrayData.cast<Heap::SimpleArrayData>();
         if (len > sa->len)
             len = sa->len;
         uint idx = fromIndex;

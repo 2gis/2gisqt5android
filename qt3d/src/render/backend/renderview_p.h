@@ -35,21 +35,32 @@
 **
 ****************************************************************************/
 
-#ifndef QT3D_RENDER_RENDERVIEW_H
-#define QT3D_RENDER_RENDERVIEW_H
+#ifndef QT3DRENDER_RENDER_RENDERVIEW_H
+#define QT3DRENDER_RENDER_RENDERVIEW_H
 
-#include <Qt3DRenderer/qparameter.h>
-#include <Qt3DRenderer/qclearbuffer.h>
-#include <Qt3DRenderer/private/renderer_p.h>
-#include <Qt3DRenderer/private/rendercameralens_p.h>
-#include <Qt3DRenderer/private/attachmentpack_p.h>
-#include <Qt3DRenderer/private/handle_types_p.h>
-#include <Qt3DRenderer/qparameter.h>
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists for the convenience
+// of other Qt classes.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
 
-#include <Qt3DCore/qframeallocator.h>
+#include <Qt3DRender/qparameter.h>
+#include <Qt3DRender/qclearbuffer.h>
+#include <Qt3DRender/private/renderer_p.h>
+#include <Qt3DRender/private/cameralens_p.h>
+#include <Qt3DRender/private/attachmentpack_p.h>
+#include <Qt3DRender/private/handle_types_p.h>
+#include <Qt3DRender/qparameter.h>
+
+#include <Qt3DCore/private/qframeallocator_p.h>
 
 // TODO: Move out once this is all refactored
-#include <Qt3DRenderer/private/renderviewjobutils_p.h>
+#include <Qt3DRender/private/renderviewjobutils_p.h>
 
 #include <QVector>
 #include <QMutex>
@@ -57,23 +68,36 @@
 
 QT_BEGIN_NAMESPACE
 
-namespace Qt3D {
+namespace Qt3DRender {
 
 class QRenderPass;
-class QFrameAllocator;
 
 namespace Render {
 
 class Renderer;
+class NodeManagers;
 class RenderCommand;
 class RenderPassFilter;
 class TechniqueFilter;
 class ViewportNode;
-class RenderEffect;
-class RenderRenderPass;
+class Effect;
+class RenderPass;
 
 typedef QPair<ShaderUniform, QVariant> ActivePropertyContent;
 typedef QPair<QString, ActivePropertyContent > ActiveProperty;
+
+struct Q_AUTOTEST_EXPORT Plane
+{
+    explicit Plane(const QVector4D &planeEquation)
+        : planeEquation(planeEquation)
+        , normal(planeEquation.toVector3D().normalized())
+        , d(planeEquation.w() / planeEquation.toVector3D().length())
+    {}
+
+    const QVector4D planeEquation;
+    const QVector3D normal;
+    const float d;
+};
 
 // This class is kind of analogous to RenderBin but I want to avoid trampling
 // on that until we get this working
@@ -93,8 +117,9 @@ public:
     void setRenderer(Renderer *renderer);
     inline void setSurfaceSize(const QSize &size) { m_surfaceSize = size; }
     inline Renderer *renderer() const { return m_renderer; }
+    inline NodeManagers *nodeManagers() const { return m_manager; }
 
-    inline void setAllocator(QFrameAllocator *allocator)
+    inline void setAllocator(Qt3DCore::QFrameAllocator *allocator)
     {
         m_allocator = allocator;
         m_data = m_allocator->allocate<InnerData>();
@@ -102,17 +127,21 @@ public:
         // This allows us to keep the size of RenderView smaller and avoid huge block fragmentation
         //
         // TODO: Is this worth it here. We don't have that many RenderViews to iterate over. This
-        // level of memory management would be better in RenderEntity's matrices as they will
+        // level of memory management would be better in Entity's matrices as they will
         // help cache performance during iteration
         m_data->m_viewMatrix = m_allocator->allocate<QMatrix4x4>();
+        m_data->m_viewProjectionMatrix = m_allocator->allocate<QMatrix4x4>();
     }
-    inline QFrameAllocator *allocator() const { return m_allocator; }
+    inline Qt3DCore::QFrameAllocator *allocator() const { return m_allocator; }
 
-    inline void setRenderCamera(RenderCameraLens *renderCamera) { m_data->m_renderCamera = renderCamera; }
-    inline RenderCameraLens *renderCamera() const { return m_data->m_renderCamera; }
+    inline void setRenderCamera(CameraLens *renderCamera) { m_data->m_renderCamera = renderCamera; }
+    inline CameraLens *renderCamera() const { return m_data->m_renderCamera; }
 
-    inline void setViewMatrix(const QMatrix4x4 viewMatrix) { *(m_data->m_viewMatrix) = viewMatrix; }
+    inline void setViewMatrix(const QMatrix4x4 &viewMatrix) { *(m_data->m_viewMatrix) = viewMatrix; }
     inline QMatrix4x4 viewmatrix() const { Q_ASSERT(m_data->m_viewMatrix); return *(m_data->m_viewMatrix); }
+
+    inline void setViewProjectionMatrix(const QMatrix4x4 &viewProjectionMatrix) { *(m_data->m_viewProjectionMatrix) = viewProjectionMatrix; }
+    inline QMatrix4x4 viewProjectionMatrix() const { return *(m_data->m_viewProjectionMatrix); }
 
     inline void setEyePosition(const QVector3D &eyePos) { m_data->m_eyePos = eyePos; }
     inline QVector3D eyePosition() const { return m_data->m_eyePos; }
@@ -131,6 +160,9 @@ public:
 
     inline bool noDraw() const { return m_noDraw; }
     void setNoDraw(bool noDraw) { m_noDraw = noDraw; }
+
+    inline bool frustumCulling() const { return m_frustumCulling; }
+    void setFrustumCulling(bool frustumCulling) { m_frustumCulling = frustumCulling; }
 
     // TODO: Get rid of this overly complex memory management by splitting out the
     // InnerData as a RenderViewConfig struct. This can be created by setRenderViewConfigFromFrameGraphLeafNode
@@ -176,8 +208,9 @@ public:
     inline void setClearBuffer(QClearBuffer::BufferType clearBuffer) { m_clearBuffer = clearBuffer; }
     inline QClearBuffer::BufferType clearBuffer() const { return m_clearBuffer; }
 
-    void buildRenderCommands(RenderEntity *preprocessedTreeRoot);
+    void buildRenderCommands(Entity *preprocessedTreeRoot, const Plane *planes);
     QVector<RenderCommand *> commands() const { return m_commands; }
+    void gatherLights(Entity *preprocessedTreeRoot);
 
     void addRenderAttachment(Attachment attachment) { m_attachmentPack.addAttachment(attachment); }
     void setDrawBuffers(const QList<QRenderAttachment::RenderAttachmentType> &drawBuffers) { m_attachmentPack.setDrawBuffers(drawBuffers); }
@@ -186,7 +219,7 @@ public:
     void setRenderTargetHandle(HTarget renderTargetHandle) { m_renderTarget = renderTargetHandle; }
     HTarget renderTargetHandle() const { return m_renderTarget; }
 
-    void addSortCriteria(const QList<QNodeId> &sortMethodUid) { m_data->m_sortingCriteria.append(sortMethodUid); }
+    void addSortCriteria(const QList<Qt3DCore::QNodeId> &sortMethodUid) { m_data->m_sortingCriteria.append(sortMethodUid); }
 
     // Helps making the size of RenderView smaller
     // Contains all the data needed for the actual building of the RenderView
@@ -199,22 +232,33 @@ public:
             , m_viewMatrix(Q_NULLPTR)
         {
         }
-        RenderCameraLens *m_renderCamera;
+        CameraLens *m_renderCamera;
         const TechniqueFilter *m_techniqueFilter;
         const RenderPassFilter *m_passFilter;
         QMatrix4x4 *m_viewMatrix;
+        QMatrix4x4 *m_viewProjectionMatrix;
         QStringList m_layers;
-        QList<QNodeId> m_sortingCriteria;
+        QList<Qt3DCore::QNodeId> m_sortingCriteria;
         QVector3D m_eyePos;
         UniformBlockValueBuilder m_uniformBlockBuilder;
     };
 
+    struct LightSource {
+        LightSource() : entity(Q_NULLPTR) { }
+        LightSource(Entity *entity, const QList<Light *> &lights)
+            : entity(entity), lights(lights) { }
+        Entity *entity;
+        QList<Light *> lights;
+    };
+
 private:
-    void setShaderAndUniforms(RenderCommand *command, RenderRenderPass *pass, ParameterInfoList &parameters, const QMatrix4x4 &worldTransform);
+    void setShaderAndUniforms(RenderCommand *command, RenderPass *pass, ParameterInfoList &parameters, const QMatrix4x4 &worldTransform,
+                              const QVector<LightSource> &activeLightSources);
 
     Renderer *m_renderer;
+    NodeManagers *m_manager;
     QSize m_surfaceSize;
-    QFrameAllocator *m_allocator;
+    Qt3DCore::QFrameAllocator *m_allocator;
 
     InnerData *m_data;
 
@@ -225,11 +269,14 @@ private:
     QClearBuffer::BufferType m_clearBuffer;
     RenderStateSet *m_stateSet;
     bool m_noDraw;
+    bool m_frustumCulling;
 
     // We do not use pointers to RenderNodes or Drawable's here so that the
     // render aspect is free to change the drawables on the next frame whilst
     // the render thread is submitting these commands.
     QVector<RenderCommand *> m_commands;
+
+    QVector<LightSource> m_lightSources;
 
     typedef QHash<QString, QUniformValue* (RenderView::*)(const QMatrix4x4& model) const> StandardUniformsPFuncsHash;
     static StandardUniformsPFuncsHash ms_standardUniformSetters;
@@ -252,22 +299,24 @@ private:
     QUniformValue *viewportMatrix(const QMatrix4x4 &model) const;
     QUniformValue *inverseViewportMatrix(const QMatrix4x4 &model) const;
     QUniformValue *time(const QMatrix4x4 &model) const;
+    QUniformValue *eyePosition(const QMatrix4x4 &model) const;
 
     void setUniformValue(QUniformPack &uniformPack, const QString &name, const QVariant &value);
+    void setStandardUniformValue(QUniformPack &uniformPack, const QString &glslName, const QString &name, const QMatrix4x4 &worldTransform);
     void setUniformBlockValue(QUniformPack &uniformPack,
-                              RenderShader *shader,
+                              Shader *shader,
                               const ShaderUniformBlock &block,
                               const QVariant &value);
     void setDefaultUniformBlockShaderDataValue(QUniformPack &uniformPack,
-                                               RenderShader *shader,
-                                               RenderShaderData *shaderData,
+                                               Shader *shader,
+                                               ShaderData *shaderData,
                                                const QString &structName);
     void buildSortingKey(RenderCommand *command);
 };
 
 } // namespace Render
-} // namespace Qt3D
+} // namespace Qt3DRender
 
 QT_END_NAMESPACE
 
-#endif // QT3D_RENDER_RENDERVIEW_H
+#endif // QT3DRENDER_RENDER_RENDERVIEW_H

@@ -34,6 +34,17 @@
 #ifndef QSGRenderLoop_P_H
 #define QSGRenderLoop_P_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include <QtGui/QImage>
 #include <QtGui/QSurface>
 #include <private/qtquickglobal_p.h>
@@ -45,6 +56,7 @@ class QQuickWindow;
 class QSGContext;
 class QSGRenderContext;
 class QAnimationDriver;
+class QRunnable;
 
 class Q_QUICK_PRIVATE_EXPORT QSGRenderLoop : public QObject
 {
@@ -72,6 +84,7 @@ public:
     virtual QSGRenderContext *createRenderContext(QSGContext *) const = 0;
 
     virtual void releaseResources(QQuickWindow *window) = 0;
+    virtual void postJob(QQuickWindow *window, QRunnable *job);
 
     void addWindow(QQuickWindow *win) { m_windows.insert(win); }
     void removeWindow(QQuickWindow *win) { m_windows.remove(win); }

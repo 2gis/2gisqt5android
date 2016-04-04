@@ -711,7 +711,7 @@ bool QFSFileEngine::link(const QString &newName)
     Q_UNUSED(newName);
     return false;
 #endif // QT_NO_LIBRARY
-#elif defined(Q_OS_WINCE)
+#elif defined(Q_OS_WINCE) && !defined(QT_NO_WINCE_SHELLSDK)
     QString linkName = newName;
     linkName.replace(QLatin1Char('/'), QLatin1Char('\\'));
     if (!linkName.endsWith(QLatin1String(".lnk")))
@@ -724,7 +724,7 @@ bool QFSFileEngine::link(const QString &newName)
     if (!ret)
         setError(QFile::RenameError, qt_error_string());
     return ret;
-#else // Q_OS_WINCE
+#else // Q_OS_WINCE && !QT_NO_WINCE_SHELLSDK
     Q_UNUSED(newName);
     Q_UNIMPLEMENTED();
     return false;
@@ -1037,7 +1037,7 @@ uchar *QFSFileEnginePrivate::map(qint64 offset, qint64 size,
                                       offsetHi, offsetLo, size + extra);
 #else
     LPVOID mapAddress = ::MapViewOfFileFromApp(mapHandle, access,
-                                               (ULONG64(offsetHi) << 32) + offsetLo, size);
+                                               (ULONG64(offsetHi) << 32) + offsetLo, size + extra);
 #endif
     if (mapAddress) {
         uchar *address = extra + static_cast<uchar*>(mapAddress);

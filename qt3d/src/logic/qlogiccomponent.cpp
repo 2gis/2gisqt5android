@@ -39,19 +39,15 @@
 
 QT_BEGIN_NAMESPACE
 
-namespace Qt3D {
+namespace Qt3DLogic {
 
-/*!
-    \class Qt3D::QLogicComponentPrivate
-    \internal
-*/
 QLogicComponentPrivate::QLogicComponentPrivate()
     : QComponentPrivate()
 {
 }
 
 /*!
-    \class Qt3D::QLogicComponent
+    \class Qt3DLogic::QLogicComponent
     \inmodule Qt3DLogic
     \since 5.5
     \brief Provides a way to have a synchronous function executed each frame.
@@ -71,7 +67,7 @@ QLogicComponentPrivate::QLogicComponentPrivate()
 /*!
     \qmltype LogicComponent
     \inqmlmodule Qt3D.Logic
-    \instantiates Qt3D::QLogicComponent
+    \instantiates Qt3DLogic::QLogicComponent
     \inherits Component3D
     \since 5.5
 */
@@ -99,13 +95,13 @@ QLogicComponent::~QLogicComponent()
     This virtual function will be called in a synchronous manner once each frame by
     the Logic aspect.
 */
-void QLogicComponent::onFrameUpdate()
+void QLogicComponent::onFrameUpdate(float dt)
 {
     // Emit signal so that QML instances get the onFrameUpdate() signal
     // handler called
-    emit frameUpdate();
+    emit frameUpdate(dt);
 }
 
-}
+} // namespace Qt3DLogic
 
 QT_END_NAMESPACE

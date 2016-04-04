@@ -36,10 +36,11 @@
 
 #ifndef QWEBENGINESCRIPT_H
 #define QWEBENGINESCRIPT_H
-#include "qtwebenginewidgetsglobal.h"
 
-#include <QtCore/QSharedDataPointer>
-#include <QtCore/QString>
+#include <QtWebEngineWidgets/qtwebenginewidgetsglobal.h>
+
+#include <QtCore/qshareddata.h>
+#include <QtCore/qstring.h>
 
 namespace QtWebEngineCore {
 class UserScript;
@@ -98,7 +99,9 @@ private:
     QSharedDataPointer<QtWebEngineCore::UserScript> d;
 };
 
-Q_DECLARE_SHARED(QWebEngineScript)
+#if QT_VERSION >= QT_VERSION_CHECK(5,6,0)
+Q_DECLARE_SHARED_NOT_MOVABLE_UNTIL_QT6(QWebEngineScript)
+#endif
 
 #ifndef QT_NO_DEBUG_STREAM
 QWEBENGINEWIDGETS_EXPORT QDebug operator<<(QDebug, const QWebEngineScript &);

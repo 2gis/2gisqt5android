@@ -42,6 +42,7 @@
 #include <time.h>
 #include "ce_time.h"
 
+#if _WIN32_WCE < 0x800
 time_t
 time(time_t* timer)
 {
@@ -675,3 +676,5 @@ localtime(const time_t *timer)
 {
 	return gmtime(timer);
 }
+
+#endif

@@ -34,6 +34,17 @@
 #ifndef QJSVALUEITERATOR_P_H
 #define QJSVALUEITERATOR_P_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include "qjsvalue.h"
 #include "private/qv4objectiterator_p.h"
 
@@ -48,15 +59,9 @@ public:
 
     QJSValue value;
     QV4::PersistentValue iterator;
-    // ### GC
-    QV4::Property currentProperty;
-    QV4::PropertyAttributes currentAttributes;
-    QV4::StringValue currentName;
+    QV4::PersistentValue currentName;
     uint currentIndex;
-    // ### GC
-    QV4::Property nextProperty;
-    QV4::PropertyAttributes nextAttributes;
-    QV4::StringValue nextName;
+    QV4::PersistentValue nextName;
     uint nextIndex;
 };
 

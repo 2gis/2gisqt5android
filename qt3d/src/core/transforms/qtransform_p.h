@@ -34,16 +34,26 @@
 **
 ****************************************************************************/
 
-#ifndef QT3D_QTRANSFORM_P_H
-#define QT3D_QTRANSFORM_P_H
+#ifndef QT3DCORE_QTRANSFORM_P_H
+#define QT3DCORE_QTRANSFORM_P_H
+
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists for the convenience
+// of other Qt classes.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
 
 #include <private/qcomponent_p.h>
 
 QT_BEGIN_NAMESPACE
 
-namespace Qt3D {
+namespace Qt3DCore {
 
-class QTransform;
 class QTransformPrivate : public QComponentPrivate
 {
     Q_DECLARE_PUBLIC(QTransform)
@@ -51,18 +61,20 @@ class QTransformPrivate : public QComponentPrivate
 public:
     QTransformPrivate();
 
-    void _q_transformDestroyed(QObject *obj);
-    void _q_update();
-    QMatrix4x4 applyTransforms() const;
-
-    mutable bool m_transformsDirty;
-    QList<QAbstractTransform*> m_transforms;
+    // Stored in this order as QQuaternion is bigger than QVector3D
+    // Operations are applied in the order of:
+    // scale, rotation, translation
+    QQuaternion m_rotation;
+    QVector3D m_scale;
+    QVector3D m_translation;
+    QVector3D m_eulerRotationAngles;
 
     mutable QMatrix4x4 m_matrix;
+    mutable bool m_matrixDirty;
 };
 
-} // namespace Qt3D
+} // namespace Qt3DCore
 
 QT_END_NAMESPACE
 
-#endif // QT3D_QTRANSFORM_P_H
+#endif // QT3DCORE_QTRANSFORM_P_H

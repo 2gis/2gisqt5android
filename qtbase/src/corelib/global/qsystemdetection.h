@@ -94,7 +94,7 @@
 #  else
 #    define Q_OS_DARWIN32
 #  endif
-#elif defined(ANDROID)
+#elif defined(__ANDROID__) || defined(ANDROID)
 #  define Q_OS_ANDROID
 #  define Q_OS_LINUX
 #elif defined(__CYGWIN__)
@@ -109,7 +109,7 @@
 #    if defined(WINAPI_FAMILY_PHONE_APP) && WINAPI_FAMILY==WINAPI_FAMILY_PHONE_APP
 #      define Q_OS_WINPHONE
 #      define Q_OS_WINRT
-#    elif WINAPI_FAMILY==WINAPI_FAMILY_APP
+#    elif WINAPI_FAMILY==WINAPI_FAMILY_PC_APP
 #      define Q_OS_WINRT
 #    else
 #      define Q_OS_WIN32

@@ -64,23 +64,18 @@ public:
         : QGridLayoutItem(row, column, rowSpan, columnSpan, alignment), m_item(item), sizeHintCacheDirty(true), useFallbackToWidthOrHeight(true) {}
 
 
-    typedef qreal (QQuickLayoutAttached::*SizeGetter)() const;
-
     QSizeF sizeHint(Qt::SizeHint which, const QSizeF &constraint) const
     {
         Q_UNUSED(constraint);   // Quick Layouts does not support constraint atm
         return effectiveSizeHints()[which];
     }
 
-    static void effectiveSizeHints_helper(QQuickItem *item, QSizeF *cachedSizeHints, QQuickLayoutAttached **info, bool useFallbackToWidthOrHeight);
-    static QLayoutPolicy::Policy effectiveSizePolicy_helper(QQuickItem *item, Qt::Orientation orientation, QQuickLayoutAttached *info);
-
     QSizeF *effectiveSizeHints() const
     {
         if (!sizeHintCacheDirty)
             return cachedSizeHints;
 
-        effectiveSizeHints_helper(m_item, cachedSizeHints, 0, useFallbackToWidthOrHeight);
+        QQuickLayout::effectiveSizeHints_helper(m_item, cachedSizeHints, 0, useFallbackToWidthOrHeight);
         useFallbackToWidthOrHeight = false;
 
         sizeHintCacheDirty = false;
@@ -103,7 +98,7 @@ public:
 
     QLayoutPolicy::Policy sizePolicy(Qt::Orientation orientation) const
     {
-        return effectiveSizePolicy_helper(m_item, orientation, attachedLayoutObject(m_item, false));
+        return QQuickLayout::effectiveSizePolicy_helper(m_item, orientation, attachedLayoutObject(m_item, false));
     }
 
     void setGeometry(const QRectF &rect)
@@ -112,8 +107,7 @@ public:
         const QRectF r = info ? rect.marginsRemoved(info->qMargins()) : rect;
         const QSizeF oldSize(m_item->width(), m_item->height());
         const QSizeF newSize = r.size();
-        QPointF topLeft(qCeil(r.x()), qCeil(r.y()));
-        m_item->setPosition(topLeft);
+        m_item->setPosition(r.topLeft());
         if (newSize == oldSize) {
             if (QQuickLayout *lay = qobject_cast<QQuickLayout *>(m_item)) {
                 if (lay->arrangementIsDirty())
@@ -135,7 +129,7 @@ private:
 
 class QQuickGridLayoutEngine : public QGridLayoutEngine {
 public:
-    QQuickGridLayoutEngine() : QGridLayoutEngine(Qt::AlignVCenter) { }
+    QQuickGridLayoutEngine() : QGridLayoutEngine(Qt::AlignVCenter, true /*snapToPixelGrid*/) { }
 
     int indexOf(QQuickItem *item) const {
         for (int i = 0; i < q_items.size(); ++i) {

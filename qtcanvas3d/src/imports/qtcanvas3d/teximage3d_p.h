@@ -51,6 +51,7 @@
 #include "abstractobject3d_p.h"
 
 #include <QtCore/QUrl>
+#include <QtCore/QPointer>
 #include <QtGui/QImage>
 #include <QtNetwork/QNetworkAccessManager>
 #include <QtNetwork/QNetworkReply>
@@ -74,6 +75,8 @@ public:
     void notifyLoadedImages();
 
     Q_INVOKABLE QJSValue newTexImage();
+    void handleImageDestroyed(CanvasTextureImage *image);
+
 private:
     QQmlEngine *m_qmlEngine;
     QList<CanvasTextureImage *> m_loadingImagesList;
@@ -120,7 +123,7 @@ public:
     void emitImageLoadingError();
 
     void load();
-    void handleReply(QNetworkReply *reply);
+    void handleReply();
     QImage &getImage();
     uchar *convertToFormat(CanvasContext::glEnums format, bool flipY = false, bool premultipliedAlpha = false);
 
@@ -129,7 +132,7 @@ public:
 private:
     void setImageState(TextureImageState state);
     explicit CanvasTextureImage(const QImage &source, int width, int height,
-                                QObject *parent, QQmlEngine *engine);
+                                CanvasTextureImageFactory *parent, QQmlEngine *engine);
 
 signals:
     void srcChanged(QUrl source);
@@ -143,8 +146,11 @@ signals:
     void imageLoadingFailed(CanvasTextureImage *image);
 
 private:
+    void cleanupNetworkReply();
+
     QQmlEngine *m_engine;
-    QNetworkAccessManager *m_networkAccessManager;
+    QNetworkAccessManager *m_networkAccessManager; // not owned
+    QNetworkReply *m_networkReply;
     QImage m_image;
     QUrl m_source;
     TextureImageState m_state;
@@ -154,7 +160,7 @@ private:
     bool m_pixelCacheFlipY;
     QImage m_glImage;
     QVariant *m_anyValue;
-    CanvasTextureImageFactory *m_parentFactory;
+    QPointer<CanvasTextureImageFactory> m_parentFactory;
 };
 
 QT_CANVAS3D_END_NAMESPACE

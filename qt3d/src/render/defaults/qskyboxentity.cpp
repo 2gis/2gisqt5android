@@ -38,28 +38,24 @@
 #include "qskyboxentity_p.h"
 
 #include <Qt3DCore/qtransform.h>
-#include <Qt3DRenderer/qeffect.h>
-#include <Qt3DRenderer/qtexture.h>
-#include <Qt3DRenderer/qmaterial.h>
-#include <Qt3DRenderer/qcullface.h>
-#include <Qt3DRenderer/qdepthtest.h>
-#include <Qt3DRenderer/qparameter.h>
-#include <Qt3DRenderer/qtechnique.h>
-#include <Qt3DRenderer/qcuboidmesh.h>
-#include <Qt3DRenderer/qrenderpass.h>
-#include <Qt3DRenderer/qopenglfilter.h>
-#include <Qt3DRenderer/qshaderprogram.h>
-#include <Qt3DCore/qtranslatetransform.h>
+#include <Qt3DRender/qeffect.h>
+#include <Qt3DRender/qtexture.h>
+#include <Qt3DRender/qmaterial.h>
+#include <Qt3DRender/qcullface.h>
+#include <Qt3DRender/qdepthtest.h>
+#include <Qt3DRender/qparameter.h>
+#include <Qt3DRender/qtechnique.h>
+#include <Qt3DRender/qcuboidmesh.h>
+#include <Qt3DRender/qrenderpass.h>
+#include <Qt3DRender/qgraphicsapifilter.h>
+#include <Qt3DRender/qshaderprogram.h>
 
 QT_BEGIN_NAMESPACE
 
-namespace Qt3D {
+using namespace Qt3DCore;
 
+namespace Qt3DRender {
 
-/*!
- * \class Qt3D::QSkyboxEntityPrivate
- * \internal
- */
 QSkyboxEntityPrivate::QSkyboxEntityPrivate()
     : QEntityPrivate()
     , m_effect(new QEffect())
@@ -74,8 +70,7 @@ QSkyboxEntityPrivate::QSkyboxEntityPrivate()
     , m_es2RenderPass(new QRenderPass())
     , m_gl3RenderPass(new QRenderPass())
     , m_mesh(new QCuboidMesh())
-    , m_transform(new QTransform())
-    , m_translate(new QTranslateTransform())
+    , m_transform(new Qt3DCore::QTransform())
     , m_textureParameter(new QParameter(QStringLiteral("skyboxTexture"), m_skyboxTexture))
     , m_posXImage(new QTextureImage())
     , m_posYImage(new QTextureImage())
@@ -97,20 +92,20 @@ void QSkyboxEntityPrivate::init()
     m_gl2es2Shader->setVertexShaderCode(QShaderProgram::loadSource(QUrl(QStringLiteral("qrc:/shaders/es2/skybox.vert"))));
     m_gl2es2Shader->setFragmentShaderCode(QShaderProgram::loadSource(QUrl(QStringLiteral("qrc:/shaders/es2/skybox.frag"))));
 
-    m_gl3Technique->openGLFilter()->setApi(QOpenGLFilter::Desktop);
-    m_gl3Technique->openGLFilter()->setMajorVersion(3);
-    m_gl3Technique->openGLFilter()->setMajorVersion(1);
-    m_gl3Technique->openGLFilter()->setProfile(QOpenGLFilter::Core);
+    m_gl3Technique->graphicsApiFilter()->setApi(QGraphicsApiFilter::OpenGL);
+    m_gl3Technique->graphicsApiFilter()->setMajorVersion(3);
+    m_gl3Technique->graphicsApiFilter()->setMajorVersion(1);
+    m_gl3Technique->graphicsApiFilter()->setProfile(QGraphicsApiFilter::CoreProfile);
 
-    m_gl2Technique->openGLFilter()->setApi(QOpenGLFilter::Desktop);
-    m_gl2Technique->openGLFilter()->setMajorVersion(2);
-    m_gl2Technique->openGLFilter()->setMajorVersion(0);
-    m_gl2Technique->openGLFilter()->setProfile(QOpenGLFilter::None);
+    m_gl2Technique->graphicsApiFilter()->setApi(QGraphicsApiFilter::OpenGL);
+    m_gl2Technique->graphicsApiFilter()->setMajorVersion(2);
+    m_gl2Technique->graphicsApiFilter()->setMajorVersion(0);
+    m_gl2Technique->graphicsApiFilter()->setProfile(QGraphicsApiFilter::NoProfile);
 
-    m_es2Technique->openGLFilter()->setApi(QOpenGLFilter::ES);
-    m_es2Technique->openGLFilter()->setMajorVersion(2);
-    m_es2Technique->openGLFilter()->setMajorVersion(0);
-    m_es2Technique->openGLFilter()->setProfile(QOpenGLFilter::None);
+    m_es2Technique->graphicsApiFilter()->setApi(QGraphicsApiFilter::OpenGLES);
+    m_es2Technique->graphicsApiFilter()->setMajorVersion(2);
+    m_es2Technique->graphicsApiFilter()->setMajorVersion(0);
+    m_es2Technique->graphicsApiFilter()->setProfile(QGraphicsApiFilter::NoProfile);
 
     m_gl3RenderPass->setShaderProgram(m_gl3Shader);
     m_gl2RenderPass->setShaderProgram(m_gl2es2Shader);
@@ -138,8 +133,6 @@ void QSkyboxEntityPrivate::init()
 
     m_material->setEffect(m_effect);
     m_material->addParameter(m_textureParameter);
-
-    m_transform->addTransform(m_translate);
 
     m_mesh->setXYMeshResolution(QSize(2, 2));
     m_mesh->setXZMeshResolution(QSize(2, 2));
@@ -183,12 +176,13 @@ void QSkyboxEntityPrivate::reloadTexture()
 }
 
 /*!
- * \class Qt3D::QSkyboxEntity
+ * \class Qt3DRender::QSkyboxEntity
+ * \inmodule Qt3DRender
  *
- * \brief Qt3D::QSkyboxEntity is a convenience Qt3D::QEntity subclass that can
+ * \brief Qt3DRender::QSkyboxEntity is a convenience Qt3DCore::QEntity subclass that can
  * be used to insert a skybox in a 3D scene.
  *
- * By specifying a base name and an extension, Qt3D::QSkyboxEntity
+ * By specifying a base name and an extension, Qt3DCore::QSkyboxEntity
  * will take care of building a TextureCubeMap to be rendered at runtime. The
  * images in the source directory should match the pattern:
  * \b base name + * "_posx|_posy|_posz|_negx|_negy|_negz" + extension
@@ -202,7 +196,7 @@ void QSkyboxEntityPrivate::reloadTexture()
  */
 
 /*!
- * Constructs a new Qt3D::QSkyboxEntity object with \a parent as parent.
+ * Constructs a new Qt3DCore::QSkyboxEntity object with \a parent as parent.
  */
 QSkyboxEntity::QSkyboxEntity(QNode *parent)
     : QEntity(*new QSkyboxEntityPrivate, parent)
@@ -223,7 +217,7 @@ void QSkyboxEntity::setBaseName(const QString &baseName)
     Q_D(QSkyboxEntity);
     if (baseName != d->m_baseName) {
         d->m_baseName = baseName;
-        emit sourceDirectoryChanged();
+        emit sourceDirectoryChanged(baseName);
         d->reloadTexture();
     }
 }
@@ -244,7 +238,7 @@ void QSkyboxEntity::setExtension(const QString &extension)
     Q_D(QSkyboxEntity);
     if (extension != d->m_extension) {
         d->m_extension = extension;
-        emit extensionChanged();
+        emit extensionChanged(extension);
         d->reloadTexture();
     }
 }
@@ -266,8 +260,8 @@ void QSkyboxEntity::setCameraPosition(const QVector3D &cameraPosition)
     Q_D(QSkyboxEntity);
     if (cameraPosition != d->m_position) {
         d->m_position = cameraPosition;
-        d->m_translate->setTranslation(d->m_position);
-        emit cameraPositionChanged();
+        d->m_transform->setTranslation(d->m_position);
+        emit cameraPositionChanged(cameraPosition);
     }
 }
 
@@ -280,6 +274,6 @@ QVector3D QSkyboxEntity::cameraPosition() const
     return d->m_position;
 }
 
-} // Qt3D
+} // namespace Qt3DRender
 
 QT_END_NAMESPACE

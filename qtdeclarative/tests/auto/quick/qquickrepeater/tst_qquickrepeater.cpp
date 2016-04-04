@@ -41,6 +41,7 @@
 #include <private/qquickrepeater_p.h>
 #include <QtQuick/private/qquicktext_p.h>
 #include <QtQml/private/qqmllistmodel_p.h>
+#include <QtQml/private/qqmlobjectmodel_p.h>
 
 #include "../../shared/util.h"
 #include "../shared/viewtestutil.h"
@@ -67,6 +68,7 @@ private slots:
     void resetModel();
     void modelChanged();
     void modelReset();
+    void modelCleared();
     void properties();
     void asynchronous();
     void initParent();
@@ -76,6 +78,8 @@ private slots:
     void jsArrayChange();
     void clearRemovalOrder();
     void destroyCount();
+    void stackingOrder();
+    void objectModel();
 };
 
 class TestObject : public QObject
@@ -128,7 +132,7 @@ void tst_QQuickRepeater::numberModel()
     QVERIFY(!repeater->itemAt(repeater->count()));
 
     QMetaObject::invokeMethod(window->rootObject(), "checkProperties");
-    QVERIFY(testObject->error() == false);
+    QVERIFY(!testObject->error());
 
     delete testObject;
     delete window;
@@ -440,19 +444,19 @@ void tst_QQuickRepeater::itemModel()
 
     testObject->setUseModel(true);
     QMetaObject::invokeMethod(window->rootObject(), "checkProperties");
-    QVERIFY(testObject->error() == false);
+    QVERIFY(!testObject->error());
 
     QCOMPARE(container->childItems().count(), 4);
-    QVERIFY(qobject_cast<QObject*>(container->childItems().at(0))->objectName() == "item1");
-    QVERIFY(qobject_cast<QObject*>(container->childItems().at(1))->objectName() == "item2");
-    QVERIFY(qobject_cast<QObject*>(container->childItems().at(2))->objectName() == "item3");
-    QVERIFY(container->childItems().at(3) == repeater);
+    QCOMPARE(qobject_cast<QObject*>(container->childItems().at(0))->objectName(), QLatin1String("item1"));
+    QCOMPARE(qobject_cast<QObject*>(container->childItems().at(1))->objectName(), QLatin1String("item2"));
+    QCOMPARE(qobject_cast<QObject*>(container->childItems().at(2))->objectName(), QLatin1String("item3"));
+    QCOMPARE(container->childItems().at(3), repeater);
 
     QMetaObject::invokeMethod(window->rootObject(), "switchModel");
     QCOMPARE(container->childItems().count(), 3);
-    QVERIFY(qobject_cast<QObject*>(container->childItems().at(0))->objectName() == "item4");
-    QVERIFY(qobject_cast<QObject*>(container->childItems().at(1))->objectName() == "item5");
-    QVERIFY(container->childItems().at(2) == repeater);
+    QCOMPARE(qobject_cast<QObject*>(container->childItems().at(0))->objectName(), QLatin1String("item4"));
+    QCOMPARE(qobject_cast<QObject*>(container->childItems().at(1))->objectName(), QLatin1String("item5"));
+    QCOMPARE(container->childItems().at(2), repeater);
 
     testObject->setUseModel(false);
     QCOMPARE(container->childItems().count(), 1);
@@ -631,6 +635,26 @@ void tst_QQuickRepeater::modelReset()
     QCOMPARE(addedSpy.count(), 0);
 }
 
+// QTBUG-46828
+void tst_QQuickRepeater::modelCleared()
+{
+    QQmlEngine engine;
+    QQmlComponent component(&engine, testFileUrl("modelCleared.qml"));
+
+    QQuickItem *rootObject = qobject_cast<QQuickItem*>(component.create());
+    QVERIFY(rootObject);
+
+    QQuickRepeater *repeater = findItem<QQuickRepeater>(rootObject, "repeater");
+    QVERIFY(repeater);
+
+    // verify no error messages when the model is cleared and the items are destroyed
+    QQmlTestMessageHandler messageHandler;
+    repeater->setModel(0);
+    QVERIFY2(messageHandler.messages().isEmpty(), qPrintable(messageHandler.messageString()));
+
+    delete rootObject;
+}
+
 void tst_QQuickRepeater::properties()
 {
     QQmlEngine engine;
@@ -788,8 +812,8 @@ void tst_QQuickRepeater::invalidContextCrash()
     repeater->setParent(root.data());
 
     QCOMPARE(root->children().count(), 2);
-    QVERIFY(root->children().at(0) == model);
-    QVERIFY(root->children().at(1) == repeater);
+    QCOMPARE(root->children().at(0), model);
+    QCOMPARE(root->children().at(1), repeater);
 
     // Delete the root object, which will invalidate/delete the QML context
     // and then delete the child QObjects, which may try to access the context.
@@ -892,6 +916,82 @@ void tst_QQuickRepeater::destroyCount()
     model.removeRows(2,1);
     QCOMPARE(model.rowCount(), 4);
     QCOMPARE(repeater->property("componentCount").toInt(), 4);
+}
+
+void tst_QQuickRepeater::stackingOrder()
+{
+    QQmlEngine engine;
+    QQmlComponent component(&engine, testFileUrl("stackingorder.qml"));
+
+    QQuickItem *rootObject = qobject_cast<QQuickItem*>(component.create());
+    QVERIFY(rootObject);
+
+    QQuickRepeater *repeater = findItem<QQuickRepeater>(rootObject, "repeater");
+    QVERIFY(repeater);
+    int count = 1;
+    do {
+        bool stackingOrderOk = rootObject->property("stackingOrderOk").toBool();
+        QVERIFY(stackingOrderOk);
+        repeater->setModel(QVariant(++count));
+    } while (count < 3);
+}
+
+static bool compareObjectModel(QQuickRepeater *repeater, QQmlObjectModel *model)
+{
+    if (repeater->count() != model->count())
+        return false;
+    for (int i = 0; i < repeater->count(); ++i) {
+        if (repeater->itemAt(i) != model->get(i))
+            return false;
+    }
+    return true;
+}
+
+void tst_QQuickRepeater::objectModel()
+{
+    QQmlEngine engine;
+    QQmlComponent component(&engine, testFileUrl("objectmodel.qml"));
+
+    QQuickItem *positioner = qobject_cast<QQuickItem *>(component.create());
+    QVERIFY(positioner);
+
+    QQuickRepeater *repeater = findItem<QQuickRepeater>(positioner, "repeater");
+    QVERIFY(repeater);
+
+    QQmlObjectModel *model = repeater->model().value<QQmlObjectModel *>();
+    QVERIFY(model);
+
+    QVERIFY(repeater->itemAt(0));
+    QVERIFY(repeater->itemAt(1));
+    QVERIFY(repeater->itemAt(2));
+    QCOMPARE(repeater->itemAt(0)->property("color").toString(), QColor("red").name());
+    QCOMPARE(repeater->itemAt(1)->property("color").toString(), QColor("green").name());
+    QCOMPARE(repeater->itemAt(2)->property("color").toString(), QColor("blue").name());
+
+    QQuickItem *item0 = new QQuickItem(positioner);
+    item0->setSize(QSizeF(20, 20));
+    model->append(item0);
+    QCOMPARE(model->count(), 4);
+    QVERIFY(compareObjectModel(repeater, model));
+
+    QQuickItem *item1 = new QQuickItem(positioner);
+    item1->setSize(QSizeF(20, 20));
+    model->insert(0, item1);
+    QCOMPARE(model->count(), 5);
+    QVERIFY(compareObjectModel(repeater, model));
+
+    model->move(1, 2, 3);
+    QVERIFY(compareObjectModel(repeater, model));
+
+    model->remove(2, 2);
+    QCOMPARE(model->count(), 3);
+    QVERIFY(compareObjectModel(repeater, model));
+
+    model->clear();
+    QCOMPARE(model->count(), 0);
+    QCOMPARE(repeater->count(), 0);
+
+    delete positioner;
 }
 
 QTEST_MAIN(tst_QQuickRepeater)

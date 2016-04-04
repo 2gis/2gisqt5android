@@ -7,7 +7,8 @@ MODULE_PLUGIN_TYPES = \
     video/bufferpool \
     video/gstvideorenderer \
     video/videonode \
-    playlistformats
+    playlistformats \
+    resourcepolicy
 
 QMAKE_DOCS = $$PWD/doc/qtmultimedia.qdocconf
 
@@ -25,7 +26,8 @@ PRIVATE_HEADERS += \
     qmediaresourcepolicy_p.h \
     qmediaresourceset_p.h \
     qmediastoragelocation_p.h \
-    qmediaopenglhelper_p.h
+    qmediaopenglhelper_p.h \
+    qmultimediautils_p.h
 
 PUBLIC_HEADERS += \
     qmediabindableinterface.h \
@@ -52,7 +54,10 @@ SOURCES += \
     qmediaresourcepolicy_p.cpp \
     qmediaresourceset_p.cpp \
     qmediastoragelocation.cpp \
-    qmultimedia.cpp
+    qmultimedia.cpp \
+    qmultimediautils.cpp
+
+CONFIG += simd optimize_full
 
 include(audio/audio.pri)
 include(camera/camera.pri)

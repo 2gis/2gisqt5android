@@ -106,8 +106,10 @@
 #define ATT_ERROR_INVAL_ATTR_VALUE_LEN  0x0D
 #define ATT_ERROR_UNLIKELY              0x0E
 #define ATT_ERROR_INSUF_ENCRYPTION      0x0F
-#define ATT_ERROR_APPLICATION           0x10
+#define ATT_ERROR_UNSUPPRTED_GROUP_TYPE 0x10
 #define ATT_ERROR_INSUF_RESOURCES       0x11
+#define ATT_ERROR_APPLICATION_START     0x80
+#define ATT_ERROR_APPLICATION_END       0x9f
 
 #define APPEND_VALUE true
 #define NEW_VALUE false
@@ -176,12 +178,16 @@ static void dumpErrorInformation(const QByteArray &response)
         errorString = QStringLiteral("unlikely error"); break;
     case ATT_ERROR_INSUF_ENCRYPTION:
         errorString = QStringLiteral("needs encryption - permissions"); break;
-    case ATT_ERROR_APPLICATION:
-        errorString = QStringLiteral("application error"); break;
+    case ATT_ERROR_UNSUPPRTED_GROUP_TYPE:
+        errorString = QStringLiteral("unsupported group type"); break;
     case ATT_ERROR_INSUF_RESOURCES:
         errorString = QStringLiteral("insufficient resources to complete request"); break;
     default:
-        errorString = QStringLiteral("unknown error code"); break;
+        if (errorCode >= ATT_ERROR_APPLICATION_START && errorCode <= ATT_ERROR_APPLICATION_END)
+            errorString = QStringLiteral("application error");
+        else
+            errorString = QStringLiteral("unknown error code");
+        break;
     }
 
     qCDebug(QT_BT_BLUEZ) << "Error1:" << errorString
@@ -199,8 +205,16 @@ QLowEnergyControllerPrivate::QLowEnergyControllerPrivate()
       encryptionChangePending(false),
       hciManager(0)
 {
+    registerQLowEnergyControllerMetaType();
     qRegisterMetaType<QList<QLowEnergyHandle> >();
+}
 
+QLowEnergyControllerPrivate::~QLowEnergyControllerPrivate()
+{
+}
+
+void QLowEnergyControllerPrivate::init()
+{
     hciManager = new HciManager(localAdapter, this);
     if (!hciManager->isValid())
         return;
@@ -208,10 +222,6 @@ QLowEnergyControllerPrivate::QLowEnergyControllerPrivate()
     hciManager->monitorEvent(HciManager::EncryptChangeEvent);
     connect(hciManager, SIGNAL(encryptionChangedEvent(QBluetoothAddress,bool)),
             this, SLOT(encryptionChangedEvent(QBluetoothAddress,bool)));
-}
-
-QLowEnergyControllerPrivate::~QLowEnergyControllerPrivate()
-{
 }
 
 void QLowEnergyControllerPrivate::connectToDevice()
@@ -262,7 +272,9 @@ void QLowEnergyControllerPrivate::connectToDevice()
     }
 
     // connect
-    l2cpSocket->connectToService(remoteDevice, ATTRIBUTE_CHANNEL_ID);
+    // Unbuffered mode required to separate each GATT packet
+    l2cpSocket->connectToService(remoteDevice, ATTRIBUTE_CHANNEL_ID,
+                                 QIODevice::ReadWrite | QIODevice::Unbuffered);
 }
 
 void QLowEnergyControllerPrivate::l2cpConnected()
@@ -379,7 +391,12 @@ void QLowEnergyControllerPrivate::l2cpReadyRead()
         break;
     }
 
-    Q_ASSERT(!openRequests.isEmpty());
+    if (openRequests.isEmpty()) {
+        qCWarning(QT_BT_BLUEZ) << "Received unexpected packet from peer, disconnecting.";
+        disconnectFromDevice();
+        return;
+    }
+
     const Request request = openRequests.dequeue();
     processReply(request, reply);
 
@@ -851,7 +868,14 @@ void QLowEnergyControllerPrivate::processReply(
         Q_ASSERT(!p.isNull());
 
         if (isErrorResponse) {
-            readServiceValues(p->uuid, false); //read descriptor values
+            if (keys.count() == 1) {
+                // no more descriptors to discover
+                readServiceValues(p->uuid, false); //read descriptor values
+            } else {
+                // hop to the next descriptor
+                keys.removeFirst();
+                discoverNextDescriptor(p, keys, keys.first());
+            }
             break;
         }
 
@@ -1151,12 +1175,11 @@ void QLowEnergyControllerPrivate::readServiceValues(
 
     // Create list of attribute handles which need to be read
     QList<QPair<QLowEnergyHandle, quint32> > targetHandles;
-    const QList<QLowEnergyHandle> keys = service->characteristicList.keys();
-    for (int i = 0; i < keys.count(); i++) {
-        const QLowEnergyHandle charHandle = keys[i];
-        const QLowEnergyServicePrivate::CharData &charDetails =
-                service->characteristicList[charHandle];
 
+    CharacteristicDataMap::const_iterator charIt = service->characteristicList.constBegin();
+    for ( ; charIt != service->characteristicList.constEnd(); ++charIt) {
+        const QLowEnergyHandle charHandle = charIt.key();
+        const QLowEnergyServicePrivate::CharData &charDetails = charIt.value();
 
         if (readCharacteristics) {
             // Collect handles of all characteristic value attributes
@@ -1171,7 +1194,10 @@ void QLowEnergyControllerPrivate::readServiceValues(
 
         } else {
             // Collect handles of all descriptor attributes
-            foreach (QLowEnergyHandle descriptorHandle, charDetails.descriptorList.keys()) {
+            DescriptorDataMap::const_iterator descIt = charDetails.descriptorList.constBegin();
+            for ( ; descIt != charDetails.descriptorList.constEnd(); ++descIt) {
+                const QLowEnergyHandle descriptorHandle = descIt.key();
+
                 pair.first = descriptorHandle;
                 pair.second = (charHandle | (descriptorHandle << 16));
                 targetHandles.append(pair);
@@ -1270,15 +1296,15 @@ void QLowEnergyControllerPrivate::discoverServiceDescriptors(
     qCDebug(QT_BT_BLUEZ) << "Discovering descriptor values for"
                          << serviceUuid.toString();
     QSharedPointer<QLowEnergyServicePrivate> service = serviceList.value(serviceUuid);
-    // start handle of all known characteristics
-    QList<QLowEnergyHandle> keys = service->characteristicList.keys();
 
-    if (keys.isEmpty()) { // service has no characteristics
+    if (service->characteristicList.isEmpty()) { // service has no characteristics
         // implies that characteristic & descriptor discovery can be skipped
         service->setState(QLowEnergyService::ServiceDiscovered);
         return;
     }
 
+    // start handle of all known characteristics
+    QList<QLowEnergyHandle> keys = service->characteristicList.keys();
     std::sort(keys.begin(), keys.end());
 
     discoverNextDescriptor(service, keys, keys[0]);
@@ -1715,9 +1741,9 @@ bool QLowEnergyControllerPrivate::increaseEncryptLevelfRequired(quint8 errorCode
         return false;
 
     switch (errorCode) {
-    case ATT_ERROR_INSUF_AUTHORIZATION:
     case ATT_ERROR_INSUF_ENCRYPTION:
     case ATT_ERROR_INSUF_AUTHENTICATION:
+    case ATT_ERROR_INSUF_ENCR_KEY_SIZE:
         if (!hciManager->isValid())
             return false;
         if (!hciManager->monitorEvent(HciManager::EncryptChangeEvent))

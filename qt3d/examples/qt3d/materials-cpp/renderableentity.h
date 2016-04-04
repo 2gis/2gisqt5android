@@ -39,28 +39,20 @@
 
 #include <Qt3DCore/QEntity>
 #include <Qt3DCore/QTransform>
-#include <Qt3DCore/QScaleTransform>
-#include <Qt3DCore/QRotateTransform>
-#include <Qt3DCore/QTranslateTransform>
-#include <Qt3DRenderer/QMesh>
+#include <Qt3DRender/QMesh>
 
-class RenderableEntity : public Qt3D::QEntity
+class RenderableEntity : public Qt3DCore::QEntity
 {
 public:
-    RenderableEntity(Qt3D::QNode *parent = 0);
+    RenderableEntity(Qt3DCore::QNode *parent = 0);
     ~RenderableEntity();
 
-    Qt3D::QMesh *mesh() const;
-    Qt3D::QScaleTransform *scaleTransform() const;
-    Qt3D::QTranslateTransform *translateTransform() const;
-    Qt3D::QRotateTransform *rotateTransform() const;
+    Qt3DRender::QMesh *mesh() const;
+    Qt3DCore::QTransform *transform() const;
 
 private:
-    Qt3D::QMesh *m_mesh;
-    Qt3D::QTransform *m_transform;
-    Qt3D::QRotateTransform *m_rotateTransform;
-    Qt3D::QScaleTransform *m_scaleTransform;
-    Qt3D::QTranslateTransform *m_translateTransform;
+    Qt3DRender::QMesh *m_mesh;
+    Qt3DCore::QTransform *m_transform;
 };
 
 #endif // RENDERABLEENTITY_H

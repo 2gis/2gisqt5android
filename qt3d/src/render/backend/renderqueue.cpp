@@ -35,12 +35,12 @@
 ****************************************************************************/
 
 #include "renderqueue_p.h"
-#include <Qt3DRenderer/private/renderview_p.h>
+#include <Qt3DRender/private/renderview_p.h>
 #include <QThread>
 
 QT_BEGIN_NAMESPACE
 
-namespace Qt3D {
+namespace Qt3DRender {
 
 namespace Render {
 
@@ -107,8 +107,8 @@ bool RenderQueue::isFrameQueueComplete() const
     return m_targetRenderViewCount && m_targetRenderViewCount == currentRenderViewCount();
 }
 
-} // Render
+} // namespace Render
 
-} // Qt3D
+} // namespace Qt3DRender
 
 QT_END_NAMESPACE

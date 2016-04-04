@@ -48,7 +48,7 @@
 #include <QtCore/qglobal.h>
 #include <QtCore/qpointer.h>
 
-#include <private/qv4value_inl_p.h>
+#include <private/qv4value_p.h>
 #include <private/qv4object_p.h>
 
 QT_BEGIN_NAMESPACE
@@ -66,7 +66,7 @@ struct QmlTypeWrapper : Object {
         ExcludeEnums
     };
 
-    QmlTypeWrapper(QV4::ExecutionEngine *engine);
+    QmlTypeWrapper();
     ~QmlTypeWrapper();
     TypeNameMode mode;
     QPointer<QObject> object;
@@ -94,7 +94,7 @@ struct Q_QML_EXPORT QmlTypeWrapper : Object
                                 Heap::QmlTypeWrapper::TypeNameMode = Heap::QmlTypeWrapper::IncludeEnums);
 
 
-    static ReturnedValue get(Managed *m, String *name, bool *hasProperty);
+    static ReturnedValue get(const Managed *m, String *name, bool *hasProperty);
     static void put(Managed *m, String *name, const Value &value);
     static PropertyAttributes query(const Managed *, String *name);
     static bool isEqualTo(Managed *that, Managed *o);

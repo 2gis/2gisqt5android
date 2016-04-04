@@ -72,18 +72,30 @@ void QQuickViewTestUtil::moveMouseAway(QQuickView *window)
 #endif
 }
 
+void QQuickViewTestUtil::moveAndRelease(QQuickView *window, const QPoint &position)
+{
+    QTest::mouseMove(window, position);
+    QTest::mouseRelease(window, Qt::LeftButton, 0, position);
+}
+
+void QQuickViewTestUtil::moveAndPress(QQuickView *window, const QPoint &position)
+{
+    QTest::mouseMove(window, position);
+    QTest::mousePress(window, Qt::LeftButton, 0, position);
+}
+
 void QQuickViewTestUtil::flick(QQuickView *window, const QPoint &from, const QPoint &to, int duration)
 {
     const int pointCount = 5;
     QPoint diff = to - from;
 
     // send press, five equally spaced moves, and release.
-    QTest::mousePress(window, Qt::LeftButton, 0, from);
+    moveAndPress(window, from);
 
     for (int i = 0; i < pointCount; ++i)
         QTest::mouseMove(window, from + (i+1)*diff/pointCount, duration / pointCount);
 
-    QTest::mouseRelease(window, Qt::LeftButton, 0, to);
+    moveAndRelease(window, to);
     QTest::qWait(50);
 }
 
@@ -265,11 +277,11 @@ void QQuickViewTestUtil::QaimModel::resetItems(const QList<QPair<QString, QStrin
 void QQuickViewTestUtil::QaimModel::matchAgainst(const QList<QPair<QString, QString> > &other, const QString &error1, const QString &error2) {
     for (int i=0; i<other.count(); i++) {
         QVERIFY2(list.contains(other[i]),
-                 QTest::toString(other[i].first + " " + other[i].second + " " + error1));
+                 QTest::toString(other[i].first + QLatin1Char(' ') + other[i].second + QLatin1Char(' ') + error1));
     }
     for (int i=0; i<list.count(); i++) {
         QVERIFY2(other.contains(list[i]),
-                 QTest::toString(list[i].first + " " + list[i].second + " " + error2));
+                 QTest::toString(list[i].first + QLatin1Char(' ') + list[i].second + QLatin1Char(' ') + error2));
     }
 }
 

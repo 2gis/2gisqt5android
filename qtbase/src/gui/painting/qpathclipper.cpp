@@ -548,10 +548,10 @@ void SegmentTree::produceIntersectionsLeaf(const TreeNode &node, int segment)
 
         for (int k = 0; k < m_intersections.size(); ++k) {
             QPathSegments::Intersection i_isect, j_isect;
-            i_isect.vertex = j_isect.vertex = m_segments.addPoint(m_intersections.at(k).pos);
-
             i_isect.t = m_intersections.at(k).alphaA;
             j_isect.t = m_intersections.at(k).alphaB;
+
+            i_isect.vertex = j_isect.vertex = m_segments.addPoint(m_intersections.at(k).pos);
 
             i_isect.next = 0;
             j_isect.next = 0;
@@ -1889,10 +1889,10 @@ bool QPathClipper::handleCrossingEdges(QWingedEdge &list, qreal y, ClipperMode m
 
 namespace {
 
-QList<QPainterPath> toSubpaths(const QPainterPath &path)
+QVector<QPainterPath> toSubpaths(const QPainterPath &path)
 {
 
-    QList<QPainterPath> subpaths;
+    QVector<QPainterPath> subpaths;
     if (path.isEmpty())
         return subpaths;
 
@@ -2092,7 +2092,7 @@ QPainterPath clip(const QPainterPath &path, qreal t)
 
 QPainterPath intersectPath(const QPainterPath &path, const QRectF &rect)
 {
-    QList<QPainterPath> subpaths = toSubpaths(path);
+    QVector<QPainterPath> subpaths = toSubpaths(path);
 
     QPainterPath result;
     result.setFillRule(path.fillRule());

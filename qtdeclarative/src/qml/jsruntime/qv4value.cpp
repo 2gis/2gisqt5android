@@ -32,10 +32,11 @@
 ****************************************************************************/
 #include <qv4engine_p.h>
 #include <qv4runtime_p.h>
+#include <qv4string_p.h>
 #ifndef V4_BOOTSTRAP
 #include <qv4object_p.h>
 #include <qv4objectproto_p.h>
-#include "qv4mm_p.h"
+#include <private/qv4mm_p.h>
 #endif
 
 #include <wtf/MathExtras.h>
@@ -68,10 +69,32 @@ int Value::toUInt16() const
     return (unsigned short)number;
 }
 
+bool Value::toBoolean() const
+{
+    switch (type()) {
+    case Value::Undefined_Type:
+    case Value::Null_Type:
+        return false;
+    case Value::Boolean_Type:
+    case Value::Integer_Type:
+        return (bool)int_32();
+    case Value::Managed_Type:
+#ifdef V4_BOOTSTRAP
+        Q_UNIMPLEMENTED();
+#else
+        if (isString())
+            return stringValue()->toQString().length() > 0;
+#endif
+        return true;
+    default: // double
+        return doubleValue() && !std::isnan(doubleValue());
+    }
+}
+
 double Value::toInteger() const
 {
     if (integerCompatible())
-        return int_32;
+        return int_32();
 
     return Primitive::toInteger(toNumber());
 }
@@ -87,10 +110,10 @@ double Value::toNumberImpl() const
 #else
         if (isString())
             return RuntimeHelpers::stringToNumber(stringValue()->toQString());
-        {
-            Q_ASSERT(isObject());
-            Scope scope(objectValue()->engine());
-            ScopedValue prim(scope, RuntimeHelpers::toPrimitive(*this, NUMBER_HINT));
+    {
+        Q_ASSERT(isObject());
+        Scope scope(objectValue()->engine());
+        ScopedValue prim(scope, RuntimeHelpers::toPrimitive(*this, NUMBER_HINT));
             if (scope.engine->hasException)
                 return 0;
             return prim->toNumber();
@@ -99,7 +122,7 @@ double Value::toNumberImpl() const
     case QV4::Value::Null_Type:
     case QV4::Value::Boolean_Type:
     case QV4::Value::Integer_Type:
-        return int_32;
+        return int_32();
     default: // double
         Q_UNREACHABLE();
     }
@@ -148,7 +171,7 @@ QString Value::toQStringNoThrow() const
         }
     case Value::Integer_Type: {
         QString str;
-        RuntimeHelpers::numberToString(&str, (double)int_32, 10);
+        RuntimeHelpers::numberToString(&str, (double)int_32(), 10);
         return str;
     }
     default: { // double
@@ -184,7 +207,7 @@ QString Value::toQString() const
         }
     case Value::Integer_Type: {
         QString str;
-        RuntimeHelpers::numberToString(&str, (double)int_32, 10);
+        RuntimeHelpers::numberToString(&str, (double)int_32(), 10);
         return str;
     }
     default: { // double
@@ -197,14 +220,14 @@ QString Value::toQString() const
 #endif // V4_BOOTSTRAP
 
 bool Value::sameValue(Value other) const {
-    if (val == other.val)
+    if (_val == other._val)
         return true;
     if (isString() && other.isString())
         return stringValue()->isEqualTo(other.stringValue());
     if (isInteger() && other.isDouble())
-        return int_32 ? (double(int_32) == other.doubleValue()) : (other.val == 0);
+        return int_32() ? (double(int_32()) == other.doubleValue()) : (other._val == 0);
     if (isDouble() && other.isInteger())
-        return other.int_32 ? (doubleValue() == double(other.int_32)) : (val == 0);
+        return other.int_32() ? (doubleValue() == double(other.int_32())) : (_val == 0);
     return false;
 }
 
@@ -281,4 +304,35 @@ Heap::Object *Value::toObject(ExecutionEngine *e) const
     return RuntimeHelpers::convertToObject(e, *this);
 }
 
+uint Value::asArrayLength(bool *ok) const
+{
+    *ok = true;
+    if (isInteger()) {
+        if (int_32() >= 0) {
+            return (uint)int_32();
+        } else {
+            *ok = false;
+            return UINT_MAX;
+        }
+    }
+    if (isNumber()) {
+        double d = doubleValue();
+        uint idx = (uint)d;
+        if (idx != d) {
+            *ok = false;
+            return UINT_MAX;
+        }
+        return idx;
+    }
+    if (isString())
+        return stringValue()->toUInt(ok);
+
+    uint idx = toUInt32();
+    double d = toNumber();
+    if (d != idx) {
+        *ok = false;
+        return UINT_MAX;
+    }
+    return idx;
+}
 #endif // V4_BOOTSTRAP

@@ -349,6 +349,8 @@ QLowEnergyService::QLowEnergyService(QSharedPointer<QLowEnergyServicePrivate> p,
 {
     qRegisterMetaType<QLowEnergyService::ServiceState>();
     qRegisterMetaType<QLowEnergyService::ServiceError>();
+    qRegisterMetaType<QLowEnergyService::ServiceType>();
+    qRegisterMetaType<QLowEnergyService::WriteMode>();
 
     connect(p.data(), SIGNAL(error(QLowEnergyService::ServiceError)),
             this, SIGNAL(error(QLowEnergyService::ServiceError)));
@@ -388,7 +390,7 @@ QLowEnergyService::~QLowEnergyService()
     \l {QLowEnergyController::createServiceObject()} should be used to obtain
     service instances for each of the UUIDs.
 
-    \sa createServiceObject()
+    \sa {QLowEnergyController::}{createServiceObject()}
  */
 QList<QBluetoothUuid> QLowEnergyService::includedServices() const
 {
@@ -452,9 +454,13 @@ QLowEnergyService::ServiceTypes QLowEnergyService::type() const
 */
 QLowEnergyCharacteristic QLowEnergyService::characteristic(const QBluetoothUuid &uuid) const
 {
-    foreach (const QLowEnergyHandle handle, d_ptr->characteristicList.keys()) {
-        if (d_ptr->characteristicList[handle].uuid == uuid)
-            return QLowEnergyCharacteristic(d_ptr, handle);
+    CharacteristicDataMap::const_iterator charIt = d_ptr->characteristicList.constBegin();
+    for ( ; charIt != d_ptr->characteristicList.constEnd(); ++charIt) {
+        const QLowEnergyHandle charHandle = charIt.key();
+        const QLowEnergyServicePrivate::CharData &charDetails = charIt.value();
+
+        if (charDetails.uuid == uuid)
+            return QLowEnergyCharacteristic(d_ptr, charHandle);
     }
 
     return QLowEnergyCharacteristic();
@@ -578,13 +584,13 @@ bool QLowEnergyService::contains(const QLowEnergyCharacteristic &characteristic)
     serialised. A queue is employed when issuing multiple requests at the same time.
     The queue does not eliminate duplicated read requests for the same characteristic.
 
-    A characteristic can only be read if the service is in the \l ServiceDiscovered state,
-    belongs to the service. If one of these conditions is
+    A characteristic can only be read if the service is in the \l ServiceDiscovered state
+    and belongs to the service. If one of these conditions is
     not true the \l QLowEnergyService::OperationError is set.
 
     \note Calling this function despite \l QLowEnergyCharacteristic::properties() reporting a non-readable property
     always attempts to read the characteristic's value on the hardware. If the hardware
-    returns with an error the \l CharacteristicWriteError is set.
+    returns with an error the \l CharacteristicReadError is set.
 
     \sa characteristicRead(), writeCharacteristic()
 
@@ -595,9 +601,7 @@ void QLowEnergyService::readCharacteristic(
 {
     Q_D(QLowEnergyService);
 
-    if (!contains(characteristic)
-            || state() != ServiceDiscovered
-            || !d->controller) {
+    if (d->controller == Q_NULLPTR || state() != ServiceDiscovered || !contains(characteristic)) {
         d->setError(QLowEnergyService::OperationError);
         return;
     }
@@ -626,7 +630,7 @@ void QLowEnergyService::readCharacteristic(
     \note Currently, it is not possible to use signed or reliable writes as defined by the
     Bluetooth specification.
 
-    A characteristic can only be written if this service is in the \l ServiceDiscovered state,
+    A characteristic can only be written if this service is in the \l ServiceDiscovered state
     and belongs to the service. If one of these conditions is
     not true the \l QLowEnergyService::OperationError is set.
 
@@ -646,9 +650,7 @@ void QLowEnergyService::writeCharacteristic(
     //TODO check behavior when writing to WriteSigned characteristic
     Q_D(QLowEnergyService);
 
-    if (!contains(characteristic)
-            || state() != ServiceDiscovered
-            || !d->controller) {
+    if (d->controller == Q_NULLPTR || state() != ServiceDiscovered || !contains(characteristic)) {
         d->setError(QLowEnergyService::OperationError);
         return;
     }
@@ -714,9 +716,7 @@ void QLowEnergyService::readDescriptor(
 {
     Q_D(QLowEnergyService);
 
-    if (!contains(descriptor)
-            || state() != ServiceDiscovered
-            || !d->controller) {
+    if (d->controller == Q_NULLPTR || state() != ServiceDiscovered || !contains(descriptor)) {
         d->setError(QLowEnergyService::OperationError);
         return;
     }
@@ -748,9 +748,7 @@ void QLowEnergyService::writeDescriptor(const QLowEnergyDescriptor &descriptor,
 {
     Q_D(QLowEnergyService);
 
-    if (!contains(descriptor)
-            || state() != ServiceDiscovered
-            || !d->controller) {
+    if (d->controller == Q_NULLPTR || state() != ServiceDiscovered || !contains(descriptor)) {
         d->setError(QLowEnergyService::OperationError);
         return;
     }

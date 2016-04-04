@@ -60,7 +60,7 @@ QT_BEGIN_NAMESPACE
 
 class QGeoTileSpec;
 class QGeoTileTexture;
-class QGeoTileCache;
+class QAbstractGeoTileCache;
 class QGeoTiledMapPrivate;
 class QGeoTiledMappingManagerEngine;
 class QGeoTileRequestManager;
@@ -79,21 +79,21 @@ public:
     QGeoTiledMap(QGeoTiledMappingManagerEngine *engine, QObject *parent);
     virtual ~QGeoTiledMap();
 
-    QGeoTileCache *tileCache();
+    QAbstractGeoTileCache *tileCache();
     QGeoTileRequestManager *requestManager();
     void updateTile(const QGeoTileSpec &spec);
 
     QGeoCoordinate itemPositionToCoordinate(const QDoubleVector2D &pos, bool clipToViewport = true) const Q_DECL_OVERRIDE;
     QDoubleVector2D coordinateToItemPosition(const QGeoCoordinate &coordinate, bool clipToViewport = true) const Q_DECL_OVERRIDE;
     void prefetchData() Q_DECL_OVERRIDE;
-
+    void clearData() Q_DECL_OVERRIDE;
 
 protected:
     QSGNode *updateSceneGraph(QSGNode *, QQuickWindow *window) Q_DECL_OVERRIDE;
-
-protected Q_SLOTS:
     virtual void evaluateCopyrights(const QSet<QGeoTileSpec> &visibleTiles);
-    void updateMapVersion();
+
+private Q_SLOTS:
+    void handleTileVersionChanged();
 
 private:
     Q_DISABLE_COPY(QGeoTiledMap)

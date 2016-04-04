@@ -52,7 +52,6 @@
 #include <private/qflagpointer_p.h>
 #include <private/qdeletewatcher_p.h>
 #include <private/qpointervaluepair_p.h>
-#include <private/qqmlabstractexpression_p.h>
 #include <private/qqmljavascriptexpression_p.h>
 
 QT_BEGIN_NAMESPACE
@@ -60,8 +59,7 @@ QT_BEGIN_NAMESPACE
 class QQmlExpression;
 class QString;
 class QQmlExpressionPrivate : public QObjectPrivate,
-                              public QQmlJavaScriptExpression,
-                              public QQmlAbstractExpression
+                              public QQmlJavaScriptExpression
 {
     Q_DECLARE_PUBLIC(QQmlExpression)
 public:
@@ -82,15 +80,11 @@ public:
 
     bool expressionFunctionValid:1;
 
-    // "Inherited" from QQmlJavaScriptExpression
-    static QString expressionIdentifier(QQmlJavaScriptExpression *);
-    static void expressionChanged(QQmlJavaScriptExpression *);
+    // Inherited from QQmlJavaScriptExpression
+    virtual QString expressionIdentifier();
     virtual void expressionChanged();
 
     QString expression;
-
-    QV4::PersistentValue qmlscope;
-    QV4::PersistentValue function;
 
     QString url; // This is a QString for a reason.  QUrls are slooooooow...
     quint16 line;

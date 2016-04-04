@@ -524,7 +524,7 @@ TestCase {
         verify(comboBox.data[menuIndex].__popupVisible)
 
         // close the menu before destroying the combobox
-        comboBox.data[menuIndex].__closeMenu()
+        comboBox.data[menuIndex].__closeAndDestroy()
         verify(!comboBox.data[menuIndex].__popupVisible)
 
         comboBox.destroy()
@@ -550,7 +550,7 @@ TestCase {
                 verify(comboBox.data[menuIndex].items[i].checked)
         }
         // close the menu before destroying the combobox
-        comboBox.data[menuIndex].__closeMenu()
+        comboBox.data[menuIndex].__closeAndDestroy()
         verify(!comboBox.data[menuIndex].__popupVisible)
         comboBox.destroy()
     }
@@ -682,6 +682,25 @@ TestCase {
         return index
     }
 
+    function test_emptyTextItem() {
+        var comboBox = Qt.createQmlObject('import QtQuick.Controls 1.2 ; ComboBox { }', testCase, '');
+        comboBox.model = [
+            "1",
+            "",
+            "3"
+        ]
+        compare(comboBox.currentIndex, 0)
+        compare(comboBox.currentText, "1")
+        comboBox.currentIndex = 1
+        compare(comboBox.currentIndex, 1)
+        compare(comboBox.currentText, "")
+        comboBox.currentIndex = 2
+        compare(comboBox.currentIndex, 2)
+        compare(comboBox.currentText, "3")
+        compare(comboBox.find(""), 1)
+        comboBox.destroy()
+    }
+
     function test_minusOneIndexResetsSelection_QTBUG_35794() {
         var qmlObjects = ['import QtQuick.Controls 1.2 ; ComboBox { model: ["A", "B", "C"] }',
                           'import QtQuick.Controls 1.2 ; ComboBox { editable: true; model: ["A", "B", "C"] }']
@@ -753,6 +772,20 @@ TestCase {
         compare(comboBox.currentText, "Banana")
         model.set(0, { text: "Pomegranate", color: "Yellow" })
         compare(comboBox.currentText, "Pomegranate")
+        comboBox.destroy()
+    }
+
+    function test_qtBug44532() {
+        if (Qt.platform.os === "osx")
+            skip("When the menu pops up on OS X, it does not return and the test fails after time out")
+        var comboBox = Qt.createQmlObject('import QtQuick.Controls 1.2 ; ComboBox { model: ["A", "BB", "CCCCC"] }', container, '')
+        var popup = comboBox.__popup
+        verify(popup)
+        tryCompare(popup, "__popupVisible", false)
+        mouseClick(comboBox)
+        tryCompare(popup, "__popupVisible", true)
+        mouseClick(comboBox)
+        tryCompare(popup, "__popupVisible", false)
         comboBox.destroy()
     }
 }

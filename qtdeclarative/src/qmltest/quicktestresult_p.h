@@ -34,6 +34,17 @@
 #ifndef QUICKTESTRESULT_P_H
 #define QUICKTESTRESULT_P_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include <QtQuickTest/quicktestglobal.h>
 #include <QtCore/qobject.h>
 #include <QtCore/qstring.h>
@@ -50,7 +61,6 @@ class QuickTestResultPrivate;
 class Q_QUICK_TEST_EXPORT QuickTestResult : public QObject
 {
     Q_OBJECT
-    Q_ENUMS(RunMode)
     Q_PROPERTY(QString testCaseName READ testCaseName WRITE setTestCaseName NOTIFY testCaseNameChanged)
     Q_PROPERTY(QString functionName READ functionName WRITE setFunctionName NOTIFY functionNameChanged)
     Q_PROPERTY(QString dataTag READ dataTag WRITE setDataTag NOTIFY dataTagChanged)
@@ -70,6 +80,7 @@ public:
         RepeatUntilValidMeasurement,
         RunOnce
     };
+    Q_ENUM(RunMode)
 
     QString testCaseName() const;
     void setTestCaseName(const QString &name);

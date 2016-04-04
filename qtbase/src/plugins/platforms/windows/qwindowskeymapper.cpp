@@ -33,15 +33,16 @@
 
 #include "qwindowskeymapper.h"
 #include "qwindowscontext.h"
+#include "qwindowsintegration.h"
 #include "qwindowswindow.h"
-#include "qwindowsguieventdispatcher.h"
-#include "qwindowsscaling.h"
 #include "qwindowsinputcontext.h"
 
 #include <QtGui/QWindow>
 #include <qpa/qwindowsysteminterface.h>
 #include <private/qguiapplication_p.h>
+#include <private/qhighdpiscaling_p.h>
 #include <QtGui/QKeyEvent>
+#include <QtPlatformSupport/private/qwindowsguieventdispatcher_p.h>
 
 #if defined(WM_APPCOMMAND)
 #  ifndef FAPPCOMMAND_MOUSE
@@ -85,10 +86,15 @@ QT_BEGIN_NAMESPACE
     The code originates from \c qkeymapper_win.cpp.
 */
 
+static void clearKeyRecorderOnApplicationInActive(Qt::ApplicationState state);
+
 QWindowsKeyMapper::QWindowsKeyMapper()
     : m_useRTLExtensions(false), m_keyGrabber(0)
 {
     memset(keyLayout, 0, sizeof(keyLayout));
+    QGuiApplication *app = static_cast<QGuiApplication *>(QGuiApplication::instance());
+    QObject::connect(app, &QGuiApplication::applicationStateChanged,
+                     app, clearKeyRecorderOnApplicationInActive);
 }
 
 QWindowsKeyMapper::~QWindowsKeyMapper()
@@ -142,6 +148,12 @@ struct KeyRecorder
     KeyRecord records[QT_MAX_KEY_RECORDINGS];
 };
 static KeyRecorder key_recorder;
+
+static void clearKeyRecorderOnApplicationInActive(Qt::ApplicationState state)
+{
+    if (state == Qt::ApplicationInactive)
+        key_recorder.clearKeys();
+}
 
 KeyRecord *KeyRecorder::findKey(int code, bool remove)
 {
@@ -792,10 +804,12 @@ static void showSystemMenu(QWindow* w)
 #undef enabled
 #undef disabled
 #endif // !Q_OS_WINCE
-    const QPoint topLeft = topLevel->geometry().topLeft() * QWindowsScaling::factor();
+    const QPoint pos = QHighDpi::toNativePixels(topLevel->geometry().topLeft(), topLevel);
     const int ret = TrackPopupMenuEx(menu,
                                TPM_LEFTALIGN  | TPM_TOPALIGN | TPM_NONOTIFY | TPM_RETURNCMD,
-                               topLeft.x(), topLeft.y(), topLevelHwnd, 0);
+                               pos.x(), pos.y(),
+                               topLevelHwnd,
+                               0);
     if (ret)
         qWindowsWndProc(topLevelHwnd, WM_SYSCOMMAND, ret, 0);
 }
@@ -1072,7 +1086,9 @@ bool QWindowsKeyMapper::translateKeyEventInternal(QWindow *window, const MSG &ms
         // results, if we map this virtual key-code directly (for eg '?' US layouts). So try
         // to find the correct key using the current message parameters & keyboard state.
         if (uch.isNull() && msgType == WM_IME_KEYDOWN) {
-            if (!QWindowsInputContext::instance()->isComposing())
+            const QWindowsInputContext *windowsInputContext =
+                qobject_cast<const QWindowsInputContext *>(QWindowsIntegration::instance()->inputContext());
+            if (!(windowsInputContext && windowsInputContext->isComposing()))
                 vk_key = ImmGetVirtualKey((HWND)window->winId());
             BYTE keyState[256];
             wchar_t newKey[3] = {0};

@@ -32,6 +32,7 @@
 ****************************************************************************/
 
 #include "qv4booleanobject_p.h"
+#include "qv4string_p.h"
 
 using namespace QV4;
 
@@ -43,14 +44,14 @@ Heap::BooleanCtor::BooleanCtor(QV4::ExecutionContext *scope)
 {
 }
 
-ReturnedValue BooleanCtor::construct(Managed *m, CallData *callData)
+ReturnedValue BooleanCtor::construct(const Managed *m, CallData *callData)
 {
-    Scope scope(static_cast<BooleanCtor *>(m)->engine());
+    Scope scope(static_cast<const BooleanCtor *>(m)->engine());
     bool n = callData->argc ? callData->args[0].toBoolean() : false;
     return Encode(scope.engine->newBooleanObject(n));
 }
 
-ReturnedValue BooleanCtor::call(Managed *, CallData *callData)
+ReturnedValue BooleanCtor::call(const Managed *, CallData *callData)
 {
     bool value = callData->argc ? callData->args[0].toBoolean() : 0;
     return Encode(value);
@@ -60,11 +61,11 @@ void BooleanPrototype::init(ExecutionEngine *engine, Object *ctor)
 {
     Scope scope(engine);
     ScopedObject o(scope);
-    ctor->defineReadonlyProperty(engine->id_length, Primitive::fromInt32(1));
-    ctor->defineReadonlyProperty(engine->id_prototype, (o = this));
+    ctor->defineReadonlyProperty(engine->id_length(), Primitive::fromInt32(1));
+    ctor->defineReadonlyProperty(engine->id_prototype(), (o = this));
     defineDefaultProperty(QStringLiteral("constructor"), (o = ctor));
-    defineDefaultProperty(engine->id_toString, method_toString);
-    defineDefaultProperty(engine->id_valueOf, method_valueOf);
+    defineDefaultProperty(engine->id_toString(), method_toString);
+    defineDefaultProperty(engine->id_valueOf(), method_valueOf);
 }
 
 ReturnedValue BooleanPrototype::method_toString(CallContext *ctx)
@@ -73,7 +74,7 @@ ReturnedValue BooleanPrototype::method_toString(CallContext *ctx)
     if (ctx->thisObject().isBoolean()) {
         result = ctx->thisObject().booleanValue();
     } else {
-        BooleanObject *thisObject = ctx->thisObject().as<BooleanObject>();
+        const BooleanObject *thisObject = ctx->thisObject().as<BooleanObject>();
         if (!thisObject)
             return ctx->engine()->throwTypeError();
         result = thisObject->value();
@@ -87,7 +88,7 @@ ReturnedValue BooleanPrototype::method_valueOf(CallContext *ctx)
     if (ctx->thisObject().isBoolean())
         return ctx->thisObject().asReturnedValue();
 
-    BooleanObject *thisObject = ctx->thisObject().as<BooleanObject>();
+    const BooleanObject *thisObject = ctx->thisObject().as<BooleanObject>();
     if (!thisObject)
         return ctx->engine()->throwTypeError();
 

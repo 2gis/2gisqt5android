@@ -42,6 +42,17 @@
 #ifndef QTWAYLAND_QWLKEYBOARD_P_H
 #define QTWAYLAND_QWLKEYBOARD_P_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include <QtCompositor/qwaylandexport.h>
 #include <QtCompositor/qwaylandinput.h>
 
@@ -99,10 +110,18 @@ public:
     void modifiers(uint32_t serial, uint32_t mods_depressed,
                 uint32_t mods_latched, uint32_t mods_locked, uint32_t group);
 
+    void keyEvent(uint code, uint32_t state);
+    void updateModifierState(uint code, uint32_t state);
+    void updateKeymap();
+
    void startGrab(KeyboardGrabber *grab);
    void endGrab();
    KeyboardGrabber *currentGrab() const;
 
+#ifndef QT_NO_WAYLAND_XKB
+    struct xkb_state *xkbState() const { return m_state; }
+    uint32_t xkbModsMask() const { return m_modsDepressed | m_modsLatched | m_modsLocked; }
+#endif
 
 Q_SIGNALS:
     void focusChanged(Surface *surface);
@@ -113,9 +132,10 @@ protected:
     void keyboard_release(Resource *resource) Q_DECL_OVERRIDE;
 
 private:
+    void checkFocusResource(wl_keyboard::Resource *resource);
+    void sendEnter(Surface *surface, wl_keyboard::Resource *resource);
+
     void sendKeyEvent(uint code, uint32_t state);
-    void updateModifierState(uint code, uint32_t state);
-    void updateKeymap();
     void focusDestroyed(void *data);
 
 #ifndef QT_NO_WAYLAND_XKB

@@ -40,16 +40,21 @@
 #include <QColor>
 #include <QDateTime>
 #include <QDir>
+#include <QImage>
 #include <QMatrix4x4>
+#include <QNetworkCookie>
 #include <QRect>
 #include <QString>
 #include <QUrl>
 #include "base/files/file_path.h"
 #include "base/time/time.h"
 #include "content/public/common/file_chooser_file_info.h"
-#include "third_party/skia/include/utils/SkMatrix44.h"
+#include "net/cookies/canonical_cookie.h"
+#include "third_party/skia/include/core/SkBitmap.h"
 #include "third_party/skia/include/core/SkColor.h"
-#include "ui/gfx/rect.h"
+#include "third_party/skia/include/core/SkPixelRef.h"
+#include "third_party/skia/include/utils/SkMatrix44.h"
+#include "ui/gfx/geometry/rect.h"
 #include "url/gurl.h"
 
 namespace QtWebEngineCore {
@@ -92,6 +97,11 @@ inline QPoint toQt(const gfx::Point &point)
     return QPoint(point.x(), point.y());
 }
 
+inline gfx::Point toGfx(const QPoint& point)
+{
+  return gfx::Point(point.x(), point.y());
+}
+
 inline QRect toQt(const gfx::Rect &rect)
 {
     return QRect(rect.x(), rect.y(), rect.width(), rect.height());
@@ -122,6 +132,17 @@ inline QColor toQt(const SkColor &c)
     return QColor(SkColorGetR(c), SkColorGetG(c), SkColorGetB(c), SkColorGetA(c));
 }
 
+inline SkColor toSk(const QColor &c)
+{
+    return c.rgba();
+}
+
+inline QImage toQImage(const SkBitmap &bitmap, QImage::Format format)
+{
+    SkPixelRef *pixelRef = bitmap.pixelRef();
+    return QImage((uchar *)pixelRef->pixels(), bitmap.width(), bitmap.height(), format);
+}
+
 inline QMatrix4x4 toQt(const SkMatrix44 &m)
 {
     QMatrix4x4 qtMatrix(
@@ -140,6 +161,18 @@ inline QDateTime toQt(base::Time time)
 
 inline base::Time toTime(const QDateTime &dateTime) {
     return base::Time::FromInternalValue(dateTime.toMSecsSinceEpoch());
+}
+
+inline QNetworkCookie toQt(const net::CanonicalCookie & cookie)
+{
+    QNetworkCookie qCookie = QNetworkCookie(QByteArray::fromStdString(cookie.Name()), QByteArray::fromStdString(cookie.Value()));
+    qCookie.setDomain(toQt(cookie.Domain()));
+    if (!cookie.ExpiryDate().is_null())
+        qCookie.setExpirationDate(toQt(cookie.ExpiryDate()));
+    qCookie.setHttpOnly(cookie.IsHttpOnly());
+    qCookie.setPath(toQt(cookie.Path()));
+    qCookie.setSecure(cookie.IsSecure());
+    return qCookie;
 }
 
 inline base::FilePath::StringType toFilePathString(const QString &str)

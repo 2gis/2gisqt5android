@@ -54,6 +54,7 @@
 #include <QtCore/QVariant>
 #include <QtCore/QSysInfo>
 #include <QtCore/QLibraryInfo>
+#include <QtCore/QProcessEnvironment>
 #include <QtCore/QTextStream>
 #include <QtCore/QStandardPaths>
 #include <QtCore/QDir>
@@ -63,8 +64,10 @@
 #include <private/qsimd_p.h>
 #include <private/qguiapplication_p.h>
 #include <qpa/qplatformintegration.h>
+#include <qpa/qplatformscreen.h>
 #include <qpa/qplatformtheme.h>
 #include <qpa/qplatformnativeinterface.h>
+#include <private/qhighdpiscaling_p.h>
 
 #include <algorithm>
 
@@ -79,6 +82,12 @@ QTextStream &operator<<(QTextStream &str, const QSize &s)
 QTextStream &operator<<(QTextStream &str, const QSizeF &s)
 {
     str << s.width() << 'x' << s.height();
+    return str;
+}
+
+QTextStream &operator<<(QTextStream &str, const QDpi &d)
+{
+    str << d.first << ',' << d.second;
     return str;
 }
 
@@ -101,6 +110,16 @@ QTextStream &operator<<(QTextStream &str, const QStringList &l)
 QTextStream &operator<<(QTextStream &str, const QFont &f)
 {
     str << '"' << f.family() << "\" "  << f.pointSize();
+    return str;
+}
+
+QTextStream &operator<<(QTextStream &str, QPlatformScreen::SubpixelAntialiasingType st)
+{
+    static const char *enumValues[] = {
+        "Subpixel_None", "Subpixel_RGB", "Subpixel_BGR", "Subpixel_VRGB", "Subpixel_VBGR"
+    };
+    str << (size_t(st) < sizeof(enumValues) / sizeof(enumValues[0])
+            ? enumValues[st] : "<Unknown>");
     return str;
 }
 
@@ -179,7 +198,7 @@ static void dumpStandardLocation(QTextStream &str, QStandardPaths::StandardLocat
     str << '"' << QStandardPaths::displayName(location) << '"';
     const QStringList directories = QStandardPaths::standardLocations(location);
     const QString writableDirectory = QStandardPaths::writableLocation(location);
-    const int writableIndex = directories.indexOf(writableDirectory);
+    const int writableIndex = writableDirectory.isEmpty() ? -1 : directories.indexOf(writableDirectory);
     for (int i = 0; i < directories.size(); ++i) {
         str << ' ';
         if (i == writableIndex)
@@ -213,6 +232,81 @@ static QString formatQDebug(T t)
     return result;
 }
 
+// Helper to format a type via QDebug, stripping the class name.
+template <class T>
+static QString formatValueQDebug(T t)
+{
+    QString result = formatQDebug(t).trimmed();
+    if (result.endsWith(QLatin1Char(')'))) {
+        result.chop(1);
+        result.remove(0, result.indexOf(QLatin1Char('(')) + 1);
+    }
+    return result;
+}
+
+static inline QByteArrayList qtFeatures()
+{
+    QByteArrayList result;
+#ifdef QT_NO_CLIPBOARD
+    result.append("QT_NO_CLIPBOARD");
+#endif
+#ifdef QT_NO_CONTEXTMENU
+    result.append("QT_NO_CONTEXTMENU");
+#endif
+#ifdef QT_NO_CURSOR
+    result.append("QT_NO_CURSOR");
+#endif
+#ifdef QT_NO_DRAGANDDROP
+    result.append("QT_NO_DRAGANDDROP");
+#endif
+#ifdef QT_NO_EXCEPTIONS
+    result.append("QT_NO_EXCEPTIONS");
+#endif
+#ifdef QT_NO_LIBRARY
+    result.append("QT_NO_LIBRARY");
+#endif
+#ifdef QT_NO_NETWORK
+    result.append("QT_NO_NETWORK");
+#endif
+#ifdef QT_NO_OPENGL
+    result.append("QT_NO_OPENGL");
+#endif
+#ifdef QT_NO_OPENSSL
+    result.append("QT_NO_OPENSSL");
+#endif
+#ifdef QT_NO_PROCESS
+    result.append("QT_NO_PROCESS");
+#endif
+#ifdef QT_NO_PRINTER
+    result.append("QT_NO_PRINTER");
+#endif
+#ifdef QT_NO_SESSIONMANAGER
+    result.append("QT_NO_SESSIONMANAGER");
+#endif
+#ifdef QT_NO_SETTINGS
+    result.append("QT_NO_SETTINGS");
+#endif
+#ifdef QT_NO_SHORTCUT
+    result.append("QT_NO_SHORTCUT");
+#endif
+#ifdef QT_NO_SYSTEMTRAYICON
+    result.append("QT_NO_SYSTEMTRAYICON");
+#endif
+#ifdef QT_NO_QTHREAD
+    result.append("QT_NO_QTHREAD");
+#endif
+#ifdef QT_NO_WHATSTHIS
+    result.append("QT_NO_WHATSTHIS");
+#endif
+#ifdef QT_NO_WIDGETS
+    result.append("QT_NO_WIDGETS");
+#endif
+#ifdef QT_NO_ZLIB
+    result.append("QT_NO_ZLIB");
+#endif
+    return result;
+}
+
 QString qtDiag(unsigned flags)
 {
     QString result;
@@ -242,6 +336,19 @@ QString qtDiag(unsigned flags)
     DUMP_CPU_FEATURE(DSPR2, "DSPR2");
 #endif
     str << '\n';
+
+#ifndef QT_NO_PROCESS
+    const QProcessEnvironment systemEnvironment = QProcessEnvironment::systemEnvironment();
+    str << "\nEnvironment:\n";
+    foreach (const QString &key, systemEnvironment.keys()) {
+        if (key.startsWith(QLatin1Char('Q')))
+           str << "  " << key << "=\"" << systemEnvironment.value(key) << "\"\n";
+    }
+#endif // !QT_NO_PROCESS
+
+    const QByteArrayList features = qtFeatures();
+    if (!features.isEmpty())
+        str << "\nFeatures: " << features.join(' ') << '\n';
 
     str << "\nLibrary info:\n";
     DUMP_LIBRARYPATH(str, PrefixPath)
@@ -318,6 +425,7 @@ QString qtDiag(unsigned flags)
     DUMP_CAPABILITY(str, platformIntegration, RasterGLSurface)
     DUMP_CAPABILITY(str, platformIntegration, AllGLFunctionsQueryable)
     DUMP_CAPABILITY(str, platformIntegration, ApplicationIcon)
+    DUMP_CAPABILITY(str, platformIntegration, SwitchableWidgetComposition)
     str << '\n';
 
     const QStyleHints *styleHints = QGuiApplication::styleHints();
@@ -331,6 +439,7 @@ QString qtDiag(unsigned flags)
         << "  keyboardAutoRepeatRate: " << styleHints->keyboardAutoRepeatRate() << '\n'
         << "  cursorFlashTime: " << styleHints->cursorFlashTime() << '\n'
         << "  showIsFullScreen: " << styleHints->showIsFullScreen() << '\n'
+        << "  showIsMaximized: " << styleHints->showIsMaximized() << '\n'
         << "  passwordMaskDelay: " << styleHints->passwordMaskDelay() << '\n'
         << "  passwordMaskCharacter: ";
     if (passwordMaskCharacter.unicode() >= 32 && passwordMaskCharacter.unicode() < 128)
@@ -344,25 +453,21 @@ QString qtDiag(unsigned flags)
         << "  tabFocusBehavior: " << formatQDebug(styleHints->tabFocusBehavior()) << '\n'
         << "  singleClickActivation: " << styleHints->singleClickActivation() << '\n';
     str << "\nAdditional style hints (QPlatformIntegration):\n"
-        << "  ShowIsMaximized: "
-        << platformIntegration->styleHint(QPlatformIntegration::ShowIsMaximized).toBool() << '\n'
         << "  ReplayMousePressOutsidePopup: "
         << platformIntegration->styleHint(QPlatformIntegration::ReplayMousePressOutsidePopup).toBool() << '\n';
 
     const QPlatformTheme *platformTheme = QGuiApplicationPrivate::platformTheme();
-    str << "\nTheme:\n  Styles: " << platformTheme->themeHint(QPlatformTheme::StyleNames).toStringList();
+    str << "\nTheme:"
+           "\n  Available    : " << platformIntegration->themeNames()
+        << "\n  Styles       : " << platformTheme->themeHint(QPlatformTheme::StyleNames).toStringList();
     const QString iconTheme = platformTheme->themeHint(QPlatformTheme::SystemIconThemeName).toString();
     if (!iconTheme.isEmpty()) {
-        str << "\n  Icon theme: " << iconTheme
+        str << "\n  Icon theme   : " << iconTheme
             << ", " << platformTheme->themeHint(QPlatformTheme::SystemIconFallbackThemeName).toString()
             << " from " << platformTheme->themeHint(QPlatformTheme::IconThemeSearchPaths).toStringList() << '\n';
     }
     if (const QFont *systemFont = platformTheme->font())
-        str << "  System font: " << *systemFont<< '\n';
-    str << "  General font : " << QFontDatabase::systemFont(QFontDatabase::GeneralFont) << '\n'
-              << "  Fixed font   : " << QFontDatabase::systemFont(QFontDatabase::FixedFont) << '\n'
-              << "  Title font   : " << QFontDatabase::systemFont(QFontDatabase::TitleFont) << '\n'
-              << "  Smallest font: " << QFontDatabase::systemFont(QFontDatabase::SmallestReadableFont) << '\n';
+        str << "\n  System font  : " << *systemFont<< '\n';
 
     if (platformTheme->usePlatformNativeDialog(QPlatformTheme::FileDialog))
         str << "  Native file dialog\n";
@@ -370,29 +475,67 @@ QString qtDiag(unsigned flags)
         str << "  Native color dialog\n";
     if (platformTheme->usePlatformNativeDialog(QPlatformTheme::FontDialog))
         str << "  Native font dialog\n";
+    if (platformTheme->usePlatformNativeDialog(QPlatformTheme::MessageDialog))
+        str << "  Native message dialog\n";
+
+    str << "\nFonts:\n  General font : " << QFontDatabase::systemFont(QFontDatabase::GeneralFont) << '\n'
+              << "  Fixed font   : " << QFontDatabase::systemFont(QFontDatabase::FixedFont) << '\n'
+              << "  Title font   : " << QFontDatabase::systemFont(QFontDatabase::TitleFont) << '\n'
+              << "  Smallest font: " << QFontDatabase::systemFont(QFontDatabase::SmallestReadableFont) << '\n';
+    if (flags & QtDiagFonts) {
+        QFontDatabase fontDatabase;
+        const QStringList families = fontDatabase.families();
+        str << "\n  Families (" << families.size() << "):\n";
+        for (int i = 0, count = families.size(); i < count; ++i)
+            str << "    " << families.at(i) << '\n';
+
+        const QList<int> standardSizes = QFontDatabase::standardSizes();
+        str << "\n  Standard Sizes:";
+        for (int i = 0, count = standardSizes.size(); i < count; ++i)
+            str << ' ' << standardSizes.at(i);
+        QList<QFontDatabase::WritingSystem> writingSystems = fontDatabase.writingSystems();
+        str << "\n\n  Writing systems:\n";
+        for (int i = 0, count = writingSystems.size(); i < count; ++i)
+            str << "    " << formatValueQDebug(writingSystems.at(i)) << '\n';
+    }
 
     const QList<QScreen*> screens = QGuiApplication::screens();
     const int screenCount = screens.size();
-    str << "\nScreens: " << screenCount << '\n';
+    str << "\nScreens: " << screenCount << ", High DPI scaling: "
+        << (QHighDpiScaling::isActive() ? "active" : "inactive") << '\n';
     for (int s = 0; s < screenCount; ++s) {
         const QScreen *screen = screens.at(s);
+        const QPlatformScreen *platformScreen = screen->handle();
+        const QRect geometry = screen->geometry();
+        const QDpi dpi(screen->logicalDotsPerInchX(), screen->logicalDotsPerInchY());
+        const QDpi nativeDpi = platformScreen->logicalDpi();
+        const QRect nativeGeometry = platformScreen->geometry();
         str << '#' << ' ' << s << " \"" << screen->name() << '"'
                   << " Depth: " << screen->depth()
                   << " Primary: " <<  (screen == QGuiApplication::primaryScreen() ? "yes" : "no")
-            << "\n  Geometry: " << screen->geometry() << " Available: " << screen->availableGeometry();
-        if (screen->geometry() != screen->virtualGeometry())
+            << "\n  Geometry: " << geometry;
+        if (geometry != nativeGeometry)
+            str << " (native: " << nativeGeometry << ')';
+        str << " Available: " << screen->availableGeometry();
+        if (geometry != screen->virtualGeometry())
             str << "\n  Virtual geometry: " << screen->virtualGeometry() << " Available: " << screen->availableVirtualGeometry();
         if (screen->virtualSiblings().size() > 1)
             str << "\n  " << screen->virtualSiblings().size() << " virtual siblings";
         str << "\n  Physical size: " << screen->physicalSize() << " mm"
-                  << "  Refresh: " << screen->refreshRate() << " Hz"
-            << "\n  Physical DPI: " << screen->physicalDotsPerInchX()
+            << "  Refresh: " << screen->refreshRate() << " Hz"
+            << " Power state: " << platformScreen->powerState();
+        str << "\n  Physical DPI: " << screen->physicalDotsPerInchX()
             << ',' << screen->physicalDotsPerInchY()
-            << " Logical DPI: " << screen->logicalDotsPerInchX()
-            << ',' << screen->logicalDotsPerInchY()
-            << "\n  DevicePixelRatio: " << screen->devicePixelRatio()
-            << " Primary orientation: " << screen->primaryOrientation()
-            << "\n  Orientation: " << screen->orientation()
+            << " Logical DPI: " << dpi;
+        if (dpi != nativeDpi)
+            str << " (native: " << nativeDpi << ')';
+        str << ' ' << platformScreen->subpixelAntialiasingTypeHint() << "\n  ";
+        if (QHighDpiScaling::isActive())
+            str << "High DPI scaling factor: " << QHighDpiScaling::factor(screen) << ' ';
+        str << "DevicePixelRatio: " << screen->devicePixelRatio()
+            << " Pixel density: " << platformScreen->pixelDensity();
+        str << "\n  Primary orientation: " << screen->primaryOrientation()
+            << " Orientation: " << screen->orientation()
             << " Native orientation: " << screen->nativeOrientation()
             << " OrientationUpdateMask: " << screen->orientationUpdateMask()
             << "\n\n";
@@ -426,18 +569,22 @@ QString qtDiag(unsigned flags)
     }
 
 #ifndef QT_NO_OPENGL
-    dumpGlInfo(str, flags & QtDiagGlExtensions);
-    str << "\n\n";
+    if (flags & QtDiagGl) {
+        dumpGlInfo(str, flags & QtDiagGlExtensions);
+        str << "\n\n";
+    }
 #else
     Q_UNUSED(flags)
 #endif // !QT_NO_OPENGL
 
     // On Windows, this will provide addition GPU info similar to the output of dxdiag.
-    const QVariant gpuInfoV = QGuiApplication::platformNativeInterface()->property("gpu");
-    if (gpuInfoV.type() == QVariant::Map) {
-        const QString description = gpuInfoV.toMap().value(QStringLiteral("printable")).toString();
-        if (!description.isEmpty())
-            str << "\nGPU:\n" << description;
+    if (const QPlatformNativeInterface *ni = QGuiApplication::platformNativeInterface()) {
+        const QVariant gpuInfoV = ni->property("gpu");
+        if (gpuInfoV.type() == QVariant::Map) {
+            const QString description = gpuInfoV.toMap().value(QStringLiteral("printable")).toString();
+            if (!description.isEmpty())
+                str << "\nGPU:\n" << description;
+        }
     }
     return result;
 }

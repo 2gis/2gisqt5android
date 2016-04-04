@@ -34,10 +34,8 @@
 #include "qquickdroparea_p.h"
 #include "qquickdrag_p.h"
 #include "qquickitem_p.h"
-#include "qquickwindow.h"
 
 #include <private/qv4arraybuffer_p.h>
-#include <private/qqmlengine_p.h>
 
 #ifndef QT_NO_DRAGANDDROP
 
@@ -102,6 +100,8 @@ QQuickDropAreaPrivate::~QQuickDropAreaPrivate()
 
     The \l drag.source property is communicated to the source of a drag event as
     the recipient of a drop on the drag target.
+
+    \sa {Qt Quick Examples - Drag and Drop}, {Qt Quick Examples - externaldraganddrop}
 */
 
 QQuickDropArea::QQuickDropArea(QQuickItem *parent)
@@ -264,6 +264,8 @@ void QQuickDropArea::dragEnterEvent(QDragEnterEvent *event)
 
     QQuickDropEvent dragTargetEvent(d, event);
     emit entered(&dragTargetEvent);
+    if (!event->isAccepted())
+        return;
 
     d->containsDrag = true;
     if (QQuickDragMimeData *dragMime = qobject_cast<QQuickDragMimeData *>(const_cast<QMimeData *>(mimeData)))

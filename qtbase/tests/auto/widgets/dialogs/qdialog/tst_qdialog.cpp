@@ -42,12 +42,22 @@
 #include <QVBoxLayout>
 #include <QSizeGrip>
 #include <QDesktopWidget>
+#include <QGraphicsProxyWidget>
+#include <QGraphicsView>
 #include <QWindow>
 #include <private/qguiapplication_p.h>
 #include <qpa/qplatformtheme.h>
 #include <qpa/qplatformtheme_p.h>
 
 QT_FORWARD_DECLARE_CLASS(QDialog)
+
+// work around function being protected
+class DummyDialog : public QDialog
+{
+public:
+    DummyDialog(): QDialog(0, Qt::X11BypassWindowManagerHint) {}
+    using QDialog::showExtension;
+};
 
 class tst_QDialog : public QObject
 {
@@ -80,9 +90,10 @@ private slots:
     void snapToDefaultButton();
     void transientParent_data();
     void transientParent();
+    void dialogInGraphicsView();
 
 private:
-    QDialog *testWidget;
+    DummyDialog *testWidget;
 };
 
 // Testing get/set functions
@@ -108,19 +119,14 @@ void tst_QDialog::getSetCheck()
     QCOMPARE(INT_MAX, obj1.result());
 }
 
-// work around function being protected
-class DummyDialog : public QDialog {
-public:
-    DummyDialog(): QDialog(0) {}
-    void showExtension( bool b ) { QDialog::showExtension( b ); }
-};
-
 class ToolDialog : public QDialog
 {
 public:
-    ToolDialog(QWidget *parent = 0) : QDialog(parent, Qt::Tool), mWasActive(false), tId(-1) {
-    }
+    ToolDialog(QWidget *parent = 0)
+        : QDialog(parent, Qt::Tool), mWasActive(false), mWasModalWindow(false), tId(-1) {}
+
     bool wasActive() const { return mWasActive; }
+    bool wasModalWindow() const { return mWasModalWindow; }
 
     int exec() {
         tId = startTimer(300);
@@ -131,12 +137,14 @@ protected:
         if (tId == event->timerId()) {
             killTimer(tId);
             mWasActive = isActiveWindow();
+            mWasModalWindow = QGuiApplication::modalWindow() == windowHandle();
             reject();
         }
     }
 
 private:
     int mWasActive;
+    bool mWasModalWindow;
     int tId;
 };
 
@@ -148,7 +156,7 @@ tst_QDialog::tst_QDialog()
 void tst_QDialog::initTestCase()
 {
     // Create the test class
-    testWidget = new QDialog(0, Qt::X11BypassWindowManagerHint);
+    testWidget = new DummyDialog;
     testWidget->resize(200,200);
     testWidget->show();
     qApp->setActiveWindow(testWidget);
@@ -193,7 +201,7 @@ void tst_QDialog::showExtension()
     QPoint oldPosition = testWidget->pos();
 
     // show
-    ((DummyDialog*)testWidget)->showExtension( true );
+    testWidget->showExtension( true );
 //     while ( testWidget->size() == dlgSize )
 //         qApp->processEvents();
 
@@ -202,7 +210,7 @@ void tst_QDialog::showExtension()
     QCOMPARE(testWidget->pos(), oldPosition);
 
     // hide extension. back to old size ?
-    ((DummyDialog*)testWidget)->showExtension( false );
+    testWidget->showExtension( false );
     QCOMPARE( testWidget->size(), dlgSize );
 
     testWidget->setExtension( 0 );
@@ -557,7 +565,7 @@ void tst_QDialog::snapToDefaultButton()
 #ifdef QT_NO_CURSOR
     QSKIP("Test relies on there being a cursor");
 #else
-    if (qApp->platformName().toLower() == QLatin1String("wayland"))
+    if (!QGuiApplication::platformName().compare(QLatin1String("wayland"), Qt::CaseInsensitive))
         QSKIP("Wayland: Wayland does not support setting the cursor position.");
 
     QPoint topLeftPos = QApplication::desktop()->availableGeometry().topLeft();
@@ -614,6 +622,28 @@ void tst_QDialog::transientParent()
     // Transient parent should always be the top level, also when using
     // native child widgets.
     QCOMPARE(dialog.windowHandle()->transientParent(), topLevel.windowHandle());
+}
+
+void tst_QDialog::dialogInGraphicsView()
+{
+    // QTBUG-49124: A dialog embedded into QGraphicsView has Qt::WA_DontShowOnScreen
+    // set (as has a native dialog). It must not trigger the modal handling though
+    // as not to lock up.
+    QGraphicsScene scene;
+    QGraphicsView view(&scene);
+    view.setWindowTitle(QTest::currentTestFunction());
+    const QRect availableGeometry = QGuiApplication::primaryScreen()->availableGeometry();
+    view.resize(availableGeometry.size() / 2);
+    view.move(availableGeometry.left() + availableGeometry.width() / 4,
+              availableGeometry.top() + availableGeometry.height() / 4);
+    ToolDialog *dialog = new ToolDialog;
+    scene.addWidget(dialog);
+    view.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&view));
+    for (int i = 0; i < 3; ++i) {
+        dialog->exec();
+        QVERIFY(!dialog->wasModalWindow());
+    }
 }
 
 QTEST_MAIN(tst_QDialog)

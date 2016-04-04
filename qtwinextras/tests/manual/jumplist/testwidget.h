@@ -34,7 +34,7 @@
 #ifndef TESTWIDGET_H
 #define TESTWIDGET_H
 
-#include <QWidget>
+#include <QMainWindow>
 
 QT_BEGIN_NAMESPACE
 namespace Ui {
@@ -46,24 +46,34 @@ QT_END_NAMESPACE
 namespace Ui = QT_NAMESPACE::Ui;
 #endif
 
-class TestWidget : public QWidget
+class TestWidget : public QMainWindow
 {
     Q_OBJECT
 
 public:
-    explicit TestWidget(QWidget *parent = 0);
+    explicit TestWidget(QWidget *parent = Q_NULLPTR);
     ~TestWidget();
 
-protected:
-    void changeEvent(QEvent *e);
-
-private:
-    Ui::TestWidget *ui;
     void showFile(const QString &path);
+    void setText(const QString &text);
+
+    static QStringList supportedMimeTypes();
+
+    QString id() const { return m_id; }
+    void setId(const QString &id) { m_id = id; }
+
+protected:
+    void changeEvent(QEvent *e) Q_DECL_OVERRIDE;
 
 private slots:
     void updateJumpList();
+    void showInExplorer();
+    void runJumpListView();
     void openFile();
+
+private:
+    Ui::TestWidget *ui;
+    QString m_id;
 };
 
 #endif // TESTWIDGET_H

@@ -33,6 +33,17 @@
 #ifndef QV4ARGUMENTSOBJECTS_H
 #define QV4ARGUMENTSOBJECTS_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include "qv4object_p.h"
 #include "qv4functionobject_p.h"
 
@@ -59,9 +70,9 @@ struct ArgumentsObject : Object {
         CallerPropertyIndex = 3
     };
     ArgumentsObject(QV4::CallContext *context);
-    CallContext *context;
+    Pointer<CallContext> context;
     bool fullyCreated;
-    MemberData *mappedArguments;
+    Pointer<MemberData> mappedArguments;
 };
 
 }
@@ -71,7 +82,7 @@ struct ArgumentsGetterFunction: FunctionObject
     V4_OBJECT2(ArgumentsGetterFunction, FunctionObject)
 
     uint index() const { return d()->index; }
-    static ReturnedValue call(Managed *that, CallData *d);
+    static ReturnedValue call(const Managed *that, CallData *d);
 };
 
 inline
@@ -86,7 +97,7 @@ struct ArgumentsSetterFunction: FunctionObject
     V4_OBJECT2(ArgumentsSetterFunction, FunctionObject)
 
     uint index() const { return d()->index; }
-    static ReturnedValue call(Managed *that, CallData *callData);
+    static ReturnedValue call(const Managed *that, CallData *callData);
 };
 
 inline
@@ -103,15 +114,14 @@ struct ArgumentsObject: Object {
 
     Heap::CallContext *context() const { return d()->context; }
     bool fullyCreated() const { return d()->fullyCreated; }
-    Heap::MemberData *mappedArguments() { return d()->mappedArguments; }
 
     static bool isNonStrictArgumentsObject(Managed *m) {
-        return m->d()->vtable->type == Type_ArgumentsObject &&
+        return m->d()->vtable()->type == Type_ArgumentsObject &&
                 !static_cast<ArgumentsObject *>(m)->context()->strictMode;
     }
 
     bool defineOwnProperty(ExecutionEngine *engine, uint index, const Property *desc, PropertyAttributes attrs);
-    static ReturnedValue getIndexed(Managed *m, uint index, bool *hasProperty);
+    static ReturnedValue getIndexed(const Managed *m, uint index, bool *hasProperty);
     static void putIndexed(Managed *m, uint index, const Value &value);
     static bool deleteIndexedProperty(Managed *m, uint index);
     static PropertyAttributes queryIndexed(const Managed *m, uint index);

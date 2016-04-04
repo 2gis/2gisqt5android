@@ -12,23 +12,31 @@ OTHER_FILES += \
     $$PWD/data/change-document-title.js \
     $$PWD/data/download.zip \
     $$PWD/data/confirm.html \
+    $$PWD/data/confirmclose.html \
+    $$PWD/data/directoryupload.html \
     $$PWD/data/favicon.html \
     $$PWD/data/favicon.png \
     $$PWD/data/favicon2.html \
+    $$PWD/data/forms.html \
     $$PWD/data/geolocation.html \
     $$PWD/data/javascript.html \
     $$PWD/data/link.html \
     $$PWD/data/prompt.html \
+    $$PWD/data/multifileupload.html \
     $$PWD/data/redirect.html \
+    $$PWD/data/singlefileupload.html \
     $$PWD/data/small-favicon.png \
     $$PWD/data/test1.html \
     $$PWD/data/test2.html \
     $$PWD/data/test3.html \
     $$PWD/data/test4.html \
     $$PWD/data/keyboardModifierMapping.html \
+    $$PWD/data/titleupdate.js \
     $$PWD/data/tst_desktopBehaviorLoadHtml.qml \
     $$PWD/data/tst_download.qml \
     $$PWD/data/tst_favIconLoad.qml \
+    $$PWD/data/tst_filePicker.qml \
+    $$PWD/data/tst_formValidation.qml \
     $$PWD/data/tst_geopermission.qml \
     $$PWD/data/tst_javaScriptDialogs.qml \
     $$PWD/data/tst_linkHovered.qml \
@@ -49,11 +57,12 @@ OTHER_FILES += \
     $$PWD/data/tst_keyboardModifierMapping.qml \
     $$PWD/mock-delegates/QtWebEngine/UIDelegates/AlertDialog.qml \
     $$PWD/mock-delegates/QtWebEngine/UIDelegates/ConfirmDialog.qml \
+    $$PWD/mock-delegates/QtWebEngine/UIDelegates/FilePicker.qml \
     $$PWD/mock-delegates/QtWebEngine/UIDelegates/PromptDialog.qml \
     $$PWD/mock-delegates/QtWebEngine/UIDelegates/qmldir \
+    $$PWD/mock-delegates/TestParams/FilePickerParams.qml \
     $$PWD/mock-delegates/TestParams/JSDialogParams.qml \
     $$PWD/mock-delegates/TestParams/qmldir \
-
 
 load(qt_build_paths)
 DEFINES += QUICK_TEST_SOURCE_DIR=\\\"$$re_escape($$PWD$${QMAKE_DIR_SEP}data)\\\"

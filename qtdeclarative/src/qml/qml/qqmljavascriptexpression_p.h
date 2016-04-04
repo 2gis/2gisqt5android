@@ -89,23 +89,17 @@ private:
     QQmlDelayedError **prevError;
 };
 
-class QQmlJavaScriptExpression
+class Q_QML_PRIVATE_EXPORT QQmlJavaScriptExpression
 {
 public:
-    // Although this looks crazy, we implement our own "vtable" here, rather than relying on
-    // C++ virtuals, to save memory.  By doing it ourselves, we can overload the storage
-    // location that is use for the vtable to also store the rarely used delayed error.
-    // If we use C++ virtuals, we can't do this and it consts us an extra sizeof(void *) in
-    // memory for every expression.
-    struct VTable {
-        QString (*expressionIdentifier)(QQmlJavaScriptExpression *);
-        void (*expressionChanged)(QQmlJavaScriptExpression *);
-    };
+    QQmlJavaScriptExpression();
+    virtual ~QQmlJavaScriptExpression();
 
-    QQmlJavaScriptExpression(VTable *vtable);
+    virtual QString expressionIdentifier() = 0;
+    virtual void expressionChanged() = 0;
 
-    QV4::ReturnedValue evaluate(QQmlContextData *, const QV4::Value &function, bool *isUndefined);
-    QV4::ReturnedValue evaluate(QQmlContextData *, const QV4::Value &function, QV4::CallData *callData, bool *isUndefined);
+    QV4::ReturnedValue evaluate(bool *isUndefined);
+    QV4::ReturnedValue evaluate(QV4::CallData *callData, bool *isUndefined);
 
     inline bool notifyOnValueChanged() const;
 
@@ -114,6 +108,13 @@ public:
 
     inline QObject *scopeObject() const;
     inline void setScopeObject(QObject *v);
+
+    bool isValid() const { return context() != 0; }
+
+    QQmlContextData *context() const { return m_context; }
+    void setContext(QQmlContextData *context);
+
+    virtual void refresh();
 
     class DeleteWatcher {
     public:
@@ -136,46 +137,52 @@ public:
 
     static QV4::ReturnedValue evalFunction(QQmlContextData *ctxt, QObject *scope,
                                                      const QString &code, const QString &filename,
-                                                     quint16 line,
-                                                     QV4::PersistentValue *qmlscope = 0);
-    // doesn't require rewriting the expression
-    static QV4::ReturnedValue qmlBinding(QQmlContextData *ctxt, QObject *scope,
-                                        const QString &code,
-                                        const QString &filename, quint16 line,
-                                        QV4::PersistentValue *qmlscope = 0);
+                                                     quint16 line);
 protected:
-    ~QQmlJavaScriptExpression();
+    void createQmlBinding(QQmlContextData *ctxt, QObject *scope, const QString &code, const QString &filename, quint16 line);
 
 private:
-    typedef QQmlJavaScriptExpressionGuard Guard;
+    friend class QQmlContextData;
+    friend class QQmlPropertyCapture;
     friend void QQmlJavaScriptExpressionGuard_callback(QQmlNotifierEndpoint *, void **);
 
-    struct GuardCapture : public QQmlEnginePrivate::PropertyCapture {
-        GuardCapture(QQmlEngine *engine, QQmlJavaScriptExpression *e, DeleteWatcher *w)
-        : engine(engine), expression(e), watcher(w), errorString(0) { }
-
-        ~GuardCapture()  {
-            Q_ASSERT(guards.isEmpty());
-            Q_ASSERT(errorString == 0);
-        }
-
-        virtual void captureProperty(QQmlNotifier *);
-        virtual void captureProperty(QObject *, int, int);
-
-        QQmlEngine *engine;
-        QQmlJavaScriptExpression *expression;
-        DeleteWatcher *watcher;
-        QFieldList<Guard, &Guard::next> guards;
-        QStringList *errorString;
-    };
-
-    QPointerValuePair<VTable, QQmlDelayedError> m_vtable;
+    QQmlDelayedError *m_error;
 
     // We store some flag bits in the following flag pointers.
     //    activeGuards:flag1  - notifyOnValueChanged
     //    activeGuards:flag2  - useSharedContext
     QBiPointer<QObject, DeleteWatcher> m_scopeObject;
-    QForwardFieldList<Guard, &Guard::next> activeGuards;
+    QForwardFieldList<QQmlJavaScriptExpressionGuard, &QQmlJavaScriptExpressionGuard::next> activeGuards;
+
+    QQmlContextData *m_context;
+    QQmlJavaScriptExpression **m_prevExpression;
+    QQmlJavaScriptExpression  *m_nextExpression;
+
+protected:
+    QV4::PersistentValue m_function;
+};
+
+class QQmlPropertyCapture
+{
+public:
+    QQmlPropertyCapture(QQmlEngine *engine, QQmlJavaScriptExpression *e, QQmlJavaScriptExpression::DeleteWatcher *w)
+    : engine(engine), expression(e), watcher(w), errorString(0) { }
+
+    ~QQmlPropertyCapture()  {
+        Q_ASSERT(guards.isEmpty());
+        Q_ASSERT(errorString == 0);
+    }
+
+    void captureProperty(QQmlNotifier *);
+    void captureProperty(QObject *, int, int);
+
+    static void registerQmlDependencies(QV4::ExecutionEngine *engine, const QV4::CompiledData::Function *compiledFunction);
+
+    QQmlEngine *engine;
+    QQmlJavaScriptExpression *expression;
+    QQmlJavaScriptExpression::DeleteWatcher *watcher;
+    QFieldList<QQmlJavaScriptExpressionGuard, &QQmlJavaScriptExpressionGuard::next> guards;
+    QStringList *errorString;
 };
 
 QQmlJavaScriptExpression::DeleteWatcher::DeleteWatcher(QQmlJavaScriptExpression *e)
@@ -222,18 +229,18 @@ void QQmlJavaScriptExpression::setScopeObject(QObject *v)
 
 bool QQmlJavaScriptExpression::hasError() const
 {
-    return m_vtable.hasValue() && m_vtable.constValue()->isValid();
+    return m_error && m_error->isValid();
 }
 
 bool QQmlJavaScriptExpression::hasDelayedError() const
 {
-    return m_vtable.hasValue();
+    return m_error;
 }
 
 QQmlJavaScriptExpressionGuard::QQmlJavaScriptExpressionGuard(QQmlJavaScriptExpression *e)
-: expression(e), next(0)
+    : QQmlNotifierEndpoint(QQmlNotifierEndpoint::QQmlJavaScriptExpressionGuard),
+      expression(e), next(0)
 {
-    setCallback(QQmlNotifierEndpoint::QQmlJavaScriptExpressionGuard);
 }
 
 QQmlJavaScriptExpressionGuard *

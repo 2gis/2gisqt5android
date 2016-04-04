@@ -48,7 +48,7 @@ QT_BEGIN_NAMESPACE
   \instantiates EnginioQmlReply
   \inqmlmodule Enginio
   \ingroup engino-qml
-  \target EnginioModelQml
+  \keyword EnginioModelQml
 
   \brief A reply to any Enginio request.
 

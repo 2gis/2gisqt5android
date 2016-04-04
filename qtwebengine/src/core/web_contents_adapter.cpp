@@ -45,7 +45,8 @@
 #include "browser_context_adapter.h"
 #include "browser_context_qt.h"
 #include "media_capture_devices_dispatcher.h"
-#include "qt_render_view_observer_host.h"
+#include "qwebenginecallback_p.h"
+#include "render_view_observer_host_qt.h"
 #include "type_conversion.h"
 #include "web_channel_ipc_transport_host.h"
 #include "web_contents_adapter_client.h"
@@ -57,6 +58,8 @@
 #include "content/browser/renderer_host/render_view_host_impl.h"
 #include "content/browser/web_contents/web_contents_impl.h"
 #include "content/public/browser/child_process_security_policy.h"
+#include "content/public/browser/devtools_agent_host.h"
+#include <content/public/browser/download_manager.h>
 #include "content/public/browser/host_zoom_map.h"
 #include "content/public/browser/navigation_entry.h"
 #include "content/public/browser/render_view_host.h"
@@ -66,7 +69,6 @@
 #include "content/public/common/renderer_preferences.h"
 #include "content/public/common/url_constants.h"
 #include "content/public/common/web_preferences.h"
-#include "ui/shell_dialogs/selected_file_info.h"
 #include "third_party/WebKit/public/web/WebFindOptions.h"
 
 #include <QDir>
@@ -165,19 +167,6 @@ static void callbackOnEvaluateJS(WebContentsAdapterClient *adapterClient, quint6
     adapterClient->didRunJavaScript(requestId, fromJSValue(result));
 }
 
-static QStringList listRecursively(const QDir& dir) {
-    QStringList ret;
-    QFileInfoList infoList(dir.entryInfoList(QDir::Dirs | QDir::Files | QDir::NoDotAndDotDot |QDir::Hidden));
-    Q_FOREACH (const QFileInfo &fileInfo, infoList) {
-        if (fileInfo.isDir()) {
-            ret.append(fileInfo.absolutePath() + QStringLiteral("/.")); // Match chromium's behavior. See chrome/browser/file_select_helper.cc
-            ret.append(listRecursively(QDir(fileInfo.absoluteFilePath())));
-        } else
-            ret.append(fileInfo.absoluteFilePath());
-    }
-    return ret;
-}
-
 static content::WebContents *createBlankWebContents(WebContentsAdapterClient *adapterClient, content::BrowserContext *browserContext)
 {
     content::WebContents::CreateParams create_params(browserContext, NULL);
@@ -217,14 +206,11 @@ static void serializeNavigationHistory(const content::NavigationController &cont
             output << entry->GetIsOverridingUserAgent();
             output << static_cast<qint64>(entry->GetTimestamp().ToInternalValue());
             output << entry->GetHttpStatusCode();
-            // If you want to navigate a named frame in Chrome, you will first need to
-            // add support for persisting it. It is currently only used for layout tests.
-            CHECK(entry->GetFrameToNavigate().empty());
         }
     }
 }
 
-static void deserializeNavigationHistory(QDataStream &input, int *currentIndex, std::vector<content::NavigationEntry*> *entries, content::BrowserContext *browserContext)
+static void deserializeNavigationHistory(QDataStream &input, int *currentIndex, ScopedVector<content::NavigationEntry> *entries, content::BrowserContext *browserContext)
 {
     int version;
     input >> version;
@@ -265,13 +251,13 @@ static void deserializeNavigationHistory(QDataStream &input, int *currentIndex, 
         // If we couldn't unpack the entry successfully, abort everything.
         if (input.status() != QDataStream::Ok) {
             *currentIndex = -1;
-            Q_FOREACH (content::NavigationEntry *entry, *entries)
+            for (content::NavigationEntry *entry : *entries)
                 delete entry;
             entries->clear();
             return;
         }
 
-        content::NavigationEntry *entry = content::NavigationController::CreateNavigationEntry(
+        scoped_ptr<content::NavigationEntry> entry = content::NavigationController::CreateNavigationEntry(
             toGurl(virtualUrl),
             content::Referrer(toGurl(referrerUrl), static_cast<blink::WebReferrerPolicy>(referrerPolicy)),
             // Use a transition type of reload so that we don't incorrectly
@@ -290,7 +276,7 @@ static void deserializeNavigationHistory(QDataStream &input, int *currentIndex, 
         entry->SetIsOverridingUserAgent(isOverridingUserAgent);
         entry->SetTimestamp(base::Time::FromInternalValue(timestamp));
         entry->SetHttpStatusCode(httpStatusCode);
-        entries->push_back(entry);
+        entries->push_back(entry.release());
     }
 }
 
@@ -323,7 +309,7 @@ WebContentsAdapterPrivate::WebContentsAdapterPrivate()
     : engineContext(WebEngineContext::current())
     , webChannel(0)
     , adapterClient(0)
-    , nextRequestId(1)
+    , nextRequestId(CallbackDirectory::ReservedCallbackIdsEnd)
     , lastFindRequestId(0)
 {
 }
@@ -337,7 +323,7 @@ WebContentsAdapterPrivate::~WebContentsAdapterPrivate()
 QExplicitlySharedDataPointer<WebContentsAdapter> WebContentsAdapter::createFromSerializedNavigationHistory(QDataStream &input, WebContentsAdapterClient *adapterClient)
 {
     int currentIndex;
-    std::vector<content::NavigationEntry*> entries;
+    ScopedVector<content::NavigationEntry> entries;
     deserializeNavigationHistory(input, &currentIndex, &entries, adapterClient->browserContextAdapter()->browserContext());
 
     if (currentIndex == -1)
@@ -394,11 +380,12 @@ void WebContentsAdapter::initialize(WebContentsAdapterClient *adapterClient)
     const int qtCursorFlashTime = QGuiApplication::styleHints()->cursorFlashTime();
     rendererPrefs->caret_blink_interval = 0.5 * static_cast<double>(qtCursorFlashTime) / 1000;
     rendererPrefs->user_agent_override = d->browserContextAdapter->httpUserAgent().toStdString();
+    rendererPrefs->accept_languages = d->browserContextAdapter->httpAcceptLanguageWithoutQualities().toStdString();
     d->webContents->GetRenderViewHost()->SyncRendererPrefs();
 
     // Create and attach observers to the WebContents.
     d->webContentsDelegate.reset(new WebContentsDelegateQt(d->webContents.get(), adapterClient));
-    d->renderViewObserverHost.reset(new QtRenderViewObserverHost(d->webContents.get(), adapterClient));
+    d->renderViewObserverHost.reset(new RenderViewObserverHostQt(d->webContents.get(), adapterClient));
 
     // Let the WebContent's view know about the WebContentsAdapterClient.
     WebContentsViewQt* contentsView = static_cast<WebContentsViewQt*>(static_cast<content::WebContentsImpl*>(d->webContents.get())->GetView());
@@ -411,7 +398,7 @@ void WebContentsAdapter::initialize(WebContentsAdapterClient *adapterClient)
     content::RenderViewHost *rvh = d->webContents->GetRenderViewHost();
     Q_ASSERT(rvh);
     if (!rvh->IsRenderViewLive())
-        static_cast<content::WebContentsImpl*>(d->webContents.get())->CreateRenderViewForRenderManager(rvh, MSG_ROUTING_NONE, MSG_ROUTING_NONE, true);
+        static_cast<content::WebContentsImpl*>(d->webContents.get())->CreateRenderViewForRenderManager(rvh, MSG_ROUTING_NONE, MSG_ROUTING_NONE, content::FrameReplicationState(), true);
 }
 
 void WebContentsAdapter::reattachRWHV()
@@ -497,7 +484,9 @@ void WebContentsAdapter::setContent(const QByteArray &data, const QString &mimeT
     params.base_url_for_data_url = toGurl(baseUrl);
     params.virtual_url_for_data_url = baseUrl.isEmpty() ? GURL(url::kAboutBlankURL) : toGurl(baseUrl);
     params.can_load_local_resources = true;
+    params.transition_type = ui::PageTransitionFromInt(ui::PAGE_TRANSITION_TYPED | ui::PAGE_TRANSITION_FROM_API);
     d->webContents->GetController().LoadURLWithParams(params);
+    d->webContents->Focus();
 }
 
 QUrl WebContentsAdapter::activeUrl() const
@@ -585,6 +574,12 @@ void WebContentsAdapter::selectAll()
 {
     Q_D(const WebContentsAdapter);
     d->webContents->SelectAll();
+}
+
+void WebContentsAdapter::requestClose()
+{
+    Q_D(WebContentsAdapter);
+    d->webContents->DispatchBeforeUnload(false);
 }
 
 void WebContentsAdapter::navigateToIndex(int offset)
@@ -774,6 +769,66 @@ void WebContentsAdapter::updateWebPreferences(const content::WebPreferences & we
     d->webContents->GetRenderViewHost()->UpdateWebkitPreferences(webPreferences);
 }
 
+void WebContentsAdapter::download(const QUrl &url, const QString &suggestedFileName)
+{
+    content::BrowserContext *bctx = webContents()->GetBrowserContext();
+    content::DownloadManager *dlm =  content::BrowserContext::GetDownloadManager(bctx);
+    if (!dlm)
+        return;
+
+    scoped_ptr<content::DownloadUrlParameters> params(
+            content::DownloadUrlParameters::FromWebContents(webContents(), toGurl(url)));
+    params->set_suggested_name(toString16(suggestedFileName));
+    dlm->DownloadUrl(params.Pass());
+}
+
+void WebContentsAdapter::copyImageAt(const QPoint &location)
+{
+    Q_D(WebContentsAdapter);
+    d->webContents->GetRenderViewHost()->CopyImageAt(location.x(), location.y());
+}
+
+ASSERT_ENUMS_MATCH(WebContentsAdapter::MediaPlayerNoAction, blink::WebMediaPlayerAction::Unknown)
+ASSERT_ENUMS_MATCH(WebContentsAdapter::MediaPlayerPlay, blink::WebMediaPlayerAction::Play)
+ASSERT_ENUMS_MATCH(WebContentsAdapter::MediaPlayerMute, blink::WebMediaPlayerAction::Mute)
+ASSERT_ENUMS_MATCH(WebContentsAdapter::MediaPlayerLoop,  blink::WebMediaPlayerAction::Loop)
+ASSERT_ENUMS_MATCH(WebContentsAdapter::MediaPlayerControls,  blink::WebMediaPlayerAction::Controls)
+
+void WebContentsAdapter::executeMediaPlayerActionAt(const QPoint &location, MediaPlayerAction action, bool enable)
+{
+    Q_D(WebContentsAdapter);
+    blink::WebMediaPlayerAction blinkAction((blink::WebMediaPlayerAction::Type)action, enable);
+    d->webContents->GetRenderViewHost()->ExecuteMediaPlayerActionAtLocation(toGfx(location), blinkAction);
+}
+
+void WebContentsAdapter::inspectElementAt(const QPoint &location)
+{
+    Q_D(WebContentsAdapter);
+    if (content::DevToolsAgentHost::HasFor(d->webContents.get())) {
+        content::DevToolsAgentHost::GetOrCreateFor(d->webContents.get())->InspectElement(location.x(), location.y());
+    }
+}
+
+bool WebContentsAdapter::hasInspector() const
+{
+    const Q_D(WebContentsAdapter);
+    if (content::DevToolsAgentHost::HasFor(d->webContents.get()))
+        return content::DevToolsAgentHost::GetOrCreateFor(d->webContents.get())->IsAttached();
+    return false;
+}
+
+void WebContentsAdapter::exitFullScreen()
+{
+    Q_D(WebContentsAdapter);
+    d->webContents->ExitFullscreen();
+}
+
+void WebContentsAdapter::changedFullScreen()
+{
+    Q_D(WebContentsAdapter);
+    d->webContents->NotifyFullscreenChanged();
+}
+
 void WebContentsAdapter::wasShown()
 {
     Q_D(WebContentsAdapter);
@@ -795,7 +850,7 @@ void WebContentsAdapter::grantMediaAccessPermission(const QUrl &securityOrigin, 
 void WebContentsAdapter::runGeolocationRequestCallback(const QUrl &securityOrigin, bool allowed)
 {
     Q_D(WebContentsAdapter);
-    d->webContentsDelegate->geolocationPermissionReply(securityOrigin, allowed);
+    d->browserContextAdapter->permissionRequestReply(securityOrigin, BrowserContextAdapter::GeolocationPermission, allowed);
 }
 
 void WebContentsAdapter::grantMouseLockPermission(bool granted)
@@ -822,21 +877,11 @@ void WebContentsAdapter::dpiScaleChanged()
         impl->NotifyScreenInfoChanged();
 }
 
-ASSERT_ENUMS_MATCH(WebContentsAdapterClient::Open, content::FileChooserParams::Open)
-ASSERT_ENUMS_MATCH(WebContentsAdapterClient::OpenMultiple, content::FileChooserParams::OpenMultiple)
-ASSERT_ENUMS_MATCH(WebContentsAdapterClient::UploadFolder, content::FileChooserParams::UploadFolder)
-ASSERT_ENUMS_MATCH(WebContentsAdapterClient::Save, content::FileChooserParams::Save)
-
-void WebContentsAdapter::filesSelectedInChooser(const QStringList &fileList, WebContentsAdapterClient::FileChooserMode mode)
+void WebContentsAdapter::backgroundColorChanged()
 {
     Q_D(WebContentsAdapter);
-    content::RenderViewHost *rvh = d->webContents->GetRenderViewHost();
-    Q_ASSERT(rvh);
-    QStringList files(fileList);
-    if (mode == WebContentsAdapterClient::UploadFolder && !fileList.isEmpty()
-            && QFileInfo(fileList.first()).isDir()) // Enumerate the directory
-        files = listRecursively(QDir(fileList.first()));
-    rvh->FilesSelectedInChooser(toVector<content::FileChooserFileInfo>(files), static_cast<content::FileChooserParams::Mode>(mode));
+    if (content::RenderWidgetHostView *rwhv = d->webContents->GetRenderWidgetHostView())
+        rwhv->SetBackgroundColor(toSk(d->adapterClient->backgroundColor()));
 }
 
 content::WebContents *WebContentsAdapter::webContents() const
@@ -867,6 +912,38 @@ void WebContentsAdapter::setWebChannel(QWebChannel *channel)
         return;
     }
     channel->connectTo(d->webChannelTransport.get());
+}
+
+WebContentsAdapterClient::RenderProcessTerminationStatus
+WebContentsAdapterClient::renderProcessExitStatus(int terminationStatus) {
+    auto status = WebContentsAdapterClient::RenderProcessTerminationStatus(-1);
+    switch (terminationStatus) {
+    case base::TERMINATION_STATUS_NORMAL_TERMINATION:
+        status = WebContentsAdapterClient::NormalTerminationStatus;
+        break;
+    case base::TERMINATION_STATUS_ABNORMAL_TERMINATION:
+        status = WebContentsAdapterClient::AbnormalTerminationStatus;
+        break;
+    case base::TERMINATION_STATUS_PROCESS_WAS_KILLED:
+#if defined(OS_CHROMEOS)
+    case base::TERMINATION_STATUS_PROCESS_WAS_KILLED_BY_OOM:
+#endif
+        status = WebContentsAdapterClient::KilledTerminationStatus;
+        break;
+    case base::TERMINATION_STATUS_PROCESS_CRASHED:
+#if defined(OS_ANDROID)
+    case base::TERMINATION_STATUS_OOM_PROTECTED:
+#endif
+        status = WebContentsAdapterClient::CrashedTerminationStatus;
+        break;
+    case base::TERMINATION_STATUS_STILL_RUNNING:
+    case base::TERMINATION_STATUS_MAX_ENUM:
+        // should be unreachable since Chromium asserts status != TERMINATION_STATUS_STILL_RUNNING
+        // before calling this method
+        break;
+    }
+
+    return status;
 }
 
 } // namespace QtWebEngineCore

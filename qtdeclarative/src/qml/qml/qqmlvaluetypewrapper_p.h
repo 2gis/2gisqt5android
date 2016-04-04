@@ -48,7 +48,7 @@
 #include <QtCore/qglobal.h>
 #include <private/qtqmlglobal_p.h>
 
-#include <private/qv4value_inl_p.h>
+#include <private/qv4value_p.h>
 #include <private/qv4object_p.h>
 
 QT_BEGIN_NAMESPACE
@@ -61,7 +61,7 @@ namespace QV4 {
 namespace Heap {
 
 struct QQmlValueTypeWrapper : Object {
-    QQmlValueTypeWrapper(ExecutionEngine *engine);
+    QQmlValueTypeWrapper() {}
     ~QQmlValueTypeWrapper();
     QQmlRefPointer<QQmlPropertyCache> propertyCache;
     mutable void *gadgetPtr;
@@ -76,6 +76,7 @@ struct QQmlValueTypeWrapper : Object {
 struct Q_QML_EXPORT QQmlValueTypeWrapper : Object
 {
     V4_OBJECT2(QQmlValueTypeWrapper, Object)
+    V4_PROTOTYPE(valueTypeWrapperPrototype)
     static void destroy(Heap::Base *b);
 
 public:
@@ -89,7 +90,7 @@ public:
     int typeId() const;
     bool write(QObject *target, int propertyIndex) const;
 
-    static ReturnedValue get(Managed *m, String *name, bool *hasProperty);
+    static ReturnedValue get(const Managed *m, String *name, bool *hasProperty);
     static void put(Managed *m, String *name, const Value &value);
     static bool isEqualTo(Managed *m, Managed *other);
     static PropertyAttributes query(const Managed *, String *name);

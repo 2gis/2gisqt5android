@@ -71,9 +71,8 @@ bool AppCacheBackendImpl::SelectCache(
   if (!host)
     return false;
 
-  host->SelectCache(document_url, cache_document_was_loaded_from,
+  return host->SelectCache(document_url, cache_document_was_loaded_from,
                     manifest_url);
-  return true;
 }
 
 bool AppCacheBackendImpl::SelectCacheForWorker(
@@ -82,8 +81,7 @@ bool AppCacheBackendImpl::SelectCacheForWorker(
   if (!host)
     return false;
 
-  host->SelectCacheForWorker(parent_process_id, parent_host_id);
-  return true;
+  return host->SelectCacheForWorker(parent_process_id, parent_host_id);
 }
 
 bool AppCacheBackendImpl::SelectCacheForSharedWorker(
@@ -92,8 +90,7 @@ bool AppCacheBackendImpl::SelectCacheForSharedWorker(
   if (!host)
     return false;
 
-  host->SelectCacheForSharedWorker(appcache_id);
-  return true;
+  return host->SelectCacheForSharedWorker(appcache_id);
 }
 
 bool AppCacheBackendImpl::MarkAsForeignEntry(
@@ -104,8 +101,7 @@ bool AppCacheBackendImpl::MarkAsForeignEntry(
   if (!host)
     return false;
 
-  host->MarkAsForeignEntry(document_url, cache_document_was_loaded_from);
-  return true;
+  return host->MarkAsForeignEntry(document_url, cache_document_was_loaded_from);
 }
 
 bool AppCacheBackendImpl::GetStatusWithCallback(

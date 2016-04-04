@@ -3,6 +3,11 @@
 # found in the LICENSE file.
 
 {
+  'variables': {
+    'use_system_libevent%': 0,
+  },
+  'conditions' : [
+    ['use_system_libevent == 0', {
   'targets': [
     {
       'target_name': 'libevent',
@@ -26,6 +31,9 @@
       ],
       'defines': [
         'HAVE_CONFIG_H',
+      ],
+      'include_dirs': [
+        '../..',
       ],
       'conditions': [
         # libevent has platform-specific implementation files.  Since its
@@ -58,4 +66,29 @@
       ],
     },
   ],
+  }, #  'use_system_libevent == 0'
+  {
+  'targets': [
+    {
+      'target_name': 'libevent',
+      'type': 'none',
+      'toolsets': ['host', 'target'],
+      'variables': {
+        'headers_root_path': '.',
+        'header_filenames': [
+          'event.h',
+        ],
+      },
+      'includes': [
+        '../../build/shim_headers.gypi',
+      ],
+      'link_settings': {
+        'libraries': [
+          '-levent',
+        ],
+      },
+    }
+  ],
+  }
+  ]]
 }

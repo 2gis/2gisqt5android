@@ -398,8 +398,6 @@ void qt_cleanup();
 QStyle *QApplicationPrivate::app_style = 0;        // default application style
 bool QApplicationPrivate::overrides_native_style = false; // whether native QApplication style is
                                                           // overridden, i.e. not native
-QString QApplicationPrivate::styleOverride;        // style override
-
 #ifndef QT_NO_STYLE_STYLESHEET
 QString QApplicationPrivate::styleSheet;           // default application stylesheet
 #endif
@@ -465,6 +463,13 @@ QDesktopWidget *qt_desktopWidget = 0;                // root window widgets
 */
 void QApplicationPrivate::process_cmdline()
 {
+    if (!styleOverride.isEmpty()) {
+        if (app_style) {
+            delete app_style;
+            app_style = 0;
+        }
+    }
+
     // process platform-indep command line
     if (!qt_is_gui_used || !argc)
         return;
@@ -473,39 +478,29 @@ void QApplicationPrivate::process_cmdline()
 
     j = 1;
     for (i=1; i<argc; i++) { // if you add anything here, modify QCoreApplication::arguments()
-        if (argv[i] && *argv[i] != '-') {
+        if (!argv[i])
+            continue;
+        if (*argv[i] != '-') {
             argv[j++] = argv[i];
             continue;
         }
-        QByteArray arg = argv[i];
-        if (arg.startsWith("--"))
-            arg.remove(0, 1);
-        QString s;
-        if (arg == "-qdevel" || arg == "-qdebug") {
+        const char *arg = argv[i];
+        if (arg[1] == '-') // startsWith("--")
+            ++arg;
+        if (strcmp(arg, "-qdevel") == 0 || strcmp(arg, "-qdebug") == 0) {
             // obsolete argument
-        } else if (arg.indexOf("-style=", 0) != -1) {
-            s = QString::fromLocal8Bit(arg.right(arg.length() - 7).toLower());
-        } else if (arg == "-style" && i < argc-1) {
-            s = QString::fromLocal8Bit(argv[++i]).toLower();
 #ifndef QT_NO_STYLE_STYLESHEET
-        } else if (arg == "-stylesheet" && i < argc -1) {
+        } else if (strcmp(arg, "-stylesheet") == 0 && i < argc -1) {
             styleSheet = QLatin1String("file:///");
             styleSheet.append(QString::fromLocal8Bit(argv[++i]));
-        } else if (arg.indexOf("-stylesheet=") != -1) {
+        } else if (strncmp(arg, "-stylesheet=", 12) == 0) {
             styleSheet = QLatin1String("file:///");
-            styleSheet.append(QString::fromLocal8Bit(arg.right(arg.length() - 12)));
+            styleSheet.append(QString::fromLocal8Bit(arg + 12));
 #endif
         } else if (qstrcmp(arg, "-widgetcount") == 0) {
             widgetCount = true;
         } else {
             argv[j++] = argv[i];
-        }
-        if (!s.isEmpty()) {
-            if (app_style) {
-                delete app_style;
-                app_style = 0;
-            }
-            styleOverride = s;
         }
     }
 
@@ -557,7 +552,7 @@ void QApplicationPrivate::process_cmdline()
             and will make the application wait until a debugger connects to it.
     \endlist
 
-    \sa arguments()
+    \sa QCoreApplication::arguments()
 */
 
 #ifdef Q_QDOC
@@ -747,15 +742,15 @@ void QApplicationPrivate::initializeWidgetFontHash()
     if (const QFont *font = theme->font(QPlatformTheme::ItemViewFont))
         fontHash->insert(QByteArrayLiteral("QAbstractItemView"), *font);
     if (const QFont *font = theme->font(QPlatformTheme::ListViewFont))
-        fontHash->insert(QByteArrayLiteral("QListViewFont"), *font);
+        fontHash->insert(QByteArrayLiteral("QListView"), *font);
     if (const QFont *font = theme->font(QPlatformTheme::HeaderViewFont))
-        fontHash->insert(QByteArrayLiteral("QHeaderViewFont"), *font);
+        fontHash->insert(QByteArrayLiteral("QHeaderView"), *font);
     if (const QFont *font = theme->font(QPlatformTheme::ListBoxFont))
         fontHash->insert(QByteArrayLiteral("QListBox"), *font);
     if (const QFont *font = theme->font(QPlatformTheme::ComboMenuItemFont))
-        fontHash->insert(QByteArrayLiteral("QComboMenuItemFont"), *font);
+        fontHash->insert(QByteArrayLiteral("QComboMenuItem"), *font);
     if (const QFont *font = theme->font(QPlatformTheme::ComboLineEditFont))
-        fontHash->insert(QByteArrayLiteral("QComboLineEditFont"), *font);
+        fontHash->insert(QByteArrayLiteral("QComboLineEdit"), *font);
     if (const QFont *font = theme->font(QPlatformTheme::SmallFont))
         fontHash->insert(QByteArrayLiteral("QSmallFont"), *font);
     if (const QFont *font = theme->font(QPlatformTheme::MiniFont))
@@ -1905,7 +1900,7 @@ bool QApplicationPrivate::tryCloseAllWidgetWindows(QWindowList *processedWindows
         if (!w->isVisible() || w->data->is_closing)
             break;
         QWindow *window = w->windowHandle();
-        if (!w->close()) // Qt::WA_DeleteOnClose may cause deletion.
+        if (!window->close()) // Qt::WA_DeleteOnClose may cause deletion.
             return false;
         if (window)
             processedWindows->append(window);
@@ -1917,7 +1912,7 @@ bool QApplicationPrivate::tryCloseAllWidgetWindows(QWindowList *processedWindows
         if (w->isVisible() && w->windowType() != Qt::Desktop &&
                 !w->testAttribute(Qt::WA_DontShowOnScreen) && !w->data->is_closing) {
             QWindow *window = w->windowHandle();
-            if (!w->close())  // Qt::WA_DeleteOnClose may cause deletion.
+            if (!window->close())  // Qt::WA_DeleteOnClose may cause deletion.
                 return false;
             if (window)
                 processedWindows->append(window);
@@ -1950,7 +1945,7 @@ bool QApplicationPrivate::tryCloseAllWindows()
     \l quitOnLastWindowClosed to false.
 
     \sa quitOnLastWindowClosed, lastWindowClosed(), QWidget::close(),
-    QWidget::closeEvent(), lastWindowClosed(), quit(), topLevelWidgets(),
+    QWidget::closeEvent(), lastWindowClosed(), QCoreApplication::quit(), topLevelWidgets(),
     QWidget::isWindow()
 */
 void QApplication::closeAllWindows()
@@ -2248,8 +2243,10 @@ void QApplicationPrivate::notifyActiveWindowChange(QWindow *previous)
     QApplication::setActiveWindow(tlw);
     // QTBUG-37126, Active X controls may set the focus on native child widgets.
     if (wnd && tlw && wnd != tlw->windowHandle()) {
-        if (QWidgetWindow *widgetWindow = qobject_cast<QWidgetWindow *>(wnd))
-            widgetWindow->widget()->setFocus(Qt::ActiveWindowFocusReason);
+        if (QWidgetWindow *widgetWindow = qobject_cast<QWidgetWindow *>(wnd)) {
+            if (widgetWindow->widget()->inherits("QAxHostWidget"))
+                widgetWindow->widget()->setFocus(Qt::ActiveWindowFocusReason);
+        }
     }
 }
 
@@ -2968,8 +2965,8 @@ int QApplication::startDragDistance()
     application will have time to exit its event loop and execute code at the
     end of the \c{main()} function, after the QApplication::exec() call.
 
-    \sa quitOnLastWindowClosed, quit(), exit(), processEvents(),
-        QCoreApplication::exec()
+    \sa quitOnLastWindowClosed, QCoreApplication::quit(), QCoreApplication::exit(),
+        QCoreApplication::processEvents(), QCoreApplication::exec()
 */
 int QApplication::exec()
 {
@@ -3249,12 +3246,11 @@ bool QApplication::notify(QObject *receiver, QEvent *e)
 
             QPointer<QWidget> pw = w;
             while (w) {
-                QMouseEvent me(mouse->type(), relpos, mouse->windowPos(), mouse->globalPos(), mouse->button(), mouse->buttons(),
-                               mouse->modifiers());
+                QMouseEvent me(mouse->type(), relpos, mouse->windowPos(), mouse->globalPos(),
+                               mouse->button(), mouse->buttons(), mouse->modifiers(), mouse->source());
                 me.spont = mouse->spontaneous();
                 me.setTimestamp(mouse->timestamp());
                 QGuiApplicationPrivate::setMouseEventFlags(&me, mouse->flags());
-                QGuiApplicationPrivate::setMouseEventSource(&me, mouse->source());
                 // throw away any mouse-tracking-only mouse events
                 if (!w->hasMouseTracking()
                     && mouse->type() == QEvent::MouseMove && mouse->buttons() == 0) {
@@ -3688,7 +3684,9 @@ bool QApplication::notify(QObject *receiver, QEvent *e)
 bool QApplicationPrivate::notify_helper(QObject *receiver, QEvent * e)
 {
     // send to all application event filters
-    if (sendThroughApplicationEventFilters(receiver, e))
+    if (threadRequiresCoreApplication()
+        && receiver->d_func()->threadData->thread == mainThread()
+        && sendThroughApplicationEventFilters(receiver, e))
         return true;
 
     if (receiver->isWidgetType()) {

@@ -40,14 +40,16 @@
 #include <Qt3DCore/qaspectengine.h>
 #include <Qt3DCore/qentity.h>
 #include <Qt3DCore/qcamera.h>
-#include <Qt3DRenderer/qframegraph.h>
-#include <Qt3DRenderer/qrenderaspect.h>
-#include <Qt3DRenderer/qforwardrenderer.h>
+#include <Qt3DRender/qframegraph.h>
+#include <Qt3DRender/qrenderaspect.h>
+#include <Qt3DRender/qforwardrenderer.h>
 #include <QOpenGLContext>
 
 QT_BEGIN_NAMESPACE
 
-namespace Qt3D {
+using namespace Qt3DCore;
+
+namespace Qt3DRender {
 
 QWindowPrivate::QWindowPrivate()
     : ::QWindowPrivate()
@@ -125,13 +127,13 @@ QFrameGraph *QWindow::frameGraph() const
     return d->m_frameGraph;
 }
 
-QCamera *QWindow::defaultCamera()
+Qt3DCore::QCamera *QWindow::defaultCamera()
 {
     Q_D(const QWindow);
     return d->m_defaultCamera;
 }
 
-void QWindow::registerAspect(QAbstractAspect *aspect)
+void QWindow::registerAspect(Qt3DCore::QAbstractAspect *aspect)
 {
     Q_ASSERT(!isVisible());
     Q_D(QWindow);
@@ -145,7 +147,7 @@ void QWindow::registerAspect(const QString &name)
     d->m_engine->registerAspect(name);
 }
 
-void QWindow::setRootEntity(QEntity *root)
+void QWindow::setRootEntity(Qt3DCore::QEntity *root)
 {
     Q_ASSERT(!isVisible());
     Q_D(QWindow);
@@ -171,13 +173,12 @@ void QWindow::show()
     data.insert(QStringLiteral("eventSource"), QVariant::fromValue(this));
     d->m_engine->setData(data);
 
-    d->m_engine->initialize();
     d->m_root->addComponent(d->m_frameGraph);
     d->m_engine->setRootEntity(d->m_root);
 
     ::QWindow::show();
 }
 
-} // Qt3D
+} // namespace Qt3DRender
 
 QT_END_NAMESPACE

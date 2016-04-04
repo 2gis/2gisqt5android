@@ -78,6 +78,10 @@ private:
     QScopedPointer<QWinJumpListItemPrivate> d_ptr;
 };
 
+#ifndef QT_NO_DEBUG_STREAM
+Q_WINEXTRAS_EXPORT QDebug operator<<(QDebug, const QWinJumpListItem *);
+#endif
+
 QT_END_NAMESPACE
 
 #endif // QWINJUMPLISTITEM_H

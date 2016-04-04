@@ -39,7 +39,7 @@
 #include "qdeclarativepositionsource_p.h"
 #include "qdeclarativeposition_p.h"
 
-#include "qdeclarativegeocoordinateanimation_p.h"
+#include "qquickgeocoordinateanimation_p.h"
 #include "locationsingleton.h"
 
 #include <QtCore/QVariantAnimation>
@@ -517,7 +517,7 @@ public:
             qRegisterMetaType<QGeoShape>();
             QMetaType::registerEqualsComparator<QGeoShape>();
 
-            qRegisterAnimationInterpolator<QGeoCoordinate>(geoCoordinateInterpolator);
+            qRegisterAnimationInterpolator<QGeoCoordinate>(q_coordinateInterpolator);
 
             // Register the 5.0 types
             // 5.0 is silent and not advertised
@@ -531,7 +531,7 @@ public:
             // Register the 5.3 types
             // Introduction of 5.3 version; existing 5.0 exports become automatically available under 5.3
             minor = 3;
-            qmlRegisterType<QDeclarativeGeoCoordinateAnimation  >(uri, major, minor, "CoordinateAnimation");
+            qmlRegisterType<QQuickGeoCoordinateAnimation  >(uri, major, minor, "CoordinateAnimation");
             qmlRegisterType<QDeclarativePosition, 1             >(uri, major, minor, "Position");
 
             // Register the 5.4 types
@@ -539,7 +539,7 @@ public:
             minor = 4;
             qmlRegisterType<QDeclarativePosition, 2>(uri, major, minor, "Position");
 
-            minor = 5;
+            minor = 6;
             qmlRegisterType<QDeclarativePosition, 2>(uri, major, minor, "Position");
         } else {
             qDebug() << "Unsupported URI given to load positioning QML plugin: " << QLatin1String(uri);

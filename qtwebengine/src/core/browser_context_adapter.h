@@ -40,10 +40,15 @@
 #include "qtwebenginecoreglobal.h"
 
 #include <QList>
+#include <QPointer>
 #include <QScopedPointer>
 #include <QSharedData>
 #include <QString>
 #include <QVector>
+
+#include "api/qwebenginecookiestore.h"
+#include "api/qwebengineurlrequestinterceptor.h"
+#include "api/qwebengineurlschemehandler.h"
 
 QT_FORWARD_DECLARE_CLASS(QObject)
 
@@ -51,7 +56,6 @@ namespace QtWebEngineCore {
 
 class BrowserContextAdapterClient;
 class BrowserContextQt;
-class CustomUrlSchemeHandler;
 class DownloadManagerDelegateQt;
 class UserScriptControllerHost;
 class WebEngineVisitedLinksManager;
@@ -68,6 +72,11 @@ public:
 
     WebEngineVisitedLinksManager *visitedLinksManager();
     DownloadManagerDelegateQt *downloadManagerDelegate();
+
+    QWebEngineCookieStore *cookieStore();
+
+    QWebEngineUrlRequestInterceptor* requestInterceptor();
+    void setRequestInterceptor(QWebEngineUrlRequestInterceptor *interceptor);
 
     QList<BrowserContextAdapterClient*> clients() { return m_clients; }
     void addClient(BrowserContextAdapterClient *adapterClient);
@@ -113,6 +122,13 @@ public:
         TrackVisitedLinksOnDisk,
     };
 
+    enum PermissionType {
+        UnsupportedPermission = 0,
+        GeolocationPermission = 1,
+// Reserved:
+//        NotificationPermission = 2,
+    };
+
     HttpCacheType httpCacheType() const;
     void setHttpCacheType(BrowserContextAdapter::HttpCacheType);
 
@@ -128,9 +144,18 @@ public:
     bool trackVisitedLinks() const;
     bool persistVisitedLinks() const;
 
-    QVector<CustomUrlSchemeHandler*> &customUrlSchemeHandlers();
+    QHash<QByteArray, QWebEngineUrlSchemeHandler *> &customUrlSchemeHandlers();
     void updateCustomUrlSchemeHandlers();
+    void addCustomUrlSchemeHandler(const QByteArray &, QWebEngineUrlSchemeHandler *);
+    bool removeCustomUrlSchemeHandler(QWebEngineUrlSchemeHandler *);
+    QWebEngineUrlSchemeHandler *takeCustomUrlSchemeHandler(const QByteArray &);
     UserScriptControllerHost *userScriptController();
+
+    void permissionRequestReply(const QUrl &origin, PermissionType type, bool reply);
+
+    QString httpAcceptLanguageWithoutQualities() const;
+    QString httpAcceptLanguage() const;
+    void setHttpAcceptLanguage(const QString &httpAcceptLanguage);
 
 private:
     QString m_name;
@@ -139,14 +164,17 @@ private:
     QScopedPointer<WebEngineVisitedLinksManager> m_visitedLinksManager;
     QScopedPointer<DownloadManagerDelegateQt> m_downloadManagerDelegate;
     QScopedPointer<UserScriptControllerHost> m_userScriptController;
+    QScopedPointer<QWebEngineCookieStore> m_cookieStore;
+    QPointer<QWebEngineUrlRequestInterceptor> m_requestInterceptor;
 
     QString m_dataPath;
     QString m_cachePath;
     QString m_httpUserAgent;
     HttpCacheType m_httpCacheType;
+    QString m_httpAcceptLanguage;
     PersistentCookiesPolicy m_persistentCookiesPolicy;
     VisitedLinksPolicy m_visitedLinksPolicy;
-    QVector<CustomUrlSchemeHandler*> m_customUrlSchemeHandlers;
+    QHash<QByteArray, QWebEngineUrlSchemeHandler *> m_customUrlSchemeHandlers;
     QList<BrowserContextAdapterClient*> m_clients;
     int m_httpCacheMaxSize;
 

@@ -34,6 +34,17 @@
 #ifndef QQUICKTEXTINPUT_P_H
 #define QQUICKTEXTINPUT_P_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include "qquickimplicitsizeitem_p.h"
 #include <QtGui/qtextoption.h>
 #include <QtGui/qvalidator.h>
@@ -45,13 +56,6 @@ class QValidator;
 class Q_QUICK_PRIVATE_EXPORT QQuickTextInput : public QQuickImplicitSizeItem
 {
     Q_OBJECT
-    Q_ENUMS(HAlignment)
-    Q_ENUMS(VAlignment)
-    Q_ENUMS(WrapMode)
-    Q_ENUMS(EchoMode)
-    Q_ENUMS(SelectionMode)
-    Q_ENUMS(CursorPosition)
-    Q_ENUMS(RenderType)
 
     Q_PROPERTY(QString text READ text WRITE setText NOTIFY textChanged)
     Q_PROPERTY(int length READ length NOTIFY textChanged)
@@ -96,6 +100,12 @@ class Q_QUICK_PRIVATE_EXPORT QQuickTextInput : public QQuickImplicitSizeItem
     Q_PROPERTY(qreal contentHeight READ contentHeight NOTIFY contentSizeChanged)
     Q_PROPERTY(RenderType renderType READ renderType WRITE setRenderType NOTIFY renderTypeChanged)
 
+    Q_PROPERTY(qreal padding READ padding WRITE setPadding RESET resetPadding NOTIFY paddingChanged REVISION 6)
+    Q_PROPERTY(qreal topPadding READ topPadding WRITE setTopPadding RESET resetTopPadding NOTIFY topPaddingChanged REVISION 6)
+    Q_PROPERTY(qreal leftPadding READ leftPadding WRITE setLeftPadding RESET resetLeftPadding NOTIFY leftPaddingChanged REVISION 6)
+    Q_PROPERTY(qreal rightPadding READ rightPadding WRITE setRightPadding RESET resetRightPadding NOTIFY rightPaddingChanged REVISION 6)
+    Q_PROPERTY(qreal bottomPadding READ bottomPadding WRITE setBottomPadding RESET resetBottomPadding NOTIFY bottomPaddingChanged REVISION 6)
+
 public:
     QQuickTextInput(QQuickItem * parent=0);
     ~QQuickTextInput();
@@ -108,18 +118,21 @@ public:
         Password,
         PasswordEchoOnEdit
     };
+    Q_ENUM(EchoMode)
 
     enum HAlignment {
         AlignLeft = Qt::AlignLeft,
         AlignRight = Qt::AlignRight,
         AlignHCenter = Qt::AlignHCenter
     };
+    Q_ENUM(HAlignment)
 
     enum VAlignment {
         AlignTop = Qt::AlignTop,
         AlignBottom = Qt::AlignBottom,
         AlignVCenter = Qt::AlignVCenter
     };
+    Q_ENUM(VAlignment)
 
     enum WrapMode {
         NoWrap = QTextOption::NoWrap,
@@ -128,20 +141,24 @@ public:
         WrapAtWordBoundaryOrAnywhere = QTextOption::WrapAtWordBoundaryOrAnywhere, // COMPAT
         Wrap = QTextOption::WrapAtWordBoundaryOrAnywhere
     };
+    Q_ENUM(WrapMode)
 
     enum SelectionMode {
         SelectCharacters,
         SelectWords
     };
+    Q_ENUM(SelectionMode)
 
     enum CursorPosition {
         CursorBetweenCharacters,
         CursorOnCharacter
     };
+    Q_ENUM(CursorPosition)
 
     enum RenderType { QtRendering,
                       NativeRendering
                     };
+    Q_ENUM(RenderType)
 
     //Auxilliary functions needed to control the TextInput from QML
     Q_INVOKABLE void positionAt(QQmlV4Function *args) const;
@@ -260,6 +277,26 @@ public:
     qreal contentWidth() const;
     qreal contentHeight() const;
 
+    qreal padding() const;
+    void setPadding(qreal padding);
+    void resetPadding();
+
+    qreal topPadding() const;
+    void setTopPadding(qreal padding);
+    void resetTopPadding();
+
+    qreal leftPadding() const;
+    void setLeftPadding(qreal padding);
+    void resetLeftPadding();
+
+    qreal rightPadding() const;
+    void setRightPadding(qreal padding);
+    void resetRightPadding();
+
+    qreal bottomPadding() const;
+    void setBottomPadding(qreal padding);
+    void resetBottomPadding();
+
 Q_SIGNALS:
     void textChanged();
     void cursorPositionChanged();
@@ -300,12 +337,19 @@ Q_SIGNALS:
     void contentSizeChanged();
     void inputMethodHintsChanged();
     void renderTypeChanged();
+    Q_REVISION(6) void paddingChanged();
+    Q_REVISION(6) void topPaddingChanged();
+    Q_REVISION(6) void leftPaddingChanged();
+    Q_REVISION(6) void rightPaddingChanged();
+    Q_REVISION(6) void bottomPaddingChanged();
 
 private:
     void invalidateFontCaches();
     void ensureActiveFocus();
 
 protected:
+    QQuickTextInput(QQuickTextInputPrivate &dd, QQuickItem *parent = 0);
+
     void geometryChanged(const QRectF &newGeometry,
                                  const QRectF &oldGeometry) Q_DECL_OVERRIDE;
 
@@ -360,46 +404,8 @@ private:
     Q_DECLARE_PRIVATE(QQuickTextInput)
 };
 
-#ifndef QT_NO_VALIDATOR
-class Q_AUTOTEST_EXPORT QQuickIntValidator : public QIntValidator
-{
-    Q_OBJECT
-    Q_PROPERTY(QString locale READ localeName WRITE setLocaleName RESET resetLocaleName NOTIFY localeNameChanged)
-public:
-    QQuickIntValidator(QObject *parent = 0);
-
-    QString localeName() const;
-    void setLocaleName(const QString &name);
-    void resetLocaleName();
-
-Q_SIGNALS:
-    void localeNameChanged();
-};
-
-class Q_AUTOTEST_EXPORT QQuickDoubleValidator : public QDoubleValidator
-{
-    Q_OBJECT
-    Q_PROPERTY(QString locale READ localeName WRITE setLocaleName RESET resetLocaleName NOTIFY localeNameChanged)
-public:
-    QQuickDoubleValidator(QObject *parent = 0);
-
-    QString localeName() const;
-    void setLocaleName(const QString &name);
-    void resetLocaleName();
-
-Q_SIGNALS:
-    void localeNameChanged();
-};
-#endif
-
 QT_END_NAMESPACE
 
 QML_DECLARE_TYPE(QQuickTextInput)
-#ifndef QT_NO_VALIDATOR
-QML_DECLARE_TYPE(QValidator)
-QML_DECLARE_TYPE(QQuickIntValidator)
-QML_DECLARE_TYPE(QQuickDoubleValidator)
-QML_DECLARE_TYPE(QRegExpValidator)
-#endif
 
 #endif // QQUICKTEXTINPUT_P_H

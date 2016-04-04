@@ -1,6 +1,7 @@
 /****************************************************************************
 **
 ** Copyright (C) 2015 The Qt Company Ltd.
+** Copyright (C) 2015 BasysKom GmbH.
 ** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtQml module of the Qt Toolkit.
@@ -63,7 +64,7 @@
 #include <private/qv8engine_p.h>
 #include <private/qflagpointer_p.h>
 
-#include <private/qv4value_inl_p.h>
+#include <private/qv4value_p.h>
 
 QT_BEGIN_NAMESPACE
 
@@ -71,13 +72,11 @@ QT_BEGIN_NAMESPACE
 
 struct QQmlVMEMetaData
 {
-    short varPropertyCount;
     short propertyCount;
     short aliasCount;
     short signalCount;
     short methodCount;
-    short dummyForAlignment; // Add padding to ensure that the following
-                             // AliasData/PropertyData/MethodData is int aligned.
+    // Make sure this structure is always aligned to int
 
     struct AliasData {
         int contextIdx;
@@ -108,6 +107,10 @@ struct QQmlVMEMetaData
         }
     };
 
+    enum {
+        VarPropertyType = -1
+    };
+
     struct PropertyData {
         int propertyType;
     };
@@ -135,29 +138,67 @@ class QQmlVMEMetaObject;
 class QQmlVMEVariantQObjectPtr : public QQmlGuard<QObject>
 {
 public:
-    inline QQmlVMEVariantQObjectPtr(bool isVar);
+    inline QQmlVMEVariantQObjectPtr();
     inline ~QQmlVMEVariantQObjectPtr();
 
     inline void objectDestroyed(QObject *);
     inline void setGuardedValue(QObject *obj, QQmlVMEMetaObject *target, int index);
 
     QQmlVMEMetaObject *m_target;
-    unsigned m_isVar : 1;
-    int m_index : 31;
+    int m_index;
 };
+
+
+class Q_QML_PRIVATE_EXPORT QQmlInterceptorMetaObject : public QAbstractDynamicMetaObject
+{
+public:
+    QQmlInterceptorMetaObject(QObject *obj, QQmlPropertyCache *cache);
+    ~QQmlInterceptorMetaObject();
+
+    void registerInterceptor(int index, int valueIndex, QQmlPropertyValueInterceptor *interceptor);
+
+    static QQmlInterceptorMetaObject *get(QObject *obj);
+
+    virtual QAbstractDynamicMetaObject *toDynamicMetaObject(QObject *o);
+
+    // Used by auto-tests for inspection
+    QQmlPropertyCache *propertyCache() const { return cache; }
+
+protected:
+    virtual int metaCall(QObject *o, QMetaObject::Call c, int id, void **a);
+    bool intercept(QMetaObject::Call c, int id, void **a);
+
+public:
+    QObject *object;
+    QQmlPropertyCache *cache;
+    QBiPointer<QDynamicMetaObjectData, const QMetaObject> parent;
+
+    QQmlPropertyValueInterceptor *interceptors;
+    bool hasAssignedMetaObjectData;
+};
+
+inline QQmlInterceptorMetaObject *QQmlInterceptorMetaObject::get(QObject *obj)
+{
+    if (obj) {
+        if (QQmlData *data = QQmlData::get(obj)) {
+            if (data->hasInterceptorMetaObject)
+                return static_cast<QQmlInterceptorMetaObject *>(QObjectPrivate::get(obj)->metaObject);
+        }
+    }
+
+    return 0;
+}
 
 class QQmlVMEVariant;
 class QQmlRefCount;
 class QQmlVMEMetaObjectEndpoint;
-class Q_QML_PRIVATE_EXPORT QQmlVMEMetaObject : public QAbstractDynamicMetaObject
+class Q_QML_PRIVATE_EXPORT QQmlVMEMetaObject : public QQmlInterceptorMetaObject
 {
 public:
-    QQmlVMEMetaObject(QObject *obj, QQmlPropertyCache *cache, const QQmlVMEMetaData *data,
-                      QV4::ExecutionContext *qmlBindingContext = 0, QQmlCompiledData *compiledData = 0);
+    QQmlVMEMetaObject(QObject *obj, QQmlPropertyCache *cache, const QQmlVMEMetaData *data);
     ~QQmlVMEMetaObject();
 
     bool aliasTarget(int index, QObject **target, int *coreIndex, int *valueTypeIndex) const;
-    void registerInterceptor(int index, int valueIndex, QQmlPropertyValueInterceptor *interceptor);
     QV4::ReturnedValue vmeMethod(int index);
     quint16 vmeMethodLineNumber(int index);
     void setVmeMethod(int index, const QV4::Value &function);
@@ -166,27 +207,20 @@ public:
 
     void connectAliasSignal(int index, bool indexInSignalRange);
 
-    virtual QAbstractDynamicMetaObject *toDynamicMetaObject(QObject *o);
-
-    // Used by auto-tests for inspection
-    QQmlPropertyCache *propertyCache() const { return cache; }
-
     static inline QQmlVMEMetaObject *get(QObject *o);
     static QQmlVMEMetaObject *getForProperty(QObject *o, int coreIndex);
     static QQmlVMEMetaObject *getForMethod(QObject *o, int coreIndex);
     static QQmlVMEMetaObject *getForSignal(QObject *o, int coreIndex);
 
 protected:
-    virtual int metaCall(QMetaObject::Call _c, int _id, void **_a);
+    virtual int metaCall(QObject *o, QMetaObject::Call _c, int _id, void **_a);
 
 public:
     friend class QQmlVMEMetaObjectEndpoint;
     friend class QQmlVMEVariantQObjectPtr;
     friend class QQmlPropertyCache;
 
-    QObject *object;
     QQmlGuardedContextData ctxt;
-    QQmlPropertyCache *cache;
 
     const QQmlVMEMetaData *metaData;
     inline int propOffset() const;
@@ -194,26 +228,44 @@ public:
     inline int signalOffset() const;
     inline int signalCount() const;
 
-    bool hasAssignedMetaObjectData;
-    QQmlVMEVariant *data;
     QQmlVMEMetaObjectEndpoint *aliasEndpoints;
 
-    QV4::WeakValue varProperties;
-    int firstVarPropertyIndex;
-    bool varPropertiesInitialized;
-    inline void allocateVarPropertiesArray();
-    inline bool ensureVarPropertiesAllocated();
+    QV4::WeakValue properties;
+    inline void allocateProperties();
+    QV4::MemberData *propertiesAsMemberData();
+
+    int readPropertyAsInt(int id);
+    bool readPropertyAsBool(int id);
+    double readPropertyAsDouble(int id);
+    QString readPropertyAsString(int id);
+    QSizeF readPropertyAsSizeF(int id);
+    QPointF readPropertyAsPointF(int id);
+    QUrl readPropertyAsUrl(int id);
+    QDate readPropertyAsDate(int id);
+    QDateTime readPropertyAsDateTime(int id);
+    QRectF readPropertyAsRectF(int id);
+    QObject *readPropertyAsQObject(int id);
+    QList<QObject *> *readPropertyAsList(int id);
+
+    void writeProperty(int id, int v);
+    void writeProperty(int id, bool v);
+    void writeProperty(int id, double v);
+    void writeProperty(int id, const QString& v);
+    void writeProperty(int id, const QPointF& v);
+    void writeProperty(int id, const QSizeF& v);
+    void writeProperty(int id, const QUrl& v);
+    void writeProperty(int id, const QDate& v);
+    void writeProperty(int id, const QDateTime& v);
+    void writeProperty(int id, const QRectF& v);
+    void writeProperty(int id, QObject *v);
 
     void ensureQObjectWrapper();
 
     void mark(QV4::ExecutionEngine *e);
 
     void connectAlias(int aliasId);
-    QBitArray aConnected;
 
-    QQmlPropertyValueInterceptor *interceptors;
-
-    QV4::PersistentValue *v8methods;
+    QV4::PersistentValue *methods;
     QV4::ReturnedValue method(int);
 
     QV4::ReturnedValue readVarProperty(int);
@@ -221,19 +273,9 @@ public:
     QVariant readPropertyAsVariant(int);
     void writeProperty(int, const QVariant &);
 
-    QBiPointer<QDynamicMetaObjectData, const QMetaObject> parent;
-
     inline QQmlVMEMetaObject *parentVMEMetaObject() const;
 
     void listChanged(int);
-    class List : public QList<QObject*>
-    {
-    public:
-        List(int lpi, QQmlVMEMetaObject *mo) : notifyIndex(lpi), mo(mo) {}
-        int notifyIndex;
-        QQmlVMEMetaObject *mo;
-    };
-    QList<List> listProperties;
 
     static void list_append(QQmlListProperty<QObject> *, QObject *);
     static int list_count(QQmlListProperty<QObject> *);
@@ -245,8 +287,6 @@ public:
     QList<QQmlVMEVariantQObjectPtr *> varObjectGuards;
 
     QQmlVMEVariantQObjectPtr *getQObjectGuardForProperty(int) const;
-
-    friend class QV8GCCallback;
 };
 
 QQmlVMEMetaObject *QQmlVMEMetaObject::get(QObject *obj)

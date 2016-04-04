@@ -34,6 +34,17 @@
 #ifndef QV4GLOBAL_H
 #define QV4GLOBAL_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #if defined(QT_BUILD_QMLDEVTOOLS_LIB) || defined(QT_QMLDEVTOOLS_LIB)
 #define V4_BOOTSTRAP
 #endif
@@ -88,6 +99,8 @@ inline double trunc(double d) { return d > 0 ? floor(d) : ceil(d); }
 #define V4_ENABLE_JIT
 #endif
 
+#elif defined(Q_PROCESSOR_MIPS_32) && defined(Q_OS_LINUX)
+#define V4_ENABLE_JIT
 #endif
 
 // Black list some platforms
@@ -168,7 +181,7 @@ struct Property;
 struct Value;
 struct Lookup;
 struct ArrayData;
-struct ManagedVTable;
+struct VTable;
 
 struct BooleanObject;
 struct NumberObject;
@@ -211,7 +224,6 @@ class WeakValue;
 struct IdentifierTable;
 class RegExpCache;
 class MultiplyWrappedQObjectMap;
-struct QmlExtensions;
 
 namespace Global {
     enum {
@@ -277,8 +289,6 @@ struct PropertyAttributes
             setConfigurable(!(f & Attr_NotConfigurable));
         }
     }
-    PropertyAttributes(const PropertyAttributes &other) : m_all(other.m_all) {}
-    PropertyAttributes & operator=(const PropertyAttributes &other) { m_all = other.m_all; return *this; }
 
     void setType(Type t) { m_type = t; type_set = true; }
     Type type() const { return type_set ? (Type)m_type : Generic; }

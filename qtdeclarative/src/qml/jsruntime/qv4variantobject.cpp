@@ -43,12 +43,15 @@ using namespace QV4;
 
 DEFINE_OBJECT_VTABLE(VariantObject);
 
-Heap::VariantObject::VariantObject(QV4::ExecutionEngine *engine, const QVariant &value)
-    : Heap::Object(engine->emptyClass, engine->variantPrototype.asObject())
+Heap::VariantObject::VariantObject()
+{
+}
+
+Heap::VariantObject::VariantObject(const QVariant &value)
 {
     data = value;
     if (isScarce())
-        engine->scarceResources.insert(this);
+        internalClass->engine->scarceResources.insert(this);
 }
 
 bool VariantObject::Data::isScarce() const
@@ -96,8 +99,8 @@ void VariantPrototype::init()
 {
     defineDefaultProperty(QStringLiteral("preserve"), method_preserve, 0);
     defineDefaultProperty(QStringLiteral("destroy"), method_destroy, 0);
-    defineDefaultProperty(engine()->id_valueOf, method_valueOf, 0);
-    defineDefaultProperty(engine()->id_toString, method_toString, 0);
+    defineDefaultProperty(engine()->id_valueOf(), method_valueOf, 0);
+    defineDefaultProperty(engine()->id_toString(), method_toString, 0);
 }
 
 QV4::ReturnedValue VariantPrototype::method_preserve(CallContext *ctx)
@@ -129,7 +132,7 @@ QV4::ReturnedValue VariantPrototype::method_toString(CallContext *ctx)
         return Encode::undefined();
     QString result = o->d()->data.toString();
     if (result.isEmpty() && !o->d()->data.canConvert(QVariant::String))
-        result = QString::fromLatin1("QVariant(%0)").arg(QString::fromLatin1(o->d()->data.typeName()));
+        result = QStringLiteral("QVariant(%0)").arg(QString::fromLatin1(o->d()->data.typeName()));
     return Encode(ctx->d()->engine->newString(result));
 }
 

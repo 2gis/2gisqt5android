@@ -37,6 +37,9 @@
 #include <QtTest/qtest.h>
 #include <QtCore/qbytearray.h>
 #include <QtCore/qfile.h>
+#include <QtCore/qset.h>
+#include <QtCore/qcoreapplication.h>
+#include <QtCore/qvariant.h>
 #include <QtCore/QSysInfo>
 
 #include <set>
@@ -61,83 +64,89 @@ QT_BEGIN_NAMESPACE
  The known keys are listed below:
 */
 
-// this table can be extended with new keywords as required
-const char *matchedConditions[] =
+static QSet<QByteArray> keywords()
 {
-    "*",
+    // this list can be extended with new keywords as required
+   QSet<QByteArray> set = QSet<QByteArray>()
+             << "*"
 #ifdef Q_OS_LINUX
-    "linux",
+            << "linux"
 #endif
 #ifdef Q_OS_OSX
-    "osx",
+            << "osx"
 #endif
 #ifdef Q_OS_WIN
-    "windows",
+            << "windows"
 #endif
 #ifdef Q_OS_IOS
-    "ios",
+            << "ios"
 #endif
 #ifdef Q_OS_ANDROID
-    "android",
+            << "android"
 #endif
 #ifdef Q_OS_QNX
-    "qnx",
+            << "qnx"
 #endif
 #ifdef Q_OS_WINRT
-    "winrt",
+            << "winrt"
 #endif
 #ifdef Q_OS_WINCE
-    "wince",
+            << "wince"
 #endif
 
 #if QT_POINTER_SIZE == 8
-    "64bit",
+            << "64bit"
 #else
-    "32bit",
+            << "32bit"
 #endif
 
 #ifdef Q_CC_GNU
-    "gcc",
+            << "gcc"
 #endif
 #ifdef Q_CC_CLANG
-    "clang",
+            << "clang"
 #endif
 #ifdef Q_CC_MSVC
-    "msvc",
+            << "msvc"
     #ifdef _MSC_VER
-        #if _MSC_VER == 1800
-            "msvc-2013",
+        #if _MSC_VER == 1900
+            << "msvc-2015"
+        #elif _MSC_VER == 1800
+            << "msvc-2013"
         #elif _MSC_VER == 1700
-            "msvc-2012",
+            << "msvc-2012"
         #elif _MSC_VER == 1600
-            "msvc-2010",
+            << "msvc-2010"
         #endif
     #endif
 #endif
 
 #ifdef Q_AUTOTEST_EXPORT
-    "developer-build",
+            << "developer-build"
 #endif
-    0
-};
+            ;
 
+            QCoreApplication *app = QCoreApplication::instance();
+            if (app) {
+                const QVariant platformName = app->property("platformName");
+                if (platformName.isValid())
+                    set << platformName.toByteArray();
+            }
+
+            return set;
+}
 
 static bool checkCondition(const QByteArray &condition)
 {
+    static QSet<QByteArray> matchedConditions = keywords();
     QList<QByteArray> conds = condition.split(' ');
-    std::set<QByteArray> matches;
-    const char **m = matchedConditions;
-    while (*m) {
-        matches.insert(*m);
-        ++m;
-    }
 
     QByteArray distributionName = QSysInfo::productType().toLower().toUtf8();
     QByteArray distributionRelease = QSysInfo::productVersion().toLower().toUtf8();
     if (!distributionName.isEmpty()) {
-        if (matches.find(distributionName) == matches.end())
-            matches.insert(distributionName);
-        matches.insert(distributionName + "-" + distributionRelease);
+        if (matchedConditions.find(distributionName) == matchedConditions.end())
+            matchedConditions.insert(distributionName);
+        matchedConditions.insert(distributionName + "-" + distributionRelease);
     }
 
     for (int i = 0; i < conds.size(); ++i) {
@@ -146,7 +155,7 @@ static bool checkCondition(const QByteArray &condition)
         if (result)
             c = c.mid(1);
 
-        result ^= (matches.find(c) != matches.end());
+        result ^= matchedConditions.contains(c);
         if (!result)
             return false;
     }
@@ -158,6 +167,19 @@ static std::set<QByteArray> *ignoredTests = 0;
 static std::set<QByteArray> *gpuFeatures = 0;
 
 Q_TESTLIB_EXPORT std::set<QByteArray> *(*qgpu_features_ptr)(const QString &) = 0;
+
+static bool isGPUTestBlacklisted(const char *slot, const char *data = 0)
+{
+    const QByteArray disableKey = QByteArrayLiteral("disable_") + QByteArray(slot);
+    if (gpuFeatures->find(disableKey) != gpuFeatures->end()) {
+        QByteArray msg = QByteArrayLiteral("Skipped due to GPU blacklist: ") + disableKey;
+        if (data)
+            msg += ':' + QByteArray(data);
+        QTest::qSkip(msg.constData(), __FILE__, __LINE__);
+        return true;
+    }
+    return false;
+}
 
 namespace QTestPrivate {
 
@@ -223,10 +245,12 @@ void checkBlackLists(const char *slot, const char *data)
     // Tests blacklisted in GPU_BLACKLIST are to be skipped. Just ignoring the result is
     // not sufficient since these are expected to crash or behave in undefined ways.
     if (!ignore && gpuFeatures) {
-        const QByteArray disableKey = QByteArrayLiteral("disable_") + QByteArray(slot);
-        if (gpuFeatures->find(disableKey) != gpuFeatures->end()) {
-            const QByteArray msg = QByteArrayLiteral("Skipped due to GPU blacklist: ") + disableKey;
-            QTest::qSkip(msg.constData(), __FILE__, __LINE__);
+        QByteArray s_gpu = slot;
+        ignore = isGPUTestBlacklisted(s_gpu, data);
+        if (!ignore && data) {
+            s_gpu += ':';
+            s_gpu += data;
+            isGPUTestBlacklisted(s_gpu);
         }
     }
 }

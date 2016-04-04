@@ -78,6 +78,7 @@ QT_BEGIN_NAMESPACE
 class QNetworkReply;
 class QQuickItemKeyFilter;
 class QQuickLayoutMirroringAttached;
+class QQuickEnterKeyAttached;
 class QQuickScreenAttached;
 
 class QQuickContents : public QQuickItemChangeListener
@@ -142,6 +143,7 @@ class QQuickItemLayer : public QObject, public QQuickItemChangeListener
     Q_PROPERTY(QQuickShaderEffectSource::Format format READ format WRITE setFormat NOTIFY formatChanged)
     Q_PROPERTY(QByteArray samplerName READ name WRITE setName NOTIFY nameChanged)
     Q_PROPERTY(QQmlComponent *effect READ effect WRITE setEffect NOTIFY effectChanged)
+    Q_PROPERTY(QQuickShaderEffectSource::TextureMirroring textureMirroring READ textureMirroring WRITE setTextureMirroring NOTIFY textureMirroringChanged)
 public:
     QQuickItemLayer(QQuickItem *item);
     ~QQuickItemLayer();
@@ -176,6 +178,9 @@ public:
     QQmlComponent *effect() const { return m_effectComponent; }
     void setEffect(QQmlComponent *effect);
 
+    QQuickShaderEffectSource::TextureMirroring textureMirroring() const { return m_textureMirroring; }
+    void setTextureMirroring(QQuickShaderEffectSource::TextureMirroring mirroring);
+
     QQuickShaderEffectSource *effectSource() const { return m_effectSource; }
 
     void itemGeometryChanged(QQuickItem *, const QRectF &, const QRectF &) Q_DECL_OVERRIDE;
@@ -199,6 +204,7 @@ Q_SIGNALS:
     void smoothChanged(bool smooth);
     void formatChanged(QQuickShaderEffectSource::Format format);
     void sourceRectChanged(const QRectF &sourceRect);
+    void textureMirroringChanged(QQuickShaderEffectSource::TextureMirroring mirroring);
 
 private:
     friend class QQuickTransformAnimatorJob;
@@ -222,6 +228,7 @@ private:
     QQmlComponent *m_effectComponent;
     QQuickItem *m_effect;
     QQuickShaderEffectSource *m_effectSource;
+    QQuickShaderEffectSource::TextureMirroring m_textureMirroring;
 };
 
 class Q_QUICK_PRIVATE_EXPORT QQuickItemPrivate : public QObjectPrivate
@@ -338,6 +345,7 @@ public:
         QQuickContents *contents;
         QQuickScreenAttached *screenAttached;
         QQuickLayoutMirroringAttached* layoutDirectionAttached;
+        QQuickEnterKeyAttached *enterKeyAttached;
         QQuickItemKeyFilter *keyHandler;
         mutable QQuickItemLayer *layer;
 #ifndef QT_NO_CURSOR
@@ -419,6 +427,13 @@ public:
     bool activeFocusOnTab:1;
     bool implicitAntialiasing:1;
     bool antialiasingValid:1;
+    // isTabFence: When true, the item acts as a fence within the tab focus chain.
+    // This means that the item and its children will be skipped from the tab focus
+    // chain when navigating from its parent or any of its siblings. Similarly,
+    // when any of the item's descendants gets focus, the item constrains the tab
+    // focus chain and prevents tabbing outside.
+    bool isTabFence:1;
+    bool replayingPressEvent:1;
 
     enum DirtyType {
         TransformOrigin         = 0x00000001,
@@ -490,6 +505,8 @@ public:
     void itemToParentTransform(QTransform &) const;
 
     static bool focusNextPrev(QQuickItem *item, bool forward);
+    static QQuickItem *nextTabChildItem(const QQuickItem *item, int start);
+    static QQuickItem *prevTabChildItem(const QQuickItem *item, int start);
     static QQuickItem *nextPrevItemInTabFocusChain(QQuickItem *item, bool forward);
 
     static bool canAcceptTabFocus(QQuickItem *item);
@@ -516,6 +533,10 @@ public:
     virtual qreal getImplicitHeight() const;
     virtual void implicitWidthChanged();
     virtual void implicitHeightChanged();
+
+#ifndef QT_NO_ACCESSIBILITY
+    virtual QAccessible::Role accessibleRole() const;
+#endif
 
     void setImplicitAntialiasing(bool antialiasing);
 
@@ -645,8 +666,6 @@ class Q_QUICK_PRIVATE_EXPORT QQuickKeyNavigationAttached : public QObject, publi
     Q_PROPERTY(QQuickItem *backtab READ backtab WRITE setBacktab NOTIFY backtabChanged)
     Q_PROPERTY(Priority priority READ priority WRITE setPriority NOTIFY priorityChanged)
 
-    Q_ENUMS(Priority)
-
 public:
     QQuickKeyNavigationAttached(QObject * = 0);
 
@@ -664,6 +683,7 @@ public:
     void setBacktab(QQuickItem *);
 
     enum Priority { BeforeItem, AfterItem };
+    Q_ENUM(Priority)
     Priority priority() const;
     void setPriority(Priority);
 
@@ -710,6 +730,27 @@ private:
     QQuickItemPrivate *itemPrivate;
 };
 
+class QQuickEnterKeyAttached : public QObject
+{
+    Q_OBJECT
+    Q_PROPERTY(Qt::EnterKeyType type READ type WRITE setType NOTIFY typeChanged)
+
+public:
+    explicit QQuickEnterKeyAttached(QObject *parent = Q_NULLPTR);
+
+    Qt::EnterKeyType type() const;
+    void setType(Qt::EnterKeyType type);
+
+    static QQuickEnterKeyAttached *qmlAttachedProperties(QObject *);
+Q_SIGNALS:
+    void typeChanged();
+private:
+    friend class QQuickItemPrivate;
+    QQuickItemPrivate *itemPrivate;
+
+    Qt::EnterKeyType keyType;
+};
+
 class QQuickKeysAttachedPrivate : public QObjectPrivate
 {
 public:
@@ -739,8 +780,6 @@ class QQuickKeysAttached : public QObject, public QQuickItemKeyFilter
     Q_PROPERTY(QQmlListProperty<QQuickItem> forwardTo READ forwardTo)
     Q_PROPERTY(Priority priority READ priority WRITE setPriority NOTIFY priorityChanged)
 
-    Q_ENUMS(Priority)
-
 public:
     QQuickKeysAttached(QObject *parent=0);
     ~QQuickKeysAttached();
@@ -755,6 +794,7 @@ public:
     }
 
     enum Priority { BeforeItem, AfterItem};
+    Q_ENUM(Priority)
     Priority priority() const;
     void setPriority(Priority);
 
@@ -895,5 +935,7 @@ QML_DECLARE_TYPE(QQuickKeyNavigationAttached)
 QML_DECLARE_TYPEINFO(QQuickKeyNavigationAttached, QML_HAS_ATTACHED_PROPERTIES)
 QML_DECLARE_TYPE(QQuickLayoutMirroringAttached)
 QML_DECLARE_TYPEINFO(QQuickLayoutMirroringAttached, QML_HAS_ATTACHED_PROPERTIES)
+QML_DECLARE_TYPE(QQuickEnterKeyAttached)
+QML_DECLARE_TYPEINFO(QQuickEnterKeyAttached, QML_HAS_ATTACHED_PROPERTIES)
 
 #endif // QQUICKITEM_P_H

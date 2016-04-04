@@ -35,8 +35,8 @@
 #define QMLPROFILERCLIENT_H
 
 #include "qqmldebugclient.h"
-#include <QtQml/private/qqmlprofilerservice_p.h>
 #include "qmlprofilereventlocation.h"
+#include <QtQml/private/qqmlprofilerdefinitions_p.h>
 
 class ProfilerClientPrivate;
 class ProfilerClient : public QQmlDebugClient
@@ -44,25 +44,18 @@ class ProfilerClient : public QQmlDebugClient
     Q_OBJECT
 
     Q_PROPERTY(bool enabled READ isEnabled NOTIFY enabledChanged)
-    Q_PROPERTY(bool recording READ isRecording WRITE setRecording
-               NOTIFY recordingChanged)
-
 public:
     ProfilerClient(const QString &clientName,
                   QQmlDebugConnection *client);
     ~ProfilerClient();
 
     bool isEnabled() const;
-    bool isRecording() const;
 
 public slots:
-    void setRecording(bool);
     virtual void clearData();
-    virtual void sendRecordingStatus();
 
 signals:
     void complete();
-    void recordingChanged(bool arg);
     void enabledChanged();
     void cleared();
 
@@ -70,7 +63,6 @@ protected:
     virtual void stateChanged(State);
 
 protected:
-    bool m_recording;
     bool m_enabled;
 };
 
@@ -82,25 +74,28 @@ public:
     QmlProfilerClient(QQmlDebugConnection *client);
     ~QmlProfilerClient();
 
+    void setFeatures(quint64 features);
+
 public slots:
     void clearData();
-    void sendRecordingStatus();
+    void sendRecordingStatus(bool record);
 
 signals:
     void traceFinished( qint64 time );
     void traceStarted( qint64 time );
-    void range(QQmlProfilerService::RangeType type,
-               QQmlProfilerService::BindingType bindingType,
+    void range(QQmlProfilerDefinitions::RangeType type,
+               QQmlProfilerDefinitions::BindingType bindingType,
                qint64 startTime, qint64 length,
                const QStringList &data,
                const QmlEventLocation &location);
     void frame(qint64 time, int frameRate, int animationCount, int threadId);
-    void sceneGraphFrame(QQmlProfilerService::SceneGraphFrameType type, qint64 time,
+    void sceneGraphFrame(QQmlProfilerDefinitions::SceneGraphFrameType type, qint64 time,
                          qint64 numericData1, qint64 numericData2, qint64 numericData3,
                          qint64 numericData4, qint64 numericData5);
-    void pixmapCache(QQmlProfilerService::PixmapEventType, qint64 time,
+    void pixmapCache(QQmlProfilerDefinitions::PixmapEventType, qint64 time,
                      const QmlEventLocation &location, int width, int height, int refCount);
-    void memoryAllocation(QQmlProfilerService::MemoryType type, qint64 time, qint64 amount);
+    void memoryAllocation(QQmlProfilerDefinitions::MemoryType type, qint64 time, qint64 amount);
+    void inputEvent(QQmlProfilerDefinitions::EventType, qint64 time);
 
 protected:
     virtual void messageReceived(const QByteArray &);
@@ -125,7 +120,7 @@ public:
     ~V8ProfilerClient();
 
 public slots:
-    void sendRecordingStatus();
+    void sendRecordingStatus(bool record);
 
 signals:
     void range(int depth, const QString &function, const QString &filename,

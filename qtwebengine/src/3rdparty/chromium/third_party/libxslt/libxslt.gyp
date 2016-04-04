@@ -25,15 +25,15 @@
           'type': 'none',
           'direct_dependent_settings': {
             'cflags': [
-              '<!@(pkg-config --cflags libxslt)',
+              '<!@(<(pkg-config) --cflags libxslt)',
             ],
           },
           'link_settings': {
             'ldflags': [
-              '<!@(pkg-config --libs-only-L --libs-only-other libxslt)',
+              '<!@(<(pkg-config) --libs-only-L --libs-only-other libxslt)',
             ],
             'libraries': [
-              '<!@(pkg-config --libs-only-l libxslt)',
+              '<!@(<(pkg-config) --libs-only-l libxslt)',
             ],
           },
         }, { # else: os_posix != 1 or OS == "mac" or ! use_system_libxml
@@ -106,6 +106,10 @@
               '.',
             ],
           },
+          'msvs_disabled_warnings': [
+            # size_t to int conversion.
+            4267,
+          ],
           'variables': {
             'clang_warning_flags': [
               # libxslt stores a char[3] in a `const unsigned char*`.

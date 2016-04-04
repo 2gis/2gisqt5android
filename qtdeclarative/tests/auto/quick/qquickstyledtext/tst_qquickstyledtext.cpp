@@ -171,16 +171,16 @@ void tst_qquickstyledtext::textOutput()
 
     QCOMPARE(layout.text(), output);
 
-    QList<QTextLayout::FormatRange> layoutFormats = layout.additionalFormats();
+    const QVector<QTextLayout::FormatRange> layoutFormats = layout.formats();
 
     QCOMPARE(layoutFormats.count(), formats.count());
     for (int i = 0; i < formats.count(); ++i) {
         QCOMPARE(layoutFormats.at(i).start, formats.at(i).start);
         QCOMPARE(layoutFormats.at(i).length, formats.at(i).length);
         if (formats.at(i).type & Format::Bold)
-            QVERIFY(layoutFormats.at(i).format.fontWeight() == QFont::Bold);
+            QCOMPARE(layoutFormats.at(i).format.fontWeight(), int(QFont::Bold));
         else
-            QVERIFY(layoutFormats.at(i).format.fontWeight() == QFont::Normal);
+            QCOMPARE(layoutFormats.at(i).format.fontWeight(), int(QFont::Normal));
         QVERIFY(layoutFormats.at(i).format.fontItalic() == bool(formats.at(i).type & Format::Italic));
         QVERIFY(layoutFormats.at(i).format.fontUnderline() == bool(formats.at(i).type & Format::Underline));
     }
@@ -200,7 +200,7 @@ void tst_qquickstyledtext::anchors()
 
     QCOMPARE(layout.text(), output);
 
-    QList<QTextLayout::FormatRange> layoutFormats = layout.additionalFormats();
+    const QVector<QTextLayout::FormatRange> layoutFormats = layout.formats();
 
     QCOMPARE(layoutFormats.count(), formats.count());
     for (int i = 0; i < formats.count(); ++i) {

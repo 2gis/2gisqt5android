@@ -49,6 +49,7 @@
 #include "qquicktransition_p.h"
 #include "qquickanimator_p.h"
 #include "qquickshortcut_p.h"
+#include "qquickvalidator_p.h"
 #include <qqmlinfo.h>
 #include <private/qqmltypenotavailable_p.h>
 #include <private/qquickanimationcontroller_p.h>
@@ -87,6 +88,13 @@ void QQuickUtilModule::defineModule()
     qmlRegisterType<QQuickTransition>("QtQuick",2,0,"Transition");
     qmlRegisterType<QQuickVector3dAnimation>("QtQuick",2,0,"Vector3dAnimation");
 
+#ifndef QT_NO_VALIDATOR
+    qmlRegisterType<QValidator>();
+    qmlRegisterType<QQuickIntValidator>("QtQuick",2,0,"IntValidator");
+    qmlRegisterType<QQuickDoubleValidator>("QtQuick",2,0,"DoubleValidator");
+    qmlRegisterType<QRegExpValidator>("QtQuick",2,0,"RegExpValidator");
+#endif
+
     qmlRegisterUncreatableType<QQuickAnimator>("QtQuick", 2, 2, "Animator", QQuickAbstractAnimation::tr("Animator is an abstract class"));
     qmlRegisterType<QQuickXAnimator>("QtQuick", 2, 2, "XAnimator");
     qmlRegisterType<QQuickYAnimator>("QtQuick", 2, 2, "YAnimator");
@@ -106,4 +114,6 @@ void QQuickUtilModule::defineModule()
     qmlRegisterType<QQuickTextMetrics>("QtQuick", 2, 4, "TextMetrics");
 
     qmlRegisterType<QQuickShortcut>("QtQuick", 2, 5, "Shortcut");
+
+    qmlRegisterType<QQuickShortcut,1>("QtQuick", 2, 6, "Shortcut");
 }

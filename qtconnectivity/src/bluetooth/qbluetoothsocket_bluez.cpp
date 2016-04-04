@@ -64,6 +64,7 @@ QBluetoothSocketPrivate::QBluetoothSocketPrivate()
       connectWriteNotifier(0),
       connecting(false),
       discoveryAgent(0),
+      secFlags(QBluetooth::Authorization),
       lowEnergySocketType(0)
 {
 }
@@ -128,6 +129,27 @@ void QBluetoothSocketPrivate::connectToService(const QBluetoothAddress &address,
 
     if (socket == -1 && !ensureNativeSocket(socketType)) {
         errorString = QBluetoothSocket::tr("Unknown socket error");
+        q->setSocketError(QBluetoothSocket::UnknownSocketError);
+        return;
+    }
+
+    // apply preferred security level
+    // ignore QBluetooth::Authentication -> not used anymore by kernel
+    struct bt_security security;
+    memset(&security, 0, sizeof(security));
+
+    if (secFlags & QBluetooth::Authorization)
+        security.level = BT_SECURITY_LOW;
+    if (secFlags & QBluetooth::Encryption)
+        security.level = BT_SECURITY_MEDIUM;
+    if (secFlags & QBluetooth::Secure)
+        security.level = BT_SECURITY_HIGH;
+
+    if (setsockopt(socket, SOL_BLUETOOTH, BT_SECURITY,
+                   &security, sizeof(security)) != 0) {
+        qCWarning(QT_BT_BLUEZ) << "Failed to set socket option, closing socket for safety" << errno;
+        qCWarning(QT_BT_BLUEZ) << "Error: " << qt_error_string(errno);
+        errorString = QBluetoothSocket::tr("Cannot set connection security level");
         q->setSocketError(QBluetoothSocket::UnknownSocketError);
         return;
     }
@@ -287,20 +309,14 @@ QBluetoothAddress QBluetoothSocketPrivate::localAddress() const
         sockaddr_rc addr;
         socklen_t addrLength = sizeof(addr);
 
-        if (::getsockname(socket, reinterpret_cast<sockaddr *>(&addr), &addrLength) == 0) {
-            quint64 bdaddr;
-            convertAddress(addr.rc_bdaddr.b, bdaddr);
-            return QBluetoothAddress(bdaddr);
-        }
+        if (::getsockname(socket, reinterpret_cast<sockaddr *>(&addr), &addrLength) == 0)
+            return QBluetoothAddress(convertAddress(addr.rc_bdaddr.b));
     } else if (socketType == QBluetoothServiceInfo::L2capProtocol) {
         sockaddr_l2 addr;
         socklen_t addrLength = sizeof(addr);
 
-        if (::getsockname(socket, reinterpret_cast<sockaddr *>(&addr), &addrLength) == 0) {
-            quint64 bdaddr;
-            convertAddress(addr.l2_bdaddr.b, bdaddr);
-            return QBluetoothAddress(bdaddr);
-        }
+        if (::getsockname(socket, reinterpret_cast<sockaddr *>(&addr), &addrLength) == 0)
+            return QBluetoothAddress(convertAddress(addr.l2_bdaddr.b));
     }
 
     return QBluetoothAddress();
@@ -336,7 +352,7 @@ QString QBluetoothSocketPrivate::peerName() const
         if (::getpeername(socket, reinterpret_cast<sockaddr *>(&addr), &addrLength) < 0)
             return QString();
 
-        convertAddress(addr.rc_bdaddr.b, bdaddr);
+        convertAddress(addr.rc_bdaddr.b, &bdaddr);
     } else if (socketType == QBluetoothServiceInfo::L2capProtocol) {
         sockaddr_l2 addr;
         socklen_t addrLength = sizeof(addr);
@@ -344,7 +360,7 @@ QString QBluetoothSocketPrivate::peerName() const
         if (::getpeername(socket, reinterpret_cast<sockaddr *>(&addr), &addrLength) < 0)
             return QString();
 
-        convertAddress(addr.l2_bdaddr.b, bdaddr);
+        convertAddress(addr.l2_bdaddr.b, &bdaddr);
     } else {
         qCWarning(QT_BT_BLUEZ) << "peerName() called on socket of unknown type";
         return QString();
@@ -362,13 +378,17 @@ QString QBluetoothSocketPrivate::peerName() const
         if (reply.isError())
             return QString();
 
-        foreach (const QDBusObjectPath &path, reply.value().keys()) {
-            const InterfaceList ifaceList = reply.value().value(path);
-            foreach (const QString &iface, ifaceList.keys()) {
+        ManagedObjectList managedObjectList = reply.value();
+        for (ManagedObjectList::const_iterator it = managedObjectList.constBegin(); it != managedObjectList.constEnd(); ++it) {
+            const InterfaceList &ifaceList = it.value();
+
+            for (InterfaceList::const_iterator jt = ifaceList.constBegin(); jt != ifaceList.constEnd(); ++jt) {
+                const QString &iface = jt.key();
+                const QVariantMap &ifaceValues = jt.value();
+
                 if (iface == QStringLiteral("org.bluez.Device1")) {
-                    if (ifaceList.value(iface).value(QStringLiteral("Address")).toString()
-                            == peerAddress)
-                        return ifaceList.value(iface).value(QStringLiteral("Alias")).toString();
+                    if (ifaceValues.value(QStringLiteral("Address")).toString() == peerAddress)
+                        return ifaceValues.value(QStringLiteral("Alias")).toString();
                 }
             }
         }
@@ -385,13 +405,13 @@ QString QBluetoothSocketPrivate::peerName() const
         OrgBluezAdapterInterface adapter(QStringLiteral("org.bluez"), reply.value().path(),
                                          QDBusConnection::systemBus());
 
-        QDBusPendingReply<QDBusObjectPath> deviceObjectPath = adapter.CreateDevice(peerAddress);
+        QDBusPendingReply<QDBusObjectPath> deviceObjectPath = adapter.FindDevice(peerAddress);
         deviceObjectPath.waitForFinished();
         if (deviceObjectPath.isError()) {
-            if (deviceObjectPath.error().name() != QStringLiteral("org.bluez.Error.AlreadyExists"))
+            if (deviceObjectPath.error().name() != QStringLiteral("org.bluez.Error.DoesNotExist"))
                 return QString();
 
-            deviceObjectPath = adapter.FindDevice(peerAddress);
+            deviceObjectPath = adapter.CreateDevice(peerAddress);
             deviceObjectPath.waitForFinished();
             if (deviceObjectPath.isError())
                 return QString();
@@ -415,20 +435,14 @@ QBluetoothAddress QBluetoothSocketPrivate::peerAddress() const
         sockaddr_rc addr;
         socklen_t addrLength = sizeof(addr);
 
-        if (::getpeername(socket, reinterpret_cast<sockaddr *>(&addr), &addrLength) == 0) {
-            quint64 bdaddr;
-            convertAddress(addr.rc_bdaddr.b, bdaddr);
-            return QBluetoothAddress(bdaddr);
-        }
+        if (::getpeername(socket, reinterpret_cast<sockaddr *>(&addr), &addrLength) == 0)
+            return QBluetoothAddress(convertAddress(addr.rc_bdaddr.b));
     } else if (socketType == QBluetoothServiceInfo::L2capProtocol) {
         sockaddr_l2 addr;
         socklen_t addrLength = sizeof(addr);
 
-        if (::getpeername(socket, reinterpret_cast<sockaddr *>(&addr), &addrLength) == 0) {
-            quint64 bdaddr;
-            convertAddress(addr.l2_bdaddr.b, bdaddr);
-            return QBluetoothAddress(bdaddr);
-        }
+        if (::getpeername(socket, reinterpret_cast<sockaddr *>(&addr), &addrLength) == 0)
+            return QBluetoothAddress(convertAddress(addr.l2_bdaddr.b));
     }
 
     return QBluetoothAddress();

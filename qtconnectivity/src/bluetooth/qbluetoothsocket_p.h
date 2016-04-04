@@ -47,9 +47,6 @@
 
 #include "qbluetoothsocket.h"
 
-#ifdef QT_QNX_BLUETOOTH
-#include "qnx/ppshelpers_p.h"
-#endif
 #ifdef QT_ANDROID_BLUETOOTH
 #include <QtAndroidExtras/QAndroidJniObject>
 #include <QtCore/QPointer>
@@ -95,8 +92,8 @@ public:
     QBluetoothSocketPrivate();
     ~QBluetoothSocketPrivate();
 
-//On QNX and Android we connect using the uuid not the port
-#if defined(QT_QNX_BLUETOOTH) || defined(QT_ANDROID_BLUETOOTH)
+//On Android we connect using the uuid not the port
+#if defined(QT_ANDROID_BLUETOOTH)
     void connectToService(const QBluetoothAddress &address, const QBluetoothUuid &uuid,
                           QIODevice::OpenMode openMode);
 #else
@@ -151,6 +148,7 @@ public:
 
     QBluetoothServiceDiscoveryAgent *discoveryAgent;
     QBluetoothSocket::OpenMode openMode;
+    QBluetooth::SecurityFlags secFlags;
 
 
 //    QByteArray rxBuffer;
@@ -179,7 +177,7 @@ signals:
 
 #endif
 
-#if defined(QT_QNX_BLUETOOTH) || defined(QT_BLUEZ_BLUETOOTH)
+#if defined(QT_BLUEZ_BLUETOOTH)
 private slots:
     void _q_readNotify();
     void _q_writeNotify();
@@ -189,15 +187,6 @@ protected:
     QBluetoothSocket *q_ptr;
 
 private:
-#ifdef QT_QNX_BLUETOOTH
-    QBluetoothAddress m_peerAddress;
-    QBluetoothUuid m_uuid;
-    bool isServerSocket;
-
-private slots:
-    void controlReply(ppsResult result);
-    void controlEvent(ppsResult result);
-#endif
 
 #ifdef QT_BLUEZ_BLUETOOTH
 public:
@@ -231,14 +220,17 @@ static inline void convertAddress(quint64 from, quint8 (&to)[6])
     to[5] = (from >> 40) & 0xff;
 }
 
-static inline void convertAddress(quint8 (&from)[6], quint64 &to)
+static inline quint64 convertAddress(quint8 (&from)[6], quint64 *to = 0)
 {
-    to = (quint64(from[0]) << 0) |
+    const quint64 result = (quint64(from[0]) << 0) |
          (quint64(from[1]) << 8) |
          (quint64(from[2]) << 16) |
          (quint64(from[3]) << 24) |
          (quint64(from[4]) << 32) |
          (quint64(from[5]) << 40);
+    if (to)
+        *to = result;
+    return result;
 }
 
 QT_END_NAMESPACE

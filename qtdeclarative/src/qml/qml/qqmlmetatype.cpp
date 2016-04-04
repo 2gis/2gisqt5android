@@ -38,6 +38,7 @@
 #include <private/qqmlcustomparser_p.h>
 #include <private/qhashedstring_p.h>
 #include <private/qqmlimport_p.h>
+#include <private/qqmlcompiler_p.h>
 
 #include <QtCore/qdebug.h>
 #include <QtCore/qstringlist.h>
@@ -217,12 +218,10 @@ public:
 void QQmlType::SingletonInstanceInfo::init(QQmlEngine *e)
 {
     QV4::ExecutionEngine *v4 = QV8Engine::getV4(e->handle());
+    v4->pushGlobalContext();
     if (scriptCallback && scriptApi(e).isUndefined()) {
-        v4->pushGlobalContext();
         setScriptApi(e, scriptCallback(e, e));
-        v4->popContext();
     } else if (qobjectCallback && !qobjectApi(e)) {
-        v4->pushGlobalContext();
         QObject *o = qobjectCallback(e, e);
         setQObjectApi(e, o);
         if (!o) {
@@ -230,14 +229,12 @@ void QQmlType::SingletonInstanceInfo::init(QQmlEngine *e)
         }
         // if this object can use a property cache, create it now
         QQmlData::ensurePropertyCache(e, o);
-        v4->popContext();
     } else if (!url.isEmpty() && !qobjectApi(e)) {
-        v4->pushGlobalContext();
         QQmlComponent component(e, url, QQmlComponent::PreferSynchronous);
         QObject *o = component.create();
         setQObjectApi(e, o);
-        v4->popContext();
     }
+    v4->popContext();
 }
 
 void QQmlType::SingletonInstanceInfo::destroy(QQmlEngine *e)
@@ -245,7 +242,12 @@ void QQmlType::SingletonInstanceInfo::destroy(QQmlEngine *e)
     // cleans up the engine-specific singleton instances if they exist.
     scriptApis.remove(e);
     QObject *o = qobjectApis.take(e);
-    delete o;
+    if (o) {
+        QQmlData *ddata = QQmlData::get(o, false);
+        if (url.isEmpty() && ddata && ddata->indestructible && ddata->explicitIndestructibleSet)
+            return;
+        delete o;
+    }
 }
 
 void QQmlType::SingletonInstanceInfo::setQObjectApi(QQmlEngine *e, QObject *o)
@@ -258,7 +260,7 @@ QObject *QQmlType::SingletonInstanceInfo::qobjectApi(QQmlEngine *e) const
     return qobjectApis.value(e);
 }
 
-void QQmlType::SingletonInstanceInfo::setScriptApi(QQmlEngine *e, QJSValue v)
+void QQmlType::SingletonInstanceInfo::setScriptApi(QQmlEngine *e, const QJSValue &v)
 {
     scriptApis.insert(e, v);
 }
@@ -475,6 +477,29 @@ QQmlType *QQmlType::superType() const
     }
 
     return d->superType;
+}
+
+QQmlType *QQmlType::resolveCompositeBaseType(QQmlEnginePrivate *engine) const
+{
+    Q_ASSERT(isComposite());
+    if (!engine)
+        return 0;
+    QQmlTypeData *td = engine->typeLoader.getType(sourceUrl());
+    if (!td || !td->isComplete())
+        return 0;
+    QQmlCompiledData *cd = td->compiledData();
+    const QMetaObject *mo = cd->rootPropertyCache->firstCppMetaObject();
+    return QQmlMetaType::qmlType(mo);
+}
+
+int QQmlType::resolveCompositeEnumValue(QQmlEnginePrivate *engine, const QString &name, bool *ok) const
+{
+    Q_ASSERT(isComposite());
+    *ok = false;
+    QQmlType *type = resolveCompositeBaseType(engine);
+    if (!type)
+        return -1;
+    return type->enumValue(engine, name, ok);
 }
 
 static void clone(QMetaObjectBuilder &builder, const QMetaObject *mo,
@@ -842,18 +867,26 @@ int QQmlType::metaObjectRevision() const
     return d->revision;
 }
 
-QQmlAttachedPropertiesFunc QQmlType::attachedPropertiesFunction() const
+QQmlAttachedPropertiesFunc QQmlType::attachedPropertiesFunction(QQmlEnginePrivate *engine) const
 {
-    if (d->regType != CppType)
-        return 0;
-    return d->extraData.cd->attachedPropertiesFunc;
+    if (d->regType == CppType)
+        return d->extraData.cd->attachedPropertiesFunc;
+
+    QQmlType *base = 0;
+    if (d->regType == CompositeType)
+        base = resolveCompositeBaseType(engine);
+    return base ? base->attachedPropertiesFunction(engine) : 0;
 }
 
-const QMetaObject *QQmlType::attachedPropertiesType() const
+const QMetaObject *QQmlType::attachedPropertiesType(QQmlEnginePrivate *engine) const
 {
-    if (d->regType != CppType)
-        return 0;
-    return d->extraData.cd->attachedPropertiesType;
+    if (d->regType == CppType)
+        return d->extraData.cd->attachedPropertiesType;
+
+    QQmlType *base = 0;
+    if (d->regType == CompositeType)
+        base = resolveCompositeBaseType(engine);
+    return base ? base->attachedPropertiesType(engine) : 0;
 }
 
 /*
@@ -861,11 +894,15 @@ This is the id passed to qmlAttachedPropertiesById().  This is different from th
 for the case that a single class is registered under two or more names (eg. Item in
 Qt 4.7 and QtQuick 1.0).
 */
-int QQmlType::attachedPropertiesId() const
+int QQmlType::attachedPropertiesId(QQmlEnginePrivate *engine) const
 {
-    if (d->regType != CppType)
-        return 0;
-    return d->extraData.cd->attachedPropertiesId;
+    if (d->regType == CppType)
+        return d->extraData.cd->attachedPropertiesId;
+
+    QQmlType *base = 0;
+    if (d->regType == CompositeType)
+        base = resolveCompositeBaseType(engine);
+    return base ? base->attachedPropertiesId(engine) : 0;
 }
 
 int QQmlType::parserStatusCast() const
@@ -911,9 +948,11 @@ QUrl QQmlType::sourceUrl() const
         return QUrl();
 }
 
-int QQmlType::enumValue(const QHashedStringRef &name, bool *ok) const
+int QQmlType::enumValue(QQmlEnginePrivate *engine, const QHashedStringRef &name, bool *ok) const
 {
     Q_ASSERT(ok);
+    if (isComposite())
+        return resolveCompositeEnumValue(engine, name.toString(), ok);
     *ok = true;
 
     d->initEnums();
@@ -926,9 +965,11 @@ int QQmlType::enumValue(const QHashedStringRef &name, bool *ok) const
     return -1;
 }
 
-int QQmlType::enumValue(const QHashedCStringRef &name, bool *ok) const
+int QQmlType::enumValue(QQmlEnginePrivate *engine, const QHashedCStringRef &name, bool *ok) const
 {
     Q_ASSERT(ok);
+    if (isComposite())
+        return resolveCompositeEnumValue(engine, name.toUtf16(), ok);
     *ok = true;
 
     d->initEnums();
@@ -941,9 +982,11 @@ int QQmlType::enumValue(const QHashedCStringRef &name, bool *ok) const
     return -1;
 }
 
-int QQmlType::enumValue(const QV4::String *name, bool *ok) const
+int QQmlType::enumValue(QQmlEnginePrivate *engine, const QV4::String *name, bool *ok) const
 {
     Q_ASSERT(ok);
+    if (isComposite())
+        return resolveCompositeEnumValue(engine, name->toQString(), ok);
     *ok = true;
 
     d->initEnums();
@@ -1110,7 +1153,9 @@ void qmlClearTypeRegistrations() // Declared in qqml.h
     data->uriToModule.clear();
 
     QQmlEnginePrivate::baseModulesUninitialized = true; //So the engine re-registers its types
+#ifndef QT_NO_LIBRARY
     qmlClearEnginePlugins();
+#endif
 }
 
 int registerAutoParentFunction(QQmlPrivate::RegisterAutoParent &autoparent)
@@ -1440,8 +1485,8 @@ bool QQmlMetaType::isAnyModule(const QString &uri)
     QMutexLocker lock(metaTypeDataLock());
     QQmlMetaTypeData *data = metaTypeData();
 
-    for (QQmlMetaTypeData::TypeModules::ConstIterator iter = data->uriToModule.begin();
-         iter != data->uriToModule.end(); ++iter) {
+    for (QQmlMetaTypeData::TypeModules::ConstIterator iter = data->uriToModule.cbegin();
+         iter != data->uriToModule.cend(); ++iter) {
         if ((*iter)->module() == uri)
             return true;
     }
@@ -1538,25 +1583,25 @@ int QQmlMetaType::listType(int id)
         return 0;
 }
 
-int QQmlMetaType::attachedPropertiesFuncId(const QMetaObject *mo)
+int QQmlMetaType::attachedPropertiesFuncId(QQmlEnginePrivate *engine, const QMetaObject *mo)
 {
     QMutexLocker lock(metaTypeDataLock());
     QQmlMetaTypeData *data = metaTypeData();
 
     QQmlType *type = data->metaObjectToType.value(mo);
-    if (type && type->attachedPropertiesFunction())
-        return type->attachedPropertiesId();
+    if (type && type->attachedPropertiesFunction(engine))
+        return type->attachedPropertiesId(engine);
     else
         return -1;
 }
 
-QQmlAttachedPropertiesFunc QQmlMetaType::attachedPropertiesFuncById(int id)
+QQmlAttachedPropertiesFunc QQmlMetaType::attachedPropertiesFuncById(QQmlEnginePrivate *engine, int id)
 {
     if (id < 0)
         return 0;
     QMutexLocker lock(metaTypeDataLock());
     QQmlMetaTypeData *data = metaTypeData();
-    return data->types.at(id)->attachedPropertiesFunction();
+    return data->types.at(id)->attachedPropertiesFunction(engine);
 }
 
 QMetaProperty QQmlMetaType::defaultProperty(const QMetaObject *metaObject)
@@ -1718,7 +1763,7 @@ QQmlType *QQmlMetaType::qmlType(const QHashedStringRef &name, const QHashedStrin
     QQmlMetaTypeData *data = metaTypeData();
 
     QQmlMetaTypeData::Names::ConstIterator it = data->nameToType.constFind(name);
-    while (it != data->nameToType.end() && it.key() == name) {
+    while (it != data->nameToType.cend() && it.key() == name) {
         // XXX version_major<0 just a kludge for QQmlPropertyPrivate::initProperty
         if (version_major < 0 || module.isEmpty() || (*it)->availableInVersion(module, version_major,version_minor))
             return (*it);
@@ -1752,7 +1797,7 @@ QQmlType *QQmlMetaType::qmlType(const QMetaObject *metaObject, const QHashedStri
     QQmlMetaTypeData *data = metaTypeData();
 
     QQmlMetaTypeData::MetaObjects::const_iterator it = data->metaObjectToType.constFind(metaObject);
-    while (it != data->metaObjectToType.end() && it.key() == metaObject) {
+    while (it != data->metaObjectToType.cend() && it.key() == metaObject) {
         QQmlType *t = *it;
         if (version_major < 0 || module.isEmpty() || t->availableInVersion(module, version_major,version_minor))
             return t;
@@ -1823,8 +1868,9 @@ QList<QString> QQmlMetaType::qmlTypeNames()
     QQmlMetaTypeData *data = metaTypeData();
 
     QList<QString> names;
-    QQmlMetaTypeData::Names::ConstIterator it = data->nameToType.begin();
-    while (it != data->nameToType.end()) {
+    names.reserve(data->nameToType.count());
+    QQmlMetaTypeData::Names::ConstIterator it = data->nameToType.cbegin();
+    while (it != data->nameToType.cend()) {
         names += (*it)->qmlTypeName();
         ++it;
     }
@@ -1883,6 +1929,45 @@ const QQmlPrivate::CachedQmlUnit *QQmlMetaType::findCachedCompilationUnit(const 
             return unit;
     }
     return 0;
+}
+
+/*!
+    Returns the pretty QML type name (e.g. 'Item' instead of 'QtQuickItem') for the given object.
+ */
+QString QQmlMetaType::prettyTypeName(const QObject *object)
+{
+    QString typeName;
+
+    if (!object)
+        return typeName;
+
+    const QQmlType *type = QQmlMetaType::qmlType(object->metaObject());
+    if (type) {
+        typeName = type->qmlTypeName();
+        const int lastSlash = typeName.lastIndexOf(QLatin1Char('/'));
+        if (lastSlash != -1)
+            typeName = typeName.mid(lastSlash + 1);
+    } else {
+        typeName = QString::fromUtf8(object->metaObject()->className());
+        int marker = typeName.indexOf(QLatin1String("_QMLTYPE_"));
+        if (marker != -1)
+            typeName = typeName.left(marker);
+
+        marker = typeName.indexOf(QLatin1String("_QML_"));
+        if (marker != -1) {
+            typeName = typeName.left(marker);
+            typeName += QLatin1Char('*');
+            type = QQmlMetaType::qmlType(QMetaType::type(typeName.toLatin1()));
+            if (type) {
+                typeName = type->qmlTypeName();
+                const int lastSlash = typeName.lastIndexOf(QLatin1Char('/'));
+                if (lastSlash != -1)
+                    typeName = typeName.mid(lastSlash + 1);
+            }
+        }
+    }
+
+    return typeName;
 }
 
 QT_END_NAMESPACE

@@ -48,7 +48,7 @@
 #include <QtCore/qglobal.h>
 #include <private/qtqmlglobal_p.h>
 
-#include <private/qv4value_inl_p.h>
+#include <private/qv4value_p.h>
 #include <private/qv4object_p.h>
 #include <private/qqmlcontext_p.h>
 #include <private/qv4functionobject_p.h>
@@ -65,10 +65,8 @@ struct QmlContextWrapper;
 
 namespace Heap {
 
-struct QQmlIdObjectsArray;
-
 struct QmlContextWrapper : Object {
-    QmlContextWrapper(ExecutionEngine *engine, QQmlContextData *context, QObject *scopeObject, bool ownsContext = false);
+    QmlContextWrapper(QQmlContextData *context, QObject *scopeObject, bool ownsContext = false);
     ~QmlContextWrapper();
     bool readOnly;
     bool ownsContext;
@@ -76,12 +74,6 @@ struct QmlContextWrapper : Object {
 
     QQmlGuardedContextData context;
     QPointer<QObject> scopeObject;
-    QQmlIdObjectsArray *idObjectsWrapper;
-};
-
-struct QQmlIdObjectsArray : Object {
-    QQmlIdObjectsArray(QV4::ExecutionEngine *engine, QV4::QmlContextWrapper *contextWrapper);
-    QmlContextWrapper *contextWrapper;
 };
 
 }
@@ -94,33 +86,17 @@ struct Q_QML_EXPORT QmlContextWrapper : Object
     static ReturnedValue qmlScope(ExecutionEngine *e, QQmlContextData *ctxt, QObject *scope);
     static ReturnedValue urlScope(ExecutionEngine *v4, const QUrl &);
 
-    static QQmlContextData *callingContext(ExecutionEngine *v4);
-    static void takeContextOwnership(const Value &qmlglobal);
+    void takeContextOwnership() {
+        d()->ownsContext = true;
+    }
 
     inline QObject *getScopeObject() const { return d()->scopeObject; }
     inline QQmlContextData *getContext() const { return d()->context; }
-    static QQmlContextData *getContext(const Value &value);
 
     void setReadOnly(bool b) { d()->readOnly = b; }
 
-    static ReturnedValue get(Managed *m, String *name, bool *hasProperty);
+    static ReturnedValue get(const Managed *m, String *name, bool *hasProperty);
     static void put(Managed *m, String *name, const Value &value);
-    static void markObjects(Heap::Base *m, ExecutionEngine *engine);
-
-    static void registerQmlDependencies(ExecutionEngine *context, const CompiledData::Function *compiledFunction);
-
-    ReturnedValue idObjectsArray();
-    ReturnedValue qmlSingletonWrapper(ExecutionEngine *e, String *name);
-
-};
-
-struct QQmlIdObjectsArray : public Object
-{
-    V4_OBJECT2(QQmlIdObjectsArray, Object)
-
-    static ReturnedValue getIndexed(Managed *m, uint index, bool *hasProperty);
-    static void markObjects(Heap::Base *that, ExecutionEngine *engine);
-
 };
 
 }

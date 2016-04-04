@@ -34,15 +34,15 @@
 **
 ****************************************************************************/
 
-import Qt3D 2.0
-import Qt3D.Renderer 2.0
+import Qt3D.Core 2.0
+import Qt3D.Render 2.0
 
 Material {
     id: root
 
     property color ambient:  Qt.rgba( 0.05, 0.05, 0.05, 1.0 )
     property alias diffuse: diffuseTextureImage.source
-    property color specular: Qt.rgba( 0.95, 0.95, 0.95, 1.0 )
+    property color specular: Qt.rgba( 0.01, 0.01, 0.01, 1.0 )
     property real shininess: 150.0
     property real textureScale: 1.0
 
@@ -69,12 +69,6 @@ Material {
     ]
 
     effect: Effect {
-
-        parameters: [
-            Parameter { name: "lightPosition";  value: Qt.vector4d( 0.0, 0.0, 0.0, 1.0 ) },
-            Parameter { name: "lightIntensity"; value: Qt.vector3d( 1.0, 1.0, 1.0 ) }
-        ]
-
         ShaderProgram {
             id: gl2Es2Shader
             vertexShaderCode:   loadSource("qrc:/shaders/es2/diffusemap.vert")
@@ -90,9 +84,9 @@ Material {
         techniques: [
             // OpenGL 3.1
             Technique {
-                openGLFilter {
-                    api: OpenGLFilter.Desktop
-                    profile: OpenGLFilter.Core
+                graphicsApiFilter {
+                    api: GraphicsApiFilter.OpenGL
+                    profile: GraphicsApiFilter.CoreProfile
                     majorVersion: 3
                     minorVersion: 1
                 }
@@ -101,9 +95,9 @@ Material {
 
             // OpenGL 2.1
             Technique {
-                openGLFilter {
-                    api: OpenGLFilter.Desktop
-                    profile: OpenGLFilter.None
+                graphicsApiFilter {
+                    api: GraphicsApiFilter.OpenGL
+                    profile: GraphicsApiFilter.NoProfile
                     majorVersion: 2
                     minorVersion: 0
                 }
@@ -112,9 +106,9 @@ Material {
 
             // OpenGL ES 2
             Technique {
-                openGLFilter {
-                    api: OpenGLFilter.ES
-                    profile: OpenGLFilter.None
+                graphicsApiFilter {
+                    api: GraphicsApiFilter.OpenGLES
+                    profile: GraphicsApiFilter.NoProfile
                     majorVersion: 2
                     minorVersion: 0
                 }

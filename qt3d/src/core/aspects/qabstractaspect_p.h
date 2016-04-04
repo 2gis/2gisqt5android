@@ -34,28 +34,61 @@
 **
 ****************************************************************************/
 
-#ifndef QT3D_QABSTRACTASPECT_P_H
-#define QT3D_QABSTRACTASPECT_P_H
+#ifndef QT3DCORE_QABSTRACTASPECT_P_H
+#define QT3DCORE_QABSTRACTASPECT_P_H
+
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists for the convenience
+// of other Qt classes.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
 
 #include <private/qobject_p.h>
+#include <private/qaspectjobproviderinterface_p.h>
 #include <private/qbackendnode_p.h>
+#include <private/qbackendnodefactory_p.h>
+#include <private/qsceneobserverinterface_p.h>
 #include <private/qt3dcore_global_p.h>
 #include <Qt3DCore/qabstractaspect.h>
 
 QT_BEGIN_NAMESPACE
 
-namespace Qt3D {
+namespace Qt3DCore {
 
 class QAbstractAspect;
+class QBackendNode;
 class QEntity;
 class QAspectManager;
 class QAbstractAspectJobManager;
 class QChangeArbiter;
+class QServiceLocator;
 
-class QT3DCORE_PRIVATE_EXPORT QAbstractAspectPrivate : public QObjectPrivate
+class QT3DCORE_PRIVATE_EXPORT QAbstractAspectPrivate
+        : public QObjectPrivate
+        , public QBackendNodeFactory
+        , public QSceneObserverInterface
+        , public QAspectJobProviderInterface
 {
 public:
     QAbstractAspectPrivate();
+
+    void registerAspect(QEntity *rootObject);
+
+    QServiceLocator *services() const;
+    QAbstractAspectJobManager *jobManager() const;
+
+    QVector<QAspectJobPtr> jobsToExecute(qint64 time) Q_DECL_OVERRIDE;
+
+    QBackendNode *createBackendNode(QNode *frontend) const Q_DECL_OVERRIDE;
+    void clearBackendNode(QNode *frontend) const;
+
+    void sceneNodeAdded(Qt3DCore::QSceneChangePtr &e) Q_DECL_OVERRIDE;
+    void sceneNodeRemoved(Qt3DCore::QSceneChangePtr &e) Q_DECL_OVERRIDE;
 
     Q_DECLARE_PUBLIC(QAbstractAspect)
 
@@ -63,7 +96,6 @@ public:
     QAspectManager *m_aspectManager;
     QAbstractAspectJobManager *m_jobManager;
     QChangeArbiter *m_arbiter;
-    QAbstractAspect::AspectType m_aspectType;
     QHash<QByteArray, QBackendNodeFunctorPtr> m_backendCreatorFunctors;
 
     static QAbstractAspectPrivate *get(QAbstractAspect *aspect);
@@ -73,4 +105,4 @@ public:
 
 QT_END_NAMESPACE
 
-#endif // QT3D_QABSTRACTASPECT_P_H
+#endif // QT3DCORE_QABSTRACTASPECT_P_H

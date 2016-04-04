@@ -332,7 +332,7 @@ QDeclarativePolygonMapItem::QDeclarativePolygonMapItem(QQuickItem *parent)
 void QDeclarativePolygonMapItem::handleBorderUpdated()
 {
     borderGeometry_.markSourceDirty();
-    updateMapItem();
+    polishAndUpdate();
 }
 
 QDeclarativePolygonMapItem::~QDeclarativePolygonMapItem()
@@ -367,7 +367,7 @@ void QDeclarativePolygonMapItem::setMap(QDeclarativeGeoMap *quickMap, QGeoMap *m
     if (map) {
         geometry_.markSourceDirty();
         borderGeometry_.markSourceDirty();
-        updateMapItem();
+        polishAndUpdate();
     }
 }
 
@@ -423,7 +423,7 @@ void QDeclarativePolygonMapItem::setPath(const QJSValue &value)
 
     geometry_.markSourceDirty();
     borderGeometry_.markSourceDirty();
-    updateMapItem();
+    polishAndUpdate();
     emit pathChanged();
 }
 
@@ -441,38 +441,31 @@ void QDeclarativePolygonMapItem::addCoordinate(const QGeoCoordinate &coordinate)
 
     geometry_.markSourceDirty();
     borderGeometry_.markSourceDirty();
-    updateMapItem();
+    polishAndUpdate();
     emit pathChanged();
 }
 
 /*!
     \qmlmethod void MapPolygon::removeCoordinate(coordinate)
 
-    Removes a coordinate from the path. If there are multiple instances of the
+    Removes \a coordinate from the path. If there are multiple instances of the
     same coordinate, the one added last is removed.
 
+    If \a coordinate is not in the path this method does nothing.
+
     \sa addCoordinate, path
-
 */
-
 void QDeclarativePolygonMapItem::removeCoordinate(const QGeoCoordinate &coordinate)
 {
     int index = path_.lastIndexOf(coordinate);
-
-    if (index == -1) {
-        qmlInfo(this) << COORD_NOT_BELONG_TO << QStringLiteral("PolygonMapItem");
+    if (index == -1)
         return;
-    }
 
-    if (path_.count() < index + 1) {
-        qmlInfo(this) << COORD_NOT_BELONG_TO << QStringLiteral("PolygonMapItem");
-        return;
-    }
     path_.removeAt(index);
 
     geometry_.markSourceDirty();
     borderGeometry_.markSourceDirty();
-    updateMapItem();
+    polishAndUpdate();
     emit pathChanged();
 }
 
@@ -496,7 +489,7 @@ void QDeclarativePolygonMapItem::setColor(const QColor &color)
 
     color_ = color;
     dirtyMaterial_ = true;
-    updateMapItem();
+    update();
     emit colorChanged(color_);
 }
 
@@ -526,7 +519,7 @@ QSGNode *QDeclarativePolygonMapItem::updateMapItemPaintNode(QSGNode *oldNode, Up
 /*!
     \internal
 */
-void QDeclarativePolygonMapItem::updateMapItem()
+void QDeclarativePolygonMapItem::updatePolish()
 {
     if (!map() || path_.count() == 0)
         return;
@@ -553,7 +546,6 @@ void QDeclarativePolygonMapItem::updateMapItem()
     setHeight(combined.height());
 
     setPositionOnMap(path_.at(0), -1 * geometry_.sourceBoundingBox().topLeft());
-    update();
 }
 
 /*!
@@ -589,7 +581,7 @@ void QDeclarativePolygonMapItem::afterViewportChanged(const QGeoMapViewportChang
     borderGeometry_.setPreserveGeometry(true, borderGeometry_.geoLeftBound());
     geometry_.markScreenDirty();
     borderGeometry_.markScreenDirty();
-    updateMapItem();
+    polishAndUpdate();
 }
 
 /*!
@@ -646,7 +638,7 @@ void QDeclarativePolygonMapItem::geometryChanged(const QRectF &newGeometry, cons
         borderGeometry_.setPreserveGeometry(true, leftBoundCoord);
         geometry_.markSourceDirty();
         borderGeometry_.markSourceDirty();
-        updateMapItem();
+        polishAndUpdate();
         emit pathChanged();
     }
 

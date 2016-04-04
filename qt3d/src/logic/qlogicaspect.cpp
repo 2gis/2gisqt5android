@@ -36,42 +36,34 @@
 
 #include "qlogicaspect.h"
 #include "qlogicaspect_p.h"
-#include "logicexecutor_p.h"
-#include "logichandler_p.h"
-#include "logicmanager_p.h"
+#include "executor_p.h"
+#include "handler_p.h"
+#include "manager_p.h"
 #include "qlogiccomponent.h"
 
-#include <Qt3DCore/qnodevisitor.h>
-#include <Qt3DCore/qscenepropertychange.h>
-
 #include <Qt3DCore/qnode.h>
-#include <Qt3DCore/private/qaspectmanager_p.h>
 #include <Qt3DCore/private/qchangearbiter_p.h>
 #include <Qt3DCore/private/qscene_p.h>
-#include <Qt3DCore/qaspectfactory.h>
-#include <Qt3DCore/qservicelocator.h>
+#include <Qt3DCore/private/qservicelocator_p.h>
 
 #include <QThread>
 #include <QWindow>
 
 QT_BEGIN_NAMESPACE
 
-namespace Qt3D {
+using namespace Qt3DCore;
 
-/*!
-    \class Qt3D::QLogicAspectPrivate
-    \internal
-*/
+namespace Qt3DLogic {
+
 QLogicAspectPrivate::QLogicAspectPrivate()
     : QAbstractAspectPrivate()
     , m_time(0)
     , m_initialized(false)
-    , m_manager(new Logic::LogicManager)
-    , m_executor(new Logic::LogicExecutor)
-    , m_callbackJob(new Logic::LogicCallbackJob)
+    , m_manager(new Logic::Manager)
+    , m_executor(new Logic::Executor)
+    , m_callbackJob(new Logic::CallbackJob)
 {
-    m_aspectType = QAbstractAspect::AspectOther;
-    m_callbackJob->setLogicManager(m_manager.data());
+    m_callbackJob->setManager(m_manager.data());
     m_manager->setExecutor(m_executor.data());
 }
 
@@ -92,42 +84,21 @@ QLogicAspect::QLogicAspect(QLogicAspectPrivate &dd, QObject *parent)
 
 void QLogicAspect::registerBackendTypes()
 {
-    registerBackendType<QLogicComponent>(QBackendNodeFunctorPtr(new Logic::LogicHandlerFunctor(d_func()->m_manager.data())));
+    registerBackendType<QLogicComponent>(QBackendNodeFunctorPtr(new Logic::HandlerFunctor(d_func()->m_manager.data())));
 }
 
 QVector<QAspectJobPtr> QLogicAspect::jobsToExecute(qint64 time)
 {
     Q_D(QLogicAspect);
+    const qint64 deltaTime = time - d->m_time;
+    const float dt = static_cast<const float>(deltaTime) / 1.0e9;
+    d->m_manager->setDeltaTime(dt);
     d->m_time = time;
-    // TODO: Ensure arbiter and postman are setup prior to invoking QAspectManager::initialize()
 
     // Create jobs that will get exectued by the threadpool
     QVector<QAspectJobPtr> jobs;
     jobs.append(d->m_callbackJob);
     return jobs;
-}
-
-void QLogicAspect::sceneNodeAdded(QSceneChangePtr &e)
-{
-    QScenePropertyChangePtr propertyChange = e.staticCast<QScenePropertyChange>();
-    QNodePtr nodePtr = propertyChange->value().value<QNodePtr>();
-    QNode *n = nodePtr.data();
-    QNodeVisitor visitor;
-    visitor.traverse(n, this, &QLogicAspect::visitNode);
-}
-
-void QLogicAspect::sceneNodeRemoved(QSceneChangePtr &e)
-{
-    QScenePropertyChangePtr propertyChange = e.staticCast<QScenePropertyChange>();
-    QNodePtr nodePtr = propertyChange->value().value<QNodePtr>();
-    QNode *n = nodePtr.data();
-    QAbstractAspect::clearBackendNode(n);
-}
-
-void QLogicAspect::setRootEntity(QEntity *rootObject)
-{
-    QNodeVisitor visitor;
-    visitor.traverse(rootObject, this, &QLogicAspect::visitNode);
 }
 
 void QLogicAspect::onInitialize(const QVariantMap &data)
@@ -153,14 +124,9 @@ void QLogicAspect::onShutdown()
     d->m_executor->clearQueueAndProceed();
 }
 
-void QLogicAspect::visitNode(QNode *node)
-{
-    QAbstractAspect::createBackendNode(node);
-}
-
-} // Qt3D
+} // namespace Qt3DLogic
 
 QT_END_NAMESPACE
 
-QT3D_REGISTER_NAMESPACED_ASPECT("logic", QT_PREPEND_NAMESPACE(Qt3D), QLogicAspect)
+QT3D_REGISTER_NAMESPACED_ASPECT("logic", QT_PREPEND_NAMESPACE(Qt3DLogic), QLogicAspect)
 

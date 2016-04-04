@@ -1241,7 +1241,7 @@ void tst_qquickstates::deletingState()
     QVERIFY(state != 0);
     delete state;
 
-    QVERIFY(sg->findState("blue") == 0);
+    QVERIFY(!sg->findState("blue"));
 
     //### should we warn that state doesn't exist
     sg->setState("blue");
@@ -1317,7 +1317,7 @@ void tst_qquickstates::illegalObjectCreation()
 
     QQmlComponent component(&engine, testFileUrl("illegalObj.qml"));
     QList<QQmlError> errors = component.errors();
-    QVERIFY(errors.count() == 1);
+    QCOMPARE(errors.count(), 1);
     const QQmlError &error = errors.at(0);
     QCOMPARE(error.line(), 9);
     QCOMPARE(error.column(), 23);
@@ -1637,7 +1637,7 @@ void tst_qquickstates::QTBUG_38492()
 
 void tst_qquickstates::revertListMemoryLeak()
 {
-    QWeakPointer<QQmlAbstractBinding> weakPtr;
+    QQmlAbstractBinding::Ptr bindingPtr;
     {
         QQmlEngine engine;
 
@@ -1651,12 +1651,12 @@ void tst_qquickstates::revertListMemoryLeak()
 
         QQmlAbstractBinding *binding = state->bindingInRevertList(item, "height");
         QVERIFY(binding);
-        weakPtr = QQmlAbstractBinding::getPointer(binding);
-        QVERIFY(!weakPtr.toStrongRef().isNull());
+        bindingPtr = binding;
+        QVERIFY(bindingPtr->ref > 1);
 
         delete item;
     }
-    QVERIFY(weakPtr.toStrongRef().isNull());
+    QVERIFY(bindingPtr->ref == 1);
 }
 
 QTEST_MAIN(tst_qquickstates)

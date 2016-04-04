@@ -50,6 +50,7 @@ QT_BEGIN_NAMESPACE
     \qmltype Action
     \instantiates QQuickAction
     \ingroup applicationwindow
+    \ingroup controls
     \inqmlmodule QtQuick.Controls
     \brief Action provides an abstract user interface action that can be bound to items
 
@@ -391,12 +392,12 @@ void QQuickAction::setChecked(bool c)
         emit toggled(m_checked);
 }
 
-QQuickExclusiveGroup *QQuickAction::exclusiveGroup() const
+QQuickExclusiveGroup1 *QQuickAction::exclusiveGroup() const
 {
     return m_exclusiveGroup.data();
 }
 
-void QQuickAction::setExclusiveGroup(QQuickExclusiveGroup *eg)
+void QQuickAction::setExclusiveGroup(QQuickExclusiveGroup1 *eg)
 {
     if (m_exclusiveGroup == eg)
         return;

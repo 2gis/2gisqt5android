@@ -37,7 +37,7 @@
 #include "qcocoawindow.h"
 #include "qcocoamenuloader.h"
 #include "qcocoaapplication.h" // for custom application category
-#include "qcocoaautoreleasepool.h"
+#include "qcocoaapplicationdelegate.h"
 
 #include <QtGui/QGuiApplication>
 #include <QtCore/QDebug>
@@ -83,7 +83,7 @@ QCocoaMenuBar::~QCocoaMenuBar()
 
 void QCocoaMenuBar::insertNativeMenu(QCocoaMenu *menu, QCocoaMenu *beforeMenu)
 {
-    QCocoaAutoReleasePool pool;
+    QMacAutoReleasePool pool;
 
     if (beforeMenu) {
         NSUInteger nativeIndex = [m_nativeMenu indexOfItem:beforeMenu->nsMenuItem()];
@@ -108,12 +108,12 @@ void QCocoaMenuBar::insertMenu(QPlatformMenu *platformMenu, QPlatformMenu *befor
 #endif
 
     if (m_menus.contains(menu)) {
-        qWarning() << Q_FUNC_INFO << "This menu already belongs to the menubar, remove it first";
+        qWarning("This menu already belongs to the menubar, remove it first");
         return;
     }
 
     if (beforeMenu && !m_menus.contains(beforeMenu)) {
-        qWarning() << Q_FUNC_INFO << "The before menu does not belong to the menubar";
+        qWarning("The before menu does not belong to the menubar");
         return;
     }
 
@@ -126,7 +126,7 @@ void QCocoaMenuBar::insertMenu(QPlatformMenu *platformMenu, QPlatformMenu *befor
 
 void QCocoaMenuBar::removeNativeMenu(QCocoaMenu *menu)
 {
-    QCocoaAutoReleasePool pool;
+    QMacAutoReleasePool pool;
 
     if (menu->menuBar() == this)
         menu->setMenuBar(0);
@@ -138,7 +138,7 @@ void QCocoaMenuBar::removeMenu(QPlatformMenu *platformMenu)
 {
     QCocoaMenu *menu = static_cast<QCocoaMenu *>(platformMenu);
     if (!m_menus.contains(menu)) {
-        qWarning() << Q_FUNC_INFO << "Trying to remove a menu that does not belong to the menubar";
+        qWarning("Trying to remove a menu that does not belong to the menubar");
         return;
     }
     m_menus.removeOne(menu);
@@ -147,7 +147,7 @@ void QCocoaMenuBar::removeMenu(QPlatformMenu *platformMenu)
 
 void QCocoaMenuBar::syncMenu(QPlatformMenu *menu)
 {
-    QCocoaAutoReleasePool pool;
+    QMacAutoReleasePool pool;
 
     QCocoaMenu *cocoaMenu = static_cast<QCocoaMenu *>(menu);
     Q_FOREACH (QCocoaMenuItem *item, cocoaMenu->items())
@@ -260,13 +260,26 @@ void QCocoaMenuBar::resetKnownMenuItemsToQt()
 
 void QCocoaMenuBar::updateMenuBarImmediately()
 {
-    QCocoaAutoReleasePool pool;
+    QMacAutoReleasePool pool;
     QCocoaMenuBar *mb = findGlobalMenubar();
     QCocoaWindow *cw = findWindowForMenubar();
 
     QWindow *win = cw ? cw->window() : 0;
-    if (win && (win->flags() & Qt::Popup) == Qt::Popup)
-        return; // context menus, comboboxes, etc. don't need to update the menubar
+    if (win && (win->flags() & Qt::Popup) == Qt::Popup) {
+        // context menus, comboboxes, etc. don't need to update the menubar,
+        // but if an application has only Qt::Tool window(s) on start,
+        // we still have to update the menubar.
+        if ((win->flags() & Qt::WindowType_Mask) != Qt::Tool)
+            return;
+        typedef QT_MANGLE_NAMESPACE(QCocoaApplicationDelegate) AppDelegate;
+        NSApplication *app = [NSApplication sharedApplication];
+        if (![app.delegate isKindOfClass:[AppDelegate class]])
+            return;
+        // We apply this logic _only_ during the startup.
+        AppDelegate *appDelegate = app.delegate;
+        if (!appDelegate.inLaunch)
+            return;
+    }
 
     if (cw && cw->menubar())
         mb = cw->menubar();

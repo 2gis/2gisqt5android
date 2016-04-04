@@ -35,13 +35,13 @@
 ****************************************************************************/
 
 #include <QtTest/QtTest>
-#include <Qt3DCore/qservicelocator.h>
-#include <Qt3DCore/qopenglinformationservice.h>
-#include <Qt3DCore/qsysteminformationservice.h>
+#include <Qt3DCore/private/qservicelocator_p.h>
+#include <Qt3DCore/private/qopenglinformationservice_p.h>
+#include <Qt3DCore/private/qsysteminformationservice_p.h>
 
 #include <QScopedPointer>
 
-using namespace Qt3D;
+using namespace Qt3DCore;
 
 class DummyService : public QAbstractServiceProvider
 {

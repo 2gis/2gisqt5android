@@ -38,8 +38,9 @@
 #include "qquickitem_p.h"
 #include "qquickitemchangelistener_p.h"
 
+#include <private/qqmldebugconnector_p.h>
 #include <private/qquickprofiler_p.h>
-#include <private/qqmlinspectorservice_p.h>
+#include <private/qqmldebugserviceinterfaces_p.h>
 #include <private/qqmlmemoryprofiler_p.h>
 
 #include <QtQml/qqmlengine.h>
@@ -53,7 +54,7 @@ DEFINE_OBJECT_VTABLE(QV4::QQuickRootItemMarker);
 QV4::Heap::QQuickRootItemMarker *QV4::QQuickRootItemMarker::create(QQmlEngine *engine, QQuickWindow *window)
 {
     QV4::ExecutionEngine *e = QQmlEnginePrivate::getV4Engine(engine);
-    return e->memoryManager->alloc<QQuickRootItemMarker>(e, window);
+    return e->memoryManager->allocObject<QQuickRootItemMarker>(window);
 }
 
 void QV4::QQuickRootItemMarker::markObjects(QV4::Heap::Base *that, QV4::ExecutionEngine *e)
@@ -86,8 +87,9 @@ void QQuickViewPrivate::init(QQmlEngine* e)
         rootItemMarker.set(v4, v);
     }
 
-    if (QQmlDebugService::isDebuggingEnabled())
-        QQmlInspectorService::instance()->addView(q);
+    QQmlInspectorService *service = QQmlDebugConnector::service<QQmlInspectorService>();
+    if (service)
+        service->addView(q);
 }
 
 QQuickViewPrivate::QQuickViewPrivate()
@@ -97,8 +99,9 @@ QQuickViewPrivate::QQuickViewPrivate()
 
 QQuickViewPrivate::~QQuickViewPrivate()
 {
-    if (QQmlDebugService::isDebuggingEnabled())
-        QQmlInspectorService::instance()->removeView(q_func());
+    QQmlInspectorService *service = QQmlDebugConnector::service<QQmlInspectorService>();
+    if (service)
+        service->removeView(q_func());
 }
 
 void QQuickViewPrivate::execute()
@@ -345,6 +348,9 @@ QQuickView::Status QQuickView::status() const
     if (!d->component)
         return QQuickView::Null;
 
+    if (d->component->status() == QQmlComponent::Ready && !d->root)
+        return QQuickView::Error;
+
     return QQuickView::Status(d->component->status());
 }
 
@@ -363,6 +369,10 @@ QList<QQmlError> QQuickView::errors() const
     if (!d->engine) {
         QQmlError error;
         error.setDescription(QLatin1String("QQuickView: invalid qml engine."));
+        errs << error;
+    } else if (d->component && d->component->status() == QQmlComponent::Ready && !d->root) {
+        QQmlError error;
+        error.setDescription(QLatin1String("QQuickView: invalid root object."));
         errs << error;
     }
 
@@ -501,14 +511,15 @@ void QQuickViewPrivate::setRootObject(QObject *obj)
     if (QQuickItem *sgItem = qobject_cast<QQuickItem *>(obj)) {
         root = sgItem;
         sgItem->setParentItem(q->QQuickWindow::contentItem());
+    } else if (qobject_cast<QWindow *>(obj)) {
+        qWarning() << "QQuickView does not support using windows as a root item." << endl
+                   << endl
+                   << "If you wish to create your root window from QML, consider using QQmlApplicationEngine instead." << endl;
     } else {
         qWarning() << "QQuickView only supports loading of root objects that derive from QQuickItem." << endl
                    << endl
-                   << "If your example is using QML 2, (such as qmlscene) and the .qml file you" << endl
-                   << "loaded has 'import QtQuick 1.0' or 'import Qt 4.7', this error will occur." << endl
-                   << endl
-                   << "To load files with 'import QtQuick 1.0' or 'import Qt 4.7', use the" << endl
-                   << "QDeclarativeView class in the Qt Quick 1 module." << endl;
+                   << "Ensure your QML code is written for QtQuick 2, and uses a root that is or" << endl
+                   << "inherits from QtQuick's Item (not a Timer, QtObject, etc)." << endl;
         delete obj;
         root = 0;
     }

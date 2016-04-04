@@ -37,22 +37,18 @@
 #include "qgoochmaterial.h"
 #include "qgoochmaterial_p.h"
 
-#include <Qt3DRenderer/qeffect.h>
-#include <Qt3DRenderer/qopenglfilter.h>
-#include <Qt3DRenderer/qparameter.h>
-#include <Qt3DRenderer/qrenderpass.h>
-#include <Qt3DRenderer/qtechnique.h>
+#include <Qt3DRender/qeffect.h>
+#include <Qt3DRender/qgraphicsapifilter.h>
+#include <Qt3DRender/qparameter.h>
+#include <Qt3DRender/qrenderpass.h>
+#include <Qt3DRender/qtechnique.h>
 
 #include <QtCore/qurl.h>
 
 QT_BEGIN_NAMESPACE
 
-namespace Qt3D {
+namespace Qt3DRender {
 
-/*!
-   \class Qt3D::QGoochMaterialPrivate
-   \internal
-*/
 QGoochMaterialPrivate::QGoochMaterialPrivate()
     : QMaterialPrivate()
     , m_effect(new QEffect)
@@ -77,33 +73,41 @@ QGoochMaterialPrivate::QGoochMaterialPrivate()
 void QGoochMaterialPrivate::init()
 {
     Q_Q(QGoochMaterial);
-    QObject::connect(m_diffuseParameter, SIGNAL(valueChanged()), q, SIGNAL(diffuseChanged()));
-    QObject::connect(m_specularParameter, SIGNAL(valueChanged()), q, SIGNAL(specularChanged()));
-    QObject::connect(m_coolParameter, SIGNAL(valueChanged()), q, SIGNAL(coolChanged()));
-    QObject::connect(m_warmParameter, SIGNAL(valueChanged()), q, SIGNAL(warmChanged()));
-    QObject::connect(m_alphaParameter, SIGNAL(valueChanged()), q, SIGNAL(alphaChanged()));
-    QObject::connect(m_betaParameter, SIGNAL(valueChanged()), q, SIGNAL(betaChanged()));
-    QObject::connect(m_shininessParameter, SIGNAL(valueChanged()), q, SIGNAL(shininessChanged()));
+
+    connect(m_diffuseParameter, &Qt3DRender::QParameter::valueChanged,
+            this, &QGoochMaterialPrivate::handleDiffuseChanged);
+    connect(m_specularParameter, &Qt3DRender::QParameter::valueChanged,
+            this, &QGoochMaterialPrivate::handleSpecularChanged);
+    connect(m_coolParameter, &Qt3DRender::QParameter::valueChanged,
+            this, &QGoochMaterialPrivate::handleCoolChanged);
+    connect(m_warmParameter, &Qt3DRender::QParameter::valueChanged,
+            this, &QGoochMaterialPrivate::handleWarmChanged);
+    connect(m_alphaParameter, &Qt3DRender::QParameter::valueChanged,
+            this, &QGoochMaterialPrivate::handleAlphaChanged);
+    connect(m_betaParameter, &Qt3DRender::QParameter::valueChanged,
+            this, &QGoochMaterialPrivate::handleBetaChanged);
+    connect(m_shininessParameter, &Qt3DRender::QParameter::valueChanged,
+            this, &QGoochMaterialPrivate::handleShininessChanged);
 
     m_gl3Shader->setVertexShaderCode(QShaderProgram::loadSource(QUrl(QStringLiteral("qrc:/shaders/gl3/gooch.vert"))));
     m_gl3Shader->setFragmentShaderCode(QShaderProgram::loadSource(QUrl(QStringLiteral("qrc:/shaders/gl3/gooch.frag"))));
     m_gl2ES2Shader->setVertexShaderCode(QShaderProgram::loadSource(QUrl(QStringLiteral("qrc:/shaders/es2/gooch.vert"))));
     m_gl2ES2Shader->setFragmentShaderCode(QShaderProgram::loadSource(QUrl(QStringLiteral("qrc:/shaders/es2/gooch.frag"))));
 
-    m_gl3Technique->openGLFilter()->setApi(QOpenGLFilter::Desktop);
-    m_gl3Technique->openGLFilter()->setMajorVersion(3);
-    m_gl3Technique->openGLFilter()->setMinorVersion(1);
-    m_gl3Technique->openGLFilter()->setProfile(QOpenGLFilter::Core);
+    m_gl3Technique->graphicsApiFilter()->setApi(QGraphicsApiFilter::OpenGL);
+    m_gl3Technique->graphicsApiFilter()->setMajorVersion(3);
+    m_gl3Technique->graphicsApiFilter()->setMinorVersion(1);
+    m_gl3Technique->graphicsApiFilter()->setProfile(QGraphicsApiFilter::CoreProfile);
 
-    m_gl2Technique->openGLFilter()->setApi(QOpenGLFilter::Desktop);
-    m_gl2Technique->openGLFilter()->setMajorVersion(2);
-    m_gl2Technique->openGLFilter()->setMinorVersion(0);
-    m_gl2Technique->openGLFilter()->setProfile(QOpenGLFilter::None);
+    m_gl2Technique->graphicsApiFilter()->setApi(QGraphicsApiFilter::OpenGL);
+    m_gl2Technique->graphicsApiFilter()->setMajorVersion(2);
+    m_gl2Technique->graphicsApiFilter()->setMinorVersion(0);
+    m_gl2Technique->graphicsApiFilter()->setProfile(QGraphicsApiFilter::NoProfile);
 
-    m_es2Technique->openGLFilter()->setApi(QOpenGLFilter::ES);
-    m_es2Technique->openGLFilter()->setMajorVersion(2);
-    m_es2Technique->openGLFilter()->setMinorVersion(0);
-    m_es2Technique->openGLFilter()->setProfile(QOpenGLFilter::None);
+    m_es2Technique->graphicsApiFilter()->setApi(QGraphicsApiFilter::OpenGLES);
+    m_es2Technique->graphicsApiFilter()->setMajorVersion(2);
+    m_es2Technique->graphicsApiFilter()->setMinorVersion(0);
+    m_es2Technique->graphicsApiFilter()->setProfile(QGraphicsApiFilter::NoProfile);
 
     m_gl3RenderPass->setShaderProgram(m_gl3Shader);
     m_gl2RenderPass->setShaderProgram(m_gl2ES2Shader);
@@ -128,11 +132,53 @@ void QGoochMaterialPrivate::init()
     q->setEffect(m_effect);
 }
 
+void QGoochMaterialPrivate::handleDiffuseChanged(const QVariant &var)
+{
+    Q_Q(QGoochMaterial);
+    emit q->diffuseChanged(var.value<QColor>());
+}
+
+void QGoochMaterialPrivate::handleSpecularChanged(const QVariant &var)
+{
+    Q_Q(QGoochMaterial);
+    emit q->specularChanged(var.value<QColor>());
+}
+
+void QGoochMaterialPrivate::handleCoolChanged(const QVariant &var)
+{
+    Q_Q(QGoochMaterial);
+    emit q->coolChanged(var.value<QColor>());
+}
+
+void QGoochMaterialPrivate::handleWarmChanged(const QVariant &var)
+{
+    Q_Q(QGoochMaterial);
+    emit q->warmChanged(var.value<QColor>());
+}
+
+void QGoochMaterialPrivate::handleAlphaChanged(const QVariant &var)
+{
+    Q_Q(QGoochMaterial);
+    emit q->alphaChanged(var.toFloat());
+}
+
+void QGoochMaterialPrivate::handleBetaChanged(const QVariant &var)
+{
+    Q_Q(QGoochMaterial);
+    emit q->betaChanged(var.toFloat());
+}
+
+void QGoochMaterialPrivate::handleShininessChanged(const QVariant &var)
+{
+    Q_Q(QGoochMaterial);
+    emit q->shininessChanged(var.toFloat());
+}
+
 /*!
-    \class Qt3D::QGoochMaterial
+    \class Qt3DRender::QGoochMaterial
     \brief The QGoochMaterial provides a material that implements the Gooch
     shading model, popular in CAD and CAM applications.
-    \inmodule Qt3DRenderer
+    \inmodule Qt3DRender
     \since 5.5
 
     The Gooch lighting model uses both color and brightness to help show the
@@ -157,7 +203,7 @@ void QGoochMaterialPrivate::init()
 */
 
 /*!
-    Constructs a new Qt3D::QGoochMaterial instance with parent object \a parent.
+    Constructs a new Qt3DCore::QGoochMaterial instance with parent object \a parent.
 */
 QGoochMaterial::QGoochMaterial(QNode *parent)
     : QMaterial(*new QGoochMaterialPrivate, parent)
@@ -174,7 +220,7 @@ QGoochMaterial::QGoochMaterial(QGoochMaterialPrivate &dd, QNode *parent)
 }
 
 /*!
-    \property Qt3D::QGoochMaterial::diffuse
+    \property Qt3DRender::QGoochMaterial::diffuse
 
     Holds the current diffuse color.
 */
@@ -185,7 +231,7 @@ QColor QGoochMaterial::diffuse() const
 }
 
 /*!
-    \property Qt3D::QGoochMaterial::specular
+    \property Qt3DRender::QGoochMaterial::specular
 
     Holds the current specular color.
 */
@@ -196,7 +242,7 @@ QColor QGoochMaterial::specular() const
 }
 
 /*!
-    \property Qt3D::QGoochMaterial::cool
+    \property Qt3DRender::QGoochMaterial::cool
 
     Holds the current cool color.
 */
@@ -207,7 +253,7 @@ QColor QGoochMaterial::cool() const
 }
 
 /*!
-    \property Qt3D::QGoochMaterial::warm
+    \property Qt3DRender::QGoochMaterial::warm
 
     Holds the current warm color.
 */
@@ -218,7 +264,7 @@ QColor QGoochMaterial::warm() const
 }
 
 /*!
-    \property Qt3D::QGoochMaterial::alpha
+    \property Qt3DRender::QGoochMaterial::alpha
 
     Holds the current alpha value. The start point of the color ramp
     used by the Gooch shader is calculated as {c = cool + alpha * diffuse}.
@@ -230,7 +276,7 @@ float QGoochMaterial::alpha() const
 }
 
 /*!
-    \property Qt3D::QGoochMaterial::beta
+    \property Qt3DRender::QGoochMaterial::beta
 
     Holds the current beta value. The start point of the color ramp
     used by the Gooch shader is calculated as {c = warm + beta * diffuse}.
@@ -242,7 +288,7 @@ float QGoochMaterial::beta() const
 }
 
 /*!
-    \property Qt3D::QGoochMaterial::shininess
+    \property Qt3DRender::QGoochMaterial::shininess
 
     Holds the current shininess value. Higher values of shininess result in
     a smaller and brighter highlight.

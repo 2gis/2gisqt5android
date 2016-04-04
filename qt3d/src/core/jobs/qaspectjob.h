@@ -34,8 +34,8 @@
 **
 ****************************************************************************/
 
-#ifndef QT3D_QASPECTJOB_H
-#define QT3D_QASPECTJOB_H
+#ifndef QT3DCORE_QASPECTJOB_H
+#define QT3DCORE_QASPECTJOB_H
 
 #include <Qt3DCore/qt3dcore_global.h>
 #include <QSharedPointer>
@@ -43,7 +43,7 @@
 
 QT_BEGIN_NAMESPACE
 
-namespace Qt3D {
+namespace Qt3DCore {
 
 class QAspectJobPrivate;
 
@@ -54,6 +54,8 @@ public:
     virtual ~QAspectJob();
 
     void addDependency(QWeakPointer<QAspectJob> dependency);
+    void removeDependency(QWeakPointer<QAspectJob> dependency);
+
     QVector<QWeakPointer<QAspectJob> > dependencies() const;
 
     virtual void run() = 0;
@@ -68,8 +70,8 @@ private:
 
 typedef QSharedPointer<QAspectJob> QAspectJobPtr;
 
-} // namespace Qt3D
+} // namespace Qt3DCore
 
 QT_END_NAMESPACE
 
-#endif // QT3D_QASPECTJOB_H
+#endif // QT3DCORE_QASPECTJOB_H

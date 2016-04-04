@@ -34,6 +34,17 @@
 #ifndef QV4INSTR_MOTH_P_H
 #define QV4INSTR_MOTH_P_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include <QtCore/qglobal.h>
 #include <private/qv4value_p.h>
 #include <private/qv4function_p.h>
@@ -64,12 +75,19 @@ QT_BEGIN_NAMESPACE
     F(SetLookup, setLookup) \
     F(StoreQObjectProperty, storeQObjectProperty) \
     F(LoadQObjectProperty, loadQObjectProperty) \
+    F(StoreScopeObjectProperty, storeScopeObjectProperty) \
+    F(StoreContextObjectProperty, storeContextObjectProperty) \
+    F(LoadScopeObjectProperty, loadScopeObjectProperty) \
+    F(LoadContextObjectProperty, loadContextObjectProperty) \
+    F(LoadIdObject, loadIdObject) \
     F(LoadAttachedQObjectProperty, loadAttachedQObjectProperty) \
     F(LoadSingletonQObjectProperty, loadQObjectProperty) \
     F(Push, push) \
     F(CallValue, callValue) \
     F(CallProperty, callProperty) \
     F(CallPropertyLookup, callPropertyLookup) \
+    F(CallScopeObjectProperty, callScopeObjectProperty) \
+    F(CallContextObjectProperty, callContextObjectProperty) \
     F(CallElement, callElement) \
     F(CallActivationProperty, callActivationProperty) \
     F(CallGlobalLookup, callGlobalLookup) \
@@ -84,6 +102,8 @@ QT_BEGIN_NAMESPACE
     F(CallBuiltinDeleteMember, callBuiltinDeleteMember) \
     F(CallBuiltinDeleteSubscript, callBuiltinDeleteSubscript) \
     F(CallBuiltinDeleteName, callBuiltinDeleteName) \
+    F(CallBuiltinTypeofScopeObjectProperty, callBuiltinTypeofScopeObjectProperty) \
+    F(CallBuiltinTypeofContextObjectProperty, callBuiltinTypeofContextObjectProperty) \
     F(CallBuiltinTypeofMember, callBuiltinTypeofMember) \
     F(CallBuiltinTypeofSubscript, callBuiltinTypeofSubscript) \
     F(CallBuiltinTypeofName, callBuiltinTypeofName) \
@@ -125,10 +145,8 @@ QT_BEGIN_NAMESPACE
     F(Sub, sub) \
     F(BinopContext, binopContext) \
     F(LoadThis, loadThis) \
-    F(LoadQmlIdArray, loadQmlIdArray) \
+    F(LoadQmlContext, loadQmlContext) \
     F(LoadQmlImportedScripts, loadQmlImportedScripts) \
-    F(LoadQmlContextObject, loadQmlContextObject) \
-    F(LoadQmlScopeObject, loadQmlScopeObject) \
     F(LoadQmlSingleton, loadQmlSingleton)
 
 #if defined(Q_CC_GNU) && (!defined(Q_CC_INTEL) || __INTEL_COMPILER >= 1200)
@@ -293,6 +311,24 @@ union Instr
         Param base;
         Param result;
     };
+    struct instr_loadScopeObjectProperty {
+        MOTH_INSTR_HEADER
+        int propertyIndex;
+        Param base;
+        Param result;
+    };
+    struct instr_loadContextObjectProperty {
+        MOTH_INSTR_HEADER
+        int propertyIndex;
+        Param base;
+        Param result;
+    };
+    struct instr_loadIdObject {
+        MOTH_INSTR_HEADER
+        int index;
+        Param base;
+        Param result;
+    };
     struct instr_loadQObjectProperty {
         MOTH_INSTR_HEADER
         int propertyIndex;
@@ -316,6 +352,18 @@ union Instr
         MOTH_INSTR_HEADER
         int index;
         Param base;
+        Param source;
+    };
+    struct instr_storeScopeObjectProperty {
+        MOTH_INSTR_HEADER
+        Param base;
+        int propertyIndex;
+        Param source;
+    };
+    struct instr_storeContextObjectProperty {
+        MOTH_INSTR_HEADER
+        Param base;
+        int propertyIndex;
         Param source;
     };
     struct instr_storeQObjectProperty {
@@ -372,6 +420,22 @@ union Instr
     struct instr_callPropertyLookup {
         MOTH_INSTR_HEADER
         int lookupIndex;
+        quint32 argc;
+        quint32 callData;
+        Param base;
+        Param result;
+    };
+    struct instr_callScopeObjectProperty {
+        MOTH_INSTR_HEADER
+        int index;
+        quint32 argc;
+        quint32 callData;
+        Param base;
+        Param result;
+    };
+    struct instr_callContextObjectProperty {
+        MOTH_INSTR_HEADER
+        int index;
         quint32 argc;
         quint32 callData;
         Param base;
@@ -447,6 +511,18 @@ union Instr
     struct instr_callBuiltinDeleteName {
         MOTH_INSTR_HEADER
         int name;
+        Param result;
+    };
+    struct instr_callBuiltinTypeofScopeObjectProperty {
+        MOTH_INSTR_HEADER
+        int index;
+        Param base;
+        Param result;
+    };
+    struct instr_callBuiltinTypeofContextObjectProperty {
+        MOTH_INSTR_HEADER
+        int index;
+        Param base;
         Param result;
     };
     struct instr_callBuiltinTypeofMember {
@@ -684,19 +760,11 @@ union Instr
         MOTH_INSTR_HEADER
         Param result;
     };
-    struct instr_loadQmlIdArray {
+    struct instr_loadQmlContext {
         MOTH_INSTR_HEADER
         Param result;
     };
     struct instr_loadQmlImportedScripts {
-        MOTH_INSTR_HEADER
-        Param result;
-    };
-    struct instr_loadQmlContextObject {
-        MOTH_INSTR_HEADER
-        Param result;
-    };
-    struct instr_loadQmlScopeObject {
         MOTH_INSTR_HEADER
         Param result;
     };
@@ -725,15 +793,22 @@ union Instr
     instr_storeElementLookup storeElementLookup;
     instr_loadProperty loadProperty;
     instr_getLookup getLookup;
+    instr_loadScopeObjectProperty loadScopeObjectProperty;
+    instr_loadContextObjectProperty loadContextObjectProperty;
+    instr_loadIdObject loadIdObject;
     instr_loadQObjectProperty loadQObjectProperty;
     instr_loadAttachedQObjectProperty loadAttachedQObjectProperty;
     instr_storeProperty storeProperty;
     instr_setLookup setLookup;
+    instr_storeScopeObjectProperty storeScopeObjectProperty;
+    instr_storeContextObjectProperty storeContextObjectProperty;
     instr_storeQObjectProperty storeQObjectProperty;
     instr_push push;
     instr_callValue callValue;
     instr_callProperty callProperty;
     instr_callPropertyLookup callPropertyLookup;
+    instr_callScopeObjectProperty callScopeObjectProperty;
+    instr_callContextObjectProperty callContextObjectProperty;
     instr_callElement callElement;
     instr_callActivationProperty callActivationProperty;
     instr_callGlobalLookup callGlobalLookup;
@@ -748,6 +823,8 @@ union Instr
     instr_callBuiltinDeleteMember callBuiltinDeleteMember;
     instr_callBuiltinDeleteSubscript callBuiltinDeleteSubscript;
     instr_callBuiltinDeleteName callBuiltinDeleteName;
+    instr_callBuiltinTypeofScopeObjectProperty callBuiltinTypeofScopeObjectProperty;
+    instr_callBuiltinTypeofContextObjectProperty callBuiltinTypeofContextObjectProperty;
     instr_callBuiltinTypeofMember callBuiltinTypeofMember;
     instr_callBuiltinTypeofSubscript callBuiltinTypeofSubscript;
     instr_callBuiltinTypeofName callBuiltinTypeofName;
@@ -789,10 +866,8 @@ union Instr
     instr_sub sub;
     instr_binopContext binopContext;
     instr_loadThis loadThis;
-    instr_loadQmlIdArray loadQmlIdArray;
+    instr_loadQmlContext loadQmlContext;
     instr_loadQmlImportedScripts loadQmlImportedScripts;
-    instr_loadQmlContextObject loadQmlContextObject;
-    instr_loadQmlScopeObject loadQmlScopeObject;
     instr_loadQmlSingleton loadQmlSingleton;
 
     static int size(Type type);

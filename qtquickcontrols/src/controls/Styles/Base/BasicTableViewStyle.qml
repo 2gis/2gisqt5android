@@ -84,7 +84,7 @@ ScrollViewStyle {
         See qtquickcontrolsstyles-tableviewstyle.qdoc and qtquickcontrolsstyles-treeviewstyle.qdoc
     */
     property Component headerDelegate: BorderImage {
-        height: textItem.implicitHeight * 1.2
+        height: Math.round(textItem.implicitHeight * 1.2)
         source: "images/header.png"
         border.left: 4
         border.bottom: 2
@@ -94,19 +94,17 @@ ScrollViewStyle {
             anchors.fill: parent
             verticalAlignment: Text.AlignVCenter
             horizontalAlignment: styleData.textAlignment
-            anchors.leftMargin: 12
+            anchors.leftMargin: horizontalAlignment === Text.AlignLeft ? 12 : 1
+            anchors.rightMargin: horizontalAlignment === Text.AlignRight ? 8 : 1
             text: styleData.value
             elide: Text.ElideRight
             color: textColor
             renderType: Settings.isMobile ? Text.QtRendering : Text.NativeRendering
         }
         Rectangle {
-            anchors.right: parent.right
-            anchors.top: parent.top
-            anchors.bottom: parent.bottom
-            anchors.bottomMargin: 1
-            anchors.topMargin: 1
             width: 1
+            height: parent.height - 2
+            y: 1
             color: "#ccc"
         }
     }
@@ -137,8 +135,9 @@ ScrollViewStyle {
         Text {
             id: label
             objectName: "label"
-            width: parent.width - x
-            x: styleData.depth && styleData.column === 0 ? 0 : 8
+            width: parent.width - x - (horizontalAlignment === Text.AlignRight ? 8 : 1)
+            x: (styleData.hasOwnProperty("depth") && styleData.column === 0) ? 0 :
+               horizontalAlignment === Text.AlignRight ? 1 : 8
             horizontalAlignment: styleData.textAlignment
             anchors.verticalCenter: parent.verticalCenter
             anchors.verticalCenterOffset: 1

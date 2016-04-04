@@ -36,9 +36,9 @@
 
 #include "qquickwebenginesettings_p.h"
 
-#include "qquickwebengineprofile_p.h"
 #include "web_engine_settings.h"
 
+#include <QtWebEngine/QQuickWebEngineProfile>
 #include <QtCore/QList>
 
 QT_BEGIN_NAMESPACE
@@ -54,13 +54,15 @@ QQuickWebEngineSettings::QQuickWebEngineSettings(QQuickWebEngineSettings *parent
     \instantiates QQuickWebEngineSettings
     \inqmlmodule QtWebEngine
     \since QtWebEngine 1.1
-    \brief WebEngineSettings allows configuration of browser properties and attributes.
+    \brief Allows configuration of browser properties and attributes.
 
-    WebEngineSettings allows configuration of browser properties and generic attributes, such as
-    JavaScript support, focus behavior, and access to remote content.
+    The WebEngineSettings type can be used to configure browser properties and generic
+    attributes, such as JavaScript support, focus behavior, and access to remote content. This type
+    is uncreatable, but the default settings for all web engine views can be accessed by using
+    the \l [QML] {WebEngine::settings}{WebEngine.settings} property.
 
-    Each WebEngineView can have individual settings.
-
+    Each web engine view can have individual settings that can be accessed by using the
+    \l{WebEngineView::settings}{WebEngineView.settings} property.
 */
 
 
@@ -206,6 +208,31 @@ bool QQuickWebEngineSettings::errorPageEnabled() const
 }
 
 /*!
+    \qmlproperty bool WebEngineSettings::pluginsEnabled
+
+    Enables support for Pepper plugins, such as the Flash player.
+
+    Disabled by default.
+*/
+bool QQuickWebEngineSettings::pluginsEnabled() const
+{
+    return d_ptr->testAttribute(WebEngineSettings::PluginsEnabled);
+}
+
+/*!
+    \qmlproperty bool WebEngineSettings::fullscreenSupportEnabled
+    \since QtWebEngine 1.2
+
+    Tells the web engine whether fullscreen is supported in this application or not.
+
+    Enabled by default.
+*/
+bool QQuickWebEngineSettings::fullScreenSupportEnabled() const
+{
+    return d_ptr->testAttribute(WebEngineSettings::FullScreenSupportEnabled);
+}
+
+/*!
     \qmlproperty QString WebEngineSettings::defaultTextEncoding
 
     Sets the default encoding. The value must be a string describing an encoding such as "utf-8" or
@@ -307,6 +334,22 @@ void QQuickWebEngineSettings::setErrorPageEnabled(bool on)
     d_ptr->setAttribute(WebEngineSettings::ErrorPageEnabled, on);
     if (wasOn != on)
         Q_EMIT errorPageEnabledChanged();
+}
+
+void QQuickWebEngineSettings::setPluginsEnabled(bool on)
+{
+    bool wasOn = d_ptr->testAttribute(WebEngineSettings::PluginsEnabled);
+    d_ptr->setAttribute(WebEngineSettings::PluginsEnabled, on);
+    if (wasOn != on)
+        Q_EMIT pluginsEnabledChanged();
+}
+
+void QQuickWebEngineSettings::setFullScreenSupportEnabled(bool on)
+{
+    bool wasOn = d_ptr->testAttribute(WebEngineSettings::FullScreenSupportEnabled);
+    d_ptr->setAttribute(WebEngineSettings::FullScreenSupportEnabled, on);
+    if (wasOn != on)
+        Q_EMIT fullScreenSupportEnabledChanged();
 }
 
 void QQuickWebEngineSettings::setDefaultTextEncoding(QString encoding)

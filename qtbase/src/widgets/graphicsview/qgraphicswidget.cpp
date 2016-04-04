@@ -304,6 +304,7 @@ void QGraphicsWidget::resize(const QSizeF &size)
 
 /*!
     \fn void QGraphicsWidget::resize(qreal w, qreal h)
+    \overload
 
     This convenience function is equivalent to calling resize(QSizeF(w, h)).
 
@@ -2397,7 +2398,7 @@ bool QGraphicsWidget::close()
 #if 0
 void QGraphicsWidget::dumpFocusChain()
 {
-    qDebug() << "=========== Dumping focus chain ==============";
+    qDebug("=========== Dumping focus chain ==============");
     int i = 0;
     QGraphicsWidget *next = this;
     QSet<QGraphicsWidget*> visited;

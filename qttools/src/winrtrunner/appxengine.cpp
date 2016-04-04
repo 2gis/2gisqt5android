@@ -281,13 +281,14 @@ bool AppxEngine::installDependencies()
 
     const QString extensionSdkDir = extensionSdkPath();
     if (!QFile::exists(extensionSdkDir)) {
-        qCWarning(lcWinRtRunner).nospace()
-                << QString(QStringLiteral("The directory '%1' does not exist.")).arg(
+        qCWarning(lcWinRtRunner).nospace().noquote()
+                << QStringLiteral("The directory \"%1\" does not exist.").arg(
                        QDir::toNativeSeparators(extensionSdkDir));
         return false;
     }
-    qCDebug(lcWinRtRunner).nospace()
-        << "looking for dependency packages in " << extensionSdkDir;
+    qCDebug(lcWinRtRunner).nospace().noquote()
+        << "looking for dependency packages in \""
+        << QDir::toNativeSeparators(extensionSdkDir) << '"';
     QDirIterator dit(extensionSdkDir, QStringList() << QStringLiteral("*.appx"),
                      QDir::Files,
                      QDirIterator::Subdirectories);
@@ -296,9 +297,18 @@ bool AppxEngine::installDependencies()
 
         HRESULT hr;
         ComPtr<IStream> inputStream;
-        hr = SHCreateStreamOnFileEx(wchar(dit.filePath()),
-                                    STGM_READ | STGM_SHARE_EXCLUSIVE,
-                                    0, FALSE, NULL, &inputStream);
+        forever {
+            hr = SHCreateStreamOnFileEx(wchar(dit.filePath()),
+                                        STGM_READ | STGM_SHARE_EXCLUSIVE,
+                                        0, FALSE, NULL, &inputStream);
+            if (HRESULT_CODE(hr) == ERROR_SHARING_VIOLATION) {
+                qCWarning(lcWinRtRunner).nospace()
+                    << "Input stream is locked by another process. Will retry...";
+                Sleep(1000);
+            } else {
+                break;
+            }
+        }
         CHECK_RESULT("Failed to create input stream for package in ExtensionSdkDir.", continue);
 
         ComPtr<IAppxPackageReader> packageReader;
@@ -328,8 +338,9 @@ bool AppxEngine::installDependencies()
         if (d->packageArchitecture != arch)
             continue;
 
-        qCDebug(lcWinRtRunner).nospace()
-            << "installing dependency " << name << " from " << dit.filePath();
+        qCDebug(lcWinRtRunner).nospace().noquote()
+            << "installing dependency \"" << name << "\" from \""
+            << QDir::toNativeSeparators(dit.filePath()) << '"';
         if (!installPackage(manifestReader.Get(), dit.filePath())) {
             qCWarning(lcWinRtRunner) << "Failed to install package:" << name;
             return false;

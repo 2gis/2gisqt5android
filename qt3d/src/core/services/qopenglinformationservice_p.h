@@ -34,28 +34,43 @@
 **
 ****************************************************************************/
 
-#ifndef QT3D_QOPENGLINFORMATIONSERVICE_P_H
-#define QT3D_QOPENGLINFORMATIONSERVICE_P_H
+#ifndef QT3DCORE_QOPENGLINFORMATIONSERVICE_P_H
+#define QT3DCORE_QOPENGLINFORMATIONSERVICE_P_H
+
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists for the convenience
+// of other Qt classes.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
 
 #include <Qt3DCore/qt3dcore_global.h>
-#include <Qt3DCore/private/qabstractserviceprovider_p.h>
-#include <Qt3DCore/qservicelocator.h>
+#include <Qt3DCore/private/qservicelocator_p.h>
+#include <QtGui/qsurfaceformat.h>
+#include <QtCore/qstring.h>
 
 QT_BEGIN_NAMESPACE
 
-namespace Qt3D {
+namespace Qt3DCore {
 
-class QOpenGLInformationServicePrivate : public QAbstractServiceProviderPrivate
+class QOpenGLInformationServicePrivate;
+
+class QT3DCORESHARED_EXPORT QOpenGLInformationService : public QAbstractServiceProvider
 {
 public:
-    QOpenGLInformationServicePrivate(const QString &description)
-        : QAbstractServiceProviderPrivate(QServiceLocator::OpenGLInformation, description)
-    {}
+    virtual QSurfaceFormat format() const = 0;
+
+protected:
+    QOpenGLInformationService(const QString &description = QString());
+    QOpenGLInformationService(QOpenGLInformationServicePrivate &dd);
 };
 
-}
+} // namespace Qt3DCore
 
 QT_END_NAMESPACE
 
-#endif // QT3D_QOPENGLINFORMATIONSERVICE_P_H
-
+#endif // QT3DCORE_QOPENGLINFORMATIONSERVICE_P_H

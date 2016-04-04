@@ -441,9 +441,6 @@ namespace QPatternist
     class MergeIterator
     {
     public:
-        inline MergeIterator()
-        {
-        }
 
         inline
         QXmlNodeModelIndexIteratorPointer
@@ -452,12 +449,9 @@ namespace QPatternist
         {
             return it;
         }
-
-    private:
-        Q_DISABLE_COPY(MergeIterator)
     };
 
-    static const MergeIterator mergeIterator;
+    static const MergeIterator mergeIterator = {};
 
     /**
      * One might wonder, why not use makeVectorIterator() directly on a QVector
@@ -483,8 +477,9 @@ namespace QPatternist
         virtual QAbstractXmlForwardIterator<QXmlNodeModelIndexIteratorPointer>::Ptr copy() const
         {
             ItVector result;
-
-            for(int i = 0; i < m_list.count(); ++i)
+            const int count = m_list.count();
+            result.reserve(count);
+            for (int i = 0; i < count; ++i)
                 result.append(m_list.at(i)->copy());
 
             return Ptr(new IteratorVector(result));
@@ -501,6 +496,7 @@ static inline QXmlNodeModelIndexIteratorPointer mergeIterators(const QXmlNodeMod
                                                                const QXmlNodeModelIndexIteratorPointer &it2)
 {
     QVector<QXmlNodeModelIndexIteratorPointer> iterators;
+    iterators.reserve(2);
     iterators.append(makeSingletonIterator(node));
     iterators.append(it2);
 

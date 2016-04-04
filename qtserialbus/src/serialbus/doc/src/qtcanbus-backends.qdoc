@@ -1,0 +1,67 @@
+/****************************************************************************
+**
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
+**
+** This file is part of the documentation of the Qt Toolkit.
+**
+** $QT_BEGIN_LICENSE:FDL$
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
+**
+** GNU Free Documentation License Usage
+** Alternatively, this file may be used under the terms of the GNU Free
+** Documentation License version 1.3 as published by the Free Software
+** Foundation and appearing in the file included in the packaging of
+** this file. Please review the following information to ensure
+** the GNU Free Documentation License version 1.3 requirements
+** will be met: http://www.gnu.org/copyleft/fdl.html.
+** $QT_END_LICENSE$
+**
+****************************************************************************/
+/*!
+    \page qtcanbus-backends.html
+    \title Qt CAN Bus
+
+    \brief Implemented Qt CAN Bus.
+
+    A Controller Area Network (CAN) is a vehicle bus standard designed to allow microcontrollers
+    and devices to communicate with each other in applications without a host computer.
+
+    It is a message-based protocol, designed originally for multiplex electrical wiring within
+    automobiles, but is also used in many other contexts.
+
+    The CAN Bus API provides some common API to access the CAN devices:
+
+    \list
+        \li QCanBusDevice provides an API for direct access to the CAN device.
+        \li QCanBusFrame defines a CAN frame that can be written and read from QCanBusDevice.
+    \endlist
+
+    Various vendors provide CAN devices with different API for access. The CAN bus plugin
+    supports the following set of backends for various devices:
+
+    \table
+        \header
+            \li Vendor
+            \li Backend
+            \li Brief description
+        \row
+            \li CAN over Linux sockets
+            \li \l {Using SocketCAN Backend}{SocketCAN}
+            \li CAN bus backend using Linux sockets and open source drivers.
+        \row
+            \li PEAK-System
+            \li \l {Using PeakCAN Backend}{PeakCAN}
+            \li CAN bus backend using the PCAN adapters.
+        \row
+            \li MHS Elektronik
+            \li \l {Using TinyCAN Backend}{TinyCAN}
+            \li CAN bus backend using the Tiny-CAN adapters.
+    \endtable
+ */

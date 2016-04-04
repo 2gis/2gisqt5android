@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 # Copyright (C) 2013 Adobe Systems Incorporated. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -180,12 +182,14 @@ CONTENT OF TEST
         self.verify_prefixed_properties(converted, test_content[0])
 
     def test_convert_test_harness_paths(self):
-        """ Tests convert_testharness_paths() with a test that uses all three testharness files """
+        """ Tests convert_testharness_paths() with a test that uses multiple testharness files """
 
         test_html = """<head>
 <link href="/resources/testharness.css" rel="stylesheet" type="text/css">
 <script src="/resources/testharness.js"></script>
 <script src="/resources/testharnessreport.js"></script>
+<script src="/resources/WebIDLParser.js"></script>
+<script src="/resources/idlharness.js"></script>
 </head>
 """
         fake_dir_path = self.fake_dir_path('testharnesspaths')
@@ -201,7 +205,7 @@ CONTENT OF TEST
             oc.restore_output()
 
         self.verify_conversion_happened(converted)
-        self.verify_test_harness_paths(converter, converted[1], fake_dir_path, 2, 1)
+        self.verify_test_harness_paths(converter, converted[1], fake_dir_path, 4, 1)
 
     def test_convert_vendor_prefix_js_paths(self):
         test_html = """<head>
@@ -235,6 +239,7 @@ CONTENT OF TEST
         """ Tests convert_prefixed_properties() file that has 20 properties requiring the -webkit- prefix:
         10 in one style block + 5 in another style
         block + 5 inline styles, including one with multiple prefixed properties.
+        2 when prefixed properties appear in comments without ending ';'.
         The properties in the test content are in all sorts of wack formatting.
         """
 
@@ -291,11 +296,16 @@ CONTENT OF TEST
     @test19@: propvalue;
 }
 
+#missing-semicolon-in-comments {
+    /* @test20@: propvalue */
+    @test21@: propvalue;
+}
+
 ]]></style>
 </html>
 """
         converter = _W3CTestConverter(DUMMY_PATH, DUMMY_FILENAME, None)
-        test_content = self.generate_test_content(converter.prefixed_properties, 20, test_html)
+        test_content = self.generate_test_content(converter.prefixed_properties, 22, test_html)
 
         oc = OutputCapture()
         oc.capture_output()

@@ -88,16 +88,18 @@ static inline QString sizeString(const QFileInfo &fi)
 }
 
 class DisplayFileSystemModel : public QFileSystemModel {
+    Q_OBJECT
 public:
     explicit DisplayFileSystemModel(QObject *parent = Q_NULLPTR)
         : QFileSystemModel(parent) {}
 
-    enum  {
+    enum Roles  {
         SizeRole = Qt::UserRole + 4,
         DisplayableFilePermissionsRole = Qt::UserRole + 5,
         LastModifiedRole = Qt::UserRole + 6,
-        UrlStringRole = Qt::UserRole + 7 // 263
+        UrlStringRole = Qt::UserRole + 7
     };
+    Q_ENUM(Roles)
 
     QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const Q_DECL_OVERRIDE
     {
@@ -133,11 +135,18 @@ int main(int argc, char *argv[])
     QApplication app(argc, argv);
 
     QQmlApplicationEngine engine;
+    qmlRegisterUncreatableType<DisplayFileSystemModel>("io.qt.examples.quick.controls.filesystembrowser", 1, 0,
+                                                       "FileSystemModel", "Cannot create a FileSystemModel instance.");
     QFileSystemModel *fsm = new DisplayFileSystemModel(&engine);
     fsm->setRootPath(QDir::homePath());
     fsm->setResolveSymlinks(true);
     engine.rootContext()->setContextProperty("fileSystemModel", fsm);
+    engine.rootContext()->setContextProperty("rootPathIndex", fsm->index(fsm->rootPath()));
     engine.load(QUrl(QStringLiteral("qrc:///main.qml")));
+    if (engine.rootObjects().isEmpty())
+        return -1;
 
     return app.exec();
 }
+
+#include "main.moc"

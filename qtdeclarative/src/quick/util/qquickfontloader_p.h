@@ -34,6 +34,17 @@
 #ifndef QQUICKFONTLOADER_H
 #define QQUICKFONTLOADER_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include <qqml.h>
 
 #include <QtCore/qobject.h>
@@ -46,7 +57,6 @@ class Q_AUTOTEST_EXPORT QQuickFontLoader : public QObject
 {
     Q_OBJECT
     Q_DECLARE_PRIVATE(QQuickFontLoader)
-    Q_ENUMS(Status)
 
     Q_PROPERTY(QUrl source READ source WRITE setSource NOTIFY sourceChanged)
     Q_PROPERTY(QString name READ name WRITE setName NOTIFY nameChanged)
@@ -54,6 +64,7 @@ class Q_AUTOTEST_EXPORT QQuickFontLoader : public QObject
 
 public:
     enum Status { Null = 0, Ready, Loading, Error };
+    Q_ENUM(Status)
 
     QQuickFontLoader(QObject *parent = 0);
     ~QQuickFontLoader();

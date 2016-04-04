@@ -13,7 +13,6 @@ namespace media {
 
 AudioClock::AudioClock(base::TimeDelta start_timestamp, int sample_rate)
     : start_timestamp_(start_timestamp),
-      sample_rate_(sample_rate),
       microseconds_per_frame_(
           static_cast<double>(base::Time::kMicrosecondsPerSecond) /
           sample_rate),
@@ -28,7 +27,7 @@ AudioClock::~AudioClock() {
 void AudioClock::WroteAudio(int frames_written,
                             int frames_requested,
                             int delay_frames,
-                            float playback_rate) {
+                            double playback_rate) {
   DCHECK_GE(frames_written, 0);
   DCHECK_LE(frames_written, frames_requested);
   DCHECK_GE(delay_frames, 0);
@@ -36,7 +35,7 @@ void AudioClock::WroteAudio(int frames_written,
 
   // First write: initialize buffer with silence.
   if (start_timestamp_ == front_timestamp_ && buffered_.empty())
-    PushBufferedAudioData(delay_frames, 0.0f);
+    PushBufferedAudioData(delay_frames, 0.0);
 
   // Move frames from |buffered_| into the computed timestamp based on
   // |delay_frames|.
@@ -45,53 +44,39 @@ void AudioClock::WroteAudio(int frames_written,
   // reallocations in cases where |buffered_| gets emptied.
   int64_t frames_played =
       std::max(INT64_C(0), total_buffered_frames_ - delay_frames);
-  front_timestamp_ += ComputeBufferedMediaTime(frames_played);
   PushBufferedAudioData(frames_written, playback_rate);
-  PushBufferedAudioData(frames_requested - frames_written, 0.0f);
+  PushBufferedAudioData(frames_requested - frames_written, 0.0);
   PopBufferedAudioData(frames_played);
 
+  // Update our front and back timestamps.  The back timestamp is considered the
+  // authoritative source of truth, so base the front timestamp on range of data
+  // buffered.  Doing so avoids accumulation errors on the front timestamp.
   back_timestamp_ += base::TimeDelta::FromMicroseconds(
       frames_written * playback_rate * microseconds_per_frame_);
-
-  // Update cached values.
-  double scaled_frames = 0;
-  double scaled_frames_at_same_rate = 0;
-  bool found_silence = false;
-  for (size_t i = 0; i < buffered_.size(); ++i) {
-    if (buffered_[i].playback_rate == 0) {
-      found_silence = true;
-      continue;
-    }
-
-    // Any buffered silence breaks our contiguous stretch of audio data.
-    if (found_silence)
-      break;
-
-    scaled_frames += (buffered_[i].frames * buffered_[i].playback_rate);
-
-    if (i == 0)
-      scaled_frames_at_same_rate = scaled_frames;
-  }
-
-  contiguous_audio_data_buffered_ = base::TimeDelta::FromMicroseconds(
-      scaled_frames * microseconds_per_frame_);
-  contiguous_audio_data_buffered_at_same_rate_ =
-      base::TimeDelta::FromMicroseconds(scaled_frames_at_same_rate *
-                                        microseconds_per_frame_);
+  front_timestamp_ = back_timestamp_ - ComputeBufferedMediaDuration();
+  DCHECK_LE(front_timestamp_, back_timestamp_);
 }
 
-base::TimeDelta AudioClock::TimestampSinceWriting(
-    base::TimeDelta time_since_writing) const {
-  int64_t frames_played_since_writing = std::min(
-      total_buffered_frames_,
-      static_cast<int64_t>(time_since_writing.InSecondsF() * sample_rate_));
-  return front_timestamp_ +
-         ComputeBufferedMediaTime(frames_played_since_writing);
+void AudioClock::CompensateForSuspendedWrites(base::TimeDelta elapsed,
+                                              int delay_frames) {
+  const int64_t frames_elapsed =
+      elapsed.InMicroseconds() / microseconds_per_frame_ + 0.5;
+
+  // No need to do anything if we're within the limits of our played out audio
+  // or there are no delay frames, the next WroteAudio() call will expire
+  // everything correctly.
+  if (frames_elapsed < total_buffered_frames_ || !delay_frames)
+    return;
+
+  // Otherwise, flush everything and prime with the delay frames.
+  WroteAudio(0, 0, 0, 0);
+  DCHECK(buffered_.empty());
+  PushBufferedAudioData(delay_frames, 0.0);
 }
 
 base::TimeDelta AudioClock::TimeUntilPlayback(base::TimeDelta timestamp) const {
-  DCHECK(timestamp >= front_timestamp_);
-  DCHECK(timestamp <= back_timestamp_);
+  DCHECK_GE(timestamp, front_timestamp_);
+  DCHECK_LE(timestamp, back_timestamp_);
 
   int64_t frames_until_timestamp = 0;
   double timestamp_us = timestamp.InMicroseconds();
@@ -126,11 +111,39 @@ base::TimeDelta AudioClock::TimeUntilPlayback(base::TimeDelta timestamp) const {
                                            microseconds_per_frame_);
 }
 
-AudioClock::AudioData::AudioData(int64_t frames, float playback_rate)
+void AudioClock::ContiguousAudioDataBufferedForTesting(
+    base::TimeDelta* total,
+    base::TimeDelta* same_rate_total) const {
+  double scaled_frames = 0;
+  double scaled_frames_at_same_rate = 0;
+  bool found_silence = false;
+  for (size_t i = 0; i < buffered_.size(); ++i) {
+    if (buffered_[i].playback_rate == 0) {
+      found_silence = true;
+      continue;
+    }
+
+    // Any buffered silence breaks our contiguous stretch of audio data.
+    if (found_silence)
+      break;
+
+    scaled_frames += (buffered_[i].frames * buffered_[i].playback_rate);
+
+    if (i == 0)
+      scaled_frames_at_same_rate = scaled_frames;
+  }
+
+  *total = base::TimeDelta::FromMicroseconds(scaled_frames *
+                                             microseconds_per_frame_);
+  *same_rate_total = base::TimeDelta::FromMicroseconds(
+      scaled_frames_at_same_rate * microseconds_per_frame_);
+}
+
+AudioClock::AudioData::AudioData(int64_t frames, double playback_rate)
     : frames(frames), playback_rate(playback_rate) {
 }
 
-void AudioClock::PushBufferedAudioData(int64_t frames, float playback_rate) {
+void AudioClock::PushBufferedAudioData(int64_t frames, double playback_rate) {
   if (frames == 0)
     return;
 
@@ -160,16 +173,10 @@ void AudioClock::PopBufferedAudioData(int64_t frames) {
   }
 }
 
-base::TimeDelta AudioClock::ComputeBufferedMediaTime(int64_t frames) const {
-  DCHECK_LE(frames, total_buffered_frames_);
-
+base::TimeDelta AudioClock::ComputeBufferedMediaDuration() const {
   double scaled_frames = 0;
-  for (size_t i = 0; i < buffered_.size() && frames > 0; ++i) {
-    int64_t min_frames = std::min(buffered_[i].frames, frames);
-    scaled_frames += min_frames * buffered_[i].playback_rate;
-    frames -= min_frames;
-  }
-
+  for (const auto& buffer : buffered_)
+    scaled_frames += buffer.frames * buffer.playback_rate;
   return base::TimeDelta::FromMicroseconds(scaled_frames *
                                            microseconds_per_frame_);
 }

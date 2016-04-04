@@ -37,13 +37,14 @@
 #include "qjsengine.h"
 #include "qjsvalue.h"
 #include "qjsvalue_p.h"
-#include "qv4value_inl_p.h"
+#include "qv4value_p.h"
 #include "qv4object_p.h"
 #include "qv4functionobject_p.h"
 #include "qv4dateobject_p.h"
 #include "qv4runtime_p.h"
 #include "qv4variantobject_p.h"
 #include "qv4regexpobject_p.h"
+#include "qv4errorobject_p.h"
 #include "private/qv8engine_p.h"
 #include <private/qv4mm_p.h>
 #include <private/qv4scopedvalue_p.h>
@@ -57,7 +58,6 @@
 
   \ingroup qtjavascript
   \inmodule QtQml
-  \mainclass
 
   QJSValue supports the types defined in the \l{ECMA-262}
   standard: The primitive types, which are Undefined, Null, Boolean,
@@ -329,8 +329,7 @@ bool QJSValue::isError() const
     QV4::Value *val = QJSValuePrivate::getValue(this);
     if (!val)
         return false;
-    Object *o = val->asObject();
-    return o && o->asErrorObject();
+    return val->as<ErrorObject>();
 }
 
 /*!
@@ -344,7 +343,7 @@ bool QJSValue::isArray() const
     QV4::Value *val = QJSValuePrivate::getValue(this);
     if (!val)
         return false;
-    return val->asArrayObject();
+    return val->as<ArrayObject>();
 }
 
 /*!
@@ -361,7 +360,7 @@ bool QJSValue::isObject() const
     QV4::Value *val = QJSValuePrivate::getValue(this);
     if (!val)
         return false;
-    return val->asObject();
+    return val->as<Object>();
 }
 
 /*!
@@ -375,7 +374,7 @@ bool QJSValue::isCallable() const
     QV4::Value *val = QJSValuePrivate::getValue(this);
     if (!val)
         return false;
-    return val->asFunctionObject();
+    return val->as<FunctionObject>();
 }
 
 /*!
@@ -601,7 +600,7 @@ QVariant QJSValue::toVariant() const
     QV4::Value *val = QJSValuePrivate::valueForData(this, &scratch);
     Q_ASSERT(val);
 
-    if (Object *o = val->asObject())
+    if (Object *o = val->as<Object>())
         return o->engine()->toVariant(*val, /*typeHint*/ -1, /*createJSValueForObjects*/ false);
 
     if (val->isString())
@@ -640,7 +639,7 @@ QJSValue QJSValue::call(const QJSValueList &args)
     if (!val)
         return QJSValue();
 
-    FunctionObject *f = val->asFunctionObject();
+    FunctionObject *f = val->as<FunctionObject>();
     if (!f)
         return QJSValue();
 
@@ -649,7 +648,7 @@ QJSValue QJSValue::call(const QJSValueList &args)
 
     Scope scope(engine);
     ScopedCallData callData(scope, args.length());
-    callData->thisObject = engine->globalObject()->asReturnedValue();
+    callData->thisObject = engine->globalObject;
     for (int i = 0; i < args.size(); ++i) {
         if (!QJSValuePrivate::checkEngine(engine, args.at(i))) {
             qWarning("QJSValue::call() failed: cannot call function with argument created in a different engine");
@@ -691,7 +690,7 @@ QJSValue QJSValue::callWithInstance(const QJSValue &instance, const QJSValueList
     if (!val)
         return QJSValue();
 
-    FunctionObject *f = val->asFunctionObject();
+    FunctionObject *f = val->as<FunctionObject>();
     if (!f)
         return QJSValue();
 
@@ -745,7 +744,7 @@ QJSValue QJSValue::callAsConstructor(const QJSValueList &args)
     if (!val)
         return QJSValue();
 
-    FunctionObject *f = val->asFunctionObject();
+    FunctionObject *f = val->as<FunctionObject>();
     if (!f)
         return QJSValue();
 
@@ -801,7 +800,7 @@ QJSValue QJSValue::prototype() const
     if (!engine)
         return QJSValue();
     QV4::Scope scope(engine);
-    ScopedObject o(scope, QJSValuePrivate::getValue(this)->asObject());
+    ScopedObject o(scope, QJSValuePrivate::getValue(this)->as<Object>());
     if (!o)
         return QJSValue();
     ScopedObject p(scope, o->prototype());
@@ -1041,7 +1040,7 @@ QJSValue QJSValue::property(quint32 arrayIndex) const
     if (!o)
         return QJSValue();
 
-    QV4::ScopedValue result(scope, arrayIndex == UINT_MAX ? o->get(engine->id_uintMax) : o->getIndexed(arrayIndex));
+    QV4::ScopedValue result(scope, arrayIndex == UINT_MAX ? o->get(engine->id_uintMax()) : o->getIndexed(arrayIndex));
     if (engine->hasException)
         engine->catchException();
     return QJSValue(engine, result->asReturnedValue());
@@ -1120,7 +1119,7 @@ void QJSValue::setProperty(quint32 arrayIndex, const QJSValue& value)
     if (arrayIndex != UINT_MAX)
         o->putIndexed(arrayIndex, v);
     else
-        o->put(engine->id_uintMax, v);
+        o->put(engine->id_uintMax(), v);
     if (engine->hasException)
         engine->catchException();
 }
@@ -1236,7 +1235,7 @@ QDateTime QJSValue::toDateTime() const
 {
     QV4::Value *val = QJSValuePrivate::getValue(this);
     if (val) {
-        QV4::DateObject *date = val->asDateObject();
+        QV4::DateObject *date = val->as<DateObject>();
         if (date)
             return date->toQDateTime();
     }
@@ -1250,7 +1249,7 @@ QDateTime QJSValue::toDateTime() const
 bool QJSValue::isDate() const
 {
     QV4::Value *val = QJSValuePrivate::getValue(this);
-    return val && val->asDateObject();
+    return val && val->as<DateObject>();
 }
 
 /*!

@@ -32,8 +32,7 @@
 ****************************************************************************/
 
 #include "qqmldebugservice_p.h"
-#include "qqmldebugservice_p_p.h"
-#include "qqmldebugserver_p.h"
+#include "qqmldebugconnector_p.h"
 #include <private/qqmldata_p.h>
 #include <private/qqmlcontext_p.h>
 
@@ -43,58 +42,55 @@
 
 QT_BEGIN_NAMESPACE
 
-QQmlDebugServicePrivate::QQmlDebugServicePrivate()
+class QQmlDebugServer;
+
+class QQmlDebugServicePrivate : public QObjectPrivate
+{
+    Q_DECLARE_PUBLIC(QQmlDebugService)
+public:
+    QQmlDebugServicePrivate(const QString &name, float version);
+
+    const QString name;
+    const float version;
+    QQmlDebugService::State state;
+};
+
+QQmlDebugServicePrivate::QQmlDebugServicePrivate(const QString &name, float version) :
+    name(name), version(version), state(QQmlDebugService::NotConnected)
 {
 }
 
 QQmlDebugService::QQmlDebugService(const QString &name, float version, QObject *parent)
-    : QObject(*(new QQmlDebugServicePrivate), parent)
-{
-    QQmlDebugServer::instance(); // create it when it isn't there yet.
-
-    Q_D(QQmlDebugService);
-    d->name = name;
-    d->version = version;
-    d->state = QQmlDebugService::NotConnected;
-}
-
-QQmlDebugService::QQmlDebugService(QQmlDebugServicePrivate &dd,
-                                                   const QString &name, float version, QObject *parent)
-    : QObject(dd, parent)
+    : QObject(*(new QQmlDebugServicePrivate(name, version)), parent)
 {
     Q_D(QQmlDebugService);
-    d->name = name;
-    d->version = version;
-    d->state = QQmlDebugService::NotConnected;
-}
-
-/**
-  Registers the service. This should be called in the constructor of the inherited class. From
-  then on the service might get asynchronous calls to messageReceived().
-  */
-QQmlDebugService::State QQmlDebugService::registerService()
-{
-    Q_D(QQmlDebugService);
-    QQmlDebugServer *server = QQmlDebugServer::instance();
+    QQmlDebugConnector *server = QQmlDebugConnector::instance();
 
     if (!server)
-        return NotConnected;
+        return;
 
-    if (server->serviceNames().contains(d->name)) {
+    if (server->service(d->name)) {
         qWarning() << "QQmlDebugService: Conflicting plugin name" << d->name;
     } else {
-        server->addService(this);
+        server->addService(d->name, this);
     }
-    return state();
 }
 
 QQmlDebugService::~QQmlDebugService()
 {
-    if (QQmlDebugServer *inst = QQmlDebugServer::instance())
-        inst->removeService(this);
+    Q_D(QQmlDebugService);
+    QQmlDebugConnector *server = QQmlDebugConnector::instance();
+
+    if (!server)
+        return;
+
+    if (server->service(d->name) != this)
+        qWarning() << "QQmlDebugService: Plugin" << d->name << "is not registered.";
+    else
+        server->removeService(d->name);
 }
 
-QString QQmlDebugService::name() const
+const QString &QQmlDebugService::name() const
 {
     Q_D(const QQmlDebugService);
     return d->name;
@@ -112,27 +108,38 @@ QQmlDebugService::State QQmlDebugService::state() const
     return d->state;
 }
 
+void QQmlDebugService::setState(QQmlDebugService::State newState)
+{
+    Q_D(QQmlDebugService);
+    d->state = newState;
+}
+
 namespace {
-
-struct ObjectReference
+class ObjectReferenceHash : public QObject
 {
-    QPointer<QObject> object;
-    int id;
-};
-
-struct ObjectReferenceHash
-{
+    Q_OBJECT
+public:
     ObjectReferenceHash() : nextId(0) {}
 
-    QHash<QObject *, ObjectReference> objects;
+    QHash<QObject *, int> objects;
     QHash<int, QObject *> ids;
 
     int nextId;
-};
 
+private slots:
+    void remove(QObject *obj);
+};
 }
 Q_GLOBAL_STATIC(ObjectReferenceHash, objectReferenceHash)
 
+void ObjectReferenceHash::remove(QObject *obj)
+{
+    QHash<QObject *, int>::Iterator iter = objects.find(obj);
+    if (iter != objects.end()) {
+        ids.remove(iter.value());
+        objects.erase(iter);
+    }
+}
 
 /*!
     Returns a unique id for \a object.  Calling this method multiple times
@@ -144,158 +151,23 @@ int QQmlDebugService::idForObject(QObject *object)
         return -1;
 
     ObjectReferenceHash *hash = objectReferenceHash();
-    QHash<QObject *, ObjectReference>::Iterator iter =
-            hash->objects.find(object);
+    QHash<QObject *, int>::Iterator iter = hash->objects.find(object);
 
     if (iter == hash->objects.end()) {
         int id = hash->nextId++;
-
         hash->ids.insert(id, object);
-        iter = hash->objects.insert(object, ObjectReference());
-        iter->object = object;
-        iter->id = id;
-    } else if (iter->object != object) {
-        int id = hash->nextId++;
-
-        hash->ids.remove(iter->id);
-
-        hash->ids.insert(id, object);
-        iter->object = object;
-        iter->id = id;
+        iter = hash->objects.insert(object, id);
+        connect(object, SIGNAL(destroyed(QObject*)), hash, SLOT(remove(QObject*)));
     }
-    return iter->id;
+    return iter.value();
 }
 
 /*!
-    Returns the object for unique \a id.  If the object has not previously been
-    assigned an id, through idForObject(), then 0 is returned.  If the object
-    has been destroyed, 0 is returned.
+    Returns the mapping of objects to unique \a ids, created through calls to idForObject().
 */
-QObject *QQmlDebugService::objectForId(int id)
+const QHash<int, QObject *> &QQmlDebugService::objectsForIds()
 {
-    ObjectReferenceHash *hash = objectReferenceHash();
-
-    QHash<int, QObject *>::Iterator iter = hash->ids.find(id);
-    if (iter == hash->ids.end())
-        return 0;
-
-
-    QHash<QObject *, ObjectReference>::Iterator objIter =
-            hash->objects.find(*iter);
-    Q_ASSERT(objIter != hash->objects.end());
-
-    if (objIter->object == 0) {
-        hash->ids.erase(iter);
-        hash->objects.erase(objIter);
-        // run a loop to remove other invalid objects
-        removeInvalidObjectsFromHash();
-        return 0;
-    } else {
-        return *iter;
-    }
-}
-
-/*!
-    Returns a list of objects matching the given filename, line and column.
-*/
-QList<QObject*> QQmlDebugService::objectForLocationInfo(const QString &filename,
-                                                 int lineNumber, int columnNumber)
-{
-    ObjectReferenceHash *hash = objectReferenceHash();
-    QList<QObject*> objects;
-    QHash<int, QObject *>::Iterator iter = hash->ids.begin();
-    while (iter != hash->ids.end()) {
-        QHash<QObject *, ObjectReference>::Iterator objIter =
-                hash->objects.find(*iter);
-        Q_ASSERT(objIter != hash->objects.end());
-
-        if (objIter->object == 0) {
-            iter = hash->ids.erase(iter);
-            hash->objects.erase(objIter);
-        } else {
-            QQmlData *ddata = QQmlData::get(iter.value());
-            if (ddata && ddata->outerContext) {
-                if (QFileInfo(ddata->outerContext->urlString()).fileName() == filename &&
-                    ddata->lineNumber == lineNumber &&
-                    ddata->columnNumber >= columnNumber) {
-                    objects << *iter;
-                }
-            }
-            ++iter;
-        }
-    }
-    return objects;
-}
-
-void QQmlDebugService::removeInvalidObjectsFromHash()
-{
-    ObjectReferenceHash *hash = objectReferenceHash();
-    QHash<int, QObject *>::Iterator iter = hash->ids.begin();
-    while (iter != hash->ids.end()) {
-        QHash<QObject *, ObjectReference>::Iterator objIter =
-                hash->objects.find(*iter);
-        Q_ASSERT(objIter != hash->objects.end());
-
-        if (objIter->object == 0) {
-            iter = hash->ids.erase(iter);
-            hash->objects.erase(objIter);
-        } else {
-            ++iter;
-        }
-    }
-}
-
-void QQmlDebugService::clearObjectsFromHash()
-{
-    ObjectReferenceHash *hash = objectReferenceHash();
-    hash->ids.clear();
-    hash->objects.clear();
-}
-
-bool QQmlDebugService::isDebuggingEnabled()
-{
-    return QQmlDebugServer::instance() != 0;
-}
-
-bool QQmlDebugService::hasDebuggingClient()
-{
-    return QQmlDebugServer::instance() != 0
-            && QQmlDebugServer::instance()->hasDebuggingClient();
-}
-
-bool QQmlDebugService::blockingMode()
-{
-    return QQmlDebugServer::instance() != 0
-            && QQmlDebugServer::instance()->blockingMode();
-}
-
-QString QQmlDebugService::objectToString(QObject *obj)
-{
-    if(!obj)
-        return QStringLiteral("NULL");
-
-    QString objectName = obj->objectName();
-    if(objectName.isEmpty())
-        objectName = QStringLiteral("<unnamed>");
-
-    QString rv = QString::fromUtf8(obj->metaObject()->className()) +
-            QLatin1String(": ") + objectName;
-
-    return rv;
-}
-
-void QQmlDebugService::sendMessage(const QByteArray &message)
-{
-    sendMessages(QList<QByteArray>() << message);
-}
-
-void QQmlDebugService::sendMessages(const QList<QByteArray> &messages)
-{
-    if (state() != Enabled)
-        return;
-
-    if (QQmlDebugServer *inst = QQmlDebugServer::instance())
-        inst->sendMessages(this, messages);
+    return objectReferenceHash()->ids;
 }
 
 void QQmlDebugService::stateAboutToBeChanged(State)
@@ -328,28 +200,32 @@ void QQmlDebugService::engineRemoved(QQmlEngine *)
 {
 }
 
+int QQmlDebugStream::s_dataStreamVersion = QDataStream::Qt_4_7;
+
 QQmlDebugStream::QQmlDebugStream()
     : QDataStream()
 {
-    setVersion(QQmlDebugServer::s_dataStreamVersion);
+    setVersion(s_dataStreamVersion);
 }
 
 QQmlDebugStream::QQmlDebugStream(QIODevice *d)
     : QDataStream(d)
 {
-    setVersion(QQmlDebugServer::s_dataStreamVersion);
+    setVersion(s_dataStreamVersion);
 }
 
 QQmlDebugStream::QQmlDebugStream(QByteArray *ba, QIODevice::OpenMode flags)
     : QDataStream(ba, flags)
 {
-    setVersion(QQmlDebugServer::s_dataStreamVersion);
+    setVersion(s_dataStreamVersion);
 }
 
 QQmlDebugStream::QQmlDebugStream(const QByteArray &ba)
     : QDataStream(ba)
 {
-    setVersion(QQmlDebugServer::s_dataStreamVersion);
+    setVersion(s_dataStreamVersion);
 }
 
 QT_END_NAMESPACE
+
+#include "qqmldebugservice.moc"

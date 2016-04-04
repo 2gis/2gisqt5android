@@ -34,42 +34,93 @@
 #include "testwidget.h"
 
 #include <QApplication>
-#include <QSettings>
+#include <QCommandLineParser>
+#include <QCommandLineOption>
 #include <QDir>
+#include <QDebug>
+#include <QMimeDatabase>
+#include <QSettings>
+#include <QStatusBar>
 
-void associateFileType()
+#include <algorithm>
+#include <iterator>
+
+static bool associateFileType()
 {
-    QString exeFileName = QCoreApplication::applicationFilePath();
-    exeFileName = exeFileName.right(exeFileName.length() - exeFileName.lastIndexOf("/") - 1);
-    QString appName = "QtWinExtras JumpList Test";
-
+    const QString applicationBinary = QCoreApplication::applicationFilePath();
+    QString exeFileName = applicationBinary;
+    const int lastSlashPos = exeFileName.lastIndexOf(QLatin1Char('/'));
+    exeFileName.remove(0, lastSlashPos + 1);
     QSettings regApplications("HKEY_CURRENT_USER\\Software\\Classes\\Applications\\" + exeFileName, QSettings::NativeFormat);
-    regApplications.setValue("FriendlyAppName", appName);
+    regApplications.setValue("FriendlyAppName", QGuiApplication::applicationDisplayName());
 
     regApplications.beginGroup("SupportedTypes");
-    regApplications.setValue(".txt", QString());
+    QMimeDatabase mimeDatabase;
+    foreach (const QString &t, TestWidget::supportedMimeTypes()) {
+        foreach (const QString &s, mimeDatabase.mimeTypeForName(t).suffixes())
+            regApplications.setValue('.' + s, QString());
+    }
     regApplications.endGroup();
 
     regApplications.beginGroup("shell");
     regApplications.beginGroup("open");
-    regApplications.setValue("FriendlyAppName", appName);
+    regApplications.setValue("FriendlyAppName", QGuiApplication::applicationDisplayName());
     regApplications.beginGroup("command");
-    regApplications.setValue(".", '"' + QDir::toNativeSeparators(QCoreApplication::applicationFilePath()) + "\" \"%1\"");
+    regApplications.setValue(".", '"' + QDir::toNativeSeparators(applicationBinary) + "\" \"%1\"");
     regApplications.endGroup();
     regApplications.endGroup();
     regApplications.endGroup();
+    return regApplications.status() == QSettings::NoError;
 }
 
 int main(int argc, char *argv[])
 {
-    QApplication a(argc, argv);
-    associateFileType();
+    QStringList allArgs; // Show all arguments including style.
+    std::copy(argv + 1, argv + argc, std::back_inserter(allArgs));
+
+    QApplication app(argc, argv);
+    QGuiApplication::setApplicationDisplayName(QStringLiteral("QtWinExtras JumpList Test"));
+    if (!associateFileType()) {
+        qWarning() << "Unable to create registry entries.";
+        return -1;
+    }
+
+    QCoreApplication::setOrganizationName("QtProject");
+    QCoreApplication::setApplicationVersion(QT_VERSION_STR);
+    QCommandLineParser parser;
+    parser.setSingleDashWordOptionMode(QCommandLineParser::ParseAsLongOptions);
+    parser.setApplicationDescription(QGuiApplication::applicationDisplayName());
+    parser.addHelpOption();
+    parser.addVersionOption();
+    QCommandLineOption textOption("text", "Show some text");
+    parser.addOption(textOption);
+    QCommandLineOption fullScreenOption("fullscreen", "Show fullscreen");
+    parser.addOption(fullScreenOption);
+    QCommandLineOption idOption("id", "Jump list identifier", "id");
+    parser.addOption(idOption);
+    parser.addPositionalArgument("file", "The file to open.");
+    parser.process(app);
 
     TestWidget w;
-    if (QCoreApplication::arguments().contains("-fullscreen"))
+
+    if (parser.isSet(idOption))
+        w.setId(parser.value(idOption));
+
+    if (parser.isSet(fullScreenOption))
         w.showFullScreen();
     else
         w.show();
 
-    return a.exec();
+    if (parser.isSet(textOption))
+        w.setText("Hello, world!");
+
+    if (!parser.positionalArguments().isEmpty())
+        w.showFile(parser.positionalArguments().first());
+
+    if (allArgs.isEmpty())
+        w.statusBar()->showMessage("Remember to run windeployqt");
+    else
+        w.statusBar()->showMessage("Arguments: " + allArgs.join(' '));
+
+    return app.exec();
 }

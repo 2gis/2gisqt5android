@@ -34,6 +34,17 @@
 #ifndef QQUICKSYSTEMPALETTE_H
 #define QQUICKSYSTEMPALETTE_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include <qqml.h>
 
 #include <QtCore/qobject.h>
@@ -45,7 +56,6 @@ class QQuickSystemPalettePrivate;
 class Q_AUTOTEST_EXPORT QQuickSystemPalette : public QObject
 {
     Q_OBJECT
-    Q_ENUMS(ColorGroup)
     Q_DECLARE_PRIVATE(QQuickSystemPalette)
 
     Q_PROPERTY(QQuickSystemPalette::ColorGroup colorGroup READ colorGroup WRITE setColorGroup NOTIFY paletteChanged)
@@ -69,6 +79,7 @@ public:
     ~QQuickSystemPalette();
 
     enum ColorGroup { Active = QPalette::Active, Inactive = QPalette::Inactive, Disabled = QPalette::Disabled };
+    Q_ENUM(ColorGroup)
 
     QColor window() const;
     QColor windowText() const;

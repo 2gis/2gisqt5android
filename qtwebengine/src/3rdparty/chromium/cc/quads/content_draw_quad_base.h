@@ -22,7 +22,8 @@ class CC_EXPORT ContentDrawQuadBase : public DrawQuad {
               const gfx::Rect& visible_rect,
               const gfx::RectF& tex_coord_rect,
               const gfx::Size& texture_size,
-              bool swizzle_contents);
+              bool swizzle_contents,
+              bool nearest_neighbor);
 
   void SetAll(const SharedQuadState* shared_quad_state,
               DrawQuad::Material material,
@@ -32,16 +33,18 @@ class CC_EXPORT ContentDrawQuadBase : public DrawQuad {
               bool needs_blending,
               const gfx::RectF& tex_coord_rect,
               const gfx::Size& texture_size,
-              bool swizzle_contents);
+              bool swizzle_contents,
+              bool nearest_neighbor);
 
   gfx::RectF tex_coord_rect;
   gfx::Size texture_size;
   bool swizzle_contents;
+  bool nearest_neighbor;
 
  protected:
   ContentDrawQuadBase();
   ~ContentDrawQuadBase() override;
-  void ExtendValue(base::debug::TracedValue* value) const override;
+  void ExtendValue(base::trace_event::TracedValue* value) const override;
 };
 
 }  // namespace cc

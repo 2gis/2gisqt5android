@@ -613,12 +613,19 @@ Item {
         \li blue(x, y) Returns the blue channel value of the pixel at \a x, \a y position
         \li alpha(x, y) Returns the alpha channel value of the pixel at \a x, \a y position
         \li pixel(x, y) Returns the color value of the pixel at \a x, \a y position
+        \li equals(image) Returns \c true if this image is identical to \a image -
+            see \l QImage::operator== (since 5.6)
+
         For example:
 
         \code
         var image = grabImage(rect);
         compare(image.red(10, 10), 255);
         compare(image.pixel(20, 20), Qt.rgba(255, 0, 0, 255));
+
+        rect.width += 10;
+        var newImage = grabImage(rect);
+        verify(!newImage.equals(image));
         \endcode
 
         \endlist
@@ -869,6 +876,9 @@ Item {
         focused item.  If \a delay is larger than 0, the test will wait for
         \a delay milliseconds.
 
+        The event will be sent to the TestCase window or, in case of multiple windows,
+        to the current active window. See \l QGuiApplication::focusWindow() for more details.
+
         \b{Note:} At some point you should release the key using keyRelease().
 
         \sa keyRelease(), keyClick()
@@ -894,6 +904,9 @@ Item {
         focused item.  If \a delay is larger than 0, the test will wait for
         \a delay milliseconds.
 
+        The event will be sent to the TestCase window or, in case of multiple windows,
+        to the current active window. See \l QGuiApplication::focusWindow() for more details.
+
         \sa keyPress(), keyClick()
     */
     function keyRelease(key, modifiers, delay) {
@@ -916,6 +929,9 @@ Item {
         Simulates clicking of \a key with an optional \a modifier on the currently
         focused item.  If \a delay is larger than 0, the test will wait for
         \a delay milliseconds.
+
+        The event will be sent to the TestCase window or, in case of multiple windows,
+        to the current active window. See \l QGuiApplication::focusWindow() for more details.
 
         \sa keyPress(), keyRelease()
     */

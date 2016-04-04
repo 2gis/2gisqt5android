@@ -18,6 +18,7 @@ PRIVATETESTS += \
     qquickapplication \
     qquickbehaviors \
     qquickfontloader \
+    qquickfontloader_static \
     qquickfontmetrics \
     qquickimageprovider \
     qquickpath \
@@ -74,8 +75,8 @@ QUICKTESTS =  \
     qquickview \
     qquickcanvasitem \
     qquickscreen \
-    touchmouse
-
+    touchmouse \
+    scenegraph
 
 SUBDIRS += $$PUBLICTESTS
 

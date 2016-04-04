@@ -33,6 +33,17 @@
 #ifndef QSGDEFAULTLAYER_P_H
 #define QSGDEFAULTLAYER_P_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include <private/qsgadaptationlayer_p.h>
 #include <private/qsgcontext_p.h>
 #include <qsgsimplerectnode.h>
@@ -78,9 +89,17 @@ public:
 
     void setDevicePixelRatio(qreal ratio) Q_DECL_OVERRIDE { m_device_pixel_ratio = ratio; }
 
+    bool mirrorHorizontal() const { return bool(m_mirrorHorizontal); }
+    void setMirrorHorizontal(bool mirror) Q_DECL_OVERRIDE;
+
+    bool mirrorVertical() const { return bool(m_mirrorVertical); }
+    void setMirrorVertical(bool mirror) Q_DECL_OVERRIDE;
+
     void scheduleUpdate() Q_DECL_OVERRIDE;
 
     QImage toImage() const Q_DECL_OVERRIDE;
+
+    QRectF normalizedTextureSubRect() const Q_DECL_OVERRIDE;
 
 public Q_SLOTS:
     void markDirtyTexture() Q_DECL_OVERRIDE;
@@ -115,6 +134,8 @@ private:
     uint m_multisamplingChecked : 1;
     uint m_multisampling : 1;
     uint m_grab : 1;
+    uint m_mirrorHorizontal : 1;
+    uint m_mirrorVertical : 1;
 };
 
 #endif // QSGDEFAULTLAYER_P_H

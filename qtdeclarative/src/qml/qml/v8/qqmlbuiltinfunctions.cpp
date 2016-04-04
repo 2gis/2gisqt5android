@@ -41,7 +41,8 @@
 #include <private/qv8engine_p.h>
 #include <QFileInfo>
 
-#include <private/qqmlprofilerservice_p.h>
+#include <private/qqmldebugconnector_p.h>
+#include <private/qqmldebugserviceinterfaces_p.h>
 #include <private/qqmlglobal_p.h>
 
 #include <private/qqmlplatform_p.h>
@@ -51,6 +52,7 @@
 #include <private/qv4include_p.h>
 #include <private/qv4context_p.h>
 #include <private/qv4stringobject_p.h>
+#include <private/qv4dateobject_p.h>
 #include <private/qv4mm_p.h>
 #include <private/qv4jsonobject_p.h>
 #include <private/qv4objectproto_p.h>
@@ -78,10 +80,9 @@ struct StaticQtMetaObject : public QObject
         { return &staticQtMetaObject; }
 };
 
-Heap::QtObject::QtObject(ExecutionEngine *v4, QQmlEngine *qmlEngine)
-    : Heap::Object(v4)
+Heap::QtObject::QtObject(QQmlEngine *qmlEngine)
 {
-    Scope scope(v4);
+    Scope scope(internalClass->engine);
     ScopedObject o(scope, this);
 
     // Set all the enums from the "Qt" namespace
@@ -91,11 +92,11 @@ Heap::QtObject::QtObject(ExecutionEngine *v4, QQmlEngine *qmlEngine)
     for (int ii = 0; ii < qtMetaObject->enumeratorCount(); ++ii) {
         QMetaEnum enumerator = qtMetaObject->enumerator(ii);
         for (int jj = 0; jj < enumerator.keyCount(); ++jj) {
-            o->put((str = v4->newString(QString::fromUtf8(enumerator.key(jj)))), (v = QV4::Primitive::fromInt32(enumerator.value(jj))));
+            o->put((str = scope.engine->newString(QString::fromUtf8(enumerator.key(jj)))), (v = QV4::Primitive::fromInt32(enumerator.value(jj))));
         }
     }
-    o->put((str = v4->newString(QStringLiteral("Asynchronous"))), (v = QV4::Primitive::fromInt32(0)));
-    o->put((str = v4->newString(QStringLiteral("Synchronous"))), (v = QV4::Primitive::fromInt32(1)));
+    o->put((str = scope.engine->newString(QStringLiteral("Asynchronous"))), (v = QV4::Primitive::fromInt32(0)));
+    o->put((str = scope.engine->newString(QStringLiteral("Synchronous"))), (v = QV4::Primitive::fromInt32(1)));
 
     o->defineDefaultProperty(QStringLiteral("include"), QV4Include::method_include);
     o->defineDefaultProperty(QStringLiteral("isQtObject"), QV4::QtObject::method_isQtObject);
@@ -433,10 +434,15 @@ Returns a Matrix4x4 with the specified values.
 Alternatively, the function may be called with a single argument
 where that argument is a JavaScript array which contains the sixteen
 matrix values.
+Finally, the function may be called with no arguments and the resulting
+matrix will be the identity matrix.
 */
 ReturnedValue QtObject::method_matrix4x4(QV4::CallContext *ctx)
 {
     QV4::ExecutionEngine *v4 = ctx->d()->engine;
+
+    if (ctx->argc() == 0)
+        return ctx->engine()->fromVariant(QQml_valueTypeProvider()->createValueType(QMetaType::QMatrix4x4, 0, Q_NULLPTR));
 
     if (ctx->argc() == 1 && ctx->args()[0].isObject()) {
         bool ok = false;
@@ -669,7 +675,7 @@ ReturnedValue QtObject::method_formatTime(QV4::CallContext *ctx)
 
     QVariant argVariant = ctx->engine()->toVariant(ctx->args()[0], -1);
     QTime time;
-    if (ctx->args()[0].asDateObject() || (argVariant.type() == QVariant::String))
+    if (ctx->args()[0].as<DateObject>() || (argVariant.type() == QVariant::String))
         time = argVariant.toDateTime().time();
     else // if (argVariant.type() == QVariant::Time), or invalid.
         time = argVariant.toTime();
@@ -839,21 +845,21 @@ ReturnedValue QtObject::method_openUrlExternally(QV4::CallContext *ctx)
 */
 ReturnedValue QtObject::method_resolvedUrl(QV4::CallContext *ctx)
 {
-    QV8Engine *v8engine = ctx->d()->engine->v8Engine;
+    ExecutionEngine *v4 = ctx->engine();
 
-    QUrl url = ctx->engine()->toVariant(ctx->args()[0], -1).toUrl();
-    QQmlEngine *e = v8engine->engine();
+    QUrl url = v4->toVariant(ctx->args()[0], -1).toUrl();
+    QQmlEngine *e = v4->qmlEngine();
     QQmlEnginePrivate *p = 0;
     if (e) p = QQmlEnginePrivate::get(e);
     if (p) {
-        QQmlContextData *ctxt = v8engine->callingContext();
+        QQmlContextData *ctxt = v4->callingQmlContext();
         if (ctxt)
-            return ctx->d()->engine->newString(ctxt->resolvedUrl(url).toString())->asReturnedValue();
+            return v4->newString(ctxt->resolvedUrl(url).toString())->asReturnedValue();
         else
-            return ctx->d()->engine->newString(url.toString())->asReturnedValue();
+            return v4->newString(url.toString())->asReturnedValue();
     }
 
-    return ctx->d()->engine->newString(e->baseUrl().resolved(url).toString())->asReturnedValue();
+    return v4->newString(e->baseUrl().resolved(url).toString())->asReturnedValue();
 }
 
 /*!
@@ -983,7 +989,7 @@ ReturnedValue QtObject::method_createQmlObject(CallContext *ctx)
     QV8Engine *v8engine = ctx->d()->engine->v8Engine;
     QQmlEngine *engine = v8engine->engine();
 
-    QQmlContextData *context = v8engine->callingContext();
+    QQmlContextData *context = scope.engine->callingQmlContext();
     Q_ASSERT(context);
     QQmlContext *effectiveContext = 0;
     if (context->isPragmaLibraryContext)
@@ -1012,8 +1018,13 @@ ReturnedValue QtObject::method_createQmlObject(CallContext *ctx)
     if (!parentArg)
         V4THROW_ERROR("Qt.createQmlObject(): Missing parent object");
 
+    QQmlTypeData *typeData = QQmlEnginePrivate::get(engine)->typeLoader.getType(
+                qml.toUtf8(), url, QQmlTypeLoader::Synchronous);
+    Q_ASSERT(typeData->isCompleteOrError());
     QQmlComponent component(engine);
-    component.setData(qml.toUtf8(), url);
+    QQmlComponentPrivate *componentPrivate = QQmlComponentPrivate::get(&component);
+    componentPrivate->fromTypeData(typeData);
+    componentPrivate->progress = 1.0;
 
     if (component.isError()) {
         ScopedValue v(scope, Error::create(ctx->d()->engine, component.errors()));
@@ -1063,10 +1074,23 @@ If the optional \a mode parameter is set to \c Component.Asynchronous, the
 component will be loaded in a background thread.  The Component::status property
 will be \c Component.Loading while it is loading.  The status will change to
 \c Component.Ready if the component loads successfully, or \c Component.Error
-if loading fails.
+if loading fails. This parameter defaults to \c Component.PreferSynchronous
+if omitted.
+
+If \a mode is set to \c Component.PreferSynchronous, Qt will attempt to load
+the component synchronously, but may end up loading it asynchronously if
+necessary. Scenarios that may cause asynchronous loading include, but are not
+limited to, the following:
+
+\list
+\li The URL refers to a network resource
+\li The component is being created as a result of another component that is
+being loaded asynchronously
+\endlist
 
 If the optional \a parent parameter is given, it should refer to the object
-that will become the parent for the created \l Component object.
+that will become the parent for the created \l Component object. If no mode
+was passed, this can be the second argument.
 
 Call \l {Component::createObject()}{Component.createObject()} on the returned
 component to create an object instance of the component.
@@ -1090,7 +1114,7 @@ ReturnedValue QtObject::method_createComponent(CallContext *ctx)
     QV8Engine *v8engine = ctx->d()->engine->v8Engine;
     QQmlEngine *engine = v8engine->engine();
 
-    QQmlContextData *context = v8engine->callingContext();
+    QQmlContextData *context = scope.engine->callingQmlContext();
     Q_ASSERT(context);
     QQmlContextData *effectiveContext = context;
     if (context->isPragmaLibraryContext)
@@ -1178,7 +1202,7 @@ ReturnedValue QtObject::method_locale(CallContext *ctx)
     return QQmlLocale::locale(ctx->engine(), code);
 }
 
-Heap::QQmlBindingFunction::QQmlBindingFunction(QV4::FunctionObject *originalFunction)
+Heap::QQmlBindingFunction::QQmlBindingFunction(const QV4::FunctionObject *originalFunction)
     : QV4::Heap::FunctionObject(originalFunction->scope(), originalFunction->name())
     , originalFunction(originalFunction->d())
 {
@@ -1191,10 +1215,10 @@ void QQmlBindingFunction::initBindingLocation()
     d()->bindingLocation.line = frame.line;
 }
 
-ReturnedValue QQmlBindingFunction::call(Managed *that, CallData *callData)
+ReturnedValue QQmlBindingFunction::call(const Managed *that, CallData *callData)
 {
-    Scope scope(static_cast<QQmlBindingFunction*>(that)->engine());
-    ScopedFunctionObject function(scope, static_cast<QQmlBindingFunction*>(that)->d()->originalFunction);
+    Scope scope(static_cast<const QQmlBindingFunction*>(that)->engine());
+    ScopedFunctionObject function(scope, static_cast<const QQmlBindingFunction*>(that)->d()->originalFunction);
     return function->call(callData);
 }
 
@@ -1256,18 +1280,18 @@ ReturnedValue QtObject::method_binding(CallContext *ctx)
 {
     if (ctx->argc() != 1)
         V4THROW_ERROR("binding() requires 1 argument");
-    QV4::FunctionObject *f = ctx->args()[0].asFunctionObject();
+    const QV4::FunctionObject *f = ctx->args()[0].as<FunctionObject>();
     if (!f)
         V4THROW_TYPE("binding(): argument (binding expression) must be a function");
 
-    return (ctx->d()->engine->memoryManager->alloc<QQmlBindingFunction>(f))->asReturnedValue();
+    return (ctx->d()->engine->memoryManager->allocObject<QQmlBindingFunction>(f))->asReturnedValue();
 }
 
 
 ReturnedValue QtObject::method_get_platform(CallContext *ctx)
 {
     // ### inefficient. Should be just a value based getter
-    Object *o = ctx->thisObject().asObject();
+    Object *o = ctx->thisObject().as<Object>();
     if (!o)
         return ctx->engine()->throwTypeError();
     QtObject *qt = o->as<QtObject>();
@@ -1284,7 +1308,7 @@ ReturnedValue QtObject::method_get_platform(CallContext *ctx)
 ReturnedValue QtObject::method_get_application(CallContext *ctx)
 {
     // ### inefficient. Should be just a value based getter
-    Object *o = ctx->thisObject().asObject();
+    Object *o = ctx->thisObject().as<Object>();
     if (!o)
         return ctx->engine()->throwTypeError();
     QtObject *qt = o->as<QtObject>();
@@ -1313,10 +1337,9 @@ ReturnedValue QtObject::method_get_styleHints(CallContext *ctx)
 }
 
 
-QV4::Heap::ConsoleObject::ConsoleObject(ExecutionEngine *v4)
-    : Heap::Object(v4)
+QV4::Heap::ConsoleObject::ConsoleObject()
 {
-    QV4::Scope scope(v4);
+    QV4::Scope scope(internalClass->engine);
     QV4::ScopedObject o(scope, this);
 
     o->defineDefaultProperty(QStringLiteral("debug"), QV4::ConsoleObject::method_log);
@@ -1353,12 +1376,12 @@ static QString jsStack(QV4::ExecutionEngine *engine) {
 
         QString stackFrame;
         if (frame.column >= 0)
-            stackFrame = QString::fromLatin1("%1 (%2:%3:%4)").arg(frame.function,
+            stackFrame = QStringLiteral("%1 (%2:%3:%4)").arg(frame.function,
                                                              frame.source,
                                                              QString::number(frame.line),
                                                              QString::number(frame.column));
         else
-            stackFrame = QString::fromLatin1("%1 (%2:%3)").arg(frame.function,
+            stackFrame = QStringLiteral("%1 (%2:%3)").arg(frame.function,
                                                              frame.source,
                                                              QString::number(frame.line));
 
@@ -1379,38 +1402,41 @@ static QV4::ReturnedValue writeToConsole(ConsoleLogTypes logType, CallContext *c
         if (i != 0)
             result.append(QLatin1Char(' '));
 
-        if (ctx->args()[i].asArrayObject())
-            result.append(QStringLiteral("[") + ctx->args()[i].toQStringNoThrow() + QStringLiteral("]"));
+        if (ctx->args()[i].as<ArrayObject>())
+            result.append(QLatin1Char('[') + ctx->args()[i].toQStringNoThrow() + QLatin1Char(']'));
         else
             result.append(ctx->args()[i].toQStringNoThrow());
     }
 
     if (printStack) {
-        result.append(QLatin1String("\n"));
+        result.append(QLatin1Char('\n'));
         result.append(jsStack(v4));
     }
 
-    static QLoggingCategory loggingCategory("qml");
+    static QLoggingCategory qmlLoggingCategory("qml");
+    static QLoggingCategory jsLoggingCategory("js");
+
+    QLoggingCategory *loggingCategory = v4->qmlEngine() ? &qmlLoggingCategory : &jsLoggingCategory;
     QV4::StackFrame frame = v4->currentStackFrame();
     const QByteArray baSource = frame.source.toUtf8();
     const QByteArray baFunction = frame.function.toUtf8();
-    QMessageLogger logger(baSource.constData(), frame.line, baFunction.constData(), loggingCategory.categoryName());
+    QMessageLogger logger(baSource.constData(), frame.line, baFunction.constData(), loggingCategory->categoryName());
 
     switch (logType) {
     case Log:
-        if (loggingCategory.isDebugEnabled())
+        if (loggingCategory->isDebugEnabled())
             logger.debug("%s", result.toUtf8().constData());
         break;
     case Info:
-        if (loggingCategory.isInfoEnabled())
+        if (loggingCategory->isInfoEnabled())
             logger.info("%s", result.toUtf8().constData());
         break;
     case Warn:
-        if (loggingCategory.isWarningEnabled())
+        if (loggingCategory->isWarningEnabled())
             logger.warning("%s", result.toUtf8().constData());
         break;
     case Error:
-        if (loggingCategory.isCriticalEnabled())
+        if (loggingCategory->isCriticalEnabled())
             logger.critical("%s", result.toUtf8().constData());
         break;
     default:
@@ -1442,14 +1468,18 @@ QV4::ReturnedValue ConsoleObject::method_profile(CallContext *ctx)
 {
     QV4::ExecutionEngine *v4 = ctx->d()->engine;
 
+    if (!v4->qmlEngine())
+        return QV4::Encode::undefined(); // Not yet implemented for JavaScript.
+
     QV4::StackFrame frame = v4->currentStackFrame();
     const QByteArray baSource = frame.source.toUtf8();
     const QByteArray baFunction = frame.function.toUtf8();
     QMessageLogger logger(baSource.constData(), frame.line, baFunction.constData());
-    if (!QQmlDebugService::isDebuggingEnabled()) {
+    QQmlProfilerService *service = QQmlDebugConnector::service<QQmlProfilerService>();
+    if (!service) {
         logger.warning("Cannot start profiling because debug service is disabled. Start with -qmljsdebugger=port:XXXXX.");
     } else {
-        QQmlProfilerService::instance()->startProfiling(v4->qmlEngine());
+        service->startProfiling(v4->qmlEngine());
         logger.debug("Profiling started.");
     }
 
@@ -1460,15 +1490,19 @@ QV4::ReturnedValue ConsoleObject::method_profileEnd(CallContext *ctx)
 {
     QV4::ExecutionEngine *v4 = ctx->d()->engine;
 
+    if (!v4->qmlEngine())
+        return QV4::Encode::undefined(); // Not yet implemented for JavaScript.
+
     QV4::StackFrame frame = v4->currentStackFrame();
     const QByteArray baSource = frame.source.toUtf8();
     const QByteArray baFunction = frame.function.toUtf8();
     QMessageLogger logger(baSource.constData(), frame.line, baFunction.constData());
 
-    if (!QQmlDebugService::isDebuggingEnabled()) {
+    QQmlProfilerService *service = QQmlDebugConnector::service<QQmlProfilerService>();
+    if (!service) {
         logger.warning("Ignoring console.profileEnd(): the debug service is disabled.");
     } else {
-        QQmlProfilerService::instance()->stopProfiling(v4->qmlEngine());
+        service->stopProfiling(v4->qmlEngine());
         logger.debug("Profiling ended.");
     }
 
@@ -1588,31 +1622,36 @@ QV4::ReturnedValue ConsoleObject::method_exception(CallContext *ctx)
 
 
 
-void QV4::GlobalExtensions::init(QQmlEngine *qmlEngine, Object *globalObject)
+void QV4::GlobalExtensions::init(Object *globalObject, QJSEngine::Extensions extensions)
 {
     ExecutionEngine *v4 = globalObject->engine();
     Scope scope(v4);
 
-#ifndef QT_NO_TRANSLATION
-    globalObject->defineDefaultProperty(QStringLiteral("qsTranslate"), method_qsTranslate);
-    globalObject->defineDefaultProperty(QStringLiteral("QT_TRANSLATE_NOOP"), method_qsTranslateNoOp);
-    globalObject->defineDefaultProperty(QStringLiteral("qsTr"), method_qsTr);
-    globalObject->defineDefaultProperty(QStringLiteral("QT_TR_NOOP"), method_qsTrNoOp);
-    globalObject->defineDefaultProperty(QStringLiteral("qsTrId"), method_qsTrId);
-    globalObject->defineDefaultProperty(QStringLiteral("QT_TRID_NOOP"), method_qsTrIdNoOp);
-#endif
+    if (extensions.testFlag(QJSEngine::TranslationExtension)) {
+    #ifndef QT_NO_TRANSLATION
+        globalObject->defineDefaultProperty(QStringLiteral("qsTranslate"), QV4::GlobalExtensions::method_qsTranslate);
+        globalObject->defineDefaultProperty(QStringLiteral("QT_TRANSLATE_NOOP"), QV4::GlobalExtensions::method_qsTranslateNoOp);
+        globalObject->defineDefaultProperty(QStringLiteral("qsTr"), QV4::GlobalExtensions::method_qsTr);
+        globalObject->defineDefaultProperty(QStringLiteral("QT_TR_NOOP"), QV4::GlobalExtensions::method_qsTrNoOp);
+        globalObject->defineDefaultProperty(QStringLiteral("qsTrId"), QV4::GlobalExtensions::method_qsTrId);
+        globalObject->defineDefaultProperty(QStringLiteral("QT_TRID_NOOP"), QV4::GlobalExtensions::method_qsTrIdNoOp);
 
-    globalObject->defineDefaultProperty(QStringLiteral("print"), ConsoleObject::method_log);
-    globalObject->defineDefaultProperty(QStringLiteral("gc"), method_gc);
+        // string prototype extension
+        scope.engine->stringPrototype()->defineDefaultProperty(QStringLiteral("arg"), QV4::GlobalExtensions::method_string_arg);
+    #endif
+    }
 
-    ScopedObject console(scope, v4->memoryManager->alloc<QV4::ConsoleObject>(v4));
-    globalObject->defineDefaultProperty(QStringLiteral("console"), console);
+    if (extensions.testFlag(QJSEngine::ConsoleExtension)) {
+        globalObject->defineDefaultProperty(QStringLiteral("print"), QV4::ConsoleObject::method_log);
 
-    ScopedObject qt(scope, v4->memoryManager->alloc<QV4::QtObject>(v4, qmlEngine));
-    globalObject->defineDefaultProperty(QStringLiteral("Qt"), qt);
 
-    // string prototype extension
-    v4->stringPrototype.asObject()->defineDefaultProperty(QStringLiteral("arg"), method_string_arg);
+        QV4::ScopedObject console(scope, globalObject->engine()->memoryManager->allocObject<QV4::ConsoleObject>());
+        globalObject->defineDefaultProperty(QStringLiteral("console"), console);
+    }
+
+    if (extensions.testFlag(QJSEngine::GarbageCollectionExtension)) {
+        globalObject->defineDefaultProperty(QStringLiteral("gc"), QV4::GlobalExtensions::method_gc);
+    }
 }
 
 
@@ -1726,18 +1765,17 @@ ReturnedValue GlobalExtensions::method_qsTr(CallContext *ctx)
         V4THROW_ERROR("qsTr(): third argument (n) must be a number");
 
     Scope scope(ctx);
-    QV8Engine *v8engine = ctx->d()->engine->v8Engine;
     QString context;
-    if (QQmlContextData *ctxt = v8engine->callingContext()) {
+    if (QQmlContextData *ctxt = scope.engine->callingQmlContext()) {
         QString path = ctxt->urlString();
         int lastSlash = path.lastIndexOf(QLatin1Char('/'));
         int lastDot = path.lastIndexOf(QLatin1Char('.'));
         int length = lastDot - (lastSlash + 1);
         context = (lastSlash > -1) ? path.mid(lastSlash + 1, (length > -1) ? length : -1) : QString();
-    } else if (ctx->d()->parent) {
-        ScopedContext parentCtx(scope, ctx->d()->parent);
+    } else {
+        ExecutionContext *parentCtx = scope.engine->parentContext(ctx);
         // The first non-empty source URL in the call stack determines the translation context.
-        while (parentCtx && context.isEmpty()) {
+        while (!!parentCtx && context.isEmpty()) {
             if (QV4::CompiledData::CompilationUnit *unit = parentCtx->d()->compilationUnit) {
                 QString fileName = unit->fileName();
                 QUrl url(unit->fileName());
@@ -1750,7 +1788,7 @@ ReturnedValue GlobalExtensions::method_qsTr(CallContext *ctx)
                 }
                 context = QFileInfo(context).baseName();
             }
-            parentCtx = parentCtx->d()->parent;
+            parentCtx = scope.engine->parentContext(parentCtx);
         }
     }
 

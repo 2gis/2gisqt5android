@@ -34,8 +34,8 @@
 **
 ****************************************************************************/
 
-#ifndef QT3D_QENTITY_H
-#define QT3D_QENTITY_H
+#ifndef QT3DCORE_QENTITY_H
+#define QT3DCORE_QENTITY_H
 
 #include <Qt3DCore/qnode.h>
 #include <Qt3DCore/qt3dcore_global.h>
@@ -44,7 +44,7 @@
 
 QT_BEGIN_NAMESPACE
 
-namespace Qt3D {
+namespace Qt3DCore {
 
 class QComponent;
 class QEntityPrivate;
@@ -54,7 +54,6 @@ typedef QList<QComponent*> QComponentList;
 class QT3DCORESHARED_EXPORT QEntity : public QNode
 {
     Q_OBJECT
-
 public:
     explicit QEntity(QNode *parent = 0);
     virtual ~QEntity();
@@ -66,7 +65,6 @@ public:
     void removeAllComponents();
 
     QEntity *parentEntity() const;
-    QNodeId parentEntityId() const;
 
 protected:
     QEntity(QEntityPrivate &dd, QNode *parent = 0);
@@ -77,8 +75,8 @@ private:
     QT3D_CLONEABLE(QEntity)
 };
 
-} // namespace Qt3D
+} // namespace Qt3DCore
 
 QT_END_NAMESPACE
 
-#endif // QT3D_QENTITY_H
+#endif // QT3DCORE_QENTITY_H

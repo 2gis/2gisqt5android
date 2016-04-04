@@ -58,6 +58,7 @@ QT_BEGIN_NAMESPACE
 class QQmlContext;
 class QQmlEnginePrivate;
 class QQmlJavaScriptExpression;
+
 class Q_QML_PRIVATE_EXPORT QQmlPropertyPrivate : public QQmlRefCount
 {
 public:
@@ -103,15 +104,18 @@ public:
                       QQmlContextData *, WriteFlags flags = 0);
     static void findAliasTarget(QObject *, int, QObject **, int *);
 
-    static QQmlAbstractBinding *setBinding(QObject *, int coreIndex,
-                                                   int valueTypeIndex /* -1 */,
-                                                   QQmlAbstractBinding *,
-                                                   WriteFlags flags = DontRemoveBinding);
-    static QQmlAbstractBinding *setBindingNoEnable(QObject *, int coreIndex,
-                                                           int valueTypeIndex /* -1 */,
-                                                           QQmlAbstractBinding *);
-    static QQmlAbstractBinding *binding(QObject *, int coreIndex,
-                                                int valueTypeIndex /* -1 */);
+    enum BindingFlag {
+        None = 0,
+        DontEnable = 0x1
+    };
+    Q_DECLARE_FLAGS(BindingFlags, BindingFlag)
+
+    static void setBinding(QQmlAbstractBinding *binding, BindingFlags flags = None, WriteFlags writeFlags = DontRemoveBinding);
+
+    static void removeBinding(const QQmlProperty &that);
+    static void removeBinding(QObject *o, int index);
+    static void removeBinding(QQmlAbstractBinding *b);
+    static QQmlAbstractBinding *binding(QObject *, int index);
 
     static QQmlPropertyData saveValueType(const QQmlPropertyData &,
                                           const QMetaObject *, int,
@@ -128,20 +132,13 @@ public:
 
     // "Public" (to QML) methods
     static QQmlAbstractBinding *binding(const QQmlProperty &that);
-    static QQmlAbstractBinding *setBinding(const QQmlProperty &that,
-                                                   QQmlAbstractBinding *,
-                                                   WriteFlags flags = DontRemoveBinding);
+    static void setBinding(const QQmlProperty &that, QQmlAbstractBinding *);
     static QQmlBoundSignalExpression *signalExpression(const QQmlProperty &that);
-    static QQmlBoundSignalExpressionPointer setSignalExpression(const QQmlProperty &that,
+    static void setSignalExpression(const QQmlProperty &that,
                                                                 QQmlBoundSignalExpression *);
-    static QQmlBoundSignalExpressionPointer takeSignalExpression(const QQmlProperty &that,
+    static void takeSignalExpression(const QQmlProperty &that,
                                                                  QQmlBoundSignalExpression *);
     static bool write(const QQmlProperty &that, const QVariant &, WriteFlags);
-    static bool writeBinding(QObject *, const QQmlPropertyData &,
-                             QQmlContextData *context,
-                             QQmlJavaScriptExpression *expression,
-                             const QV4::Value &result, bool isUndefined,
-                             WriteFlags flags);
     static int valueTypeCoreIndex(const QQmlProperty &that);
     static int bindingIndex(const QQmlProperty &that);
     static int bindingIndex(const QQmlPropertyData &that);
@@ -150,9 +147,12 @@ public:
                         const QObject *receiver, int method_index,
                         int type = 0, int *types = 0);
     static void flushSignal(const QObject *sender, int signal_index);
+
+    static QVariant resolvedUrlSequence(const QVariant &value, QQmlContextData *context);
 };
 
 Q_DECLARE_OPERATORS_FOR_FLAGS(QQmlPropertyPrivate::WriteFlags)
+Q_DECLARE_OPERATORS_FOR_FLAGS(QQmlPropertyPrivate::BindingFlags)
 
 QT_END_NAMESPACE
 

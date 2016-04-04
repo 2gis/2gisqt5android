@@ -34,9 +34,20 @@
 #ifndef QQUICKANIMATEDSPRITE_P_H
 #define QQUICKANIMATEDSPRITE_P_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include <QtQuick/QQuickItem>
 #include <private/qquicksprite_p.h>
-#include <QTime>
+#include <QtCore/qelapsedtimer.h>
 
 QT_BEGIN_NAMESPACE
 
@@ -70,12 +81,12 @@ class Q_AUTOTEST_EXPORT QQuickAnimatedSprite : public QQuickItem
     Q_PROPERTY(bool paused READ paused WRITE setPaused NOTIFY pausedChanged)
     Q_PROPERTY(int currentFrame READ currentFrame WRITE setCurrentFrame NOTIFY currentFrameChanged)
 
-    Q_ENUMS(LoopParameters)
 public:
     explicit QQuickAnimatedSprite(QQuickItem *parent = 0);
     enum LoopParameters {
         Infinite = -1
     };
+    Q_ENUM(LoopParameters)
 
     bool running() const
     {
@@ -333,6 +344,7 @@ public Q_SLOTS:
         if (m_curFrame != arg) {
             m_curFrame = arg;
             Q_EMIT currentFrameChanged(arg); //TODO-C Only emitted on manual advance!
+            update();
         }
     }
 
@@ -354,7 +366,7 @@ private:
     QQuickAnimatedSpriteMaterial *m_material;
     QQuickSprite* m_sprite;
     QQuickSpriteEngine* m_spriteEngine;
-    QTime m_timestamp;
+    QElapsedTimer m_timestamp;
     int m_curFrame;
     bool m_pleaseReset;
     bool m_running;

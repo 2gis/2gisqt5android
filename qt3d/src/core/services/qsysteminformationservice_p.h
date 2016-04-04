@@ -34,28 +34,43 @@
 **
 ****************************************************************************/
 
-#ifndef QT3D_QSYSTEMINFORMATIONSERVICE_P_H
-#define QT3D_QSYSTEMINFORMATIONSERVICE_P_H
+#ifndef QT3DCORE_QSYSTEMINFORMATIONSERVICE_P_H
+#define QT3DCORE_QSYSTEMINFORMATIONSERVICE_P_H
+
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists for the convenience
+// of other Qt classes.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
 
 #include <Qt3DCore/qt3dcore_global.h>
-#include <Qt3DCore/private/qabstractserviceprovider_p.h>
-#include <Qt3DCore/qservicelocator.h>
+#include <Qt3DCore/private/qservicelocator_p.h>
+#include <QtCore/qstringlist.h>
 
 QT_BEGIN_NAMESPACE
 
-namespace Qt3D {
+namespace Qt3DCore {
 
-class QSystemInformationServicePrivate : public QAbstractServiceProviderPrivate
+class QSystemInformationServicePrivate;
+
+class QT3DCORESHARED_EXPORT QSystemInformationService : public QAbstractServiceProvider
 {
 public:
-    QSystemInformationServicePrivate(const QString &description)
-        : QAbstractServiceProviderPrivate(QServiceLocator::SystemInformation, description)
-    {}
+    virtual QStringList aspectNames() const = 0;
+    virtual int threadPoolThreadCount() const = 0;
+
+protected:
+    QSystemInformationService(const QString &description = QString());
+    QSystemInformationService(QSystemInformationServicePrivate &dd);
 };
 
-}
+} // namespace Qt3DCore
 
 QT_END_NAMESPACE
 
-#endif // QT3D_QSYSTEMINFORMATIONSERVICE_P_H
-
+#endif // QT3DCORE_QSYSTEMINFORMATIONSERVICE_P_H

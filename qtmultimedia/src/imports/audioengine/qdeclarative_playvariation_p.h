@@ -34,18 +34,28 @@
 #ifndef QDECLARATIVEPLAYVARIATION_P_H
 #define QDECLARATIVEPLAYVARIATION_P_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include <QtQml/qqml.h>
-#include <QtQml/qqmlcomponent.h>
 
 QT_BEGIN_NAMESPACE
 
 class QDeclarativeAudioSample;
 class QSoundInstance;
+class QDeclarativeAudioEngine;
 
-class QDeclarativePlayVariation : public QObject, public QQmlParserStatus
+class QDeclarativePlayVariation : public QObject
 {
     Q_OBJECT
-    Q_INTERFACES(QQmlParserStatus)
     Q_PROPERTY(QString sample READ sample WRITE setSample)
     Q_PROPERTY(bool looping READ isLooping WRITE setLooping)
     Q_PROPERTY(qreal maxGain READ maxGain WRITE setMaxGain)
@@ -56,9 +66,6 @@ class QDeclarativePlayVariation : public QObject, public QQmlParserStatus
 public:
     QDeclarativePlayVariation(QObject *parent = 0);
     ~QDeclarativePlayVariation();
-
-    void classBegin();
-    void componentComplete();
 
     QString sample() const;
     void setSample(const QString& sample);
@@ -82,9 +89,10 @@ public:
 
     void applyParameters(QSoundInstance *soundInstance);
 
+    void setEngine(QDeclarativeAudioEngine *engine);
+
 private:
     Q_DISABLE_COPY(QDeclarativePlayVariation);
-    bool m_complete;
     QString m_sample;
     bool m_looping;
     qreal m_maxGain;
@@ -92,6 +100,7 @@ private:
     qreal m_maxPitch;
     qreal m_minPitch;
     QDeclarativeAudioSample *m_sampleObject;
+    QDeclarativeAudioEngine *m_engine;
 };
 
 QT_END_NAMESPACE

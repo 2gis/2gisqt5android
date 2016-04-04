@@ -50,7 +50,7 @@
 #include "qquickitemchangelistener_p.h"
 #include <qqmlincubator.h>
 
-#include <private/qv4value_inl_p.h>
+#include <private/qv4value_p.h>
 
 QT_BEGIN_NAMESPACE
 
@@ -102,7 +102,6 @@ public:
     QQmlContext *itemContext;
     QQuickLoaderIncubator *incubator;
     QV4::PersistentValue initialPropertyValues;
-    QV4::PersistentValue qmlGlobalForIpv;
     bool updatingSize: 1;
     bool active : 1;
     bool loadingFromSource : 1;

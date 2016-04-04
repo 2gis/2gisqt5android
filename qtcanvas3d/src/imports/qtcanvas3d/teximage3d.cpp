@@ -58,9 +58,6 @@ public:
 };
 static StaticFactoryMapDeleter staticFactoryMapDeleter;
 
-/*!
- * \internal
- */
 CanvasTextureImageFactory::CanvasTextureImageFactory(QQmlEngine *engine, QObject *parent) :
     QObject(parent)
 {
@@ -70,9 +67,6 @@ CanvasTextureImageFactory::CanvasTextureImageFactory(QQmlEngine *engine, QObject
                      this, &CanvasTextureImageFactory::deleteLater);
 }
 
-/*!
- * \internal
- */
 CanvasTextureImageFactory::~CanvasTextureImageFactory()
 {
     m_qmlEngineToImageFactoryMap.remove(m_qmlEngine);
@@ -89,10 +83,6 @@ CanvasTextureImageFactory::~CanvasTextureImageFactory()
  *
  * \sa TextureImage
  */
-
-/*!
- * \internal
- */
 QObject *CanvasTextureImageFactory::texture_image_factory_provider(QQmlEngine *engine,
                                                                    QJSEngine *scriptEngine)
 {
@@ -100,9 +90,6 @@ QObject *CanvasTextureImageFactory::texture_image_factory_provider(QQmlEngine *e
     return factory(engine);
 }
 
-/*!
- * \internal
- */
 CanvasTextureImageFactory *CanvasTextureImageFactory::factory(QQmlEngine *engine)
 {
     if (m_qmlEngineToImageFactoryMap.contains(engine))
@@ -113,9 +100,6 @@ CanvasTextureImageFactory *CanvasTextureImageFactory::factory(QQmlEngine *engine
     return factory;
 }
 
-/*!
- * \internal
- */
 void CanvasTextureImageFactory::handleImageLoadingStarted(CanvasTextureImage *image)
 {
     if (m_loadingImagesList.contains(image))
@@ -124,9 +108,6 @@ void CanvasTextureImageFactory::handleImageLoadingStarted(CanvasTextureImage *im
     m_loadingImagesList << image;
 }
 
-/*!
- * \internal
- */
 void CanvasTextureImageFactory::notifyLoadedImages()
 {
     if (!m_loadingImagesList.size())
@@ -138,7 +119,6 @@ void CanvasTextureImageFactory::notifyLoadedImages()
         if (image->imageState() == CanvasTextureImage::LOADING_FINISHED) {
             m_loadingImagesList.removeOne(image);
             image->emitImageLoaded();
-
         } else if (image->imageState() == CanvasTextureImage::LOADING_ERROR) {
             m_loadingImagesList.removeOne(image);
             image->emitImageLoadingError();
@@ -150,16 +130,15 @@ void CanvasTextureImageFactory::notifyLoadedImages()
  * \qmlmethod TextureImage TextureImageFactory::newTexImage()
  * Returns a new empty TextureImage.
  */
-/*!
- * \internal
- */
 QJSValue CanvasTextureImageFactory::newTexImage()
 {
     CanvasTextureImage *newImg = new CanvasTextureImage(this, m_qmlEngine);
-    connect(newImg, &CanvasTextureImage::imageLoadingStarted,
-            this, &CanvasTextureImageFactory::handleImageLoadingStarted);
-
     return m_qmlEngine->newQObject(newImg);
+}
+
+void CanvasTextureImageFactory::handleImageDestroyed(CanvasTextureImage *image)
+{
+    m_loadingImagesList.removeOne(image);
 }
 
 /*!
@@ -173,14 +152,11 @@ QJSValue CanvasTextureImageFactory::newTexImage()
  *
  * \sa TextureImageFactory
  */
-
-/*!
- * \internal
- */
 CanvasTextureImage::CanvasTextureImage(CanvasTextureImageFactory *parent, QQmlEngine *engine) :
-    CanvasAbstractObject(parent),
+    CanvasAbstractObject(0, 0),
     m_engine(engine),
-    m_networkAccessManager(0),
+    m_networkAccessManager(m_engine->networkAccessManager()),
+    m_networkReply(0),
     m_state(INITIALIZED),
     m_errorString(""),
     m_pixelCache(0),
@@ -188,59 +164,55 @@ CanvasTextureImage::CanvasTextureImage(CanvasTextureImageFactory *parent, QQmlEn
     m_pixelCacheFlipY(false),
     m_parentFactory(parent)
 {
-    m_networkAccessManager = new QNetworkAccessManager(this);
-    QObject::connect(m_networkAccessManager, &QNetworkAccessManager::finished,
-                     this, &CanvasTextureImage::handleReply);
 }
 
-/*!
- * \internal
- */
 CanvasTextureImage::CanvasTextureImage(const QImage &source,
                                        int width, int height,
-                                       QObject *parent,
+                                       CanvasTextureImageFactory *parent,
                                        QQmlEngine *engine) :
-    CanvasAbstractObject(parent),
+    CanvasAbstractObject(0, 0),
     m_engine(engine),
-    m_networkAccessManager(0),
+    m_networkAccessManager(m_engine->networkAccessManager()),
+    m_networkReply(0),
     m_state(INITIALIZED),
     m_errorString(""),
     m_pixelCache(0),
     m_pixelCacheFormat(CanvasContext::NONE),
-    m_pixelCacheFlipY(false)
+    m_pixelCacheFlipY(false),
+    m_parentFactory(parent)
 {
-    m_networkAccessManager = new QNetworkAccessManager(this);
-    QObject::connect(m_networkAccessManager, &QNetworkAccessManager::finished,
-                     this, &CanvasTextureImage::handleReply);
-
     m_image = source.scaled(width, height);
     setImageState(LOADING_FINISHED);
 }
 
-/*!
- * \internal
- */
+void CanvasTextureImage::cleanupNetworkReply()
+{
+    if (m_networkReply) {
+        QObject::disconnect(m_networkReply, &QNetworkReply::finished,
+                            this, &CanvasTextureImage::handleReply);
+        m_networkReply->abort();
+        m_networkReply->deleteLater();
+        m_networkReply = 0;
+    }
+}
+
 CanvasTextureImage::~CanvasTextureImage()
 {
-    delete m_networkAccessManager;
-    delete m_pixelCache;
+    if (!m_parentFactory.isNull())
+        m_parentFactory->handleImageDestroyed(this);
+    cleanupNetworkReply();
+    delete[] m_pixelCache;
 }
 
 /*!
  * \qmlproperty url TextureImage::src()
  * Contains the url source where the image data is loaded from.
  */
-/*!
- * \internal
- */
 const QUrl &CanvasTextureImage::src() const
 {
     return m_source;
 }
 
-/*!
- * \internal
- */
 void CanvasTextureImage::setSrc(const QUrl &url)
 {
     if (url == m_source)
@@ -256,33 +228,21 @@ void CanvasTextureImage::setSrc(const QUrl &url)
  * \qmlmethod int TextureImage::id()
  * Contains the object id.
  */
-/*!
- * \internal
- */
 ulong CanvasTextureImage::id()
 {
     return m_texId++;
 }
 
-/*!
- * \internal
- */
 void CanvasTextureImage::emitImageLoaded()
 {
     emit imageLoaded(this);
 }
 
-/*!
- * \internal
- */
 void CanvasTextureImage::emitImageLoadingError()
 {
     emit imageLoadingFailed(this);
 }
 
-/*!
- * \internal
- */
 void CanvasTextureImage::load()
 {
     if (m_source.isEmpty()) {
@@ -297,60 +257,50 @@ void CanvasTextureImage::load()
         return;
 
     setImageState(LOADING);
+    if (!m_parentFactory.isNull())
+        m_parentFactory->handleImageLoadingStarted(this);
     emit imageLoadingStarted(this);
 
     QNetworkRequest request(m_source);
-    m_networkAccessManager->get(request);
+    m_networkReply = m_networkAccessManager->get(request);
+    QObject::connect(m_networkReply, &QNetworkReply::finished,
+                     this, &CanvasTextureImage::handleReply);
 }
 
 /*!
  * \qmlproperty string TextureImage::errorString()
  * Contains the error string if an error happened during image creation.
  */
-/*!
- * \internal
- */
 QString CanvasTextureImage::errorString() const
 {
     return m_errorString;
 }
 
-/*!
- * \internal
- */
-void CanvasTextureImage::handleReply(QNetworkReply *reply)
+void CanvasTextureImage::handleReply()
 {
-    if (reply->error() != QNetworkReply::NoError) {
-        m_errorString = reply->errorString();
-        emit errorStringChanged(m_errorString);
-        setImageState(LOADING_ERROR);
-        return;
+    if (m_networkReply) {
+        if (m_networkReply->error() != QNetworkReply::NoError) {
+            m_errorString = m_networkReply->errorString();
+            emit errorStringChanged(m_errorString);
+            setImageState(LOADING_ERROR);
+        } else {
+            m_image.loadFromData(m_networkReply->readAll());
+            setImageState(LOADING_FINISHED);
+        }
+        cleanupNetworkReply();
     }
-
-    m_image.loadFromData(reply->readAll());
-
-    setImageState(LOADING_FINISHED);
 }
 
-/*!
- * \internal
- */
 QImage &CanvasTextureImage::getImage()
 {
     return m_image;
 }
 
-/*!
- * \internal
- */
 QVariant *CanvasTextureImage::anything() const
 {
     return m_anyValue;
 }
 
-/*!
- * \internal
- */
 void CanvasTextureImage::setAnything(QVariant *value)
 {
     if (m_anyValue == value)
@@ -365,17 +315,11 @@ void CanvasTextureImage::setAnything(QVariant *value)
  * \c{TextureImage.LOAD_PENDING}, \c{TextureImage.LOADING}, \c{TextureImage.LOADING_FINISHED} or
  * \c{TextureImage.LOADING_ERROR}.
  */
-/*!
- * \internal
- */
 CanvasTextureImage::TextureImageState CanvasTextureImage::imageState() const
 {
     return m_state;
 }
 
-/*!
- * \internal
- */
 void CanvasTextureImage::setImageState(TextureImageState state)
 {
     if (state == m_state)
@@ -387,9 +331,6 @@ void CanvasTextureImage::setImageState(TextureImageState state)
 /*!
  * \qmlproperty int TextureImage::width()
  * Contains the texture image width.
- */
-/*!
- * \internal
  */
 int CanvasTextureImage::width() const
 {
@@ -403,9 +344,6 @@ int CanvasTextureImage::width() const
  * \qmlproperty int TextureImage::height()
  * Contains the texture image height.
  */
-/*!
- * \internal
- */
 int CanvasTextureImage::height() const
 {
     if (m_state != LOADING_FINISHED)
@@ -414,9 +352,6 @@ int CanvasTextureImage::height() const
     return m_image.height();
 }
 
-/*!
- * \internal
- */
 uchar *CanvasTextureImage::convertToFormat(CanvasContext::glEnums format,
                                            bool flipY, bool premultipliedAlpha)
 {
@@ -424,7 +359,7 @@ uchar *CanvasTextureImage::convertToFormat(CanvasContext::glEnums format,
         return m_pixelCache;
 
     // Destroy the pixel cache
-    delete m_pixelCache;
+    delete[] m_pixelCache;
     m_pixelCache = 0;
     m_pixelCacheFormat = CanvasContext::NONE;
 
@@ -513,9 +448,6 @@ uchar *CanvasTextureImage::convertToFormat(CanvasContext::glEnums format,
  * \qmlmethod TextureImage TextureImage::create()
  * Returns a new texture image.
  */
-/*!
- * \internal
- */
 QJSValue CanvasTextureImage::create()
 {
     return m_engine->newQObject(new CanvasTextureImage(m_parentFactory, m_engine));
@@ -524,9 +456,6 @@ QJSValue CanvasTextureImage::create()
 /*!
  * \qmlmethod TextureImage TextureImage::resize(int width, int height)
  * Returns a copy of the texture image resized to the given \a width and \a height.
- */
-/*!
- * \internal
  */
 QJSValue CanvasTextureImage::resize(int width, int height)
 {
@@ -538,9 +467,6 @@ QJSValue CanvasTextureImage::resize(int width, int height)
                                                        m_parentFactory, m_engine));
 }
 
-/*!
- * \internal
- */
 QDebug operator<<(QDebug dbg, const CanvasTextureImage *texImage)
 {
     if (texImage)

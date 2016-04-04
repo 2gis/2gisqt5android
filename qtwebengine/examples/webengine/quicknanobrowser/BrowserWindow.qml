@@ -38,8 +38,8 @@
 **
 ****************************************************************************/
 
-import QtQuick 2.1
-import QtWebEngine 1.1
+import QtQuick 2.2
+import QtWebEngine 1.2
 import QtQuick.Controls 1.0
 import QtQuick.Controls.Styles 1.0
 import QtQuick.Layouts 1.0
@@ -53,16 +53,6 @@ ApplicationWindow {
     property QtObject applicationRoot
     property Item currentWebView: tabs.currentIndex < tabs.count ? tabs.getTab(tabs.currentIndex).item : null
     property int previousVisibility: Window.Windowed
-
-    property bool isFullScreen: visibility == Window.FullScreen
-    onIsFullScreenChanged: {
-        // This is for the case where the system forces us to leave fullscreen.
-        if (currentWebView && !isFullScreen) {
-            currentWebView.state = ""
-            if (currentWebView.isFullScreen)
-                currentWebView.fullScreenCancelled()
-        }
-    }
 
     width: 1300
     height: 900
@@ -82,6 +72,8 @@ ApplicationWindow {
         property alias autoLoadImages: loadImages.checked;
         property alias javaScriptEnabled: javaScriptEnabled.checked;
         property alias errorPageEnabled: errorPageEnabled.checked;
+        property alias pluginsEnabled: pluginsEnabled.checked;
+        property alias fullScreenSupportEnabled: fullScreenSupportEnabled.checked;
     }
 
     Action {
@@ -99,14 +91,14 @@ ApplicationWindow {
         }
     }
     Action {
-        shortcut: "Ctrl+R"
+        shortcut: StandardKey.Refresh
         onTriggered: {
             if (currentWebView)
                 currentWebView.reload()
         }
     }
     Action {
-        shortcut: "Ctrl+T"
+        shortcut: StandardKey.AddTab
         onTriggered: {
             tabs.createEmptyTab(currentWebView.profile)
             tabs.currentIndex = tabs.count - 1
@@ -115,19 +107,19 @@ ApplicationWindow {
         }
     }
     Action {
-        shortcut: "Ctrl+W"
+        shortcut: StandardKey.Close
         onTriggered: {
-            if (tabs.count == 1)
-                browserWindow.close()
-            else
-                tabs.removeTab(tabs.currentIndex)
+            currentWebView.triggerWebAction(WebEngineView.RequestClose);
         }
     }
     Action {
         shortcut: "Escape"
         onTriggered: {
-            if (browserWindow.isFullScreen)
+            if (currentWebView.state == "FullScreen") {
                 browserWindow.visibility = browserWindow.previousVisibility
+                fullScreenNotification.hide()
+                currentWebView.triggerWebAction(WebEngineView.ExitFullScreen);
+            }
         }
     }
     Action {
@@ -135,12 +127,49 @@ ApplicationWindow {
         onTriggered: currentWebView.zoomFactor = 1.0;
     }
     Action {
-        shortcut: "Ctrl+-"
+        shortcut: StandardKey.ZoomOut
         onTriggered: currentWebView.zoomFactor -= 0.1;
     }
     Action {
-        shortcut: "Ctrl+="
+        shortcut: StandardKey.ZoomIn
         onTriggered: currentWebView.zoomFactor += 0.1;
+    }
+
+    Action {
+        shortcut: StandardKey.Copy
+        onTriggered: currentWebView.triggerWebAction(WebEngineView.Copy)
+    }
+    Action {
+        shortcut: StandardKey.Cut
+        onTriggered: currentWebView.triggerWebAction(WebEngineView.Cut)
+    }
+    Action {
+        shortcut: StandardKey.Paste
+        onTriggered: currentWebView.triggerWebAction(WebEngineView.Paste)
+    }
+    Action {
+        shortcut: "Shift+"+StandardKey.Paste
+        onTriggered: currentWebView.triggerWebAction(WebEngineView.PasteAndMatchStyle)
+    }
+    Action {
+        shortcut: StandardKey.SelectAll
+        onTriggered: currentWebView.triggerWebAction(WebEngineView.SelectAll)
+    }
+    Action {
+        shortcut: StandardKey.Undo
+        onTriggered: currentWebView.triggerWebAction(WebEngineView.Undo)
+    }
+    Action {
+        shortcut: StandardKey.Redo
+        onTriggered: currentWebView.triggerWebAction(WebEngineView.Redo)
+    }
+    Action {
+        shortcut: StandardKey.Back
+        onTriggered: currentWebView.triggerWebAction(WebEngineView.Back)
+    }
+    Action {
+        shortcut: StandardKey.Forward
+        onTriggered: currentWebView.triggerWebAction(WebEngineView.Forward)
     }
 
     toolBar: ToolBar {
@@ -230,6 +259,18 @@ ApplicationWindow {
                             checked: WebEngine.settings.errorPageEnabled
                         }
                         MenuItem {
+                            id: pluginsEnabled
+                            text: "Plugins On"
+                            checkable: true
+                            checked: true
+                        }
+                        MenuItem {
+                            id: fullScreenSupportEnabled
+                            text: "FullScreen On"
+                            checkable: true
+                            checked: WebEngine.settings.fullScreenSupportEnabled
+                        }
+                        MenuItem {
                             id: offTheRecordEnabled
                             text: "Off The Record"
                             checkable: true
@@ -312,6 +353,8 @@ ApplicationWindow {
                 settings.autoLoadImages: appSettings.autoLoadImages
                 settings.javascriptEnabled: appSettings.javaScriptEnabled
                 settings.errorPageEnabled: appSettings.errorPageEnabled
+                settings.pluginsEnabled: appSettings.pluginsEnabled
+                settings.fullScreenSupportEnabled: appSettings.fullScreenSupportEnabled
 
                 onCertificateError: {
                     error.defer()
@@ -342,11 +385,49 @@ ApplicationWindow {
                         webEngineView.state = "FullScreen"
                         browserWindow.previousVisibility = browserWindow.visibility
                         browserWindow.showFullScreen()
+                        fullScreenNotification.show()
                     } else {
                         webEngineView.state = ""
                         browserWindow.visibility = browserWindow.previousVisibility
+                        fullScreenNotification.hide()
                     }
                     request.accept()
+                }
+
+                onRenderProcessTerminated: {
+                    var status = ""
+                    switch (terminationStatus) {
+                    case WebEngineView.NormalTerminationStatus:
+                        status = "(normal exit)"
+                        break;
+                    case WebEngineView.AbnormalTerminationStatus:
+                        status = "(abnormal exit)"
+                        break;
+                    case WebEngineView.CrashedTerminationStatus:
+                        status = "(crashed)"
+                        break;
+                    case WebEngineView.KilledTerminationStatus:
+                        status = "(killed)"
+                        break;
+                    }
+
+                    print("Render process exited with code " + exitCode + " " + status)
+                    reloadTimer.running = true
+                }
+
+                onWindowCloseRequested: {
+                    if (tabs.count == 1)
+                        browserWindow.close()
+                    else
+                        tabs.removeTab(tabs.currentIndex)
+                }
+
+                Timer {
+                    id: reloadTimer
+                    interval: 0
+                    running: false
+                    repeat: false
+                    onTriggered: currentWebView.reload()
                 }
             }
         }
@@ -382,6 +463,11 @@ ApplicationWindow {
             visible = certErrors.length > 0
         }
     }
+
+    FullScreenNotification {
+        id: fullScreenNotification
+    }
+
     DownloadView {
         id: downloadView
         visible: false

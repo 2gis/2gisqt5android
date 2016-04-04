@@ -49,6 +49,7 @@ AppCacheHost::AppCacheHost(int host_id, AppCacheFrontend* frontend,
       parent_host_id_(kAppCacheNoHostId), parent_process_id_(0),
       pending_main_resource_cache_id_(kAppCacheNoCacheId),
       pending_selected_cache_id_(kAppCacheNoCacheId),
+      was_select_cache_called_(false),
       is_cache_selection_enabled_(true),
       frontend_(frontend), service_(service),
       storage_(service->storage()),
@@ -79,17 +80,21 @@ void AppCacheHost::RemoveObserver(Observer* observer) {
   observers_.RemoveObserver(observer);
 }
 
-void AppCacheHost::SelectCache(const GURL& document_url,
+bool AppCacheHost::SelectCache(const GURL& document_url,
                                const int64 cache_document_was_loaded_from,
                                const GURL& manifest_url) {
+  if (was_select_cache_called_)
+    return false;
+
   DCHECK(pending_start_update_callback_.is_null() &&
          pending_swap_cache_callback_.is_null() &&
          pending_get_status_callback_.is_null() &&
          !is_selection_pending());
 
+  was_select_cache_called_ = true;
   if (!is_cache_selection_enabled_) {
     FinishCacheSelection(NULL, NULL);
-    return;
+    return true;
   }
 
   origin_in_use_ = document_url.GetOrigin();
@@ -109,7 +114,7 @@ void AppCacheHost::SelectCache(const GURL& document_url,
 
   if (cache_document_was_loaded_from != kAppCacheNoCacheId) {
     LoadSelectedCache(cache_document_was_loaded_from);
-    return;
+    return true;
   }
 
   if (!manifest_url.is_empty() &&
@@ -130,7 +135,7 @@ void AppCacheHost::SelectCache(const GURL& document_url,
               0,
               false /*is_cross_origin*/));
       frontend_->OnContentBlocked(host_id_, manifest_url);
-      return;
+      return true;
     }
 
     // Note: The client detects if the document was not loaded using HTTP GET
@@ -139,47 +144,62 @@ void AppCacheHost::SelectCache(const GURL& document_url,
     set_preferred_manifest_url(manifest_url);
     new_master_entry_url_ = document_url;
     LoadOrCreateGroup(manifest_url);
-    return;
+    return true;
   }
 
   // TODO(michaeln): If there was a manifest URL, the user agent may report
   // to the user that it was ignored, to aid in application development.
   FinishCacheSelection(NULL, NULL);
+  return true;
 }
 
-void AppCacheHost::SelectCacheForWorker(int parent_process_id,
+bool AppCacheHost::SelectCacheForWorker(int parent_process_id,
                                         int parent_host_id) {
+  if (was_select_cache_called_)
+    return false;
+
   DCHECK(pending_start_update_callback_.is_null() &&
          pending_swap_cache_callback_.is_null() &&
          pending_get_status_callback_.is_null() &&
          !is_selection_pending());
 
+  was_select_cache_called_ = true;
   parent_process_id_ = parent_process_id;
   parent_host_id_ = parent_host_id;
   FinishCacheSelection(NULL, NULL);
+  return true;
 }
 
-void AppCacheHost::SelectCacheForSharedWorker(int64 appcache_id) {
+bool AppCacheHost::SelectCacheForSharedWorker(int64 appcache_id) {
+  if (was_select_cache_called_)
+    return false;
+
   DCHECK(pending_start_update_callback_.is_null() &&
          pending_swap_cache_callback_.is_null() &&
          pending_get_status_callback_.is_null() &&
          !is_selection_pending());
 
+  was_select_cache_called_ = true;
   if (appcache_id != kAppCacheNoCacheId) {
     LoadSelectedCache(appcache_id);
-    return;
+    return true;
   }
   FinishCacheSelection(NULL, NULL);
+  return true;
 }
 
 // TODO(michaeln): change method name to MarkEntryAsForeign for consistency
-void AppCacheHost::MarkAsForeignEntry(const GURL& document_url,
+bool AppCacheHost::MarkAsForeignEntry(const GURL& document_url,
                                       int64 cache_document_was_loaded_from) {
+  if (was_select_cache_called_)
+    return false;
+
   // The document url is not the resource url in the fallback case.
   storage()->MarkEntryAsForeign(
       main_resource_was_namespace_entry_ ? namespace_entry_url_ : document_url,
       cache_document_was_loaded_from);
   SelectCache(document_url, kAppCacheNoCacheId, GURL());
+  return true;
 }
 
 void AppCacheHost::GetStatusWithCallback(const GetStatusCallback& callback,
@@ -291,11 +311,13 @@ AppCacheHost* AppCacheHost::GetParentAppCacheHost() const {
 
 AppCacheRequestHandler* AppCacheHost::CreateRequestHandler(
     net::URLRequest* request,
-    ResourceType resource_type) {
+    ResourceType resource_type,
+    bool should_reset_appcache) {
   if (is_for_dedicated_worker()) {
     AppCacheHost* parent_host = GetParentAppCacheHost();
     if (parent_host)
-      return parent_host->CreateRequestHandler(request, resource_type);
+      return parent_host->CreateRequestHandler(
+          request, resource_type, should_reset_appcache);
     return NULL;
   }
 
@@ -303,12 +325,14 @@ AppCacheRequestHandler* AppCacheHost::CreateRequestHandler(
     // Store the first party origin so that it can be used later in SelectCache
     // for checking whether the creation of the appcache is allowed.
     first_party_url_ = request->first_party_for_cookies();
-    return new AppCacheRequestHandler(this, resource_type);
+    return new AppCacheRequestHandler(
+        this, resource_type, should_reset_appcache);
   }
 
   if ((associated_cache() && associated_cache()->is_complete()) ||
       is_selection_pending()) {
-    return new AppCacheRequestHandler(this, resource_type);
+    return new AppCacheRequestHandler(
+        this, resource_type, should_reset_appcache);
   }
   return NULL;
 }

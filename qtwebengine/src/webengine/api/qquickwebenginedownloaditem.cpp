@@ -36,7 +36,7 @@
 
 #include "qquickwebenginedownloaditem_p.h"
 #include "qquickwebenginedownloaditem_p_p.h"
-#include "qquickwebengineprofile_p_p.h"
+#include "qquickwebengineprofile_p.h"
 
 using QtWebEngineCore::BrowserContextAdapterClient;
 
@@ -76,7 +76,7 @@ QQuickWebEngineDownloadItemPrivate::~QQuickWebEngineDownloadItemPrivate()
 /*!
     \qmltype WebEngineDownloadItem
     \instantiates QQuickWebEngineDownloadItem
-    \inqmlmodule QtWebEngine 1.1
+    \inqmlmodule QtWebEngine
     \since QtWebEngine 1.1
     \brief Provides information about a download.
 
@@ -217,6 +217,18 @@ qint64 QQuickWebEngineDownloadItem::receivedBytes() const
 }
 
 /*!
+    \qmlproperty QString WebEngineDownloadItem::mimeType
+
+    Holds the MIME type of the download.
+*/
+
+QString QQuickWebEngineDownloadItem::mimeType() const
+{
+    Q_D(const QQuickWebEngineDownloadItem);
+    return d->mimeType;
+}
+
+/*!
     \qmlproperty QString WebEngineDownloadItem::path
 
     Holds the full target path where data is being downloaded to.
@@ -227,7 +239,7 @@ qint64 QQuickWebEngineDownloadItem::receivedBytes() const
     The download path can only be set in the \c WebEngineProfile.onDownloadRequested
     handler before the download is accepted.
 
-    \sa WebEngineProfile::downloadRequested(WebEngineDownloadItem download), WebEngineDownloadItem::accept()
+    \sa WebEngineProfile::downloadRequested(), accept()
 */
 
 QString QQuickWebEngineDownloadItem::path() const

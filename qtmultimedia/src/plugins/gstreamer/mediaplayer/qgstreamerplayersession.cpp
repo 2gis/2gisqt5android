@@ -241,6 +241,10 @@ QGstreamerPlayerSession::QGstreamerPlayerSession(QObject *parent)
         g_signal_connect(G_OBJECT(m_playbin), "video-changed", G_CALLBACK(handleStreamsChange), this);
         g_signal_connect(G_OBJECT(m_playbin), "audio-changed", G_CALLBACK(handleStreamsChange), this);
         g_signal_connect(G_OBJECT(m_playbin), "text-changed", G_CALLBACK(handleStreamsChange), this);
+
+#if defined(HAVE_GST_APPSRC)
+        g_signal_connect(G_OBJECT(m_playbin), "deep-notify::source", G_CALLBACK(configureAppSrcElement), this);
+#endif
     }
 }
 
@@ -274,7 +278,7 @@ void QGstreamerPlayerSession::configureAppSrcElement(GObject* object, GObject *o
     Q_UNUSED(object);
     Q_UNUSED(pspec);
 
-    if (self->appsrc()->isReady())
+    if (!self->appsrc())
         return;
 
     GstElement *appsrc;
@@ -298,16 +302,14 @@ void QGstreamerPlayerSession::loadFromStream(const QNetworkRequest &request, QIO
     m_lastPosition = 0;
     m_isPlaylist = false;
 
-    if (m_appSrc)
-        m_appSrc->deleteLater();
-    m_appSrc = new QGstAppSrc(this);
+    if (!m_appSrc)
+        m_appSrc = new QGstAppSrc(this);
     m_appSrc->setStream(appSrcStream);
 
     if (m_playbin) {
         m_tags.clear();
         emit tagsChanged();
 
-        g_signal_connect(G_OBJECT(m_playbin), "deep-notify::source", (GCallback) &QGstreamerPlayerSession::configureAppSrcElement, (gpointer)this);
         g_object_set(G_OBJECT(m_playbin), "uri", "appsrc://", NULL);
 
         if (!m_streamTypes.isEmpty()) {
@@ -329,6 +331,13 @@ void QGstreamerPlayerSession::loadFromUri(const QNetworkRequest &request)
     m_duration = -1;
     m_lastPosition = 0;
     m_isPlaylist = false;
+
+#if defined(HAVE_GST_APPSRC)
+    if (m_appSrc) {
+        m_appSrc->deleteLater();
+        m_appSrc = 0;
+    }
+#endif
 
     if (m_playbin) {
         m_tags.clear();
@@ -388,7 +397,7 @@ QMediaTimeRange QGstreamerPlayerSession::availablePlaybackRanges() const
     if (duration() <= 0)
         return ranges;
 
-#if (GST_VERSION_MAJOR >= 0) &&  (GST_VERSION_MINOR >= 10) && (GST_VERSION_MICRO >= 31)
+#if GST_CHECK_VERSION(0, 10, 31)
     //GST_FORMAT_TIME would be more appropriate, but unfortunately it's not supported.
     //with GST_FORMAT_PERCENT media is treated as encoded with constant bitrate.
     GstQuery* query = gst_query_new_buffering(GST_FORMAT_PERCENT);
@@ -1637,7 +1646,7 @@ void QGstreamerPlayerSession::updateMuted()
     }
 }
 
-#if (GST_VERSION_MAJOR == 0) && ((GST_VERSION_MINOR < 10) || (GST_VERSION_MICRO < 33))
+#if !GST_CHECK_VERSION(0, 10, 33)
 static gboolean factory_can_src_any_caps (GstElementFactory *factory, const GstCaps *caps)
 {
     GList *templates;
@@ -1653,7 +1662,7 @@ static gboolean factory_can_src_any_caps (GstElementFactory *factory, const GstC
         if (templ->direction == GST_PAD_SRC) {
             GstCaps *templcaps = gst_static_caps_get(&templ->static_caps);
 
-            if (gst_caps_can_intersect(caps, templcaps)) {
+            if (qt_gst_caps_can_intersect(caps, templcaps)) {
                 gst_caps_unref(templcaps);
                 return TRUE;
             }
@@ -1685,7 +1694,7 @@ GstAutoplugSelectResult QGstreamerPlayerSession::handleAutoplugSelect(GstBin *bi
         GstCaps *sinkCaps = gst_pad_get_caps(sinkPad);
 #endif
 
-#if (GST_VERSION_MAJOR == 0) && ((GST_VERSION_MINOR < 10) || (GST_VERSION_MICRO < 33))
+#if !GST_CHECK_VERSION(0, 10, 33)
         if (!factory_can_src_any_caps(factory, sinkCaps))
 #else
         if (!gst_element_factory_can_src_any_caps(factory, sinkCaps))

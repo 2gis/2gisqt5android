@@ -33,6 +33,17 @@
 #ifndef QV4FUNCTION_H
 #define QV4FUNCTION_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include "qv4global_p.h"
 #include <private/qv4compileddata_p.h>
 
@@ -49,10 +60,15 @@ struct Q_QML_EXPORT Function {
 
     // first nArguments names in internalClass are the actual arguments
     InternalClass *internalClass;
+    uint nFormals;
+    bool activationRequired;
 
     Function(ExecutionEngine *engine, CompiledData::CompilationUnit *unit, const CompiledData::Function *function,
              ReturnedValue (*codePtr)(ExecutionEngine *, const uchar *));
     ~Function();
+
+    // used when dynamically assigning signal handlers (QQmlConnection)
+    void updateInternalClass(ExecutionEngine *engine, const QList<QByteArray> &parameters);
 
     inline Heap::String *name() {
         return compilationUnit->runtimeStrings[compiledFunction->nameIndex];
@@ -64,7 +80,7 @@ struct Q_QML_EXPORT Function {
     inline bool isNamedExpression() const { return compiledFunction->flags & CompiledData::Function::IsNamedExpression; }
 
     inline bool needsActivation() const
-    { return compiledFunction->nInnerFunctions > 0 || (compiledFunction->flags & (CompiledData::Function::HasDirectEval | CompiledData::Function::UsesArgumentsObject)); }
+    { return activationRequired; }
 
 };
 

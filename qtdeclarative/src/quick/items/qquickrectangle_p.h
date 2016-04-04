@@ -34,6 +34,17 @@
 #ifndef QQUICKRECTANGLE_P_H
 #define QQUICKRECTANGLE_P_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include "qquickitem.h"
 
 #include <QtGui/qbrush.h>
@@ -42,7 +53,7 @@
 
 QT_BEGIN_NAMESPACE
 
-class Q_AUTOTEST_EXPORT QQuickPen : public QObject
+class Q_QUICK_PRIVATE_EXPORT QQuickPen : public QObject
 {
     Q_OBJECT
 
@@ -125,7 +136,7 @@ private:
 };
 
 class QQuickRectanglePrivate;
-class Q_AUTOTEST_EXPORT QQuickRectangle : public QQuickItem
+class Q_QUICK_PRIVATE_EXPORT QQuickRectangle : public QQuickItem
 {
     Q_OBJECT
 

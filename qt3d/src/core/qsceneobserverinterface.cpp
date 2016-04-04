@@ -34,11 +34,11 @@
 **
 ****************************************************************************/
 
-#include "qsceneobserverinterface.h"
+#include "qsceneobserverinterface_p.h"
 
 QT_BEGIN_NAMESPACE
 
-namespace Qt3D {
+namespace Qt3DCore {
 
 QSceneObserverInterface::~QSceneObserverInterface()
 {

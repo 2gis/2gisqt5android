@@ -189,7 +189,7 @@
     \title Building and Running Example
 */
 /*!
-    \externalpage http://doc.qt.io/qtcreator/creator-mobile-app-tutorial.html
+    \externalpage http://doc.qt.io/qtcreator/qtcreator-accelbubble-example.html
     \title Creating a Mobile Application
 */
 /*!
@@ -248,13 +248,8 @@
 */
 
 /*!
-    \externalpage http://doc.qt.io/qt-5/qtwebview-index.html
-    \title Qt WebView
-*/
-
-/*!
-    \externalpage http://doc.qt.io/qt-5/qtcanvas3d-index.html
-    \title Qt Canvas 3D
+    \externalpage http://doc.qt.io/qt-5/qtwaylandcompositor-index.html
+    \title Qt Wayland Compositor
 */
 
 /*!
@@ -275,4 +270,40 @@
 /*!
     \externalpage http://doc.qt.io/vs-addin
     \title Qt Visual Studio Add-in
+*/
+/*!
+    \externalpage http://doc.qt.io/emulator/index.html
+    \title Emulator
+*/
+/*!
+    \externalpage http://wiki.qt.io/QtWebEngine
+    \title Qt WebEngine Wiki
+*/
+/*!
+    \externalpage http://wiki.qt.io/QtWebEngineOnWindows
+    \title Qt WebEngine on Windows
+*/
+/*!
+    \externalpage http://doc.qt.io/archives/qt-5.3/qtwebkit-index.html
+    \title Qt WebKit
+*/
+/*!
+    \externalpage http://doc.qt.io/archives/qt-5.3/qtwebkitwidgets-index.html
+    \title Qt WebKit Widgets
+*/
+/*!
+    \externalpage http://www.opengl.org/wiki/Vertex_Rendering#Instancing
+    \title OpenGL Instanced Rendering
+*/
+/*!
+    \externalpage http://www.opengl.org/wiki/Vertex_Rendering#Primitive_Restart
+    \title OpenGL Primitive Restart
+*/
+/*!
+    \externalpage http://www.khronos.org/gltf/
+    \title OpenGL glTF
+*/
+/*!
+    \externalpage http://doc.qt.io/archives/qt-5.3/enginio-index.html
+    \title Enginio Manual
 */

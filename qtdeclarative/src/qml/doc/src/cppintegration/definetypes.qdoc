@@ -195,6 +195,7 @@ be aware that properties of such a singleton type cannot be bound to.
 See \l{qmlRegisterSingletonType()} for more information on how implement and
 register a new singleton type, and how to use an existing singleton type.
 
+\note Enum values for registered types in QML should start with a capital.
 
 \section2 Type Revisions and Versions
 
@@ -314,7 +315,7 @@ merged with the original target class when used from within QML. For example:
 The \c leftMargin property is a new property added to an existing C++ type, \l
 QLineEdit, without modifying its source code.
 
-The \l qmlRegisterExtendedType() function is for registering extended types.
+The \l {QQmlEngine::}{qmlRegisterExtendedType()} function is for registering extended types.
 Note that it has two forms.
 
 \code

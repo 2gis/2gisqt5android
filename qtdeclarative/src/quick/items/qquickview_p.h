@@ -34,6 +34,17 @@
 #ifndef QQUICKVIEW_P_H
 #define QQUICKVIEW_P_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include "qquickview.h"
 
 #include <QtCore/qurl.h>
@@ -98,7 +109,10 @@ namespace QV4 {
 namespace Heap {
 
 struct QQuickRootItemMarker : Object {
-    inline QQuickRootItemMarker(QV4::ExecutionEngine *engine, QQuickWindow *window);
+    inline QQuickRootItemMarker(QQuickWindow *window)
+        : window(window)
+    {
+    }
 
     QQuickWindow *window;
 };
@@ -115,12 +129,7 @@ struct QQuickRootItemMarker : public Object
 
 };
 
-inline
-Heap::QQuickRootItemMarker::QQuickRootItemMarker(QV4::ExecutionEngine *engine, QQuickWindow *window)
-    : Heap::Object(engine)
-    , window(window)
-{
-}
+
 
 }
 

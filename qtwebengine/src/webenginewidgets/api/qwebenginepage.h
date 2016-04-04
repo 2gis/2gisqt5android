@@ -39,6 +39,7 @@
 
 #include <QtWebEngineWidgets/qtwebenginewidgetsglobal.h>
 #include <QtWebEngineWidgets/qwebenginecertificateerror.h>
+#include <QtWebEngineCore/qwebenginecallback.h>
 
 #include <QtCore/qobject.h>
 #include <QtCore/qurl.h>
@@ -49,43 +50,13 @@
 QT_BEGIN_NAMESPACE
 class QMenu;
 class QWebChannel;
+class QWebEngineFullScreenRequest;
 class QWebEngineHistory;
 class QWebEnginePage;
 class QWebEnginePagePrivate;
 class QWebEngineProfile;
 class QWebEngineScriptCollection;
 class QWebEngineSettings;
-
-namespace QtWebEnginePrivate {
-
-template <typename T>
-class QWebEngineCallbackPrivateBase : public QSharedData {
-public:
-    virtual ~QWebEngineCallbackPrivateBase() {}
-    virtual void operator()(T) = 0;
-};
-
-template <typename T, typename F>
-class QWebEngineCallbackPrivate : public QWebEngineCallbackPrivateBase<T> {
-public:
-    QWebEngineCallbackPrivate(F callable) : m_callable(callable) {}
-    virtual void operator()(T value) Q_DECL_OVERRIDE { m_callable(value); }
-private:
-    F m_callable;
-};
-
-} // namespace QtWebEnginePrivate
-
-template <typename T>
-class QWebEngineCallback {
-public:
-    template <typename F>
-    QWebEngineCallback(F f) : d(new QtWebEnginePrivate::QWebEngineCallbackPrivate<T, F>(f)) { }
-    QWebEngineCallback() { }
-private:
-    QExplicitlySharedDataPointer<QtWebEnginePrivate::QWebEngineCallbackPrivateBase<T> > d;
-    friend class QWebEnginePage;
-};
 
 class QWEBENGINEWIDGETS_EXPORT QWebEnginePage : public QObject {
     Q_OBJECT
@@ -98,6 +69,7 @@ class QWEBENGINEWIDGETS_EXPORT QWebEnginePage : public QObject {
     Q_PROPERTY(QString title READ title)
     Q_PROPERTY(QUrl url READ url WRITE setUrl)
     Q_PROPERTY(QUrl iconUrl READ iconUrl)
+    Q_PROPERTY(QColor backgroundColor READ backgroundColor WRITE setBackgroundColor)
 
 public:
     enum WebAction {
@@ -117,6 +89,27 @@ public:
         ReloadAndBypassCache,
 
         PasteAndMatchStyle,
+
+        OpenLinkInThisWindow,
+        OpenLinkInNewWindow,
+        OpenLinkInNewTab,
+        CopyLinkToClipboard,
+        DownloadLinkToDisk,
+
+        CopyImageToClipboard,
+        CopyImageUrlToClipboard,
+        DownloadImageToDisk,
+
+        CopyMediaUrlToClipboard,
+        ToggleMediaControls,
+        ToggleMediaLoop,
+        ToggleMediaPlayPause,
+        ToggleMediaMute,
+        DownloadMediaToDisk,
+
+        InspectElement,
+        ExitFullScreen,
+        RequestClose,
 
         WebActionCount
     };
@@ -172,6 +165,14 @@ public:
         InfoMessageLevel = 0,
         WarningMessageLevel,
         ErrorMessageLevel
+    };
+
+    // must match WebContentsAdapterClient::RenderProcessTerminationStatus
+    enum RenderProcessTerminationStatus {
+        NormalTerminationStatus = 0,
+        AbnormalTerminationStatus,
+        CrashedTerminationStatus,
+        KilledTerminationStatus
     };
 
     explicit QWebEnginePage(QObject *parent = 0);
@@ -236,6 +237,8 @@ public:
 
     QWebChannel *webChannel() const;
     void setWebChannel(QWebChannel *);
+    QColor backgroundColor() const;
+    void setBackgroundColor(const QColor &color);
 
 Q_SIGNALS:
     void loadStarted();
@@ -249,9 +252,12 @@ Q_SIGNALS:
 
     void featurePermissionRequested(const QUrl &securityOrigin, QWebEnginePage::Feature feature);
     void featurePermissionRequestCanceled(const QUrl &securityOrigin, QWebEnginePage::Feature feature);
+    void fullScreenRequested(QWebEngineFullScreenRequest fullScreenRequest);
 
     void authenticationRequired(const QUrl &requestUrl, QAuthenticator *authenticator);
     void proxyAuthenticationRequired(const QUrl &requestUrl, QAuthenticator *authenticator, const QString &proxyHost);
+
+    void renderProcessTerminated(RenderProcessTerminationStatus terminationStatus, int exitCode);
 
     // Ex-QWebFrame signals
     void titleChanged(const QString &title);
@@ -261,7 +267,6 @@ Q_SIGNALS:
 
 protected:
     virtual QWebEnginePage *createWindow(WebWindowType type);
-
     virtual QStringList chooseFiles(FileSelectionMode mode, const QStringList &oldFiles, const QStringList &acceptedMimeTypes);
     virtual void javaScriptAlert(const QUrl &securityOrigin, const QString& msg);
     virtual bool javaScriptConfirm(const QUrl &securityOrigin, const QString& msg);
@@ -271,12 +276,14 @@ protected:
     virtual bool acceptNavigationRequest(const QUrl &url, NavigationType type, bool isMainFrame);
 
 private:
+    Q_DISABLE_COPY(QWebEnginePage)
     Q_DECLARE_PRIVATE(QWebEnginePage)
     QScopedPointer<QWebEnginePagePrivate> d_ptr;
 #ifndef QT_NO_ACTION
     Q_PRIVATE_SLOT(d_func(), void _q_webActionTriggered(bool checked))
 #endif
 
+    friend class QWebEngineFullScreenRequest;
     friend class QWebEngineView;
     friend class QWebEngineViewPrivate;
 #ifndef QT_NO_ACCESSIBILITY

@@ -32,6 +32,7 @@
 ****************************************************************************/
 #include "qv4typedarray_p.h"
 #include "qv4arraybuffer_p.h"
+#include "qv4string_p.h"
 
 #include <cmath>
 
@@ -201,10 +202,10 @@ Heap::TypedArrayCtor::TypedArrayCtor(QV4::ExecutionContext *scope, TypedArray::T
 {
 }
 
-ReturnedValue TypedArrayCtor::construct(Managed *m, CallData *callData)
+ReturnedValue TypedArrayCtor::construct(const Managed *m, CallData *callData)
 {
-    Scope scope(static_cast<Object *>(m)->engine());
-    Scoped<TypedArrayCtor> that(scope, static_cast<TypedArrayCtor *>(m));
+    Scope scope(static_cast<const Object *>(m)->engine());
+    Scoped<TypedArrayCtor> that(scope, static_cast<const TypedArrayCtor *>(m));
 
     if (!callData->argc || !callData->args[0].isObject()) {
         // ECMA 6 22.2.1.1
@@ -215,11 +216,11 @@ ReturnedValue TypedArrayCtor::construct(Managed *m, CallData *callData)
         if (l != len)
             scope.engine->throwRangeError(QStringLiteral("Non integer length for typed array."));
         uint byteLength = len * operations[that->d()->type].bytesPerElement;
-        Scoped<ArrayBuffer> buffer(scope, scope.engine->memoryManager->alloc<ArrayBuffer>(scope.engine, byteLength));
+        Scoped<ArrayBuffer> buffer(scope, scope.engine->newArrayBuffer(byteLength));
         if (scope.engine->hasException)
             return Encode::undefined();
 
-        Scoped<TypedArray > array(scope, scope.engine->memoryManager->alloc<TypedArray>(scope.engine, that->d()->type));
+        Scoped<TypedArray > array(scope, TypedArray::create(scope.engine, that->d()->type));
         array->d()->buffer = buffer->d();
         array->d()->byteLength = byteLength;
         array->d()->byteOffset = 0;
@@ -235,11 +236,11 @@ ReturnedValue TypedArrayCtor::construct(Managed *m, CallData *callData)
         uint byteLength = typedArray->d()->byteLength;
         uint destByteLength = byteLength*destElementSize/srcElementSize;
 
-        Scoped<ArrayBuffer> newBuffer(scope, scope.engine->memoryManager->alloc<ArrayBuffer>(scope.engine, destByteLength));
+        Scoped<ArrayBuffer> newBuffer(scope, scope.engine->newArrayBuffer(destByteLength));
         if (scope.engine->hasException)
             return Encode::undefined();
 
-        Scoped<TypedArray > array(scope, scope.engine->memoryManager->alloc<TypedArray>(scope.engine, that->d()->type));
+        Scoped<TypedArray > array(scope, TypedArray::create(scope.engine, that->d()->type));
         array->d()->buffer = newBuffer->d();
         array->d()->byteLength = destByteLength;
         array->d()->byteOffset = 0;
@@ -257,7 +258,7 @@ ReturnedValue TypedArrayCtor::construct(Managed *m, CallData *callData)
             TypedArrayWrite write =array->d()->type->write;
             for (uint i = 0; i < l; ++i) {
                 Primitive val;
-                val.val = read(src, i*srcElementSize);
+                val.setRawValue(read(src, i*srcElementSize));
                 write(scope.engine, dest, i*destElementSize, val);
             }
         }
@@ -289,7 +290,7 @@ ReturnedValue TypedArrayCtor::construct(Managed *m, CallData *callData)
             byteLength = (uint)l;
         }
 
-        Scoped<TypedArray > array(scope, scope.engine->memoryManager->alloc<TypedArray>(scope.engine, that->d()->type));
+        Scoped<TypedArray > array(scope, TypedArray::create(scope.engine, that->d()->type));
         array->d()->buffer = buffer->d();
         array->d()->byteLength = byteLength;
         array->d()->byteOffset = byteOffset;
@@ -299,16 +300,16 @@ ReturnedValue TypedArrayCtor::construct(Managed *m, CallData *callData)
     // ECMA 6 22.2.1.3
 
     ScopedObject o(scope, callData->argument(0));
-    uint l = (uint) qBound(0., ScopedValue(scope, o->get(scope.engine->id_length))->toInteger(), (double)UINT_MAX);
+    uint l = (uint) qBound(0., ScopedValue(scope, o->get(scope.engine->id_length()))->toInteger(), (double)UINT_MAX);
     if (scope.engine->hasException)
         return scope.engine->throwTypeError();
 
     uint elementSize = operations[that->d()->type].bytesPerElement;
-    Scoped<ArrayBuffer> newBuffer(scope, scope.engine->memoryManager->alloc<ArrayBuffer>(scope.engine, l * elementSize));
+    Scoped<ArrayBuffer> newBuffer(scope, scope.engine->newArrayBuffer(l * elementSize));
     if (scope.engine->hasException)
         return Encode::undefined();
 
-    Scoped<TypedArray > array(scope, scope.engine->memoryManager->alloc<TypedArray>(scope.engine, that->d()->type));
+    Scoped<TypedArray > array(scope, TypedArray::create(scope.engine, that->d()->type));
     array->d()->buffer = newBuffer->d();
     array->d()->byteLength = l * elementSize;
     array->d()->byteOffset = 0;
@@ -329,16 +330,20 @@ ReturnedValue TypedArrayCtor::construct(Managed *m, CallData *callData)
     return array.asReturnedValue();
 }
 
-ReturnedValue TypedArrayCtor::call(Managed *that, CallData *callData)
+ReturnedValue TypedArrayCtor::call(const Managed *that, CallData *callData)
 {
     return construct(that, callData);
 }
 
-Heap::TypedArray::TypedArray(ExecutionEngine *e, Type t)
-    : Heap::Object(e->emptyClass, e->typedArrayPrototype[t].asObject()),
-      type(operations + t),
+Heap::TypedArray::TypedArray(Type t)
+    : type(operations + t),
       arrayType(t)
 {
+}
+
+Heap::TypedArray *TypedArray::create(ExecutionEngine *e, Heap::TypedArray::Type t)
+{
+    return e->memoryManager->allocObject<TypedArray>(e->emptyClass, e->typedArrayPrototype + t, t);
 }
 
 void TypedArray::markObjects(Heap::Base *that, ExecutionEngine *e)
@@ -347,10 +352,10 @@ void TypedArray::markObjects(Heap::Base *that, ExecutionEngine *e)
     Object::markObjects(that, e);
 }
 
-ReturnedValue TypedArray::getIndexed(Managed *m, uint index, bool *hasProperty)
+ReturnedValue TypedArray::getIndexed(const Managed *m, uint index, bool *hasProperty)
 {
-    Scope scope(static_cast<Object *>(m)->engine());
-    Scoped<TypedArray> a(scope, static_cast<TypedArray *>(m));
+    Scope scope(static_cast<const Object *>(m)->engine());
+    Scoped<TypedArray> a(scope, static_cast<const TypedArray *>(m));
 
     uint bytesPerElement = a->d()->type->bytesPerElement;
     uint byteOffset = a->d()->byteOffset + index * bytesPerElement;
@@ -382,7 +387,7 @@ void TypedArray::putIndexed(Managed *m, uint index, const Value &value)
     return;
 
 reject:
-  if (scope.engine->currentContext()->strictMode)
+  if (scope.engine->current->strictMode)
       scope.engine->throwTypeError();
 }
 
@@ -390,10 +395,10 @@ void TypedArrayPrototype::init(ExecutionEngine *engine, TypedArrayCtor *ctor)
 {
     Scope scope(engine);
     ScopedObject o(scope);
-    ctor->defineReadonlyProperty(engine->id_length, Primitive::fromInt32(3));
-    ctor->defineReadonlyProperty(engine->id_prototype, (o = this));
+    ctor->defineReadonlyProperty(engine->id_length(), Primitive::fromInt32(3));
+    ctor->defineReadonlyProperty(engine->id_prototype(), (o = this));
     ctor->defineReadonlyProperty(QStringLiteral("BYTES_PER_ELEMENT"), Primitive::fromInt32(operations[ctor->d()->type].bytesPerElement));
-    defineDefaultProperty(engine->id_constructor, (o = ctor));
+    defineDefaultProperty(engine->id_constructor(), (o = ctor));
     defineAccessorProperty(QStringLiteral("buffer"), method_get_buffer, 0);
     defineAccessorProperty(QStringLiteral("byteLength"), method_get_byteLength, 0);
     defineAccessorProperty(QStringLiteral("byteOffset"), method_get_byteOffset, 0);
@@ -470,7 +475,7 @@ ReturnedValue TypedArrayPrototype::method_set(CallContext *ctx)
         if (scope.engine->hasException || !o)
             return scope.engine->throwTypeError();
 
-        double len = ScopedValue(scope, o->get(scope.engine->id_length))->toNumber();
+        double len = ScopedValue(scope, o->get(scope.engine->id_length()))->toNumber();
         uint l = (uint)len;
         if (scope.engine->hasException || l != len)
             return scope.engine->throwTypeError();
@@ -523,7 +528,7 @@ ReturnedValue TypedArrayPrototype::method_set(CallContext *ctx)
     TypedArrayWrite write = a->d()->type->write;
     for (uint i = 0; i < l; ++i) {
         Primitive val;
-        val.val = read(src, i*srcElementSize);
+        val.setRawValue(read(src, i*srcElementSize));
         write(scope.engine, dest, i*elementSize, val);
     }
 
@@ -563,7 +568,7 @@ ReturnedValue TypedArrayPrototype::method_subarray(CallContext *ctx)
 
     int newLen = end - begin;
 
-    ScopedFunctionObject constructor(scope, a->get(scope.engine->id_constructor));
+    ScopedFunctionObject constructor(scope, a->get(scope.engine->id_constructor()));
     if (!constructor)
         return scope.engine->throwTypeError();
 

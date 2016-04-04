@@ -69,7 +69,7 @@ enum { DoVerification = 1 };
 
 static void showMeTheCode(IR::Function *function, const char *marker)
 {
-    static bool showCode = !qgetenv("QV4_SHOW_IR").isNull();
+    static const bool showCode = qEnvironmentVariableIsSet("QV4_SHOW_IR");
     if (showCode) {
         qDebug() << marker;
         QBuffer buf;
@@ -477,7 +477,7 @@ class DominatorTree
                 d->vertex[d->N] = n;
                 d->parent[n] = todo.parent;
                 ++d->N;
-                const QVector<BasicBlock *> &out = function->basicBlock(n)->out;
+                const BasicBlock::OutgoingEdges &out = function->basicBlock(n)->out;
                 for (int i = out.size() - 1; i > 0; --i)
                     worklist.push_back(DFSTodo(out[i]->index(), n));
 
@@ -2028,32 +2028,16 @@ private:
     }
 };
 
-class EliminateDeadCode: public ExprVisitor {
-    DefUses &_defUses;
-    StatementWorklist &_worklist;
+class SideEffectsChecker: public ExprVisitor
+{
     bool _sideEffect;
-    QVector<Temp *> _collectedTemps;
 
 public:
-    EliminateDeadCode(DefUses &defUses, StatementWorklist &worklist)
-        : _defUses(defUses)
-        , _worklist(worklist)
-    {
-        _collectedTemps.reserve(8);
-    }
+    SideEffectsChecker()
+        : _sideEffect(false)
+    {}
 
-    void run(Expr *&expr, Stmt *stmt) {
-        if (!checkForSideEffects(expr)) {
-            expr = 0;
-            foreach (Temp *t, _collectedTemps) {
-                _defUses.removeUse(stmt, *t);
-                _worklist += _defUses.defStmt(*t);
-            }
-        }
-    }
-
-private:
-    bool checkForSideEffects(Expr *expr)
+    bool hasSideEffects(Expr *expr)
     {
         bool sideEffect = false;
         qSwap(_sideEffect, sideEffect);
@@ -2062,19 +2046,20 @@ private:
         return sideEffect;
     }
 
+protected:
     void markAsSideEffect()
     {
         _sideEffect = true;
-        _collectedTemps.clear();
     }
 
-protected:
-    virtual void visitConst(Const *) {}
-    virtual void visitString(IR::String *) {}
-    virtual void visitRegExp(IR::RegExp *) {}
+    bool seenSideEffects() const { return _sideEffect; }
 
-    virtual void visitName(Name *e)
-    {
+protected:
+    void visitConst(Const *) Q_DECL_OVERRIDE {}
+    void visitString(IR::String *) Q_DECL_OVERRIDE {}
+    void visitRegExp(IR::RegExp *) Q_DECL_OVERRIDE {}
+
+    void visitName(Name *e) Q_DECL_OVERRIDE {
         if (e->freeOfSideEffects)
             return;
         // TODO: maybe we can distinguish between built-ins of which we know that they do not have
@@ -2083,19 +2068,14 @@ protected:
             markAsSideEffect();
     }
 
-    virtual void visitTemp(Temp *e)
-    {
-        _collectedTemps.append(e);
-    }
+    void visitTemp(Temp *) Q_DECL_OVERRIDE {}
+    void visitArgLocal(ArgLocal *) Q_DECL_OVERRIDE {}
 
-    virtual void visitArgLocal(ArgLocal *) {}
-
-    virtual void visitClosure(Closure *)
-    {
+    void visitClosure(Closure *) Q_DECL_OVERRIDE {
         markAsSideEffect();
     }
 
-    virtual void visitConvert(Convert *e) {
+    void visitConvert(Convert *e) Q_DECL_OVERRIDE {
         e->expr->accept(this);
 
         switch (e->expr->type) {
@@ -2109,7 +2089,7 @@ protected:
         }
     }
 
-    virtual void visitUnop(Unop *e) {
+    void visitUnop(Unop *e) Q_DECL_OVERRIDE {
         e->expr->accept(this);
 
         switch (e->op) {
@@ -2127,43 +2107,75 @@ protected:
         }
     }
 
-    virtual void visitBinop(Binop *e) {
+    void visitBinop(Binop *e) Q_DECL_OVERRIDE {
         // TODO: prune parts that don't have a side-effect. For example, in:
         //   function f(x) { +x+1; return 0; }
         // we can prune the binop and leave the unop/conversion.
-        _sideEffect = checkForSideEffects(e->left);
-        _sideEffect |= checkForSideEffects(e->right);
+        _sideEffect = hasSideEffects(e->left);
+        _sideEffect |= hasSideEffects(e->right);
 
         if (e->left->type == VarType || e->left->type == StringType || e->left->type == QObjectType
                 || e->right->type == VarType || e->right->type == StringType || e->right->type == QObjectType)
             markAsSideEffect();
     }
 
-    virtual void visitSubscript(Subscript *e) {
+    void visitSubscript(Subscript *e) Q_DECL_OVERRIDE {
         e->base->accept(this);
         e->index->accept(this);
         markAsSideEffect();
     }
 
-    virtual void visitMember(Member *e) {
+    void visitMember(Member *e) Q_DECL_OVERRIDE {
         e->base->accept(this);
         if (e->freeOfSideEffects)
             return;
         markAsSideEffect();
     }
 
-    virtual void visitCall(Call *e) {
+    void visitCall(Call *e) Q_DECL_OVERRIDE {
         e->base->accept(this);
         for (ExprList *args = e->args; args; args = args->next)
             args->expr->accept(this);
         markAsSideEffect(); // TODO: there are built-in functions that have no side effect.
     }
 
-    virtual void visitNew(New *e) {
+    void visitNew(New *e) Q_DECL_OVERRIDE {
         e->base->accept(this);
         for (ExprList *args = e->args; args; args = args->next)
             args->expr->accept(this);
         markAsSideEffect(); // TODO: there are built-in types that have no side effect.
+    }
+};
+
+class EliminateDeadCode: public SideEffectsChecker
+{
+    DefUses &_defUses;
+    StatementWorklist &_worklist;
+    QVector<Temp *> _collectedTemps;
+
+public:
+    EliminateDeadCode(DefUses &defUses, StatementWorklist &worklist)
+        : _defUses(defUses)
+        , _worklist(worklist)
+    {
+        _collectedTemps.reserve(8);
+    }
+
+    void run(Expr *&expr, Stmt *stmt) {
+        _collectedTemps.clear();
+        if (!hasSideEffects(expr)) {
+            expr = 0;
+            foreach (Temp *t, _collectedTemps) {
+                _defUses.removeUse(stmt, *t);
+                _worklist += _defUses.defStmt(*t);
+            }
+        }
+    }
+
+protected:
+    void visitTemp(Temp *e) Q_DECL_OVERRIDE
+    {
+        _collectedTemps.append(e);
     }
 };
 
@@ -3504,7 +3516,7 @@ void checkCriticalEdges(QVector<BasicBlock *> basicBlocks) {
 }
 #endif
 
-void cleanupBasicBlocks(IR::Function *function)
+static void cleanupBasicBlocks(IR::Function *function)
 {
     showMeTheCode(function, "Before basic block cleanup");
 
@@ -3887,7 +3899,7 @@ bool tryOptimizingComparison(Expr *&expr)
 
 void cfg2dot(IR::Function *f, const QVector<LoopDetection::LoopInfo *> &loops = QVector<LoopDetection::LoopInfo *>())
 {
-    static bool showCode = !qgetenv("QV4_SHOW_IR").isNull();
+    static const bool showCode = qEnvironmentVariableIsSet("QV4_SHOW_IR");
     if (!showCode)
         return;
 
@@ -3912,7 +3924,7 @@ void cfg2dot(IR::Function *f, const QVector<LoopDetection::LoopInfo *> &loops = 
 
     QString name;
     if (f->name) name = *f->name;
-    else name = QString::fromLatin1("%1").arg((unsigned long long)f);
+    else name = QStringLiteral("%1").arg((unsigned long long)f);
     qout << "digraph \"" << name << "\" { ordering=out;\n";
 
     foreach (LoopDetection::LoopInfo *l, loops) {
@@ -4020,14 +4032,14 @@ void optimizeSSA(StatementWorklist &W, DefUses &defUses, DominatorTree &df)
                 if (Member *member = m->source->asMember()) {
                     if (member->kind == Member::MemberOfEnum) {
                         Const *c = function->New<Const>();
-                        const int enumValue = member->attachedPropertiesIdOrEnumValue;
+                        const int enumValue = member->enumValue;
                         c->init(SInt32Type, enumValue);
                         replaceUses(targetTemp, c, W);
                         defUses.removeDef(*targetTemp);
                         W.remove(s);
                         defUses.removeUse(s, *member->base->asTemp());
                         continue;
-                    } else if (member->attachedPropertiesIdOrEnumValue != 0 && member->property && member->base->asTemp()) {
+                    } else if (member->kind != IR::Member::MemberOfIdObjectsArray && member->attachedPropertiesId != 0 && member->property && member->base->asTemp()) {
                         // Attached properties have no dependency on their base. Isel doesn't
                         // need it and we can eliminate the temp used to initialize it.
                         defUses.removeUse(s, *member->base->asTemp());
@@ -4927,6 +4939,39 @@ static void verifyNoPointerSharing(IR::Function *function)
     V(function);
 }
 
+class RemoveLineNumbers: public SideEffectsChecker, public StmtVisitor
+{
+public:
+    static void run(IR::Function *function)
+    {
+        foreach (BasicBlock *bb, function->basicBlocks()) {
+            if (bb->isRemoved())
+                continue;
+
+            foreach (Stmt *s, bb->statements()) {
+                if (!hasSideEffects(s)) {
+                    s->location = QQmlJS::AST::SourceLocation();
+                }
+            }
+        }
+    }
+
+private:
+    static bool hasSideEffects(Stmt *stmt)
+    {
+        RemoveLineNumbers checker;
+        stmt->accept(&checker);
+        return checker.seenSideEffects();
+    }
+
+    void visitExp(Exp *s) Q_DECL_OVERRIDE { s->expr->accept(this); }
+    void visitMove(Move *s) Q_DECL_OVERRIDE { s->source->accept(this); s->target->accept(this); }
+    void visitJump(Jump *) Q_DECL_OVERRIDE {}
+    void visitCJump(CJump *s) Q_DECL_OVERRIDE { s->cond->accept(this); }
+    void visitRet(Ret *s) Q_DECL_OVERRIDE { s->expr->accept(this); }
+    void visitPhi(Phi *) Q_DECL_OVERRIDE {}
+};
+
 } // anonymous namespace
 
 void LifeTimeInterval::setFrom(int from) {
@@ -5150,12 +5195,15 @@ void Optimizer::run(QQmlEnginePrivate *qmlEngine, bool doTypeInference, bool pee
     cleanupBasicBlocks(function);
 
     function->removeSharedExpressions();
-
+    int statementCount = 0;
+    foreach (BasicBlock *bb, function->basicBlocks())
+        if (!bb->isRemoved())
+            statementCount += bb->statementCount();
 //    showMeTheCode(function);
 
-    static bool doSSA = qgetenv("QV4_NO_SSA").isEmpty();
+    static bool doSSA = qEnvironmentVariableIsEmpty("QV4_NO_SSA");
 
-    if (!function->hasTry && !function->hasWith && !function->module->debugMode && doSSA) {
+    if (!function->hasTry && !function->hasWith && !function->module->debugMode && doSSA && statementCount <= 300) {
 //        qout << "SSA for " << (function->name ? qPrintable(*function->name) : "<anonymous>") << endl;
 
         ConvertArgLocals(function).toTemps();
@@ -5221,7 +5269,7 @@ void Optimizer::run(QQmlEnginePrivate *qmlEngine, bool doTypeInference, bool pee
             verifyNoPointerSharing(function);
         }
 
-        static bool doOpt = qgetenv("QV4_NO_OPT").isEmpty();
+        static const bool doOpt = qEnvironmentVariableIsEmpty("QV4_NO_OPT");
         if (doOpt) {
 //            qout << "Running SSA optimization..." << endl;
             worklist.reset();
@@ -5258,6 +5306,11 @@ void Optimizer::run(QQmlEnginePrivate *qmlEngine, bool doTypeInference, bool pee
 #ifndef QT_NO_DEBUG
         checkCriticalEdges(function->basicBlocks());
 #endif
+
+        if (!function->module->debugMode) {
+            RemoveLineNumbers::run(function);
+            showMeTheCode(function, "After line number removal");
+        }
 
 //        qout << "Finished SSA." << endl;
         inSSA = true;

@@ -65,13 +65,13 @@ static bool isLocaleObject(const QV4::Value &val)
 
 void QQmlDateExtension::registerExtension(QV4::ExecutionEngine *engine)
 {
-    engine->datePrototype.asObject()->defineDefaultProperty(QStringLiteral("toLocaleString"), method_toLocaleString);
-    engine->datePrototype.asObject()->defineDefaultProperty(QStringLiteral("toLocaleTimeString"), method_toLocaleTimeString);
-    engine->datePrototype.asObject()->defineDefaultProperty(QStringLiteral("toLocaleDateString"), method_toLocaleDateString);
-    engine->dateCtor.objectValue()->defineDefaultProperty(QStringLiteral("fromLocaleString"), method_fromLocaleString);
-    engine->dateCtor.objectValue()->defineDefaultProperty(QStringLiteral("fromLocaleTimeString"), method_fromLocaleTimeString);
-    engine->dateCtor.objectValue()->defineDefaultProperty(QStringLiteral("fromLocaleDateString"), method_fromLocaleDateString);
-    engine->dateCtor.objectValue()->defineDefaultProperty(QStringLiteral("timeZoneUpdated"), method_timeZoneUpdated);
+    engine->datePrototype()->defineDefaultProperty(QStringLiteral("toLocaleString"), method_toLocaleString);
+    engine->datePrototype()->defineDefaultProperty(QStringLiteral("toLocaleTimeString"), method_toLocaleTimeString);
+    engine->datePrototype()->defineDefaultProperty(QStringLiteral("toLocaleDateString"), method_toLocaleDateString);
+    engine->dateCtor()->defineDefaultProperty(QStringLiteral("fromLocaleString"), method_fromLocaleString);
+    engine->dateCtor()->defineDefaultProperty(QStringLiteral("fromLocaleTimeString"), method_fromLocaleTimeString);
+    engine->dateCtor()->defineDefaultProperty(QStringLiteral("fromLocaleDateString"), method_fromLocaleDateString);
+    engine->dateCtor()->defineDefaultProperty(QStringLiteral("timeZoneUpdated"), method_timeZoneUpdated);
 }
 
 QV4::ReturnedValue QQmlDateExtension::method_toLocaleString(QV4::CallContext *ctx)
@@ -81,7 +81,7 @@ QV4::ReturnedValue QQmlDateExtension::method_toLocaleString(QV4::CallContext *ct
 
     QV4::Scope scope(ctx);
 
-    QV4::DateObject *date = ctx->thisObject().asDateObject();
+    QV4::DateObject *date = ctx->thisObject().as<DateObject>();
     if (!date)
         return QV4::DatePrototype::method_toLocaleString(ctx);
 
@@ -125,7 +125,7 @@ QV4::ReturnedValue QQmlDateExtension::method_toLocaleTimeString(QV4::CallContext
 
     QV4::Scope scope(ctx);
 
-    QV4::DateObject *date = ctx->thisObject().asDateObject();
+    QV4::DateObject *date = ctx->thisObject().as<DateObject>();
     if (!date)
         return QV4::DatePrototype::method_toLocaleTimeString(ctx);
 
@@ -170,7 +170,7 @@ QV4::ReturnedValue QQmlDateExtension::method_toLocaleDateString(QV4::CallContext
 
     QV4::Scope scope(ctx);
 
-    QV4::DateObject *dateObj = ctx->thisObject().asDateObject();
+    QV4::DateObject *dateObj = ctx->thisObject().as<DateObject>();
     if (!dateObj)
         return QV4::DatePrototype::method_toLocaleDateString(ctx);
 
@@ -347,9 +347,9 @@ QV4::ReturnedValue QQmlDateExtension::method_timeZoneUpdated(QV4::CallContext *c
 
 void QQmlNumberExtension::registerExtension(QV4::ExecutionEngine *engine)
 {
-    engine->numberPrototype.asObject()->defineDefaultProperty(QStringLiteral("toLocaleString"), method_toLocaleString);
-    engine->numberPrototype.asObject()->defineDefaultProperty(QStringLiteral("toLocaleCurrencyString"), method_toLocaleCurrencyString);
-    engine->numberCtor.objectValue()->defineDefaultProperty(QStringLiteral("fromLocaleString"), method_fromLocaleString);
+    engine->numberPrototype()->defineDefaultProperty(QStringLiteral("toLocaleString"), method_toLocaleString);
+    engine->numberPrototype()->defineDefaultProperty(QStringLiteral("toLocaleCurrencyString"), method_toLocaleCurrencyString);
+    engine->numberCtor()->defineDefaultProperty(QStringLiteral("fromLocaleString"), method_fromLocaleString);
 }
 
 QV4::ReturnedValue QQmlNumberExtension::method_toLocaleString(QV4::CallContext *ctx)
@@ -806,7 +806,7 @@ QV4::ReturnedValue QQmlLocale::wrap(ExecutionEngine *v4, const QLocale &locale)
 {
     QV4::Scope scope(v4);
     QV4LocaleDataDeletable *d = localeV4Data(scope.engine);
-    QV4::Scoped<QQmlLocaleData> wrapper(scope, v4->memoryManager->alloc<QQmlLocaleData>(v4));
+    QV4::Scoped<QQmlLocaleData> wrapper(scope, v4->memoryManager->allocObject<QQmlLocaleData>());
     wrapper->d()->locale = locale;
     QV4::ScopedObject p(scope, d->prototype.value());
     wrapper->setPrototype(p);
@@ -815,15 +815,15 @@ QV4::ReturnedValue QQmlLocale::wrap(ExecutionEngine *v4, const QLocale &locale)
 
 void QQmlLocale::registerStringLocaleCompare(QV4::ExecutionEngine *engine)
 {
-    engine->stringPrototype.asObject()->defineDefaultProperty(QStringLiteral("localeCompare"), method_localeCompare);
+    engine->stringPrototype()->defineDefaultProperty(QStringLiteral("localeCompare"), method_localeCompare);
 }
 
 QV4::ReturnedValue QQmlLocale::method_localeCompare(QV4::CallContext *ctx)
 {
-    if (ctx->argc() != 1 || (!ctx->args()[0].isString() && !ctx->args()[0].asStringObject()))
+    if (ctx->argc() != 1 || (!ctx->args()[0].isString() && !ctx->args()[0].as<StringObject>()))
         return QV4::StringPrototype::method_localeCompare(ctx);
 
-    if (!ctx->thisObject().isString() && !ctx->thisObject().asStringObject())
+    if (!ctx->thisObject().isString() && !ctx->thisObject().as<StringObject>())
         return QV4::StringPrototype::method_localeCompare(ctx);
 
     QString thisString = ctx->thisObject().toQStringNoThrow();

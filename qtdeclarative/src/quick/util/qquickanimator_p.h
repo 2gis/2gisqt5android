@@ -34,6 +34,17 @@
 #ifndef QQUICKANIMATOR_P_H
 #define QQUICKANIMATOR_P_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include "qquickanimation_p.h"
 
 QT_BEGIN_NAMESPACE
@@ -136,10 +147,9 @@ class Q_QUICK_PRIVATE_EXPORT QQuickRotationAnimator : public QQuickAnimator
     Q_DECLARE_PRIVATE(QQuickRotationAnimator)
     Q_PROPERTY(RotationDirection direction READ direction WRITE setDirection NOTIFY directionChanged)
 
-    Q_ENUMS(RotationDirection)
-
 public:
     enum RotationDirection { Numerical, Shortest, Clockwise, Counterclockwise };
+    Q_ENUM(RotationDirection)
 
     QQuickRotationAnimator(QObject *parent = 0);
 

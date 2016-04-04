@@ -52,7 +52,9 @@ QT_FORWARD_DECLARE_CLASS(CertificateErrorController)
 
 namespace QtWebEngineCore {
 
+class AuthenticationDialogController;
 class BrowserContextAdapter;
+class FilePickerController;
 class JavaScriptDialogController;
 class RenderWidgetHostViewQt;
 class RenderWidgetHostViewQtDelegate;
@@ -65,10 +67,55 @@ class WebEngineSettings;
 class WebEngineContextMenuData {
 
 public:
+    WebEngineContextMenuData()
+        : mediaType(MediaTypeNone)
+        , hasImageContent(false)
+        , mediaFlags(0)
+    {
+    }
+
+    // Must match blink::WebContextMenuData::MediaType:
+    enum MediaType {
+        // No special node is in context.
+        MediaTypeNone,
+        // An image node is selected.
+        MediaTypeImage,
+        // A video node is selected.
+        MediaTypeVideo,
+        // An audio node is selected.
+        MediaTypeAudio,
+        // A canvas node is selected.
+        MediaTypeCanvas,
+        // A file node is selected.
+        MediaTypeFile,
+        // A plugin node is selected.
+        MediaTypePlugin,
+        MediaTypeLast = MediaTypePlugin
+    };
+    // Must match blink::WebContextMenuData::MediaFlags:
+    enum MediaFlags {
+        MediaNone = 0x0,
+        MediaInError = 0x1,
+        MediaPaused = 0x2,
+        MediaMuted = 0x4,
+        MediaLoop = 0x8,
+        MediaCanSave = 0x10,
+        MediaHasAudio = 0x20,
+        MediaCanToggleControls = 0x40,
+        MediaControls = 0x80,
+        MediaCanPrint = 0x100,
+        MediaCanRotate = 0x200,
+    };
+
     QPoint pos;
     QUrl linkUrl;
     QString linkText;
     QString selectedText;
+    QUrl mediaUrl;
+    MediaType mediaType;
+    bool hasImageContent;
+    uint mediaFlags;
+    QString suggestedFileName;
 // Some likely candidates for future additions as we add support for the related actions:
 //    bool isImageBlocked;
 //    bool isEditable;
@@ -100,16 +147,9 @@ public:
         AlertDialog,
         ConfirmDialog,
         PromptDialog,
+        UnloadDialog,
         // Leave room for potential new specs
         InternalAuthorizationDialog = 0x10,
-    };
-
-    // Must match the ones in file_chooser_params.h
-    enum FileChooserMode {
-        Open,
-        OpenMultiple,
-        UploadFolder,
-        Save
     };
 
     enum NavigationRequestAction {
@@ -119,7 +159,7 @@ public:
     };
 
     enum NavigationType {
-        LinkClickedNavigation,
+        LinkNavigation,
         TypedNavigation,
         FormSubmittedNavigation,
         BackForwardNavigation,
@@ -131,6 +171,13 @@ public:
         Info = 0,
         Warning,
         Error
+    };
+
+    enum RenderProcessTerminationStatus {
+        NormalTerminationStatus = 0,
+        AbnormalTerminationStatus,
+        CrashedTerminationStatus,
+        KilledTerminationStatus
     };
 
     enum MediaRequestFlag {
@@ -152,6 +199,7 @@ public:
     virtual void selectionChanged() = 0;
     virtual QRectF viewportRect() const = 0;
     virtual qreal dpiScale() const = 0;
+    virtual QColor backgroundColor() const = 0;
     virtual void loadStarted(const QUrl &provisionalUrl, bool isErrorPage = false) = 0;
     virtual void loadCommitted() = 0;
     virtual void loadVisuallyCommitted() = 0;
@@ -159,13 +207,15 @@ public:
     virtual void focusContainer() = 0;
     virtual void unhandledKeyEvent(QKeyEvent *event) = 0;
     virtual void adoptNewWindow(WebContentsAdapter *newWebContents, WindowOpenDisposition disposition, bool userGesture, const QRect & initialGeometry) = 0;
+    virtual bool isBeingAdopted() = 0;
     virtual void close() = 0;
+    virtual void windowCloseRejected() = 0;
     virtual bool contextMenuRequested(const WebEngineContextMenuData&) = 0;
     virtual void navigationRequested(int navigationType, const QUrl &url, int &navigationRequestAction, bool isMainFrame) = 0;
-    virtual void requestFullScreen(bool) = 0;
-    virtual bool isFullScreen() const = 0;
+    virtual void requestFullScreenMode(const QUrl &origin, bool fullscreen) = 0;
+    virtual bool isFullScreenMode() const = 0;
     virtual void javascriptDialog(QSharedPointer<JavaScriptDialogController>) = 0;
-    virtual void runFileChooser(FileChooserMode, const QString &defaultFileName, const QStringList &acceptedMimeTypes) = 0;
+    virtual void runFileChooser(FilePickerController *controller) = 0;
     virtual void didRunJavaScript(quint64 requestId, const QVariant& result) = 0;
     virtual void didFetchDocumentMarkup(quint64 requestId, const QString& result) = 0;
     virtual void didFetchDocumentInnerText(quint64 requestId, const QString& result) = 0;
@@ -177,7 +227,7 @@ public:
     virtual QObject *accessibilityParentObject() = 0;
 #endif // QT_NO_ACCESSIBILITY
     virtual void javaScriptConsoleMessage(JavaScriptConsoleMessageLevel level, const QString& message, int lineNumber, const QString& sourceID) = 0;
-    virtual void authenticationRequired(const QUrl &requestUrl, const QString &realm, bool isProxy, const QString &challengingHost, QString *outUser, QString *outPassword) = 0;
+    virtual void authenticationRequired(QSharedPointer<AuthenticationDialogController>) = 0;
     virtual void runGeolocationPermissionRequest(const QUrl &securityOrigin) = 0;
     virtual void runMediaAccessPermissionRequest(const QUrl &securityOrigin, MediaRequestFlags requestFlags) = 0;
     virtual void runMouseLockPermissionRequest(const QUrl &securityOrigin) = 0;
@@ -185,7 +235,9 @@ public:
     virtual void showValidationMessage(const QRect &anchor, const QString &mainText, const QString &subText) = 0;
     virtual void hideValidationMessage() = 0;
     virtual void moveValidationMessage(const QRect &anchor) = 0;
-
+    RenderProcessTerminationStatus renderProcessExitStatus(int);
+    virtual void renderProcessTerminated(RenderProcessTerminationStatus terminationStatus, int exitCode) = 0;
+    virtual void requestGeometryChange(const QRect &geometry) = 0;
     virtual void allowCertificateError(const QSharedPointer<CertificateErrorController> &errorController) = 0;
 
     virtual BrowserContextAdapter* browserContextAdapter() = 0;

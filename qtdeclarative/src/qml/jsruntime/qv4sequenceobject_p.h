@@ -48,9 +48,10 @@
 #include <QtCore/qglobal.h>
 #include <QtCore/qvariant.h>
 
-#include "qv4value_inl_p.h"
+#include "qv4value_p.h"
 #include "qv4object_p.h"
 #include "qv4context_p.h"
+#include "qv4string_p.h"
 
 QT_BEGIN_NAMESPACE
 
@@ -70,7 +71,7 @@ struct SequencePrototype : public QV4::Object
     static bool isSequenceType(int sequenceTypeId);
     static ReturnedValue newSequence(QV4::ExecutionEngine *engine, int sequenceTypeId, QObject *object, int propertyIndex, bool *succeeded);
     static ReturnedValue fromVariant(QV4::ExecutionEngine *engine, const QVariant& v, bool *succeeded);
-    static int metaTypeForSequence(Object *object);
+    static int metaTypeForSequence(const Object *object);
     static QVariant toVariant(Object *object);
     static QVariant toVariant(const Value &array, int typeHint, bool *succeeded);
 };

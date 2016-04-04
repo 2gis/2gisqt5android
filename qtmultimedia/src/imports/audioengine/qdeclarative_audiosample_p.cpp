@@ -51,15 +51,12 @@ QT_USE_NAMESPACE
     \inherits Item
     \preliminary
 
-    \c AudioSample is part of the \b{QtAudioEngine 1.0} module.
-
     It can be accessed through QtAudioEngine::AudioEngine::samples with its unique
-    name and must be defined inside AudioEngine.
+    name and must be defined inside AudioEngine or be added to it using
+    \l{QtAudioEngine::AudioEngine::addAudioSample()}{AudioEngine.addAudioSample()}
+    if AudioSample is created dynamically.
 
     \qml
-    import QtQuick 2.0
-    import QtAudioEngine 1.0
-
     Rectangle {
         color:"white"
         width: 300
@@ -78,32 +75,15 @@ QT_USE_NAMESPACE
 */
 QDeclarativeAudioSample::QDeclarativeAudioSample(QObject *parent)
     : QObject(parent)
-    , m_complete(false)
     , m_streaming(false)
     , m_preloaded(false)
     , m_soundBuffer(0)
+    , m_engine(0)
 {
 }
 
 QDeclarativeAudioSample::~QDeclarativeAudioSample()
 {
-}
-
-void QDeclarativeAudioSample::classBegin()
-{
-    if (!parent() || !parent()->inherits("QDeclarativeAudioEngine")) {
-        qWarning("AudioSample must be defined inside AudioEngine!");
-        return;
-    }
-}
-
-void QDeclarativeAudioSample::componentComplete()
-{
-    if (m_name.isEmpty()) {
-        qWarning("AudioSample must have a name!");
-        return;
-    }
-    m_complete = true;
 }
 
 /*!
@@ -118,7 +98,7 @@ QUrl QDeclarativeAudioSample::source() const
 
 void QDeclarativeAudioSample::setSource(const QUrl& url)
 {
-    if (m_complete) {
+    if (m_engine) {
         qWarning("AudioSample: source not changeable after initialization.");
         return;
     }
@@ -128,6 +108,11 @@ void QDeclarativeAudioSample::setSource(const QUrl& url)
 bool QDeclarativeAudioSample::isStreaming() const
 {
     return m_streaming;
+}
+
+QDeclarativeAudioEngine *QDeclarativeAudioSample::engine() const
+{
+    return m_engine;
 }
 
 /*!
@@ -173,7 +158,7 @@ void QDeclarativeAudioSample::load()
 
 void QDeclarativeAudioSample::setPreloaded(bool preloaded)
 {
-    if (m_complete) {
+    if (m_engine) {
         qWarning("AudioSample: preloaded not changeable after initialization.");
         return;
     }
@@ -182,11 +167,20 @@ void QDeclarativeAudioSample::setPreloaded(bool preloaded)
 
 void QDeclarativeAudioSample::setStreaming(bool streaming)
 {
-    if (m_complete) {
+    if (m_engine) {
         qWarning("AudioSample: streaming not changeable after initialization.");
         return;
     }
     m_streaming = streaming;
+}
+
+void QDeclarativeAudioSample::setEngine(QDeclarativeAudioEngine *engine)
+{
+    if (m_engine) {
+        qWarning("AudioSample: engine not changeable after initialization.");
+        return;
+    }
+    m_engine = engine;
 }
 
 /*!
@@ -202,7 +196,7 @@ QString QDeclarativeAudioSample::name() const
 
 void QDeclarativeAudioSample::setName(const QString& name)
 {
-    if (m_complete) {
+    if (m_engine) {
         qWarning("AudioSample: name not changeable after initialization.");
         return;
     }
@@ -211,12 +205,13 @@ void QDeclarativeAudioSample::setName(const QString& name)
 
 void QDeclarativeAudioSample::init()
 {
+    Q_ASSERT(m_engine != 0);
+
     if (m_streaming) {
         //TODO
 
     } else {
-        m_soundBuffer =
-            qobject_cast<QDeclarativeAudioEngine*>(parent())->engine()->getStaticSoundBuffer(m_url);
+        m_soundBuffer = m_engine->engine()->getStaticSoundBuffer(m_url);
         if (m_soundBuffer->state() == QSoundBuffer::Ready) {
             emit loadedChanged();
         } else {

@@ -45,13 +45,8 @@
 
 QT_BEGIN_NAMESPACE
 
-static QQmlJavaScriptExpression::VTable QQmlExpressionPrivate_jsvtable = {
-    QQmlExpressionPrivate::expressionIdentifier,
-    QQmlExpressionPrivate::expressionChanged
-};
-
 QQmlExpressionPrivate::QQmlExpressionPrivate()
-: QQmlJavaScriptExpression(&QQmlExpressionPrivate_jsvtable),
+: QQmlJavaScriptExpression(),
   expressionFunctionValid(true),
   line(0), column(0)
 {
@@ -65,7 +60,7 @@ void QQmlExpressionPrivate::init(QQmlContextData *ctxt, const QString &expr, QOb
 {
     expression = expr;
 
-    QQmlAbstractExpression::setContext(ctxt);
+    QQmlJavaScriptExpression::setContext(ctxt);
     setScopeObject(me);
     expressionFunctionValid = false;
 }
@@ -74,9 +69,9 @@ void QQmlExpressionPrivate::init(QQmlContextData *ctxt, QV4::Function *runtimeFu
 {
     expressionFunctionValid = true;
     QV4::ExecutionEngine *engine = QQmlEnginePrivate::getV4Engine(ctxt->engine);
-    function.set(engine, QV4::QmlBindingWrapper::createQmlCallableForFunction(ctxt, me, runtimeFunction));
+    m_function.set(engine, QV4::FunctionObject::createQmlFunction(ctxt, me, runtimeFunction));
 
-    QQmlAbstractExpression::setContext(ctxt);
+    QQmlJavaScriptExpression::setContext(ctxt);
     setScopeObject(me);
 }
 
@@ -246,18 +241,12 @@ void QQmlExpression::setExpression(const QString &expression)
 // Must be called with a valid handle scope
 QV4::ReturnedValue QQmlExpressionPrivate::v4value(bool *isUndefined)
 {
-    Q_Q(QQmlExpression);
-
-    QV4::ExecutionEngine *v4 = QQmlEnginePrivate::get(q->engine())->v4engine();
-
     if (!expressionFunctionValid) {
-        function.set(v4, qmlBinding(context(), scopeObject(), expression, url, line, &qmlscope));
+        createQmlBinding(context(), scopeObject(), expression, url, line);
         expressionFunctionValid = true;
     }
 
-    QV4::Scope scope(v4);
-    QV4::ScopedValue f(scope, function.value());
-    return evaluate(context(), f, isUndefined);
+    return evaluate(isUndefined);
 }
 
 QVariant QQmlExpressionPrivate::value(bool *isUndefined)
@@ -432,22 +421,15 @@ QQmlError QQmlExpression::error() const
     calling QQmlExpression::evaluate()) before this signal will be emitted.
 */
 
-void QQmlExpressionPrivate::expressionChanged(QQmlJavaScriptExpression *e)
-{
-    QQmlExpressionPrivate *This = static_cast<QQmlExpressionPrivate *>(e);
-    This->expressionChanged();
-}
-
 void QQmlExpressionPrivate::expressionChanged()
 {
     Q_Q(QQmlExpression);
     emit q->valueChanged();
 }
 
-QString QQmlExpressionPrivate::expressionIdentifier(QQmlJavaScriptExpression *e)
+QString QQmlExpressionPrivate::expressionIdentifier()
 {
-    QQmlExpressionPrivate *This = static_cast<QQmlExpressionPrivate *>(e);
-    return QLatin1Char('"') + This->expression + QLatin1Char('"');
+    return QLatin1Char('"') + expression + QLatin1Char('"');
 }
 
 QT_END_NAMESPACE

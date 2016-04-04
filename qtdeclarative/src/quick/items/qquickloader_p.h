@@ -34,6 +34,17 @@
 #ifndef QQUICKLOADER_P_H
 #define QQUICKLOADER_P_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include "qquickimplicitsizeitem_p.h"
 
 QT_BEGIN_NAMESPACE
@@ -42,7 +53,6 @@ class QQuickLoaderPrivate;
 class Q_AUTOTEST_EXPORT QQuickLoader : public QQuickImplicitSizeItem
 {
     Q_OBJECT
-    Q_ENUMS(Status)
 
     Q_PROPERTY(bool active READ active WRITE setActive NOTIFY activeChanged)
     Q_PROPERTY(QUrl source READ source WRITE setSource NOTIFY sourceChanged)
@@ -69,6 +79,7 @@ public:
     void resetSourceComponent();
 
     enum Status { Null, Ready, Loading, Error };
+    Q_ENUM(Status)
     Status status() const;
     qreal progress() const;
 

@@ -40,7 +40,7 @@
 
 import QtQuick 2.5
 import QtQuick.Controls 1.4
-import QtLocation 5.5
+import QtLocation 5.6
 import QtPositioning 5.5
 import "map"
 import "menus"
@@ -220,6 +220,12 @@ ApplicationWindow {
                                    properties: { "locale":  map.plugin.locales[0]}})
                 stackView.currentItem.selectLanguage.connect(setLanguage)
                 stackView.currentItem.closeForm.connect(stackView.closeForm)
+                break
+            case "Clear":
+                map.clearData()
+                break
+            case "Prefetch":
+                map.prefetchData()
                 break
             default:
                 console.log("Unsupported operation")

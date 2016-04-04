@@ -42,7 +42,6 @@
 #include "qwloutput_p.h"
 
 #include "qwlcompositor_p.h"
-#include "qwlextendedoutput_p.h"
 #include "qwlsurface_p.h"
 
 #include <QtGui/QWindow>

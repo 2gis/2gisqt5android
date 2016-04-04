@@ -403,19 +403,23 @@ void FormWindow::init()
     m_defaultMargin = INT_MIN;
     m_defaultSpacing = INT_MIN;
 
-    connect(m_widgetStack, SIGNAL(currentToolChanged(int)), this, SIGNAL(toolChanged(int)));
+    connect(m_widgetStack, &FormWindowWidgetStack::currentToolChanged,
+            this, &QDesignerFormWindowInterface::toolChanged);
 
     m_selectionChangedTimer = new QTimer(this);
     m_selectionChangedTimer->setSingleShot(true);
-    connect(m_selectionChangedTimer, SIGNAL(timeout()), this, SLOT(selectionChangedTimerDone()));
+    connect(m_selectionChangedTimer, &QTimer::timeout, this,
+            &FormWindow::selectionChangedTimerDone);
 
     m_checkSelectionTimer = new QTimer(this);
     m_checkSelectionTimer->setSingleShot(true);
-    connect(m_checkSelectionTimer, SIGNAL(timeout()), this, SLOT(checkSelectionNow()));
+    connect(m_checkSelectionTimer, &QTimer::timeout,
+            this, &FormWindow::checkSelectionNow);
 
     m_geometryChangedTimer = new QTimer(this);
     m_geometryChangedTimer->setSingleShot(true);
-    connect(m_geometryChangedTimer, SIGNAL(timeout()), this, SIGNAL(geometryChanged()));
+    connect(m_geometryChangedTimer, &QTimer::timeout,
+            this, &QDesignerFormWindowInterface::geometryChanged);
 
     m_rubberBand = 0;
 
@@ -424,8 +428,10 @@ void FormWindow::init()
     m_mainContainer = 0;
     m_currentWidget = 0;
 
-    connect(&m_undoStack, SIGNAL(changed()), this, SIGNAL(changed()));
-    connect(&m_undoStack, SIGNAL(changed()), this, SLOT(checkSelection()));
+    connect(&m_undoStack, &QDesignerUndoStack::changed,
+            this, &QDesignerFormWindowInterface::changed);
+    connect(&m_undoStack, &QDesignerUndoStack::changed,
+            this, &FormWindow::checkSelection);
 
     core()->metaDataBase()->add(this);
 
@@ -434,7 +440,7 @@ void FormWindow::init()
     QAction *a = new QAction(this);
     a->setText(tr("Edit contents"));
     a->setShortcut(tr("F2"));
-    connect(a, SIGNAL(triggered()), this, SLOT(editContents()));
+    connect(a, &QAction::triggered, this, &FormWindow::editContents);
     addAction(a);
 }
 
@@ -2182,8 +2188,6 @@ void FormWindow::layoutContainer(QWidget *w, int type)
     w = core()->widgetFactory()->containerOfWidget(w);
 
     const QObjectList l = w->children();
-    if (l.isEmpty())
-        return;
     // find managed widget children
     QWidgetList widgets;
     const QObjectList::const_iterator ocend = l.constEnd();
@@ -2193,6 +2197,9 @@ void FormWindow::layoutContainer(QWidget *w, int type)
             if (widget->isVisibleTo(this) && isManaged(widget))
                 widgets.append(widget);
         }
+
+    if (widgets.isEmpty()) // QTBUG-50563, observed when using hand-edited forms.
+        return;
 
     LayoutCommand *cmd = new LayoutCommand(this);
     cmd->init(mainContainer(), widgets, static_cast<LayoutInfo::Type>(type), w);
@@ -2252,7 +2259,7 @@ QAction *FormWindow::createSelectAncestorSubMenu(QWidget *w)
     // Create a submenu listing the managed, unselected parents
     QMenu *menu = new QMenu;
     QActionGroup *ag = new QActionGroup(menu);
-    QObject::connect(ag, SIGNAL(triggered(QAction*)), this, SLOT(slotSelectWidget(QAction*)));
+    QObject::connect(ag, &QActionGroup::triggered, this, &FormWindow::slotSelectWidget);
     const int size = parents.size();
     for (int i = 0; i < size; i++) {
         QWidget *w = parents.at(i);

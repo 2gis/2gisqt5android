@@ -35,7 +35,7 @@
 ****************************************************************************/
 
 #include "houseplant.h"
-#include <Qt3DRenderer/qtexture.h>
+#include <Qt3DRender/qtexture.h>
 
 const char *potNames[] = {
     "cross",
@@ -53,25 +53,24 @@ const char *plantNames[] = {
 };
 
 
-HousePlant::HousePlant(Qt3D::QNode *parent)
-    : Qt3D::QEntity(parent)
+HousePlant::HousePlant(Qt3DCore::QNode *parent)
+    : Qt3DCore::QEntity(parent)
     , m_pot(new RenderableEntity(this))
     , m_plant(new RenderableEntity(m_pot))
     , m_cover(new RenderableEntity(m_pot))
-    , m_potMaterial(new Qt3D::QNormalDiffuseMapMaterial())
-    , m_plantMaterial(new Qt3D::QNormalDiffuseMapAlphaMaterial())
-    , m_coverMaterial(new Qt3D::QNormalDiffuseMapMaterial())
-    , m_potImage(new Qt3D::QTextureImage())
-
-    , m_potNormalImage(new Qt3D::QTextureImage())
-    , m_plantImage(new Qt3D::QTextureImage())
-    , m_plantNormalImage(new Qt3D::QTextureImage())
-    , m_coverImage(new Qt3D::QTextureImage())
-    , m_coverNormalImage(new Qt3D::QTextureImage())
+    , m_potMaterial(new Qt3DRender::QNormalDiffuseMapMaterial())
+    , m_plantMaterial(new Qt3DRender::QNormalDiffuseMapAlphaMaterial())
+    , m_coverMaterial(new Qt3DRender::QNormalDiffuseMapMaterial())
+    , m_potImage(new Qt3DRender::QTextureImage())
+    , m_potNormalImage(new Qt3DRender::QTextureImage())
+    , m_plantImage(new Qt3DRender::QTextureImage())
+    , m_plantNormalImage(new Qt3DRender::QTextureImage())
+    , m_coverImage(new Qt3DRender::QTextureImage())
+    , m_coverNormalImage(new Qt3DRender::QTextureImage())
     , m_plantType(Bamboo)
     , m_potShape(Cross)
 {
-    m_pot->scaleTransform()->setScale(0.03f);
+    m_pot->transform()->setScale(0.03f);
     m_pot->addComponent(m_potMaterial);
     m_plant->addComponent(m_plantMaterial);
     m_cover->addComponent(m_coverMaterial);
@@ -130,44 +129,24 @@ HousePlant::Plant HousePlant::plantType() const
     return m_plantType;
 }
 
-void HousePlant::setX(float x)
+void HousePlant::setPosition(const QVector3D &pos)
 {
-    m_pot->translateTransform()->setDx(x);
-}
-
-void HousePlant::setY(float y)
-{
-    m_pot->translateTransform()->setDy(y);
-}
-
-void HousePlant::setZ(float z)
-{
-    m_pot->translateTransform()->setDz(z);
+    m_pot->transform()->setTranslation(pos);
 }
 
 void HousePlant::setScale(float scale)
 {
-    m_pot->scaleTransform()->setScale(scale);
+    m_pot->transform()->setScale(scale);
 }
 
-float HousePlant::x() const
+QVector3D HousePlant::position() const
 {
-    return m_pot->translateTransform()->dx();
-}
-
-float HousePlant::y() const
-{
-    return m_pot->translateTransform()->dy();
-}
-
-float HousePlant::z() const
-{
-    return m_pot->translateTransform()->dz();
+    return m_pot->transform()->translation();
 }
 
 float HousePlant::scale() const
 {
-    return m_pot->scaleTransform()->scale();
+    return m_pot->transform()->scale();
 }
 
 void HousePlant::updatePotShape()

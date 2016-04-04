@@ -140,6 +140,8 @@ private slots:
     void nestedinFlickable();
     void flickableDelegate();
     void jsArrayChange();
+    void qtbug42716();
+    void addCustomAttribute();
 };
 
 class TestObject : public QObject
@@ -183,8 +185,8 @@ void tst_QQuickPathView::initValues()
     QQuickPathView *obj = qobject_cast<QQuickPathView*>(c.create());
 
     QVERIFY(obj != 0);
-    QVERIFY(obj->path() == 0);
-    QVERIFY(obj->delegate() == 0);
+    QVERIFY(!obj->path());
+    QVERIFY(!obj->delegate());
     QCOMPARE(obj->model(), QVariant());
     QCOMPARE(obj->currentIndex(), 0);
     QCOMPARE(obj->offset(), 0.);
@@ -799,7 +801,7 @@ void tst_QQuickPathView::dataModel()
     QVERIFY(pathview != 0);
 
     QMetaObject::invokeMethod(window->rootObject(), "checkProperties");
-    QVERIFY(testObject->error() == false);
+    QVERIFY(!testObject->error());
 
     QQuickItem *item = findItem<QQuickItem>(pathview, "wrapper", 0);
     QVERIFY(item);
@@ -828,14 +830,14 @@ void tst_QQuickPathView::dataModel()
 
     testObject->setPathItemCount(5);
     QMetaObject::invokeMethod(window->rootObject(), "checkProperties");
-    QVERIFY(testObject->error() == false);
+    QVERIFY(!testObject->error());
 
     QTRY_COMPARE(findItems<QQuickItem>(pathview, "wrapper").count(), 5);
 
     QQuickRectangle *testItem = findItem<QQuickRectangle>(pathview, "wrapper", 4);
     QVERIFY(testItem != 0);
     testItem = findItem<QQuickRectangle>(pathview, "wrapper", 5);
-    QVERIFY(testItem == 0);
+    QVERIFY(!testItem);
 
     pathview->setCurrentIndex(1);
     QCOMPARE(pathview->currentIndex(), 1);
@@ -1111,6 +1113,15 @@ void tst_QQuickPathView::setCurrentIndex()
     QCOMPARE(pathview->currentItem(), firstItem);
     QCOMPARE(firstItem->property("onPath"), QVariant(true));
 
+    // check for bogus currentIndexChanged() signals
+    QSignalSpy currentIndexSpy(pathview, SIGNAL(currentIndexChanged()));
+    QVERIFY(currentIndexSpy.isValid());
+    pathview->setHighlightMoveDuration(100);
+    pathview->setHighlightRangeMode(QQuickPathView::StrictlyEnforceRange);
+    pathview->setSnapMode(QQuickPathView::SnapToItem);
+    pathview->setCurrentIndex(3);
+    QTRY_COMPARE(pathview->currentIndex(), 3);
+    QCOMPARE(currentIndexSpy.count(), 1);
 }
 
 void tst_QQuickPathView::resetModel()
@@ -1814,7 +1825,7 @@ void tst_QQuickPathView::cancelDrag()
     item->grabMouse();
 
     // returns to a snap point.
-    QTRY_VERIFY(pathview->offset() == qFloor(pathview->offset()));
+    QTRY_COMPARE(pathview->offset(), qreal(qFloor(pathview->offset())));
     QTRY_VERIFY(!pathview->isMoving());
     QVERIFY(!pathview->isDragging());
     QCOMPARE(draggingSpy.count(), 2);
@@ -1897,7 +1908,7 @@ void tst_QQuickPathView::snapToItem()
     QVERIFY(pathview->isMoving());
     QTRY_VERIFY_WITH_TIMEOUT(!pathview->isMoving(), 50000);
 
-    QVERIFY(pathview->offset() == qFloor(pathview->offset()));
+    QCOMPARE(pathview->offset(), qreal(qFloor(pathview->offset())));
 
     if (enforceRange)
         QVERIFY(pathview->currentIndex() != currentIndex);
@@ -2051,7 +2062,7 @@ void tst_QQuickPathView::indexAt_itemAt()
         QVERIFY(item);
     }
     QCOMPARE(pathview->indexAt(x,y), index);
-    QVERIFY(pathview->itemAt(x,y) == item);
+    QCOMPARE(pathview->itemAt(x,y), item);
 
 }
 
@@ -2320,6 +2331,61 @@ void tst_QQuickPathView::jsArrayChange()
     // no change
     view->setModel(QVariant::fromValue(array2));
     QCOMPARE(spy.count(), 1);
+}
+
+/* This bug was one where if you jump the list such that the sole missing item needed to be
+ * added in the middle of the list, it would instead move an item somewhere else in the list
+ * to the middle (messing it up very badly).
+ *
+ * The test checks correct visual order both before and after the jump.
+ */
+void tst_QQuickPathView::qtbug42716()
+{
+    QScopedPointer<QQuickView> window(createView());
+
+    window->setSource(testFileUrl("qtbug42716.qml"));
+    window->show();
+    QVERIFY(QTest::qWaitForWindowActive(window.data()));
+    QCOMPARE(window.data(), qGuiApp->focusWindow());
+
+    QQuickPathView *pathView = findItem<QQuickPathView>(window->rootObject(), "pathView");
+    QVERIFY(pathView != 0);
+
+    int order1[] = {5,6,7,0,1,2,3};
+    int missing1 = 4;
+    int order2[] = {0,1,2,3,4,5,6};
+    int missing2 = 7;
+
+    qreal lastY = 0.0;
+    for (int i = 0; i<7; i++) {
+        QQuickItem *item = findItem<QQuickItem>(pathView, QString("delegate%1").arg(order1[i]));
+        QVERIFY(item);
+        QVERIFY(item->y() > lastY);
+        lastY = item->y();
+    }
+    QQuickItem *itemMiss = findItem<QQuickItem>(pathView, QString("delegate%1").arg(missing1));
+    QVERIFY(!itemMiss);
+
+    pathView->setOffset(0.0882353);
+    //Note refill is delayed, needs time to take effect
+    QTest::qWait(100);
+
+    lastY = 0.0;
+    for (int i = 0; i<7; i++) {
+        QQuickItem *item = findItem<QQuickItem>(pathView, QString("delegate%1").arg(order2[i]));
+        QVERIFY(item);
+        QVERIFY(item->y() > lastY);
+        lastY = item->y();
+    }
+    itemMiss = findItem<QQuickItem>(pathView, QString("delegate%1").arg(missing2));
+    QVERIFY(!itemMiss);
+}
+
+void tst_QQuickPathView::addCustomAttribute()
+{
+    const QScopedPointer<QQuickView> window(createView());
+    window->setSource(testFileUrl("customAttribute.qml"));
+    window->show();
 }
 
 QTEST_MAIN(tst_QQuickPathView)

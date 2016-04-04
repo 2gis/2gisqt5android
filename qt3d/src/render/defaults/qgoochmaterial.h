@@ -34,19 +34,19 @@
 **
 ****************************************************************************/
 
-#ifndef QT3D_RENDER_QGOOCHMATERIAL_H
-#define QT3D_RENDER_QGOOCHMATERIAL_H
+#ifndef QT3DRENDER_RENDER_QGOOCHMATERIAL_H
+#define QT3DRENDER_RENDER_QGOOCHMATERIAL_H
 
-#include <Qt3DRenderer/qmaterial.h>
+#include <Qt3DRender/qmaterial.h>
 #include <QColor>
 
 QT_BEGIN_NAMESPACE
 
-namespace Qt3D {
+namespace Qt3DRender {
 
 class QGoochMaterialPrivate;
 
-class QGoochMaterial : public QMaterial
+class QT3DRENDERSHARED_EXPORT QGoochMaterial : public QMaterial
 {
     Q_OBJECT
     Q_PROPERTY(QColor diffuse READ diffuse WRITE setDiffuse NOTIFY diffuseChanged)
@@ -58,7 +58,7 @@ class QGoochMaterial : public QMaterial
     Q_PROPERTY(float shininess READ shininess WRITE setShininess NOTIFY shininessChanged)
 
 public:
-    explicit QGoochMaterial(QNode *parent = 0);
+    explicit QGoochMaterial(Qt3DCore::QNode *parent = 0);
     QColor diffuse() const;
     QColor specular() const;
     QColor cool() const;
@@ -77,23 +77,23 @@ public Q_SLOTS:
     void setShininess(float shininess);
 
 Q_SIGNALS:
-    void diffuseChanged();
-    void specularChanged();
-    void coolChanged();
-    void warmChanged();
-    void alphaChanged();
-    void betaChanged();
-    void shininessChanged();
+    void diffuseChanged(const QColor &diffuse);
+    void specularChanged(const QColor &specular);
+    void coolChanged(const QColor &cool);
+    void warmChanged(const QColor &warm);
+    void alphaChanged(float alpha);
+    void betaChanged(float beta);
+    void shininessChanged(float shininess);
 
 protected:
-    QGoochMaterial(QGoochMaterialPrivate &dd, QNode *parent = 0);
+    QGoochMaterial(QGoochMaterialPrivate &dd, Qt3DCore::QNode *parent = 0);
 
 private:
     Q_DECLARE_PRIVATE(QGoochMaterial)
 };
 
-} // Qt3D
+} // namespace Qt3DRender
 
 QT_END_NAMESPACE
 
-#endif // QT3D_RENDER_QGOOCHMATERIAL_H
+#endif // QT3DRENDER_RENDER_QGOOCHMATERIAL_H

@@ -109,6 +109,7 @@ void QGeoMap::setActiveMapType(const QGeoMapType type)
     d->m_activeMapType = type;
     d->changeActiveMapType(type);
     d->setCameraData(d->m_cameraData);
+    emit activeMapTypeChanged();
     update();
 }
 
@@ -116,12 +117,6 @@ const QGeoMapType QGeoMap::activeMapType() const
 {
     Q_D(const QGeoMap);
     return d->m_activeMapType;
-}
-
-QString QGeoMap::pluginString()
-{
-    Q_D(const QGeoMap);
-    return d->m_pluginString;
 }
 
 QGeoCameraCapabilities QGeoMap::cameraCapabilities()
@@ -133,12 +128,12 @@ QGeoCameraCapabilities QGeoMap::cameraCapabilities()
         return QGeoCameraCapabilities();
 }
 
-int QGeoMap::mapVersion()
+void QGeoMap::prefetchData()
 {
-    return -1;
+
 }
 
-void QGeoMap::prefetchData()
+void QGeoMap::clearData()
 {
 
 }
@@ -152,9 +147,6 @@ QGeoMapPrivate::QGeoMapPrivate(QGeoMappingManagerEngine *engine)
       m_controller(0),
       m_activeMapType(QGeoMapType())
 {
-    if (!m_engine.isNull()) {
-        m_pluginString = m_engine->managerName() + QLatin1Char('_') + QString::number(m_engine->managerVersion());
-    }
 }
 
 QGeoMapPrivate::~QGeoMapPrivate()

@@ -37,6 +37,8 @@
 #include "qwinrtcameraservice.h"
 #include "qwinrtcameracontrol.h"
 #include "qwinrtcamerainfocontrol.h"
+#include "qwinrtvideoprobecontrol.h"
+#include "qwinrtcameravideorenderercontrol.h"
 
 #include <QtCore/QCoreApplication>
 #include <QtCore/qfunctions_winrt.h>
@@ -45,6 +47,9 @@
 #include <QtMultimedia/QVideoRendererControl>
 #include <QtMultimedia/QVideoDeviceSelectorControl>
 #include <QtMultimedia/QImageEncoderControl>
+#include <QtMultimedia/QCameraFocusControl>
+#include <QtMultimedia/QCameraLocksControl>
+#include <QtMultimedia/QMediaVideoProbeControl>
 
 QT_BEGIN_NAMESPACE
 
@@ -69,39 +74,44 @@ QMediaControl *QWinRTCameraService::requestControl(const char *name)
             d->cameraControl = new QWinRTCameraControl(this);
         return d->cameraControl;
     }
-
-    if (qstrcmp(name, QVideoRendererControl_iid) == 0) {
-        if (d->cameraControl)
-            return d->cameraControl->videoRenderer();
-    }
-
-    if (qstrcmp(name, QVideoDeviceSelectorControl_iid) == 0) {
-        if (d->cameraControl)
-            return d->cameraControl->videoDeviceSelector();
-    }
-
     if (qstrcmp(name, QCameraInfoControl_iid) == 0) {
         if (!d->cameraInfoControl)
             d->cameraInfoControl = new QWinRTCameraInfoControl(this);
         return d->cameraInfoControl;
     }
 
-    if (qstrcmp(name, QCameraImageCaptureControl_iid) == 0) {
-        if (d->cameraControl)
-            return d->cameraControl->imageCaptureControl();
-    }
+    if (!d->cameraControl)
+        return nullptr;
 
-    if (qstrcmp(name, QImageEncoderControl_iid) == 0) {
-        if (d->cameraControl)
-            return d->cameraControl->imageEncoderControl();
-    }
+    if (qstrcmp(name, QVideoRendererControl_iid) == 0)
+        return d->cameraControl->videoRenderer();
 
-    return Q_NULLPTR;
+    if (qstrcmp(name, QVideoDeviceSelectorControl_iid) == 0)
+       return d->cameraControl->videoDeviceSelector();
+
+    if (qstrcmp(name, QCameraImageCaptureControl_iid) == 0)
+        return d->cameraControl->imageCaptureControl();
+
+    if (qstrcmp(name, QImageEncoderControl_iid) == 0)
+        return d->cameraControl->imageEncoderControl();
+
+    if (qstrcmp(name, QCameraFocusControl_iid) == 0)
+        return d->cameraControl->cameraFocusControl();
+
+    if (qstrcmp(name, QCameraLocksControl_iid) == 0)
+        return d->cameraControl->cameraLocksControl();
+
+    if (qstrcmp(name, QMediaVideoProbeControl_iid) == 0)
+        return new QWinRTVideoProbeControl(qobject_cast<QWinRTCameraVideoRendererControl *>(d->cameraControl->videoRenderer()));
+
+    return nullptr;
 }
 
 void QWinRTCameraService::releaseControl(QMediaControl *control)
 {
-    Q_UNUSED(control);
+    Q_ASSERT(control);
+    if (QWinRTVideoProbeControl *videoProbe = qobject_cast<QWinRTVideoProbeControl *>(control))
+        videoProbe->deleteLater();
 }
 
 QT_END_NAMESPACE

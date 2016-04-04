@@ -37,6 +37,7 @@ PRIVATETESTS += \
     qqmldirparser \
     qqmlglobal \
     qqmllanguage \
+    qqmlopenmetaobject \
     qqmlproperty \
     qqmlpropertycache \
     qqmlpropertymap \
@@ -60,7 +61,8 @@ PRIVATETESTS += \
     qqmlenginecleanup \
     v4misc \
     qqmltranslation \
-    qqmlimport
+    qqmlimport \
+    qqmlobjectmodel
 
 qtHaveModule(widgets) {
     PUBLICTESTS += \
@@ -70,7 +72,10 @@ qtHaveModule(widgets) {
 
 SUBDIRS += $$PUBLICTESTS
 SUBDIRS += $$METATYPETESTS
-!winrt: SUBDIRS += debugger # no QProcess on winrt
+!winrt { # no QProcess on winrt
+    !contains(QT_CONFIG, no-qml-debug): SUBDIRS += debugger
+    SUBDIRS += qmllint
+}
 
 contains(QT_CONFIG, private_tests) {
     SUBDIRS += $$PRIVATETESTS

@@ -33,6 +33,17 @@
 
 #ifndef WANDERAFFECTOR_H
 #define WANDERAFFECTOR_H
+
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
 #include <QHash>
 #include "qquickparticleaffector_p.h"
 
@@ -54,7 +65,6 @@ class QQuickWanderAffector : public QQuickParticleAffector
     Q_PROPERTY(qreal xVariance READ xVariance WRITE setXVariance NOTIFY xVarianceChanged)
     Q_PROPERTY(qreal yVariance READ yVariance WRITE setYVariance NOTIFY yVarianceChanged)
     Q_PROPERTY(AffectableParameters affectedParameter READ affectedParameter WRITE setAffectedParameter NOTIFY affectedParameterChanged)
-    Q_ENUMS(AffectableParameters)
 
 public:
     enum AffectableParameters {
@@ -62,6 +72,7 @@ public:
         Velocity,
         Acceleration
     };
+    Q_ENUM(AffectableParameters)
 
     explicit QQuickWanderAffector(QQuickItem *parent = 0);
     ~QQuickWanderAffector();

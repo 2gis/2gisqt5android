@@ -128,7 +128,9 @@ void tst_qtgraphicaleffects::brightnessContrast()
     QVERIFY(obj != 0);
 
     // Default values
+    QCOMPARE(obj->property("brightness").type(), QVariant::Double);
     QCOMPARE(obj->property("brightness").toDouble(), 0.0);
+    QCOMPARE(obj->property("contrast").type(), QVariant::Double);
     QCOMPARE(obj->property("contrast").toDouble(), 0.0);
     QCOMPARE(obj->property("source").toInt(), 0);
     QCOMPARE(obj->property("cached").toBool(), false);
@@ -153,8 +155,11 @@ void tst_qtgraphicaleffects::colorize()
     QVERIFY(obj != 0);
 
     // Default values
+    QCOMPARE(obj->property("hue").type(), QVariant::Double);
     QCOMPARE(obj->property("hue").toDouble(), 0.0);
+    QCOMPARE(obj->property("saturation").type(), QVariant::Double);
     QCOMPARE(obj->property("saturation").toDouble(), 1.0);
+    QCOMPARE(obj->property("lightness").type(), QVariant::Double);
     QCOMPARE(obj->property("lightness").toDouble(), 0.0);
     QCOMPARE(obj->property("source").toInt(), 0);
     QCOMPARE(obj->property("cached").toBool(), false);
@@ -179,6 +184,7 @@ void tst_qtgraphicaleffects::fastBlur()
     QVERIFY(obj != 0);
 
     // Default values
+    QCOMPARE(obj->property("radius").type(), QVariant::Double);
     QCOMPARE(obj->property("radius").toDouble(), 0.0);
     QCOMPARE(obj->property("transparentBorder").toBool(), false);
     QCOMPARE(obj->property("source").toInt(), 0);
@@ -204,6 +210,7 @@ void tst_qtgraphicaleffects::desaturate()
     QVERIFY(obj != 0);
 
     // Default values
+    QCOMPARE(obj->property("desaturation").type(), QVariant::Double);
     QCOMPARE(obj->property("desaturation").toDouble(), 0.0);
     QCOMPARE(obj->property("source").toInt(), 0);
     QCOMPARE(obj->property("cached").toBool(), false);
@@ -228,8 +235,11 @@ void tst_qtgraphicaleffects::hueSaturation()
     QVERIFY(obj != 0);
 
     // Default values
+    QCOMPARE(obj->property("hue").type(), QVariant::Double);
     QCOMPARE(obj->property("hue").toDouble(), 0.0);
+    QCOMPARE(obj->property("saturation").type(), QVariant::Double);
     QCOMPARE(obj->property("saturation").toDouble(), 0.0);
+    QCOMPARE(obj->property("lightness").type(), QVariant::Double);
     QCOMPARE(obj->property("lightness").toDouble(), 0.0);
     QCOMPARE(obj->property("source").toInt(), 0);
     QCOMPARE(obj->property("cached").toBool(), false);
@@ -279,11 +289,16 @@ void tst_qtgraphicaleffects::radialGradient()
 
     // Default values
     QCOMPARE(obj->property("gradient").toInt(), 0);
+    QCOMPARE(obj->property("horizontalOffset").type(), QVariant::Double);
     QCOMPARE(obj->property("horizontalOffset").toDouble(), 0.0);
+    QCOMPARE(obj->property("verticalOffset").type(), QVariant::Double);
     QCOMPARE(obj->property("verticalOffset").toDouble(), 0.0);
+    QCOMPARE(obj->property("horizontalRadius").type(), QVariant::Double);
     QCOMPARE(obj->property("horizontalRadius").toDouble(), 50.0);
+    QCOMPARE(obj->property("verticalRadius").type(), QVariant::Double);
     QCOMPARE(obj->property("verticalRadius").toDouble(), 50.0);
     QCOMPARE(obj->property("source").toInt(), 0);
+    QCOMPARE(obj->property("angle").type(), QVariant::Double);
     QCOMPARE(obj->property("angle").toDouble(), 0.0);
     QCOMPARE(obj->property("cached").toBool(), false);
 
@@ -331,9 +346,12 @@ void tst_qtgraphicaleffects::rectangularGlow()
     QVERIFY(obj != 0);
 
     // Default values
+    QCOMPARE(obj->property("spread").type(), QVariant::Double);
     QCOMPARE(obj->property("spread").toDouble(), 0.0);
+    QCOMPARE(obj->property("glowRadius").type(), QVariant::Double);
     QCOMPARE(obj->property("glowRadius").toDouble(), 0.0);
     QCOMPARE(obj->property("color").toString(), QString("#ffffff"));
+    QCOMPARE(obj->property("cornerRadius").type(), QVariant::Double);
     QCOMPARE(obj->property("cornerRadius").toDouble(), 0.0);
     QCOMPARE(obj->property("cached").toBool(), false);
 
@@ -356,9 +374,12 @@ void tst_qtgraphicaleffects::conicalGradient()
     QVERIFY(obj != 0);
 
     // Default values
+    QCOMPARE(obj->property("angle").type(), QVariant::Double);
     QCOMPARE(obj->property("angle").toDouble(), 0.0);
     QCOMPARE(obj->property("gradient").toInt(), 0);
+    QCOMPARE(obj->property("horizontalOffset").type(), QVariant::Double);
     QCOMPARE(obj->property("horizontalOffset").toDouble(), 0.0);
+    QCOMPARE(obj->property("horizontalOffset").type(), QVariant::Double);
     QCOMPARE(obj->property("verticalOffset").toDouble(), 0.0);
     QCOMPARE(obj->property("source").toInt(), 0);
     QCOMPARE(obj->property("cached").toBool(), false);
@@ -384,7 +405,7 @@ void tst_qtgraphicaleffects::colorOverlay()
 
     // Default values
     QCOMPARE(obj->property("cached").toBool(), false);
-    QCOMPARE(obj->property("color").toString(), QString("#000000"));
+    QCOMPARE(obj->property("color").toString(), QString("#00000000"));
 
     delete obj;
 }
@@ -406,13 +427,13 @@ void tst_qtgraphicaleffects::gaussianBlur()
     QVERIFY(obj != 0);
 
     // Default values
-    QCOMPARE(obj->property("radius").toDouble(), 0.0);
-    QCOMPARE(obj->property("samples").toInt(), 0);
+    QCOMPARE(obj->property("radius").type(), QVariant::Double);
+    QCOMPARE(obj->property("radius").toDouble(), 4.0);
+    QCOMPARE(obj->property("samples").toInt(), 9);
     QCOMPARE(obj->property("transparentBorder").toBool(), false);
 
     double res = obj->property("deviation").toDouble();
-    QVERIFY(res < 0.3000 + 0.0001);
-    QVERIFY(res > 0.3000 - 0.0001);
+    QVERIFY(res > 0.0);
 
     QCOMPARE(obj->property("cached").toBool(), false);
 
@@ -436,20 +457,22 @@ void tst_qtgraphicaleffects::dropShadow()
     QVERIFY(obj != 0);
 
     // Default values
-    QCOMPARE(obj->property("radius").toDouble(), 0.0);
-    QCOMPARE(obj->property("samples").toInt(), 0);
+    QCOMPARE(obj->property("radius").type(), QVariant::Double);
+    QCOMPARE(obj->property("radius").toDouble(), 4.0);
+    QCOMPARE(obj->property("samples").toInt(), 9);
+    QCOMPARE(obj->property("horizontalOffset").type(), QVariant::Double);
     QCOMPARE(obj->property("horizontalOffset").toDouble(), 0.0);
+    QCOMPARE(obj->property("verticalOffset").type(), QVariant::Double);
     QCOMPARE(obj->property("verticalOffset").toDouble(), 0.0);
     QCOMPARE(obj->property("cached").toBool(), false);
     QCOMPARE(obj->property("source").toInt(), 0);
     QCOMPARE(obj->property("color").toString(), QString("#000000"));
+    QCOMPARE(obj->property("spread").type(), QVariant::Double);
     QCOMPARE(obj->property("spread").toDouble(), 0.0);
-    QCOMPARE(obj->property("transparentBorder").toBool(), false);
-    QCOMPARE(obj->property("fast").toBool(), false);
+    QCOMPARE(obj->property("transparentBorder").toBool(), true);
 
     delete obj;
 }
-
 
 void tst_qtgraphicaleffects::innerShadow()
 {
@@ -468,13 +491,17 @@ void tst_qtgraphicaleffects::innerShadow()
     QVERIFY(obj != 0);
 
     // Default values
+    QCOMPARE(obj->property("radius").type(), QVariant::Double);
     QCOMPARE(obj->property("radius").toDouble(), 0.0);
     QCOMPARE(obj->property("samples").toInt(), 0);
+    QCOMPARE(obj->property("horizontalOffset").type(), QVariant::Double);
     QCOMPARE(obj->property("horizontalOffset").toDouble(), 0.0);
+    QCOMPARE(obj->property("verticalOffset").type(), QVariant::Double);
     QCOMPARE(obj->property("verticalOffset").toDouble(), 0.0);
     QCOMPARE(obj->property("cached").toBool(), false);
     QCOMPARE(obj->property("source").toInt(), 0);
     QCOMPARE(obj->property("color").toString(), QString("#000000"));
+    QCOMPARE(obj->property("spread").type(), QVariant::Double);
     QCOMPARE(obj->property("spread").toDouble(), 0.0);
     QCOMPARE(obj->property("fast").toBool(), false);
 
@@ -499,6 +526,7 @@ void tst_qtgraphicaleffects::gammaAdjust()
     QVERIFY(obj != 0);
 
     // Default values
+    QCOMPARE(obj->property("gamma").type(), QVariant::Double);
     QCOMPARE(obj->property("gamma").toDouble(), 1.0);
     QCOMPARE(obj->property("source").toInt(), 0);
     QCOMPARE(obj->property("cached").toBool(), false);
@@ -527,7 +555,9 @@ void tst_qtgraphicaleffects::thresholdMask()
     QCOMPARE(obj->property("source").toInt(), 0);
     QCOMPARE(obj->property("maskSource").toInt(), 0);
     QCOMPARE(obj->property("cached").toBool(), false);
+    QCOMPARE(obj->property("threshold").type(), QVariant::Double);
     QCOMPARE(obj->property("threshold").toDouble(), 0.0);
+    QCOMPARE(obj->property("spread").type(), QVariant::Double);
     QCOMPARE(obj->property("spread").toDouble(), 0.0);
 
     delete obj;
@@ -550,13 +580,14 @@ void tst_qtgraphicaleffects::glow()
     QVERIFY(obj != 0);
 
     // Default values
-    QCOMPARE(obj->property("radius").toDouble(), 0.0);
-    QCOMPARE(obj->property("samples").toInt(), 0);
+    QCOMPARE(obj->property("radius").type(), QVariant::Double);
+    QCOMPARE(obj->property("radius").toDouble(), 4.0);
+    QCOMPARE(obj->property("samples").toInt(), 9);
     QCOMPARE(obj->property("cached").toBool(), false);
-    QCOMPARE(obj->property("spread").toDouble(), 0.0);
+    QCOMPARE(obj->property("spread").type(), QVariant::Double);
+    QCOMPARE(obj->property("spread").toDouble(), 0.5);
     QCOMPARE(obj->property("color").toString(), QString("#ffffff"));
-    QCOMPARE(obj->property("transparentBorder").toBool(), false);
-    QCOMPARE(obj->property("fast").toBool(), false);
+    QCOMPARE(obj->property("transparentBorder").toBool(), true);
 
     delete obj;
 }
@@ -608,6 +639,7 @@ void tst_qtgraphicaleffects::displace()
     QCOMPARE(obj->property("source").toInt(), 0);
     QCOMPARE(obj->property("displacementSource").toInt(), 0);
     QCOMPARE(obj->property("cached").toBool(), false);
+    QCOMPARE(obj->property("displacement").type(), QVariant::Double);
     QCOMPARE(obj->property("displacement").toDouble(), 0.0);
 
     delete obj;
@@ -632,7 +664,9 @@ void tst_qtgraphicaleffects::recursiveBlur()
     // Default values
     QCOMPARE(obj->property("source").toInt(), 0);
     QCOMPARE(obj->property("loops").toInt(), 0);
+    QCOMPARE(obj->property("radius").type(), QVariant::Double);
     QCOMPARE(obj->property("radius").toDouble(), 0.0);
+    QCOMPARE(obj->property("progress").type(), QVariant::Double);
     QCOMPARE(obj->property("progress").toDouble(), 0.0);
     QCOMPARE(obj->property("transparentBorder").toBool(), false);
     QCOMPARE(obj->property("cached").toBool(), false);
@@ -659,7 +693,9 @@ void tst_qtgraphicaleffects::directionalBlur()
     // Default values
     QCOMPARE(obj->property("source").toInt(), 0);
     QCOMPARE(obj->property("length").toInt(), 0);
-    QCOMPARE(obj->property("samples").toDouble(), 0.0);
+    QCOMPARE(obj->property("samples").type(), QVariant::Int);
+    QCOMPARE(obj->property("samples").toInt(), 0);
+    QCOMPARE(obj->property("angle").type(), QVariant::Double);
     QCOMPARE(obj->property("angle").toDouble(), 0.0);
     QCOMPARE(obj->property("transparentBorder").toBool(), false);
     QCOMPARE(obj->property("cached").toBool(), false);
@@ -685,11 +721,15 @@ void tst_qtgraphicaleffects::radialBlur()
 
     // Default values
     QCOMPARE(obj->property("source").toInt(), 0);
-    QCOMPARE(obj->property("samples").toDouble(), 0.0);
+    QCOMPARE(obj->property("samples").type(), QVariant::Int);
+    QCOMPARE(obj->property("samples").toInt(), 0);
+    QCOMPARE(obj->property("angle").type(), QVariant::Double);
     QCOMPARE(obj->property("angle").toDouble(), 0.0);
     QCOMPARE(obj->property("transparentBorder").toBool(), false);
     QCOMPARE(obj->property("cached").toBool(), false);
+    QCOMPARE(obj->property("horizontalOffset").type(), QVariant::Double);
     QCOMPARE(obj->property("horizontalOffset").toDouble(), 0.0);
+    QCOMPARE(obj->property("verticalOffset").type(), QVariant::Double);
     QCOMPARE(obj->property("verticalOffset").toDouble(), 0.0);
 
     delete obj;
@@ -713,10 +753,13 @@ void tst_qtgraphicaleffects::zoomBlur()
     // Default values
     QCOMPARE(obj->property("source").toInt(), 0);
     QCOMPARE(obj->property("length").toInt(), 0);
-    QCOMPARE(obj->property("samples").toDouble(), 0.0);
+    QCOMPARE(obj->property("samples").type(), QVariant::Int);
+    QCOMPARE(obj->property("samples").toInt(), 0);
     QCOMPARE(obj->property("transparentBorder").toBool(), false);
     QCOMPARE(obj->property("cached").toBool(), false);
+    QCOMPARE(obj->property("horizontalOffset").type(), QVariant::Double);
     QCOMPARE(obj->property("horizontalOffset").toDouble(), 0.0);
+    QCOMPARE(obj->property("verticalOffset").type(), QVariant::Double);
     QCOMPARE(obj->property("verticalOffset").toDouble(), 0.0);
 
     delete obj;
@@ -739,9 +782,9 @@ void tst_qtgraphicaleffects::levelAdjust()
 
     // Default values
     QCOMPARE(obj->property("source").toInt(), 0);
-    QCOMPARE(obj->property("minimumInput").toString(), QString("#000000"));
+    QCOMPARE(obj->property("minimumInput").toString(), QString("#00000000"));
     QCOMPARE(obj->property("maximumInput").toString(), QString("#ffffff"));
-    QCOMPARE(obj->property("minimumOutput").toString(), QString("#000000"));
+    QCOMPARE(obj->property("minimumOutput").toString(), QString("#00000000"));
     QCOMPARE(obj->property("maximumOutput").toString(), QString("#ffffff"));
     QCOMPARE(obj->property("cached").toBool(), false);
 
@@ -768,11 +811,10 @@ void tst_qtgraphicaleffects::maskedBlur()
     // Default values
     QCOMPARE(obj->property("source").toInt(), 0);
     QCOMPARE(obj->property("maskSource").toInt(), 0);
-    QCOMPARE(obj->property("radius").toDouble(), 0.0);
-    QCOMPARE(obj->property("samples").toInt(), 0);
+    QCOMPARE(obj->property("radius").type(), QVariant::Double);
+    QCOMPARE(obj->property("radius").toDouble(), 4.0);
+    QCOMPARE(obj->property("samples").toInt(), 9);
     QCOMPARE(obj->property("cached").toBool(), false);
-    QCOMPARE(obj->property("transparentBorder").toBool(), false);
-    QCOMPARE(obj->property("fast").toBool(), false);
 
     delete obj;
 }

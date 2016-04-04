@@ -57,6 +57,8 @@
       ['exclude', 'win/accessibility_ids_win\\.h$'],
       ['exclude', 'win/accessibility_misc_utils\\.(cc|h)$'],
       ['exclude', 'win/atl_module\\.h$'],
+      ['exclude', 'platform/ax_platform_node_win\\.(cc|h)$'],
+      ['exclude', 'audio_classifier\\.(cc|h)$'],
     ],
     'defines': [
       'TOOLKIT_QT',

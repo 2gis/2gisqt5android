@@ -45,16 +45,19 @@
 #include "base/single_thread_task_runner.h"
 #include "content/public/browser/content_browser_client.h"
 #include "content/public/common/url_constants.h"
+#include "net/http/http_network_session.h"
 #include "net/url_request/url_request_context_storage.h"
 #include "net/url_request/url_request_job_factory_impl.h"
 #include "net/proxy/dhcp_proxy_script_fetcher_factory.h"
+
+#include "cookie_monster_delegate_qt.h"
+#include "network_delegate_qt.h"
 
 #include "qglobal.h"
 #include <qatomic.h>
 
 namespace net {
 class MappedHostResolver;
-class NetworkDelegate;
 class ProxyConfigService;
 }
 
@@ -64,7 +67,7 @@ class BrowserContextAdapter;
 
 class URLRequestContextGetterQt : public net::URLRequestContextGetter {
 public:
-    explicit URLRequestContextGetterQt(BrowserContextAdapter *browserContext, content::ProtocolHandlerMap *protocolHandlers);
+    explicit URLRequestContextGetterQt(BrowserContextAdapter *browserContext, content::ProtocolHandlerMap *protocolHandlers, content::URLRequestInterceptorScopedVector request_interceptors);
 
     virtual net::URLRequestContext *GetURLRequestContext() Q_DECL_OVERRIDE;
     virtual scoped_refptr<base::SingleThreadTaskRunner> GetNetworkTaskRunner() const Q_DECL_OVERRIDE;
@@ -74,6 +77,7 @@ public:
     void updateUserAgent();
     void updateCookieStore();
     void updateHttpCache();
+    void updateJobFactory();
 
 private:
     virtual ~URLRequestContextGetterQt();
@@ -84,19 +88,25 @@ private:
     void generateHttpCache();
     void generateUserAgent();
     void generateJobFactory();
+    void cancelAllUrlRequests();
+    net::HttpNetworkSession::Params generateNetworkSessionParams();
 
     bool m_ignoreCertificateErrors;
     QAtomicInt m_updateCookieStore;
     QAtomicInt m_updateHttpCache;
-    BrowserContextAdapter *m_browserContext;
+    QExplicitlySharedDataPointer<BrowserContextAdapter> m_browserContext;
     content::ProtocolHandlerMap m_protocolHandlers;
 
     QAtomicPointer<net::ProxyConfigService> m_proxyConfigService;
     scoped_ptr<net::URLRequestContext> m_urlRequestContext;
-    scoped_ptr<net::NetworkDelegate> m_networkDelegate;
+    scoped_ptr<NetworkDelegateQt> m_networkDelegate;
     scoped_ptr<net::URLRequestContextStorage> m_storage;
-    scoped_ptr<net::URLRequestJobFactoryImpl> m_jobFactory;
+    scoped_ptr<net::URLRequestJobFactory> m_jobFactory;
     scoped_ptr<net::DhcpProxyScriptFetcherFactory> m_dhcpProxyScriptFetcherFactory;
+    scoped_refptr<CookieMonsterDelegateQt> m_cookieDelegate;
+    content::URLRequestInterceptorScopedVector m_requestInterceptors;
+
+    friend class NetworkDelegateQt;
 };
 
 } // namespace QtWebEngineCore

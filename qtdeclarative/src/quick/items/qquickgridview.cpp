@@ -267,9 +267,13 @@ qreal QQuickGridViewPrivate::originPosition() const
 qreal QQuickGridViewPrivate::lastPosition() const
 {
     qreal pos = 0;
-    if (model && model->count()) {
-        // get end position of last item
-        pos = (rowPosAt(model->count() - 1) + rowSize());
+    if (model && (model->count() || !visibleItems.isEmpty())) {
+        qreal lastRowPos = model->count() ? rowPosAt(model->count() - 1) : 0;
+        if (!visibleItems.isEmpty()) {
+            // If there are items in delayRemove state, they may be after any items linked to the model
+            lastRowPos = qMax(lastRowPos, static_cast<FxGridItemSG*>(visibleItems.last())->rowPos());
+        }
+        pos = lastRowPos + rowSize();
     }
     return pos;
 }
@@ -918,13 +922,13 @@ void QQuickGridViewPrivate::fixup(AxisData &data, qreal minExtent, qreal maxExte
             tempPosition -= bias;
         }
         FxViewItem *topItem = snapItemAt(tempPosition+highlightRangeStart);
-        if (!topItem && strictHighlightRange && currentItem) {
+        if (strictHighlightRange && currentItem && (!topItem || topItem->index != currentIndex)) {
             // StrictlyEnforceRange always keeps an item in range
             updateHighlight();
             topItem = currentItem;
         }
         FxViewItem *bottomItem = snapItemAt(tempPosition+highlightRangeEnd);
-        if (!bottomItem && strictHighlightRange && currentItem) {
+        if (strictHighlightRange && currentItem && (!bottomItem || bottomItem->index != currentIndex)) {
             // StrictlyEnforceRange always keeps an item in range
             updateHighlight();
             bottomItem = currentItem;

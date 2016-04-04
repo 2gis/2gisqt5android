@@ -78,7 +78,7 @@ QQuickStateActionEvent::~QQuickStateActionEvent()
 {
 }
 
-void QQuickStateActionEvent::execute(Reason)
+void QQuickStateActionEvent::execute()
 {
 }
 
@@ -87,7 +87,7 @@ bool QQuickStateActionEvent::isReversable()
     return false;
 }
 
-void QQuickStateActionEvent::reverse(Reason)
+void QQuickStateActionEvent::reverse()
 {
 }
 
@@ -157,11 +157,6 @@ QQuickState::~QQuickState()
     Q_D(QQuickState);
     if (d->group)
         d->group->removeState(this);
-
-    foreach (const QQuickSimpleAction &action, d->revertList) {
-        if (action.binding())
-            action.binding()->destroy();
-    }
 }
 
 /*!
@@ -361,8 +356,7 @@ void QQuickState::cancel()
 void QQuickStateAction::deleteFromBinding()
 {
     if (fromBinding) {
-        QQmlPropertyPrivate::setBinding(property, 0);
-        fromBinding->destroy();
+        QQmlPropertyPrivate::removeBinding(property);
         fromBinding = 0;
     }
 }
@@ -413,9 +407,6 @@ bool QQuickState::changeBindingInRevertList(QObject *target, const QString &name
         while (revertListIterator.hasNext()) {
             QQuickSimpleAction &simpleAction = revertListIterator.next();
             if (simpleAction.specifiedObject() == target && simpleAction.specifiedProperty() == name) {
-                if (simpleAction.binding())
-                    simpleAction.binding()->destroy();
-
                 simpleAction.setBinding(binding);
                 return true;
             }
@@ -435,15 +426,11 @@ bool QQuickState::removeEntryFromRevertList(QObject *target, const QString &name
         while (revertListIterator.hasNext()) {
             QQuickSimpleAction &simpleAction = revertListIterator.next();
             if (simpleAction.property().object() == target && simpleAction.property().name() == name) {
-                QQmlAbstractBinding *oldBinding = QQmlPropertyPrivate::binding(simpleAction.property());
-                if (oldBinding) {
-                    QQmlPropertyPrivate::setBinding(simpleAction.property(), 0);
-                    oldBinding->destroy();
-                }
+                QQmlPropertyPrivate::removeBinding(simpleAction.property());
 
                 simpleAction.property().write(simpleAction.value());
                 if (simpleAction.binding())
-                    QQmlPropertyPrivate::setBinding(simpleAction.property(), simpleAction.binding());
+                    QQmlPropertyPrivate::setBinding(simpleAction.binding());
 
                 revertListIterator.remove();
                 return true;
@@ -473,15 +460,11 @@ void QQuickState::removeAllEntriesFromRevertList(QObject *target)
          while (revertListIterator.hasNext()) {
              QQuickSimpleAction &simpleAction = revertListIterator.next();
              if (simpleAction.property().object() == target) {
-                 QQmlAbstractBinding *oldBinding = QQmlPropertyPrivate::binding(simpleAction.property());
-                 if (oldBinding) {
-                     QQmlPropertyPrivate::setBinding(simpleAction.property(), 0);
-                     oldBinding->destroy();
-                 }
+                 QQmlPropertyPrivate::removeBinding(simpleAction.property());
 
                  simpleAction.property().write(simpleAction.value());
                  if (simpleAction.binding())
-                     QQmlPropertyPrivate::setBinding(simpleAction.property(), simpleAction.binding());
+                     QQmlPropertyPrivate::setBinding(simpleAction.binding());
 
                  revertListIterator.remove();
              }
@@ -494,18 +477,15 @@ void QQuickState::addEntriesToRevertList(const QList<QQuickStateAction> &actionL
     Q_D(QQuickState);
     if (isStateActive()) {
         QList<QQuickSimpleAction> simpleActionList;
+        simpleActionList.reserve(actionList.count());
 
         QListIterator<QQuickStateAction> actionListIterator(actionList);
         while(actionListIterator.hasNext()) {
             const QQuickStateAction &action = actionListIterator.next();
             QQuickSimpleAction simpleAction(action);
             action.property.write(action.toValue);
-            if (!action.toBinding.isNull()) {
-                QQmlAbstractBinding *oldBinding = QQmlPropertyPrivate::binding(simpleAction.property());
-                if (oldBinding)
-                    QQmlPropertyPrivate::setBinding(simpleAction.property(), 0);
-                QQmlPropertyPrivate::setBinding(simpleAction.property(), action.toBinding.data(), QQmlPropertyPrivate::DontRemoveBinding);
-            }
+            if (action.toBinding)
+                QQmlPropertyPrivate::setBinding(action.toBinding.data());
 
             simpleActionList.append(simpleAction);
         }
@@ -619,7 +599,7 @@ void QQuickState::apply(QQuickTransition *trans, QQuickState *revert)
             for (int jj = 0; jj < d->revertList.count(); ++jj) {
                 if (d->revertList.at(jj).property() == action.property) {
                     found = true;
-                    if (d->revertList.at(jj).binding() != action.fromBinding) {
+                    if (d->revertList.at(jj).binding() != action.fromBinding.data()) {
                         action.deleteFromBinding();
                     }
                     break;
@@ -663,16 +643,13 @@ void QQuickState::apply(QQuickTransition *trans, QQuickState *revert)
         }
         if (!found) {
             QVariant cur = d->revertList.at(ii).property().read();
-            QQmlAbstractBinding *delBinding =
-                QQmlPropertyPrivate::setBinding(d->revertList.at(ii).property(), 0);
-            if (delBinding)
-                delBinding->destroy();
+            QQmlPropertyPrivate::removeBinding(d->revertList.at(ii).property());
 
             QQuickStateAction a;
             a.property = d->revertList.at(ii).property();
             a.fromValue = cur;
             a.toValue = d->revertList.at(ii).value();
-            a.toBinding = QQmlAbstractBinding::getPointer(d->revertList.at(ii).binding());
+            a.toBinding = d->revertList.at(ii).binding();
             a.specifiedObject = d->revertList.at(ii).specifiedObject();
             a.specifiedProperty = d->revertList.at(ii).specifiedProperty();
             a.event = d->revertList.at(ii).event();

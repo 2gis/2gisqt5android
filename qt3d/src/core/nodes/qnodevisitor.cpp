@@ -34,11 +34,11 @@
 **
 ****************************************************************************/
 
-#include "qnodevisitor.h"
+#include "qnodevisitor_p.h"
 
 QT_BEGIN_NAMESPACE
 
-namespace Qt3D {
+namespace Qt3DCore {
 
 QNodeVisitor::QNodeVisitor()
 {
@@ -58,11 +58,26 @@ QNode* QNodeVisitor::currentNode() const
     return m_path.back();
 }
 
+void QNodeVisitor::setPath(QNodeList path)
+{
+    m_path = path;
+}
+
 QNodeList QNodeVisitor::path() const
 {
     return m_path;
 }
 
-} // namespace Qt3D
+void QNodeVisitor::append(QNode *n)
+{
+    m_path.append(n);
+}
+
+void QNodeVisitor::pop_back()
+{
+    m_path.pop_back();
+}
+
+} // namespace Qt3DCore
 
 QT_END_NAMESPACE

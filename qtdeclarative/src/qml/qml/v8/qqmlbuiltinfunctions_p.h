@@ -47,6 +47,7 @@
 
 #include <private/qqmlglobal_p.h>
 #include <private/qv4functionobject_p.h>
+#include <private/qjsengine_p.h>
 
 QT_BEGIN_NAMESPACE
 
@@ -58,18 +59,18 @@ namespace QV4 {
 namespace Heap {
 
 struct QtObject : Object {
-    QtObject(ExecutionEngine *v4, QQmlEngine *qmlEngine);
+    QtObject(QQmlEngine *qmlEngine);
     QObject *platform;
     QObject *application;
 };
 
 struct ConsoleObject : Object {
-    ConsoleObject(ExecutionEngine *engine);
+    ConsoleObject();
 };
 
 struct QQmlBindingFunction : FunctionObject {
-    QQmlBindingFunction(QV4::FunctionObject *originalFunction);
-    FunctionObject *originalFunction;
+    QQmlBindingFunction(const QV4::FunctionObject *originalFunction);
+    Pointer<FunctionObject> originalFunction;
     // Set when the binding is created later
     QQmlSourceLocation bindingLocation;
 };
@@ -142,7 +143,7 @@ struct ConsoleObject : Object
 };
 
 struct GlobalExtensions {
-    static void init(QQmlEngine *qmlEngine, Object *globalObject);
+    static void init(Object *globalObject, QJSEngine::Extensions extensions);
 
 #ifndef QT_NO_TRANSLATION
     static ReturnedValue method_qsTranslate(CallContext *ctx);
@@ -166,7 +167,7 @@ struct QQmlBindingFunction : public QV4::FunctionObject
 
     void initBindingLocation(); // from caller stack trace
 
-    static ReturnedValue call(Managed *that, CallData *callData);
+    static ReturnedValue call(const Managed *that, CallData *callData);
 
     static void markObjects(Heap::Base *that, ExecutionEngine *e);
 };

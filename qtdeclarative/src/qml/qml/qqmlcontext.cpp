@@ -57,7 +57,6 @@ QQmlContextPrivate::QQmlContextPrivate()
 /*!
     \class QQmlContext
     \brief The QQmlContext class defines a context within a QML engine.
-    \mainclass
     \inmodule QtQml
 
     Contexts allow data to be exposed to the QML components instantiated by the
@@ -585,9 +584,9 @@ void QQmlContextData::clearContext()
 {
     emitDestruction();
 
-    QQmlAbstractExpression *expression = expressions;
+    QQmlJavaScriptExpression *expression = expressions;
     while (expression) {
-        QQmlAbstractExpression *nextExpression = expression->m_nextExpression;
+        QQmlJavaScriptExpression *nextExpression = expression->m_nextExpression;
 
         expression->m_prevExpression = 0;
         expression->m_nextExpression = 0;
@@ -652,9 +651,9 @@ void QQmlContextData::setParent(QQmlContextData *p, bool parentTakesOwnership)
     }
 }
 
-void QQmlContextData::refreshExpressionsRecursive(QQmlAbstractExpression *expression)
+void QQmlContextData::refreshExpressionsRecursive(QQmlJavaScriptExpression *expression)
 {
-    QQmlAbstractExpression::DeleteWatcher w(expression);
+    QQmlJavaScriptExpression::DeleteWatcher w(expression);
 
     if (expression->m_nextExpression)
         refreshExpressionsRecursive(expression->m_nextExpression);
@@ -808,7 +807,7 @@ QV4::IdentifierHash<int> &QQmlContextData::propertyNames() const
 {
     if (propertyNameCache.isEmpty()) {
         propertyNameCache = QV4::IdentifierHash<int>(QV8Engine::getV4(engine->handle()));
-        for (QHash<int, int>::ConstIterator it = objectIndexToId.begin(), end = objectIndexToId.end();
+        for (QHash<int, int>::ConstIterator it = objectIndexToId.cbegin(), end = objectIndexToId.cend();
              it != end; ++it) {
             const QV4::CompiledData::Object *obj = typeCompilationUnit->data->objectAt(it.key());
             const QString name = typeCompilationUnit->data->stringAt(obj->idIndex);

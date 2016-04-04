@@ -35,8 +35,8 @@
 **
 ****************************************************************************/
 
-#ifndef QT3D_QRAY3D_H
-#define QT3D_QRAY3D_H
+#ifndef QT3DCORE_QRAY3D_H
+#define QT3DCORE_QRAY3D_H
 
 #include <Qt3DCore/qt3dcore_global.h>
 #include <QtGui/qvector3d.h>
@@ -44,13 +44,13 @@
 
 QT_BEGIN_NAMESPACE
 
-namespace Qt3D {
+namespace Qt3DCore {
 
 class QT3DCORESHARED_EXPORT QRay3D
 {
 public:
     QRay3D();
-    explicit QRay3D(const QVector3D &origin, const QVector3D &direction = QVector3D(0.0f, 0.0f, 1.0f));
+    explicit QRay3D(const QVector3D &origin, const QVector3D &direction = QVector3D(0.0f, 0.0f, 1.0f), float distance = 1.0f);
     ~QRay3D();
 
     QVector3D origin() const;
@@ -58,6 +58,9 @@ public:
 
     QVector3D direction() const;
     void setDirection(const QVector3D &value);
+
+    float distance() const;
+    void setDistance(float distance);
 
     bool contains(const QVector3D &point) const;
     bool contains(const QRay3D &ray) const;
@@ -78,27 +81,28 @@ public:
 private:
     QVector3D m_origin;
     QVector3D m_direction;
+    float m_distance;
 };
 
 #ifndef QT_NO_DEBUG_STREAM
-QT3DCORESHARED_EXPORT QDebug operator<<(QDebug dbg, const Qt3D::QRay3D &ray);
+QT3DCORESHARED_EXPORT QDebug operator<<(QDebug dbg, const Qt3DCore::QRay3D &ray);
 #endif
 
 #ifndef QT_NO_DATASTREAM
-QT3DCORESHARED_EXPORT QDataStream &operator<<(QDataStream &stream, const Qt3D::QRay3D &ray);
-QT3DCORESHARED_EXPORT QDataStream &operator>>(QDataStream &stream, Qt3D::QRay3D &ray);
+QT3DCORESHARED_EXPORT QDataStream &operator<<(QDataStream &stream, const Qt3DCore::QRay3D &ray);
+QT3DCORESHARED_EXPORT QDataStream &operator>>(QDataStream &stream, Qt3DCore::QRay3D &ray);
 #endif
 
-} // namespace Qt3D
+} // namespace Qt3DCore
 
 QT_END_NAMESPACE
 
-inline bool qFuzzyCompare(const Qt3D::QRay3D &ray1, const Qt3D::QRay3D &ray2)
+inline bool qFuzzyCompare(const Qt3DCore::QRay3D &ray1, const Qt3DCore::QRay3D &ray2)
 {
     return qFuzzyCompare(ray1.origin(), ray2.origin()) &&
            qFuzzyCompare(ray1.direction(), ray2.direction());
 }
 
-Q_DECLARE_METATYPE(Qt3D::QRay3D)
+Q_DECLARE_METATYPE(Qt3DCore::QRay3D)
 
-#endif // QT3D_QRAY3D_H
+#endif // QT3DCORE_QRAY3D_H

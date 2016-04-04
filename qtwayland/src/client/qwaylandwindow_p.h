@@ -34,6 +34,17 @@
 #ifndef QWAYLANDWINDOW_H
 #define QWAYLANDWINDOW_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include <QtCore/QWaitCondition>
 #include <QtCore/QMutex>
 #include <QtGui/QIcon>
@@ -190,6 +201,7 @@ protected:
     QWaylandDisplay *mDisplay;
     QWaylandShellSurface *mShellSurface;
     QWaylandSubSurface *mSubSurfaceWindow;
+    QVector<QWaylandSubSurface *> mChildren;
 
     QWaylandAbstractDecoration *mWindowDecoration;
     bool mMouseEventsInContentArea;
@@ -223,6 +235,8 @@ protected:
 private:
     bool setWindowStateInternal(Qt::WindowState flags);
     void setGeometry_helper(const QRect &rect);
+    void initWindow();
+    void reset();
 
     void handleMouseEventWithDecoration(QWaylandInputDevice *inputDevice, const QWaylandPointerEvent &e);
 
@@ -231,6 +245,8 @@ private:
 
     static QMutex mFrameSyncMutex;
     static QWaylandWindow *mMouseGrab;
+
+    friend class QWaylandSubSurface;
 };
 
 inline QIcon QWaylandWindow::windowIcon() const

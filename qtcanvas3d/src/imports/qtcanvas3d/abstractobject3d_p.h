@@ -48,6 +48,7 @@
 #define ABSTRACTOBJECT3D_P_H
 
 #include "canvas3dcommon_p.h"
+#include "glcommandqueue_p.h"
 #include <QObject>
 #include <QThread>
 
@@ -58,21 +59,34 @@ class CanvasAbstractObject : public QObject
 {
     Q_OBJECT
     Q_PROPERTY(QString name READ name WRITE setName NOTIFY nameChanged)
+    Q_PROPERTY(bool invalidated READ invalidated NOTIFY invalidatedChanged)
 
 public:
-    explicit CanvasAbstractObject(QObject *parent = 0);
+    explicit CanvasAbstractObject(CanvasGlCommandQueue *queue, QObject *parent);
     virtual ~CanvasAbstractObject();
 
     void setName(const QString &name);
     const QString &name() const;
     bool hasSpecificName() const;
+    bool invalidated() const;
+    void setInvalidated(bool invalidated); // Internal
 
 signals:
     void nameChanged(const QString &name);
+    void invalidatedChanged(bool invalidated);
+
+protected:
+    void queueCommand(CanvasGlCommandQueue::GlCommandId id, GLint p1, GLint p2 = 0);
+    void queueCommand(CanvasGlCommandQueue::GlCommandId id, QByteArray *data,
+                      GLint p1, GLint p2 = 0);
+    CanvasGlCommandQueue *commandQueue() const { return m_commandQueue; }
 
 private:
     QString m_name;
     bool m_hasName;
+    bool m_invalidated;
+    // Not owned. Can be null pointer if the object type doesn't need OpenGL commands
+    CanvasGlCommandQueue *m_commandQueue;
 };
 
 QT_CANVAS3D_END_NAMESPACE

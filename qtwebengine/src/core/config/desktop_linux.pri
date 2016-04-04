@@ -1,21 +1,10 @@
 GYP_ARGS += "-D qt_os=\"desktop_linux\""
 
+include(linux.pri)
+
 GYP_CONFIG += \
     desktop_linux=1 \
-    toolkit_uses_gtk=0 \
-    use_aura=1 \
-    use_ash=0 \
-    use_cairo=0 \
-    use_clipboard_aurax11=0 \
-    use_cups=0 \
-    use_gconf=0 \
-    use_gio=0 \
-    use_gnome_keyring=0 \
-    use_kerberos=0 \
-    use_pango=0 \
-    host_clang=0 \
-    clang=0 \
+    enable_plugins=1 \
 
-contains(QT_CONFIG, system-jpeg): GYP_CONFIG += use_system_libjpeg=1
-
-!contains(QT_CONFIG, pulseaudio): GYP_CONFIG += use_pulseaudio=0
+linux-clang: GYP_CONFIG += clang=1 host_clang=1 clang_use_chrome_plugins=0 make_clang_dir=/usr
+else: GYP_CONFIG += clang=0 host_clang=0

@@ -280,7 +280,7 @@ static inline int compressedNumber(double d)
     if (non_int)
         return INT_MAX;
 
-    bool neg = (val >> 63);
+    bool neg = (val >> 63) != 0;
     val &= fraction_mask;
     val |= ((quint64)1 << 52);
     int res = (int)(val >> (52 - exp));
@@ -305,7 +305,7 @@ public:
     {
         d->length = str.length();
 #if Q_BYTE_ORDER == Q_BIG_ENDIAN
-        const qle_ushort *uc = (const qle_ushort *)str.unicode();
+        const ushort *uc = (const ushort *)str.unicode();
         for (int i = 0; i < str.length(); ++i)
             d->utf16[i] = uc[i];
 #else
@@ -543,7 +543,7 @@ public:
     offset tableOffset;
     // content follows here
 
-    inline bool isObject() const { return is_object; }
+    inline bool isObject() const { return !!is_object; }
     inline bool isArray() const { return !isObject(); }
 
     inline offset *table() const { return (offset *) (((char *) this) + tableOffset); }

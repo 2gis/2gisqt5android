@@ -36,7 +36,7 @@
 
 #include "platformsurfacefilter_p.h"
 
-#include <Qt3DRenderer/private/renderer_p.h>
+#include <Qt3DRender/private/renderer_p.h>
 
 #include <QMetaObject>
 #include <QPlatformSurfaceEvent>
@@ -45,17 +45,15 @@
 
 QT_BEGIN_NAMESPACE
 
-namespace Qt3D {
+namespace Qt3DRender {
 namespace Render {
 
-PlatformSurfaceFilter::PlatformSurfaceFilter(Renderer *renderer,
-                                             QObject *parent)
+PlatformSurfaceFilter::PlatformSurfaceFilter(QObject *parent)
     : QObject(parent)
     , m_obj(Q_NULLPTR)
     , m_surface(Q_NULLPTR)
-    , m_renderer(renderer)
+    , m_renderer(Q_NULLPTR)
 {
-    Q_ASSERT(m_renderer);
     qRegisterMetaType<QSurface *>("QSurface*");
 }
 
@@ -75,6 +73,11 @@ void PlatformSurfaceFilter::setOffscreenSurface(QOffscreenSurface *offscreen)
     setSurface(offscreen);
 }
 
+void PlatformSurfaceFilter::setRenderer(AbstractRenderer *renderer)
+{
+    m_renderer = renderer;
+}
+
 bool PlatformSurfaceFilter::eventFilter(QObject *obj, QEvent *e)
 {
     if (obj == m_obj && e->type() == QEvent::PlatformSurface) {
@@ -86,6 +89,7 @@ bool PlatformSurfaceFilter::eventFilter(QObject *obj, QEvent *e)
             break;
 
         case QPlatformSurfaceEvent::SurfaceAboutToBeDestroyed:
+            setSurface<QWindow>(Q_NULLPTR);
             setRendererSurface(Q_NULLPTR);
             break;
 
@@ -93,6 +97,11 @@ bool PlatformSurfaceFilter::eventFilter(QObject *obj, QEvent *e)
             qCritical("Unknown surface type");
             Q_UNREACHABLE();
         }
+    }
+
+    if (obj == m_obj && e->type() == QEvent::Expose) {
+        QExposeEvent *ev = static_cast<QExposeEvent *>(e);
+        m_renderer->setSurfaceExposed(!ev->region().isEmpty());
     }
     return false;
 }
@@ -108,10 +117,11 @@ void PlatformSurfaceFilter::setRendererSurface(QSurface *surface)
     // draw calls. Only when the frame finishes and the mutex is unlocked does
     // this call to Renderer::setSurface continue. Thereby blocking the main
     // thread from destroying the platform surface before we are ready.
-    m_renderer->setSurface(surface);
+    if (m_renderer != Q_NULLPTR)
+        m_renderer->setSurface(surface);
 }
 
 } // namespace Render
-} // namespace Qt3D
+} // namespace Qt3DRender
 
 QT_END_NAMESPACE

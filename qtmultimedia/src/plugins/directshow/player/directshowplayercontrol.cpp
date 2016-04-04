@@ -53,17 +53,6 @@ static int volumeToDecibels(int volume)
     }
 }
 
-static int decibelsToVolume(int dB)
-{
-    if (dB == -10000) {
-        return 0;
-    } else if (dB == 0) {
-        return 100;
-    } else {
-        return qRound(100 * qPow(10, qreal(dB) / 5000));
-    }
-}
-
 DirectShowPlayerControl::DirectShowPlayerControl(DirectShowPlayerService *service, QObject *parent)
     : QMediaPlayerControl(parent)
     , m_service(service)
@@ -73,8 +62,9 @@ DirectShowPlayerControl::DirectShowPlayerControl(DirectShowPlayerService *servic
     , m_status(QMediaPlayer::NoMedia)
     , m_error(QMediaPlayer::NoError)
     , m_streamTypes(0)
-    , m_muteVolume(-1)
-    , m_position(0)
+    , m_volume(100)
+    , m_muted(false)
+    , m_emitPosition(-1)
     , m_pendingPosition(-1)
     , m_duration(0)
     , m_playbackRate(0)
@@ -108,11 +98,16 @@ qint64 DirectShowPlayerControl::position() const
     if (m_pendingPosition != -1)
         return m_pendingPosition;
 
-    return const_cast<qint64 &>(m_position) = m_service->position();
+    return m_service->position();
 }
 
 void DirectShowPlayerControl::setPosition(qint64 position)
 {
+    if (m_status == QMediaPlayer::EndOfMedia) {
+        m_status = QMediaPlayer::LoadedMedia;
+        emit mediaStatusChanged(m_status);
+    }
+
     if (m_state == QMediaPlayer::StoppedState && m_pendingPosition != position) {
         m_pendingPosition = position;
         emit positionChanged(m_pendingPosition);
@@ -125,63 +120,47 @@ void DirectShowPlayerControl::setPosition(qint64 position)
 
 int DirectShowPlayerControl::volume() const
 {
-    if (m_muteVolume >= 0) {
-        return m_muteVolume;
-    } else if (m_audio) {
-        long dB = 0;
-
-        m_audio->get_Volume(&dB);
-
-        return decibelsToVolume(dB);
-    } else {
-        return 0;
-    }
+    return m_volume;
 }
 
 void DirectShowPlayerControl::setVolume(int volume)
 {
     int boundedVolume = qBound(0, volume, 100);
 
-    if (m_muteVolume >= 0) {
-        m_muteVolume = boundedVolume;
+    if (m_volume == boundedVolume)
+        return;
 
-        emit volumeChanged(m_muteVolume);
-    } else if (m_audio) {
-        m_audio->put_Volume(volumeToDecibels(volume));
+    m_volume = boundedVolume;
 
-        emit volumeChanged(boundedVolume);
-    }
+    if (!m_muted)
+        setVolumeHelper(m_volume);
+
+    emit volumeChanged(m_volume);
 }
 
 bool DirectShowPlayerControl::isMuted() const
 {
-    return m_muteVolume >= 0;
+    return m_muted;
 }
 
 void DirectShowPlayerControl::setMuted(bool muted)
 {
-    if (muted && m_muteVolume < 0) {
-        if (m_audio) {
-            long dB = 0;
+    if (m_muted == muted)
+        return;
 
-            m_audio->get_Volume(&dB);
+    m_muted = muted;
 
-            m_muteVolume = decibelsToVolume(dB);
+    setVolumeHelper(m_muted ? 0 : m_volume);
 
-            m_audio->put_Volume(-10000);
-        } else {
-            m_muteVolume = 0;
-        }
+    emit mutedChanged(m_muted);
+}
 
-        emit mutedChanged(muted);
-    } else if (!muted && m_muteVolume >= 0) {
-        if (m_audio) {
-            m_audio->put_Volume(volumeToDecibels(m_muteVolume));
-        }
-        m_muteVolume = -1;
+void DirectShowPlayerControl::setVolumeHelper(int volume)
+{
+    if (!m_audio)
+        return;
 
-        emit mutedChanged(muted);
-    }
+    m_audio->put_Volume(volumeToDecibels(volume));
 }
 
 int DirectShowPlayerControl::bufferStatus() const
@@ -235,6 +214,9 @@ const QIODevice *DirectShowPlayerControl::mediaStream() const
 
 void DirectShowPlayerControl::setMedia(const QMediaContent &media, QIODevice *stream)
 {
+    m_pendingPosition = -1;
+    m_emitPosition = -1;
+
     m_media = media;
     m_stream = stream;
 
@@ -248,34 +230,41 @@ void DirectShowPlayerControl::setMedia(const QMediaContent &media, QIODevice *st
 
 void DirectShowPlayerControl::play()
 {
-    if (m_status == QMediaPlayer::NoMedia)
-        return;
-    if (m_status == QMediaPlayer::InvalidMedia) {
-        setMedia(m_media, m_stream);
-        if (m_error != QMediaPlayer::NoError)
-            return;
-    }
-    m_service->play();
-    if (m_pendingPosition != -1)
-        setPosition(m_pendingPosition);
-    emit stateChanged(m_state = QMediaPlayer::PlayingState);
+    playOrPause(QMediaPlayer::PlayingState);
 }
 
 void DirectShowPlayerControl::pause()
 {
-    if (m_status == QMediaPlayer::NoMedia)
+    playOrPause(QMediaPlayer::PausedState);
+}
+
+void DirectShowPlayerControl::playOrPause(QMediaPlayer::State state)
+{
+    if (m_status == QMediaPlayer::NoMedia || state == QMediaPlayer::StoppedState)
         return;
     if (m_status == QMediaPlayer::InvalidMedia) {
         setMedia(m_media, m_stream);
         if (m_error != QMediaPlayer::NoError)
             return;
     }
-    m_service->pause();
-    emit stateChanged(m_state = QMediaPlayer::PausedState);
+
+    m_emitPosition = -1;
+    m_state = state;
+
+    if (m_pendingPosition != -1)
+        setPosition(m_pendingPosition);
+
+    if (state == QMediaPlayer::PausedState)
+        m_service->pause();
+    else
+        m_service->play();
+
+    emit stateChanged(m_state);
 }
 
 void DirectShowPlayerControl::stop()
 {
+    m_emitPosition = -1;
     m_service->stop();
     emit stateChanged(m_state = QMediaPlayer::StoppedState);
 }
@@ -307,8 +296,8 @@ void DirectShowPlayerControl::emitPropertyChanges()
         emit videoAvailableChanged(m_streamTypes & DirectShowPlayerService::VideoStream);
     }
 
-    if (properties & PositionProperty)
-        emit positionChanged(m_position);
+    if (properties & PositionProperty && m_emitPosition != -1)
+        emit positionChanged(m_emitPosition);
 
     if (properties & DurationProperty)
         emit durationChanged(m_duration);
@@ -389,6 +378,7 @@ void DirectShowPlayerControl::updateAudioOutput(IBaseFilter *filter)
         m_audio->Release();
 
     m_audio = com_cast<IBasicAudio>(filter, IID_IBasicAudio);
+    setVolumeHelper(m_muted ? 0 : m_volume);
 }
 
 void DirectShowPlayerControl::updateError(QMediaPlayer::Error error, const QString &errorString)
@@ -402,8 +392,8 @@ void DirectShowPlayerControl::updateError(QMediaPlayer::Error error, const QStri
 
 void DirectShowPlayerControl::updatePosition(qint64 position)
 {
-    if (m_position != position) {
-        m_position = position;
+    if (m_emitPosition != position) {
+        m_emitPosition = position;
 
         scheduleUpdate(PositionProperty);
     }

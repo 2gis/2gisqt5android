@@ -34,31 +34,69 @@
 **
 ****************************************************************************/
 
-#ifndef QT3D_QASPECTFACTORY_P_H
-#define QT3D_QASPECTFACTORY_P_H
+#ifndef QT3DCORE_QASPECTFACTORY_P_H
+#define QT3DCORE_QASPECTFACTORY_P_H
+
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists for the convenience
+// of other Qt classes.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
 
 #include <QHash>
-#include <QSharedData>
-#include <QString>
+#include <QStringList>
 
-#include "qaspectfactory.h"
+#include <Qt3DCore/private/qt3dcore_global_p.h>
 
 QT_BEGIN_NAMESPACE
 
-namespace Qt3D {
+struct QMetaObject;
+class QObject;
 
-class QAspectFactory;
+namespace Qt3DCore {
 
-class QAspectFactoryPrivate : public QSharedData
+class QAbstractAspect;
+
+class QT3DCORE_PRIVATE_EXPORT QAspectFactory
 {
 public:
-    QAspectFactoryPrivate();
+    typedef QAbstractAspect *(*CreateFunction)(QObject *);
 
+    QAspectFactory();
+    QAspectFactory(const QAspectFactory &other);
+    ~QAspectFactory();
+    QAspectFactory &operator=(const QAspectFactory &other);
+#ifdef Q_COMPILER_RVALUE_REFS
+    QAspectFactory &operator=(QAspectFactory &&other) Q_DECL_NOTHROW
+    {
+        m_factories.swap(other.m_factories);
+        m_aspectNames.swap(other.m_aspectNames);
+        return *this;
+    }
+#endif
+
+    inline void swap(QAspectFactory &other) Q_DECL_NOTHROW
+    {
+        m_factories.swap(other.m_factories);
+        m_aspectNames.swap(other.m_aspectNames);
+    }
+
+    QStringList availableFactories() const;
+    QAbstractAspect *createAspect(const QString &aspect, QObject *parent = 0) const;
+    QString aspectName(QAbstractAspect *aspect) const;
+
+private:
     QHash<QString, QAspectFactory::CreateFunction> m_factories;
+    QHash<const QMetaObject*, QString> m_aspectNames;
 };
 
-} // Qt3D
+} // namespace Qt3DCore
 
 QT_END_NAMESPACE
 
-#endif // QT3D_QASPECTFACTORY_P_H
+#endif // QT3DCORE_QASPECTFACTORY_P_H

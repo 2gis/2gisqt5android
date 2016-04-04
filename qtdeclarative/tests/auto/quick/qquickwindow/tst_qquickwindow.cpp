@@ -277,6 +277,10 @@ class tst_qquickwindow : public QQmlDataTest
 {
     Q_OBJECT
 public:
+    tst_qquickwindow()
+    {
+        QQuickWindow::setDefaultAlphaBuffer(true);
+    }
 
 private slots:
     void initTestCase()
@@ -504,7 +508,7 @@ void tst_qquickwindow::touchEvent_basic()
     window->resize(250, 250);
     window->setPosition(100, 100);
     window->show();
-    QVERIFY(QTest::qWaitForWindowExposed(window));
+    QVERIFY(QTest::qWaitForWindowActive(window));
 
     TestTouchItem *bottomItem = new TestTouchItem(window->contentItem());
     bottomItem->setObjectName("Bottom Item");
@@ -635,7 +639,7 @@ void tst_qquickwindow::touchEvent_propagation()
     window->setPosition(100, 100);
     window->setTitle(QTest::currentTestFunction());
     window->show();
-    QVERIFY(QTest::qWaitForWindowExposed(window));
+    QVERIFY(QTest::qWaitForWindowActive(window));
 
     TestTouchItem *bottomItem = new TestTouchItem(window->contentItem());
     bottomItem->setObjectName("Bottom Item");
@@ -769,18 +773,18 @@ void tst_qquickwindow::touchEvent_cancel()
     window->setPosition(100, 100);
     window->setTitle(QTest::currentTestFunction());
     window->show();
-    QVERIFY(QTest::qWaitForWindowExposed(window));
+    QVERIFY(QTest::qWaitForWindowActive(window));
 
     TestTouchItem *item = new TestTouchItem(window->contentItem());
     item->setPosition(QPointF(50, 50));
     item->setSize(QSizeF(150, 150));
 
-    QPointF pos(10, 10);
-    QTest::touchEvent(window, touchDevice).press(0, item->mapToScene(pos).toPoint(),window);
+    QPointF pos(50, 50);
+    QTest::touchEvent(window, touchDevice).press(0, item->mapToScene(pos).toPoint(), window);
     QCoreApplication::processEvents();
 
     QTRY_COMPARE(item->lastEvent.touchPoints.count(), 1);
-    TouchEventData d = makeTouchData(QEvent::TouchBegin, window, Qt::TouchPointPressed, makeTouchPoint(item,pos));
+    TouchEventData d = makeTouchData(QEvent::TouchBegin, window, Qt::TouchPointPressed, makeTouchPoint(item, pos));
     COMPARE_TOUCH_DATA(item->lastEvent, d);
     item->reset();
 
@@ -803,7 +807,7 @@ void tst_qquickwindow::touchEvent_reentrant()
     window->setPosition(100, 100);
     window->setTitle(QTest::currentTestFunction());
     window->show();
-    QVERIFY(QTest::qWaitForWindowExposed(window));
+    QVERIFY(QTest::qWaitForWindowActive(window));
 
     TestTouchItem *item = new TestTouchItem(window->contentItem());
 
@@ -978,7 +982,7 @@ void tst_qquickwindow::clearWindow()
 
     delete window;
 
-    QVERIFY(item->window() == 0);
+    QVERIFY(!item->window());
 
     delete item;
 }
@@ -993,7 +997,7 @@ void tst_qquickwindow::mouseFiltering()
     window->setPosition(100, 100);
     window->setTitle(QTest::currentTestFunction());
     window->show();
-    QVERIFY(QTest::qWaitForWindowExposed(window));
+    QVERIFY(QTest::qWaitForWindowActive(window));
 
     TestTouchItem *bottomItem = new TestTouchItem(window->contentItem());
     bottomItem->setObjectName("Bottom Item");
@@ -1081,17 +1085,25 @@ void tst_qquickwindow::defaultState()
 void tst_qquickwindow::grab_data()
 {
     QTest::addColumn<bool>("visible");
-    QTest::newRow("visible") << true;
-    QTest::newRow("invisible") << false;
+    QTest::addColumn<bool>("alpha");
+    QTest::newRow("visible,opaque") << true << false;
+    QTest::newRow("invisible,opaque") << false << false;
+    QTest::newRow("visible,transparent") << true << true;
+    QTest::newRow("invisible,transparent") << false << true;
 }
 
 void tst_qquickwindow::grab()
 {
     QFETCH(bool, visible);
+    QFETCH(bool, alpha);
 
     QQuickWindow window;
     window.setTitle(QLatin1String(QTest::currentTestFunction()) + QLatin1Char(' ') + QLatin1String(QTest::currentDataTag()));
-    window.setColor(Qt::red);
+    if (alpha) {
+        window.setColor(QColor(0, 0, 0, 0));
+    } else {
+        window.setColor(Qt::red);
+    }
 
     window.resize(250, 250);
 
@@ -1103,9 +1115,14 @@ void tst_qquickwindow::grab()
     }
 
     QImage content = window.grabWindow();
-    QCOMPARE(content.width(), window.width());
-    QCOMPARE(content.height(), window.height());
-    QCOMPARE((uint) content.convertToFormat(QImage::Format_RGB32).pixel(0, 0), (uint) 0xffff0000);
+    QCOMPARE(content.width(), int(window.width() * window.devicePixelRatio()));
+    QCOMPARE(content.height(), int(window.height() * window.devicePixelRatio()));
+
+    if (alpha) {
+        QCOMPARE((uint) content.convertToFormat(QImage::Format_ARGB32_Premultiplied).pixel(0, 0), (uint) 0x00000000);
+    } else {
+        QCOMPARE((uint) content.convertToFormat(QImage::Format_RGB32).pixel(0, 0), (uint) 0xffff0000);
+    }
 }
 
 void tst_qquickwindow::multipleWindows()
@@ -1232,7 +1249,7 @@ void tst_qquickwindow::headless()
 
     if (threaded) {
         QTRY_COMPARE(invalidated.size(), 1);
-        QVERIFY(window->openglContext() == 0);
+        QVERIFY(!window->openglContext());
     }
 
     if (QGuiApplication::platformName() == QLatin1String("windows")
@@ -1242,7 +1259,7 @@ void tst_qquickwindow::headless()
 
     // Destroy the native windowing system buffers
     window->destroy();
-    QVERIFY(window->handle() == 0);
+    QVERIFY(!window->handle());
 
     // Show and verify that we are back and running
     window->show();
@@ -1452,7 +1469,7 @@ void tst_qquickwindow::cursor()
     clippedItem.setParentItem(&clippingItem);
 
     window.show();
-    QVERIFY(QTest::qWaitForWindowExposed(&window));
+    QVERIFY(QTest::qWaitForWindowActive(&window));
 
     // Position the cursor over the parent and child item and the clipped section of clippedItem.
     QTest::mouseMove(&window, QPoint(100, 100));
@@ -1609,7 +1626,7 @@ void tst_qquickwindow::hideThenDelete()
                 if (!persistentGL)
                     QVERIFY(openglDestroyed->size() > 0);
                 else
-                    QVERIFY(openglDestroyed->size() == 0);
+                    QCOMPARE(openglDestroyed->size(), 0);
             } else {
                 QCOMPARE(sgInvalidated->size(), 0);
                 QCOMPARE(openglDestroyed->size(), 0);
@@ -1693,7 +1710,7 @@ void tst_qquickwindow::requestActivate()
     window1->requestActivate();                 // and then transfer the focus to window1
 
     QTRY_COMPARE(QGuiApplication::focusWindow(), window1.data());
-    QVERIFY(window1->isActive() == true);
+    QVERIFY(window1->isActive());
 
     QQuickItem *item = QQuickVisualTestUtil::findItem<QQuickItem>(window1->contentItem(), "item1");
     QVERIFY(item);
@@ -1805,7 +1822,7 @@ void tst_qquickwindow::crashWhenHoverItemDeleted()
     QVERIFY(!window.isNull());
     window->setTitle(QTest::currentTestFunction());
     window->show();
-    QTest::qWaitForWindowExposed(window.data());
+    QTest::qWaitForWindowActive(window.data());
 
     // Simulate a move from the first rectangle to the second. Crash will happen in here
     // Moving instantaneously from (0, 99) to (0, 102) does not cause the crash
@@ -1844,7 +1861,7 @@ void tst_qquickwindow::qobjectEventFilter_touch()
     window.setPosition(100, 100);
     window.setTitle(QTest::currentTestFunction());
     window.show();
-    QVERIFY(QTest::qWaitForWindowExposed(&window));
+    QVERIFY(QTest::qWaitForWindowActive(&window));
 
     TestTouchItem *item = new TestTouchItem(window.contentItem());
     item->setSize(QSizeF(150, 150));
@@ -1870,7 +1887,7 @@ void tst_qquickwindow::qobjectEventFilter_key()
     window.setPosition(100, 100);
     window.setTitle(QTest::currentTestFunction());
     window.show();
-    QVERIFY(QTest::qWaitForWindowExposed(&window));
+    QVERIFY(QTest::qWaitForWindowActive(&window));
 
     TestTouchItem *item = new TestTouchItem(window.contentItem());
     item->setSize(QSizeF(150, 150));
@@ -1899,8 +1916,7 @@ void tst_qquickwindow::qobjectEventFilter_mouse()
     window.setPosition(100, 100);
     window.setTitle(QTest::currentTestFunction());
     window.show();
-
-    QVERIFY(QTest::qWaitForWindowExposed(&window));
+    QVERIFY(QTest::qWaitForWindowActive(&window));
 
     TestTouchItem *item = new TestTouchItem(window.contentItem());
     item->setSize(QSizeF(150, 150));
@@ -1909,6 +1925,7 @@ void tst_qquickwindow::qobjectEventFilter_mouse()
     item->installEventFilter(&eventFilter);
 
     QPoint point = item->mapToScene(QPointF(10, 10)).toPoint();
+    QTest::mouseMove(&window, point);
     QTest::mousePress(&window, Qt::LeftButton, Qt::NoModifier, point);
 
     QVERIFY(eventFilter.events.contains((int)QEvent::MouseButtonPress));
@@ -2048,44 +2065,108 @@ public:
     static int deleted;
 };
 
+class GlRenderJob : public QRunnable
+{
+public:
+    GlRenderJob(GLubyte *buf) : readPixel(buf), mutex(0), condition(0) {}
+    ~GlRenderJob() {}
+    void run() {
+        QOpenGLContext::currentContext()->functions()->glClearColor(1.0f, 0, 0, 1.0f);
+        QOpenGLContext::currentContext()->functions()->glClear(GL_COLOR_BUFFER_BIT);
+        QOpenGLContext::currentContext()->functions()->glReadPixels(0, 0, 1, 1, GL_RGBA,
+                                                                    GL_UNSIGNED_BYTE,
+                                                                    (void *)readPixel);
+        if (mutex) {
+            mutex->lock();
+            condition->wakeOne();
+            mutex->unlock();
+        }
+    }
+    GLubyte *readPixel;
+    QMutex *mutex;
+    QWaitCondition *condition;
+};
+
 int RenderJob::deleted = 0;
 
 void tst_qquickwindow::testRenderJob()
 {
     QList<QQuickWindow::RenderStage> completedJobs;
 
-    QQuickWindow window;
-    window.setTitle(QTest::currentTestFunction());
-
     QQuickWindow::RenderStage stages[] = {
         QQuickWindow::BeforeSynchronizingStage,
         QQuickWindow::AfterSynchronizingStage,
         QQuickWindow::BeforeRenderingStage,
         QQuickWindow::AfterRenderingStage,
-        QQuickWindow::AfterSwapStage
+        QQuickWindow::AfterSwapStage,
+        QQuickWindow::NoStage
     };
-    // Schedule the jobs
-    for (int i=0; i<5; ++i)
-        window.scheduleRenderJob(new RenderJob(stages[i], &completedJobs), stages[i]);
-    window.show();
 
-    QTRY_COMPARE(completedJobs.size(), 5);
+    const int numJobs = 6;
 
-    for (int i=0; i<5; ++i) {
-        QCOMPARE(completedJobs.at(i), stages[i]);
+    {
+        QQuickWindow window;
+        window.setTitle(QTest::currentTestFunction());
+        RenderJob::deleted = 0;
+
+        // Schedule the jobs
+        for (int i = 0; i < numJobs; ++i)
+            window.scheduleRenderJob(new RenderJob(stages[i], &completedJobs), stages[i]);
+        window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));
+
+        // All jobs should be deleted
+        QTRY_COMPARE(RenderJob::deleted, numJobs);
+
+        // The NoStage job is not completed, if it is issued when there is no context,
+        // but the rest will be queued and completed once relevant render stage is hit.
+        QCOMPARE(completedJobs.size(), numJobs - 1);
+
+        // Verify jobs were completed in correct order
+        for (int i = 0; i < numJobs - 1; ++i)
+            QCOMPARE(completedJobs.at(i), stages[i]);
+
+
+        // Check that NoStage job gets executed if it is scheduled when window is exposed
+        completedJobs.clear();
+        RenderJob::deleted = 0;
+        window.scheduleRenderJob(new RenderJob(QQuickWindow::NoStage, &completedJobs),
+                                 QQuickWindow::NoStage);
+        QTRY_COMPARE(RenderJob::deleted, 1);
+        QCOMPARE(completedJobs.size(), 1);
+
+        // Do a synchronized GL job.
+        GLubyte readPixel[4] = {0, 0, 0, 0};
+        GlRenderJob *glJob = new GlRenderJob(readPixel);
+        if (window.openglContext()->thread() != QThread::currentThread()) {
+            QMutex mutex;
+            QWaitCondition condition;
+            glJob->mutex = &mutex;
+            glJob->condition = &condition;
+            mutex.lock();
+            window.scheduleRenderJob(glJob, QQuickWindow::NoStage);
+            condition.wait(&mutex);
+            mutex.unlock();
+        } else {
+            window.scheduleRenderJob(glJob, QQuickWindow::NoStage);
+        }
+        QCOMPARE(int(readPixel[0]), 255);
+        QCOMPARE(int(readPixel[1]), 0);
+        QCOMPARE(int(readPixel[2]), 0);
+        QCOMPARE(int(readPixel[3]), 255);
     }
 
-    // Verify that jobs are deleted when window has not been rendered at all...
+    // Verify that jobs are deleted when window is not rendered at all
     completedJobs.clear();
     RenderJob::deleted = 0;
     {
         QQuickWindow window2;
-        for (int i=0; i<5; ++i) {
+        for (int i = 0; i < numJobs; ++i) {
             window2.scheduleRenderJob(new RenderJob(stages[i], &completedJobs), stages[i]);
         }
     }
+    QTRY_COMPARE(RenderJob::deleted, numJobs);
     QCOMPARE(completedJobs.size(), 0);
-    QCOMPARE(RenderJob::deleted, 5);
 }
 
 class EventCounter : public QQuickRectangle
@@ -2144,7 +2225,7 @@ void tst_qquickwindow::testHoverChildMouseEventFilter()
     window.setPosition(100, 100);
     window.setTitle(QTest::currentTestFunction());
     window.show();
-    QVERIFY(QTest::qWaitForWindowExposed(&window));
+    QVERIFY(QTest::qWaitForWindowActive(&window));
 
     EventCounter *bottomItem = new EventCounter(window.contentItem());
     bottomItem->setObjectName("Bottom Item");

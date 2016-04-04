@@ -46,10 +46,10 @@ additional imports:
 \endlist
 
 \note The \l {QJSEngine::}{globalObject()} function cannot be used to modify
-the global object of a \l QQmlEngine by setting properties on it
-(via \l {QJSValue::}{setProperty()}).
+the global object of a \l QQmlEngine. For more information about this, see
+\l {JavaScript Environment Restrictions}.
 
-\keyword XMLHttpRequest
+\target XMLHttpRequest
 \section1 XMLHttpRequest
 
 The XMLHttpRequest object, which can be used to asynchronously obtain

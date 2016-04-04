@@ -150,6 +150,12 @@ Item {
             tumbler.setCurrentIndexAt(0, 1);
             tryCompare(tumbler.__viewAt(0), "offset", 4);
             compare(tumbler.currentIndexAt(0), 1);
+
+            tumbler.setCurrentIndexAt(0, 0);
+            waitForRendering(tumbler);
+            tumbler.setCurrentIndexAt(0, tumbler.getColumn(0).model.count-1, 1000);
+            tryCompare(tumbler.__viewAt(0), "offset", 1);
+            compare(tumbler.currentIndexAt(0), tumbler.getColumn(0).model.count-1);
         }
 
         function test_visible() {
@@ -175,6 +181,9 @@ Item {
         }
 
         function test_keyboardNavigation() {
+            if (Qt.platform.os === "osx")
+                skip("OS X doesn't allow tab focus for certain controls by default");
+
             var column = simpleColumn.createObject(tumbler);
             compare(tumbler.addColumn(column), column);
             column = simpleColumn.createObject(tumbler);
@@ -244,6 +253,9 @@ Item {
         }
 
         function test_itemsCorrectlyPositioned() {
+            if (Qt.platform.os === "osx")
+                skip("OS X doesn't allow tab focus for certain controls by default");
+
             // TODO: rewrite this test so that it tests supported usecases.
             // Somehow it works with the Base style. It could be rewritten to use an
             // equal amount of items for the model and visibleItemCount, judging from
@@ -346,6 +358,9 @@ Item {
         }
 
         function test_focusPastLastColumn() {
+            if (Qt.platform.os === "osx")
+                skip("OS X doesn't allow tab focus for certain controls by default");
+
             var column = dayOfMonthColumn.createObject(tumbler);
             compare(tumbler.addColumn(column), column);
             column = yearColumn.createObject(tumbler);

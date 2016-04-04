@@ -32,6 +32,7 @@
 ****************************************************************************/
 
 #include <QtQml/qqmlengine.h>
+#include <QtQml/private/qqmlengine_p.h>
 #include <QtQml/private/qqmlmetatype_p.h>
 #include <QtQml/private/qqmlopenmetaobject_p.h>
 #include <QtQuick/private/qquickevents_p_p.h>
@@ -73,6 +74,10 @@
 #  endif
 #include <qt_windows.h>
 #endif
+
+
+static const uint qtQmlMajorVersion = 2;
+static const uint qtQmlMinorVersion = 2;
 
 QString pluginImportPath;
 bool verbose = false;
@@ -129,11 +134,11 @@ void collectReachableMetaObjects(QObject *object, QSet<const QMetaObject *> *met
     }
 }
 
-void collectReachableMetaObjects(const QQmlType *ty, QSet<const QMetaObject *> *metas)
+void collectReachableMetaObjects(QQmlEnginePrivate *engine, const QQmlType *ty, QSet<const QMetaObject *> *metas)
 {
     collectReachableMetaObjects(ty->metaObject(), metas, ty->isExtendedType());
-    if (ty->attachedPropertiesType())
-        collectReachableMetaObjects(ty->attachedPropertiesType(), metas);
+    if (ty->attachedPropertiesType(engine))
+        collectReachableMetaObjects(ty->attachedPropertiesType(engine), metas);
 }
 
 /* We want to add the MetaObject for 'Qt' to the list, this is a
@@ -151,8 +156,9 @@ public:
 */
 static QHash<QByteArray, QSet<const QQmlType *> > qmlTypesByCppName;
 
-// No different versioning possible for a composite type.
-static QMap<QString, const QQmlType * > qmlTypesByCompositeName;
+/* A composite type is completely specified by name, major version and minor version.
+*/
+static QMap<QString, QSet<const QQmlType *> > qmlTypesByCompositeName;
 
 static QHash<QByteArray, QByteArray> cppToId;
 
@@ -195,13 +201,13 @@ QByteArray convertToId(const QMetaObject *mo)
 
 
 // Collect all metaobjects for types registered with qmlRegisterType() without parameters
-void collectReachableMetaObjectsWithoutQmlName( QSet<const QMetaObject *>& metas ) {
+void collectReachableMetaObjectsWithoutQmlName(QQmlEnginePrivate *engine, QSet<const QMetaObject *>& metas ) {
     foreach (const QQmlType *ty, QQmlMetaType::qmlAllTypes()) {
         if ( ! metas.contains(ty->metaObject()) ) {
             if (!ty->isComposite()) {
-                collectReachableMetaObjects(ty, &metas);
+                collectReachableMetaObjects(engine, ty, &metas);
             } else {
-                qmlTypesByCompositeName[ty->elementName()] = ty;
+                qmlTypesByCompositeName[ty->elementName()].insert(ty);
             }
        }
     }
@@ -225,9 +231,9 @@ QSet<const QMetaObject *> collectReachableMetaObjects(QQmlEngine *engine,
             qmlTypesByCppName[ty->metaObject()->className()].insert(ty);
             if (ty->isExtendedType())
                 extensions[ty->typeName()].insert(ty->metaObject()->className());
-            collectReachableMetaObjects(ty, &metas);
+            collectReachableMetaObjects(QQmlEnginePrivate::get(engine), ty, &metas);
         } else {
-            qmlTypesByCompositeName[ty->elementName()] = ty;
+            qmlTypesByCompositeName[ty->elementName()].insert(ty);
         }
     }
 
@@ -324,7 +330,7 @@ QSet<const QMetaObject *> collectReachableMetaObjects(QQmlEngine *engine,
         }
     }
 
-    collectReachableMetaObjectsWithoutQmlName(metas);
+    collectReachableMetaObjectsWithoutQmlName(QQmlEnginePrivate::get(engine), metas);
 
     return metas;
 }
@@ -374,7 +380,7 @@ public:
         if (qmlTyName.startsWith("./")) {
             qmlTyName.remove(0, 2);
         }
-        if (qmlTyName.startsWith("/")) {
+        if (qmlTyName.startsWith(QLatin1Char('/'))) {
             qmlTyName.remove(0, 1);
         }
         const QString exportString = enquote(
@@ -458,7 +464,13 @@ public:
         return prototypeName;
     }
 
-    void dumpComposite(QQmlEngine *engine, const QQmlType *compositeType, QSet<QByteArray> &defaultReachableNames)
+    void dumpComposite(QQmlEngine *engine, const QSet<const QQmlType *> &compositeType, QSet<QByteArray> &defaultReachableNames)
+    {
+        foreach (const QQmlType *type, compositeType)
+            dumpCompositeItem(engine, type, defaultReachableNames);
+    }
+
+    void dumpCompositeItem(QQmlEngine *engine, const QQmlType *compositeType, QSet<QByteArray> &defaultReachableNames)
     {
         QQmlComponent e(engine, compositeType->sourceUrl());
         if (!e.isReady()) {
@@ -484,9 +496,8 @@ public:
         qml->writeScriptBinding(QLatin1String("prototype"), enquote(prototypeName));
 
         QString qmlTyName = compositeType->qmlTypeName();
-        // name should be unique
-        qml->writeScriptBinding(QLatin1String("name"), enquote(qmlTyName));
         const QString exportString = getExportString(qmlTyName, compositeType->majorVersion(), compositeType->minorVersion());
+        qml->writeScriptBinding(QLatin1String("name"), exportString);
         qml->writeArrayBinding(QLatin1String("exports"), QStringList() << exportString);
         qml->writeArrayBinding(QLatin1String("exportMetaObjectRevisions"), QStringList() << QString::number(compositeType->minorVersion()));
         qml->writeBooleanBinding(QLatin1String("isComposite"), true);
@@ -510,7 +521,7 @@ public:
         qml->writeEndObject();
     }
 
-    void dump(const QMetaObject *meta, bool isUncreatable, bool isSingleton)
+    void dump(QQmlEnginePrivate *engine, const QMetaObject *meta, bool isUncreatable, bool isSingleton)
     {
         qml->writeStartObject("Component");
 
@@ -556,7 +567,7 @@ public:
             }
             qml->writeArrayBinding(QLatin1String("exportMetaObjectRevisions"), metaObjectRevisions);
 
-            if (const QMetaObject *attachedType = (*qmlTypes.begin())->attachedPropertiesType()) {
+            if (const QMetaObject *attachedType = (*qmlTypes.begin())->attachedPropertiesType(engine)) {
                 // Can happen when a type is registered that returns itself as attachedPropertiesType()
                 // because there is no creatable type to attach to.
                 if (attachedType != meta) {
@@ -691,7 +702,9 @@ private:
         qml->writeScriptBinding(QLatin1String("name"), enquote(QString::fromUtf8(e.name())));
 
         QList<QPair<QString, QString> > namesValues;
-        for (int index = 0; index < e.keyCount(); ++index) {
+        const int keyCount = e.keyCount();
+        namesValues.reserve(keyCount);
+        for (int index = 0; index < keyCount; ++index) {
             namesValues.append(qMakePair(enquote(QString::fromUtf8(e.key(index))), QString::number(e.value(index))));
         }
 
@@ -733,7 +746,7 @@ static bool readDependenciesData(QString dependenciesFile, const QByteArray &fil
         std::cerr << "parsing "
                   << qPrintable( dependenciesFile ) << " skipping";
         foreach (const QString &uriToSkip, urisToSkip)
-            std::cerr << " "  << qPrintable(uriToSkip);
+            std::cerr << ' '  << qPrintable(uriToSkip);
         std::cerr << std::endl;
     }
     QJsonParseError parseError;
@@ -778,12 +791,19 @@ static bool readDependenciesData(QString dependenciesFile, const QByteArray &fil
                   << ": expected an array" << std::endl;
         return false;
     }
+    // Workaround for avoiding conflicting types when no dependency has been found.
+    //
+    // qmlplugindump used to import QtQuick, so all types defined in QtQuick used to be skipped when dumping.
+    // Now that it imports only Qt, it is no longer the case: if no dependency is found all the types defined
+    // in QtQuick will be dumped, causing conflicts.
+    if (dependencies->isEmpty())
+        dependencies->push_back(QLatin1String("QtQuick 2.0"));
     return true;
 }
 
-static bool readDependenciesFile(QString dependenciesFile, QStringList *dependencies,
+static bool readDependenciesFile(const QString &dependenciesFile, QStringList *dependencies,
                                 const QStringList &urisToSkip) {
-    if (!QFileInfo(dependenciesFile).exists()) {
+    if (!QFileInfo::exists(dependenciesFile)) {
         std::cerr << "non existing dependencies file " << dependenciesFile.toStdString()
                   << std::endl;
         return false;
@@ -826,7 +846,7 @@ static bool getDependencies(const QQmlEngine &engine, const QString &pluginImpor
     if (!importScanner.waitForFinished()) {
         std::cerr << "failure to start " << qPrintable(command);
         foreach (const QString &arg, commandArgs)
-            std::cerr << " " << qPrintable(arg);
+            std::cerr << ' ' << qPrintable(arg);
         std::cerr << std::endl;
         return false;
     }
@@ -836,6 +856,14 @@ static bool getDependencies(const QQmlEngine &engine, const QString &pluginImpor
         std::cerr << "failed to proecess output of qmlimportscanner" << std::endl;
         return false;
     }
+
+    QStringList aux;
+    foreach (const QString &str, *dependencies) {
+        if (!str.startsWith("Qt.test.qtestroot"))
+            aux += str;
+    }
+    *dependencies = aux;
+
     return true;
 }
 
@@ -1047,9 +1075,13 @@ int main(int argc, char *argv[])
         getDependencies(engine, pluginImportUri, pluginImportVersion, &dependencies);
     compactDependencies(&dependencies);
 
-    // load the QtQml 2.2 builtins and the dependencies
+    QString qtQmlImportString = QString::fromLatin1("import QtQml %1.%2")
+        .arg(qtQmlMajorVersion)
+        .arg(qtQmlMinorVersion);
+
+    // load the QtQml builtins and the dependencies
     {
-        QByteArray code("import QtQml 2.2");
+        QByteArray code(qtQmlImportString.toUtf8());
         foreach (const QString &moduleToImport, dependencies) {
             code.append("\nimport ");
             code.append(moduleToImport.toUtf8());
@@ -1080,14 +1112,40 @@ int main(int argc, char *argv[])
     QSet<const QMetaObject *> metas;
 
     if (action == Builtins) {
+        foreach (const QMetaObject *m, defaultReachable) {
+            if (m->className() == QLatin1String("Qt")) {
+                metas.insert(m);
+                break;
+            }
+        }
+    } else if (pluginImportUri == QLatin1String("QtQml")) {
+        bool ok = false;
+        const uint major = pluginImportVersion.split('.')[0].toUInt(&ok, 10);
+        if (!ok) {
+            std::cerr << "Malformed version string \""<< qPrintable(pluginImportVersion) << "\"."
+                      << std::endl;
+            return EXIT_INVALIDARGUMENTS;
+        }
+        if (major != qtQmlMajorVersion) {
+            std::cerr << "Unsupported version \"" << qPrintable(pluginImportVersion)
+                      << "\": Major version number must be \"" << qtQmlMajorVersion << "\"."
+                      << std::endl;
+            return EXIT_INVALIDARGUMENTS;
+        }
         metas = defaultReachable;
+        foreach (const QMetaObject *m, defaultReachable) {
+            if (m->className() == QLatin1String("Qt")) {
+                metas.remove(m);
+                break;
+            }
+        }
     } else {
         // find a valid QtQuick import
         QByteArray importCode;
         QQmlType *qtObjectType = QQmlMetaType::qmlType(&QObject::staticMetaObject);
         if (!qtObjectType) {
             std::cerr << "Could not find QtObject type" << std::endl;
-            importCode = QByteArray("import QtQml 2.2");
+            importCode = qtQmlImportString.toUtf8();
         } else {
             QString module = qtObjectType->qmlTypeName();
             module = module.mid(0, module.lastIndexOf(QLatin1Char('/')));
@@ -1155,7 +1213,7 @@ int main(int argc, char *argv[])
               "//\n"
               "// This file was auto-generated by:\n"
               "// '%1 %2'\n"
-              "\n").arg(QFileInfo(args.at(0)).fileName()).arg(QStringList(args.mid(1)).join(QLatin1String(" "))));
+              "\n").arg(QFileInfo(args.at(0)).baseName(), args.mid(1).join(QLatin1Char(' '))));
     qml.writeStartObject("Module");
     QStringList quotedDependencies;
     foreach (const QString &dep, dependencies)
@@ -1171,10 +1229,12 @@ int main(int argc, char *argv[])
     if (relocatable)
         dumper.setRelocatableModuleUri(pluginImportUri);
     foreach (const QMetaObject *meta, nameToMeta) {
-        dumper.dump(meta, uncreatableMetas.contains(meta), singletonMetas.contains(meta));
+        dumper.dump(QQmlEnginePrivate::get(&engine), meta, uncreatableMetas.contains(meta), singletonMetas.contains(meta));
     }
-    foreach (const QQmlType *compositeType, qmlTypesByCompositeName)
-        dumper.dumpComposite(&engine, compositeType, defaultReachableNames);
+
+    QMap<QString, QSet<const QQmlType *> >::const_iterator iter = qmlTypesByCompositeName.constBegin();
+    for (; iter != qmlTypesByCompositeName.constEnd(); ++iter)
+        dumper.dumpComposite(&engine, iter.value(), defaultReachableNames);
 
     // define QEasingCurve as an extension of QQmlEasingValueType, this way
     // properties using the QEasingCurve type get useful type information.

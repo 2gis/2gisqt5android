@@ -350,7 +350,8 @@ AppxLocalEngine::~AppxLocalEngine()
 bool AppxLocalEngine::installPackage(IAppxManifestReader *reader, const QString &filePath)
 {
     Q_D(const AppxLocalEngine);
-    qCDebug(lcWinRtRunner) << __FUNCTION__ << filePath;
+    qCDebug(lcWinRtRunner).nospace().noquote()
+        << __FUNCTION__ << " \"" << QDir::toNativeSeparators(filePath) << '"';
 
     HRESULT hr;
     if (reader) {
@@ -414,6 +415,26 @@ bool AppxLocalEngine::installPackage(IAppxManifestReader *reader, const QString 
     }
 
     return SUCCEEDED(hr);
+}
+
+bool AppxLocalEngine::parseExitCode()
+{
+    Q_D(AppxLocalEngine);
+    const QString exitFileName(QStringLiteral("exitCode.tmp"));
+    bool ok = false;
+    QFile exitCodeFile(devicePath(QString::number(pid()).append(QStringLiteral(".pid"))));
+    if (exitCodeFile.open(QIODevice::ReadOnly)) {
+        d->exitCode = exitCodeFile.readAll().toInt(&ok);
+        exitCodeFile.close();
+        exitCodeFile.remove();
+    }
+    if (!ok && !GetExitCodeProcess(d->processHandle, &d->exitCode)) {
+        d->exitCode = UINT_MAX;
+        qCWarning(lcWinRtRunner).nospace() << "Failed to obtain process exit code.";
+        qCDebug(lcWinRtRunner, "GetLastError: 0x%x", GetLastError());
+        return false;
+    }
+    return true;
 }
 
 bool AppxLocalEngine::install(bool removeFirst)
@@ -551,10 +572,7 @@ bool AppxLocalEngine::stop()
     if (!d->processHandle)
         qCDebug(lcWinRtRunner) << "No handle to the process; the exit code won't be available.";
 
-    if (d->processHandle && !GetExitCodeProcess(d->processHandle, &d->exitCode)) {
-        d->exitCode = UINT_MAX;
-        qCWarning(lcWinRtRunner).nospace() << "Failed to obtain process exit code.";
-        qCDebug(lcWinRtRunner, "GetLastError: 0x%x", GetLastError());
+    if (d->processHandle && !parseExitCode()) {
         return false;
     }
 
@@ -594,8 +612,10 @@ bool AppxLocalEngine::sendFile(const QString &localFile, const QString &deviceFi
         QFile::remove(deviceFile);
 
     bool result = source.copy(deviceFile);
-    if (!result)
-        qCWarning(lcWinRtRunner) << "Unable to sendFile:" << source.errorString();
+    if (!result) {
+        qCWarning(lcWinRtRunner).nospace().noquote()
+            << "Unable to sendFile: " << source.errorString();
+    }
 
     return result;
 }

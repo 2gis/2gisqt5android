@@ -34,6 +34,17 @@
 #ifndef QLOWENERGYCONTROLLERPRIVATE_P_H
 #define QLOWENERGYCONTROLLERPRIVATE_P_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #if defined(QT_OSX_BLUETOOTH) || defined(QT_IOS_BLUETOOTH)
 
 #include <QtCore/qglobal.h>
@@ -73,6 +84,8 @@ class HciManager;
 class LowEnergyNotificationHub;
 #endif
 
+extern void registerQLowEnergyControllerMetaType();
+
 typedef QMap<QBluetoothUuid, QSharedPointer<QLowEnergyServicePrivate> > ServiceDataMap;
 
 class QLowEnergyControllerPrivate : public QObject
@@ -82,6 +95,8 @@ class QLowEnergyControllerPrivate : public QObject
 public:
     QLowEnergyControllerPrivate();
     ~QLowEnergyControllerPrivate();
+
+    void init();
 
     void setError(QLowEnergyController::Error newError);
     bool isValidLocalAdapter();

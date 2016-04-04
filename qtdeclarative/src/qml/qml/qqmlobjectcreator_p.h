@@ -33,6 +33,17 @@
 #ifndef QQMLOBJECTCREATOR_P_H
 #define QQMLOBJECTCREATOR_P_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include <private/qqmlimport_p.h>
 #include <private/qqmltypenamecache_p.h>
 #include <private/qv4compileddata_p.h>
@@ -55,7 +66,7 @@ struct QQmlObjectCreatorSharedState : public QSharedData
 {
     QQmlContextData *rootContext;
     QQmlContextData *creationContext;
-    QFiniteStack<QQmlAbstractBinding*> allCreatedBindings;
+    QFiniteStack<QQmlAbstractBinding::Ptr> allCreatedBindings;
     QFiniteStack<QQmlParserStatus*> allParserStatusCallbacks;
     QFiniteStack<QPointer<QObject> > allCreatedObjects;
     QV4::Value *allJavaScriptObjects; // pointer to vector on JS stack to reference JS wrappers during creation phase.
@@ -107,7 +118,7 @@ private:
 
     void registerObjectWithContextById(int objectIndex, QObject *instance) const;
 
-    QV4::Heap::ExecutionContext *currentQmlContext();
+    QV4::Heap::QmlContext *currentQmlContext();
 
     enum Phase {
         Startup,
@@ -143,7 +154,7 @@ private:
     QQmlRefPointer<QQmlPropertyCache> _propertyCache;
     QQmlVMEMetaObject *_vmeMetaObject;
     QQmlListProperty<void> _currentList;
-    QV4::Value *_qmlBindingWrapper;
+    QV4::QmlContext *_qmlContext;
 
     friend struct QQmlObjectCreatorRecursionWatcher;
 };

@@ -34,15 +34,15 @@
 **
 ****************************************************************************/
 
-import Qt3D 2.0
-import Qt3D.Renderer 2.0
+import Qt3D.Core 2.0
+import Qt3D.Render 2.0
 
 Technique {
     annotations : [
         Annotation { name : "RenderingStyle"; value : "forward"},
         Annotation { name : "Enabled"; value : true}
     ]
-    openGLFilter {api : OpenGLFilter.Desktop; profile : OpenGLFilter.Core; minorVersion : 1; majorVersion : 3 }
+    graphicsApiFilter {api : GraphicsApiFilter.OpenGL; profile : GraphicsApiFilter.CoreProfile; minorVersion : 1; majorVersion : 3 }
     renderPasses : [
         RenderPass {
             annotations : [Annotation {name : "Name"; value : "TextureLighting" }]

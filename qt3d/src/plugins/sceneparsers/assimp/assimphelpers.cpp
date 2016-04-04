@@ -34,7 +34,7 @@
 **
 ****************************************************************************/
 
-#include "assimphelpers_p.h"
+#include "assimphelpers.h"
 
 #include <QFileDevice>
 #include <QFileInfo>
@@ -44,10 +44,10 @@
 
 QT_BEGIN_NAMESPACE
 
-namespace Qt3D {
+namespace Qt3DRender {
 namespace AssimpHelper {
 /*!
- *  \class Qt3D::AssimpHelper::AssimpIOStream
+ *  \class Qt3DRender::AssimpHelper::AssimpIOStream
  *
  *  \internal
  *
@@ -145,7 +145,7 @@ void AssimpIOStream::Flush()
 }
 
 /*!
- * \class AssimpIOSystem
+ * \class Qt3DRender::AssimpHelper::AssimpIOSystem
  *
  * \internal
  *
@@ -222,7 +222,7 @@ void AssimpIOSystem::Close(Assimp::IOStream *pFile)
     delete pFile;
 }
 
-} // AssimpHelper namespace
-} // Qt3D namespace
+} // namespace AssimpHelper
+} // namespace Qt3DRender
 
 QT_END_NAMESPACE

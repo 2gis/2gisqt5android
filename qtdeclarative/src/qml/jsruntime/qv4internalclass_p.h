@@ -33,6 +33,17 @@
 #ifndef QV4INTERNALCLASS_H
 #define QV4INTERNALCLASS_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include "qv4global_p.h"
 
 #include <QHash>
@@ -46,7 +57,7 @@ struct String;
 struct ExecutionEngine;
 struct Object;
 struct Identifier;
-struct ManagedVTable;
+struct VTable;
 
 struct PropertyHashData;
 struct PropertyHash
@@ -233,6 +244,7 @@ struct InternalClass : public QQmlJS::Managed {
 
     InternalClass *sealed();
     InternalClass *frozen();
+    InternalClass *propertiesFrozen() const;
 
     void destroy();
 

@@ -34,8 +34,8 @@
 **
 ****************************************************************************/
 
-import Qt3D 2.0
-import Qt3D.Renderer 2.0
+import Qt3D.Core 2.0
+import Qt3D.Render 2.0
 
 Entity {
     id: sceneRoot
@@ -76,11 +76,8 @@ Entity {
 
     Transform {
         id: transform
-        Scale { scale3D: Qt.vector3d(1.5, 1, 0.5) }
-        Rotate {
-            angle: 45
-            axis: Qt.vector3d(1, 0, 0)
-        }
+        scale3D: Qt.vector3d(1.5, 1, 0.5)
+        rotation: fromAxisAndAngle(Qt.vector3d(1, 0, 0), 45)
     }
 
     Material {

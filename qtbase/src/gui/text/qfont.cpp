@@ -1860,14 +1860,9 @@ void QFont::removeSubstitutions(const QString &familyName)
 */
 QStringList QFont::substitutions()
 {
-    typedef QFontSubst::const_iterator QFontSubstConstIterator;
-
     QFontSubst *fontSubst = globalFontSubst();
     Q_ASSERT(fontSubst != 0);
-    QStringList ret;
-    const QFontSubstConstIterator cend = fontSubst->constEnd();
-    for (QFontSubstConstIterator it = fontSubst->constBegin(); it != cend; ++it)
-        ret.append(it.key());
+    QStringList ret = fontSubst->keys();
 
     ret.sort();
     return ret;
@@ -2115,6 +2110,9 @@ QString QFont::lastResortFamily() const
     return QString::fromLatin1("helvetica");
 }
 
+extern QStringList qt_fallbacksForFamily(const QString &family, QFont::Style style,
+                                         QFont::StyleHint styleHint, QChar::Script script);
+
 /*!
     \fn QString QFont::defaultFamily() const
 
@@ -2125,8 +2123,7 @@ QString QFont::lastResortFamily() const
 */
 QString QFont::defaultFamily() const
 {
-    QPlatformFontDatabase *fontDB = QGuiApplicationPrivate::platformIntegration()->fontDatabase();
-    const QStringList fallbacks = fontDB->fallbacksForFamily(QString(), QFont::StyleNormal
+    const QStringList fallbacks = qt_fallbacksForFamily(QString(), QFont::StyleNormal
                                       , QFont::StyleHint(d->request.styleHint), QChar::Script_Common);
     if (!fallbacks.isEmpty())
         return fallbacks.first();
@@ -2223,6 +2220,8 @@ QDataStream &operator<<(QDataStream &s, const QFont &font)
     }
     if (s.version() >= QDataStream::Qt_5_4)
         s << (quint8)font.d->request.hintingPreference;
+    if (s.version() >= QDataStream::Qt_5_6)
+        s << (quint8)font.d->capital;
     return s;
 }
 
@@ -2313,7 +2312,11 @@ QDataStream &operator>>(QDataStream &s, QFont &font)
         s >> value;
         font.d->request.hintingPreference = QFont::HintingPreference(value);
     }
-
+    if (s.version() >= QDataStream::Qt_5_6) {
+        quint8 value;
+        s >> value;
+        font.d->capital = QFont::Capitalization(value);
+    }
     return s;
 }
 
@@ -2793,6 +2796,10 @@ void QFontCache::insertEngineData(const QFontDef &def, QFontEngineData *engineDa
     Q_ASSERT(!engineDataCache.contains(def));
 
     engineData->ref.ref();
+    // Decrease now rather than waiting
+    if (total_cost > min_cost * 2)
+        decreaseCache();
+
     engineDataCache.insert(def, engineData);
     increaseCost(sizeof(QFontEngineData));
 }
@@ -2802,6 +2809,10 @@ QFontEngine *QFontCache::findEngine(const Key &key)
     EngineCache::Iterator it = engineCache.find(key),
                          end = engineCache.end();
     if (it == end) return 0;
+
+    Q_ASSERT(it.value().data != Q_NULLPTR);
+    Q_ASSERT(key.multi == (it.value().data->type() == QFontEngine::Multi));
+
     // found... update the hitcount and timestamp
     updateHitCountAndTimeStamp(it.value());
 
@@ -2822,6 +2833,9 @@ void QFontCache::updateHitCountAndTimeStamp(Engine &value)
 
 void QFontCache::insertEngine(const Key &key, QFontEngine *engine, bool insertMulti)
 {
+    Q_ASSERT(engine != Q_NULLPTR);
+    Q_ASSERT(key.multi == (engine->type() == QFontEngine::Multi));
+
 #ifdef QFONTCACHE_DEBUG
     FC_DEBUG("QFontCache: inserting new engine %p, refcount %d", engine, engine->ref.load());
     if (!insertMulti && engineCache.contains(key)) {
@@ -2830,8 +2844,10 @@ void QFontCache::insertEngine(const Key &key, QFontEngine *engine, bool insertMu
                  key.def.pixelSize, key.def.weight, key.def.style, key.def.fixedPitch);
     }
 #endif
-
     engine->ref.ref();
+    // Decrease now rather than waiting
+    if (total_cost > min_cost * 2)
+        decreaseCache();
 
     Engine data(engine);
     data.timestamp = ++current_timestamp;
@@ -2892,7 +2908,11 @@ void QFontCache::timerEvent(QTimerEvent *)
 
         return;
     }
+    decreaseCache();
+}
 
+void QFontCache::decreaseCache()
+{
     // go through the cache and count up everything in use
     uint in_use_cost = 0;
 

@@ -47,6 +47,7 @@
 #include <QtGui/qpalette.h>
 #include <QtGui/qtextlayout.h>
 #include <QtGui/qstylehints.h>
+#include <private/qlazilyallocated_p.h>
 
 #include "qplatformdefs.h"
 
@@ -64,12 +65,28 @@ QT_BEGIN_NAMESPACE
 
 class QQuickTextNode;
 
-class Q_AUTOTEST_EXPORT QQuickTextInputPrivate : public QQuickImplicitSizeItemPrivate
+class Q_QUICK_PRIVATE_EXPORT QQuickTextInputPrivate : public QQuickImplicitSizeItemPrivate
 {
 public:
     Q_DECLARE_PUBLIC(QQuickTextInput)
 
     typedef QQuickTextInput Public;
+
+    struct ExtraData {
+        ExtraData();
+
+        qreal padding;
+        qreal topPadding;
+        qreal leftPadding;
+        qreal rightPadding;
+        qreal bottomPadding;
+        bool explicitTopPadding : 1;
+        bool explicitLeftPadding : 1;
+        bool explicitRightPadding : 1;
+        bool explicitBottomPadding : 1;
+        bool implicitResize : 1;
+    };
+    QLazilyAllocated<ExtraData> extra;
 
     QQuickTextInputPrivate()
         : hscroll(0)
@@ -419,6 +436,15 @@ public:
     void updateBaselineOffset();
 
     qreal getImplicitWidth() const Q_DECL_OVERRIDE;
+
+    inline qreal padding() const { return extra.isAllocated() ? extra->padding : 0.0; }
+    void setTopPadding(qreal value, bool reset = false);
+    void setLeftPadding(qreal value, bool reset = false);
+    void setRightPadding(qreal value, bool reset = false);
+    void setBottomPadding(qreal value, bool reset = false);
+
+    bool isImplicitResizeEnabled() const;
+    void setImplicitResizeEnabled(bool enabled);
 
 private:
     void removeSelectedText();

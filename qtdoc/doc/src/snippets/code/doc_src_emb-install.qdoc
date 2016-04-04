@@ -40,13 +40,13 @@
 
 //! [0]
 cd <anywhere>
-gunzip qt-everywhere-opensource-src-5.5.1.tar.gz
-tar xf qt-everywhere-opensource-src-5.5.1.tar
+gunzip qt-everywhere-opensource-src-%VERSION%.tar.gz
+tar xf qt-everywhere-opensource-src-%VERSION%.tar
 //! [0]
 
 
 //! [1]
-~/qt-everywhere-opensource-src-5.5.1
+~/qt-everywhere-opensource-src-%VERSION%
 //! [1]
 
 
@@ -55,7 +55,7 @@ tar xf qt-everywhere-opensource-src-5.5.1.tar
 //! [embedded help]
 
 //! [2]
-cd  ~/qt-everywhere-opensource-src-5.5.1
+cd  ~/qt-everywhere-opensource-src-%VERSION%
 ./configure -embedded [architecture]
 //! [2]
 
@@ -71,11 +71,11 @@ su -c "make install"
 
 
 //! [5]
-PATH=/usr/local/Qt-5.5.1/bin:$PATH
+PATH=/usr/local/Qt-%VERSION%/bin:$PATH
 export PATH
 //! [5]
 
 
 //! [6]
-setenv PATH /usr/local/Qt-5.5.1/bin:$PATH
+setenv PATH /usr/local/Qt-%VERSION%/bin:$PATH
 //! [6]

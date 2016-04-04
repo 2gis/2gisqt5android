@@ -6,8 +6,12 @@
   'dependencies': [
     '../third_party/khronos/khronos.gyp:khronos_headers',
   ],
-  'export_dependent_settings': [
-    '../third_party/khronos/khronos.gyp:khronos_headers',
+  'conditions': [
+    ['qt_os=="mac" or qt_os=="win32"', {
+        'export_dependent_settings': [
+          '../third_party/khronos/khronos.gyp:khronos_headers',
+        ],
+    }],
   ],
   'sources': [
     'command_buffer/common/bitfield_helpers.h',
@@ -34,5 +38,7 @@
     'command_buffer/common/mailbox_holder.h',
     'command_buffer/common/thread_local.h',
     'command_buffer/common/time.h',
+    'command_buffer/common/value_state.cc',
+    'command_buffer/common/value_state.h',
   ],
 }

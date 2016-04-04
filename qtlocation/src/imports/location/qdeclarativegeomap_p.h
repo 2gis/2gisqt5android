@@ -37,13 +37,25 @@
 #ifndef QDECLARATIVEGEOMAP_H
 #define QDECLARATIVEGEOMAP_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include "qgeoserviceprovider.h"
 #include "qdeclarativegeomapitemview_p.h"
-#include "qdeclarativegeomapgesturearea_p.h"
+#include "qquickgeomapgesturearea_p.h"
 #include "qgeocameradata_p.h"
 #include <QtQuick/QQuickItem>
 #include <QtCore/QPointer>
 #include <QtCore/QMutex>
+#include <QtGui/QColor>
 #include <QtPositioning/qgeoshape.h>
 
 QT_BEGIN_NAMESPACE
@@ -56,7 +68,7 @@ class QDeclarativeGeoMap : public QQuickItem
 {
     Q_OBJECT
     Q_ENUMS(QGeoServiceProvider::Error)
-    Q_PROPERTY(QDeclarativeGeoMapGestureArea *gesture READ gesture CONSTANT)
+    Q_PROPERTY(QQuickGeoMapGestureArea *gesture READ gesture CONSTANT)
     Q_PROPERTY(QDeclarativeGeoServiceProvider *plugin READ plugin WRITE setPlugin NOTIFY pluginChanged)
     Q_PROPERTY(qreal minimumZoomLevel READ minimumZoomLevel WRITE setMinimumZoomLevel NOTIFY minimumZoomLevelChanged)
     Q_PROPERTY(qreal maximumZoomLevel READ maximumZoomLevel WRITE setMaximumZoomLevel NOTIFY maximumZoomLevelChanged)
@@ -68,6 +80,7 @@ class QDeclarativeGeoMap : public QQuickItem
     Q_PROPERTY(QGeoServiceProvider::Error error READ error NOTIFY errorChanged)
     Q_PROPERTY(QString errorString READ errorString NOTIFY errorChanged)
     Q_PROPERTY(QGeoShape visibleRegion READ visibleRegion WRITE setVisibleRegion)
+    Q_PROPERTY(QColor color READ color WRITE setColor NOTIFY colorChanged)
     Q_INTERFACES(QQmlParserStatus)
 
 public:
@@ -96,6 +109,9 @@ public:
     void setVisibleRegion(const QGeoShape &shape);
     QGeoShape visibleRegion() const;
 
+    void setColor(const QColor &color);
+    QColor color() const;
+
     QQmlListProperty<QDeclarativeGeoMapType> supportedMapTypes();
 
     Q_INVOKABLE void removeMapItem(QDeclarativeGeoMapItemBase *item);
@@ -103,19 +119,15 @@ public:
     Q_INVOKABLE void clearMapItems();
     QList<QObject *> mapItems();
 
-    Q_INVOKABLE QGeoCoordinate toCoordinate(const QPointF &position) const;
-    Q_INVOKABLE QPointF fromCoordinate(const QGeoCoordinate &coordinate) const;
+    Q_INVOKABLE QGeoCoordinate toCoordinate(const QPointF &position, bool clipToViewPort = true) const;
+    Q_INVOKABLE QPointF fromCoordinate(const QGeoCoordinate &coordinate, bool clipToViewPort = true) const;
 
-#if QT_DEPRECATED_SINCE(5,5)
-    QT_DEPRECATED Q_INVOKABLE QPointF toScreenPosition(const QGeoCoordinate &coordinate) const;
-#endif
+    QQuickGeoMapGestureArea *gesture();
 
-    QDeclarativeGeoMapGestureArea *gesture();
-
-    Q_INVOKABLE void fitViewportToGeoShape(const QVariant &shape);
     Q_INVOKABLE void fitViewportToMapItems();
     Q_INVOKABLE void pan(int dx, int dy);
     Q_INVOKABLE void prefetchData(); // optional hint for prefetch
+    Q_INVOKABLE void clearData();
 
     QString errorString() const;
     QGeoServiceProvider::Error error() const;
@@ -131,6 +143,7 @@ Q_SIGNALS:
     void mapItemsChanged();
     void errorChanged();
     void copyrightLinkActivated(const QString &link);
+    void colorChanged(const QColor &color);
 
 protected:
     void mousePressEvent(QMouseEvent *event) Q_DECL_OVERRIDE ;
@@ -152,7 +165,6 @@ protected:
     void setError(QGeoServiceProvider::Error error, const QString &errorString);
 
 private Q_SLOTS:
-    void updateMapDisplay(const QRectF &target);
     void mappingManagerInitialized();
     void mapZoomLevelChanged(qreal zoom);
     void pluginReady();
@@ -173,7 +185,7 @@ private:
     QDeclarativeGeoMapType *m_activeMapType;
     QList<QDeclarativeGeoMapType *> m_supportedMapTypes;
     QList<QDeclarativeGeoMapItemView *> m_mapViews;
-    QDeclarativeGeoMapGestureArea *m_gestureArea;
+    QQuickGeoMapGestureArea *m_gestureArea;
     QGeoMap *m_map;
     QPointer<QDeclarativeGeoMapCopyrightNotice> m_copyrights;
     QList<QPointer<QDeclarativeGeoMapItemBase> > m_mapItems;
@@ -184,11 +196,12 @@ private:
     bool m_componentCompleted;
     bool m_mappingManagerInitialized;
     QGeoShape m_region;
+    QColor m_color;
     bool m_pendingFitViewport;
 
     friend class QDeclarativeGeoMapItem;
     friend class QDeclarativeGeoMapItemView;
-    friend class QDeclarativeGeoMapGestureArea;
+    friend class QQuickGeoMapGestureArea;
     Q_DISABLE_COPY(QDeclarativeGeoMap)
 };
 

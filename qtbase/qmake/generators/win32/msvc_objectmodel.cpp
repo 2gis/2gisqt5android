@@ -922,6 +922,8 @@ bool VCCLCompilerTool::parseOption(const char* option)
                     TreatWChar_tAsBuiltInType = ((*c) == '-' ? _False : _True);
                 else if (config->CompilerVersion >= NET2013 && strncmp(option + 4, "strictStrings", 13) == 0)
                     AdditionalOptions += option;
+                else if (config->CompilerVersion >= NET2015 && strncmp(option + 4, "throwingNew", 11) == 0)
+                    AdditionalOptions += option;
                 else
                     found = false;
             } else {
@@ -2194,7 +2196,7 @@ void VCFilter::modifyPCHstage(QString str)
             break;
         }
     }
-    bool isHFile = Option::hasFileExtension(str, Option::h_ext) && (str == Project->precompH);
+    const bool isHFile = (str == Project->precompH);
     bool isCPPFile = pchThroughSourceFile && (str == Project->precompCPP);
 
     if(!isCFile && !isHFile && !isCPPFile)
@@ -2397,11 +2399,7 @@ bool VCFilter::addExtraCompiler(const VCFilterFile &info)
         if (!CustomBuildTool.Description.isEmpty())
             CustomBuildTool.Description += ", ";
         CustomBuildTool.Description += cmd_name;
-        // Execute custom build steps in an environment variable scope to prevent unwanted
-        // side effects for downstream build steps
-        CustomBuildTool.CommandLine += QLatin1String("setlocal");
         CustomBuildTool.CommandLine += VCToolBase::fixCommandLine(cmd.trimmed());
-        CustomBuildTool.CommandLine += QLatin1String("endlocal");
         int space = cmd.indexOf(' ');
         QFileInfo finf(cmd.left(space));
         if (CustomBuildTool.ToolPath.isEmpty())
@@ -2412,7 +2410,7 @@ bool VCFilter::addExtraCompiler(const VCFilterFile &info)
         // Make sure that all deps are only once
         QStringList uniqDeps;
         for (int c = 0; c < deps.count(); ++c) {
-            QString aDep = deps.at(c).trimmed();
+            QString aDep = deps.at(c);
             if (!aDep.isEmpty())
                 uniqDeps << aDep;
         }

@@ -1,4 +1,4 @@
-SYNCQT.HEADER_FILES = zconf.h zlib.h 
+SYNCQT.HEADER_FILES = ../3rdparty/zlib/zconf.h ../3rdparty/zlib/zlib.h 
 SYNCQT.HEADER_CLASSES = 
 SYNCQT.PRIVATE_HEADER_FILES = 
 SYNCQT.QPA_HEADER_FILES = 

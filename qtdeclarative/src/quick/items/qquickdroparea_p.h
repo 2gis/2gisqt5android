@@ -34,10 +34,18 @@
 #ifndef QQUICKDROPAREA_P_H
 #define QQUICKDROPAREA_P_H
 
-#include "qquickitem.h"
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
 
-#include <private/qqmlguard_p.h>
-#include <private/qv8engine_p.h>
+#include "qquickitem.h"
 
 #include <QtGui/qevent.h>
 
