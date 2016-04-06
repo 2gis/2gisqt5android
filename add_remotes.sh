@@ -11,3 +11,4 @@ git remote -v
 echo ""
 
 git fetch --all
+
