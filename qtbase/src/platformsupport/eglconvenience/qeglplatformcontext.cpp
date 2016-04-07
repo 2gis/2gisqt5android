@@ -372,6 +372,9 @@ bool QEGLPlatformContext::makeCurrent(QPlatformSurface *surface)
 
     EGLSurface eglSurface = eglSurfaceForPlatformSurface(surface);
 
+    if (eglSurface == EGL_NO_SURFACE)
+        return false;
+
     // shortcut: on some GPUs, eglMakeCurrent is not a cheap operation
     if (eglGetCurrentContext() == m_eglContext &&
         eglGetCurrentDisplay() == m_eglDisplay &&

@@ -68,8 +68,11 @@ import android.content.res.Configuration;
 import android.content.res.Resources.Theme;
 import android.content.res.AssetManager;
 import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.drawable.ColorDrawable;
+import android.graphics.drawable.BitmapDrawable;
+import android.graphics.Paint;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -196,6 +199,19 @@ public class QtActivity extends Activity
         }
     }
 
+    private DexClassLoader getDexClassLoader(Bundle loaderParams)
+    {
+        if (m_classLoader == null) {
+            // load and start QtLoader class
+            m_classLoader = new DexClassLoader(loaderParams.getString(DEX_PATH_KEY), // .jar/.apk files
+                                               getDir("outdex", Context.MODE_PRIVATE).getAbsolutePath(), // directory where optimized DEX files should be written.
+                                               loaderParams.containsKey(LIB_PATH_KEY) ? loaderParams.getString(LIB_PATH_KEY) : null, // libs folder (if exists)
+                                               getClassLoader()); // parent loader
+        }
+
+        return m_classLoader;
+    }
+
     // this function is used to load and start the loader
     private void loadApplication(Bundle loaderParams)
     {
@@ -235,19 +251,16 @@ public class QtActivity extends Activity
             loaderParams.putInt(NECESSITAS_API_LEVEL_KEY, NECESSITAS_API_LEVEL);
 
             // load and start QtLoader class
-            m_classLoader = new DexClassLoader(loaderParams.getString(DEX_PATH_KEY), // .jar/.apk files
-                                               getDir("outdex", Context.MODE_PRIVATE).getAbsolutePath(), // directory where optimized DEX files should be written.
-                                               loaderParams.containsKey(LIB_PATH_KEY) ? loaderParams.getString(LIB_PATH_KEY) : null, // libs folder (if exists)
-                                               getClassLoader()); // parent loader
+            DexClassLoader classLoader = getDexClassLoader(loaderParams);
 
             @SuppressWarnings("rawtypes")
-            Class loaderClass = m_classLoader.loadClass(loaderParams.getString(LOADER_CLASS_NAME_KEY)); // load QtLoader class
+            Class loaderClass = classLoader.loadClass(loaderParams.getString(LOADER_CLASS_NAME_KEY)); // load QtLoader class
             Object qtLoader = loaderClass.newInstance(); // create an instance
             Method prepareAppMethod = qtLoader.getClass().getMethod("loadApplication",
                                                                     Activity.class,
                                                                     ClassLoader.class,
                                                                     Bundle.class);
-            if (!(Boolean)prepareAppMethod.invoke(qtLoader, this, m_classLoader, loaderParams))
+            if (!(Boolean)prepareAppMethod.invoke(qtLoader, this, classLoader, loaderParams))
                 throw new Exception("");
 
             QtApplication.setQtActivityDelegate(qtLoader);
@@ -551,6 +564,105 @@ public class QtActivity extends Activity
         }
     }
 
+    private Bundle makeLoaderParams()
+    {
+        if (m_activityInfo == null)
+            return null;
+
+        try {
+            ArrayList<String> libraryList = new ArrayList<String>();
+
+            String localPrefix = "/data/local/tmp/qt/";
+            if (m_activityInfo.metaData.containsKey("android.app.libs_prefix"))
+                localPrefix = m_activityInfo.metaData.getString("android.app.libs_prefix");
+
+            String pluginsPrefix = localPrefix;
+
+            boolean bundlingQtLibs = false;
+            if (m_activityInfo.metaData.containsKey("android.app.bundle_local_qt_libs")
+                    && m_activityInfo.metaData.getInt("android.app.bundle_local_qt_libs") == 1) {
+                localPrefix = getApplicationInfo().dataDir + "/";
+                pluginsPrefix = localPrefix + "qt-reserved-files/";
+                cleanOldCacheIfNecessary(localPrefix, pluginsPrefix);
+                extractBundledPluginsAndImports(pluginsPrefix);
+                bundlingQtLibs = true;
+            }
+
+            if (m_qtLibs != null) {
+                for (int i=0;i<m_qtLibs.length;i++) {
+                    libraryList.add(localPrefix
+                            + "lib/lib"
+                            + m_qtLibs[i]
+                            + ".so");
+                }
+            }
+
+            if (m_activityInfo.metaData.containsKey("android.app.load_local_libs")) {
+                String[] extraLibs = m_activityInfo.metaData.getString("android.app.load_local_libs").split(":");
+                for (String lib : extraLibs) {
+                    if (lib.length() > 0) {
+                        if (lib.startsWith("lib/"))
+                            libraryList.add(localPrefix + lib);
+                        else
+                            libraryList.add(pluginsPrefix + lib);
+                    }
+                }
+            }
+
+            String dexPaths = new String();
+            String pathSeparator = System.getProperty("path.separator", ":");
+            if (!bundlingQtLibs && m_activityInfo.metaData.containsKey("android.app.load_local_jars")) {
+                String[] jarFiles = m_activityInfo.metaData.getString("android.app.load_local_jars").split(":");
+                for (String jar:jarFiles) {
+                    if (jar.length() > 0) {
+                        if (dexPaths.length() > 0)
+                            dexPaths += pathSeparator;
+                        dexPaths += localPrefix + jar;
+                    }
+                }
+            }
+
+            Bundle loaderParams = new Bundle();
+            loaderParams.putInt(ERROR_CODE_KEY, 0);
+            loaderParams.putString(DEX_PATH_KEY, dexPaths);
+            loaderParams.putString(LOADER_CLASS_NAME_KEY, "org.qtproject.qt5.android.QtActivityDelegate");
+            if (m_activityInfo.metaData.containsKey("android.app.static_init_classes")) {
+                loaderParams.putStringArray(STATIC_INIT_CLASSES_KEY,
+                        m_activityInfo.metaData.getString("android.app.static_init_classes").split(":"));
+            }
+            loaderParams.putStringArrayList(NATIVE_LIBRARIES_KEY, libraryList);
+
+            String themePath = getApplicationInfo().dataDir + "/qt-reserved-files/android-style/";
+            String stylePath = themePath + m_displayDensity + "/";
+            if (!(new File(stylePath)).exists())
+                loaderParams.putString(EXTRACT_STYLE_KEY, stylePath);
+            ENVIRONMENT_VARIABLES += "\tMINISTRO_ANDROID_STYLE_PATH=" + stylePath
+                + "\tQT_ANDROID_THEMES_ROOT_PATH=" + themePath;
+
+            loaderParams.putString(ENVIRONMENT_VARIABLES_KEY, ENVIRONMENT_VARIABLES
+                    + "\tQML2_IMPORT_PATH=" + pluginsPrefix + "/qml"
+                    + "\tQML_IMPORT_PATH=" + pluginsPrefix + "/imports"
+                    + "\tQT_PLUGIN_PATH=" + pluginsPrefix + "/plugins");
+
+            if (APPLICATION_PARAMETERS != null) {
+                loaderParams.putString(APPLICATION_PARAMETERS_KEY, APPLICATION_PARAMETERS);
+            } else {
+                Intent intent = getIntent();
+                if (intent != null) {
+                    String parameters = intent.getStringExtra("applicationArguments");
+                    if (parameters != null)
+                        loaderParams.putString(APPLICATION_PARAMETERS_KEY, parameters.replace(' ', '\t'));
+                }
+            }
+
+            return loaderParams;
+        } catch (Exception e) {
+            Log.e(QtApplication.QtTAG, "Can't create loader params", e);
+        }
+
+        return null;
+    }
+
     private void startApp(final boolean firstStart)
     {
         try {
@@ -569,95 +681,9 @@ public class QtActivity extends Activity
 
             if (m_activityInfo.metaData.containsKey("android.app.use_local_qt_libs")
                     && m_activityInfo.metaData.getInt("android.app.use_local_qt_libs") == 1) {
-                ArrayList<String> libraryList = new ArrayList<String>();
-
-
-                String localPrefix = "/data/local/tmp/qt/";
-                if (m_activityInfo.metaData.containsKey("android.app.libs_prefix"))
-                    localPrefix = m_activityInfo.metaData.getString("android.app.libs_prefix");
-
-                String pluginsPrefix = localPrefix;
-
-                boolean bundlingQtLibs = false;
-                if (m_activityInfo.metaData.containsKey("android.app.bundle_local_qt_libs")
-                    && m_activityInfo.metaData.getInt("android.app.bundle_local_qt_libs") == 1) {
-                    localPrefix = getApplicationInfo().dataDir + "/";
-                    pluginsPrefix = localPrefix + "qt-reserved-files/";
-                    cleanOldCacheIfNecessary(localPrefix, pluginsPrefix);
-                    extractBundledPluginsAndImports(pluginsPrefix);
-                    bundlingQtLibs = true;
-                }
-
-                if (m_qtLibs != null) {
-                    for (int i=0;i<m_qtLibs.length;i++) {
-                        libraryList.add(localPrefix
-                                        + "lib/lib"
-                                        + m_qtLibs[i]
-                                        + ".so");
-                    }
-                }
-
-                if (m_activityInfo.metaData.containsKey("android.app.load_local_libs")) {
-                    String[] extraLibs = m_activityInfo.metaData.getString("android.app.load_local_libs").split(":");
-                    for (String lib : extraLibs) {
-                        if (lib.length() > 0) {
-                            if (lib.startsWith("lib/"))
-                                libraryList.add(localPrefix + lib);
-                            else
-                                libraryList.add(pluginsPrefix + lib);
-                        }
-                    }
-                }
-
-
-                String dexPaths = new String();
-                String pathSeparator = System.getProperty("path.separator", ":");
-                if (!bundlingQtLibs && m_activityInfo.metaData.containsKey("android.app.load_local_jars")) {
-                    String[] jarFiles = m_activityInfo.metaData.getString("android.app.load_local_jars").split(":");
-                    for (String jar:jarFiles) {
-                        if (jar.length() > 0) {
-                            if (dexPaths.length() > 0)
-                                dexPaths += pathSeparator;
-                            dexPaths += localPrefix + jar;
-                        }
-                    }
-                }
-
-                Bundle loaderParams = new Bundle();
-                loaderParams.putInt(ERROR_CODE_KEY, 0);
-                loaderParams.putString(DEX_PATH_KEY, dexPaths);
-                loaderParams.putString(LOADER_CLASS_NAME_KEY, "org.qtproject.qt5.android.QtActivityDelegate");
-                if (m_activityInfo.metaData.containsKey("android.app.static_init_classes")) {
-                    loaderParams.putStringArray(STATIC_INIT_CLASSES_KEY,
-                                                m_activityInfo.metaData.getString("android.app.static_init_classes").split(":"));
-                }
-                loaderParams.putStringArrayList(NATIVE_LIBRARIES_KEY, libraryList);
-
-
-                String themePath = getApplicationInfo().dataDir + "/qt-reserved-files/android-style/";
-                String stylePath = themePath + m_displayDensity + "/";
-                if (!(new File(stylePath)).exists())
-                    loaderParams.putString(EXTRACT_STYLE_KEY, stylePath);
-                ENVIRONMENT_VARIABLES += "\tMINISTRO_ANDROID_STYLE_PATH=" + stylePath
-                                       + "\tQT_ANDROID_THEMES_ROOT_PATH=" + themePath;
-
-                loaderParams.putString(ENVIRONMENT_VARIABLES_KEY, ENVIRONMENT_VARIABLES
-                                                                  + "\tQML2_IMPORT_PATH=" + pluginsPrefix + "/qml"
-                                                                  + "\tQML_IMPORT_PATH=" + pluginsPrefix + "/imports"
-                                                                  + "\tQT_PLUGIN_PATH=" + pluginsPrefix + "/plugins");
-
-                if (APPLICATION_PARAMETERS != null) {
-                    loaderParams.putString(APPLICATION_PARAMETERS_KEY, APPLICATION_PARAMETERS);
-                } else {
-                    Intent intent = getIntent();
-                    if (intent != null) {
-                        String parameters = intent.getStringExtra("applicationArguments");
-                        if (parameters != null)
-                            loaderParams.putString(APPLICATION_PARAMETERS_KEY, parameters.replace(' ', '\t'));
-                    }
-                }
-
+                Bundle loaderParams = makeLoaderParams();
                 loadApplication(loaderParams);
+
                 return;
             }
 
@@ -875,7 +901,24 @@ public class QtActivity extends Activity
         }
 
         if (QtApplication.m_delegateObject != null && QtApplication.onCreate != null) {
+            @SuppressWarnings("rawtypes")
+            Object qtLoader = QtApplication.getQtActivityDelegate();
+            if (qtLoader != null) {
+                try {
+                    Bundle loaderParams = makeLoaderParams();
+                    DexClassLoader classLoader = getDexClassLoader(loaderParams);
+                    Method setActivityMethod = qtLoader.getClass().getMethod("setActivity",
+                            Activity.class,
+                            ClassLoader.class,
+                            Bundle.class);
+                    setActivityMethod.invoke(qtLoader, this, classLoader, loaderParams);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
+
             QtApplication.invokeDelegateMethod(QtApplication.onCreate, savedInstanceState);
+
             return;
         }
 
@@ -887,7 +930,33 @@ public class QtActivity extends Activity
         if (null == getLastNonConfigurationInstance()) {
             // if splash screen is defined, then show it
             if (m_activityInfo.metaData.containsKey("android.app.splash_screen_drawable"))
-                getWindow().setBackgroundDrawableResource(m_activityInfo.metaData.getInt("android.app.splash_screen_drawable"));
+            {
+                int res_id = m_activityInfo.metaData.getInt("android.app.splash_screen_drawable");
+
+                // Prevent any bitmap scaling. The splash should be crisp and sparkling exactly as it has been painted.
+                BitmapFactory.Options ops = new BitmapFactory.Options();
+                ops.inScaled = false;
+                ops.inDensity = 0;
+                ops.inTargetDensity = 0;
+                ops.inScreenDensity = 0;
+                final Bitmap image = BitmapFactory.decodeResource(getResources(), res_id, ops);
+                BitmapDrawable drawable = new BitmapDrawable(image){
+                    Paint mPaint = new Paint();
+                    @Override
+                    public void draw(Canvas canvas)
+                    {
+                        if (image != null) {
+                            canvas.drawColor(image.getPixel(0, 0));
+                            canvas.setDensity(Bitmap.DENSITY_NONE);
+                            canvas.drawBitmap(image,
+                                (canvas.getWidth() - image.getWidth()) / 2,
+                                (canvas.getHeight() - image.getHeight()) / 2,
+                                mPaint);
+                        }
+                    }
+                };
+                getWindow().setBackgroundDrawable(drawable);
+            }
             else
                 getWindow().setBackgroundDrawable(new ColorDrawable(0xff000000));
 

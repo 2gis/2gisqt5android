@@ -242,6 +242,8 @@ public:
     uint lastWheelEventAccepted : 1;
     bool componentCompleted : 1;
 
+    bool clearStencilAndDepth; // 2GIS VNA-3203
+
     Qt::FocusReason lastFocusReason;
 
     QOpenGLFramebufferObject *renderTarget;

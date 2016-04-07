@@ -92,7 +92,6 @@ static jclass getCachedClass(const QByteArray &classBinEnc, bool *isCached = 0)
 inline static jclass loadClass(const QByteArray &className, JNIEnv *env, bool binEncoded = false)
 {
     const QByteArray &binEncClassName = binEncoded ? className : toBinaryEncClassName(className);
-
     bool isCached = false;
     jclass clazz = getCachedClass(binEncClassName, &isCached);
     if (clazz != 0 || isCached)
@@ -121,6 +120,7 @@ inline static jclass loadClass(const QByteArray &className, JNIEnv *env, bool bi
     return clazz;
 }
 
+
 typedef QHash<QString, jmethodID> JMethodIDHash;
 Q_GLOBAL_STATIC(JMethodIDHash, cachedMethodID)
 Q_GLOBAL_STATIC(QReadWriteLock, cachedMethodIDLock)
@@ -139,7 +139,6 @@ static inline jmethodID getMethodID(JNIEnv *env,
 
     return id;
 }
-
 static jmethodID getCachedMethodID(JNIEnv *env,
                                    jclass clazz,
                                    const QByteArray &className,
@@ -191,7 +190,6 @@ static inline jfieldID getFieldID(JNIEnv *env,
 
     return id;
 }
-
 static jfieldID getCachedFieldID(JNIEnv *env,
                                  jclass clazz,
                                  const QByteArray &className,
@@ -259,10 +257,10 @@ QJNIEnvironmentPrivate::QJNIEnvironmentPrivate()
         JavaVMAttachArgs args = { JNI_VERSION_1_6, qJniThreadName, Q_NULLPTR };
         if (vm->AttachCurrentThread(&jniEnv, &args) != JNI_OK)
             return;
-
         if (!jniEnvTLS->hasLocalData()) // If we attached the thread we own it.
             jniEnvTLS->setLocalData(new QJNIEnvironmentPrivateTLS);
     }
+
 }
 
 JNIEnv *QJNIEnvironmentPrivate::operator->()

@@ -312,6 +312,9 @@ void QAndroidPlatformScreen::doRedraw()
     QMutexLocker lock(&m_surfaceMutex);
     if (m_id == -1 && m_rasterSurfaces) {
         m_id = QtAndroid::createSurface(this, m_availableGeometry, true, m_depth);
+        if (m_id < 0) {
+            return;
+        }
         AndroidDeadlockProtector protector;
         if (!protector.acquire())
             return;

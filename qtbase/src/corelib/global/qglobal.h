@@ -931,7 +931,7 @@ public:
 // (http://www.open-std.org/jtc1/sc22/wg21/docs/cwg_defects.html#382).
 // GCC 4.3 and 4.4 have support for decltype, but are affected by DR 382.
 #  if defined(Q_COMPILER_DECLTYPE) && \
-    (defined(Q_CC_CLANG) || defined(Q_CC_INTEL) || !defined(Q_CC_GNU) || Q_CC_GNU >= 405)
+    (defined(Q_CC_CLANG) || defined(Q_CC_INTEL) || !defined(Q_CC_GNU) || (defined(Q_CC_GNU) && (Q_CC_GNU + 0 >= 405)))
 #    define QT_FOREACH_DECLTYPE(x) typename QtPrivate::remove_reference<decltype(x)>::type
 #  else
 #    define QT_FOREACH_DECLTYPE(x) __typeof__((x))

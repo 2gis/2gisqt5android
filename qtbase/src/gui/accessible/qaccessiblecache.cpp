@@ -33,6 +33,8 @@
 
 #include "qaccessiblecache_p.h"
 
+#include <QMutexLocker>
+
 #ifndef QT_NO_ACCESSIBILITY
 
 QT_BEGIN_NAMESPACE
@@ -50,6 +52,12 @@ QAccessibleCache *QAccessibleCache::instance()
     return qAccessibleCache;
 }
 
+
+QAccessibleCache::QAccessibleCache() : 
+    dataSync(QMutex::Recursive)
+{}
+
+
 /*
   The ID is always in the range [INT_MAX+1, UINT_MAX].
   This makes it easy on windows to reserve the positive integer range
@@ -59,6 +67,8 @@ QAccessible::Id QAccessibleCache::acquireId() const
 {
     static const QAccessible::Id FirstId = QAccessible::Id(INT_MAX) + 1;
     static QAccessible::Id lastUsedId = FirstId;
+
+    QMutexLocker lock(&dataSync);
 
     while (idToInterface.contains(lastUsedId)) {
         // (wrap back when when we reach UINT_MAX - 1)
@@ -72,8 +82,31 @@ QAccessible::Id QAccessibleCache::acquireId() const
     return lastUsedId;
 }
 
+
+QAccessible::Id QAccessibleCache::getId(QObject *object)
+{
+    QMutexLocker lock(&dataSync);
+    return objectToId.value(object);
+}
+
+
+bool QAccessibleCache::containsObject(QObject *object)
+{
+    QMutexLocker lock(&dataSync);
+    return objectToId.contains(object);
+}
+
+
+QAccessible::Id QAccessibleCache::getId(QAccessibleInterface *iface)
+{
+    QMutexLocker lock(&dataSync);
+    return idToInterface.key(iface, 0x00);
+}
+
+
 QAccessibleInterface *QAccessibleCache::interfaceForId(QAccessible::Id id) const
 {
+    QMutexLocker lock(&dataSync);
     return idToInterface.value(id);
 }
 
@@ -81,6 +114,8 @@ QAccessible::Id QAccessibleCache::insert(QObject *object, QAccessibleInterface *
 {
     Q_ASSERT(iface);
     Q_UNUSED(object)
+
+    QMutexLocker lock(&dataSync);
 
     // object might be 0
     Q_ASSERT(!objectToId.contains(object));
@@ -99,6 +134,8 @@ QAccessible::Id QAccessibleCache::insert(QObject *object, QAccessibleInterface *
 
 void QAccessibleCache::objectDestroyed(QObject* obj)
 {
+    QMutexLocker lock(&dataSync);
+
     QAccessible::Id id = objectToId.value(obj);
     if (id) {
         Q_ASSERT_X(idToInterface.contains(id), "", "QObject with accessible interface deleted, where interface not in cache!");
@@ -108,6 +145,8 @@ void QAccessibleCache::objectDestroyed(QObject* obj)
 
 void QAccessibleCache::deleteInterface(QAccessible::Id id, QObject *obj)
 {
+    QMutexLocker lock(&dataSync);
+
     QAccessibleInterface *iface = idToInterface.take(id);
     if (!obj)
         obj = iface->object();

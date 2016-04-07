@@ -117,6 +117,11 @@ static int qt_gettid()
 {
     return pthread_getthreadid_np();
 }
+#elif defined(Q_OS_ANDROID)
+static int qt_gettid()
+{
+    return gettid();
+}
 #else
 static QT_PREPEND_NAMESPACE(qint64) qt_gettid()
 {

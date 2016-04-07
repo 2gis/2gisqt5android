@@ -297,6 +297,9 @@ public class QtAccessibilityDelegate extends View.AccessibilityDelegate
 
         node.setClassName(m_view.getClass().getName() + DEFAULT_CLASS_NAME);
         node.setPackageName(m_view.getContext().getPackageName());
+        String id = QtNativeAccessibility.viewIdResourceForAccessibleObject(virtualViewId);
+        if (!TextUtils.isEmpty(id) && android.os.Build.VERSION.SDK_INT >= 18)
+            node.setViewIdResourceName(String.format("%s:id/%s", node.getPackageName(), id));
 
         if (!QtNativeAccessibility.populateNode(virtualViewId, node))
             return node;

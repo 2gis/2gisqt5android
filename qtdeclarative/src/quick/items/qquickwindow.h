@@ -62,6 +62,7 @@ class Q_QUICK_EXPORT QQuickWindow : public QWindow
     Q_PROPERTY(QColor color READ color WRITE setColor NOTIFY colorChanged)
     Q_PROPERTY(QQuickItem* contentItem READ contentItem CONSTANT)
     Q_PROPERTY(QQuickItem* activeFocusItem READ activeFocusItem NOTIFY activeFocusItemChanged REVISION 1)
+    Q_PROPERTY(bool clearStencilAndDepth READ clearStencilAndDepth WRITE setClearStencilAndDepth)
     Q_CLASSINFO("DefaultProperty", "data")
     Q_DECLARE_PRIVATE(QQuickWindow)
 public:
@@ -146,6 +147,10 @@ public:
     void scheduleRenderJob(QRunnable *job, RenderStage schedule);
 
     qreal effectiveDevicePixelRatio() const;
+
+    // 2GIS VNA-3203
+    bool clearStencilAndDepth();
+    void setClearStencilAndDepth(bool clear);
 
 Q_SIGNALS:
     void frameSwapped();

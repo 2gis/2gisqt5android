@@ -1,3 +1,21 @@
+2GIS QT 5 FORK
+==============
+
+This is a fork of Qt 5 by DoubleGIS, LLC (2GIS) distribued under GNU LGPL License
+used to build 2GIS v4 for Android.
+
+Changes from official Qt version:
+
+- 2GIS patches to fix various bugs (including crashes and lock-ups) under Android.
+- 2GIS UI automation improvements for Android.
+- Single git repository without submodules, based on release tarballs from Digia.
+
+All the improvements are contributed to Qt but this repository allows you to get
+them in real time, without having to wait for their acceptance to the official
+repository and the next Qt release.
+
+
+
 HOW TO BUILD QT5
 ================
 

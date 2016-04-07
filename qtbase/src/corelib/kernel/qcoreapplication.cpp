@@ -461,8 +461,11 @@ QCoreApplicationPrivate::QCoreApplicationPrivate(int &aargc, char **aargv, uint 
 #  endif
 
     QThread *cur = QThread::currentThread(); // note: this may end up setting theMainThread!
+#  if !defined(Q_OS_ANDROID)
     if (cur != theMainThread)
         qWarning("WARNING: QApplication was not created in the main() thread.");
+#  endif
+
 #endif
 }
 

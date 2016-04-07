@@ -466,19 +466,23 @@ QVariant QAndroidPlatformTheme::themeHint(ThemeHint hint) const
 
             QAndroidPlatformIntegration *platformIntegration
                     = static_cast<QAndroidPlatformIntegration *>(QGuiApplicationPrivate::platformIntegration());
-            QAndroidPlatformScreen *platformScreen = platformIntegration->screen();
-            if (platformScreen != 0) {
-                QScreen *screen = platformScreen->screen();
-                qreal dotsPerInch = screen->physicalDotsPerInch();
 
-                // Allow 15% of an inch between clicks when double clicking
-                int distance = qRound(dotsPerInch * 0.15);
-                if (distance > minimumDistance)
-                    ret = distance;
-            }
+			if (platformIntegration != 0)
+			{
+				QAndroidPlatformScreen *platformScreen = platformIntegration->screen();
+				if (platformScreen != 0) {
+					QScreen *screen = platformScreen->screen();
+					qreal dotsPerInch = screen->physicalDotsPerInch();
 
-            if (ret > 0)
-                return ret;
+					// Allow 15% of an inch between clicks when double clicking
+					int distance = qRound(dotsPerInch * 0.15);
+					if (distance > minimumDistance)
+						ret = distance;
+				}
+
+				if (ret > 0)
+					return ret;
+			}
 
             // fall through
     }
