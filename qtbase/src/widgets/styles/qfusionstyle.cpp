@@ -937,6 +937,7 @@ void QFusionStyle::drawPrimitive(PrimitiveElement elem,
     case PE_FrameTabWidget:
         painter->save();
         painter->fillRect(option->rect.adjusted(0, 0, -1, -1), tabFrameColor);
+#ifndef QT_NO_TABWIDGET
         if (const QStyleOptionTabWidgetFrame *twf = qstyleoption_cast<const QStyleOptionTabWidgetFrame *>(option)) {
             QColor borderColor = outline.lighter(110);
             QRect rect = option->rect.adjusted(0, 0, -1, -1);
@@ -959,6 +960,7 @@ void QFusionStyle::drawPrimitive(PrimitiveElement elem,
             painter->drawRect(rect.adjusted(1, 1, -1, -1));
 
         }
+#endif // !QT_NO_TABWIDGET
         painter->restore();
         break ;
 
