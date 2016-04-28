@@ -1097,6 +1097,7 @@ void QFusionStyle::drawControl(ControlElement element, const QStyleOption *optio
         painter->restore();
         break;
     case CE_ToolBar:
+#ifndef QT_NO_TOOLBAR
         if (const QStyleOptionToolBar *toolBar = qstyleoption_cast<const QStyleOptionToolBar *>(option)) {
             // Reserve the beveled appearance only for mainwindow toolbars
             if (widget && !(qobject_cast<const QMainWindow*> (widget->parentWidget())))
@@ -1215,6 +1216,7 @@ void QFusionStyle::drawControl(ControlElement element, const QStyleOption *optio
             }
             painter->setPen(oldPen);
         }
+#endif // !QT_NO_TOOLBAR
         break;
     case CE_DockWidgetTitle:
         painter->save();
