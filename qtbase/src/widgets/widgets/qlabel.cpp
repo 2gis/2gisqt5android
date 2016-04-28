@@ -882,6 +882,7 @@ void QLabel::mouseReleaseEvent(QMouseEvent *ev)
     d->sendControlEvent(ev);
 }
 
+#ifndef QT_NO_CONTEXTMENU
 /*!\reimp
 */
 void QLabel::contextMenuEvent(QContextMenuEvent *ev)
@@ -904,6 +905,7 @@ void QLabel::contextMenuEvent(QContextMenuEvent *ev)
     menu->popup(ev->globalPos());
 #endif
 }
+#endif // !QT_NO_CONTEXTMENU
 
 /*!
     \reimp
