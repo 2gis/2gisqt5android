@@ -73,6 +73,13 @@
 #  define HAVE_WAIT4    1
 #endif
 
+#if defined(ANDROID)
+/*
+ * Some android x86 devices have a bug with wait4 function
+ */
+#  undef HAVE_WAIT4
+#endif
+
 #if defined(__APPLE__)
 /* Up until OS X 10.7, waitid(P_ALL, ...) will return success, but will not
  * fill in the details of the dead child. That means waitid is not useful to us.
