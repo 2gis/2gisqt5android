@@ -3024,8 +3024,10 @@ void QFusionStyle::drawComplexControl(ComplexControl control, const QStyleOption
         }
         break;
     case CC_Dial:
+#ifndef QT_NO_DIAL
         if (const QStyleOptionSlider *dial = qstyleoption_cast<const QStyleOptionSlider *>(option))
             QStyleHelper::drawDial(dial, painter);
+#endif // !QT_NO_DIAL
         break;
     default:
         QCommonStyle::drawComplexControl(control, option, painter, widget);
