@@ -1533,9 +1533,11 @@ void QMdiAreaPrivate::showRubberBandFor(QMdiSubWindow *subWindow)
     if (!subWindow || !rubberBand)
         return;
 
+#ifndef QT_NO_TABBAR
     if (viewMode == QMdiArea::TabbedView)
         rubberBand->setGeometry(tabBar->tabRect(childWindows.indexOf(subWindow)));
     else
+#endif // !QT_NO_TABBAR
         rubberBand->setGeometry(subWindow->geometry());
 
     rubberBand->raise();

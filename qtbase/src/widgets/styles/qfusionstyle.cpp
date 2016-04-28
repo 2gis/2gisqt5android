@@ -448,6 +448,7 @@ void QFusionStyle::drawPrimitive(PrimitiveElement elem,
         break;
     }
     case PE_FrameTabBarBase:
+#ifndef QT_NO_TABBAR
         if (const QStyleOptionTabBarBase *tbb
                 = qstyleoption_cast<const QStyleOptionTabBarBase *>(option)) {
             painter->save();
@@ -482,6 +483,7 @@ void QFusionStyle::drawPrimitive(PrimitiveElement elem,
             }
             painter->restore();
         }
+#endif // !QT_NO_TABBAR
         return;
     case PE_PanelScrollAreaCorner: {
         painter->save();
@@ -1795,6 +1797,7 @@ void QFusionStyle::drawControl(ControlElement element, const QStyleOption *optio
         break;
     case CE_TabBarTabShape:
         painter->save();
+#ifndef QT_NO_TABBAR
         if (const QStyleOptionTab *tab = qstyleoption_cast<const QStyleOptionTab *>(option)) {
 
             bool rtlHorTabs = (tab->direction == Qt::RightToLeft
@@ -1906,6 +1909,7 @@ void QFusionStyle::drawControl(ControlElement element, const QStyleOption *optio
                 painter->fillRect(QRect(rect.bottomRight() + QPoint(-1, -1), QSize(1, 1)), d->innerContrastLine());
             }
         }
+#endif // !QT_NO_TABBAR
         painter->restore();
         break;
     default:
