@@ -539,6 +539,13 @@ static void quitQtAndroidPlugin(JNIEnv *env, jclass /*clazz*/)
 
 static void terminateQt(JNIEnv *env, jclass /*clazz*/)
 {
+    const bool closing_down = QCoreApplication::closingDown();
+
+    if (!closing_down)
+    {
+        QCoreApplication::exit();
+    }
+
     sem_wait(&m_terminateSemaphore);
     sem_destroy(&m_terminateSemaphore);
     env->DeleteGlobalRef(m_applicationClass);
