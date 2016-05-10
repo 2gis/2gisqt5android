@@ -14,9 +14,6 @@
 #ifndef QT_NO_PROGRESSDIALOG
 #  define QT_NO_PROGRESSDIALOG
 #endif
-#ifndef QT_NO_WIZARD
-#  define QT_NO_WIZARD
-#endif
 
 /* File I/O */
 #if !defined QT_NO_PROCESS && defined Q_OS_ANDROID
