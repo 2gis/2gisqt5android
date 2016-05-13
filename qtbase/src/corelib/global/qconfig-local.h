@@ -1,17 +1,17 @@
 /* Dialogs */
-#ifndef QT_NO_ERRORMESSAGE
+#if !defined QT_NO_ERRORMESSAGE && defined Q_OS_ANDROID
 #  define QT_NO_ERRORMESSAGE
 #endif
-#ifndef QT_NO_INPUTDIALOG
+#if !defined QT_NO_INPUTDIALOG && defined Q_OS_ANDROID
 #  define QT_NO_INPUTDIALOG
 #endif
-#ifndef QT_NO_PRINTDIALOG
+#if !defined QT_NO_PRINTDIALOG && defined Q_OS_ANDROID
 #  define QT_NO_PRINTDIALOG
 #endif
-#ifndef QT_NO_PRINTPREVIEWDIALOG
+#if !defined QT_NO_PRINTPREVIEWDIALOG && defined Q_OS_ANDROID
 #  define QT_NO_PRINTPREVIEWDIALOG
 #endif
-#ifndef QT_NO_PROGRESSDIALOG
+#if !defined QT_NO_PROGRESSDIALOG && defined Q_OS_ANDROID
 #  define QT_NO_PROGRESSDIALOG
 #endif
 
@@ -62,7 +62,7 @@
 #ifndef QT_NO_PAINT_DEBUG
 #  define QT_NO_PAINT_DEBUG
 #endif
-#ifndef QT_NO_PRINTER
+#if !defined QT_NO_PRINTER && defined Q_OS_ANDROID
 #  define QT_NO_PRINTER
 #endif
 /* Styles */
