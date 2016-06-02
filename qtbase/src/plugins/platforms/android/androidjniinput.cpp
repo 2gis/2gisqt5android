@@ -287,9 +287,11 @@ namespace QtAndroidInput
         qDebug() << action << pointerType << buttonState << '@' << x << y << "pressure" << pressure << ": buttons" << buttons;
 #endif
 
+#if !defined QT_NO_TABLETEVENT
         QWindowSystemInterface::handleTabletEvent(tlw, ulong(time),
             localPos, globalPosF, QTabletEvent::Stylus, pointerType,
             buttons, pressure, 0, 0, 0., 0., 0, deviceId, Qt::NoModifier);
+#endif // !QT_NO_TABLETEVENT
     }
 
     static int mapAndroidKey(int key)
