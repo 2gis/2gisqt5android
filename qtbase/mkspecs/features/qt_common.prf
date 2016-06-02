@@ -23,6 +23,7 @@ contains(TEMPLATE, .*lib) {
     }
 
     QMAKE_LFLAGS += -Wl,-soname,$$shell_quote($$SONAME_TARGET)
+    QMAKE_LFLAGS += -Wl,-z,text
 
     # module and plugins
     !host_build:contains(QT_CONFIG, reduce_exports): CONFIG += hide_symbols
