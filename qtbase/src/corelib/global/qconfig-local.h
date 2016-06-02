@@ -49,6 +49,9 @@
 #ifndef QT_NO_SHAREDMEMORY
 #  define QT_NO_SHAREDMEMORY
 #endif
+#ifndef QT_NO_TABLETEVENT
+#  define QT_NO_TABLETEVENT
+#endif
 
 /* Networking */
 #ifndef QT_NO_SOCKS5
