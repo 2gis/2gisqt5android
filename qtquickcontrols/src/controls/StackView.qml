@@ -938,7 +938,7 @@ FocusScope {
                 "immediate":transition.immediate }
             var anim = root.delegate.getTransition(transition.properties)
             if (anim.createObject) {
-                anim = anim.createObject(null, transition.properties)
+                anim = anim.createObject(root, transition.properties)
                 anim.runningChanged.connect(function(){ if (anim.running === false) anim.destroy() })
             }
             transition.animation = anim
