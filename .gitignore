@@ -25,3 +25,4 @@ qtwebengine/src/3rdparty/ninja/build/
 qtwebengine/src/3rdparty/ninja/ninja
 qtwebengine/src/core/core_generated.gyp
 qtwebengine/src/core/qmake_extras.gypi
+
