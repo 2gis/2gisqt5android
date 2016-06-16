@@ -1,7 +1,8 @@
 TARGET = Enginio
+MODULE = enginio
+
 QT = core-private network
 DEFINES += ENGINIOCLIENT_LIBRARY
-MODULE = enginio
 
 QMAKE_DOCS = $$PWD/doc/qtenginio.qdocconf
 OTHER_FILES += \
@@ -9,8 +10,6 @@ OTHER_FILES += \
     doc/enginio_client.qdoc
 
 include(../src.pri)
-
-load(qt_module)
 
 SOURCES += \
     enginiobackendconnection.cpp \
@@ -43,5 +42,6 @@ HEADERS += \
     enginiooauth2authentication.h \
     enginioreplystate.h
 
-
 DEFINES +=  "ENGINIO_VERSION=\\\"$$MODULE_VERSION\\\""
+
+load(qt_module)

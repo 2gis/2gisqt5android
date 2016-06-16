@@ -106,15 +106,11 @@ void QSerialPortPrivate::close()
 {
     ::CancelIo(handle);
 
-    if (notifier) {
-        delete notifier;
-        notifier = Q_NULLPTR;
-    }
+    delete notifier;
+    notifier = Q_NULLPTR;
 
-    if (startAsyncWriteTimer) {
-        delete startAsyncWriteTimer;
-        startAsyncWriteTimer = Q_NULLPTR;
-    }
+    delete startAsyncWriteTimer;
+    startAsyncWriteTimer = Q_NULLPTR;
 
     communicationStarted = false;
     readStarted = false;
@@ -437,10 +433,13 @@ bool QSerialPortPrivate::completeAsyncRead(qint64 bytesTransferred)
     readStarted = false;
 
     bool result = true;
-    if (bytesTransferred == ReadChunkSize)
+    if (bytesTransferred == ReadChunkSize
+            || queuedBytesCount(QSerialPort::Input) > 0) {
         result = startAsyncRead();
-    else if (readBufferMaxSize == 0 || readBufferMaxSize > buffer.size())
+    } else if (readBufferMaxSize == 0
+               || readBufferMaxSize > buffer.size()) {
         result = startAsyncCommunication();
+    }
 
     if (bytesTransferred > 0)
         emitReadyRead();
@@ -596,6 +595,16 @@ OVERLAPPED *QSerialPortPrivate::waitForNotified(int msecs)
         return 0;
     }
     return overlapped;
+}
+
+qint64 QSerialPortPrivate::queuedBytesCount(QSerialPort::Direction direction) const
+{
+    COMSTAT comstat;
+    if (::ClearCommError(handle, Q_NULLPTR, &comstat) == 0)
+        return -1;
+    return (direction == QSerialPort::Input)
+            ? comstat.cbInQue
+            : ((direction == QSerialPort::Output) ? comstat.cbOutQue : -1);
 }
 
 inline bool QSerialPortPrivate::initialize()

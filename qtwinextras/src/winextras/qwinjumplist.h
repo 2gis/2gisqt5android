@@ -52,7 +52,7 @@ class Q_WINEXTRAS_EXPORT QWinJumpList : public QObject
     Q_PROPERTY(QString identifier READ identifier WRITE setIdentifier)
 
 public:
-    explicit QWinJumpList(QObject *parent = 0);
+    explicit QWinJumpList(QObject *parent = Q_NULLPTR);
     ~QWinJumpList();
 
     QString identifier() const;

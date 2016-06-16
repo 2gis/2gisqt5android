@@ -77,22 +77,6 @@ static inline QDpi monitorDPI(HMONITOR hMonitor)
 
 #endif // !Q_OS_WINCE
 
-static inline QSizeF deviceSizeMM(const QSize &pixels, const QDpi &dpi)
-{
-    const qreal inchToMM = 25.4;
-    const qreal h = qreal(pixels.width())  / qreal(dpi.first)  * inchToMM;
-    const qreal v = qreal(pixels.height()) / qreal(dpi.second) * inchToMM;
-    return QSizeF(h, v);
-}
-
-static inline QDpi deviceDPI(const QSize &pixels, const QSizeF &physicalSizeMM)
-{
-    const qreal inchToMM = 25.4;
-    const qreal h = qreal(pixels.width())  / (qreal(physicalSizeMM.width())  / inchToMM);
-    const qreal v = qreal(pixels.height()) / (qreal(physicalSizeMM.height()) / inchToMM);
-    return QDpi(h, v);
-}
-
 typedef QList<QWindowsScreenData> WindowsScreenDataList;
 
 static bool monitorData(HMONITOR hMonitor, QWindowsScreenData *data)
@@ -168,7 +152,7 @@ BOOL QT_WIN_CALLBACK monitorEnumCallback(HMONITOR hMonitor, HDC, LPRECT, LPARAM 
 static inline WindowsScreenDataList monitorData()
 {
     WindowsScreenDataList result;
-    EnumDisplayMonitors(0, 0, monitorEnumCallback, (LPARAM)&result);
+    EnumDisplayMonitors(0, 0, monitorEnumCallback, reinterpret_cast<LPARAM>(&result));
     return result;
 }
 
@@ -216,7 +200,7 @@ Q_GUI_EXPORT QPixmap qt_pixmapFromWinHBITMAP(HBITMAP bitmap, int hbitmapFormat =
 QPixmap QWindowsScreen::grabWindow(WId window, int x, int y, int width, int height) const
 {
     RECT r;
-    HWND hwnd = window ? (HWND)window : GetDesktopWindow();
+    HWND hwnd = window ? reinterpret_cast<HWND>(window) : GetDesktopWindow();
     GetClientRect(hwnd, &r);
 
     if (width < 0) width = r.right - r.left;
@@ -450,7 +434,7 @@ QWindowsScreenManager::QWindowsScreenManager() :
 
 bool QWindowsScreenManager::handleDisplayChange(WPARAM wParam, LPARAM lParam)
 {
-    const int newDepth = (int)wParam;
+    const int newDepth = int(wParam);
     const WORD newHorizontalResolution = LOWORD(lParam);
     const WORD newVerticalResolution = HIWORD(lParam);
     if (newDepth != m_lastDepth || newHorizontalResolution != m_lastHorizontalResolution

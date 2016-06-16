@@ -46,6 +46,7 @@
 #include <QJsonObject>
 #include <QJsonArray>
 #include <QJsonValue>
+#include <QRegularExpression>
 #include "shared.h"
 
 #ifdef Q_OS_DARWIN
@@ -164,6 +165,56 @@ void patch_debugInInfoPlist(const QString &infoPlistPath)
     infoPlist.write(contents);
 }
 
+OtoolInfo findDependencyInfo(const QString &binaryPath)
+{
+    OtoolInfo info;
+    info.binaryPath = binaryPath;
+
+    LogDebug() << "Using otool:";
+    LogDebug() << " inspecting" << binaryPath;
+    QProcess otool;
+    otool.start("otool", QStringList() << "-L" << binaryPath);
+    otool.waitForFinished();
+
+    if (otool.exitCode() != 0) {
+        LogError() << otool.readAllStandardError();
+    }
+
+    static const QRegularExpression regexp(QStringLiteral(
+        "^\\t(.+) \\(compatibility version (\\d+\\.\\d+\\.\\d+), "
+        "current version (\\d+\\.\\d+\\.\\d+)\\)$"));
+
+    QString output = otool.readAllStandardOutput();
+    QStringList outputLines = output.split("\n", QString::SkipEmptyParts);
+    outputLines.removeFirst(); // remove line containing the binary path
+    if (binaryPath.contains(".framework/") || binaryPath.endsWith(".dylib")) {
+        const auto match = regexp.match(outputLines.first());
+        if (match.hasMatch()) {
+            info.installName = match.captured(1);
+            info.compatibilityVersion = QVersionNumber::fromString(match.captured(2));
+            info.currentVersion = QVersionNumber::fromString(match.captured(3));
+        } else {
+            LogError() << "Could not parse otool output line:" << outputLines.first();
+        }
+        outputLines.removeFirst();
+    }
+
+    for (const QString &outputLine : outputLines) {
+        const auto match = regexp.match(outputLine);
+        if (match.hasMatch()) {
+            DylibInfo dylib;
+            dylib.binaryPath = match.captured(1);
+            dylib.compatibilityVersion = QVersionNumber::fromString(match.captured(2));
+            dylib.currentVersion = QVersionNumber::fromString(match.captured(3));
+            info.dependencies << dylib;
+        } else {
+            LogError() << "Could not parse otool output line:" << outputLine;
+        }
+    }
+
+    return info;
+}
+
 FrameworkInfo parseOtoolLibraryLine(const QString &line, const QString &appBundlePath, const QSet<QString> &rpaths, bool useDebugLibs)
 {
     FrameworkInfo info;
@@ -229,27 +280,32 @@ FrameworkInfo parseOtoolLibraryLine(const QString &line, const QString &appBundl
 
         if (state == QtPath) {
             // Check for library name part
-            if (part < parts.count() && parts.at(part).contains(".dylib ")) {
-                info.installName += "/" + (qtPath + currentPart + "/").simplified();
-                info.frameworkDirectory = info.installName;
+            if (part < parts.count() && parts.at(part).contains(".dylib")) {
+                info.frameworkDirectory += "/" + (qtPath + currentPart + "/").simplified();
                 state = DylibName;
                 continue;
             } else if (part < parts.count() && parts.at(part).endsWith(".framework")) {
-                info.installName += "/" + (qtPath + "lib/").simplified();
-                info.frameworkDirectory = info.installName;
+                info.frameworkDirectory += "/" + (qtPath + "lib/").simplified();
                 state = FrameworkName;
                 continue;
             } else if (trimmed.startsWith("/") == false) {      // If the line does not contain a full path, the app is using a binary Qt package.
+                QStringList partsCopy = parts;
+                partsCopy.removeLast();
                 if (currentPart.contains(".framework")) {
-                    info.frameworkDirectory = "/Library/Frameworks/";
+                    info.frameworkDirectory = "/Library/Frameworks/" + partsCopy.join("/");
+                    if (!info.frameworkDirectory.endsWith("/"))
+                        info.frameworkDirectory += "/";
                     state = FrameworkName;
-                } else {
-                    info.frameworkDirectory = "/usr/lib/";
+                    --part;
+                    continue;
+                } else if (currentPart.contains(".dylib")) {
+                    info.frameworkDirectory = "/usr/lib/" + partsCopy.join("/");
+                    if (!info.frameworkDirectory.endsWith("/"))
+                        info.frameworkDirectory += "/";
                     state = DylibName;
+                    --part;
+                    continue;
                 }
-
-                --part;
-                continue;
             }
             qtPath += (currentPart + "/");
 
@@ -263,11 +319,10 @@ FrameworkInfo parseOtoolLibraryLine(const QString &line, const QString &appBundl
             ++part;
             continue;
         } if (state == DylibName) {
-            name = currentPart.split(" (compatibility").at(0);
+            name = currentPart;
             info.isDylib = true;
             info.frameworkName = name;
             info.binaryName = name.left(name.indexOf('.')) + suffix + name.mid(name.indexOf('.'));
-            info.installName += name;
             info.deployedInstallName = "@executable_path/../Frameworks/" + info.binaryName;
             info.frameworkPath = info.frameworkDirectory + info.binaryName;
             info.sourceFilePath = info.frameworkPath;
@@ -283,7 +338,6 @@ FrameworkInfo parseOtoolLibraryLine(const QString &line, const QString &appBundl
             info.binaryDirectory = "Versions/" + info.version;
             info.binaryName = name + suffix;
             info.binaryPath = "/" + info.binaryDirectory + "/" + info.binaryName;
-            info.installName += info.frameworkName + "/" + info.binaryDirectory + "/" + name;
             info.deployedInstallName = "@executable_path/../Frameworks/" + info.frameworkName + info.binaryPath;
             info.frameworkPath = info.frameworkDirectory + info.frameworkName;
             info.sourceFilePath = info.frameworkPath + info.binaryPath;
@@ -293,6 +347,12 @@ FrameworkInfo parseOtoolLibraryLine(const QString &line, const QString &appBundl
         } else if (state == End) {
             break;
         }
+    }
+
+    if (!info.sourceFilePath.isEmpty() && QFile::exists(info.sourceFilePath)) {
+        info.installName = findDependencyInfo(info.sourceFilePath).installName;
+        if (info.installName.startsWith("@rpath/"))
+            info.deployedInstallName = info.installName;
     }
 
     return info;
@@ -377,7 +437,7 @@ QStringList findAppLibraries(const QString &appBundlePath)
     return result;
 }
 
-QStringList findAppBundleFiles(const QString &appBundlePath)
+QStringList findAppBundleFiles(const QString &appBundlePath, bool absolutePath = false)
 {
     QStringList result;
 
@@ -388,17 +448,17 @@ QStringList findAppBundleFiles(const QString &appBundlePath)
         iter.next();
         if (iter.fileInfo().isSymLink())
             continue;
-        result << iter.fileInfo().filePath();
+        result << (absolutePath ? iter.fileInfo().absoluteFilePath() : iter.fileInfo().filePath());
     }
 
     return result;
 }
 
-QList<FrameworkInfo> getQtFrameworks(const QStringList &otoolLines, const QString &appBundlePath, const QSet<QString> &rpaths, bool useDebugLibs)
+QList<FrameworkInfo> getQtFrameworks(const QList<DylibInfo> &dependencies, const QString &appBundlePath, const QSet<QString> &rpaths, bool useDebugLibs)
 {
     QList<FrameworkInfo> libraries;
-    foreach(const QString line, otoolLines) {
-        FrameworkInfo info = parseOtoolLibraryLine(line, appBundlePath, rpaths, useDebugLibs);
+    for (const DylibInfo &dylibInfo : dependencies) {
+        FrameworkInfo info = parseOtoolLibraryLine(dylibInfo.binaryPath, appBundlePath, rpaths, useDebugLibs);
         if (info.frameworkName.isEmpty() == false) {
             LogDebug() << "Adding framework:";
             LogDebug() << info;
@@ -476,23 +536,8 @@ QSet<QString> getBinaryRPaths(const QString &path, bool resolve = true, QString 
 
 QList<FrameworkInfo> getQtFrameworks(const QString &path, const QString &appBundlePath, const QSet<QString> &rpaths, bool useDebugLibs)
 {
-    LogDebug() << "Using otool:";
-    LogDebug() << " inspecting" << path;
-    QProcess otool;
-    otool.start("otool", QStringList() << "-L" << path);
-    otool.waitForFinished();
-
-    if (otool.exitCode() != 0) {
-        LogError() << otool.readAllStandardError();
-    }
-
-    QString output = otool.readAllStandardOutput();
-    QStringList outputLines = output.split("\n");
-    outputLines.removeFirst(); // remove line containing the binary path
-    if (path.contains(".framework") || path.contains(".dylib"))
-        outputLines.removeFirst(); // frameworks and dylibs print install name of themselves first.
-
-    return getQtFrameworks(outputLines, appBundlePath, rpaths + getBinaryRPaths(path), useDebugLibs);
+    const OtoolInfo info = findDependencyInfo(path);
+    return getQtFrameworks(info.dependencies, appBundlePath, rpaths + getBinaryRPaths(path), useDebugLibs);
 }
 
 QList<FrameworkInfo> getQtFrameworksForPaths(const QStringList &paths, const QString &appBundlePath, const QSet<QString> &rpaths, bool useDebugLibs)
@@ -510,28 +555,20 @@ QList<FrameworkInfo> getQtFrameworksForPaths(const QStringList &paths, const QSt
     return result;
 }
 
-QStringList getBinaryDependencies(const QString executablePath, const QString &path)
+QStringList getBinaryDependencies(const QString executablePath,
+                                  const QString &path,
+                                  const QList<QString> &additionalBinariesContainingRpaths)
 {
     QStringList binaries;
 
-    QProcess otool;
-    otool.start("otool", QStringList() << "-L" << path);
-    otool.waitForFinished();
-
-    if (otool.exitCode() != 0) {
-        LogError() << otool.readAllStandardError();
-    }
-
-    QString output = otool.readAllStandardOutput();
-    QStringList outputLines = output.split("\n");
-    outputLines.removeFirst(); // remove line containing the binary path
+    const auto dependencies = findDependencyInfo(path).dependencies;
 
     bool rpathsLoaded = false;
     QSet<QString> rpaths;
 
     // return bundle-local dependencies. (those starting with @executable_path)
-    foreach (const QString &line, outputLines) {
-        QString trimmedLine = line.mid(0, line.indexOf("(")).trimmed(); // remove "(compatibility version ...)" and whitespace
+    foreach (const DylibInfo &info, dependencies) {
+        QString trimmedLine = info.binaryPath;
         if (trimmedLine.startsWith("@executable_path/")) {
             QString binary = QDir::cleanPath(executablePath + trimmedLine.mid(QStringLiteral("@executable_path/").length()));
             if (binary != path)
@@ -539,6 +576,10 @@ QStringList getBinaryDependencies(const QString executablePath, const QString &p
         } else if (trimmedLine.startsWith("@rpath/")) {
             if (!rpathsLoaded) {
                 rpaths = getBinaryRPaths(path, true, executablePath);
+                foreach (const QString &binaryPath, additionalBinariesContainingRpaths) {
+                    QSet<QString> binaryRpaths = getBinaryRPaths(binaryPath, true);
+                    rpaths += binaryRpaths;
+                }
                 rpathsLoaded = true;
             }
             bool resolved = false;
@@ -862,15 +903,10 @@ DeploymentInfo deployQtFrameworks(QList<FrameworkInfo> frameworks,
         const FrameworkInfo framework = frameworks.takeFirst();
         copiedFrameworks.append(framework.frameworkName);
 
-        // Get the qt path from one of the Qt frameworks;
-        if (deploymentInfo.qtPath.isNull() && framework.frameworkName.contains("Qt")
-            && framework.frameworkDirectory.contains("/lib"))
-        {
-            deploymentInfo.qtPath = framework.frameworkDirectory;
-            deploymentInfo.qtPath.chop(5); // remove "/lib/"
-        }
+        if (deploymentInfo.qtPath.isNull())
+            deploymentInfo.qtPath = QLibraryInfo::location(QLibraryInfo::PrefixPath);
 
-        if (framework.installName.startsWith("@executable_path/") || framework.installName.startsWith("@rpath/")) {
+        if (framework.frameworkDirectory.startsWith(bundlePath)) {
             LogError()  << framework.frameworkName << "already deployed, skipping.";
             continue;
         }
@@ -926,7 +962,9 @@ DeploymentInfo deployQtFrameworks(const QString &appBundlePath, const QStringLis
    applicationBundle.libraryPaths = findAppLibraries(appBundlePath);
    QStringList allBinaryPaths = QStringList() << applicationBundle.binaryPath << applicationBundle.libraryPaths
                                                  << additionalExecutables;
-   QList<FrameworkInfo> frameworks = getQtFrameworksForPaths(allBinaryPaths, appBundlePath, getBinaryRPaths(applicationBundle.binaryPath, true), useDebugLibs);
+   QSet<QString> allLibraryPaths = getBinaryRPaths(applicationBundle.binaryPath, true);
+   allLibraryPaths.insert(QLibraryInfo::location(QLibraryInfo::LibrariesPath));
+   QList<FrameworkInfo> frameworks = getQtFrameworksForPaths(allBinaryPaths, appBundlePath, allLibraryPaths, useDebugLibs);
    if (frameworks.isEmpty() && !alwaysOwerwriteEnabled) {
         LogWarning();
         LogWarning() << "Could not find any external Qt frameworks to deploy in" << appBundlePath;
@@ -1010,7 +1048,6 @@ void deployPlugins(const ApplicationBundleInfo &appBundleInfo, const QString &pl
     }
 
     foreach (const QString &plugin, pluginList) {
-
         QString sourcePath = pluginSourcePath + "/" + plugin;
         if (useDebugLibs) {
             // Use debug plugins if found.
@@ -1025,10 +1062,8 @@ void deployPlugins(const ApplicationBundleInfo &appBundleInfo, const QString &pl
 
         if (copyFilePrintStatus(sourcePath, destinationPath)) {
             runStrip(destinationPath);
-
             QList<FrameworkInfo> frameworks = getQtFrameworks(destinationPath, appBundleInfo.path, deploymentInfo.rpathsUsed, useDebugLibs);
             deployQtFrameworks(frameworks, appBundleInfo.path, QStringList() << destinationPath, useDebugLibs, deploymentInfo.useLoaderPath);
-
         }
     }
 }
@@ -1260,7 +1295,9 @@ void codesignFile(const QString &identity, const QString &filePath)
     }
 }
 
-QSet<QString> codesignBundle(const QString &identity, const QString &appBundlePath)
+QSet<QString> codesignBundle(const QString &identity,
+                             const QString &appBundlePath,
+                             QList<QString> additionalBinariesContainingRpaths)
 {
     // Code sign all binaries in the app bundle. This needs to
     // be done inside-out, e.g sign framework dependencies
@@ -1273,27 +1310,38 @@ QSet<QString> codesignBundle(const QString &identity, const QString &appBundlePa
     LogNormal() << "Signing" << appBundlePath << "with identity" << identity;
 
     QStack<QString> pendingBinaries;
+    QSet<QString> pendingBinariesSet;
     QSet<QString> signedBinaries;
 
     // Create the root code-binary set. This set consists of the application
     // executable(s) and the plugins.
-    QString rootBinariesPath = appBundlePath + "/Contents/MacOS/";
+    QString appBundleAbsolutePath = QFileInfo(appBundlePath).absoluteFilePath();
+    QString rootBinariesPath = appBundleAbsolutePath + "/Contents/MacOS/";
     QStringList foundRootBinaries = QDir(rootBinariesPath).entryList(QStringList() << "*", QDir::Files);
-    foreach (const QString &binary, foundRootBinaries)
-        pendingBinaries.push(rootBinariesPath + binary);
+    foreach (const QString &binary, foundRootBinaries) {
+        QString binaryPath = rootBinariesPath + binary;
+        pendingBinaries.push(binaryPath);
+        pendingBinariesSet.insert(binaryPath);
+        additionalBinariesContainingRpaths.append(binaryPath);
+    }
 
-    QStringList foundPluginBinaries = findAppBundleFiles(appBundlePath + "/Contents/PlugIns/");
-    foreach (const QString &binary, foundPluginBinaries)
+    bool getAbsoltuePath = true;
+    QStringList foundPluginBinaries = findAppBundleFiles(appBundlePath + "/Contents/PlugIns/", getAbsoltuePath);
+    foreach (const QString &binary, foundPluginBinaries) {
          pendingBinaries.push(binary);
+         pendingBinariesSet.insert(binary);
+    }
 
     // Add frameworks for processing.
     QStringList frameworkPaths = findAppFrameworkPaths(appBundlePath);
     foreach (const QString &frameworkPath, frameworkPaths) {
 
         // Add all files for a framework as a catch all.
-        QStringList bundleFiles = findAppBundleFiles(frameworkPath);
-        foreach (const QString &binary, bundleFiles)
+        QStringList bundleFiles = findAppBundleFiles(frameworkPath, getAbsoltuePath);
+        foreach (const QString &binary, bundleFiles) {
             pendingBinaries.push(binary);
+            pendingBinariesSet.insert(binary);
+        }
 
         // Prioritise first to sign any additional inner bundles found in the Helpers folder (e.g
         // used by QtWebEngine).
@@ -1303,7 +1351,9 @@ QSet<QString> codesignBundle(const QString &identity, const QString &appBundlePa
             QString helpersPath = helpersIterator.filePath();
             QStringList innerBundleNames = QDir(helpersPath).entryList(QStringList() << "*.app", QDir::Dirs);
             foreach (const QString &innerBundleName, innerBundleNames)
-                signedBinaries += codesignBundle(identity, helpersPath + "/" + innerBundleName);
+                signedBinaries += codesignBundle(identity,
+                                                 helpersPath + "/" + innerBundleName,
+                                                 additionalBinariesContainingRpaths);
         }
 
         // Also make sure to sign any libraries that will not be found by otool because they
@@ -1312,35 +1362,43 @@ QSet<QString> codesignBundle(const QString &identity, const QString &appBundlePa
         while (librariesIterator.hasNext()) {
             librariesIterator.next();
             QString librariesPath = librariesIterator.filePath();
-            bundleFiles = findAppBundleFiles(librariesPath);
-            foreach (const QString &binary, bundleFiles)
+            bundleFiles = findAppBundleFiles(librariesPath, getAbsoltuePath);
+            foreach (const QString &binary, bundleFiles) {
                 pendingBinaries.push(binary);
+                pendingBinariesSet.insert(binary);
+            }
         }
     }
 
-    // Sign all binares; use otool to find and sign dependencies first.
+    // Sign all binaries; use otool to find and sign dependencies first.
     while (!pendingBinaries.isEmpty()) {
         QString binary = pendingBinaries.pop();
         if (signedBinaries.contains(binary))
             continue;
 
-        // Check if there are unsigned dependencies, sign these first
-        QStringList dependencies = getBinaryDependencies(rootBinariesPath, binary).toSet().subtract(signedBinaries).toList();
+        // Check if there are unsigned dependencies, sign these first.
+        QStringList dependencies =
+                getBinaryDependencies(rootBinariesPath, binary, additionalBinariesContainingRpaths).toSet()
+                .subtract(signedBinaries)
+                .subtract(pendingBinariesSet)
+                .toList();
 
         if (!dependencies.isEmpty()) {
             pendingBinaries.push(binary);
+            pendingBinariesSet.insert(binary);
             int dependenciesSkipped = 0;
             foreach (const QString &dependency, dependencies) {
                 // Skip dependencies that are outside the current app bundle, because this might
                 // cause a codesign error if the current bundle is part of the dependency (e.g.
                 // a bundle is part of a framework helper, and depends on that framework).
                 // The dependencies will be taken care of after the current bundle is signed.
-                if (!dependency.startsWith(appBundlePath)) {
+                if (!dependency.startsWith(appBundleAbsolutePath)) {
                     ++dependenciesSkipped;
                     LogNormal() << "Skipping outside dependency: " << dependency;
                     continue;
                 }
                 pendingBinaries.push(dependency);
+                pendingBinariesSet.insert(dependency);
             }
 
             // If all dependencies were skipped, make sure the binary is actually signed, instead
@@ -1352,9 +1410,10 @@ QSet<QString> codesignBundle(const QString &identity, const QString &appBundlePa
             }
         }
 
-        // All dependencies are signed, now sign this binary
+        // All dependencies are signed, now sign this binary.
         codesignFile(identity, binary);
         signedBinaries.insert(binary);
+        pendingBinariesSet.remove(binary);
     }
 
     LogNormal() << "Finished codesigning " << appBundlePath << "with identity" << identity;
@@ -1375,7 +1434,7 @@ QSet<QString> codesignBundle(const QString &identity, const QString &appBundlePa
 }
 
 void codesign(const QString &identity, const QString &appBundlePath) {
-    codesignBundle(identity, appBundlePath);
+    codesignBundle(identity, appBundlePath, QList<QString>());
 }
 
 void createDiskImage(const QString &appBundlePath)

@@ -70,11 +70,14 @@ public:
     }
     inline QKeySequencePrivate(const QKeySequencePrivate &copy) : ref(1)
     {
-        std::copy(copy.key, copy.key + MaxKeyCount, key);
+        std::copy(copy.key, copy.key + MaxKeyCount,
+                  QT_MAKE_CHECKED_ARRAY_ITERATOR(key, MaxKeyCount));
     }
     QAtomicInt ref;
     int key[MaxKeyCount];
     static QString encodeString(int key, QKeySequence::SequenceFormat format);
+    // used in dbusmenu
+    Q_GUI_EXPORT static QString keyName(int key, QKeySequence::SequenceFormat format);
     static int decodeString(const QString &keyStr, QKeySequence::SequenceFormat format);
 };
 #endif // QT_NO_SHORTCUT

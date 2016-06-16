@@ -53,7 +53,7 @@ class Q_WINEXTRAS_EXPORT QWinTaskbarProgress : public QObject
     Q_PROPERTY(bool stopped READ isStopped NOTIFY stoppedChanged)
 
 public:
-    explicit QWinTaskbarProgress(QObject *parent = 0);
+    explicit QWinTaskbarProgress(QObject *parent = Q_NULLPTR);
     ~QWinTaskbarProgress();
 
     int value() const;

@@ -367,7 +367,7 @@ static QByteArray filenameForCFUrl(CFURLRef url)
 
     if (!CFURLGetFileSystemRepresentation(url, true, buffer, sizeof(buffer))) {
         qWarning("QCoreTextFontDatabase::filenameForCFUrl: could not resolve file for URL %s",
-                 qPrintable(QString::fromCFString(CFURLGetString(url))));
+                 url ? qPrintable(QString::fromCFString(CFURLGetString(url))) : "(null)");
     } else {
         QCFType<CFStringRef> scheme = CFURLCopyScheme(url);
         if (QString::fromCFString(scheme) == QLatin1String("qrc"))
@@ -518,9 +518,6 @@ QStringList QCoreTextFontDatabase::fallbacksForFamily(const QString &family, QFo
         if (&CTFontCopyDefaultCascadeListForLanguages)
   #endif
         {
-            if (fallbackLists.contains(family))
-                return fallbackLists.value(family);
-
             QCFType<CFMutableDictionaryRef> attributes = CFDictionaryCreateMutable(kCFAllocatorDefault, 0, &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
             CFDictionaryAddValue(attributes, kCTFontFamilyNameAttribute, QCFString(family));
             if (QCFType<CTFontDescriptorRef> fontDescriptor = CTFontDescriptorCreateWithAttributes(attributes)) {
@@ -548,12 +545,9 @@ QStringList QCoreTextFontDatabase::fallbacksForFamily(const QString &family, QFo
                             fallbackList.append(QStringLiteral("Arial Unicode MS"));
 #endif
 
-                        fallbackLists[family] = fallbackList;
+                        return fallbackList;
                     }
                 }
-
-                if (fallbackLists.contains(family))
-                    return fallbackLists.value(family);
             }
         }
 #endif

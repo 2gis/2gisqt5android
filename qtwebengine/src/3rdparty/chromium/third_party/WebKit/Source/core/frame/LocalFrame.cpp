@@ -245,7 +245,7 @@ void LocalFrame::navigate(Document& originDocument, const KURL& url, bool lockBa
     if (isMainFrame() && !m_loader.stateMachine()->committedFirstRealDocumentLoad()) {
         FrameLoadRequest request(&originDocument, url);
         request.resourceRequest().setHasUserGesture(userGestureStatus == UserGestureStatus::Active);
-        m_loader.load(request);
+        navigate(request);
     } else {
         m_navigationScheduler.scheduleLocationChange(&originDocument, url.string(), lockBackForwardList);
     }
@@ -253,8 +253,6 @@ void LocalFrame::navigate(Document& originDocument, const KURL& url, bool lockBa
 
 void LocalFrame::navigate(const FrameLoadRequest& request)
 {
-    if (!isNavigationAllowed())
-        return;
     m_loader.load(request);
 }
 

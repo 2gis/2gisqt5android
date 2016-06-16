@@ -63,7 +63,8 @@ HEADERS += \
     $$PWD/qplatformfunctions_wince.h \
     $$PWD/qwindowsnativeimage.h \
     $$PWD/qwindowsnativeinterface.h \
-    $$PWD/qwindowsopengltester.h
+    $$PWD/qwindowsopengltester.h \
+    $$PWD/qwindowsthreadpoolrunner.h
 
 INCLUDEPATH += $$PWD
 
@@ -123,6 +124,7 @@ contains(QT_CONFIG, freetype) {
     SOURCES += \
                $$PWD/qwindowsfontdatabase_ft.cpp
 } else:contains(QT_CONFIG, system-freetype) {
+    CONFIG += qpa/basicunixfontdatabase
     include($$QT_SOURCE_TREE/src/platformsupport/fontdatabases/basic/basic.pri)
     HEADERS += \
                $$PWD/qwindowsfontdatabase_ft.h

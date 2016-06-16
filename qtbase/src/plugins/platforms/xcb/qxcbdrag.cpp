@@ -50,6 +50,7 @@
 
 #include <qpa/qwindowsysteminterface.h>
 
+#include <private/qguiapplication_p.h>
 #include <private/qshapedpixmapdndwindow_p.h>
 #include <private/qsimpledrag_p.h>
 #include <private/qhighdpiscaling_p.h>
@@ -170,6 +171,17 @@ QMimeData *QXcbDrag::platformDropData()
     return dropData;
 }
 
+bool QXcbDrag::eventFilter(QObject *o, QEvent *e)
+{
+    /* We are setting a mouse grab on the QShapedPixmapWindow in order not to
+     * lose the grab when the virtual desktop changes, but
+     * QBasicDrag::eventFilter() expects the events to be coming from the
+     * window where the drag was started. */
+    if (initiatorWindow && o == shapedPixmapWindow())
+        o = initiatorWindow.data();
+    return QBasicDrag::eventFilter(o, e);
+}
+
 void QXcbDrag::startDrag()
 {
     // #fixme enableEventFilter();
@@ -193,6 +205,8 @@ void QXcbDrag::startDrag()
                             XCB_ATOM_ATOM, 32, drag_types.size(), (const void *)drag_types.constData());
 
     setUseCompositing(current_virtual_desktop->compositingActive());
+    setScreen(current_virtual_desktop->screens().constFirst()->screen());
+    initiatorWindow = QGuiApplicationPrivate::currentMouseWindow;
     QBasicDrag::startDrag();
     if (connection()->mouseGrabber() == Q_NULLPTR)
         shapedPixmapWindow()->setMouseGrabEnabled(true);
@@ -201,6 +215,7 @@ void QXcbDrag::startDrag()
 void QXcbDrag::endDrag()
 {
     QBasicDrag::endDrag();
+    initiatorWindow.clear();
 }
 
 static xcb_translate_coordinates_reply_t *
@@ -322,6 +337,9 @@ void QXcbDrag::move(const QPoint &globalPos)
     if (virtualDesktop != current_virtual_desktop) {
         setUseCompositing(virtualDesktop->compositingActive());
         recreateShapedPixmapWindow(static_cast<QPlatformScreen*>(screen)->screen(), deviceIndependentPos);
+        if (connection()->mouseGrabber() == Q_NULLPTR)
+            shapedPixmapWindow()->setMouseGrabEnabled(true);
+
         current_virtual_desktop = virtualDesktop;
     } else {
         QBasicDrag::moveShapedPixmapWindow(deviceIndependentPos);
@@ -419,6 +437,7 @@ void QXcbDrag::move(const QPoint &globalPos)
 
             xcb_client_message_event_t enter;
             enter.response_type = XCB_CLIENT_MESSAGE;
+            enter.sequence = 0;
             enter.window = target;
             enter.format = 32;
             enter.type = atom(QXcbAtom::XdndEnter);
@@ -447,6 +466,7 @@ void QXcbDrag::move(const QPoint &globalPos)
 
         xcb_client_message_event_t move;
         move.response_type = XCB_CLIENT_MESSAGE;
+        move.sequence = 0;
         move.window = target;
         move.format = 32;
         move.type = atom(QXcbAtom::XdndPosition);
@@ -475,6 +495,7 @@ void QXcbDrag::drop(const QPoint &globalPos)
 
     xcb_client_message_event_t drop;
     drop.response_type = XCB_CLIENT_MESSAGE;
+    drop.sequence = 0;
     drop.window = current_target;
     drop.format = 32;
     drop.type = atom(QXcbAtom::XdndDrop);
@@ -736,6 +757,7 @@ void QXcbDrag::handle_xdnd_position(QPlatformWindow *w, const xcb_client_message
 
     xcb_client_message_event_t response;
     response.response_type = XCB_CLIENT_MESSAGE;
+    response.sequence = 0;
     response.window = xdnd_dragsource;
     response.format = 32;
     response.type = atom(QXcbAtom::XdndStatus);
@@ -882,6 +904,7 @@ void QXcbDrag::send_leave()
 
     xcb_client_message_event_t leave;
     leave.response_type = XCB_CLIENT_MESSAGE;
+    leave.sequence = 0;
     leave.window = current_target;
     leave.format = 32;
     leave.type = atom(QXcbAtom::XdndLeave);
@@ -952,6 +975,7 @@ void QXcbDrag::handleDrop(QPlatformWindow *, const xcb_client_message_event_t *e
 
     xcb_client_message_event_t finished;
     finished.response_type = XCB_CLIENT_MESSAGE;
+    finished.sequence = 0;
     finished.window = xdnd_dragsource;
     finished.format = 32;
     finished.type = atom(QXcbAtom::XdndFinished);
@@ -1062,6 +1086,40 @@ void QXcbDrag::cancel()
         send_leave();
 }
 
+// find an ancestor with XdndAware on it
+static xcb_window_t findXdndAwareParent(QXcbConnection *c, xcb_window_t window)
+{
+    xcb_window_t target = 0;
+    forever {
+        // check if window has XdndAware
+        xcb_get_property_cookie_t gpCookie = Q_XCB_CALL(
+            xcb_get_property(c->xcb_connection(), false, window,
+                             c->atom(QXcbAtom::XdndAware), XCB_GET_PROPERTY_TYPE_ANY, 0, 0));
+        xcb_get_property_reply_t *gpReply = xcb_get_property_reply(
+            c->xcb_connection(), gpCookie, 0);
+        bool aware = gpReply && gpReply->type != XCB_NONE;
+        free(gpReply);
+        if (aware) {
+            target = window;
+            break;
+        }
+
+        // try window's parent
+        xcb_query_tree_cookie_t qtCookie = Q_XCB_CALL(
+            xcb_query_tree_unchecked(c->xcb_connection(), window));
+        xcb_query_tree_reply_t *qtReply = xcb_query_tree_reply(
+            c->xcb_connection(), qtCookie, NULL);
+        if (!qtReply)
+            break;
+        xcb_window_t root = qtReply->root;
+        xcb_window_t parent = qtReply->parent;
+        free(qtReply);
+        if (window == root)
+            break;
+        window = parent;
+    }
+    return target;
+}
 
 void QXcbDrag::handleSelectionRequest(const xcb_selection_request_event_t *event)
 {
@@ -1089,17 +1147,16 @@ void QXcbDrag::handleSelectionRequest(const xcb_selection_request_event_t *event
             // xcb_convert_selection() that we sent the XdndDrop event to.
             at = findTransactionByWindow(event->requestor);
         }
-//        if (at == -1 && event->time == XCB_CURRENT_TIME) {
-//            // previous Qt versions always requested the data on a child of the target window
-//            // using CurrentTime... but it could be asking for either drop data or the current drag's data
-//            Window target = findXdndAwareParent(event->requestor);
-//            if (target) {
-//                if (current_target && current_target == target)
-//                    at = -2;
-//                else
-//                    at = findXdndDropTransactionByWindow(target);
-//            }
-//        }
+
+        if (at == -1) {
+            xcb_window_t target = findXdndAwareParent(connection(), event->requestor);
+            if (target) {
+                if (event->time == XCB_CURRENT_TIME && current_target == target)
+                    at = -2;
+                else
+                    at = findTransactionByWindow(target);
+            }
+        }
     }
 
     QDrag *transactionDrag = 0;

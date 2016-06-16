@@ -15,3 +15,6 @@ HEADERS += \
     mainwindow.h \
     imageobject.h \
     imagemodel.h
+
+target.path = $$[QT_INSTALL_EXAMPLES]/enginio/widgets/image-gallery-cpp
+INSTALLS += target

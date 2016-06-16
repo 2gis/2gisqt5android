@@ -5,6 +5,7 @@ QMAKE_DOCS = \
 QT -= gui
 QT += core-private
 
-load(qt_module)
 include(jni/jni.pri)
 include(android/android.pri)
+
+load(qt_module)

@@ -36,6 +36,7 @@
 
 #include "qquickstackview_p_p.h"
 
+#include <QtQml/qqmlinfo.h>
 #include <QtQml/qqmllist.h>
 #include <QtQml/qqmlengine.h>
 #include <QtQml/qqmlcomponent.h>
@@ -178,7 +179,8 @@ void QQuickStackElement::initialize()
         Q_ASSERT(v4);
         QV4::Scope scope(v4);
         QV4::ScopedValue ipv(scope, properties.value());
-        d->initializeObjectWithInitialProperties(ipv, item);
+        QV4::Scoped<QV4::QmlContext> qmlContext(scope, qmlCallingContext.value());
+        d->initializeObjectWithInitialProperties(qmlContext, ipv, item);
         properties.clear();
     }
 
@@ -224,6 +226,13 @@ void QQuickStackElement::transitionNextReposition(QQuickItemViewTransitioner *tr
 bool QQuickStackElement::prepareTransition(QQuickItemViewTransitioner *transitioner, const QRectF &viewBounds)
 {
     if (transitioner) {
+        if (item) {
+            QQuickAnchors *anchors = QQuickItemPrivate::get(item)->_anchors;
+            // TODO: expose QQuickAnchorLine so we can test for other conflicting anchors
+            if (anchors && (anchors->fill() || anchors->centerIn()))
+                qmlInfo(item) << "StackView has detected conflicting anchors. Transitions may not execute properly.";
+        }
+
         // TODO: add force argument to QQuickItemViewTransitionableItem::prepareTransition()?
         nextTransitionToSet = true;
         nextTransitionFromSet = true;
@@ -266,6 +275,7 @@ static bool initProperties(QQuickStackElement *element, const QV4::Value &props,
         if (!wrapper) {
             QV4::ExecutionEngine *v4 = args->v4engine();
             element->properties.set(v4, props);
+            element->qmlCallingContext.set(v4, v4->qmlContext());
             return true;
         }
     }

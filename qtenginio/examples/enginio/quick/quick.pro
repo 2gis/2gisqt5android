@@ -5,3 +5,6 @@ SUBDIRS += \
     socialtodos \
     todos \
     users \
+
+EXAMPLE_FILES += \
+    main.cpp

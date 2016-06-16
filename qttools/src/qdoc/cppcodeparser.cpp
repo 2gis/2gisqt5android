@@ -556,11 +556,13 @@ Node* CppCodeParser::processTopicCommand(const Doc& doc,
              (command == COMMAND_JSATTACHEDSIGNAL) ||
              (command == COMMAND_JSATTACHEDMETHOD)) {
         QString module;
-        QString qmlTypeName;
+        QString name;
         QString type;
-        if (splitQmlMethodArg(arg.first, type, module, qmlTypeName)) {
-            QmlTypeNode* qmlType = qdb_->findQmlType(module, qmlTypeName);
-            if (qmlType) {
+        if (splitQmlMethodArg(arg.first, type, module, name)) {
+            Aggregate* aggregate = qdb_->findQmlType(module, name);
+            if (!aggregate)
+                aggregate = qdb_->findQmlBasicType(module, name);
+            if (aggregate) {
                 bool attached = false;
                 Node::NodeType nodeType = Node::QmlMethod;
                 if ((command == COMMAND_QMLSIGNAL) ||
@@ -582,7 +584,7 @@ Node* CppCodeParser::processTopicCommand(const Doc& doc,
                     return 0; // never get here.
                 FunctionNode* fn = makeFunctionNode(doc,
                                                     arg.first,
-                                                    qmlType,
+                                                    aggregate,
                                                     nodeType,
                                                     attached,
                                                     command);
@@ -811,9 +813,11 @@ void CppCodeParser::processQmlProperties(const Doc& doc,
             bool attached = ((topic == COMMAND_QMLATTACHEDPROPERTY) ||
                              (topic == COMMAND_JSATTACHEDPROPERTY));
             if (splitQmlPropertyArg(arg, type, module, qmlTypeName, property)) {
-                qmlType = qdb_->findQmlType(module, qmlTypeName);
-                if (qmlType) {
-                    if (qmlType->hasQmlProperty(property, attached) != 0) {
+                Aggregate* aggregate = qdb_->findQmlType(module, qmlTypeName);
+                if (!aggregate)
+                    aggregate = qdb_->findQmlBasicType(module, qmlTypeName);
+                if (aggregate) {
+                    if (aggregate->hasQmlProperty(property, attached) != 0) {
                         QString msg = tr("QML property documented multiple times: '%1'").arg(arg);
                         doc.startLocation().warning(msg);
                     }
@@ -824,7 +828,7 @@ void CppCodeParser::processQmlProperties(const Doc& doc,
                             qpn->setGenus(Node::JS);
                     }
                     else {
-                        qpn = new QmlPropertyNode(qmlType, property, type, attached);
+                        qpn = new QmlPropertyNode(aggregate, property, type, attached);
                         qpn->setLocation(doc.startLocation());
                         if (jsProps)
                             qpn->setGenus(Node::JS);
@@ -1179,7 +1183,7 @@ bool CppCodeParser::matchTemplateHeader()
     return matchTemplateAngles();
 }
 
-bool CppCodeParser::matchDataType(CodeChunk *dataType, QString *var)
+bool CppCodeParser::matchDataType(CodeChunk *dataType, QString *var, bool qProp)
 {
     /*
       This code is really hard to follow... sorry. The loop is there to match
@@ -1255,7 +1259,7 @@ bool CppCodeParser::matchDataType(CodeChunk *dataType, QString *var)
     }
 
     while (match(Tok_Ampersand) || match(Tok_Aster) || match(Tok_const) ||
-           match(Tok_Caret))
+           match(Tok_Caret) || match(Tok_Ellipsis))
         dataType->append(previousLexeme());
 
     if (match(Tok_LeftParenAster)) {
@@ -1304,6 +1308,10 @@ bool CppCodeParser::matchDataType(CodeChunk *dataType, QString *var)
                 */
                 if (varComment.exactMatch(previousLexeme()))
                     *var = varComment.cap(1);
+            }
+            else if (qProp && (match(Tok_default) || match(Tok_final))) {
+                // Hack to make 'default' and 'final' work again in Q_PROPERTY
+                *var = previousLexeme();
             }
         }
 
@@ -1512,7 +1520,7 @@ bool CppCodeParser::matchFunctionDecl(Aggregate *parent,
         }
         if (parent && (tok == Tok_Semicolon ||
                        tok == Tok_LeftBracket ||
-                       tok == Tok_Colon)
+                       tok == Tok_Colon || tok == Tok_Equal)
                 && access != Node::Private) {
             if (tok == Tok_LeftBracket) {
                 returnType.appendHotspot();
@@ -1528,7 +1536,7 @@ bool CppCodeParser::matchFunctionDecl(Aggregate *parent,
                     return false;
                 }
             }
-            else if (tok == Tok_Colon) {
+            else if (tok == Tok_Colon || tok == Tok_Equal) {
                 returnType.appendHotspot();
 
                 while (tok != Tok_Semicolon && tok != Tok_Eoi) {
@@ -1542,7 +1550,10 @@ bool CppCodeParser::matchFunctionDecl(Aggregate *parent,
 
             VariableNode *var = new VariableNode(parent, name);
             var->setAccess(access);
-            var->setLocation(location());
+            if (parsingHeaderFile_)
+                var->setLocation(declLoc());
+            else
+                var->setLocation(location());
             var->setLeftType(returnType.left());
             var->setRightType(returnType.right());
             if (matched_compat)
@@ -1570,11 +1581,18 @@ bool CppCodeParser::matchFunctionDecl(Aggregate *parent,
 
     // look for const
     bool matchedConst = match(Tok_const);
+    bool matchFinal = match(Tok_final);
 
-    // look for 0 indicating pure virtual
-    if (match(Tok_Equal) && match(Tok_Number))
-        virtuality = FunctionNode::PureVirtual;
-
+    bool isDeleted = false;
+    bool isDefaulted = false;
+    if (match(Tok_Equal)) {
+        if (match(Tok_Number)) // look for 0 indicating pure virtual
+            virtuality = FunctionNode::PureVirtual;
+        else if (match(Tok_delete))
+            isDeleted = true;
+        else if (match(Tok_default))
+            isDefaulted = true;
+    }
     // look for colon indicating ctors which must be skipped
     if (match(Tok_Colon)) {
         while (tok != Tok_LeftBrace && tok != Tok_Eoi)
@@ -1625,7 +1643,10 @@ bool CppCodeParser::matchFunctionDecl(Aggregate *parent,
         if (matched_friend)
             access = Node::Public;
         func->setAccess(access);
-        func->setLocation(location());
+        if (parsingHeaderFile_)
+            func->setLocation(declLoc());
+        else
+            func->setLocation(location());
         func->setReturnType(returnType.toString());
         func->setParentPath(parentPath);
         func->setTemplateStuff(templateStuff);
@@ -1634,21 +1655,54 @@ bool CppCodeParser::matchFunctionDecl(Aggregate *parent,
         if (matched_QT_DEPRECATED)
             func->setStatus(Node::Deprecated);
         if (matched_explicit) { /* What can be done? */ }
+        if (!pvect.isEmpty()) {
+            func->setParameters(pvect);
+        }
         func->setMetaness(metaness_);
-        if (parent) {
-            if (name == parent->name())
-                func->setMetaness(FunctionNode::Ctor);
-            else if (name.startsWith(QLatin1Char('~')))
-                func->setMetaness(FunctionNode::Dtor);
+        if (parent && (name == parent->name())) {
+            FunctionNode::Metaness m = FunctionNode::Ctor;
+            if (!pvect.isEmpty()) {
+                for (int i=0; i<pvect.size(); i++) {
+                    const Parameter& p = pvect.at(i);
+                    if (p.dataType().contains(name)) {
+                        if (p.dataType().endsWith(QLatin1String("&&"))) {
+                            m = FunctionNode::MCtor;
+                            break;
+                        }
+                        if (p.dataType().endsWith(QLatin1String("&"))) {
+                            m = FunctionNode::CCtor;
+                            break;
+                        }
+                    }
+                }
+            }
+            func->setMetaness(m);
+        }
+        else if (name.startsWith(QLatin1Char('~')))
+            func->setMetaness(FunctionNode::Dtor);
+        else if (name == QLatin1String("operator=")) {
+            FunctionNode::Metaness m = FunctionNode::Plain;
+            if (parent && pvect.size() == 1) {
+                const Parameter& p = pvect.at(0);
+                if (p.dataType().contains(parent->name())) {
+                    if (p.dataType().endsWith(QLatin1String("&&"))) {
+                        m = FunctionNode::MAssign;
+                    }
+                    else if (p.dataType().endsWith(QLatin1String("&"))) {
+                        m = FunctionNode::CAssign;
+                    }
+                }
+            }
+            func->setMetaness(m);
         }
         func->setStatic(matched_static);
         func->setConst(matchedConst);
         func->setVirtualness(virtuality);
+        func->setIsDeleted(isDeleted);
+        func->setIsDefaulted(isDefaulted);
+        func->setFinal(matchFinal);
         if (isQPrivateSignal)
             func->setPrivateSignal();
-        if (!pvect.isEmpty()) {
-            func->setParameters(pvect);
-        }
     }
     if (parentPathPtr != 0)
         *parentPathPtr = parentPath;
@@ -1732,6 +1786,9 @@ bool CppCodeParser::matchClassDecl(Aggregate *parent,
             }
         }
     }
+
+    const QString className = previousLexeme();
+    match(Tok_final); // ignore C++11 final class-virt-specifier
     if (tok != Tok_Colon && tok != Tok_LeftBrace)
         return false;
 
@@ -1739,9 +1796,9 @@ bool CppCodeParser::matchClassDecl(Aggregate *parent,
       So far, so good. We have 'class Foo {' or 'class Foo :'.
       This is enough to recognize a class definition.
     */
-    ClassNode *classe = new ClassNode(parent, previousLexeme());
+    ClassNode *classe = new ClassNode(parent, className);
     classe->setAccess(access);
-    classe->setLocation(location());
+    classe->setLocation(declLoc());
     if (compat)
         classe->setStatus(Node::Compat);
     if (!physicalModuleName.isEmpty())
@@ -1785,7 +1842,7 @@ bool CppCodeParser::matchNamespaceDecl(Aggregate *parent)
     if (!ns) {
         ns = new NamespaceNode(parent, namespaceName);
         ns->setAccess(access);
-        ns->setLocation(location());
+        ns->setLocation(declLoc());
     }
 
     readToken(); // skip '{'
@@ -1931,8 +1988,15 @@ bool CppCodeParser::matchEnumDecl(Aggregate *parent)
 
     if (!match(Tok_enum))
         return false;
+    if (tok == Tok_struct || tok == Tok_class)
+        readToken(); // ignore C++11 struct or class attribute
     if (match(Tok_Ident))
         name = previousLexeme();
+    if (match(Tok_Colon)) { // ignore C++11 enum-base
+        CodeChunk dataType;
+        if (!matchDataType(&dataType))
+            return false;
+    }
     if (tok != Tok_LeftBrace)
         return false;
 
@@ -1941,7 +2005,7 @@ bool CppCodeParser::matchEnumDecl(Aggregate *parent)
     if (!name.isEmpty()) {
         enume = new EnumNode(parent, name);
         enume->setAccess(access);
-        enume->setLocation(location());
+        enume->setLocation(declLoc());
     }
 
     readToken();
@@ -1971,7 +2035,7 @@ bool CppCodeParser::matchTypedefDecl(Aggregate *parent)
     if (parent && !parent->findChildNode(name, Node::Typedef)) {
         TypedefNode* td = new TypedefNode(parent, name);
         td->setAccess(access);
-        td->setLocation(location());
+        td->setLocation(declLoc());
     }
     return true;
 }
@@ -1995,16 +2059,16 @@ bool CppCodeParser::matchProperty(Aggregate *parent)
 
     QString name;
     CodeChunk dataType;
-    if (!matchDataType(&dataType, &name))
+    if (!matchDataType(&dataType, &name, true))
         return false;
 
     PropertyNode *property = new PropertyNode(parent, name);
     property->setAccess(Node::Public);
-    property->setLocation(location());
+    property->setLocation(declLoc());
     property->setDataType(dataType.toString());
 
     while (tok != Tok_RightParen && tok != Tok_Eoi) {
-        if (!match(Tok_Ident))
+        if (!match(Tok_Ident) && !match(Tok_default) && !match(Tok_final))
             return false;
         QString key = previousLexeme();
         QString value;
@@ -2105,12 +2169,15 @@ bool CppCodeParser::matchDeclList(Aggregate *parent)
         case Tok_class:
         case Tok_struct:
         case Tok_union:
+            setDeclLoc();
             matchClassDecl(parent, templateStuff);
             break;
         case Tok_namespace:
+            setDeclLoc();
             matchNamespaceDecl(parent);
             break;
         case Tok_using:
+            setDeclLoc();
             matchUsingDecl(parent);
             break;
         case Tok_template:
@@ -2122,9 +2189,11 @@ bool CppCodeParser::matchDeclList(Aggregate *parent)
             }
             continue;
         case Tok_enum:
+            setDeclLoc();
             matchEnumDecl(parent);
             break;
         case Tok_typedef:
+            setDeclLoc();
             matchTypedefDecl(parent);
             break;
         case Tok_private:
@@ -2160,6 +2229,7 @@ bool CppCodeParser::matchDeclList(Aggregate *parent)
         case Tok_Q_PROPERTY:
         case Tok_Q_PRIVATE_PROPERTY:
         case Tok_QDOC_PROPERTY:
+            setDeclLoc();
             if (!matchProperty(parent)) {
                 location().warning(tr("Failed to parse token %1 in property declaration").arg(lexeme()));
                 skipTo(Tok_RightParen);
@@ -2192,13 +2262,14 @@ bool CppCodeParser::matchDeclList(Aggregate *parent)
             break;
         case Tok_Q_DECLARE_FLAGS:
             readToken();
+            setDeclLoc();
             if (match(Tok_LeftParen) && match(Tok_Ident)) {
                 QString flagsType = previousLexeme();
                 if (match(Tok_Comma) && match(Tok_Ident)) {
                     QString name = previousLexeme();
                     TypedefNode *flagsNode = new TypedefNode(parent, flagsType);
                     flagsNode->setAccess(access);
-                    flagsNode->setLocation(location());
+                    flagsNode->setLocation(declLoc());
                     EnumNode* en = static_cast<EnumNode*>(parent->findChildNode(name, Node::Enum));
                     if (en)
                         en->setFlagsType(flagsNode);
@@ -2208,6 +2279,7 @@ bool CppCodeParser::matchDeclList(Aggregate *parent)
             break;
         case Tok_QT_MODULE:
             readToken();
+            setDeclLoc();
             if (match(Tok_LeftParen) && match(Tok_Ident))
                 physicalModuleName = previousLexeme();
             if (!physicalModuleName.startsWith("Qt"))
@@ -2215,6 +2287,8 @@ bool CppCodeParser::matchDeclList(Aggregate *parent)
             match(Tok_RightParen);
             break;
         default:
+            if (parsingHeaderFile_)
+                setDeclLoc();
             if (!matchFunctionDecl(parent, 0, 0, templateStuff, extra)) {
                 while (tok != Tok_Eoi &&
                        (tokenizer->braceDepth() > braceDepth0 ||
@@ -2372,7 +2446,7 @@ bool CppCodeParser::matchDocsAndStuff()
         else {
             QStringList parentPath;
             FunctionNode *clone;
-            FunctionNode *node = 0;
+            FunctionNode *fnode = 0;
 
             if (matchFunctionDecl(0, &parentPath, &clone, QString(), extra)) {
                 /*
@@ -2384,9 +2458,9 @@ bool CppCodeParser::matchDocsAndStuff()
                   Signals are implemented in uninteresting files
                   generated by moc.
                 */
-                node = qdb_->findFunctionNode(parentPath, clone);
-                if (node != 0 && node->metaness() != FunctionNode::Signal)
-                    node->setLocation(clone->location());
+                fnode = qdb_->findFunctionNode(parentPath, clone);
+                if (fnode != 0 && !fnode->isSignal())
+                    fnode->setLocation(clone->location());
                 delete clone;
             }
             else {

@@ -62,9 +62,8 @@ BrowserContextAdapter::PermissionType toQt(content::PermissionType type)
     return BrowserContextAdapter::UnsupportedPermission;
 }
 
-PermissionManagerQt::PermissionManagerQt(BrowserContextAdapter *contextAdapter)
-    : m_contextAdapter(contextAdapter)
-    , m_subscriberCount(0)
+PermissionManagerQt::PermissionManagerQt()
+    : m_subscriberCount(0)
 {
 }
 
@@ -89,6 +88,12 @@ void PermissionManagerQt::permissionRequestReply(const QUrl &origin, BrowserCont
         if (subscriber.origin == origin && subscriber.type == type)
             subscriber.callback.Run(status);
     }
+}
+
+bool PermissionManagerQt::checkPermission(const QUrl &origin, BrowserContextAdapter::PermissionType type)
+{
+    QPair<QUrl, BrowserContextAdapter::PermissionType> key(origin, type);
+    return m_permissions.contains(key) && m_permissions[key];
 }
 
 void PermissionManagerQt::RequestPermission(content::PermissionType permission,

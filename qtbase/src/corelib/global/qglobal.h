@@ -55,6 +55,9 @@
 #include <QtCore/qfeatures.h>
 #endif
 
+// The QT_SUPPORTS macro is deprecated. Don't use it in new code.
+// Instead, use #ifdef/ndef QT_NO_feature.
+// ### Qt6: remove macro
 #ifdef _MSC_VER
 #  define QT_SUPPORTS(FEATURE) (!defined QT_NO_##FEATURE)
 #else
@@ -579,10 +582,6 @@ Q_DECL_CONSTEXPR inline const T &qBound(const T &min, const T &val, const T &max
 #  define QT_OSX_DEPLOYMENT_TARGET_BELOW(osx) \
       QT_MAC_DEPLOYMENT_TARGET_BELOW(osx, __IPHONE_NA)
 
-QT_END_NAMESPACE
-Q_FORWARD_DECLARE_OBJC_CLASS(NSAutoreleasePool);
-QT_BEGIN_NAMESPACE
-
 // Implemented in qcore_mac_objc.mm
 class Q_CORE_EXPORT QMacAutoReleasePool
 {
@@ -591,7 +590,7 @@ public:
     ~QMacAutoReleasePool();
 private:
     Q_DISABLE_COPY(QMacAutoReleasePool)
-    NSAutoreleasePool *pool;
+    void *pool;
 };
 
 #endif // Q_OS_MAC
@@ -1049,8 +1048,6 @@ Q_CORE_EXPORT QString qtTrId(const char *id, int n = -1);
 #define QT_TRID_NOOP(id) id
 
 #endif // QT_NO_TRANSLATION
-
-#define QDOC_PROPERTY(text)
 
 /*
    When RTTI is not available, define this macro to force any uses of

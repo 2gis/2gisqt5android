@@ -423,14 +423,8 @@ void QProcessPrivate::startProcess()
     }
 
     // Start the process manager, and fork off the child process.
-#if defined(QPROCESS_USE_SPAWN)
-    pid_t childPid;
-    forkfd = spawnChild(&childPid, workingDirPtr, argv, envp);
-    Q_ASSUME(forkfd != FFD_CHILD_PROCESS);
-#else
     pid_t childPid;
     forkfd = ::forkfd(FFD_CLOEXEC, &childPid);
-#endif
     int lastForkErrno = errno;
     if (forkfd != FFD_CHILD_PROCESS) {
         // Parent process.
@@ -464,12 +458,10 @@ void QProcessPrivate::startProcess()
     }
 
     // Start the child.
-#if !defined(QPROCESS_USE_SPAWN)
     if (forkfd == FFD_CHILD_PROCESS) {
         execChild(workingDirPtr, path, argv, envp);
         ::_exit(-1);
     }
-#endif
 
     pid = Q_PID(childPid);
 
@@ -507,147 +499,6 @@ void QProcessPrivate::startProcess()
                          q, SLOT(_q_processDied()));
     }
 }
-
-#if defined(QPROCESS_USE_SPAWN)
-static int doSpawn(pid_t *ppid, const posix_spawn_file_actions_t *file_actions,
-                   char **argv, char **envp, const char *workingDir, bool spawn_detached)
-{
-    // A multi threaded QNX Process can't fork so we call spawnfd() instead.
-    posix_spawnattr_t attr;
-    posix_spawnattr_init(&attr);
-#  ifdef Q_OS_QNX
-    posix_spawnattr_setxflags(&attr, POSIX_SPAWN_SETSIGDEF | POSIX_SPAWN_SETPGROUP
-                              | (spawn_detached * POSIX_SPAWN_NOZOMBIE));
-#  else
-    posix_spawnattr_setflags(&attr, POSIX_SPAWN_SETSIGDEF | POSIX_SPAWN_SETPGROUP);
-#  endif
-    posix_spawnattr_setpgroup(&attr, 0);
-
-    sigset_t sigdefault;
-    sigemptyset(&sigdefault);
-    sigaddset(&sigdefault, SIGPIPE); // reset the signal that we ignored
-    posix_spawnattr_setsigdefault(&attr, &sigdefault);
-
-    // enter the working directory
-    const char *oldWorkingDir = 0;
-    char buff[PATH_MAX + 1];
-
-    if (workingDir) {
-#  ifdef Q_OS_QNX
-        //we need to freeze everyone in order to avoid race conditions with //chdir().
-        if (ThreadCtl(_NTO_TCTL_THREADS_HOLD, 0) == -1)
-            qWarning("ThreadCtl(): cannot hold threads: %s", qPrintable(qt_error_string(errno)));
-#  endif
-
-        oldWorkingDir = QT_GETCWD(buff, PATH_MAX + 1);
-        if (QT_CHDIR(workingDir) == -1)
-            qWarning("ThreadCtl(): failed to chdir to %s", workingDir);
-    }
-
-    int fd;
-    if (spawn_detached) {
-        fd = ::posix_spawn(ppid, argv[0], file_actions, &attr, argv, envp);
-        if (fd == -1) {
-            fd = ::posix_spawnp(ppid, argv[0], file_actions, &attr, argv, envp);
-        }
-    } else {
-        // use spawnfd
-        fd = ::spawnfd(FFD_CLOEXEC | FFD_NONBLOCK, ppid, argv[0], file_actions, &attr, argv, envp);
-        if (fd == -1) {
-            fd = ::spawnfd(FFD_CLOEXEC | FFD_NONBLOCK | FFD_SPAWN_SEARCH_PATH, ppid, argv[0], file_actions,
-                           &attr, argv, envp);
-        }
-    }
-
-    if (oldWorkingDir) {
-        if (QT_CHDIR(oldWorkingDir) == -1)
-            qWarning("ThreadCtl(): failed to chdir to %s", oldWorkingDir);
-
-#  ifdef Q_OS_QNX
-        if (ThreadCtl(_NTO_TCTL_THREADS_CONT, 0) == -1)
-            qFatal("ThreadCtl(): cannot resume threads: %s", qPrintable(qt_error_string(errno)));
-#  endif
-    }
-
-    posix_spawnattr_destroy(&attr);
-    return fd;
-}
-
-pid_t QProcessPrivate::spawnChild(pid_t *ppid, const char *workingDir, char **argv, char **envp)
-{
-    // posix_spawn causes all file descriptors with FD_CLOEXEC to be closed automatically;
-    // we only need to add the actions for our own pipes
-    posix_spawn_file_actions_t file_actions;
-    posix_spawn_file_actions_init(&file_actions);
-
-#   ifdef Q_OS_QNX
-    static const bool OS_QNX = true;
-#   else
-    static const bool OS_QNX = false;
-#endif
-
-    int fdmax = -1;
-
-    if (processChannelMode == QProcess::MergedChannels) {
-        // managed stderr == stdout
-        posix_spawn_file_actions_adddup2(&file_actions, stdoutChannel.pipe[1], STDERR_FILENO);
-
-        if (OS_QNX)
-            fdmax = qMax(fdmax, stdoutChannel.pipe[1]);
-    } else if (processChannelMode != QProcess::ForwardedChannels && processChannelMode != QProcess::ForwardedErrorChannel) {
-        // managed stderr
-        posix_spawn_file_actions_adddup2(&file_actions, stderrChannel.pipe[1], STDERR_FILENO);
-
-        if (OS_QNX)
-            fdmax = qMax(fdmax, stderrChannel.pipe[1]);
-        else
-            posix_spawn_file_actions_addclose(&file_actions, stderrChannel.pipe[1]);
-
-    }
-
-    if (processChannelMode != QProcess::ForwardedChannels && processChannelMode != QProcess::ForwardedOutputChannel) {
-        // managed stdout
-        posix_spawn_file_actions_adddup2(&file_actions, stdoutChannel.pipe[1], STDOUT_FILENO);
-
-        if (OS_QNX)
-            fdmax = qMax(fdmax, stdoutChannel.pipe[1]);
-        else
-            posix_spawn_file_actions_addclose(&file_actions, stdoutChannel.pipe[1]);
-
-    }
-
-    if (inputChannelMode == QProcess::ManagedInputChannel) {
-        posix_spawn_file_actions_adddup2(&file_actions, stdinChannel.pipe[0], STDIN_FILENO);
-
-        if (OS_QNX)
-            fdmax = qMax(fdmax, stdinChannel.pipe[0]);
-        else
-            posix_spawn_file_actions_addclose(&file_actions, stdinChannel.pipe[0]);
-    }
-
-    // Workaround: QNX's spawn implementation will actually dup all FD values
-    // LESS than fdmax - regardless of the FD_CLOEEXEC flag. So we need to add
-    // those to the list of files to close, otherwise dup will fail when some
-    // other thread closes the FD.
-    for (int i = 3; i <= fdmax; i++) {
-        if (::fcntl(i, F_GETFD) & FD_CLOEXEC)
-            posix_spawn_file_actions_addclose(&file_actions, i);
-    }
-
-    int retval = doSpawn(ppid, &file_actions, argv, envp, workingDir, false);
-
-    if (retval == -1) {
-        QString error = qt_error_string(errno);
-        qt_safe_write(childStartedPipe[1], error.data(), error.length() * sizeof(QChar));
-        qt_safe_close(childStartedPipe[1]);
-        childStartedPipe[1] = -1;
-    }
-
-    posix_spawn_file_actions_destroy(&file_actions);
-    return retval;
-}
-
-#else
 
 void QProcessPrivate::execChild(const char *workingDir, char **path, char **argv, char **envp)
 {
@@ -716,7 +567,6 @@ report_errno:
     qt_safe_close(childStartedPipe[1]);
     childStartedPipe[1] = -1;
 }
-#endif
 
 bool QProcessPrivate::processStarted(QString *errorMessage)
 {
@@ -770,27 +620,42 @@ qint64 QProcessPrivate::readFromChannel(const Channel *channel, char *data, qint
     return bytesRead;
 }
 
-qint64 QProcessPrivate::writeToStdin(const char *data, qint64 maxlen)
+bool QProcessPrivate::writeToStdin()
 {
-    qint64 written = qt_safe_write_nosignal(stdinChannel.pipe[1], data, maxlen);
+    const char *data = stdinChannel.buffer.readPointer();
+    const qint64 bytesToWrite = stdinChannel.buffer.nextDataBlockSize();
+
+    qint64 written = qt_safe_write_nosignal(stdinChannel.pipe[1], data, bytesToWrite);
 #if defined QPROCESS_DEBUG
-    qDebug("QProcessPrivate::writeToStdin(%p \"%s\", %lld) == %lld",
-           data, qt_prettyDebug(data, maxlen, 16).constData(), maxlen, written);
+    qDebug("QProcessPrivate::writeToStdin(), write(%p \"%s\", %lld) == %lld",
+           data, qt_prettyDebug(data, bytesToWrite, 16).constData(), bytesToWrite, written);
     if (written == -1)
         qDebug("QProcessPrivate::writeToStdin(), failed to write (%s)", qPrintable(qt_error_string(errno)));
 #endif
-    // If the O_NONBLOCK flag is set and If some data can be written without blocking
-    // the process, write() will transfer what it can and return the number of bytes written.
-    // Otherwise, it will return -1 and set errno to EAGAIN
-    if (written == -1 && errno == EAGAIN)
-        written = 0;
-    return written;
+    if (written == -1) {
+        // If the O_NONBLOCK flag is set and If some data can be written without blocking
+        // the process, write() will transfer what it can and return the number of bytes written.
+        // Otherwise, it will return -1 and set errno to EAGAIN
+        if (errno == EAGAIN)
+            return true;
+
+        closeChannel(&stdinChannel);
+        setErrorAndEmit(QProcess::WriteError);
+        return false;
+    }
+    stdinChannel.buffer.free(written);
+    if (!emittedBytesWritten && written != 0) {
+        emittedBytesWritten = true;
+        emit q_func()->bytesWritten(written);
+        emittedBytesWritten = false;
+    }
+    return true;
 }
 
 void QProcessPrivate::terminateProcess()
 {
 #if defined (QPROCESS_DEBUG)
-    qDebug("QProcessPrivate::killProcess()");
+    qDebug("QProcessPrivate::terminateProcess()");
 #endif
     if (pid)
         ::kill(pid_t(pid), SIGTERM);
@@ -1100,40 +965,6 @@ bool QProcessPrivate::waitForDeadChild()
     return true;
 }
 
-#if defined(QPROCESS_USE_SPAWN)
-bool QProcessPrivate::startDetached(const QString &program, const QStringList &arguments, const QString &workingDirectory, qint64 *pid)
-{
-    QList<QByteArray> enc_args;
-    enc_args.append(QFile::encodeName(program));
-    for (int i = 0; i < arguments.size(); ++i)
-        enc_args.append(arguments.at(i).toLocal8Bit());
-
-    const int argc = enc_args.size();
-    QScopedArrayPointer<char*> raw_argv(new char*[argc + 1]);
-    for (int i = 0; i < argc; ++i)
-        raw_argv[i] = const_cast<char *>(enc_args.at(i).data());
-    raw_argv[argc] = 0;
-
-    char **envp = 0; // inherit environment
-
-    // Encode the working directory if it's non-empty, otherwise just pass 0.
-    const char *workingDirPtr = 0;
-    QByteArray encodedWorkingDirectory;
-    if (!workingDirectory.isEmpty()) {
-        encodedWorkingDirectory = QFile::encodeName(workingDirectory);
-        workingDirPtr = encodedWorkingDirectory.constData();
-    }
-
-    pid_t childPid;
-    int retval = doSpawn(&childPid, NULL, raw_argv.data(), envp, workingDirPtr, true);
-    if (pid && retval != -1)
-        *pid = childPid;
-
-    return retval != -1;
-}
-
-#else
-
 bool QProcessPrivate::startDetached(const QString &program, const QStringList &arguments, const QString &workingDirectory, qint64 *pid)
 {
     QByteArray encodedWorkingDirectory = QFile::encodeName(workingDirectory);
@@ -1248,7 +1079,6 @@ bool QProcessPrivate::startDetached(const QString &program, const QStringList &a
     qt_safe_close(pidPipe[0]);
     return success;
 }
-#endif
 
 QT_END_NAMESPACE
 

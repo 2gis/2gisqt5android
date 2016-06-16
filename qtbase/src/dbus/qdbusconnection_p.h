@@ -254,10 +254,13 @@ private:
                      const QVector<int> &metaTypes, int slotIdx);
 
     SignalHookHash::Iterator removeSignalHookNoLock(SignalHookHash::Iterator it);
+    void collectAllObjects(ObjectTreeNode &node, QSet<QObject *> &set);
 
     bool isServiceRegisteredByThread(const QString &serviceName);
 
     QString getNameOwnerNoCache(const QString &service);
+
+    void watchForDBusDisconnection();
 
     void _q_newConnection(QDBusConnectionPrivate *newConnection);
 
@@ -278,6 +281,7 @@ private slots:
     void serviceOwnerChangedNoLock(const QString &name, const QString &oldOwner, const QString &newOwner);
     void registerServiceNoLock(const QString &serviceName);
     void unregisterServiceNoLock(const QString &serviceName);
+    void handleDBusDisconnection();
 
 signals:
     void dispatchStatusChanged();

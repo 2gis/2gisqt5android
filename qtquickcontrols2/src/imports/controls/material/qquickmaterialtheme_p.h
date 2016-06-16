@@ -65,7 +65,9 @@ public:
 
 private:
     QFont systemFont;
-    QFont tabButtonFont;
+    QFont buttonFont;
+    QFont itemViewFont;
+    QFont menuItemFont;
 };
 
 QT_END_NAMESPACE

@@ -509,7 +509,6 @@ void QQuickPixmapReader::asyncResponseFinished(QQuickImageResponse *response)
         QQuickTextureFactory *t = 0;
         QQuickPixmapReply::ReadError error = QQuickPixmapReply::NoError;
         QString errorString;
-        QSize readSize;
         if (!response->errorString().isEmpty()) {
             error = QQuickPixmapReply::Loading;
             errorString = response->errorString();
@@ -1185,8 +1184,6 @@ static QQuickPixmapData* createPixmapDataSync(QQuickPixmap *declarativePixmap, Q
             *ok = true;
             return new QQuickPixmapData(declarativePixmap, url, QQuickTextureFactory::textureFactoryForImage(image), readSize, requestSize, autoTransform, appliedTransform);
         }
-        errorString = QQuickPixmap::tr("Invalid image data: %1").arg(url.toString());
-
     } else {
         errorString = QQuickPixmap::tr("Cannot open: %1").arg(url.toString());
     }

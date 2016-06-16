@@ -8,8 +8,6 @@ DEFINES   += QLALR_NO_QSCRIPTGRAMMAR_DEBUG_INFO
 
 QMAKE_DOCS = $$PWD/doc/qtscript.qdocconf
 
-load(qt_module)
-
 CONFIG += building-libs
 
 WEBKITDIR = $$PWD/../3rdparty/javascriptcore
@@ -76,3 +74,5 @@ integrity {
 }
 
 TR_EXCLUDE = $$WEBKITDIR/*
+
+load(qt_module)

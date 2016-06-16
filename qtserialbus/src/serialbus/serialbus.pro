@@ -1,14 +1,10 @@
 TARGET = QtSerialBus
-MODULE = serialbus
-QT = core-private network serialport
+
+QT = core-private
+QT_FOR_PRIVATE = network serialport
 CONFIG += c++11
 
 QMAKE_DOCS = $$PWD/doc/qtserialbus.qdocconf
-
-MODULE_PLUGIN_TYPES = \
-    canbus
-
-load(qt_module)
 
 PUBLIC_HEADERS += \
     qcanbusdevice.h \
@@ -57,3 +53,7 @@ SOURCES += \
     qmodbuspdu.cpp
 
 HEADERS += $$PUBLIC_HEADERS $$PRIVATE_HEADERS
+
+MODULE_PLUGIN_TYPES = \
+    canbus
+load(qt_module)

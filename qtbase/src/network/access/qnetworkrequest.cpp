@@ -138,11 +138,12 @@ QT_BEGIN_NAMESPACE
         Replies only, type: QMetaType::QUrl (no default)
         If present, it indicates that the server is redirecting the
         request to a different URL. The Network Access API does not by
-        default follow redirections: it's up to the application to
+        default follow redirections: the application can
         determine if the requested redirection should be allowed,
-        according to its security policies. However, if
-        QNetworkRequest::FollowRedirectsAttribute is set, then this attribute
-        will not be present in the reply.
+        according to its security policies, or it can set
+        QNetworkRequest::FollowRedirectsAttribute to true (in which case
+        the redirection will be followed and this attribute will not
+        be present in the reply).
         The returned URL might be relative. Use QUrl::resolved()
         to create an absolute URL out of it.
 
@@ -263,6 +264,7 @@ QT_BEGIN_NAMESPACE
         Indicates whether the Network Access API should automatically follow a
         HTTP redirect response or not. Currently redirects that are insecure,
         that is redirecting from "https" to "http" protocol, are not allowed.
+        (This value was introduced in 5.6.)
 
     \value User
         Special type. Additional information can be passed in
@@ -798,10 +800,10 @@ static QByteArray headerValue(QNetworkRequest::KnownHeaders header, const QVaria
     return QByteArray();
 }
 
-static QNetworkRequest::KnownHeaders parseHeaderName(const QByteArray &headerName)
+static int parseHeaderName(const QByteArray &headerName)
 {
     if (headerName.isEmpty())
-        return QNetworkRequest::KnownHeaders(-1);
+        return -1;
 
     switch (tolower(headerName.at(0))) {
     case 'c':
@@ -833,7 +835,7 @@ static QNetworkRequest::KnownHeaders parseHeaderName(const QByteArray &headerNam
         break;
     }
 
-    return QNetworkRequest::KnownHeaders(-1); // nothing found
+    return -1; // nothing found
 }
 
 static QVariant parseHttpDate(const QByteArray &raw)
@@ -1005,8 +1007,10 @@ void QNetworkHeadersPrivate::setRawHeaderInternal(const QByteArray &key, const Q
 void QNetworkHeadersPrivate::parseAndSetHeader(const QByteArray &key, const QByteArray &value)
 {
     // is it a known header?
-    QNetworkRequest::KnownHeaders parsedKey = parseHeaderName(key);
-    if (parsedKey != QNetworkRequest::KnownHeaders(-1)) {
+    const int parsedKeyAsInt = parseHeaderName(key);
+    if (parsedKeyAsInt != -1) {
+        const QNetworkRequest::KnownHeaders parsedKey
+                = static_cast<QNetworkRequest::KnownHeaders>(parsedKeyAsInt);
         if (value.isNull()) {
             cookedHeaders.remove(parsedKey);
         } else if (parsedKey == QNetworkRequest::ContentLengthHeader

@@ -44,16 +44,20 @@ contains(TEMPLATE, .*lib) {
     QMAKE_PRL_INSTALL_REPLACE += lib_replace
 }
 
+# The remainder of this file must not apply to bootstrapped tools,
+# as the host compiler's version and capabilities are not checked.
+host_build:force_bootstrap: return()
+
 warnings_are_errors:warning_clean {
     # If the module declares that it has does its clean-up of warnings, enable -Werror.
     # This setting is compiler-dependent anyway because it depends on the version of the
     # compiler.
     clang:!ios {
         # Apple clang 4.0-4.2,5.0-5.1,6.0-6.4
-        # Regular clang 3.3-3.7
+        # Regular clang 3.3-3.8
         apple_ver = $${QT_APPLE_CLANG_MAJOR_VERSION}.$${QT_APPLE_CLANG_MINOR_VERSION}
         reg_ver = $${QT_CLANG_MAJOR_VERSION}.$${QT_CLANG_MINOR_VERSION}
-        contains(apple_ver, "4\\.[012]|5\\.[01]|6\\.[01234]")|contains(reg_ver, "3\\.[3-7]") {
+        contains(apple_ver, "4\\.[012]|5\\.[01]|6\\.[01234]")|contains(reg_ver, "3\\.[3-8]") {
             QMAKE_CXXFLAGS_WARN_ON += -Werror -Wno-error=\\$${LITERAL_HASH}warnings -Wno-error=deprecated-declarations $$WERROR
         }
     } else:intel_icc:linux {
@@ -69,9 +73,9 @@ warnings_are_errors:warning_clean {
             QMAKE_CXXFLAGS_WARN_ON += -Werror -ww177,1224,1478,1881 $$WERROR
         }
     } else:gcc:!clang:!intel_icc {
-        # GCC 4.6-4.9, 5.x
+        # GCC 4.6-4.9, 5.x, ...
         ver = $${QT_GCC_MAJOR_VERSION}.$${QT_GCC_MINOR_VERSION}
-        contains(ver, "(4\\.[6789]|5\\..)") {
+        contains(ver, "(4\\.[6789]|[5-9]\\..)") {
             QMAKE_CXXFLAGS_WARN_ON += -Werror -Wno-error=cpp -Wno-error=deprecated-declarations $$WERROR
 
             # GCC prints this bogus warning, after it has inlined a lot of code

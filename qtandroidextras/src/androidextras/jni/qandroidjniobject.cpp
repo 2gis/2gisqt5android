@@ -310,10 +310,12 @@ QT_BEGIN_NAMESPACE
 */
 
 /*!
-    \fn QAndroidJniObject::~QAndroidJniObject()
-
     Destroys the QAndroidJniObject and releases any references held by the QAndroidJniObject.
 */
+QAndroidJniObject::~QAndroidJniObject()
+{
+    // must be empty until ### Qt 6
+}
 
 /*!
     \fn T QAndroidJniObject::callMethod(const char *methodName, const char *signature, ...) const

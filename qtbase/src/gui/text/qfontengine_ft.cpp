@@ -1073,8 +1073,8 @@ QFontEngineFT::Glyph *QFontEngineFT::loadGlyph(QGlyphSet *set, uint glyph,
     if (glyph_buffer_size < pitch * info.height) {
         glyph_buffer_size = pitch * info.height;
         glyph_buffer.reset(new uchar[glyph_buffer_size]);
+        memset(glyph_buffer.data(), 0, glyph_buffer_size);
     }
-    memset(glyph_buffer.data(), 0, glyph_buffer_size);
 
     if (slot->format == FT_GLYPH_FORMAT_OUTLINE) {
         FT_Bitmap bitmap;
@@ -1719,8 +1719,8 @@ static inline QImage alphaMapFromGlyphData(QFontEngineFT::Glyph *glyph, QFontEng
     if (glyph == Q_NULLPTR)
         return QImage();
 
-    QImage::Format format;
-    int bytesPerLine;
+    QImage::Format format = QImage::Format_Invalid;
+    int bytesPerLine = -1;
     switch (glyphFormat) {
     case QFontEngine::Format_Mono:
         format = QImage::Format_Mono;
@@ -1780,6 +1780,12 @@ void QFontEngineFT::unlockAlphaMapForGlyph()
     QFontEngine::unlockAlphaMapForGlyph();
 }
 
+static inline bool is2dRotation(const QTransform &t)
+{
+    return qFuzzyCompare(t.m11(), t.m22()) && qFuzzyCompare(t.m12(), -t.m21())
+        && qFuzzyCompare(t.m11()*t.m22() - t.m12()*t.m21(), 1.0);
+}
+
 QFontEngineFT::Glyph *QFontEngineFT::loadGlyphFor(glyph_t g,
                                                   QFixed subPixelPosition,
                                                   GlyphFormat format,
@@ -1793,7 +1799,7 @@ QFontEngineFT::Glyph *QFontEngineFT::loadGlyphFor(glyph_t g,
     Glyph *glyph = glyphSet != 0 ? glyphSet->getGlyph(g, subPixelPosition) : 0;
     if (!glyph || glyph->format != format || (!fetchBoundingBox && !glyph->data)) {
         QScopedValueRollback<HintStyle> saved_default_hint_style(default_hint_style);
-        if (t.type() >= QTransform::TxScale)
+        if (t.type() >= QTransform::TxScale && !is2dRotation(t))
             default_hint_style = HintNone; // disable hinting if the glyphs are transformed
 
         lockFace();
@@ -2003,6 +2009,11 @@ QFontEngine *QFontEngineFT::cloneWithSize(qreal pixelSize) const
     } else {
         return fe;
     }
+}
+
+Qt::HANDLE QFontEngineFT::handle() const
+{
+    return non_locked_face();
 }
 
 QT_END_NAMESPACE

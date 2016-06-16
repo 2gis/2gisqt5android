@@ -120,11 +120,6 @@ QList<QSerialPortInfo> QSerialPortInfo::availablePorts()
     return serialPortInfoList;
 }
 
-QList<qint32> QSerialPortInfo::standardBaudRates()
-{
-    return QSerialPortPrivate::standardBaudRates();
-}
-
 #if QT_DEPRECATED_SINCE(5, 6)
 bool QSerialPortInfo::isBusy() const
 {

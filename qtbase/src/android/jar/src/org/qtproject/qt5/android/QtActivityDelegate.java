@@ -92,6 +92,7 @@ public class QtActivityDelegate
     private Method m_super_onConfigurationChanged = null;
     private Method m_super_onActivityResult = null;
     private Method m_super_dispatchGenericMotionEvent = null;
+    private Method m_super_onWindowFocusChanged = null;
 
     private static final String NATIVE_LIBRARIES_KEY = "native.libraries";
     private static final String BUNDLED_LIBRARIES_KEY = "bundled.libraries";
@@ -138,17 +139,13 @@ public class QtActivityDelegate
             m_activity.getWindow().addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
             m_activity.getWindow().clearFlags(WindowManager.LayoutParams.FLAG_FORCE_NOT_FULLSCREEN);
             try {
-                if (Build.VERSION.SDK_INT >= 14) {
+                if (Build.VERSION.SDK_INT >= 19) {
                     int flags = View.class.getDeclaredField("SYSTEM_UI_FLAG_HIDE_NAVIGATION").getInt(null);
-                    if (Build.VERSION.SDK_INT >= 16) {
-                        flags |= View.class.getDeclaredField("SYSTEM_UI_FLAG_LAYOUT_STABLE").getInt(null);
-                        flags |= View.class.getDeclaredField("SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION").getInt(null);
-                        flags |= View.class.getDeclaredField("SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN").getInt(null);
-                        flags |= View.class.getDeclaredField("SYSTEM_UI_FLAG_FULLSCREEN").getInt(null);
-
-                        if (Build.VERSION.SDK_INT >= 19)
-                            flags |= View.class.getDeclaredField("SYSTEM_UI_FLAG_IMMERSIVE_STICKY").getInt(null);
-                    }
+                    flags |= View.class.getDeclaredField("SYSTEM_UI_FLAG_LAYOUT_STABLE").getInt(null);
+                    flags |= View.class.getDeclaredField("SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION").getInt(null);
+                    flags |= View.class.getDeclaredField("SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN").getInt(null);
+                    flags |= View.class.getDeclaredField("SYSTEM_UI_FLAG_FULLSCREEN").getInt(null);
+                    flags |= View.class.getDeclaredField("SYSTEM_UI_FLAG_IMMERSIVE_STICKY").getInt(null);
                     Method m = View.class.getMethod("setSystemUiVisibility", int.class);
                     m.invoke(m_activity.getWindow().getDecorView(), flags | View.INVISIBLE);
                 }
@@ -520,6 +517,7 @@ public class QtActivityDelegate
             m_super_onKeyUp = m_activity.getClass().getMethod("super_onKeyUp", Integer.TYPE, KeyEvent.class);
             m_super_onConfigurationChanged = m_activity.getClass().getMethod("super_onConfigurationChanged", Configuration.class);
             m_super_onActivityResult = m_activity.getClass().getMethod("super_onActivityResult", Integer.TYPE, Integer.TYPE, Intent.class);
+            m_super_onWindowFocusChanged = m_activity.getClass().getMethod("super_onWindowFocusChanged", Boolean.TYPE);
             if (Build.VERSION.SDK_INT >= 12) {
                 try {
                     m_super_dispatchGenericMotionEvent = m_activity.getClass().getMethod("super_dispatchGenericMotionEvent", MotionEvent.class);
@@ -941,6 +939,16 @@ public class QtActivityDelegate
             // Unknown exception means something went wrong.
             Log.w("Qt A11y", "Unknown exception: " + e.toString());
         }
+    }
+
+    public void onWindowFocusChanged(boolean hasFocus) {
+        try {
+            m_super_onWindowFocusChanged.invoke(m_activity, hasFocus);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        if (hasFocus)
+            updateFullScreen();
     }
 
     public void onConfigurationChanged(Configuration configuration)

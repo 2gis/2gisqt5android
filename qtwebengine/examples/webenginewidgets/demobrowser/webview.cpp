@@ -96,16 +96,6 @@ BrowserMainWindow *WebPage::mainWindow()
     return BrowserApplication::instance()->mainWindow();
 }
 
-bool WebPage::acceptNavigationRequest(const QUrl &url, NavigationType type, bool isMainFrame)
-{
-    Q_UNUSED(type);
-    if (isMainFrame) {
-        m_loadingUrl = url;
-        emit loadingUrl(m_loadingUrl);
-    }
-    return true;
-}
-
 bool WebPage::certificateError(const QWebEngineCertificateError &error)
 {
     if (error.isOverridable()) {
@@ -357,8 +347,6 @@ void WebView::setPage(WebPage *_page)
     connect(page(), SIGNAL(statusBarMessage(QString)),
             SLOT(setStatusBarText(QString)));
 #endif
-    connect(page(), SIGNAL(loadingUrl(QUrl)),
-            this, SIGNAL(urlChanged(QUrl)));
     connect(page(), SIGNAL(iconUrlChanged(QUrl)),
             this, SLOT(onIconUrlChanged(QUrl)));
     connect(page(), &WebPage::featurePermissionRequested, this, &WebView::onFeaturePermissionRequested);
@@ -375,10 +363,11 @@ void WebView::contextMenuEvent(QContextMenuEvent *event)
     if (it != actions.cend()) {
        (*it)->setText(tr("Open Link in This Window"));
         ++it;
-        menu->insertAction(*it, page()->action(QWebEnginePage::OpenLinkInNewWindow));
-        menu->insertAction(*it, page()->action(QWebEnginePage::OpenLinkInNewTab));
+        QAction *before(it == actions.cend() ? nullptr : *it);
+        menu->insertAction(before, page()->action(QWebEnginePage::OpenLinkInNewWindow));
+        menu->insertAction(before, page()->action(QWebEnginePage::OpenLinkInNewTab));
     }
-
+    connect(menu, &QMenu::aboutToHide, menu, &QObject::deleteLater);
     menu->popup(event->globalPos());
 }
 

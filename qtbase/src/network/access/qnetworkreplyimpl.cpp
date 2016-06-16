@@ -319,7 +319,7 @@ void QNetworkReplyImplPrivate::_q_networkSessionConnected()
 void QNetworkReplyImplPrivate::_q_networkSessionStateChanged(QNetworkSession::State sessionState)
 {
     if (sessionState == QNetworkSession::Disconnected
-            && (state != Idle || state != Reconnecting)) {
+        && state != Idle && state != Reconnecting) {
         error(QNetworkReplyImpl::NetworkSessionFailedError,
               QCoreApplication::translate("QNetworkReply", "Network session error."));
         finished();
@@ -1100,21 +1100,17 @@ bool QNetworkReplyImplPrivate::migrateBackend()
         return true;
 
     // Backend does not support resuming download.
-    if (!backend->canResume())
+    if (backend && !backend->canResume())
         return false;
 
     state = QNetworkReplyPrivate::Reconnecting;
-
-    if (backend) {
-        delete backend;
-        backend = 0;
-    }
 
     cookedHeaders.clear();
     rawHeaders.clear();
 
     preMigrationDownloaded = bytesDownloaded;
 
+    delete backend;
     backend = manager->d_func()->findBackend(operation, request);
 
     if (backend) {

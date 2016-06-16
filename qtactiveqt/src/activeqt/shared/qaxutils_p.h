@@ -65,16 +65,7 @@ class QRect;
 class QRegion;
 class QWindow;
 
-enum HBitmapFormat
-{
-    HBitmapNoAlpha,
-    HBitmapPremultipliedAlpha,
-    HBitmapAlpha
-};
-
 HWND hwndForWidget(QWidget *widget);
-HBITMAP qaxPixmapToWinHBITMAP(const QPixmap &p, HBitmapFormat format = HBitmapNoAlpha);
-QPixmap qaxPixmapFromWinHBITMAP(HBITMAP bitmap, HBitmapFormat format = HBitmapNoAlpha);
 HRGN qaxHrgnFromQRegion(QRegion region, const QWindow *window);
 
 typedef QPair<qreal, qreal> QDpi;
@@ -119,6 +110,9 @@ RECT qaxNativeWidgetRect(const QWidget *w);
 QRect qaxFromNativeRect(const RECT &r, const QWidget *w);
 HRGN qaxHrgnFromQRegion(const QRegion &region, const QWidget *widget);
 #endif // QT_WIDGETS_LIB
+
+QByteArray qaxTypeInfoName(ITypeInfo *typeInfo, MEMBERID memId);
+QByteArrayList qaxTypeInfoNames(ITypeInfo *typeInfo, MEMBERID memId);
 
 QT_END_NAMESPACE
 

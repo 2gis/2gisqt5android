@@ -485,8 +485,10 @@ void WebContentsAdapter::setContent(const QByteArray &data, const QString &mimeT
     params.virtual_url_for_data_url = baseUrl.isEmpty() ? GURL(url::kAboutBlankURL) : toGurl(baseUrl);
     params.can_load_local_resources = true;
     params.transition_type = ui::PageTransitionFromInt(ui::PAGE_TRANSITION_TYPED | ui::PAGE_TRANSITION_FROM_API);
+    params.override_user_agent = content::NavigationController::UA_OVERRIDE_TRUE;
     d->webContents->GetController().LoadURLWithParams(params);
     d->webContents->Focus();
+    d->webContents->Unselect();
 }
 
 QUrl WebContentsAdapter::activeUrl() const
@@ -664,7 +666,15 @@ void WebContentsAdapter::setZoomFactor(qreal factor)
     Q_D(WebContentsAdapter);
     if (factor < content::kMinimumZoomFactor || factor > content::kMaximumZoomFactor)
         return;
-    content::HostZoomMap::SetZoomLevel(d->webContents.get(), content::ZoomFactorToZoomLevel(static_cast<double>(factor)));
+
+    double zoomLevel = content::ZoomFactorToZoomLevel(static_cast<double>(factor));
+    content::HostZoomMap *zoomMap = content::HostZoomMap::GetForWebContents(d->webContents.get());
+
+    if (zoomMap) {
+        int render_process_id = d->webContents->GetRenderProcessHost()->GetID();
+        int render_view_id = d->webContents->GetRenderViewHost()->GetRoutingID();
+        zoomMap->SetTemporaryZoomLevel(render_process_id, render_view_id, zoomLevel);
+    }
 }
 
 qreal WebContentsAdapter::currentZoomFactor() const
@@ -844,6 +854,11 @@ void WebContentsAdapter::wasHidden()
 void WebContentsAdapter::grantMediaAccessPermission(const QUrl &securityOrigin, WebContentsAdapterClient::MediaRequestFlags flags)
 {
     Q_D(WebContentsAdapter);
+    // Let the permission manager remember the reply.
+    if (flags & WebContentsAdapterClient::MediaAudioCapture)
+        d->browserContextAdapter->permissionRequestReply(securityOrigin, BrowserContextAdapter::AudioCapturePermission, true);
+    if (flags & WebContentsAdapterClient::MediaVideoCapture)
+        d->browserContextAdapter->permissionRequestReply(securityOrigin, BrowserContextAdapter::VideoCapturePermission, true);
     MediaCaptureDevicesDispatcher::GetInstance()->handleMediaAccessPermissionResponse(d->webContents.get(), securityOrigin, flags);
 }
 

@@ -94,6 +94,12 @@
 #  define Q_DECL_DEPRECATED_X(text) __declspec(deprecated(text))
 #  define Q_DECL_EXPORT __declspec(dllexport)
 #  define Q_DECL_IMPORT __declspec(dllimport)
+#  if _MSC_VER >= 1800
+#    define QT_MAKE_UNCHECKED_ARRAY_ITERATOR(x) stdext::make_unchecked_array_iterator(x)
+#  endif
+#  if _MSC_VER >= 1500
+#    define QT_MAKE_CHECKED_ARRAY_ITERATOR(x, N) stdext::make_checked_array_iterator(x, size_t(N))
+#  endif
 /* Intel C++ disguising as Visual C++: the `using' keyword avoids warnings */
 #  if defined(__INTEL_COMPILER)
 #    define Q_DECL_VARIABLE_DEPRECATED
@@ -1049,6 +1055,11 @@
 #  define Q_ALIGNOF(x)  alignof(x)
 #endif
 
+#if defined(Q_COMPILER_ALIGNAS)
+#  undef Q_DECL_ALIGN
+#  define Q_DECL_ALIGN(n)   alignas(n)
+#endif
+
 /*
  * Fallback macros to certain compiler features
  */
@@ -1116,6 +1127,12 @@
 #endif
 #ifndef Q_DECL_CONST_FUNCTION
 #  define Q_DECL_CONST_FUNCTION Q_DECL_PURE_FUNCTION
+#endif
+#ifndef QT_MAKE_UNCHECKED_ARRAY_ITERATOR
+#  define QT_MAKE_UNCHECKED_ARRAY_ITERATOR(x) (x)
+#endif
+#ifndef QT_MAKE_CHECKED_ARRAY_ITERATOR
+#  define QT_MAKE_CHECKED_ARRAY_ITERATOR(x, N) (x)
 #endif
 
 /*

@@ -2325,16 +2325,16 @@ QList<QGlyphRun> QTextLine::glyphRuns(int from, int length) const
 
             if (mainFontEngine->type() == QFontEngine::Multi) {
                 QFontEngineMulti *multiFontEngine = static_cast<QFontEngineMulti *>(mainFontEngine);
-                int end = rtl ? glyphLayout.numGlyphs : 0;
-                int start = rtl ? end : 0;
-                int which = glyphLayout.glyphs[rtl ? start - 1 : end] >> 24;
-                for (; (rtl && start > 0) || (!rtl && end < glyphLayout.numGlyphs);
+                int start = rtl ? glyphLayout.numGlyphs : 0;
+                int end = start - 1;
+                int which = glyphLayout.glyphs[rtl ? start - 1 : end + 1] >> 24;
+                for (; (rtl && start > 0) || (!rtl && end < glyphLayout.numGlyphs - 1);
                      rtl ? --start : ++end) {
-                    const int e = glyphLayout.glyphs[rtl ? start - 1 : end] >> 24;
+                    const int e = glyphLayout.glyphs[rtl ? start - 1 : end + 1] >> 24;
                     if (e == which)
                         continue;
 
-                    QGlyphLayout subLayout = glyphLayout.mid(start, end - start);
+                    QGlyphLayout subLayout = glyphLayout.mid(start, end - start + 1);
                     multiFontEngine->ensureEngineAt(which);
 
                     QGlyphRun::GlyphRunFlags subFlags = flags;
@@ -2349,22 +2349,22 @@ QList<QGlyphRun> QTextLine::glyphRuns(int from, int length) const
                                                       width,
                                                       glyphsStart + start,
                                                       glyphsStart + end,
-                                                      logClusters,
-                                                      iterator.itemStart,
-                                                      iterator.itemLength));
+                                                      logClusters + relativeFrom,
+                                                      relativeFrom + si.position,
+                                                      relativeTo - relativeFrom + 1));
                     for (int i = 0; i < subLayout.numGlyphs; ++i) {
                         QFixed justification = QFixed::fromFixed(subLayout.justifications[i].space_18d6);
                         pos.rx() += (subLayout.advances[i] + justification).toReal();
                     }
 
                     if (rtl)
-                        end = start;
+                        end = start - 1;
                     else
-                        start = end;
+                        start = end + 1;
                     which = e;
                 }
 
-                QGlyphLayout subLayout = glyphLayout.mid(start, end - start);
+                QGlyphLayout subLayout = glyphLayout.mid(start, end - start + 1);
                 multiFontEngine->ensureEngineAt(which);
 
                 QGlyphRun::GlyphRunFlags subFlags = flags;
@@ -2379,9 +2379,9 @@ QList<QGlyphRun> QTextLine::glyphRuns(int from, int length) const
                                                       width,
                                                       glyphsStart + start,
                                                       glyphsStart + end,
-                                                      logClusters,
-                                                      iterator.itemStart,
-                                                      iterator.itemLength);
+                                                      logClusters + relativeFrom,
+                                                      relativeFrom + si.position,
+                                                      relativeTo - relativeFrom + 1);
                 if (!glyphRun.isEmpty())
                     glyphRuns.append(glyphRun);
             } else {
@@ -2395,9 +2395,9 @@ QList<QGlyphRun> QTextLine::glyphRuns(int from, int length) const
                                                       width,
                                                       glyphsStart,
                                                       glyphsEnd,
-                                                      logClusters,
-                                                      iterator.itemStart,
-                                                      iterator.itemLength);
+                                                      logClusters + relativeFrom,
+                                                      relativeFrom + si.position,
+                                                      relativeTo - relativeFrom + 1);
                 if (!glyphRun.isEmpty())
                     glyphRuns.append(glyphRun);
             }

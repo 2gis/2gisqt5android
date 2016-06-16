@@ -76,6 +76,8 @@ public:
     virtual void doneParsingHeaderFiles() Q_DECL_OVERRIDE;
     virtual void doneParsingSourceFiles() Q_DECL_OVERRIDE;
     bool parseParameters(const QString& parameters, QVector<Parameter>& pvect, bool& isQPrivateSignal);
+    const Location& declLoc() const { return declLoc_; }
+    void setDeclLoc() { declLoc_ = location(); }
 
 protected:
     const QSet<QString>& topicCommands();
@@ -117,7 +119,7 @@ protected:
     bool matchModuleQualifier(QString& name);
     bool matchTemplateAngles(CodeChunk *type = 0);
     bool matchTemplateHeader();
-    bool matchDataType(CodeChunk *type, QString *var = 0);
+    bool matchDataType(CodeChunk *type, QString *var = 0, bool qProp = false);
     bool matchParameter(QVector<Parameter>& pvect, bool& isQPrivateSignal);
     bool matchFunctionDecl(Aggregate *parent,
                            QStringList *parentPathPtr,
@@ -163,6 +165,7 @@ protected:
     QStringList lastPath_;
     QRegExp varComment;
     QRegExp sep;
+    Location declLoc_;
 
  private:
     QString sequentialIteratorDefinition;

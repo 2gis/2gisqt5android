@@ -11,3 +11,6 @@ mac: CONFIG -= app_bundle
 
 OTHER_FILES += todo.qml
 RESOURCES += todo.qrc
+
+target.path = $$[QT_INSTALL_EXAMPLES]/enginio/quick/todos
+INSTALLS += target

@@ -51,9 +51,6 @@
 
 QT_BEGIN_NAMESPACE
 
-static const char formatTextPlainC[] = "text/plain";
-static const char formatTextHtmlC[] = "text/html";
-
 /*!
     \class QWindowsClipboard
     \brief Clipboard implementation.
@@ -262,9 +259,9 @@ bool QWindowsClipboard::clipboardViewerWndProc(HWND hwnd, UINT message, WPARAM w
 
     switch (message) {
     case WM_CHANGECBCHAIN: {
-        const HWND toBeRemoved = (HWND)wParam;
+        const HWND toBeRemoved = reinterpret_cast<HWND>(wParam);
         if (toBeRemoved == m_nextClipboardViewer) {
-            m_nextClipboardViewer = (HWND)lParam;
+            m_nextClipboardViewer = reinterpret_cast<HWND>(lParam);
         } else {
             propagateClipboardMessage(message, wParam, lParam);
         }

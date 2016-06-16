@@ -120,7 +120,6 @@ public:
     using QtWayland::wl_surface::attach;
     void attach(QWaylandBuffer *buffer, int x, int y);
     void attachOffset(QWaylandBuffer *buffer);
-    QWaylandBuffer *attached() const;
     QPoint attachOffset() const;
 
     using QtWayland::wl_surface::damage;
@@ -168,7 +167,7 @@ public:
     inline bool isMaximized() const { return mState == Qt::WindowMaximized; }
     inline bool isFullscreen() const { return mState == Qt::WindowFullScreen; }
 
-    void setMouseCursor(QWaylandInputDevice *device, Qt::CursorShape shape);
+    void setMouseCursor(QWaylandInputDevice *device, const QCursor &cursor);
     void restoreMouseCursor(QWaylandInputDevice *device);
 
     QWaylandWindow *transientParent() const;
@@ -206,9 +205,8 @@ protected:
     QWaylandAbstractDecoration *mWindowDecoration;
     bool mMouseEventsInContentArea;
     Qt::MouseButtons mMousePressedInContentArea;
-    Qt::CursorShape m_cursorShape;
+    QCursor m_cursor;
 
-    QWaylandBuffer *mBuffer;
     WId mWindowId;
     bool mWaitingForFrameSync;
     struct wl_callback *mFrameCallback;
@@ -236,6 +234,8 @@ private:
     bool setWindowStateInternal(Qt::WindowState flags);
     void setGeometry_helper(const QRect &rect);
     void initWindow();
+    bool shouldCreateShellSurface() const;
+    bool shouldCreateSubSurface() const;
     void reset();
 
     void handleMouseEventWithDecoration(QWaylandInputDevice *inputDevice, const QWaylandPointerEvent &e);

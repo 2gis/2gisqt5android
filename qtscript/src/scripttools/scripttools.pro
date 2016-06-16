@@ -10,6 +10,6 @@ DEFINES   += QT_NO_USING_NAMESPACE
 
 QMAKE_DOCS = $$PWD/doc/qtscripttools.qdocconf
 
-load(qt_module)
-
 include(debugging/debugging.pri)
+
+load(qt_module)

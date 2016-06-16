@@ -208,7 +208,10 @@ QXcbScreen::QXcbScreen(QXcbConnection *connection, QXcbVirtualDesktop *virtualDe
         m_geometry = QRect(QPoint(), m_virtualSize);
 
     if (m_availableGeometry.isEmpty())
-        m_availableGeometry = m_geometry;
+        m_availableGeometry = m_geometry & m_virtualDesktop->workArea();
+
+    if (m_sizeMillimeters.isEmpty())
+        m_sizeMillimeters = m_virtualSizeMillimeters;
 
     readXResources();
 
@@ -358,6 +361,7 @@ void QXcbScreen::sendStartupMessage(const QByteArray &message) const
     ev.response_type = XCB_CLIENT_MESSAGE;
     ev.format = 8;
     ev.type = connection()->atom(QXcbAtom::_NET_STARTUP_INFO_BEGIN);
+    ev.sequence = 0;
     ev.window = rootWindow;
     int sent = 0;
     int length = message.length() + 1; // include NUL byte
@@ -433,6 +437,14 @@ void QXcbScreen::setOutput(xcb_randr_output_t outputId,
     m_mode = XCB_NONE;
     m_outputName = getOutputName(outputInfo);
     // TODO: Send an event to the QScreen instance that the screen changed its name
+}
+
+int QXcbScreen::virtualDesktopNumberStatic(const QScreen *screen)
+{
+    if (screen && screen->handle())
+        return static_cast<const QXcbScreen *>(screen->handle())->screenNumber();
+
+    return 0;
 }
 
 /*!

@@ -200,13 +200,21 @@ void QWebEnginePagePrivate::loadFinished(bool success, const QUrl &url, bool isE
     Q_UNUSED(errorCode);
     Q_UNUSED(errorDescription);
 
-    if (isErrorPage)
+    if (isErrorPage) {
+        Q_ASSERT(settings->testAttribute(QWebEngineSettings::ErrorPageEnabled));
+        Q_ASSERT(success);
+        Q_EMIT q->loadFinished(false);
         return;
+    }
 
     isLoading = false;
     if (success)
         explicitUrl = QUrl();
-    Q_EMIT q->loadFinished(success);
+    // Delay notifying failure until the error-page is done loading.
+    // Error-pages are not loaded on failures due to abort.
+    if (success || errorCode == -3 /* ERR_ABORTED*/ || !settings->testAttribute(QWebEngineSettings::ErrorPageEnabled)) {
+        Q_EMIT q->loadFinished(success);
+    }
     updateNavigationActions();
 }
 
@@ -427,7 +435,7 @@ void QWebEnginePagePrivate::setFullScreenMode(bool fullscreen)
     }
 }
 
-BrowserContextAdapter *QWebEnginePagePrivate::browserContextAdapter()
+QSharedPointer<BrowserContextAdapter> QWebEnginePagePrivate::browserContextAdapter()
 {
     return profile->d_ptr->browserContext();
 }
@@ -443,6 +451,7 @@ QWebEnginePage::QWebEnginePage(QObject* parent)
 
 /*!
     \enum QWebEnginePage::RenderProcessTerminationStatus
+    \since 5.6
 
     This enum describes the status with which the render process terminated:
 
@@ -458,6 +467,7 @@ QWebEnginePage::QWebEnginePage(QObject* parent)
 
 /*!
     \fn QWebEnginePage::renderProcessTerminated(RenderProcessTerminationStatus terminationStatus, int exitCode)
+    \since 5.6
 
     This signal is emitted when the render process is terminated with a non-zero exit status.
     \a terminationStatus is the termination status of the process and \a exitCode is the status code
@@ -638,6 +648,10 @@ QAction *QWebEnginePage::action(WebAction action) const
         text = tr("Reload");
         icon = style->standardIcon(QStyle::SP_BrowserReload);
         break;
+    case ReloadAndBypassCache:
+        text = tr("Reload and Bypass Cache");
+        icon = style->standardIcon(QStyle::SP_BrowserReload);
+        break;
     case Cut:
         text = tr("Cut");
         break;
@@ -710,7 +724,9 @@ QAction *QWebEnginePage::action(WebAction action) const
     case RequestClose:
         text = tr("Close Page");
         break;
-    default:
+    case NoWebAction:
+    case WebActionCount:
+        Q_UNREACHABLE();
         break;
     }
 
@@ -870,7 +886,7 @@ void QWebEnginePage::triggerAction(WebAction action, bool)
         break;
     case ToggleMediaMute:
         if (d->m_menuData.mediaUrl.isValid() && d->m_menuData.mediaFlags & WebEngineContextMenuData::MediaHasAudio) {
-            bool enable = (d->m_menuData.mediaFlags & WebEngineContextMenuData::MediaMuted);
+            bool enable = !(d->m_menuData.mediaFlags & WebEngineContextMenuData::MediaMuted);
             d->adapter->executeMediaPlayerActionAt(d->m_menuData.pos, WebContentsAdapter::MediaPlayerMute, enable);
         }
         break;
@@ -883,8 +899,11 @@ void QWebEnginePage::triggerAction(WebAction action, bool)
     case RequestClose:
         d->adapter->requestClose();
         break;
-    default:
+    case NoWebAction:
+        break;
+    case WebActionCount:
         Q_UNREACHABLE();
+        break;
     }
 }
 
@@ -940,11 +959,10 @@ bool QWebEnginePagePrivate::contextMenuRequested(const WebEngineContextMenuData 
             QMenu::exec(view->actions(), event.globalPos(), 0, view);
             break;
         }
-        // fall through
-    default:
+        // fallthrough
+    case Qt::NoContextMenu:
         event.ignore();
         return false;
-        break;
     }
     view->d_func()->m_pendingContextMenuEvent = false;
     return true;
@@ -993,8 +1011,6 @@ void QWebEnginePagePrivate::javascriptDialog(QSharedPointer<JavaScriptDialogCont
     case InternalAuthorizationDialog:
         accepted = (QMessageBox::question(view, controller->title(), controller->message(), QMessageBox::Yes, QMessageBox::No) == QMessageBox::Yes);
         break;
-    default:
-        Q_UNREACHABLE();
     }
     if (accepted)
         controller->accept();
@@ -1159,7 +1175,7 @@ void QWebEnginePage::setFeaturePermission(const QUrl &securityOrigin, QWebEngine
         else
             d->adapter->grantMouseLockPermission(false);
         break;
-    default:
+    case Notifications:
         break;
     }
 }
@@ -1325,7 +1341,6 @@ QStringList QWebEnginePage::chooseFiles(FileSelectionMode mode, const QStringLis
         if (!str.isNull())
             ret << str;
         break;
-    default:
     case FilePickerController::Open:
         str = QFileDialog::getOpenFileName(view(), QString(), oldFiles.first());
         if (!str.isNull())

@@ -46,6 +46,8 @@
 #include <qboxlayout.h>
 #include <qtabwidget.h>
 #include <qlabel.h>
+#include <qmainwindow.h>
+#include <qtoolbar.h>
 #include <private/qwindow_p.h>
 
 static inline void setFrameless(QWidget *w)
@@ -99,6 +101,8 @@ private slots:
     void tst_move_count();
 
     void tst_eventfilter_on_toplevel();
+
+    void QTBUG_50561_QCocoaBackingStore_paintDevice_crash();
 };
 
 void tst_QWidget_window::initTestCase()
@@ -206,32 +210,20 @@ void tst_QWidget_window::tst_show_resize_hide_show()
 //    QCoreApplication::processEvents(QEventLoop::AllEvents, 1000);
 }
 
-class TestWidget : public QWidget
+class PaintTestWidget : public QWidget
 {
 public:
-    int m_first, m_next;
-    bool paintEventReceived;
+    int paintEventCount;
 
-    void reset(){ m_first = m_next = 0; paintEventReceived = false; }
-    bool event(QEvent *event)
+    explicit PaintTestWidget(QWidget *parent = Q_NULLPTR)
+        : QWidget(parent)
+        , paintEventCount(0)
+    {}
+
+    void paintEvent(QPaintEvent *event) Q_DECL_OVERRIDE
     {
-        switch (event->type()) {
-        case QEvent::WindowActivate:
-        case QEvent::WindowDeactivate:
-        case QEvent::Hide:
-        case QEvent::Show:
-            if (m_first)
-                m_next = event->type();
-            else
-                m_first = event->type();
-            break;
-        case QEvent::Paint:
-            paintEventReceived = true;
-            break;
-        default:
-            break;
-        }
-        return QWidget::event(event);
+        ++paintEventCount;
+        QWidget::paintEvent(event);
     }
 };
 
@@ -366,15 +358,15 @@ void tst_QWidget_window::tst_showWithoutActivating()
 
 void tst_QWidget_window::tst_paintEventOnSecondShow()
 {
-    TestWidget w;
+    PaintTestWidget w;
     w.show();
     w.hide();
 
-    w.reset();
+    w.paintEventCount = 0;
     w.show();
     QVERIFY(QTest::qWaitForWindowExposed(&w));
     QApplication::processEvents();
-    QTRY_VERIFY(w.paintEventReceived);
+    QTRY_VERIFY(w.paintEventCount > 0);
 }
 
 #ifndef QT_NO_DRAGANDDROP
@@ -805,6 +797,47 @@ void tst_QWidget_window::tst_eventfilter_on_toplevel()
     // and check that it's received by the event filter
     QCoreApplication::postEvent(w.windowHandle(), new QEvent(EventFilter::filterEventType()));
     QTRY_COMPARE(filter.eventCount, 1);
+}
+
+class ApplicationStateSaver
+{
+public:
+    ApplicationStateSaver()
+    {
+        QApplication::setAttribute(Qt::AA_NativeWindows, true);
+        QApplication::setQuitOnLastWindowClosed(false);
+    }
+
+    ~ApplicationStateSaver()
+    {
+        QApplication::setAttribute(Qt::AA_NativeWindows, false);
+        QApplication::setQuitOnLastWindowClosed(true);
+    }
+};
+
+void tst_QWidget_window::QTBUG_50561_QCocoaBackingStore_paintDevice_crash()
+{
+    // Keep application state clean if testcase fails
+    ApplicationStateSaver as;
+
+    QMainWindow w;
+    w.addToolBar(new QToolBar(&w));
+    w.show();
+    QTest::qWaitForWindowExposed(&w);
+
+    // Simulate window system close
+    QCloseEvent *e = new QCloseEvent;
+    e->accept();
+    qApp->postEvent(w.windowHandle(), e);
+    qApp->processEvents();
+
+    // Show again
+    w.show();
+    qApp->processEvents();
+
+    // No crash, all good.
+    // Wrap up and leave
+    w.close();
 }
 
 QTEST_MAIN(tst_QWidget_window)

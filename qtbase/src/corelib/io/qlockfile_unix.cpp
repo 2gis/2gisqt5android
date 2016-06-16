@@ -136,13 +136,17 @@ static QBasicMutex fcntlLock;
 static bool fcntlWorksAfterFlock(const QString &fn)
 {
     QMutexLocker lock(&fcntlLock);
+    if (fcntlOK.isDestroyed())
+        return QLockFilePrivate::checkFcntlWorksAfterFlock(fn);
     bool *worksPtr = fcntlOK->object(fn);
-    if (!worksPtr) {
-        worksPtr = new bool(QLockFilePrivate::checkFcntlWorksAfterFlock(fn));
-        fcntlOK->insert(fn, worksPtr);
-    }
+    if (worksPtr)
+        return *worksPtr;
 
-    return *worksPtr;
+    const bool val = QLockFilePrivate::checkFcntlWorksAfterFlock(fn);
+    worksPtr = new bool(val);
+    fcntlOK->insert(fn, worksPtr);
+
+    return val;
 }
 
 static bool setNativeLocks(const QString &fileName, int fd)

@@ -105,7 +105,9 @@ void destroyContext()
 bool usingANGLE()
 {
 #if defined(Q_OS_WIN)
-    return qt_gl_global_share_context()->isOpenGLES();
+    if (qt_gl_global_share_context())
+        return qt_gl_global_share_context()->isOpenGLES();
+    return QOpenGLContext::openGLModuleType() == QOpenGLContext::LibGLES;
 #else
     return false;
 #endif
@@ -146,7 +148,7 @@ bool usingQtQuick2DRenderer()
 
 void WebEngineContext::destroyBrowserContext()
 {
-    m_defaultBrowserContext = 0;
+    m_defaultBrowserContext.reset();
 }
 
 void WebEngineContext::destroy()
@@ -180,11 +182,11 @@ scoped_refptr<WebEngineContext> WebEngineContext::current()
     return sContext;
 }
 
-BrowserContextAdapter* WebEngineContext::defaultBrowserContext()
+QSharedPointer<BrowserContextAdapter> WebEngineContext::defaultBrowserContext()
 {
     if (!m_defaultBrowserContext)
-        m_defaultBrowserContext = new BrowserContextAdapter(QStringLiteral("Default"));
-    return m_defaultBrowserContext.data();
+        m_defaultBrowserContext = QSharedPointer<BrowserContextAdapter>::create(QStringLiteral("Default"));
+    return m_defaultBrowserContext;
 }
 
 QObject *WebEngineContext::globalQObject()
@@ -203,21 +205,40 @@ WebEngineContext::WebEngineContext()
     , m_browserRunner(content::BrowserMainRunner::Create())
     , m_globalQObject(new QObject())
 {
-    QVector<QByteArray> args;
-    Q_FOREACH (const QString& arg, QCoreApplication::arguments())
-        args << arg.toUtf8();
-
-    bool useEmbeddedSwitches = args.removeAll("--enable-embedded-switches");
+    QStringList appArgs = QCoreApplication::arguments();
+    bool useEmbeddedSwitches = appArgs.removeAll(QStringLiteral("--enable-embedded-switches"));
 #if defined(QTWEBENGINE_EMBEDDED_SWITCHES)
-    useEmbeddedSwitches = !args.removeAll("--disable-embedded-switches");
+    useEmbeddedSwitches = !appArgs.removeAll(QStringLiteral("--disable-embedded-switches"));
 #endif
+
+#ifdef Q_OS_LINUX
+    // Call qputenv before BrowserMainRunnerImpl::Initialize is called.
+    // http://crbug.com/245466
+    qputenv("force_s3tc_enable", "true");
+#endif
+
+#if defined(Q_OS_WIN)
+    // We must initialize the command line with the UTF-16 arguments vector we got from
+    // QCoreApplication. CommandLine::Init ignores its arguments on Windows and calls
+    // GetCommandLineW() instead.
+    base::CommandLine::CreateEmpty();
+    base::CommandLine* parsedCommandLine = base::CommandLine::ForCurrentProcess();
+    base::CommandLine::StringVector argv;
+    argv.resize(appArgs.size());
+    std::transform(appArgs.constBegin(), appArgs.constEnd(), argv.begin(), &toString16);
+    parsedCommandLine->InitFromArgv(argv);
+#else
+    QVector<QByteArray> args;
+    Q_FOREACH (const QString& arg, appArgs)
+        args << arg.toUtf8();
 
     QVector<const char*> argv(args.size());
     for (int i = 0; i < args.size(); ++i)
         argv[i] = args[i].constData();
     base::CommandLine::Init(argv.size(), argv.constData());
-
     base::CommandLine* parsedCommandLine = base::CommandLine::ForCurrentProcess();
+#endif
+
     parsedCommandLine->AppendSwitchPath(switches::kBrowserSubprocessPath, WebEngineLibraryInfo::getPath(content::CHILD_PROCESS_EXE));
     parsedCommandLine->AppendSwitch(switches::kNoSandbox);
     parsedCommandLine->AppendSwitch(switches::kEnableDelegatedRenderer);
@@ -229,6 +250,7 @@ WebEngineContext::WebEngineContext()
         parsedCommandLine->AppendSwitch(switches::kEnableOverlayScrollbar);
         parsedCommandLine->AppendSwitch(switches::kEnablePinch);
         parsedCommandLine->AppendSwitch(switches::kEnableViewport);
+        parsedCommandLine->AppendSwitch(switches::kEnableViewportMeta);
         parsedCommandLine->AppendSwitch(switches::kMainFrameResizesAreOrientationChanges);
         parsedCommandLine->AppendSwitch(switches::kDisableAcceleratedVideoDecode);
         parsedCommandLine->AppendSwitch(switches::kDisableGpuShaderDiskCache);
@@ -243,10 +265,23 @@ WebEngineContext::WebEngineContext()
         parsedCommandLine->AppendSwitch(switches::kDisableGpu);
     } else {
         const char *glType = 0;
-        if (qt_gl_global_share_context()->isOpenGLES()) {
-            glType = gfx::kGLImplementationEGLName;
+        if (qt_gl_global_share_context()) {
+            if (qt_gl_global_share_context()->isOpenGLES()) {
+                glType = gfx::kGLImplementationEGLName;
+            } else {
+                glType = gfx::kGLImplementationDesktopName;
+            }
         } else {
-            glType = gfx::kGLImplementationDesktopName;
+            qWarning("WebEngineContext used before QtWebEngine::initialize()");
+            // We have to assume the default OpenGL module type will be used.
+            switch (QOpenGLContext::openGLModuleType()) {
+            case QOpenGLContext::LibGL:
+                glType = gfx::kGLImplementationDesktopName;
+                break;
+            case QOpenGLContext::LibGLES:
+                glType = gfx::kGLImplementationEGLName;
+                break;
+            }
         }
 
         parsedCommandLine->AppendSwitchASCII(switches::kUseGL, glType);

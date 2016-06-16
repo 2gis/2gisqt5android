@@ -1267,7 +1267,10 @@ void WriteInitialization::writeProperties(const QString &varName,
         } else {
             setFunction = QLatin1String("->setProperty(\"");
             setFunction += propertyName;
-            setFunction += QLatin1String("\", QVariant(");
+            setFunction += QLatin1String("\", QVariant");
+            if (p->kind() == DomProperty::Enum)
+                setFunction += QLatin1String("::fromValue");
+            setFunction += QLatin1Char('(');
         }
 
         QString varNewName = varName;
@@ -2200,8 +2203,10 @@ QList<WriteInitialization::Item *> WriteInitialization::initializeTreeWidgetItem
 {
     // items
     QList<Item *> items;
+    const int numDomItems = domItems.size();
+    items.reserve(numDomItems);
 
-    for (int i = 0; i < domItems.size(); ++i) {
+    for (int i = 0; i < numDomItems; ++i) {
         const DomItem *domItem = domItems.at(i);
 
         Item *item = new Item(QLatin1String("QTreeWidgetItem"), m_indent, m_output, m_refreshOut, m_driver);

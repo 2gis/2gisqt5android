@@ -294,19 +294,6 @@ static inline QAbstractSocket::SocketType qt_socket_getType(qintptr socketDescri
     return QAbstractSocket::UnknownSocketType;
 }
 
-/*! \internal
-
-*/
-static inline int qt_socket_getMaxMsgSize(qintptr socketDescriptor)
-{
-    int value = 0;
-    QT_SOCKLEN_T valueSize = sizeof(value);
-    if (::getsockopt(socketDescriptor, SOL_SOCKET, SO_MAX_MSG_SIZE, (char *) &value, &valueSize) != 0) {
-        WS_ERROR_DEBUG(WSAGetLastError());
-    }
-    return value;
-}
-
 // MS Transport Provider IOCTL to control
 // reporting PORT_UNREACHABLE messages
 // on UDP sockets via recv/WSARecv/etc.
@@ -584,6 +571,19 @@ bool QNativeSocketEnginePrivate::fetchConnectionParameters()
                 socketProtocol = QAbstractSocket::AnyIPProtocol;
                 localAddress = QHostAddress::Any;
             }
+    }
+
+    // Some Windows kernels return a v4-mapped QHostAddress::AnyIPv4 as a
+    // local address of the socket which bound on both IPv4 and IPv6 interfaces.
+    // This address does not match to any special address and should not be used
+    // to send the data. So, replace it with QHostAddress::Any.
+    if (socketProtocol == QAbstractSocket::IPv6Protocol) {
+        bool ok = false;
+        const quint32 localIPv4 = localAddress.toIPv4Address(&ok);
+        if (ok && localIPv4 == INADDR_ANY) {
+            socketProtocol = QAbstractSocket::AnyIPProtocol;
+            localAddress = QHostAddress::Any;
+        }
     }
 
     memset(&sa, 0, sizeof(sa));
@@ -1190,7 +1190,7 @@ qint64 QNativeSocketEnginePrivate::nativePendingDatagramSize() const
 #endif
 
 #if defined (QNATIVESOCKETENGINE_DEBUG)
-    qDebug("QNativeSocketEnginePrivate::nativePendingDatagramSize() == %li", ret);
+    qDebug("QNativeSocketEnginePrivate::nativePendingDatagramSize() == %lli", ret);
 #endif
 
     return ret;
@@ -1296,10 +1296,11 @@ qint64 QNativeSocketEnginePrivate::nativeReceiveDatagram(char *data, qint64 maxL
     }
 
 #if defined (QNATIVESOCKETENGINE_DEBUG)
-    qDebug("QNativeSocketEnginePrivate::nativeReceiveDatagram(%p \"%s\", %li, %s, %i) == %li",
+    bool printSender = (ret != -1 && (options & QNativeSocketEngine::WantDatagramSender) != 0);
+    qDebug("QNativeSocketEnginePrivate::nativeReceiveDatagram(%p \"%s\", %lli, %s, %i) == %lli",
            data, qt_prettyDebug(data, qMin<qint64>(ret, 16), ret).data(), maxLength,
-           address ? address->toString().toLatin1().constData() : "(nil)",
-           port ? *port : 0, ret);
+           printSender ? header->senderAddress.toString().toLatin1().constData() : "(unknown)",
+           printSender ? header->senderPort : 0, ret);
 #endif
 
     return ret;
@@ -1411,9 +1412,10 @@ qint64 QNativeSocketEnginePrivate::nativeSendDatagram(const char *data, qint64 l
     }
 
 #if defined (QNATIVESOCKETENGINE_DEBUG)
-    qDebug("QNativeSocketEnginePrivate::nativeSendDatagram(%p \"%s\", %li, \"%s\", %i) == %li", data,
-           qt_prettyDebug(data, qMin<qint64>(len, 16), len).data(), 0, address.toString().toLatin1().constData(),
-           port, ret);
+    qDebug("QNativeSocketEnginePrivate::nativeSendDatagram(%p \"%s\", %lli, \"%s\", %i) == %lli", data,
+           qt_prettyDebug(data, qMin<qint64>(len, 16), len).data(), len,
+           header.destinationAddress.toString().toLatin1().constData(),
+           header.destinationPort, ret);
 #endif
 
     return ret;

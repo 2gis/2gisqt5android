@@ -142,16 +142,12 @@ QThreadPrivate::QThreadPrivate(QThreadData *d)
       exited(false), returnCode(-1),
       stackSize(0), priority(QThread::InheritPriority), data(d)
 {
-#if defined (Q_OS_UNIX)
-    thread_id = 0;
-#elif defined (Q_OS_WIN)
+#if defined (Q_OS_WIN)
     handle = 0;
 #  ifndef Q_OS_WINRT
     id = 0;
 #  endif
     waiters = 0;
-#endif
-#if defined (Q_OS_WIN)
     terminationEnabled = true;
     terminatePending = false;
 #endif
@@ -303,8 +299,9 @@ QThreadPrivate::~QThreadPrivate()
     The effect of the \a priority parameter is dependent on the
     operating system's scheduling policy. In particular, the \a priority
     will be ignored on systems that do not support thread priorities
-    (such as on Linux, see http://linux.die.net/man/2/sched_setscheduler
-    for more details).
+    (such as on Linux, see the
+    \l {http://linux.die.net/man/2/sched_setscheduler}{sched_setscheduler}
+    documentation for more details).
 
     \sa run(), terminate()
 */

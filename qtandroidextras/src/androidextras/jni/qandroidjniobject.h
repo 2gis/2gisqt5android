@@ -48,11 +48,11 @@ class Q_ANDROIDEXTRAS_EXPORT QAndroidJniObject
 public:
     QAndroidJniObject();
     explicit QAndroidJniObject(const char *className);
-    QAndroidJniObject(const char *className, const char *sig, ...);
+    explicit QAndroidJniObject(const char *className, const char *sig, ...);
     explicit QAndroidJniObject(jclass clazz);
-    QAndroidJniObject(jclass clazz, const char *sig, ...);
+    explicit QAndroidJniObject(jclass clazz, const char *sig, ...);
     QAndroidJniObject(jobject obj);
-    ~QAndroidJniObject() { }
+    ~QAndroidJniObject();
 
     template <typename T>
     inline T object() const { return static_cast<T>(javaObject()); }

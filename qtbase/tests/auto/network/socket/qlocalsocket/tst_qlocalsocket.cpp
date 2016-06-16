@@ -35,6 +35,7 @@
 #include <QtTest/QtTest>
 
 #include <qtextstream.h>
+#include <qdatastream.h>
 #include <QtNetwork/qlocalsocket.h>
 #include <QtNetwork/qlocalserver.h>
 
@@ -78,6 +79,9 @@ private slots:
 
     void readBufferOverflow();
 
+    void simpleCommandProtocol1();
+    void simpleCommandProtocol2();
+
     void fullPath();
 
     void hitMaximumConnections_data();
@@ -102,7 +106,10 @@ private slots:
 
     void multiConnect();
     void writeOnlySocket();
+
+    void writeToClientAndDisconnect_data();
     void writeToClientAndDisconnect();
+
     void debug();
     void bytesWrittenSignal();
     void syncDisconnectNotify();
@@ -498,7 +505,11 @@ void tst_QLocalSocket::connectWithOldOpen()
 
 void tst_QLocalSocket::sendData_data()
 {
-    listenAndConnect_data();
+    QTest::addColumn<QString>("name");
+    QTest::addColumn<bool>("canListen");
+
+    QTest::newRow("null") << QString() << false;
+    QTest::newRow("tst_localsocket") << "tst_localsocket" << true;
 }
 
 void tst_QLocalSocket::sendData()
@@ -521,6 +532,7 @@ void tst_QLocalSocket::sendData()
     // test creating a connection
     socket.connectToServer(name);
     bool timedOut = true;
+    int expectedReadyReadSignals = 0;
 
     QCOMPARE(server.waitForNewConnection(3000, &timedOut), canListen);
 
@@ -544,15 +556,17 @@ void tst_QLocalSocket::sendData()
         out << testLine << endl;
         bool wrote = serverSocket->waitForBytesWritten(3000);
 
-        if (!socket.canReadLine())
+        if (!socket.canReadLine()) {
+            expectedReadyReadSignals = 1;
             QVERIFY(socket.waitForReadyRead());
+        }
 
         QVERIFY(socket.bytesAvailable() >= 0);
         QCOMPARE(socket.bytesToWrite(), (qint64)0);
         QCOMPARE(socket.flush(), false);
         QCOMPARE(socket.isValid(), canListen);
         QCOMPARE(socket.readBufferSize(), (qint64)0);
-        QCOMPARE(spyReadyRead.count(), 1);
+        QCOMPARE(spyReadyRead.count(), expectedReadyReadSignals);
 
         QVERIFY(testLine.startsWith(in.readLine()));
 
@@ -567,7 +581,7 @@ void tst_QLocalSocket::sendData()
     QCOMPARE(spyDisconnected.count(), canListen ? 1 : 0);
     QCOMPARE(spyError.count(), canListen ? 0 : 1);
     QCOMPARE(spyStateChanged.count(), canListen ? 4 : 2);
-    QCOMPARE(spyReadyRead.count(), canListen ? 1 : 0);
+    QCOMPARE(spyReadyRead.count(), canListen ? expectedReadyReadSignals : 0);
 
     server.close();
 
@@ -601,7 +615,7 @@ void tst_QLocalSocket::readBufferOverflow()
     serverSocket->write(buffer, dataBufferSize);
 #ifndef Q_OS_WIN
     // The data is not immediately sent, but buffered.
-    // On Windows, the flushing is done asynchronously by a separate thread.
+    // On Windows, the flushing is done by an asynchronous write operation.
     // However, this operation will never complete as long as the data is not
     // read by the other end, so the call below always times out.
     // On Unix, the flushing is synchronous and thus needs to be done before
@@ -618,6 +632,110 @@ void tst_QLocalSocket::readBufferOverflow()
     QCOMPARE(client.read(buffer, readBufferSize), qint64(readBufferSize));
     // no more bytes available
     QCOMPARE(client.bytesAvailable(), 0);
+}
+
+static qint64 writeCommand(const QVariant &command, QIODevice *device, int commandCounter)
+{
+    QByteArray block;
+    QDataStream out(&block, QIODevice::WriteOnly);
+    out << qint64(0);
+    out << commandCounter;
+    out << command;
+    out.device()->seek(0);
+    out << qint64(block.size() - sizeof(qint64));
+    return device->write(block);
+}
+
+static QVariant readCommand(QIODevice *ioDevice, int *readCommandCounter, bool readSize = true)
+{
+    QDataStream in(ioDevice);
+    qint64 blockSize;
+    int commandCounter;
+    if (readSize)
+        in >> blockSize;
+    in >> commandCounter;
+    *readCommandCounter = commandCounter;
+
+    QVariant command;
+    in >> command;
+
+    return command;
+}
+
+void tst_QLocalSocket::simpleCommandProtocol1()
+{
+    QLocalServer server;
+    server.listen(QStringLiteral("simpleProtocol"));
+
+    QLocalSocket localSocketWrite;
+    localSocketWrite.connectToServer(server.serverName());
+    QVERIFY(server.waitForNewConnection());
+    QLocalSocket *localSocketRead = server.nextPendingConnection();
+    QVERIFY(localSocketRead);
+
+    int readCounter = 0;
+    for (int i = 0; i < 2000; ++i) {
+        const QVariant command(QRect(readCounter, i, 10, 10));
+        const qint64 blockSize = writeCommand(command, &localSocketWrite, i);
+        while (localSocketWrite.bytesToWrite())
+            QVERIFY(localSocketWrite.waitForBytesWritten());
+        while (localSocketRead->bytesAvailable() < blockSize) {
+            QVERIFY(localSocketRead->waitForReadyRead(1000));
+        }
+        const QVariant variant = readCommand(localSocketRead, &readCounter);
+        QCOMPARE(readCounter, i);
+        QCOMPARE(variant, command);
+    }
+}
+
+void tst_QLocalSocket::simpleCommandProtocol2()
+{
+    QLocalServer server;
+    server.listen(QStringLiteral("simpleProtocol"));
+
+    QLocalSocket localSocketWrite;
+    localSocketWrite.connectToServer(server.serverName());
+    QVERIFY(server.waitForNewConnection());
+    QLocalSocket* localSocketRead = server.nextPendingConnection();
+    QVERIFY(localSocketRead);
+
+    int readCounter = 0;
+    qint64 writtenBlockSize = 0;
+    qint64 blockSize = 0;
+
+    QObject::connect(localSocketRead, &QLocalSocket::readyRead, [&] {
+        forever {
+            if (localSocketRead->bytesAvailable() < sizeof(qint64))
+                return;
+
+            if (blockSize == 0) {
+                QDataStream in(localSocketRead);
+                in >> blockSize;
+            }
+
+            if (localSocketRead->bytesAvailable() < blockSize)
+                return;
+
+            int commandNumber = 0;
+            const QVariant variant = readCommand(localSocketRead, &commandNumber, false);
+            QCOMPARE(writtenBlockSize, blockSize);
+            QCOMPARE(readCounter, commandNumber);
+            QCOMPARE(variant.userType(), (int)QMetaType::QRect);
+
+            readCounter++;
+            blockSize = 0;
+        }
+    });
+
+    for (int i = 0; i < 500; ++i) {
+        const QVariant command(QRect(readCounter, i, 10, 10));
+        writtenBlockSize = writeCommand(command, &localSocketWrite, i) - sizeof(qint64);
+        if (i % 10 == 0)
+            QTest::qWait(1);
+    }
+
+    localSocketWrite.abort();
+    QVERIFY(localSocketRead->waitForDisconnected(1000));
 }
 
 // QLocalSocket/Server can take a name or path, check that it works as expected
@@ -837,7 +955,8 @@ void tst_QLocalSocket::processConnection()
     const QString exeSuffix;
 #endif
 
-    QString socketProcess = QStringLiteral("socketprocess/socketprocess") + exeSuffix;
+    const QString socketProcess
+            = QFINDTESTDATA(QStringLiteral("socketprocess/socketprocess") + exeSuffix);
     QVERIFY(QFile::exists(socketProcess));
 
     QFETCH(int, processes);
@@ -1027,8 +1146,16 @@ void tst_QLocalSocket::writeOnlySocket()
     QCOMPARE(client.state(), QLocalSocket::ConnectedState);
 }
 
+void tst_QLocalSocket::writeToClientAndDisconnect_data()
+{
+    QTest::addColumn<int>("chunks");
+    QTest::newRow("one chunk") << 1;
+    QTest::newRow("several chunks") << 20;
+}
+
 void tst_QLocalSocket::writeToClientAndDisconnect()
 {
+    QFETCH(int, chunks);
     QLocalServer server;
     QLocalSocket client;
     QSignalSpy readChannelFinishedSpy(&client, SIGNAL(readChannelFinished()));
@@ -1042,14 +1169,17 @@ void tst_QLocalSocket::writeToClientAndDisconnect()
 
     char buffer[100];
     memset(buffer, 0, sizeof(buffer));
-    QCOMPARE(clientSocket->write(buffer, sizeof(buffer)), (qint64)sizeof(buffer));
-    clientSocket->waitForBytesWritten();
+    for (int i = 0; i < chunks; ++i)
+        QCOMPARE(clientSocket->write(buffer, sizeof(buffer)), qint64(sizeof(buffer)));
+    while (clientSocket->bytesToWrite())
+        QVERIFY(clientSocket->waitForBytesWritten());
     clientSocket->close();
     server.close();
 
     client.waitForDisconnected();
     QCOMPARE(readChannelFinishedSpy.count(), 1);
-    QCOMPARE(client.read(buffer, sizeof(buffer)), (qint64)sizeof(buffer));
+    const QByteArray received = client.readAll();
+    QCOMPARE(received.size(), qint64(sizeof(buffer) * chunks));
     QCOMPARE(client.state(), QLocalSocket::UnconnectedState);
 }
 

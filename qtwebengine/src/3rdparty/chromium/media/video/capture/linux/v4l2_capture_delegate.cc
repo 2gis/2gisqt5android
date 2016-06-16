@@ -18,6 +18,10 @@
 #include "media/video/capture/linux/v4l2_capture_delegate_single_plane.h"
 #include "media/video/capture/linux/video_capture_device_linux.h"
 
+#if !defined(OS_OPENBSD)
+#include <linux/version.h>
+#endif
+
 namespace media {
 
 // Desired number of video buffers to allocate. The actual number of allocated
@@ -46,7 +50,7 @@ static struct{
   {V4L2_PIX_FMT_YUYV, PIXEL_FORMAT_YUY2, 1},
   {V4L2_PIX_FMT_UYVY, PIXEL_FORMAT_UYVY, 1},
   {V4L2_PIX_FMT_RGB24, PIXEL_FORMAT_RGB24, 1},
-#if !defined(OS_OPENBSD)
+#if !defined(OS_OPENBSD) && defined(V4L_PIX_FMT_YUV420M)
   // TODO(mcasas): add V4L2_PIX_FMT_YVU420M when available in bots.
   {V4L2_PIX_FMT_YUV420M, PIXEL_FORMAT_I420, 3},
 #endif
@@ -71,11 +75,11 @@ V4L2CaptureDelegate::CreateV4L2CaptureDelegate(
       return make_scoped_refptr(new V4L2CaptureDelegateSinglePlane(
           device_name, v4l2_task_runner, power_line_frequency));
     case VideoCaptureDevice::Name::V4L2_MULTI_PLANE:
-#if !defined(OS_OPENBSD)
+#if !defined(OS_OPENBSD) && defined(V4L2_TYPE_IS_MULTIPLANAR)
       return make_scoped_refptr(new V4L2CaptureDelegateMultiPlane(
           device_name, v4l2_task_runner, power_line_frequency));
-    default:
 #endif
+    default:
       NOTIMPLEMENTED() << "Unknown V4L2 capture API type";
       return scoped_refptr<V4L2CaptureDelegate>();
   }
@@ -149,10 +153,14 @@ V4L2CaptureDelegate::V4L2CaptureDelegate(
     const VideoCaptureDevice::Name& device_name,
     const scoped_refptr<base::SingleThreadTaskRunner>& v4l2_task_runner,
     int power_line_frequency)
+#ifdef V4L2_TYPE_IS_MULTIPLANAR
     : capture_type_((device_name.capture_api_type() ==
                      VideoCaptureDevice::Name::V4L2_SINGLE_PLANE)
                         ? V4L2_BUF_TYPE_VIDEO_CAPTURE
                         : V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE),
+#else
+    : capture_type_(V4L2_BUF_TYPE_VIDEO_CAPTURE),
+#endif
       v4l2_task_runner_(v4l2_task_runner),
       device_name_(device_name),
       power_line_frequency_(power_line_frequency),
@@ -182,10 +190,15 @@ void V4L2CaptureDelegate::AllocateAndStart(
 
   v4l2_capability cap = {};
   if (!((HANDLE_EINTR(ioctl(device_fd_.get(), VIDIOC_QUERYCAP, &cap)) == 0) &&
+#ifdef V4L2_TYPE_IS_MULTIPLANAR
         ((cap.capabilities & V4L2_CAP_VIDEO_CAPTURE ||
           cap.capabilities & V4L2_CAP_VIDEO_CAPTURE_MPLANE) &&
          !(cap.capabilities & V4L2_CAP_VIDEO_OUTPUT) &&
          !(cap.capabilities & V4L2_CAP_VIDEO_OUTPUT_MPLANE)))) {
+#else
+        ((cap.capabilities & V4L2_CAP_VIDEO_CAPTURE) &&
+         !(cap.capabilities & V4L2_CAP_VIDEO_OUTPUT)))) {
+#endif
     device_fd_.reset();
     SetErrorState("This is not a V4L2 video capture device");
     return;
@@ -256,9 +269,12 @@ void V4L2CaptureDelegate::AllocateAndStart(
 
   // Set anti-banding/anti-flicker to 50/60Hz. May fail due to not supported
   // operation (|errno| == EINVAL in this case) or plain failure.
-  if ((power_line_frequency_ == V4L2_CID_POWER_LINE_FREQUENCY_50HZ) ||
-      (power_line_frequency_ == V4L2_CID_POWER_LINE_FREQUENCY_60HZ) ||
-      (power_line_frequency_ == V4L2_CID_POWER_LINE_FREQUENCY_AUTO)) {
+  if ((power_line_frequency_ == V4L2_CID_POWER_LINE_FREQUENCY_50HZ)
+      || (power_line_frequency_ == V4L2_CID_POWER_LINE_FREQUENCY_60HZ)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,2,0)
+      || (power_line_frequency_ == V4L2_CID_POWER_LINE_FREQUENCY_AUTO)
+#endif
+     ) {
     struct v4l2_control control = {};
     control.id = V4L2_CID_POWER_LINE_FREQUENCY;
     control.value = power_line_frequency_;

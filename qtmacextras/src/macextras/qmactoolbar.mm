@@ -109,8 +109,6 @@ QMacToolBar::QMacToolBar(const QString &identifier, QObject *parent)
 */
 QMacToolBar::~QMacToolBar()
 {
-    Q_D(QMacToolBar);
-    [d->toolbar release];
 }
 
 /*!

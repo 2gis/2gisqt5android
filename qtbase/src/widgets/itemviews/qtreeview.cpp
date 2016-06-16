@@ -1017,7 +1017,11 @@ void QTreeView::keyboardSearch(const QString &search)
 
     bool skipRow = false;
     bool keyboardTimeWasValid = d->keyboardInputTime.isValid();
-    qint64 keyboardInputTimeElapsed = d->keyboardInputTime.restart();
+    qint64 keyboardInputTimeElapsed;
+    if (keyboardTimeWasValid)
+        keyboardInputTimeElapsed = d->keyboardInputTime.restart();
+    else
+        d->keyboardInputTime.start();
     if (search.isEmpty() || !keyboardTimeWasValid
         || keyboardInputTimeElapsed > QApplication::keyboardInputInterval()) {
         d->keyboardInput = search;
@@ -2564,7 +2568,7 @@ void QTreeView::rowsInserted(const QModelIndex &parent, int start, int end)
     if (((parentItem != -1) && d->viewItems.at(parentItem).expanded)
         || (parent == d->root)) {
         d->doDelayedItemsLayout();
-    } else if (parentItem != -1 && (d->model->rowCount(parent) == end - start + 1)) {
+    } else if (parentItem != -1 && parentRowCount == delta) {
         // the parent just went from 0 children to more. update to re-paint the decoration
         d->viewItems[parentItem].hasChildren = true;
         viewport()->update();

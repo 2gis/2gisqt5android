@@ -47,6 +47,7 @@
               '<(SHARED_INTERMEDIATE_DIR)/ui/resources/ui_resources_100_percent.pak',
               '<(SHARED_INTERMEDIATE_DIR)/content/app/resources/content_resources_100_percent.pak',
               '<(SHARED_INTERMEDIATE_DIR)/chrome/renderer_resources_100_percent.pak',
+              '<(SHARED_INTERMEDIATE_DIR)/blink/public/resources/blink_image_resources_100_percent.pak',
             ],
             'pak_outputs': [
                 '<(SHARED_INTERMEDIATE_DIR)/repack/qtwebengine_resources_100p.pak'
@@ -61,6 +62,7 @@
               '<(SHARED_INTERMEDIATE_DIR)/ui/resources/ui_resources_200_percent.pak',
               '<(SHARED_INTERMEDIATE_DIR)/content/app/resources/content_resources_200_percent.pak',
               '<(SHARED_INTERMEDIATE_DIR)/chrome/renderer_resources_200_percent.pak',
+              '<(SHARED_INTERMEDIATE_DIR)/blink/public/resources/blink_image_resources_200_percent.pak',
             ],
             'pak_outputs': [
                 '<(SHARED_INTERMEDIATE_DIR)/repack/qtwebengine_resources_200p.pak'
@@ -72,32 +74,6 @@
         'action_name': 'repack_locales',
         'includes': [ 'repack_locales.gypi' ],
       },
-    ],
-    'conditions': [
-      ['qt_install_data != ""', {
-        'copies': [
-          {
-            'destination': '<(qt_install_data)/resources',
-            'files': [ '<(SHARED_INTERMEDIATE_DIR)/repack/qtwebengine_resources.pak' ],
-          },
-          {
-            'destination': '<(qt_install_data)/resources',
-            'files': [ '<(SHARED_INTERMEDIATE_DIR)/repack/qtwebengine_resources_100p.pak' ],
-          },
-          {
-            'destination': '<(qt_install_data)/resources',
-            'files': [ '<(SHARED_INTERMEDIATE_DIR)/repack/qtwebengine_resources_200p.pak' ],
-          },
-          ],
-      }],
-      ['qt_install_translations != ""', {
-        'copies': [
-          {
-            'destination': '<(qt_install_translations)/qtwebengine_locales',
-            'files': [ '<@(locale_files)' ],
-          },
-        ],
-      }],
     ],
   }
   ]

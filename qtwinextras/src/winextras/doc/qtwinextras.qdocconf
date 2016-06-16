@@ -7,7 +7,7 @@ version                 = $QT_VERSION
 exampledirs += ../../../examples/winextras \
                snippets
 
-examplesinstallpath     = qtwinextras/winextras
+examplesinstallpath     = winextras
 
 headerdirs = .. ../../imports/winextras
 sourcedirs = .. ../../imports/winextras

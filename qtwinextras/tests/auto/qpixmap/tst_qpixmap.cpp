@@ -97,18 +97,18 @@ void tst_QPixmap::toHBITMAP()
 
     QVERIFY(GetObject(bitmap, sizeof(BITMAP), &bitmapInfo));
 
-    QCOMPARE(100, (int) bitmapInfo.bmWidth);
-    QCOMPARE(100, (int) bitmapInfo.bmHeight);
+    QCOMPARE(LONG(100), bitmapInfo.bmWidth);
+    QCOMPARE(LONG(100), bitmapInfo.bmHeight);
 
     const HDC displayDc = GetDC(0);
     const HDC bitmapDc = CreateCompatibleDC(displayDc);
 
-    const HBITMAP nullBitmap = (HBITMAP) SelectObject(bitmapDc, bitmap);
+    const HBITMAP nullBitmap = static_cast<HBITMAP>(SelectObject(bitmapDc, bitmap));
 
     const COLORREF pixel = GetPixel(bitmapDc, 0, 0);
-    QCOMPARE((int)GetRValue(pixel), red);
-    QCOMPARE((int)GetGValue(pixel), green);
-    QCOMPARE((int)GetBValue(pixel), blue);
+    QCOMPARE(int(GetRValue(pixel)), red);
+    QCOMPARE(int(GetGValue(pixel)), green);
+    QCOMPARE(int(GetBValue(pixel)), blue);
 
     // Clean up
     SelectObject(bitmapDc, nullBitmap);
@@ -266,7 +266,9 @@ void tst_QPixmap::fromHICON()
     const QString iconFileName = image + QStringLiteral(".ico");
     QVERIFY2(QFileInfo(iconFileName).exists(), qPrintable(iconFileName));
 
-    const HICON icon = (HICON)LoadImage(0, (wchar_t*)(iconFileName).utf16(), IMAGE_ICON, width, height, LR_LOADFROMFILE);
+    const HICON icon =
+        static_cast<HICON>(LoadImage(0, reinterpret_cast<const wchar_t *>(iconFileName.utf16()),
+                                     IMAGE_ICON, width, height, LR_LOADFROMFILE));
     const QImage imageFromHICON = QtWin::fromHICON(icon).toImage();
     DestroyIcon(icon);
 

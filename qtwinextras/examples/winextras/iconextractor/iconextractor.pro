@@ -4,3 +4,6 @@ CONFIG += console
 QT = core gui winextras
 LIBS += -lshell32
 SOURCES += main.cpp
+
+target.path = $$[QT_INSTALL_EXAMPLES]/winextras/iconextractor
+INSTALLS += target

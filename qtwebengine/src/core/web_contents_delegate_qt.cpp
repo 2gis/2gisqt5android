@@ -122,6 +122,20 @@ void WebContentsDelegateQt::NavigationStateChanged(content::WebContents* source,
         m_viewClient->titleChanged(toQt(source->GetTitle()));
 }
 
+bool WebContentsDelegateQt::ShouldPreserveAbortedURLs(content::WebContents *source)
+{
+    Q_UNUSED(source)
+
+    // Allow failed URLs to stick around in the URL bar, but only when the error-page is enabled.
+    WebEngineSettings *settings = m_viewClient->webEngineSettings();
+    bool isErrorPageEnabled = settings->testAttribute(settings->Attribute::ErrorPageEnabled);
+
+    if (isErrorPageEnabled)
+        return true;
+
+    return false;
+}
+
 void WebContentsDelegateQt::AddNewContents(content::WebContents* source, content::WebContents* new_contents, WindowOpenDisposition disposition, const gfx::Rect& initial_pos, bool user_gesture, bool* was_blocked)
 {
     Q_UNUSED(source)
@@ -191,7 +205,15 @@ void WebContentsDelegateQt::DidFailProvisionalLoad(content::RenderFrameHost* ren
 void WebContentsDelegateQt::DidFailLoad(content::RenderFrameHost* render_frame_host, const GURL& validated_url, int error_code, const base::string16& error_description, bool was_ignored_by_handler)
 {
     Q_UNUSED(was_ignored_by_handler);
-    if (m_loadingErrorFrameList.removeOne(render_frame_host->GetRoutingID()) || render_frame_host->GetParent())
+    if (validated_url.spec() == content::kUnreachableWebDataURL) {
+        m_loadingErrorFrameList.removeOne(render_frame_host->GetRoutingID());
+        qCritical("Loading error-page failed. This shouldn't happen.");
+        if (!render_frame_host->GetParent())
+            m_viewClient->loadFinished(false /* success */, toQt(validated_url), true /* isErrorPage */);
+        return;
+    }
+
+    if (render_frame_host->GetParent())
         return;
 
     m_viewClient->loadFinished(false /* success */ , toQt(validated_url), false /* isErrorPage */, error_code, toQt(error_description));
@@ -200,8 +222,9 @@ void WebContentsDelegateQt::DidFailLoad(content::RenderFrameHost* render_frame_h
 
 void WebContentsDelegateQt::DidFinishLoad(content::RenderFrameHost* render_frame_host, const GURL& validated_url)
 {
-    if (m_loadingErrorFrameList.removeOne(render_frame_host->GetRoutingID())) {
-        Q_ASSERT(validated_url.is_valid() && validated_url.spec() == content::kUnreachableWebDataURL);
+    Q_ASSERT(validated_url.is_valid());
+    if (validated_url.spec() == content::kUnreachableWebDataURL) {
+        m_loadingErrorFrameList.removeOne(render_frame_host->GetRoutingID());
         m_viewClient->iconChanged(QUrl());
 
         // Trigger LoadFinished signal for main frame's error page only.
@@ -413,6 +436,20 @@ void WebContentsDelegateQt::BeforeUnloadFired(content::WebContents *tab, bool pr
     *proceed_to_fire_unload = proceed;
     if (!proceed)
         m_viewClient->windowCloseRejected();
+}
+
+bool WebContentsDelegateQt::CheckMediaAccessPermission(content::WebContents *web_contents, const GURL& security_origin, content::MediaStreamType type)
+{
+    switch (type) {
+    case content::MEDIA_DEVICE_AUDIO_CAPTURE:
+        return m_viewClient->browserContextAdapter()->checkPermission(toQt(security_origin), BrowserContextAdapter::AudioCapturePermission);
+    case content::MEDIA_DEVICE_VIDEO_CAPTURE:
+        return m_viewClient->browserContextAdapter()->checkPermission(toQt(security_origin), BrowserContextAdapter::VideoCapturePermission);
+    default:
+        LOG(INFO) << "WebContentsDelegateQt::CheckMediaAccessPermission: "
+                  << "Unsupported media stream type checked" << type;
+        return false;
+    }
 }
 
 } // namespace QtWebEngineCore

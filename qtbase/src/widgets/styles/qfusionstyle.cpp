@@ -1536,13 +1536,7 @@ void QFusionStyle::drawControl(ControlElement element, const QStyleOption *optio
                 QRect r = option->rect;
                 painter->fillRect(r, highlight);
                 painter->setPen(QPen(highlightOutline));
-                const QLine lines[4] = {
-                    QLine(QPoint(r.left() + 1, r.bottom()), QPoint(r.right() - 1, r.bottom())),
-                    QLine(QPoint(r.left() + 1, r.top()), QPoint(r.right() - 1, r.top())),
-                    QLine(QPoint(r.left(), r.top()), QPoint(r.left(), r.bottom())),
-                    QLine(QPoint(r.right() , r.top()), QPoint(r.right(), r.bottom())),
-                };
-                painter->drawLines(lines, 4);
+                painter->drawRect(QRectF(r).adjusted(0.5, 0.5, -0.5, -0.5));
             }
             bool checkable = menuItem->checkType != QStyleOptionMenuItem::NotCheckable;
             bool checked = menuItem->checked;
@@ -3424,12 +3418,28 @@ QRect QFusionStyle::subControlRect(ComplexControl control, const QStyleOptionCom
             QSize textSize = option->fontMetrics.boundingRect(groupBox->text).size() + QSize(2, 2);
             int indicatorWidth = proxy()->pixelMetric(PM_IndicatorWidth, option, widget);
             int indicatorHeight = proxy()->pixelMetric(PM_IndicatorHeight, option, widget);
+
+            const int width = textSize.width()
+                + (option->subControls & QStyle::SC_GroupBoxCheckBox ? indicatorWidth + 5 : 0);
+
             rect = QRect();
+
+            if (option->rect.width() > width) {
+                switch (groupBox->textAlignment & Qt::AlignHorizontal_Mask) {
+                case Qt::AlignHCenter:
+                    rect.moveLeft((option->rect.width() - width) / 2);
+                    break;
+                case Qt::AlignRight:
+                    rect.moveLeft(option->rect.width() - width);
+                    break;
+                }
+            }
+
             if (subControl == SC_GroupBoxCheckBox) {
                 rect.setWidth(indicatorWidth);
                 rect.setHeight(indicatorHeight);
                 rect.moveTop(textSize.height() > indicatorHeight ? (textSize.height() - indicatorHeight) / 2 : 0);
-                rect.moveLeft(1);
+                rect.translate(1, 0);
             } else if (subControl == SC_GroupBoxLabel) {
                 rect.setSize(textSize);
                 rect.moveTop(1);
@@ -3738,5 +3748,7 @@ QPixmap QFusionStyle::standardPixmap(StandardPixmap standardPixmap, const QStyle
 }
 
 QT_END_NAMESPACE
+
+#include "moc_qfusionstyle_p.cpp"
 
 #endif // QT_NO_STYLE_FUSION || QT_PLUGIN

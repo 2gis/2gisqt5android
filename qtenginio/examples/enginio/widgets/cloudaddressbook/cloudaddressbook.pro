@@ -16,3 +16,6 @@ HEADERS += \
 
 FORMS += \
     mainwindow.ui
+
+target.path = $$[QT_INSTALL_EXAMPLES]/enginio/widgets/cloudaddressbook
+INSTALLS += target

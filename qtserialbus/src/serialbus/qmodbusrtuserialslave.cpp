@@ -107,10 +107,10 @@ bool QModbusRtuSerialSlave::open()
         return true;
 
     Q_D(QModbusRtuSerialSlave);
-    d->updateSerialPortConnectionInfo();
+    d->setupEnvironment(); // to be done before open
     if (d->m_serialPort->open(QIODevice::ReadWrite)) {
-        d->m_serialPort->clear();
         setState(QModbusDevice::ConnectedState);
+        d->m_serialPort->clear(); // only possible after open
     } else {
         setError(d->m_serialPort->errorString(), QModbusDevice::ConnectionError);
     }
@@ -126,11 +126,36 @@ void QModbusRtuSerialSlave::close()
         return;
 
     Q_D(QModbusRtuSerialSlave);
-
     if (d->m_serialPort->isOpen())
         d->m_serialPort->close();
 
     setState(QModbusDevice::UnconnectedState);
+}
+
+/*!
+    \reimp
+
+    Processes the Modbus client request specified by \a request and returns a
+    Modbus response.
+
+    The Modbus function \l QModbusRequest::EncapsulatedInterfaceTransport with
+    MEI Type 13 (0x0D) CANopen General Reference is filtered out because it is
+    usually Modbus TCP or Modbus serial ASCII only.
+
+    A request to the RTU serial slave will be answered with a Modbus exception
+    response with the exception code QModbusExceptionResponse::IllegalFunction.
+*/
+QModbusResponse QModbusRtuSerialSlave::processRequest(const QModbusPdu &request)
+{
+    if (request.functionCode() == QModbusRequest::EncapsulatedInterfaceTransport) {
+        quint8 meiType;
+        request.decodeData(&meiType);
+        if (meiType == EncapsulatedInterfaceTransport::CanOpenGeneralReference) {
+            return QModbusExceptionResponse(request.functionCode(),
+                QModbusExceptionResponse::IllegalFunction);
+        }
+    }
+    return QModbusServer::processRequest(request);
 }
 
 #include "moc_qmodbusrtuserialslave.cpp"

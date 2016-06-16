@@ -6,3 +6,6 @@ qtHaveModule(widgets) {
       SUBDIRS += quick
   }
 }
+
+EXAMPLE_FILES += \
+    common

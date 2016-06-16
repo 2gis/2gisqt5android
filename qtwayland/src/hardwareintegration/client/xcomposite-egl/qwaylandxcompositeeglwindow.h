@@ -66,6 +66,7 @@ private:
     Window m_xWindow;
     EGLConfig m_config;
     EGLSurface m_surface;
+    QWaylandBuffer *mBuffer;
 };
 
 }

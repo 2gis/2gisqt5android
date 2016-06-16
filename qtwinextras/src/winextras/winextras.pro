@@ -1,7 +1,5 @@
 TARGET = QtWinExtras
 
-load(qt_module)
-
 QT += gui-private core-private
 
 SOURCES += \
@@ -59,3 +57,5 @@ OTHER_FILES += \
     doc/snippets/code/use-qtwinextras.cpp \
     doc/snippets/code/thumbbar.cpp \
     doc/snippets/code/thumbbar.qml
+
+load(qt_module)

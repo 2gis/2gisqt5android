@@ -10,6 +10,7 @@
 #include "qwglnativecontext.h"
 #include "qwindowswindowfunctions.h"
 #include "qxcbintegrationfunctions.h"
+#include "qxcbscreenfunctions.h"
 #include "qxcbwindowfunctions.h"
 #include "qtplatformheadersversion.h"
 #endif

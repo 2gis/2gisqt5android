@@ -59,7 +59,7 @@ public:
                                     const QSharedPointer<QWindowsFontEngineData> &d);
     ~QWindowsFontEngineDirectWrite();
 
-    void initFontInfo(const QFontDef &request, int dpi, IDWriteFont *font);
+    void initFontInfo(const QFontDef &request, int dpi);
 
     QFixed lineThickness() const Q_DECL_OVERRIDE;
     QFixed underlinePosition() const Q_DECL_OVERRIDE;
@@ -92,6 +92,7 @@ public:
     QImage alphaRGBMapForGlyph(glyph_t t, QFixed subPixelPosition, const QTransform &xform) Q_DECL_OVERRIDE;
 
     QFontEngine *cloneWithSize(qreal pixelSize) const Q_DECL_OVERRIDE;
+    Qt::HANDLE handle() const Q_DECL_OVERRIDE;
 
     const QSharedPointer<QWindowsFontEngineData> &fontEngineData() const { return m_fontEngineData; }
 

@@ -57,7 +57,7 @@ class ENGINIOCLIENT_EXPORT EnginioModel
     Q_PROPERTY(QJsonObject query READ query WRITE setQuery NOTIFY queryChanged)
 
 public:
-    explicit EnginioModel(QObject *parent = 0);
+    explicit EnginioModel(QObject *parent = Q_NULLPTR);
     ~EnginioModel();
 
     EnginioClient *client() const Q_REQUIRED_RESULT;

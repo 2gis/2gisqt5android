@@ -73,8 +73,7 @@ QWaylandWindow::QWaylandWindow(QWindow *window)
     , mWindowDecoration(0)
     , mMouseEventsInContentArea(false)
     , mMousePressedInContentArea(Qt::NoButton)
-    , m_cursorShape(Qt::ArrowCursor)
-    , mBuffer(0)
+    , m_cursor(Qt::ArrowCursor)
     , mWaitingForFrameSync(false)
     , mFrameCallback(0)
     , mRequestResizeSent(false)
@@ -117,12 +116,13 @@ QWaylandWindow::~QWaylandWindow()
 void QWaylandWindow::initWindow()
 {
     init(mDisplay->createSurface(static_cast<QtWayland::wl_surface *>(this)));
-    if (QPlatformWindow::parent()) {
+
+    if (shouldCreateSubSurface()) {
         QWaylandWindow *p = static_cast<QWaylandWindow *>(QPlatformWindow::parent());
         if (::wl_subsurface *ss = mDisplay->createSubSurface(this, p)) {
             mSubSurfaceWindow = new QWaylandSubSurface(this, p, ss);
         }
-    } else if (!(window()->flags() & Qt::BypassWindowManagerHint)) {
+    } else if (shouldCreateShellSurface()) {
         mShellSurface = mDisplay->createShellSurface(this);
     }
 
@@ -174,6 +174,25 @@ void QWaylandWindow::initWindow()
     setMask(window()->mask());
     setWindowStateInternal(window()->windowState());
     handleContentOrientationChange(window()->contentOrientation());
+}
+
+bool QWaylandWindow::shouldCreateShellSurface() const
+{
+    if (shouldCreateSubSurface())
+        return false;
+
+    if (window()->inherits("QShapedPixmapWindow"))
+        return false;
+
+    if (qEnvironmentVariableIsSet("QT_WAYLAND_USE_BYPASSWINDOWMANAGERHINT"))
+        return !(window()->flags() & Qt::BypassWindowManagerHint);
+
+    return true;
+}
+
+bool QWaylandWindow::shouldCreateSubSurface() const
+{
+    return QPlatformWindow::parent() != Q_NULLPTR;
 }
 
 void QWaylandWindow::reset()
@@ -411,9 +430,8 @@ void QWaylandWindow::requestResize()
 
 void QWaylandWindow::attach(QWaylandBuffer *buffer, int x, int y)
 {
-    mBuffer = buffer;
-    if (mBuffer)
-        attach(mBuffer->buffer(), x, y);
+    if (buffer)
+        attach(buffer->buffer(), x, y);
     else
         QtWayland::wl_surface::attach(0, 0, 0);
 }
@@ -422,11 +440,6 @@ void QWaylandWindow::attachOffset(QWaylandBuffer *buffer)
 {
     attach(buffer, mOffset.x(), mOffset.y());
     mOffset = QPoint();
-}
-
-QWaylandBuffer *QWaylandWindow::attached() const
-{
-    return mBuffer;
 }
 
 void QWaylandWindow::damage(const QRect &rect)
@@ -438,9 +451,7 @@ void QWaylandWindow::damage(const QRect &rect)
         wl_callback_add_listener(mFrameCallback,&QWaylandWindow::callbackListener,this);
         mWaitingForFrameSync = true;
     }
-    if (mBuffer) {
-        damage(rect.x(), rect.y(), rect.width(), rect.height());
-    }
+    damage(rect.x(), rect.y(), rect.width(), rect.height());
 }
 
 const wl_callback_listener QWaylandWindow::callbackListener = {
@@ -740,17 +751,17 @@ void QWaylandWindow::handleMouseEventWithDecoration(QWaylandInputDevice *inputDe
     }
 }
 
-void QWaylandWindow::setMouseCursor(QWaylandInputDevice *device, Qt::CursorShape shape)
+void QWaylandWindow::setMouseCursor(QWaylandInputDevice *device, const QCursor &cursor)
 {
-    if (m_cursorShape != shape || device->serial() > device->cursorSerial()) {
-        device->setCursor(shape, mScreen);
-        m_cursorShape = shape;
+    if (device->serial() >= device->cursorSerial()) {
+        device->setCursor(cursor, mScreen);
+        m_cursor = cursor;
     }
 }
 
 void QWaylandWindow::restoreMouseCursor(QWaylandInputDevice *device)
 {
-    setMouseCursor(device, window()->cursor().shape());
+    setMouseCursor(device, window()->cursor());
 }
 
 void QWaylandWindow::requestActivateWindow()

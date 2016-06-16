@@ -1624,7 +1624,7 @@ void QQuickItemPrivate::setLayoutMirror(bool mirror)
 */
 
 /*!
-    \qmlproperty enumeration QtQuick::EnterKey::type
+    \qmlattachedproperty enumeration QtQuick::EnterKey::type
 
     Holds the type of the Enter key.
 
@@ -2639,7 +2639,7 @@ void QQuickItem::setParentItem(QQuickItem *parentItem)
 
         QQuickItem *scopeItem = 0;
 
-        if (hasFocus())
+        if (hasFocus() || op->subFocusItem == this)
             scopeFocusedItem = this;
         else if (!isFocusScope() && d->subFocusItem)
             scopeFocusedItem = d->subFocusItem;
@@ -3083,7 +3083,6 @@ QQuickItemPrivate::QQuickItemPrivate()
     , flags(0)
     , widthValid(false)
     , heightValid(false)
-    , baselineOffsetValid(false)
     , componentComplete(true)
     , keepMouse(false)
     , keepTouch(false)
@@ -3157,7 +3156,7 @@ void QQuickItemPrivate::init(QQuickItem *parent)
 
     registerAccessorProperties();
 
-    baselineOffsetValid = false;
+    baselineOffset = 0.0;
 
     if (parent) {
         q->setParentItem(parent);
@@ -4207,11 +4206,7 @@ QQuickAnchorLine QQuickItemPrivate::baseline() const
 qreal QQuickItem::baselineOffset() const
 {
     Q_D(const QQuickItem);
-    if (d->baselineOffsetValid) {
-        return d->baselineOffset;
-    } else {
-        return 0.0;
-    }
+    return d->baselineOffset;
 }
 
 void QQuickItem::setBaselineOffset(qreal offset)
@@ -4221,7 +4216,6 @@ void QQuickItem::setBaselineOffset(qreal offset)
         return;
 
     d->baselineOffset = offset;
-    d->baselineOffsetValid = true;
 
     for (int ii = 0; ii < d->changeListeners.count(); ++ii) {
         const QQuickItemPrivate::ChangeListener &change = d->changeListeners.at(ii);
@@ -6217,6 +6211,8 @@ QPointF QQuickItem::position() const
 void QQuickItem::setX(qreal v)
 {
     Q_D(QQuickItem);
+    if (qIsNaN(v))
+        return;
     if (d->x == v)
         return;
 
@@ -6232,6 +6228,8 @@ void QQuickItem::setX(qreal v)
 void QQuickItem::setY(qreal v)
 {
     Q_D(QQuickItem);
+    if (qIsNaN(v))
+        return;
     if (d->y == v)
         return;
 
@@ -7226,7 +7224,7 @@ void QQuickItem::setKeepTouchGrab(bool keep)
 }
 
 /*!
-  \qmlmethod object QtQuick::Item::contains(point point)
+  \qmlmethod bool QtQuick::Item::contains(point point)
 
   Returns true if this item contains \a point, which is in local coordinates;
   returns false otherwise.

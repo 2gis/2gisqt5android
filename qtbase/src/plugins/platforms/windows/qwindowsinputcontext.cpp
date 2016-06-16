@@ -48,6 +48,8 @@
 #include <QtGui/QPalette>
 #include <QtGui/QGuiApplication>
 
+#include <private/qhighdpiscaling_p.h>
+
 #include <algorithm>
 
 QT_BEGIN_NAMESPACE
@@ -159,7 +161,8 @@ Q_CORE_EXPORT QLocale qt_localeFromLCID(LCID id); // from qlocale_win.cpp
 HIMC QWindowsInputContext::m_defaultContext = 0;
 
 QWindowsInputContext::CompositionContext::CompositionContext() :
-    hwnd(0), haveCaret(false), position(0), isComposing(false)
+    hwnd(0), haveCaret(false), position(0), isComposing(false),
+    factor(1)
 {
 }
 
@@ -270,9 +273,12 @@ void QWindowsInputContext::cursorRectChanged()
     if (!m_compositionContext.hwnd)
         return;
     const QInputMethod *inputMethod = QGuiApplication::inputMethod();
-    const QRect cursorRectangle = inputMethod->cursorRectangle().toRect();
-    if (!cursorRectangle.isValid())
+    const QRectF cursorRectangleF = inputMethod->cursorRectangle();
+    if (!cursorRectangleF.isValid())
         return;
+    const QRect cursorRectangle =
+        QRectF(cursorRectangleF.topLeft() * m_compositionContext.factor,
+               cursorRectangleF.size() * m_compositionContext.factor).toRect();
 
     qCDebug(lcQpaInputMethods) << __FUNCTION__<< cursorRectangle;
 
@@ -319,7 +325,9 @@ void QWindowsInputContext::invokeAction(QInputMethod::Action action, int cursorP
     // position.
     const HIMC himc = ImmGetContext(m_compositionContext.hwnd);
     const HWND imeWindow = ImmGetDefaultIMEWnd(m_compositionContext.hwnd);
-    SendMessage(imeWindow, m_WM_MSIME_MOUSE, MAKELONG(MAKEWORD(MK_LBUTTON, cursorPosition == 0 ? 2 : 1), cursorPosition), (LPARAM)himc);
+    const WPARAM mouseOperationCode =
+        MAKELONG(MAKEWORD(MK_LBUTTON, cursorPosition == 0 ? 2 : 1), cursorPosition);
+    SendMessage(imeWindow, m_WM_MSIME_MOUSE, mouseOperationCode, LPARAM(himc));
     ImmReleaseContext(m_compositionContext.hwnd, himc);
 }
 
@@ -328,7 +336,7 @@ static inline QString getCompositionString(HIMC himc, DWORD dwIndex)
     enum { bufferSize = 256 };
     wchar_t buffer[bufferSize];
     const int length = ImmGetCompositionString(himc, dwIndex, buffer, bufferSize * sizeof(wchar_t));
-    return QString::fromWCharArray(buffer,  length / sizeof(wchar_t));
+    return QString::fromWCharArray(buffer,  size_t(length) / sizeof(wchar_t));
 }
 
 // Determine the converted string range as pair of start/length to be selected.
@@ -388,7 +396,7 @@ bool QWindowsInputContext::startComposition(HWND hwnd)
     qCDebug(lcQpaInputMethods) << __FUNCTION__ << fo << window << "language=" << m_languageId;
     if (!fo || QWindowsWindow::handleOf(window) != hwnd)
         return false;
-    initContext(hwnd, fo);
+    initContext(hwnd, QHighDpiScaling::factor(window), fo);
     startContextComposition();
     return true;
 }
@@ -520,12 +528,13 @@ bool QWindowsInputContext::endComposition(HWND hwnd)
     return true;
 }
 
-void QWindowsInputContext::initContext(HWND hwnd, QObject *focusObject)
+void QWindowsInputContext::initContext(HWND hwnd, qreal factor, QObject *focusObject)
 {
     if (m_compositionContext.hwnd)
         doneContext();
     m_compositionContext.hwnd = hwnd;
     m_compositionContext.focusObject = focusObject;
+    m_compositionContext.factor = factor;
     // Create a hidden caret which is kept at the microfocus
     // position in update(). This is important for some
     // Chinese input methods.
@@ -559,9 +568,8 @@ bool QWindowsInputContext::handleIME_Request(WPARAM wParam,
         if (size < 0)
             return false;
         *result = size;
-        return true;
     }
-        break;
+        return true;
     case IMR_CONFIRMRECONVERTSTRING:
         return true;
     default:
@@ -572,7 +580,7 @@ bool QWindowsInputContext::handleIME_Request(WPARAM wParam,
 
 void QWindowsInputContext::handleInputLanguageChanged(WPARAM wparam, LPARAM lparam)
 {
-    const LCID newLanguageId = languageIdFromLocaleId(lparam);
+    const LCID newLanguageId = languageIdFromLocaleId(WORD(lparam));
     if (newLanguageId == m_languageId)
         return;
     const LCID oldLanguageId = m_languageId;
@@ -606,13 +614,13 @@ int QWindowsInputContext::reconvertString(RECONVERTSTRING *reconv)
     if (!surroundingTextV.isValid())
         return -1;
     const QString surroundingText = surroundingTextV.toString();
-    const DWORD memSize = sizeof(RECONVERTSTRING)
-            + (surroundingText.length() + 1) * sizeof(ushort);
+    const int memSize = int(sizeof(RECONVERTSTRING))
+        + (surroundingText.length() + 1) * int(sizeof(ushort));
     qCDebug(lcQpaInputMethods) << __FUNCTION__ << " reconv=" << reconv
         << " surroundingText=" << surroundingText << " size=" << memSize;
     // If memory is not allocated, return the required size.
     if (!reconv)
-        return surroundingText.isEmpty() ? -1 : int(memSize);
+        return surroundingText.isEmpty() ? -1 : memSize;
 
     const QVariant posV = QInputMethod::queryFocusObject(Qt::ImCursorPosition, QVariant());
     const int pos = posV.isValid() ? posV.toInt() : 0;
@@ -631,18 +639,18 @@ int QWindowsInputContext::reconvertString(RECONVERTSTRING *reconv)
     QInputMethodEvent selectEvent(QString(), attributes);
     QCoreApplication::sendEvent(fo, &selectEvent);
 
-    reconv->dwSize = memSize;
+    reconv->dwSize = DWORD(memSize);
     reconv->dwVersion = 0;
 
-    reconv->dwStrLen = surroundingText.size();
+    reconv->dwStrLen = DWORD(surroundingText.size());
     reconv->dwStrOffset = sizeof(RECONVERTSTRING);
-    reconv->dwCompStrLen = endPos - startPos; // TCHAR count.
-    reconv->dwCompStrOffset = startPos * sizeof(ushort); // byte count.
+    reconv->dwCompStrLen = DWORD(endPos - startPos); // TCHAR count.
+    reconv->dwCompStrOffset = DWORD(startPos) * sizeof(ushort); // byte count.
     reconv->dwTargetStrLen = reconv->dwCompStrLen;
     reconv->dwTargetStrOffset = reconv->dwCompStrOffset;
     ushort *pastReconv = reinterpret_cast<ushort *>(reconv + 1);
     std::copy(surroundingText.utf16(), surroundingText.utf16() + surroundingText.size(),
-              pastReconv);
+              QT_MAKE_UNCHECKED_ARRAY_ITERATOR(pastReconv));
     return memSize;
 }
 

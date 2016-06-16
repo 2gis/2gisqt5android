@@ -183,7 +183,7 @@ static QPoint windowPlacementOffset(HWND hwnd, const QPoint &point)
         return QPoint(0, 0);
     const QWindowsScreenManager &screenManager = QWindowsContext::instance()->screenManager();
     const QWindowsScreen *screen = screenManager.screens().size() == 1
-        ? screenManager.screens().first() : screenManager.screenAtDp(point);
+        ? screenManager.screens().constFirst() : screenManager.screenAtDp(point);
     if (screen)
         return screen->availableGeometry().topLeft() - screen->geometry().topLeft();
 #else
@@ -246,13 +246,6 @@ static QWindow::Visibility windowVisibility_sys(HWND hwnd)
     }
 #endif // !Q_OS_WINCE
     return QWindow::Windowed;
-}
-
-static inline QSize clientSize(HWND hwnd)
-{
-    RECT rect = { 0, 0, 0, 0 };
-    GetClientRect(hwnd, &rect); // Always returns point 0,0, thus unusable for geometry.
-    return qSizeOfRect(rect);
 }
 
 static inline bool windowIsOpenGL(const QWindow *w)
@@ -494,6 +487,8 @@ static inline void fixTopLevelWindowFlags(Qt::WindowFlags &flags)
     default:
         break;
     }
+    if ((flags & Qt::WindowType_Mask) == Qt::SplashScreen)
+        flags |= Qt::FramelessWindowHint;
 }
 
 void WindowCreationData::fromWindow(const QWindow *w, const Qt::WindowFlags flagsIn,
@@ -1474,7 +1469,9 @@ void QWindowsWindow::handleGeometryChange()
     // QTBUG-32121: OpenGL/normal windows (with exception of ANGLE) do not receive
     // expose events when shrinking, synthesize.
     if (!testFlag(OpenGL_ES2) && isExposed()
-        && !(m_data.geometry.width() >= previousGeometry.width() || m_data.geometry.height() >= previousGeometry.height())) {
+        && m_data.geometry.size() != previousGeometry.size() // Exclude plain move
+        // One dimension grew -> Windows will send expose, no need to synthesize.
+        && !(m_data.geometry.width() > previousGeometry.width() || m_data.geometry.height() > previousGeometry.height())) {
         fireExpose(QRect(QPoint(0, 0), m_data.geometry.size()), true);
     }
     if (previousGeometry.topLeft() != m_data.geometry.topLeft()) {
@@ -1564,11 +1561,11 @@ void QWindowsWindow::releaseDC()
 bool QWindowsWindow::handleWmPaint(HWND hwnd, UINT message,
                                          WPARAM, LPARAM)
 {
+    if (message == WM_ERASEBKGND) // Backing store - ignored.
+        return true;
     // Ignore invalid update bounding rectangles
     if (!GetUpdateRect(m_data.hwnd, 0, FALSE))
         return false;
-    if (message == WM_ERASEBKGND) // Backing store - ignored.
-        return true;
     PAINTSTRUCT ps;
 
     // Observed painting problems with Aero style disabled (QTBUG-7865).
@@ -1921,7 +1918,7 @@ QMargins QWindowsWindow::frameMargins() const
         // Always skip calculating style-dependent margins for windows claimed to be frameless.
         // This allows users to remove the margins by handling WM_NCCALCSIZE with WS_THICKFRAME set
         // to ensure Areo snap still works (QTBUG-40578).
-        m_data.frame = window()->flags() & Qt::FramelessWindowHint
+        m_data.frame = m_data.flags & Qt::FramelessWindowHint
             ? QMargins(0, 0, 0, 0)
             : QWindowsGeometryHint::frame(style(), exStyle());
         clearFlag(FrameDirty);
@@ -2094,14 +2091,15 @@ void QWindowsWindow::getSizeHints(MINMAXINFO *mmi) const
 
         // Documentation of MINMAXINFO states that it will only work for the primary screen
         if (screen && screen == QGuiApplication::primaryScreen()) {
-            mmi->ptMaxSize.y = screen->availableGeometry().height();
+            const QRect availableGeometry = QHighDpi::toNativePixels(screen->availableGeometry(), screen);
+            mmi->ptMaxSize.y = availableGeometry.height();
 
             // Width, because you can have the taskbar on the sides too.
-            mmi->ptMaxSize.x = screen->availableGeometry().width();
+            mmi->ptMaxSize.x = availableGeometry.width();
 
             // If you have the taskbar on top, or on the left you don't want it at (0,0):
-            mmi->ptMaxPosition.x = screen->availableGeometry().x();
-            mmi->ptMaxPosition.y = screen->availableGeometry().y();
+            mmi->ptMaxPosition.x = availableGeometry.x();
+            mmi->ptMaxPosition.y = availableGeometry.y();
         } else if (!screen){
             qWarning() << "window()->screen() returned a null screen";
         }

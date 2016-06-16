@@ -62,7 +62,7 @@ public:
         FlexibleSpace
     };
 
-    QMacToolBarItem(QObject *parent = 0);
+    explicit QMacToolBarItem(QObject *parent = Q_NULLPTR);
     virtual ~QMacToolBarItem();
 
     bool selectable() const;

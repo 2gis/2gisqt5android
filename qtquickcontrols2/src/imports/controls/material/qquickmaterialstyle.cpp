@@ -405,6 +405,16 @@ static const QRgb switchDisabledTrackColorDark = 0x19FFFFFF;
 static const QRgb checkBoxUncheckedRippleColorLight = 0x10000000;
 static const QRgb checkBoxUncheckedRippleColorDark = 0x20FFFFFF;
 
+static QColor alphaBlend(const QColor &bg, const QColor &fg)
+{
+    QColor result;
+    result.setRedF(fg.redF() * fg.alphaF() + bg.redF() * (1.0 - fg.alphaF()));
+    result.setGreenF(fg.greenF() * fg.alphaF() + bg.greenF() * (1.0 - fg.alphaF()));
+    result.setBlueF(fg.blueF() * fg.alphaF() + bg.blueF() * (1.0 - fg.alphaF()));
+    result.setAlphaF(bg.alphaF() + fg.alphaF() * (1.0 - bg.alphaF()));
+    return result;
+}
+
 QQuickMaterialStyle::QQuickMaterialStyle(QObject *parent) : QQuickStyle(parent),
     m_explicitTheme(false),
     m_explicitPrimary(false),
@@ -515,6 +525,7 @@ void QQuickMaterialStyle::inheritPrimary(uint primary, bool custom)
         m_primary = primary;
         propagatePrimary();
         emit primaryChanged();
+        emit paletteChanged();
     }
 }
 
@@ -585,6 +596,7 @@ void QQuickMaterialStyle::inheritAccent(uint accent, bool custom)
         m_accent = accent;
         propagateAccent();
         emit accentChanged();
+        emit paletteChanged();
     }
 }
 
@@ -622,7 +634,7 @@ QColor QQuickMaterialStyle::accentColor() const
         return QColor::fromRgba(m_accent);
     if (m_accent > BlueGrey)
         return QColor();
-    return colors[m_accent][Shade500];
+    return colors[m_accent][m_theme == Light ? Shade500 : Shade200];
 }
 
 QColor QQuickMaterialStyle::backgroundColor() const
@@ -695,12 +707,14 @@ QColor QQuickMaterialStyle::raisedHighlightedButtonColor() const
 
 QColor QQuickMaterialStyle::raisedHighlightedButtonHoverColor() const
 {
-    return shade(accentColor(), Shade600);
+    // Add overlaying black shadow 12% opacity
+    return alphaBlend(accentColor(), QColor::fromRgba(0x1F000000));
 }
 
 QColor QQuickMaterialStyle::raisedHighlightedButtonPressColor() const
 {
-    return shade(accentColor(), Shade700);
+    // Add overlaying black shadow 12% opacity
+    return alphaBlend(shade(accentColor(), m_theme == Light ? Shade700 : Shade100), QColor::fromRgba(0x1F000000));
 }
 
 QColor QQuickMaterialStyle::raisedHighlightedButtonDisabledColor() const
@@ -732,7 +746,7 @@ QColor QQuickMaterialStyle::checkBoxCheckedRippleColor() const
 {
     QColor pressColor = accentColor();
     // TODO: find out actual value
-    pressColor.setAlpha(30);
+    pressColor.setAlpha(m_theme == Light ? 30 : 50);
     return pressColor;
 }
 
@@ -793,6 +807,11 @@ QColor QQuickMaterialStyle::backgroundDimColor() const
     return QColor::fromRgba(m_theme == Light ? 0x99303030 : 0x99fafafa);
 }
 
+QColor QQuickMaterialStyle::listHighlightColor() const
+{
+    return QColor::fromRgba(m_theme == Light ? 0x1e000000 : 0x1effffff);
+}
+
 QColor QQuickMaterialStyle::color(QQuickMaterialStyle::Color color, QQuickMaterialStyle::Shade shade) const
 {
     int count = sizeof(colors) / sizeof(colors[0]);
@@ -849,33 +868,33 @@ QColor QQuickMaterialStyle::shade(const QColor &color, Shade shade) const
 {
     switch (shade) {
     case Shade50:
-        return lighterShade(color, 0.52);
+        return lighterShade(color, m_theme == Light ? 0.52 : 0.26);
     case Shade100:
-        return lighterShade(color, 0.37);
+        return lighterShade(color, m_theme == Light ? 0.37 : 0.11);
     case Shade200:
-        return lighterShade(color, 0.26);
+        return m_theme == Light ? lighterShade(color, 0.26) : color;
     case Shade300:
-        return lighterShade(color, 0.12);
+        return m_theme == Light ? lighterShade(color, 0.12) : darkerShade(color, 0.14);
     case Shade400:
-        return lighterShade(color, 0.06);
+        return m_theme == Light ? lighterShade(color, 0.06) : darkerShade(color, 0.20);
     case Shade500:
-        return color;
+        return m_theme == Light ? color : darkerShade(color, 0.26);
     case Shade600:
-        return darkerShade(color, 0.06);
+        return darkerShade(color, m_theme == Light ? 0.06 : 0.32);
     case Shade700:
-        return darkerShade(color, 0.12);
+        return darkerShade(color, m_theme == Light ? 0.12 : 0.38);
     case Shade800:
-        return darkerShade(color, 0.18);
+        return darkerShade(color, m_theme == Light ? 0.18 : 0.44);
     case Shade900:
-        return darkerShade(color, 0.24);
+        return darkerShade(color, m_theme == Light ? 0.24 : 0.50);
     case ShadeA100:
-        return lighterShade(color, 0.54);
+        return lighterShade(color, m_theme == Light ? 0.54 : 0.28);
     case ShadeA200:
-        return lighterShade(color, 0.37);
+        return lighterShade(color, m_theme == Light ? 0.37 : 0.11);
     case ShadeA400:
-        return lighterShade(color, 0.06);
+        return m_theme == Light ? lighterShade(color, 0.06) : darkerShade(color, 0.20);
     case ShadeA700:
-        return darkerShade(color, 0.12);
+        return darkerShade(color, m_theme == Light ? 0.12 : 0.38);
     default:
         Q_UNREACHABLE();
         return QColor();
