@@ -59,8 +59,8 @@ public:
     Q_ENUM(TargetAccessMode)
     Q_DECLARE_FLAGS(TargetAccessModes, TargetAccessMode)
 
-    explicit QNearFieldManager(QObject *parent = 0);
-    explicit QNearFieldManager(QNearFieldManagerPrivate *backend, QObject *parent = 0);
+    explicit QNearFieldManager(QObject *parent = Q_NULLPTR);
+    explicit QNearFieldManager(QNearFieldManagerPrivate *backend, QObject *parent = Q_NULLPTR);
     ~QNearFieldManager();
 
     bool isAvailable() const;
@@ -71,6 +71,10 @@ public:
     bool startTargetDetection();
     void stopTargetDetection();
 
+    //TODO Qt 6 Consider removal of this registration mechanism
+    //None of the currently supported platforms supports the feature
+    //or in fact the implementation (on Android) is not what the
+    //function is supposed to do.
     int registerNdefMessageHandler(QObject *object, const char *method);
     int registerNdefMessageHandler(QNdefRecord::TypeNameFormat typeNameFormat,
                                    const QByteArray &type,

@@ -765,7 +765,13 @@ void QAbstractItemView::setSelectionModel(QItemSelectionModel *selectionModel)
         return;
     }
 
+    QItemSelection oldSelection;
+    QModelIndex oldCurrentIndex;
+
     if (d->selectionModel) {
+        oldSelection = d->selectionModel->selection();
+        oldCurrentIndex = d->selectionModel->currentIndex();
+
         disconnect(d->selectionModel, SIGNAL(selectionChanged(QItemSelection,QItemSelection)),
                    this, SLOT(selectionChanged(QItemSelection,QItemSelection)));
         disconnect(d->selectionModel, SIGNAL(currentChanged(QModelIndex,QModelIndex)),
@@ -779,6 +785,9 @@ void QAbstractItemView::setSelectionModel(QItemSelectionModel *selectionModel)
                 this, SLOT(selectionChanged(QItemSelection,QItemSelection)));
         connect(d->selectionModel, SIGNAL(currentChanged(QModelIndex,QModelIndex)),
                 this, SLOT(currentChanged(QModelIndex,QModelIndex)));
+
+        selectionChanged(d->selectionModel->selection(), oldSelection);
+        currentChanged(d->selectionModel->currentIndex(), oldCurrentIndex);
     }
 }
 
@@ -2923,7 +2932,11 @@ void QAbstractItemView::keyboardSearch(const QString &search)
                         : d->model->index(0, 0, d->root);
     bool skipRow = false;
     bool keyboardTimeWasValid = d->keyboardInputTime.isValid();
-    qint64 keyboardInputTimeElapsed = d->keyboardInputTime.restart();
+    qint64 keyboardInputTimeElapsed;
+    if (keyboardTimeWasValid)
+        keyboardInputTimeElapsed = d->keyboardInputTime.restart();
+    else
+        d->keyboardInputTime.start();
     if (search.isEmpty() || !keyboardTimeWasValid
         || keyboardInputTimeElapsed > QApplication::keyboardInputInterval()) {
         d->keyboardInput = search;
@@ -4353,7 +4366,20 @@ QPixmap QAbstractItemViewPrivate::renderToPixmap(const QModelIndexList &indexes,
     QItemViewPaintPairs paintPairs = draggablePaintPairs(indexes, r);
     if (paintPairs.isEmpty())
         return QPixmap();
-    QPixmap pixmap(r->size());
+
+    qreal scale = 1.0f;
+
+    Q_Q(const QAbstractItemView);
+    QWidget *window = q->window();
+    if (window) {
+        QWindow *windowHandle = window->windowHandle();
+        if (windowHandle)
+            scale = windowHandle->devicePixelRatio();
+    }
+
+    QPixmap pixmap(r->size() * scale);
+    pixmap.setDevicePixelRatio(scale);
+
     pixmap.fill(Qt::transparent);
     QPainter painter(&pixmap);
     QStyleOptionViewItem option = viewOptionsV1();

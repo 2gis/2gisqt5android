@@ -141,6 +141,15 @@ for(ever) {
                 }
             }
         }
+        # Add capabilities as defined by modules used in the project
+        winrt {
+            MODULE_WINRT_CAPABILITIES = $$eval(QT.$${QTLIB}.winrt_capabilities)
+            !isEmpty(MODULE_WINRT_CAPABILITIES): \
+                WINRT_MANIFEST.capabilities_default += $$MODULE_WINRT_CAPABILITIES
+            MODULE_WINRT_CAPABILITIES_DEVICE = $$eval(QT.$${QTLIB}.winrt_capabilities_device)
+            !isEmpty(MODULE_WINRT_CAPABILITIES_DEVICE): \
+                WINRT_MANIFEST.capabilities_device_default += $$MODULE_WINRT_CAPABILITIES_DEVICE
+        }
     }
     !isEmpty(BAD_QT):error("Unknown module(s) in QT$$var_sfx: $$replace(BAD_QT, _private$, -private)")
 
@@ -160,21 +169,8 @@ qt_module_deps = $$resolve_depends(qt_module_deps, "QT.")
         contains(qt_module_deps, core) {
     relative_qt_rpath:!isEmpty(QMAKE_REL_RPATH_BASE):contains(INSTALLS, target):\
             isEmpty(target.files):isEmpty(target.commands):isEmpty(target.extra) {
-        mac {
-            if(equals(TEMPLATE, app):app_bundle)|\
-                    if(equals(TEMPLATE, lib):plugin:plugin_bundle) {
-                ios:  binpath = $$target.path/$${TARGET}.app
-                else: binpath = $$target.path/$${TARGET}.app/Contents/MacOS
-            } else: equals(TEMPLATE, lib):!plugin:lib_bundle {
-                binpath = $$target.path/$${TARGET}.framework/Versions/Current
-            } else {
-                binpath = $$target.path
-            }
-        } else {
-            binpath = $$target.path
-        }
         # NOT the /dev property, as INSTALLS use host paths
-        QMAKE_RPATHDIR += $$relative_path($$[QT_INSTALL_LIBS], $$binpath)
+        QMAKE_RPATHDIR += $$relative_path($$[QT_INSTALL_LIBS], $$qtRelativeRPathBase())
     } else {
         QMAKE_RPATHDIR += $$[QT_INSTALL_LIBS/dev]
     }

@@ -16,3 +16,6 @@ RESOURCES += \
 
 HEADERS += \
     notificationclient.h
+
+target.path = $$[QT_INSTALL_EXAMPLES]/androidextras/notification
+INSTALLS += target

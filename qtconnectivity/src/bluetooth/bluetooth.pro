@@ -6,8 +6,6 @@ QT_PRIVATE = concurrent
 QMAKE_DOCS = $$PWD/doc/qtbluetooth.qdocconf
 OTHER_FILES += doc/src/*.qdoc   # show .qdoc files in Qt Creator
 
-load(qt_module)
-
 PUBLIC_HEADERS += \
     qbluetoothglobal.h \
     qbluetoothaddress.h\
@@ -67,7 +65,7 @@ SOURCES += \
     qlowenergyserviceprivate.cpp
 
 config_bluez:qtHaveModule(dbus) {
-    QT *= dbus
+    QT_FOR_PRIVATE += dbus
     DEFINES += QT_BLUEZ_BLUETOOTH
 
     include(bluez/bluez.pri)
@@ -100,11 +98,12 @@ config_bluez:qtHaveModule(dbus) {
 } else:android:!android-no-sdk {
     include(android/android.pri)
     DEFINES += QT_ANDROID_BLUETOOTH
-    QT += core-private androidextras
+    QT_FOR_PRIVATE += core-private androidextras
 
     ANDROID_PERMISSIONS = \
         android.permission.BLUETOOTH \
-        android.permission.BLUETOOTH_ADMIN
+        android.permission.BLUETOOTH_ADMIN \
+        android.permission.ACCESS_COARSE_LOCATION # since Android 6.0 (API lvl 23)
     ANDROID_BUNDLED_JAR_DEPENDENCIES = \
         jar/QtAndroidBluetooth-bundled.jar:org.qtproject.qt5.android.bluetooth.QtBluetoothBroadcastReceiver
     ANDROID_JAR_DEPENDENCIES = \
@@ -121,7 +120,7 @@ config_bluez:qtHaveModule(dbus) {
 
 } else:osx {
     DEFINES += QT_OSX_BLUETOOTH
-    LIBS += -framework Foundation -framework IOBluetooth
+    LIBS_PRIVATE += -framework Foundation -framework IOBluetooth
 
     include(osx/osxbt.pri)
     OBJECTIVE_SOURCES += \
@@ -156,7 +155,7 @@ config_bluez:qtHaveModule(dbus) {
     SOURCES -= qlowenergycontroller_p.cpp
 } else:ios {
     DEFINES += QT_IOS_BLUETOOTH
-    LIBS += -framework Foundation -framework CoreBluetooth
+    LIBS_PRIVATE += -framework Foundation -framework CoreBluetooth
 
     OBJECTIVE_SOURCES += \
         qbluetoothdevicediscoveryagent_ios.mm \
@@ -183,7 +182,8 @@ config_bluez:qtHaveModule(dbus) {
     SOURCES -= qlowenergycontroller.cpp
 } else {
     message("Unsupported Bluetooth platform, will not build a working QtBluetooth library.")
-    message("Either no Qt D-Bus found or no BlueZ headers.")
+    message("Either no Qt D-Bus found or no BlueZ headers available.")
+    include(dummy/dummy.pri)
     SOURCES += \
         qbluetoothdevicediscoveryagent_p.cpp \
         qbluetoothlocaldevice_p.cpp \
@@ -198,3 +198,4 @@ OTHER_FILES +=
 
 HEADERS += $$PUBLIC_HEADERS $$PRIVATE_HEADERS
 
+load(qt_module)

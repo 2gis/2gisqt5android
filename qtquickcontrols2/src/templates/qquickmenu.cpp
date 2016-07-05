@@ -92,6 +92,7 @@ QT_BEGIN_NAMESPACE
 */
 
 QQuickMenuPrivate::QQuickMenuPrivate() :
+    contentItem(Q_NULLPTR),
     contentModel(Q_NULLPTR),
     dummyFocusItem(Q_NULLPTR),
     ignoreActiveFocusChanges(false)
@@ -484,6 +485,7 @@ void QQuickMenu::contentItemChange(QQuickItem *newItem, QQuickItem *oldItem)
 
         QObjectPrivate::connect(d->dummyFocusItem.data(), &QQuickItem::activeFocusChanged, d, &QQuickMenuPrivate::maybeUnsetDummyFocusOnTab);
     }
+    d->contentItem = newItem;
 }
 
 bool QQuickMenu::eventFilter(QObject *object, QEvent *event)
@@ -516,6 +518,13 @@ bool QQuickMenu::eventFilter(QObject *object, QEvent *event)
 
     return QQuickPopup::eventFilter(object, event);
 }
+
+#ifndef QT_NO_ACCESSIBILITY
+QAccessible::Role QQuickMenu::accessibleRole() const
+{
+    return QAccessible::PopupMenu;
+}
+#endif // QT_NO_ACCESSIBILITY
 
 QT_END_NAMESPACE
 

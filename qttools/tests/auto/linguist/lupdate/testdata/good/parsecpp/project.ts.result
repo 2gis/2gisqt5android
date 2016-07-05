@@ -187,6 +187,49 @@ backslashed \ stuff.</source>
     </message>
 </context>
 <context>
+    <name>LambdaMemberClass</name>
+    <message>
+        <location filename="main.cpp" line="575"/>
+        <source>LambdaMemberClass in-class constructor</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="main.cpp" line="589"/>
+        <source>LambdaMemberClass out-of-class constructor</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>ListInitializationClass</name>
+    <message>
+        <location filename="main.cpp" line="533"/>
+        <source>Hello World</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="main.cpp" line="535"/>
+        <source>ListInitializationClass in-class constructor</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="main.cpp" line="550"/>
+        <source>ListInitializationClass out-of-class single member initializer</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message numerus="yes">
+        <location filename="main.cpp" line="558"/>
+        <source>%n item(s)</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message>
+        <location filename="main.cpp" line="560"/>
+        <source>ListInitializationClass out-of-class multi member initializer</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>LotsaFun</name>
     <message>
         <location filename="main.cpp" line="310"/>
@@ -229,6 +272,16 @@ backslashed \ stuff.</source>
         <location filename="main.cpp" line="75"/>
         <source>%n horse(s)</source>
         <comment>Plurals and function call</comment>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
+</context>
+<context>
+    <name>Plurals, nullptr</name>
+    <message numerus="yes">
+        <location filename="main.cpp" line="498"/>
+        <source>%n car(s)</source>
         <translation type="unfinished">
             <numerusform></numerusform>
         </translation>
@@ -302,6 +355,37 @@ backslashed \ stuff.</source>
         <extracomment>comment, bbb, false</extracomment>
         <translation type="unfinished"></translation>
     </message>
+    <message numerus="yes">
+        <location filename="main.cpp" line="497"/>
+        <source>%n nullptr(s)</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location filename="main.cpp" line="516"/>
+        <source>%n NULL(s)</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location filename="main.cpp" line="517"/>
+        <source>%n Q_NULLPTR(s)</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message>
+        <location filename="main.cpp" line="572"/>
+        <source>Hello</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="main.cpp" line="586"/>
+        <source>Hallo </source>
+        <translation type="unfinished"></translation>
+    </message>
     <message>
         <location filename="included.cpp" line="34"/>
         <source>message from #included .cpp file</source>
@@ -352,6 +436,29 @@ backslashed \ stuff.</source>
         <translation type="unfinished">
             <numerusform></numerusform>
         </translation>
+    </message>
+</context>
+<context>
+    <name>TemplateClass</name>
+    <message>
+        <location filename="main.cpp" line="604"/>
+        <source>TemplateClass() in-class member initialization</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="main.cpp" line="606"/>
+        <source>TemplateClass() in-class body</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="main.cpp" line="617"/>
+        <source>TemplateClass(void *) out-of-class member initialization</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="main.cpp" line="619"/>
+        <source>TemplateClass(void *) out-of-class body</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -448,11 +555,29 @@ backslashed \ stuff.</source>
     </message>
 </context>
 <context>
+    <name>TranslatedAfterPrivate</name>
+    <message>
+        <location filename="main.cpp" line="644"/>
+        <source>Must be in context TranslatedAfterPrivate</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>YetAnotherTest</name>
     <message>
         <location filename="main.cpp" line="239"/>
         <source>nothing</source>
         <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>nullptrClass</name>
+    <message numerus="yes">
+        <location filename="main.cpp" line="507"/>
+        <source>%n car(s)</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
     </message>
 </context>
 <context>

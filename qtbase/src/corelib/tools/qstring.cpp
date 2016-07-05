@@ -577,7 +577,7 @@ static int ucstrncmp(const QChar *a, const uchar *c, int l)
     // we'll read uc[offset..offset+7] (16 bytes) and c[offset..offset+7] (8 bytes)
     if (uc + offset + 7 < e) {
         // same, but we're using an 8-byte load
-        __m128i chunk = _mm_cvtsi64_si128(*(const long long *)(c + offset));
+        __m128i chunk = _mm_cvtsi64_si128(qFromUnaligned<long long>(c + offset));
         __m128i secondHalf = _mm_unpacklo_epi8(chunk, nullmask);
 
         __m128i ucdata = _mm_loadu_si128((const __m128i*)(uc + offset));
@@ -705,8 +705,8 @@ static int findChar(const QChar *str, int len, QChar ch, int from,
 }
 
 #define REHASH(a) \
-    if (sl_minus_1 < (int)sizeof(int) * CHAR_BIT)       \
-        hashHaystack -= (a) << sl_minus_1; \
+    if (sl_minus_1 < sizeof(uint) * CHAR_BIT)  \
+        hashHaystack -= uint(a) << sl_minus_1; \
     hashHaystack <<= 1
 
 inline bool qIsUpper(char ch)
@@ -3072,8 +3072,9 @@ int qFindString(
     const ushort *needle = (const ushort *)needle0;
     const ushort *haystack = (const ushort *)haystack0 + from;
     const ushort *end = (const ushort *)haystack0 + (l-sl);
-    const int sl_minus_1 = sl-1;
-    int hashNeedle = 0, hashHaystack = 0, idx;
+    const uint sl_minus_1 = sl - 1;
+    uint hashNeedle = 0, hashHaystack = 0;
+    int idx;
 
     if (cs == Qt::CaseSensitive) {
         for (idx = 0; idx < sl; ++idx) {
@@ -3148,10 +3149,11 @@ static int lastIndexOfHelper(const ushort *haystack, int from, const ushort *nee
 
     const ushort *end = haystack;
     haystack += from;
-    const int sl_minus_1 = sl-1;
+    const uint sl_minus_1 = sl - 1;
     const ushort *n = needle+sl_minus_1;
     const ushort *h = haystack+sl_minus_1;
-    int hashNeedle = 0, hashHaystack = 0, idx;
+    uint hashNeedle = 0, hashHaystack = 0;
+    int idx;
 
     if (cs == Qt::CaseSensitive) {
         for (idx = 0; idx < sl; ++idx) {
@@ -5820,7 +5822,9 @@ QString QString::toUpper_helper(QString &str)
 }
 
 /*!
-    \obsolete Use asprintf(), arg() or QTextStream instead.
+    \obsolete
+
+    Use asprintf(), arg() or QTextStream instead.
 */
 QString &QString::sprintf(const char *cformat, ...)
 {
@@ -5876,7 +5880,9 @@ QString QString::asprintf(const char *cformat, ...)
 }
 
 /*!
-    \obsolete Use vasprintf(), arg() or QTextStream instead.
+    \obsolete
+
+    Use vasprintf(), arg() or QTextStream instead.
 */
 QString &QString::vsprintf(const char *cformat, va_list ap)
 {
@@ -6163,11 +6169,7 @@ QString QString::vasprintf(const char *cformat, va_list ap)
             }
             case 'p': {
                 void *arg = va_arg(ap, void*);
-#ifdef Q_OS_WIN64
-                quint64 i = reinterpret_cast<quint64>(arg);
-#else
-                quint64 i = reinterpret_cast<unsigned long>(arg);
-#endif
+                const quint64 i = reinterpret_cast<quintptr>(arg);
                 flags |= QLocaleData::Alternate;
                 subst = QLocaleData::c()->unsLongLongToString(i, precision, 16, width, flags);
                 ++c;
@@ -10005,6 +10007,9 @@ static inline int qt_find_latin1_string(const QChar *haystack, int size,
                                         QLatin1String needle,
                                         int from, Qt::CaseSensitivity cs)
 {
+    if (size < needle.size())
+        return -1;
+
     const char *latin1 = needle.latin1();
     int len = needle.size();
     QVarLengthArray<ushort> s(len);
@@ -10491,7 +10496,7 @@ float QStringRef::toFloat(bool *ok) const
     \obsolete
     \fn QString Qt::escape(const QString &plain)
 
-    \sa QString::toHtmlEscaped()
+    Use QString::toHtmlEscaped() instead.
 */
 
 /*!

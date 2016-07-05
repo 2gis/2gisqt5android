@@ -37,6 +37,7 @@
 #include <QStringList>
 #include <QDebug>
 #include <QSet>
+#include <QVersionNumber>
 
 extern int logLevel;
 #define LogError()      if (logLevel < 0) {} else qDebug() << "ERROR:"
@@ -65,6 +66,24 @@ public:
     QString binaryDestinationDirectory;
 };
 
+class DylibInfo
+{
+public:
+    QString binaryPath;
+    QVersionNumber currentVersion;
+    QVersionNumber compatibilityVersion;
+};
+
+class OtoolInfo
+{
+public:
+    QString installName;
+    QString binaryPath;
+    QVersionNumber currentVersion;
+    QVersionNumber compatibilityVersion;
+    QList<DylibInfo> dependencies;
+};
+
 bool operator==(const FrameworkInfo &a, const FrameworkInfo &b);
 QDebug operator<<(QDebug debug, const FrameworkInfo &info);
 
@@ -91,6 +110,7 @@ inline QDebug operator<<(QDebug debug, const ApplicationBundleInfo &info);
 void changeQtFrameworks(const QString appPath, const QString &qtPath, bool useDebugLibs);
 void changeQtFrameworks(const QList<FrameworkInfo> frameworks, const QStringList &binaryPaths, const QString &qtPath);
 
+OtoolInfo findDependencyInfo(const QString &binaryPath);
 FrameworkInfo parseOtoolLibraryLine(const QString &line, const QString &appBundlePath, const QSet<QString> &rpaths, bool useDebugLibs);
 QString findAppBinary(const QString &appBundlePath);
 QList<FrameworkInfo> getQtFrameworks(const QString &path, const QString &appBundlePath, const QSet<QString> &rpaths, bool useDebugLibs);
@@ -109,7 +129,9 @@ QString findAppBinary(const QString &appBundlePath);
 QStringList findAppFrameworkNames(const QString &appBundlePath);
 QStringList findAppFrameworkPaths(const QString &appBundlePath);
 void codesignFile(const QString &identity, const QString &filePath);
-QSet<QString> codesignBundle(const QString &identity, const QString &appBundlePath);
+QSet<QString> codesignBundle(const QString &identity,
+                             const QString &appBundlePath,
+                             QList<QString> additionalBinariesContainingRpaths);
 void codesign(const QString &identity, const QString &appBundlePath);
 void createDiskImage(const QString &appBundlePath);
 

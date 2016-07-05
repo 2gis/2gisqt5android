@@ -98,7 +98,7 @@ TestCase {
 
     Component {
         id: menu
-        Item {
+        ApplicationWindow {
             Material.primary: Material.Blue
             Material.accent: Material.Red
             property alias menu: popup
@@ -106,6 +106,26 @@ TestCase {
                 id: popup
                 Material.theme: Material.Dark
                 MenuItem { }
+            }
+        }
+    }
+
+    Component {
+        id: popupComponent
+        ApplicationWindow {
+            Material.primary: Material.Blue
+            Material.accent: Material.Red
+            visible: true
+            property alias popup: popupInstance
+            property alias label: labelInstance
+            Popup {
+                id: popupInstance
+                Label {
+                    id: labelInstance
+                    text: "test"
+                    color: popupInstance.Material.textSelectionColor
+                }
+                Component.onCompleted: open()
             }
         }
     }
@@ -124,6 +144,17 @@ TestCase {
                 Material.theme: Material.Dark
                 model: 1
             }
+        }
+    }
+
+    Component {
+        id: windowPane
+        ApplicationWindow {
+            width: 200
+            height: 200
+            visible: true
+            property alias pane: pane
+            Pane { id: pane }
         }
     }
 
@@ -216,6 +247,33 @@ TestCase {
         parent.destroy()
     }
 
+    function test_inheritance_popup_data() {
+        return [
+            { tag: "primary", value1: Material.color(Material.Amber), value2: Material.color(Material.Indigo) },
+            { tag: "accent", value1: Material.color(Material.Amber), value2: Material.color(Material.Indigo) },
+            { tag: "theme", value1: Material.Dark, value2: Material.Light },
+        ]
+    }
+
+    function test_inheritance_popup(data) {
+        var prop = data.tag
+        var popupObject = popupComponent.createObject(testCase)
+        compare(popupObject.popup.Material.textSelectionColor.toString(), popupObject.Material.textSelectionColor.toString())
+        compare(popupObject.label.color.toString(), popupObject.Material.textSelectionColor.toString())
+
+        popupObject.Material[prop] = data.value1
+        compare(popupObject.Material[prop], data.value1)
+        compare(popupObject.popup.Material.textSelectionColor.toString(), popupObject.Material.textSelectionColor.toString())
+        compare(popupObject.label.color.toString(), popupObject.Material.textSelectionColor.toString())
+
+        popupObject.Material[prop] = data.value2
+        compare(popupObject.Material[prop], data.value2)
+        compare(popupObject.popup.Material.textSelectionColor.toString(), popupObject.Material.textSelectionColor.toString())
+        compare(popupObject.label.color.toString(), popupObject.Material.textSelectionColor.toString())
+
+        popupObject.destroy()
+    }
+
     function test_window() {
         var parent = window.createObject()
 
@@ -281,6 +339,8 @@ TestCase {
         var container = menu.createObject(testCase)
         verify(container)
         verify(container.menu)
+        container.menu.open()
+        verify(container.menu.visible)
         var child = container.menu.itemAt(0)
         verify(child)
         compare(container.Material.theme, Material.Light)
@@ -370,5 +430,77 @@ TestCase {
         control.Material[prop] = "#1"
 
         control.destroy()
+    }
+
+    function test_font_data() {
+        return [
+            {tag: "Button:pixelSize", type: "Button", attribute: "pixelSize", value: 14, window: 20, pane: 10},
+            {tag: "Button:weight", type: "Button", attribute: "weight", value: Font.Medium, window: Font.Black, pane: Font.Bold},
+            {tag: "Button:capitalization", type: "Button", attribute: "capitalization", value: Font.AllUppercase, window: Font.Capitalize, pane: Font.AllLowercase},
+
+            {tag: "TabButton:pixelSize", type: "TabButton", attribute: "pixelSize", value: 14, window: 20, pane: 10},
+            {tag: "TabButton:weight", type: "TabButton", attribute: "weight", value: Font.Medium, window: Font.Black, pane: Font.Bold},
+            {tag: "TabButton:capitalization", type: "TabButton", attribute: "capitalization", value: Font.AllUppercase, window: Font.Capitalize, pane: Font.AllLowercase},
+
+            {tag: "ToolButton:pixelSize", type: "ToolButton", attribute: "pixelSize", value: 14, window: 20, pane: 10},
+            {tag: "ToolButton:weight", type: "ToolButton", attribute: "weight", value: Font.Medium, window: Font.Black, pane: Font.Bold},
+            {tag: "ToolButton:capitalization", type: "ToolButton", attribute: "capitalization", value: Font.AllUppercase, window: Font.Capitalize, pane: Font.AllLowercase},
+
+            {tag: "ItemDelegate:pixelSize", type: "ItemDelegate", attribute: "pixelSize", value: 14, window: 20, pane: 10},
+            {tag: "ItemDelegate:weight", type: "ItemDelegate", attribute: "weight", value: Font.Medium, window: Font.Black, pane: Font.Bold},
+            {tag: "ItemDelegate:capitalization", type: "ItemDelegate", attribute: "capitalization", value: Font.MixedCase, window: Font.Capitalize, pane: Font.AllLowercase},
+
+            {tag: "Label:pixelSize", type: "Label", attribute: "pixelSize", value: 14, window: 20, pane: 10},
+            {tag: "Label:weight", type: "Label", attribute: "weight", value: Font.Normal, window: Font.Black, pane: Font.Bold},
+            {tag: "Label:capitalization", type: "Label", attribute: "capitalization", value: Font.MixedCase, window: Font.Capitalize, pane: Font.AllLowercase},
+
+            {tag: "CheckBox:pixelSize", type: "CheckBox", attribute: "pixelSize", value: 14, window: 20, pane: 10},
+            {tag: "CheckBox:weight", type: "CheckBox", attribute: "weight", value: Font.Normal, window: Font.Black, pane: Font.Bold},
+            {tag: "CheckBox:capitalization", type: "CheckBox", attribute: "capitalization", value: Font.MixedCase, window: Font.Capitalize, pane: Font.AllLowercase},
+
+            {tag: "RadioButton:pixelSize", type: "RadioButton", attribute: "pixelSize", value: 14, window: 20, pane: 10},
+            {tag: "RadioButton:weight", type: "RadioButton", attribute: "weight", value: Font.Normal, window: Font.Black, pane: Font.Bold},
+            {tag: "RadioButton:capitalization", type: "RadioButton", attribute: "capitalization", value: Font.MixedCase, window: Font.Capitalize, pane: Font.AllLowercase},
+
+            {tag: "Switch:pixelSize", type: "Switch", attribute: "pixelSize", value: 14, window: 20, pane: 10},
+            {tag: "Switch:weight", type: "Switch", attribute: "weight", value: Font.Normal, window: Font.Black, pane: Font.Bold},
+            {tag: "Switch:capitalization", type: "Switch", attribute: "capitalization", value: Font.MixedCase, window: Font.Capitalize, pane: Font.AllLowercase},
+
+            {tag: "MenuItem:pixelSize", type: "MenuItem", attribute: "pixelSize", value: 16, window: 20, pane: 10},
+            {tag: "MenuItem:weight", type: "MenuItem", attribute: "weight", value: Font.Normal, window: Font.Black, pane: Font.Bold},
+            {tag: "MenuItem:capitalization", type: "MenuItem", attribute: "capitalization", value: Font.MixedCase, window: Font.Capitalize, pane: Font.AllLowercase},
+
+            {tag: "ComboBox:pixelSize", type: "ComboBox", attribute: "pixelSize", value: 16, window: 20, pane: 10},
+            {tag: "ComboBox:weight", type: "ComboBox", attribute: "weight", value: Font.Normal, window: Font.Black, pane: Font.Bold},
+            {tag: "ComboBox:capitalization", type: "ComboBox", attribute: "capitalization", value: Font.MixedCase, window: Font.Capitalize, pane: Font.AllLowercase}
+        ]
+    }
+
+    function test_font(data) {
+        var window = windowPane.createObject(testCase)
+        verify(window)
+        verify(window.pane)
+
+        var control = Qt.createQmlObject("import Qt.labs.controls 1.0; " + data.type + " { }", window.pane)
+        verify(control)
+
+        compare(control.font[data.attribute], data.value)
+
+        window.font[data.attribute] = data.window
+        compare(window.font[data.attribute], data.window)
+        compare(window.pane.font[data.attribute], data.window)
+        compare(control.font[data.attribute], data.window)
+
+        window.pane.font[data.attribute] = data.pane
+        compare(window.font[data.attribute], data.window)
+        compare(window.pane.font[data.attribute], data.pane)
+        compare(control.font[data.attribute], data.pane)
+
+        window.pane.font = undefined
+        compare(window.font[data.attribute], data.window)
+        compare(window.pane.font[data.attribute], data.window)
+        compare(control.font[data.attribute], data.window)
+
+        window.destroy()
     }
 }

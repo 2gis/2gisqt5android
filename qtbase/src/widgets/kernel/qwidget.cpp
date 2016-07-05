@@ -1243,11 +1243,14 @@ void QWidgetPrivate::createRecursively()
 }
 
 
-
+// ### fixme: Qt 6: Remove parameter window from QWidget::create()
 
 /*!
-    Creates a new widget window if \a window is 0, otherwise sets the
-    widget's window to \a window.
+    Creates a new widget window.
+
+    The parameter \a window is ignored in Qt 5. Please use
+    QWindow::fromWinId() to create a QWindow wrapping a foreign
+    window and pass it to QWidget::createWindowContainer() instead.
 
     Initializes the window (sets the geometry etc.) if \a
     initializeWindow is true. If \a initializeWindow is false, no
@@ -1260,11 +1263,15 @@ void QWidgetPrivate::createRecursively()
 
     The QWidget constructor calls create(0,true,true) to create a
     window for this widget.
+
+    \sa createWindowContainer(), QWindow::fromWinId()
 */
 
 void QWidget::create(WId window, bool initializeWindow, bool destroyOldWindow)
 {
     Q_D(QWidget);
+    if (Q_UNLIKELY(window))
+        qWarning("QWidget::create(): Parameter 'window' does not have any effect.");
     if (testAttribute(Qt::WA_WState_Created) && window == 0 && internalWinId())
         return;
 
@@ -1288,7 +1295,7 @@ void QWidget::create(WId window, bool initializeWindow, bool destroyOldWindow)
             // We're about to create a native child widget that doesn't have a native parent;
             // enforce a native handle for the parent unless the Qt::WA_DontCreateNativeAncestors
             // attribute is set.
-            d->createWinId(window);
+            d->createWinId();
             // Nothing more to do.
             Q_ASSERT(testAttribute(Qt::WA_WState_Created));
             Q_ASSERT(internalWinId());
@@ -1880,7 +1887,6 @@ void QWidgetPrivate::deleteTLSysExtra()
         if (extra->topextra->window) {
             extra->topextra->window->destroy();
         }
-        setWinId(0);
         delete extra->topextra->window;
         extra->topextra->window = 0;
 
@@ -2521,13 +2527,12 @@ WId QWidget::winId() const
     return data->winid;
 }
 
-
-void QWidgetPrivate::createWinId(WId winid)
+void QWidgetPrivate::createWinId()
 {
     Q_Q(QWidget);
 
 #ifdef ALIEN_DEBUG
-    qDebug() << "QWidgetPrivate::createWinId for" << q << winid;
+    qDebug() << "QWidgetPrivate::createWinId for" << q;
 #endif
     const bool forceNativeWindow = q->testAttribute(Qt::WA_NativeWindow);
     if (!q->testAttribute(Qt::WA_WState_Created) || (forceNativeWindow && !q->internalWinId())) {
@@ -2544,15 +2549,7 @@ void QWidgetPrivate::createWinId(WId winid)
                 QWidget *w = qobject_cast<QWidget *>(pd->children.at(i));
                 if (w && !w->isWindow() && (!w->testAttribute(Qt::WA_WState_Created)
                                             || (!w->internalWinId() && w->testAttribute(Qt::WA_NativeWindow)))) {
-                    if (w!=q) {
-                        w->create();
-                    } else {
-                        w->create(winid);
-                        // if the window has already been created, we
-                        // need to raise it to its proper stacking position
-                        if (winid)
-                            w->raise();
-                    }
+                    w->create();
                 }
             }
         } else {
@@ -5237,7 +5234,9 @@ QPixmap QWidget::grab(const QRect &rectangle)
     if (!r.intersects(rect()))
         return QPixmap();
 
-    QPixmap res(r.size());
+    const qreal dpr = devicePixelRatioF();
+    QPixmap res((QSizeF(r.size()) * dpr).toSize());
+    res.setDevicePixelRatio(dpr);
     if (!d->isOpaque)
         res.fill(Qt::transparent);
     d->render(&res, QPoint(), QRegion(r), renderFlags);
@@ -6415,13 +6414,13 @@ bool QWidget::hasFocus() const
     const QWidget* w = this;
     while (w->d_func()->extra && w->d_func()->extra->focus_proxy)
         w = w->d_func()->extra->focus_proxy;
-    if (QWidget *window = w->window()) {
 #ifndef QT_NO_GRAPHICSVIEW
+    if (QWidget *window = w->window()) {
         QWExtra *e = window->d_func()->extra;
         if (e && e->proxyWidget && e->proxyWidget->hasFocus() && window->focusWidget() == w)
             return true;
-#endif
     }
+#endif // !QT_NO_GRAPHICSVIEW
     return (QApplication::focusWidget() == w);
 }
 
@@ -7216,7 +7215,7 @@ void QWidgetPrivate::setGeometry_sys(int x, int y, int w, int h, bool isMove)
             if (q->isVisible())
                 hide_sys();
             data.crect = QRect(x, y, w, h);
-        } else if (q->isVisible() && q->testAttribute(Qt::WA_OutsideWSRange)) {
+        } else if (q->testAttribute(Qt::WA_OutsideWSRange)) {
             q->setAttribute(Qt::WA_OutsideWSRange, false);
             needsShow = true;
         }
@@ -7918,8 +7917,11 @@ void QWidgetPrivate::show_sys()
         invalidateBuffer(q->rect());
         q->setAttribute(Qt::WA_Mapped);
         // add our window the modal window list (native dialogs)
-        if ((q->isWindow() && (!extra || !extra->proxyWidget))
-            && q->windowModality() != Qt::NonModal && window) {
+        if (window && q->isWindow()
+#ifndef QT_NO_GRAPHICSVIEW
+            && (!extra || !extra->proxyWidget)
+#endif
+            && q->windowModality() != Qt::NonModal) {
             QGuiApplicationPrivate::showModalWindow(window);
         }
         return;
@@ -8053,8 +8055,11 @@ void QWidgetPrivate::hide_sys()
     if (q->testAttribute(Qt::WA_DontShowOnScreen)) {
         q->setAttribute(Qt::WA_Mapped, false);
         // remove our window from the modal window list (native dialogs)
-        if ((q->isWindow() && (!extra || !extra->proxyWidget))
-            && q->windowModality() != Qt::NonModal && window) {
+        if (window && q->isWindow()
+#ifndef QT_NO_GRAPHICSVIEW
+            && (!extra || !extra->proxyWidget)
+#endif
+            && q->windowModality() != Qt::NonModal) {
             QGuiApplicationPrivate::hideModalWindow(window);
         }
         // do not return here, if window non-zero, we must hide it
@@ -12842,9 +12847,8 @@ void QWidget::setMask(const QRegion &newMask)
 void QWidgetPrivate::setMask_sys(const QRegion &region)
 {
     Q_Q(QWidget);
-    if (const QWindow *window = q->windowHandle())
-        if (QPlatformWindow *platformWindow = window->handle())
-            platformWindow->setMask(QHighDpi::toNativeLocalRegion(region, window));
+    if (QWindow *window = q->windowHandle())
+        window->setMask(region);
 }
 
 /*!

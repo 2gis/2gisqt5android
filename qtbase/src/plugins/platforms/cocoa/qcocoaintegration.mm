@@ -331,6 +331,15 @@ QCocoaIntegration::QCocoaIntegration(const QStringList &paramList)
         [newDelegate setMenuLoader:qtMenuLoader];
     }
 
+    // The presentation options such as whether or not the dock and/or menu bar is
+    // hidden (automatically by the system) affects the main screen's available
+    // geometry. Since we're initializing the screens synchronously at application
+    // startup we need to ensure that the presentation options have been propagated
+    // to the screen before we read out its properties. Normally OS X does this in
+    // an asynchronous callback, but that's too late for us. We force the propagation
+    // by explicitly setting the presentation option to the magic 'default value',
+    // which will resolve to an actual value and result in screen invalidation.
+    cocoaApplication.presentationOptions = NSApplicationPresentationDefault;
     updateScreens();
 
     QMacInternalPasteboardMime::initializeMimeTypes();
@@ -422,14 +431,18 @@ void QCocoaIntegration::updateScreens()
         }
         siblings << screen;
     }
+
+    // Set virtual siblings list. All screens in mScreens are siblings, because we ignored the
+    // mirrors. Note that some of the screens we update the siblings list for here may be deleted
+    // below, but update anyway to keep the to-be-deleted screens out of the siblings list.
+    foreach (QCocoaScreen* screen, mScreens)
+        screen->setVirtualSiblings(siblings);
+
     // Now the leftovers in remainingScreens are no longer current, so we can delete them.
     foreach (QCocoaScreen* screen, remainingScreens) {
         mScreens.removeOne(screen);
         destroyScreen(screen);
     }
-    // All screens in mScreens are siblings, because we ignored the mirrors.
-    foreach (QCocoaScreen* screen, mScreens)
-        screen->setVirtualSiblings(siblings);
 }
 
 QCocoaScreen *QCocoaIntegration::screenAtIndex(int index)

@@ -70,6 +70,9 @@ enum ObjectCategory
     Licensed         = 0x100,
 };
 
+Q_DECLARE_FLAGS(ObjectCategories, ObjectCategory)
+Q_DECLARE_OPERATORS_FOR_FLAGS(ObjectCategories)
+
 extern QMetaObject *qax_readEnumInfo(ITypeLib *typeLib, const QMetaObject *parentObject);
 extern QMetaObject *qax_readClassInfo(ITypeLib *typeLib, ITypeInfo *typeInfo, const QMetaObject *parentObject);
 extern QMetaObject *qax_readInterfaceInfo(ITypeLib *typeLib, ITypeInfo *typeInfo, const QMetaObject *parentObject);
@@ -78,10 +81,10 @@ extern QString qax_docuFromName(ITypeInfo *typeInfo, const QString &name);
 extern bool qax_dispatchEqualsIDispatch;
 extern void qax_deleteMetaObject(QMetaObject *mo);
 
-QMap<QByteArray, QByteArray> namespaceForType;
-QVector<QByteArray> strings;
-QHash<QByteArray, int> stringIndex; // Optimization, speeds up generation
-QByteArrayList vTableOnlyStubs;
+static QMap<QByteArray, QByteArray> namespaceForType;
+static QVector<QByteArray> strings;
+static QHash<QByteArray, int> stringIndex; // Optimization, speeds up generation
+static QByteArrayList vTableOnlyStubs;
 
 void writeEnums(QTextStream &out, const QMetaObject *mo)
 {
@@ -154,7 +157,9 @@ QByteArray constRefify(const QByteArray &type)
     return ctype;
 }
 
-void generateClassDecl(QTextStream &out, const QString &controlID, const QMetaObject *mo, const QByteArray &className, const QByteArray &nameSpace, ObjectCategory category)
+void generateClassDecl(QTextStream &out, const QString &controlID, const QMetaObject *mo,
+                       const QByteArray &className, const QByteArray &nameSpace,
+                       ObjectCategories category)
 {
     QList<QByteArray> functions;
 
@@ -342,7 +347,7 @@ void generateClassDecl(QTextStream &out, const QString &controlID, const QMetaOb
             if (isupper(setter.at(0))) {
                 setter = "Set" + setter;
             } else {
-                setter[0] = toupper(setter[0]);
+                setter[0] = char(toupper(setter[0]));
                 setter = "set" + setter;
             }
 
@@ -414,7 +419,7 @@ void generateClassDecl(QTextStream &out, const QString &controlID, const QMetaOb
         if (slotSignature.endsWith("()")) { // no parameters - no names
             slotNamedSignature = slotSignature;
         } else {
-            slotNamedSignature = slotSignature.left(slotSignature.indexOf('(') + 1);
+            slotNamedSignature.truncate(slotSignature.indexOf('(') + 1);
             QByteArray slotSignatureTruncated(slotSignature.mid(slotNamedSignature.length()));
             slotSignatureTruncated.truncate(slotSignatureTruncated.length() - 1);
 
@@ -567,13 +572,13 @@ QT_FOR_EACH_STATIC_TYPE(RETURN_METATYPENAME_STRING)
     return 0;
 }
 
-uint nameToBuiltinType(const QByteArray &name)
+int nameToBuiltinType(const QByteArray &name)
 {
     if (name.isEmpty())
         return 0;
 
-    uint tp = QMetaType::type(name.constData());
-    return tp < uint(QMetaType::User) ? tp : uint(QMetaType::UnknownType);
+    const int tp = QMetaType::type(name.constData());
+    return tp < QMetaType::User ? tp : QMetaType::UnknownType;
 }
 
 void copyFileToStream(QFile *file, QTextStream *stream)
@@ -689,7 +694,8 @@ void generateMethodParameters(QTextStream &out, const QMetaObject *mo, const QMe
     out << endl;
 }
 
-void generateClassImpl(QTextStream &out, const QMetaObject *mo, const QByteArray &className, const QByteArray &nameSpace, ObjectCategory category)
+void generateClassImpl(QTextStream &out, const QMetaObject *mo, const QByteArray &className,
+                       const QByteArray &nameSpace, ObjectCategories category)
 {
     Q_STATIC_ASSERT_X(QMetaObjectPrivate::OutputRevision == 7, "dumpcpp should generate the same version as moc");
 
@@ -933,7 +939,7 @@ static QByteArrayList vTableOnlyStubsFromTypeLib(ITypeLib *typelib, const QStrin
 }
 
 bool generateTypeLibrary(QString typeLibFile, QString outname,
-                         const QString &nameSpace, ObjectCategory category)
+                         const QString &nameSpace, ObjectCategories category)
 {
     typeLibFile.replace(QLatin1Char('/'), QLatin1Char('\\'));
 
@@ -1092,7 +1098,7 @@ bool generateTypeLibrary(QString typeLibFile, QString outname,
                 QByteArray refTypeLib;
                 if (refType.contains("::")) {
                     refTypeLib = refType;
-                    refType = refType.mid(refType.lastIndexOf("::") + 2);
+                    refType.remove(0, refType.lastIndexOf("::") + 2);
                     if (refTypeLib.contains(' ')) {
                         refType = refTypeLib.left(refTypeLib.indexOf(' ')) + ' ' + refType;
                     }
@@ -1170,7 +1176,7 @@ bool generateTypeLibrary(QString typeLibFile, QString outname,
         TYPEKIND typekind;
         typelib->GetTypeInfoType(index, &typekind);
 
-        uint object_category = category;
+        ObjectCategories object_category = category;
         if (!(typeattr->wTypeFlags & TYPEFLAG_FCANCREATE))
             object_category |= SubObject;
         else if (typeattr->wTypeFlags & TYPEFLAG_FCONTROL)
@@ -1224,18 +1230,22 @@ bool generateTypeLibrary(QString typeLibFile, QString outname,
                     if (typeattr->wTypeFlags & TYPEFLAG_FLICENSED)
                         object_category |= Licensed;
                     if (typekind == TKIND_COCLASS) { // write those later...
-                        generateClassDecl(classesOut, guid.toString(), metaObject, className, libName.toLatin1(), (ObjectCategory)(object_category|NoInlines));
+                        generateClassDecl(classesOut, guid.toString(), metaObject, className, libName.toLatin1(),
+                                          object_category | NoInlines);
                         classesOut << endl;
                     } else {
-                        generateClassDecl(declOut, guid.toString(), metaObject, className, libName.toLatin1(), (ObjectCategory)(object_category|NoInlines));
+                        generateClassDecl(declOut, guid.toString(), metaObject, className, libName.toLatin1(),
+                                          object_category | NoInlines);
                         declOut << endl;
                     }
                     subtypes << className;
-                    generateClassDecl(inlinesOut, guid.toString(), metaObject, className, libName.toLatin1(), (ObjectCategory)(object_category|OnlyInlines));
+                    generateClassDecl(inlinesOut, guid.toString(), metaObject, className, libName.toLatin1(),
+                                      object_category | OnlyInlines);
                     inlinesOut << endl;
                 }
                 if (implFile.isOpen())
-                    generateClassImpl(classImplOut, metaObject, className, libName.toLatin1(), (ObjectCategory)object_category);
+                    generateClassImpl(classImplOut, metaObject, className, libName.toLatin1(),
+                                      object_category);
             }
             currentTypeInfo = 0;
         }
@@ -1416,7 +1426,7 @@ struct Options
     Options() : mode(GenerateMode), category(DefaultObject), dispatchEqualsIDispatch(false) {}
 
     ProgramMode mode;
-    uint category;
+    ObjectCategories category;
     bool dispatchEqualsIDispatch;
 
     QString outname;
@@ -1599,7 +1609,7 @@ int main(int argc, char **argv)
         return -2;
     }
 
-    if (!generateTypeLibrary(typeLib, options.outname, options.nameSpace, (ObjectCategory)options.category)) {
+    if (!generateTypeLibrary(typeLib, options.outname, options.nameSpace, options.category)) {
         qWarning("dumpcpp: error processing type library '%s'", qPrintable(typeLib));
         return -1;
     }

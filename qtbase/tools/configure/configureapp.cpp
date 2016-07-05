@@ -152,6 +152,7 @@ Configure::Configure(int& argc, char** argv) : verbose(0)
     dictionary[ "GUI" ]             = "yes";
     dictionary[ "RTTI" ]            = "yes";
     dictionary[ "STRIP" ]           = "yes";
+    dictionary[ "PCH" ]             = "yes";
     dictionary[ "SEPARATE_DEBUG_INFO" ] = "no";
     dictionary[ "SSE2" ]            = "auto";
     dictionary[ "SSE3" ]            = "auto";
@@ -230,7 +231,7 @@ Configure::Configure(int& argc, char** argv) : verbose(0)
     dictionary[ "BUILD" ]           = "debug";
     dictionary[ "BUILDALL" ]        = "auto"; // Means yes, but not explicitly
     dictionary[ "FORCEDEBUGINFO" ]  = "no";
-    dictionary[ "OPTIMIZED_TOOLS" ] = "no";
+    dictionary[ "RELEASE_TOOLS" ]   = "no";
 
     dictionary[ "BUILDTYPE" ]      = "none";
 
@@ -859,6 +860,11 @@ void Configure::parseCmdLine()
         else if (configCmdLine.at(i) == "-no-strip")
             dictionary[ "STRIP" ] = "no";
 
+        else if (configCmdLine.at(i) == "-pch")
+            dictionary[ "PCH" ] = "yes";
+        else if (configCmdLine.at(i) == "-no-pch")
+            dictionary[ "PCH" ] = "no";
+
         else if (configCmdLine.at(i) == "-accessibility")
             dictionary[ "ACCESSIBILITY" ] = "yes";
         else if (configCmdLine.at(i) == "-no-accessibility") {
@@ -903,8 +909,10 @@ void Configure::parseCmdLine()
               dictionary[ "OPENSSL"] = "no";
         } else if (configCmdLine.at(i) == "-openssl") {
               dictionary[ "OPENSSL" ] = "yes";
+              dictionary[ "SSL" ] = "yes";
         } else if (configCmdLine.at(i) == "-openssl-linked") {
               dictionary[ "OPENSSL" ] = "linked";
+              dictionary[ "SSL" ] = "yes";
         } else if (configCmdLine.at(i) == "-no-libproxy") {
               dictionary[ "LIBPROXY"] = "no";
         } else if (configCmdLine.at(i) == "-libproxy") {
@@ -1368,6 +1376,14 @@ void Configure::parseCmdLine()
             dictionary[ "ANDROID_PLATFORM" ] = configCmdLine.at(i);
         }
 
+        else if (configCmdLine.at(i) == "-android-ndk-host") {
+            ++i;
+            if (i == argCount)
+                break;
+
+            dictionary[ "ANDROID_HOST" ] = configCmdLine.at(i);
+        }
+
         else if (configCmdLine.at(i) == "-android-arch") {
             ++i;
             if (i == argCount)
@@ -1699,17 +1715,6 @@ void Configure::applySpecSpecifics()
         dictionary[ "STYLE_FUSION" ]        = "no";
         dictionary[ "STYLE_WINDOWSCE" ]     = "yes";
         dictionary[ "STYLE_WINDOWSMOBILE" ] = "yes";
-        dictionary[ "OPENGL" ]              = "no";
-        dictionary[ "SSL" ]                 = "no";
-        dictionary[ "OPENSSL" ]             = "no";
-        dictionary[ "RTTI" ]                = "no";
-        dictionary[ "SSE2" ]                = "no";
-        dictionary[ "SSE3" ]                = "no";
-        dictionary[ "SSSE3" ]               = "no";
-        dictionary[ "SSE4_1" ]              = "no";
-        dictionary[ "SSE4_2" ]              = "no";
-        dictionary[ "AVX" ]                 = "no";
-        dictionary[ "AVX2" ]                = "no";
         dictionary[ "CE_CRT" ]              = "yes";
         dictionary[ "LARGE_FILE" ]          = "no";
         dictionary[ "ANGLE" ]               = "no";
@@ -1737,6 +1742,7 @@ void Configure::applySpecSpecifics()
 
         dictionary["DECORATIONS"]           = "default windows styled";
     } else if ((platform() == QNX) || (platform() == BLACKBERRY)) {
+        dictionary[ "REDUCE_EXPORTS" ]      = "yes";
         dictionary["STACK_PROTECTOR_STRONG"] = "auto";
         dictionary["SLOG2"]                 = "auto";
         dictionary["QNX_IMF"]               = "auto";
@@ -1746,6 +1752,7 @@ void Configure::applySpecSpecifics()
         dictionary[ "ANGLE" ]               = "no";
         dictionary[ "DYNAMICGL" ]           = "no";
         dictionary[ "FONT_CONFIG" ]         = "auto";
+        dictionary[ "ICU" ]                 = "auto";
     } else if (platform() == ANDROID) {
         dictionary[ "REDUCE_EXPORTS" ]      = "yes";
         dictionary[ "BUILD" ]               = "release";
@@ -1941,6 +1948,9 @@ bool Configure::displayHelp()
         desc(                   "-I <includepath>",     "Add an explicit include path.");
         desc(                   "-L <librarypath>",     "Add an explicit library path.");
         desc(                   "-l <libraryname>",     "Add an explicit library name, residing in a librarypath.\n");
+
+        desc("PCH",   "no",     "-no-pch",              "Do not use precompiled header support.");
+        desc("PCH",   "yes",    "-pch",                 "Use precopmiled header support.\n");
 
         desc(                   "-help, -h, -?",        "Display this information.\n");
 
@@ -2749,6 +2759,11 @@ void Configure::generateOutputVars()
     if (dictionary[ "RELEASE_TOOLS" ] == "yes")
         qtConfig += "release_tools";
 
+    if (dictionary[ "PCH" ] == "yes")
+        qmakeConfig += "precompile_header";
+    else
+        qmakeVars += "CONFIG -= precompile_header";
+
     if (dictionary[ "C++STD" ] == "c++11")
         qtConfig += "c++11";
     else if (dictionary[ "C++STD" ] == "c++14")
@@ -3177,9 +3192,6 @@ void Configure::generateCachefile()
             moduleStream << "QT_CE_RAPI_LIB  = " << formatPath(dictionary["QT_CE_RAPI_LIB"]) << endl;
         }
 
-        moduleStream << "#Qt for Windows CE c-runtime deployment" << endl
-                     << "QT_CE_C_RUNTIME = " << formatPath(dictionary["CE_CRT"]) << endl;
-
         if (dictionary["CE_SIGNATURE"] != QLatin1String("no"))
             moduleStream << "DEFAULT_SIGNATURE=" << dictionary["CE_SIGNATURE"] << endl;
 
@@ -3464,7 +3476,9 @@ void Configure::generateQDevicePri()
         deviceStream << "android_install {" << endl;
         deviceStream << "    DEFAULT_ANDROID_SDK_ROOT = " << formatPath(dictionary["ANDROID_SDK_ROOT"]) << endl;
         deviceStream << "    DEFAULT_ANDROID_NDK_ROOT = " << formatPath(dictionary["ANDROID_NDK_ROOT"]) << endl;
-        if (QSysInfo::WordSize == 64)
+        if (dictionary.contains("ANDROID_HOST"))
+            deviceStream << "    DEFAULT_ANDROID_NDK_HOST = " << dictionary["ANDROID_HOST"] << endl;
+        else if (QSysInfo::WordSize == 64)
             deviceStream << "    DEFAULT_ANDROID_NDK_HOST = windows-x86_64" << endl;
         else
             deviceStream << "    DEFAULT_ANDROID_NDK_HOST = windows" << endl;
@@ -3591,6 +3605,11 @@ void Configure::generateQConfigPri()
             configStream << "QT_GCC_MAJOR_VERSION = " << dictionary["QT_GCC_MAJOR_VERSION"] << endl
                          << "QT_GCC_MINOR_VERSION = " << dictionary["QT_GCC_MINOR_VERSION"] << endl
                          << "QT_GCC_PATCH_VERSION = " << dictionary["QT_GCC_PATCH_VERSION"] << endl;
+        }
+
+        if (dictionary.value("XQMAKESPEC").startsWith("wince")) {
+            configStream << "#Qt for Windows CE c-runtime deployment" << endl
+                         << "QT_CE_C_RUNTIME = " << formatPath(dictionary["CE_CRT"]) << endl;
         }
 
         if (!configStream.flush())
@@ -3851,6 +3870,7 @@ void Configure::displayConfig()
         sout << "Force optimized tools......." << dictionary[ "RELEASE_TOOLS" ] << endl;
     sout << "C++ language standard......." << dictionary[ "C++STD" ] << endl;
     sout << "Link Time Code Generation..." << dictionary[ "LTCG" ] << endl;
+    sout << "Using PCH .................." << dictionary[ "PCH" ] << endl;
     sout << "Accessibility support......." << dictionary[ "ACCESSIBILITY" ] << endl;
     sout << "RTTI support................" << dictionary[ "RTTI" ] << endl;
     sout << "SSE2 support................" << dictionary[ "SSE2" ] << endl;

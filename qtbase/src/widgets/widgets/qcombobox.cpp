@@ -2436,6 +2436,7 @@ struct IndexSetter {
     {
         cb->setCurrentIndex(index);
         emit cb->activated(index);
+        emit cb->activated(cb->itemText(index));
     }
 };
 }
@@ -3428,5 +3429,6 @@ void QComboBox::setModelColumn(int visibleColumn)
 QT_END_NAMESPACE
 
 #include "moc_qcombobox.cpp"
+#include "moc_qcombobox_p.cpp"
 
 #endif // QT_NO_COMBOBOX

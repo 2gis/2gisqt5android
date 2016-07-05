@@ -42,6 +42,7 @@
 #include <qfileinfo.h>
 #include <qregexp.h>
 #include <qwineventnotifier.h>
+#include <private/qsystemlibrary_p.h>
 #include <private/qthread_p.h>
 #include <qdebug.h>
 
@@ -647,7 +648,8 @@ bool QProcessPrivate::waitForReadyRead(int msecs)
             return false;
         if (WaitForSingleObjectEx(pid->hProcess, 0, false) == WAIT_OBJECT_0) {
             bool readyReadEmitted = drainOutputPipes();
-            _q_processDied();
+            if (pid)
+                _q_processDied();
             return readyReadEmitted;
         }
 
@@ -665,10 +667,7 @@ bool QProcessPrivate::waitForBytesWritten(int msecs)
     QIncrementalSleepTimer timer(msecs);
 
     forever {
-        // Check if we have any data pending: the pipe writer has
-        // bytes waiting to written, or it has written data since the
-        // last time we called stdinChannel.writer->waitForWrite().
-        bool pendingDataInPipe = stdinChannel.writer && (stdinChannel.writer->bytesToWrite() || stdinChannel.writer->hadWritten());
+        bool pendingDataInPipe = stdinChannel.writer && stdinChannel.writer->bytesToWrite();
 
         // If we don't have pending data, and our write buffer is
         // empty, we fail.
@@ -752,7 +751,8 @@ bool QProcessPrivate::waitForFinished(int msecs)
 
         if (WaitForSingleObject(pid->hProcess, timer.nextSleepTime()) == WAIT_OBJECT_0) {
             drainOutputPipes();
-            _q_processDied();
+            if (pid)
+                _q_processDied();
             return true;
         }
 
@@ -787,18 +787,23 @@ qint64 QProcessPrivate::pipeWriterBytesToWrite() const
     return stdinChannel.writer ? stdinChannel.writer->bytesToWrite() : qint64(0);
 }
 
-qint64 QProcessPrivate::writeToStdin(const char *data, qint64 maxlen)
+bool QProcessPrivate::writeToStdin()
 {
     Q_Q(QProcess);
 
     if (!stdinChannel.writer) {
         stdinChannel.writer = new QWindowsPipeWriter(stdinChannel.pipe[1], q);
+        QObject::connect(stdinChannel.writer, &QWindowsPipeWriter::bytesWritten,
+                         q, &QProcess::bytesWritten);
         QObjectPrivate::connect(stdinChannel.writer, &QWindowsPipeWriter::canWrite,
                                 this, &QProcessPrivate::_q_canWrite);
-        stdinChannel.writer->start();
+    } else {
+        if (stdinChannel.writer->isWriteOperationActive())
+            return true;
     }
 
-    return stdinChannel.writer->write(data, maxlen);
+    stdinChannel.writer->write(stdinChannel.buffer.read());
+    return true;
 }
 
 bool QProcessPrivate::waitForWrite(int msecs)
@@ -810,8 +815,45 @@ bool QProcessPrivate::waitForWrite(int msecs)
     return false;
 }
 
+// Use ShellExecuteEx() to trigger an UAC prompt when CreateProcess()fails
+// with ERROR_ELEVATION_REQUIRED.
+static bool startDetachedUacPrompt(const QString &programIn, const QStringList &arguments,
+                                   const QString &workingDir, qint64 *pid)
+{
+    typedef BOOL (WINAPI *ShellExecuteExType)(SHELLEXECUTEINFOW *);
+
+    static const ShellExecuteExType shellExecuteEx = // XP ServicePack 1 onwards.
+        reinterpret_cast<ShellExecuteExType>(QSystemLibrary::resolve(QLatin1String("shell32"),
+                                                                     "ShellExecuteExW"));
+    if (!shellExecuteEx)
+        return false;
+
+    const QString args = qt_create_commandline(QString(), arguments); // needs arguments only
+    SHELLEXECUTEINFOW shellExecuteExInfo;
+    memset(&shellExecuteExInfo, 0, sizeof(SHELLEXECUTEINFOW));
+    shellExecuteExInfo.cbSize = sizeof(SHELLEXECUTEINFOW);
+    shellExecuteExInfo.fMask = SEE_MASK_NOCLOSEPROCESS | SEE_MASK_UNICODE | SEE_MASK_FLAG_NO_UI;
+    shellExecuteExInfo.lpVerb = L"runas";
+    const QString program = QDir::toNativeSeparators(programIn);
+    shellExecuteExInfo.lpFile = reinterpret_cast<LPCWSTR>(program.utf16());
+    if (!args.isEmpty())
+        shellExecuteExInfo.lpParameters = reinterpret_cast<LPCWSTR>(args.utf16());
+    if (!workingDir.isEmpty())
+        shellExecuteExInfo.lpDirectory = reinterpret_cast<LPCWSTR>(workingDir.utf16());
+    shellExecuteExInfo.nShow = SW_SHOWNORMAL;
+
+    if (!shellExecuteEx(&shellExecuteExInfo))
+        return false;
+    if (pid)
+        *pid = qint64(GetProcessId(shellExecuteExInfo.hProcess));
+    CloseHandle(shellExecuteExInfo.hProcess);
+    return true;
+}
+
 bool QProcessPrivate::startDetached(const QString &program, const QStringList &arguments, const QString &workingDir, qint64 *pid)
 {
+    static const DWORD errorElevationRequired = 740;
+
     QString args = qt_create_commandline(program, arguments);
     bool success = false;
     PROCESS_INFORMATION pinfo;
@@ -831,6 +873,8 @@ bool QProcessPrivate::startDetached(const QString &program, const QStringList &a
         CloseHandle(pinfo.hProcess);
         if (pid)
             *pid = pinfo.dwProcessId;
+    } else if (GetLastError() == errorElevationRequired) {
+        success = startDetachedUacPrompt(program, arguments, workingDir, pid);
     }
 
     return success;

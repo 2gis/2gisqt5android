@@ -19,3 +19,9 @@ OTHER_FILES += \
     socialtodos.qml
 
 RESOURCES += socialtodos.qrc
+
+target.path = $$[QT_INSTALL_EXAMPLES]/enginio/quick/socialtodos
+INSTALLS += target
+
+EXAMPLE_FILES += \
+    backendconfig

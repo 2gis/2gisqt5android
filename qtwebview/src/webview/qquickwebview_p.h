@@ -112,6 +112,9 @@ private Q_SLOTS:
     void onLoadingChanged(const QWebViewLoadRequestPrivate &loadRequest);
 
 private:
+    friend class QWebEngineWebViewPrivate;
+    static QJSValue takeCallback(int id);
+
     QWebView* m_webView;
 };
 

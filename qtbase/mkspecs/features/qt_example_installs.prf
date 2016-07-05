@@ -47,8 +47,13 @@ probase = $$relative_path($$_PRO_FILE_PWD_, $$dirname(_QMAKE_CONF_)/examples)
                 sourcefiles += $$resrc
         }
     }
+    sourcefiles += \
+        $$ANDROID_PACKAGE_SOURCE_DIR \
+        $$QMAKE_INFO_PLIST \
+        $$DISTFILES
     extras = \
         $$_PRO_FILE_PWD_/README \
+        $$_PRO_FILE_PWD_/README.TXT \
         $$files($$_PRO_FILE_PWD_/*.pri) \
         $$replace(_PRO_FILE_, \\.pro$, .qmlproject) \
         $$replace(_PRO_FILE_, \\.pro$, .json) \
@@ -93,6 +98,20 @@ probase = $$relative_path($$_PRO_FILE_PWD_, $$dirname(_QMAKE_CONF_)/examples)
         }
         allfiles -= doc
         !isEmpty(allfiles): warning("remaining files in $$_PRO_FILE_PWD_: $$allfiles")
+    }
+
+    equals(TEMPLATE, app)|equals(TEMPLATE, lib) {
+        !contains(INSTALLS, target) {
+            !install_ok: \
+                error("$$_PRO_FILE_ is lacking an install target.")
+            else: check_examples: \
+                warning("$$_PRO_FILE_ is lacking an install target.")
+        } else: !equals(target.path, $$sources.path) {
+            !install_ok: \
+                error("$$_PRO_FILE_ installs target to unexpected location.")
+            else: check_examples: \
+                warning("$$_PRO_FILE_ installs target to unexpected location.")
+        }
     }
 
     !equals(TEMPLATE, subdirs):!compile_examples {

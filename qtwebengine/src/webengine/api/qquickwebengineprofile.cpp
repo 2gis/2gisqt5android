@@ -54,17 +54,29 @@ QT_BEGIN_NAMESPACE
 
 /*!
     \class QQuickWebEngineProfile
-    \brief The QQuickWebEngineProfile class provides a web-engine profile shared by multiple pages.
+    \brief The QQuickWebEngineProfile class provides a web engine profile shared by multiple pages.
     \since 5.6
 
     \inmodule QtWebEngine
 
-    QQuickWebEngineProfile contains settings, scripts, and the list of visited links shared by all
-    web engine pages that belong to the profile. As such, profiles can be used to isolate pages
-    from each other. A typical use case is a dedicated profile for a 'private browsing' mode.
+    A web engine profile contains properties and functionality shared by a group of web engine
+    pages.
 
-    The default profile is a built-in profile that all web pages not specifically created with
-    another profile belong to.
+    Information about visited links is stored together with persistent cookies and other persistent
+    data in a storage described by the persistentStoragePath property.
+
+    Profiles can be used to isolate pages from each other. A typical use case is a dedicated
+    \e {off-the-record profile} for a \e {private browsing} mode. An off-the-record profile forces
+    cookies, the HTTP cache, and other normally persistent data to be stored only in memory. The
+    offTheRecord property holds whether a profile is off-the-record.
+
+    The default profile can be accessed by defaultProfile(). It is a built-in profile that all
+    web pages not specifically created with another profile belong to.
+
+    A WebEngineProfile instance can be created and accessed from C++ through the
+    QQuickWebEngineProfile class, which exposes further functionality in C++. This allows Qt Quick
+    applications to intercept URL requests (QQuickWebEngineProfile::setRequestInterceptor), or
+    register custom URL schemes (QQuickWebEngineProfile::installUrlSchemeHandler).
 */
 
 /*!
@@ -113,7 +125,7 @@ QT_BEGIN_NAMESPACE
   The \a download argument holds the state of the finished download instance.
 */
 
-QQuickWebEngineProfilePrivate::QQuickWebEngineProfilePrivate(BrowserContextAdapter* browserContext)
+QQuickWebEngineProfilePrivate::QQuickWebEngineProfilePrivate(QSharedPointer<BrowserContextAdapter> browserContext)
         : m_settings(new QQuickWebEngineSettings())
         , m_browserContextRef(browserContext)
 {
@@ -230,7 +242,7 @@ void QQuickWebEngineProfilePrivate::downloadUpdated(const DownloadItemInfo &info
 */
 QQuickWebEngineProfile::QQuickWebEngineProfile(QObject *parent)
     : QObject(parent),
-      d_ptr(new QQuickWebEngineProfilePrivate(new BrowserContextAdapter(false)))
+      d_ptr(new QQuickWebEngineProfilePrivate(QSharedPointer<BrowserContextAdapter>::create(false)))
 {
     // Sets up the global WebEngineContext
     QQuickWebEngineProfile::defaultProfile();
@@ -580,7 +592,7 @@ QQuickWebEngineProfile *QQuickWebEngineProfile::defaultProfile()
 }
 
 /*!
-    Returns the cookie store singleton, if one has been set.
+    Returns the cookie store for this profile.
 */
 QWebEngineCookieStore *QQuickWebEngineProfile::cookieStore() const
 {
@@ -677,8 +689,7 @@ void QQuickWebEngineProfile::removeUrlScheme(const QByteArray &scheme)
 void QQuickWebEngineProfile::removeAllUrlSchemeHandlers()
 {
     Q_D(QQuickWebEngineProfile);
-    d->browserContext()->customUrlSchemeHandlers().clear();
-    d->browserContext()->updateCustomUrlSchemeHandlers();
+    d->browserContext()->clearCustomUrlSchemeHandlers();
 }
 
 void QQuickWebEngineProfile::destroyedUrlSchemeHandler(QWebEngineUrlSchemeHandler *obj)

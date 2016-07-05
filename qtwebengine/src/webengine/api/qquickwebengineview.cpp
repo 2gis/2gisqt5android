@@ -77,6 +77,8 @@
 #include <QScreen>
 #include <QUrl>
 #include <QTimer>
+#include <private/qguiapplication_p.h>
+#include <qpa/qplatformintegration.h>
 #ifndef QT_NO_ACCESSIBILITY
 #include <private/qquickaccessibleattached_p.h>
 #endif // QT_NO_ACCESSIBILITY
@@ -112,6 +114,7 @@ QQuickWebEngineViewPrivate::QQuickWebEngineViewPrivate()
     , m_webChannel(0)
     , m_dpiScale(1.0)
     , m_backgroundColor(Qt::white)
+    , m_defaultZoomFactor(1.0)
 {
     // The gold standard for mobile web content is 160 dpi, and the devicePixelRatio expected
     // is the (possibly quantized) ratio of device dpi to 160 dpi.
@@ -164,7 +167,7 @@ RenderWidgetHostViewQtDelegate *QQuickWebEngineViewPrivate::CreateRenderWidgetHo
 RenderWidgetHostViewQtDelegate *QQuickWebEngineViewPrivate::CreateRenderWidgetHostViewQtDelegateForPopup(RenderWidgetHostViewQtDelegateClient *client)
 {
     Q_Q(QQuickWebEngineView);
-    const bool hasWindowCapability = qApp->platformName().toLower() != QLatin1String("eglfs");
+    const bool hasWindowCapability = QGuiApplicationPrivate::platformIntegration()->hasCapability(QPlatformIntegration::MultipleWindows);
     RenderWidgetHostViewQtDelegateQuick *quickDelegate = new RenderWidgetHostViewQtDelegateQuick(client, /*isPopup = */ true);
     if (hasWindowCapability) {
         RenderWidgetHostViewQtDelegateQuickWindow *wrapperWindow = new RenderWidgetHostViewQtDelegateQuickWindow(quickDelegate);
@@ -420,7 +423,10 @@ void QQuickWebEngineViewPrivate::loadCommitted()
 
 void QQuickWebEngineViewPrivate::loadVisuallyCommitted()
 {
-    Q_EMIT e->loadVisuallyCommitted();
+#ifdef ENABLE_QML_TESTSUPPORT_API
+    if (m_testSupport)
+        Q_EMIT m_testSupport->loadVisuallyCommitted();
+#endif
 }
 
 Q_STATIC_ASSERT(static_cast<int>(WebEngineError::NoErrorDomain) == static_cast<int>(QQuickWebEngineView::NoErrorDomain));
@@ -602,7 +608,7 @@ QObject *QQuickWebEngineViewPrivate::accessibilityParentObject()
 }
 #endif // QT_NO_ACCESSIBILITY
 
-BrowserContextAdapter *QQuickWebEngineViewPrivate::browserContextAdapter()
+QSharedPointer<BrowserContextAdapter> QQuickWebEngineViewPrivate::browserContextAdapter()
 {
     return m_profile->d_ptr->browserContext();
 }
@@ -716,6 +722,10 @@ void QQuickWebEngineViewPrivate::adoptWebContents(WebContentsAdapter *webContent
     Q_FOREACH (QQuickWebEngineScript *script, m_userScripts)
         script->d_func()->bind(browserContextAdapter()->userScriptController(), adapter.data());
 
+    // set the zoomFactor if it had been changed on the old adapter.
+    if (!qFuzzyCompare(adapter->currentZoomFactor(), m_defaultZoomFactor))
+        q->setZoomFactor(m_defaultZoomFactor);
+
     // Emit signals for values that might be different from the previous WebContentsAdapter.
     emit q->titleChanged();
     emit q->urlChanged();
@@ -748,6 +758,7 @@ QQuickWebEngineView::~QQuickWebEngineView()
 
 void QQuickWebEngineViewPrivate::ensureContentsAdapter()
 {
+    Q_Q(QQuickWebEngineView);
     if (!adapter) {
         adapter = new WebContentsAdapter();
         adapter->initialize(this);
@@ -760,6 +771,10 @@ void QQuickWebEngineViewPrivate::ensureContentsAdapter()
         // push down the page's user scripts
         Q_FOREACH (QQuickWebEngineScript *script, m_userScripts)
             script->d_func()->bind(browserContextAdapter()->userScriptController(), adapter.data());
+        // set the zoomFactor if it had been changed on the old adapter.
+        if (!qFuzzyCompare(adapter->currentZoomFactor(), m_defaultZoomFactor))
+            q->setZoomFactor(m_defaultZoomFactor);
+
     }
 }
 
@@ -851,8 +866,11 @@ void QQuickWebEngineView::stop()
 void QQuickWebEngineView::setZoomFactor(qreal arg)
 {
     Q_D(QQuickWebEngineView);
+    d->m_defaultZoomFactor = arg;
+
     if (!d->adapter)
         return;
+
     qreal oldFactor = d->adapter->currentZoomFactor();
     d->adapter->setZoomFactor(arg);
     if (qFuzzyCompare(oldFactor, d->adapter->currentZoomFactor()))
@@ -1040,7 +1058,7 @@ qreal QQuickWebEngineView::zoomFactor() const
 {
     Q_D(const QQuickWebEngineView);
     if (!d->adapter)
-        return 1.0;
+        return d->m_defaultZoomFactor;
     return d->adapter->currentZoomFactor();
 }
 
@@ -1366,7 +1384,7 @@ void QQuickWebEngineView::triggerWebAction(WebAction action)
         break;
     case ToggleMediaMute:
         if (d->contextMenuData.mediaUrl.isValid() && d->contextMenuData.mediaFlags & WebEngineContextMenuData::MediaHasAudio) {
-            bool enable = (d->contextMenuData.mediaFlags & WebEngineContextMenuData::MediaMuted);
+            bool enable = !(d->contextMenuData.mediaFlags & WebEngineContextMenuData::MediaMuted);
             d->adapter->executeMediaPlayerActionAt(d->contextMenuData.pos, WebContentsAdapter::MediaPlayerMute, enable);
         }
         break;

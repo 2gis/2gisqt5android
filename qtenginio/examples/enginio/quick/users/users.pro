@@ -11,3 +11,6 @@ mac: CONFIG -= app_bundle
 
 OTHER_FILES += users.qml Browse.qml Login.qml Register.qml
 RESOURCES += users.qrc
+
+target.path = $$[QT_INSTALL_EXAMPLES]/enginio/quick/users
+INSTALLS += target

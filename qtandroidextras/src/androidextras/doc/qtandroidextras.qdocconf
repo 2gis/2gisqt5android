@@ -35,7 +35,7 @@ exampledirs += ../../../examples/androidextras \
 examples.fileextensions += *.java
 
 # Specify example install dir under QT_INSTALL_EXAMPLES
-examplesinstallpath = qtandroidextras/androidextras
+examplesinstallpath = androidextras
 
 imagedirs += images
 navigation.landingpage = "Qt Android Extras"

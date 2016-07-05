@@ -43,8 +43,28 @@ QT_BEGIN_NAMESPACE
 QQuickMaterialTheme::QQuickMaterialTheme(QPlatformTheme *theme)
     : QQuickProxyTheme(theme)
 {
-    systemFont = QFont(QStringLiteral("Roboto"));
-    tabButtonFont = QFont(QStringLiteral("Roboto"), 10);
+    QFont font;
+    font.setFamily(QStringLiteral("Roboto"));
+    if (!font.exactMatch())
+        font.setFamily(QStringLiteral("Noto"));
+
+    if (font.exactMatch()) {
+        systemFont.setFamily(font.family());
+        buttonFont.setFamily(font.family());
+        itemViewFont.setFamily(font.family());
+        menuItemFont.setFamily(font.family());
+    }
+
+    systemFont.setPixelSize(14);
+
+    buttonFont.setPixelSize(14);
+    buttonFont.setCapitalization(QFont::AllUppercase);
+    buttonFont.setWeight(QFont::Medium);
+
+    itemViewFont.setPixelSize(14);
+    itemViewFont.setWeight(QFont::Medium);
+
+    menuItemFont.setPixelSize(16);
 }
 
 QQuickMaterialTheme::~QQuickMaterialTheme()
@@ -55,7 +75,14 @@ const QFont *QQuickMaterialTheme::font(QPlatformTheme::Font type) const
 {
     switch (type) {
     case QPlatformTheme::TabButtonFont:
-        return &tabButtonFont;
+    case QPlatformTheme::PushButtonFont:
+    case QPlatformTheme::ToolButtonFont:
+        return &buttonFont;
+    case QPlatformTheme::ItemViewFont:
+        return &itemViewFont;
+    case QPlatformTheme::MenuItemFont:
+    case QPlatformTheme::ComboMenuItemFont:
+        return &menuItemFont;
     default:
         return &systemFont;
     }

@@ -209,6 +209,9 @@ void QXcbConnection::updateScreens(const xcb_randr_notify_event_t *event)
         // CRTC with node mode could mean that output has been disabled, and we'll
         // get RRNotifyOutputChange notification for that.
         if (screen && crtc.mode) {
+            if (crtc.rotation == XCB_RANDR_ROTATION_ROTATE_90 ||
+                crtc.rotation == XCB_RANDR_ROTATION_ROTATE_270)
+                std::swap(crtc.width, crtc.height);
             screen->updateGeometry(QRect(crtc.x, crtc.y, crtc.width, crtc.height), crtc.rotation);
             if (screen->mode() != crtc.mode)
                 screen->updateRefreshRate(crtc.mode);
@@ -557,6 +560,7 @@ QXcbConnection::QXcbConnection(QXcbNativeInterface *nativeInterface, bool canGra
     , m_buttons(0)
     , m_focusWindow(0)
     , m_mouseGrabber(0)
+    , m_mousePressWindow(0)
     , m_clientLeader(0)
     , m_systemTrayTracker(0)
     , m_glIntegration(Q_NULLPTR)
@@ -613,8 +617,8 @@ QXcbConnection::QXcbConnection(QXcbNativeInterface *nativeInterface, bool canGra
     initializeScreens();
 
     initializeXRender();
-    m_xi2Enabled = false;
 #if defined(XCB_USE_XINPUT2)
+    m_xi2Enabled = false;
     initializeXInput2();
 #endif
     initializeXShape();
@@ -1133,8 +1137,16 @@ void QXcbConnection::handleXcbEvent(xcb_generic_event_t *event)
             handleClientMessageEvent((xcb_client_message_event_t *)event);
             break;
         case XCB_ENTER_NOTIFY:
+#ifdef XCB_USE_XINPUT22
+            if (isAtLeastXI22() && xi2MouseEvents())
+                break;
+#endif
             HANDLE_PLATFORM_WINDOW_EVENT(xcb_enter_notify_event_t, event, handleEnterNotifyEvent);
         case XCB_LEAVE_NOTIFY:
+#ifdef XCB_USE_XINPUT22
+            if (isAtLeastXI22() && xi2MouseEvents())
+                break;
+#endif
             m_keyboard->updateXKBStateFromCore(((xcb_leave_notify_event_t *)event)->state);
             HANDLE_PLATFORM_WINDOW_EVENT(xcb_leave_notify_event_t, event, handleLeaveNotifyEvent);
         case XCB_FOCUS_IN:
@@ -1356,6 +1368,11 @@ void QXcbConnection::setFocusWindow(QXcbWindow *w)
 void QXcbConnection::setMouseGrabber(QXcbWindow *w)
 {
     m_mouseGrabber = w;
+    m_mousePressWindow = Q_NULLPTR;
+}
+void QXcbConnection::setMousePressWindow(QXcbWindow *w)
+{
+    m_mousePressWindow = w;
 }
 
 void QXcbConnection::grabServer()
@@ -1609,8 +1626,13 @@ bool QXcbConnection::compressEvent(xcb_generic_event_t *event, int currentIndex,
         if (!m_xi2Enabled)
             return false;
 
-        // compress XI_Motion
+        // compress XI_Motion, but not from tablet devices
         if (isXIType(event, m_xiOpCode, XI_Motion)) {
+#ifndef QT_NO_TABLETEVENT
+            xXIDeviceEvent *xdev = reinterpret_cast<xXIDeviceEvent *>(event);
+            if (const_cast<QXcbConnection *>(this)->tabletDataForDevice(xdev->sourceid))
+                return false;
+#endif // QT_NO_TABLETEVENT
             for (int j = nextIndex; j < eventqueue->size(); ++j) {
                 xcb_generic_event_t *next = eventqueue->at(j);
                 if (!isValid(next))
@@ -1922,6 +1944,7 @@ static const char * xcb_atomnames = {
     "Abs MT Position Y\0"
     "Abs MT Touch Major\0"
     "Abs MT Touch Minor\0"
+    "Abs MT Orientation\0"
     "Abs MT Pressure\0"
     "Abs MT Tracking ID\0"
     "Max Contacts\0"
@@ -1945,7 +1968,9 @@ static const char * xcb_atomnames = {
     "_COMPIZ_DECOR_PENDING\0"
     "_COMPIZ_DECOR_REQUEST\0"
     "_COMPIZ_DECOR_DELETE_PIXMAP\0"
-    "_COMPIZ_TOOLKIT_ACTION\0" // \0\0 terminates loop.
+    "_COMPIZ_TOOLKIT_ACTION\0"
+    "_GTK_LOAD_ICONTHEMES\0"
+    // \0\0 terminates loop.
 };
 
 QXcbAtom::Atom QXcbConnection::qatom(xcb_atom_t xatom) const
@@ -2216,13 +2241,15 @@ void QXcbConnection::initializeXKB()
 #endif
 }
 
+#if defined(XCB_USE_XINPUT22)
 bool QXcbConnection::xi2MouseEvents() const
 {
     static bool mouseViaXI2 = !qEnvironmentVariableIsSet("QT_XCB_NO_XI2_MOUSE");
-    // Don't use XInput2 when Xinerama extension is enabled,
-    // because it causes problems with multi-monitor setup.
+    // FIXME: Don't use XInput2 mouse events when Xinerama extension
+    // is enabled, because it causes problems with multi-monitor setup.
     return mouseViaXI2 && !has_xinerama_extension;
 }
+#endif
 
 #if defined(XCB_USE_XINPUT2)
 static int xi2ValuatorOffset(unsigned char *maskPtr, int maskLen, int number)

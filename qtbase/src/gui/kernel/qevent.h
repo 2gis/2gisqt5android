@@ -219,6 +219,8 @@ protected:
     uint ph : 2;
     uint src: 2;
     int reserved : 28;
+
+    friend class QApplication;
 };
 #endif
 
@@ -795,7 +797,7 @@ public:
         TouchPoint(const TouchPoint &other);
 #ifdef Q_COMPILER_RVALUE_REFS
         TouchPoint(TouchPoint &&other) Q_DECL_NOEXCEPT
-            : d(0)
+            : d(Q_NULLPTR)
         { qSwap(d, other.d); }
         TouchPoint &operator=(TouchPoint &&other) Q_DECL_NOEXCEPT
         { qSwap(d, other.d); return *this; }

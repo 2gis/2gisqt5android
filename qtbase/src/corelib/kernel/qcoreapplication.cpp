@@ -444,7 +444,7 @@ QCoreApplicationPrivate::QCoreApplicationPrivate(int &aargc, char **aargv, uint 
     if (!isArgvModified(argc, argv)) {
         origArgc = argc;
         origArgv = new char *[argc];
-        std::copy(argv, argv + argc, origArgv);
+        std::copy(argv, argv + argc, QT_MAKE_CHECKED_ARRAY_ITERATOR(origArgv, argc));
     }
 #endif // Q_OS_WIN && !Q_OS_WINRT
 
@@ -620,7 +620,8 @@ void QCoreApplicationPrivate::initLocale()
     This class is used by non-GUI applications to provide their event
     loop. For non-GUI application that uses Qt, there should be exactly
     one QCoreApplication object. For GUI applications, see
-    QApplication.
+    QGuiApplication. For applications that use the Qt Widgets module,
+    see QApplication.
 
     QCoreApplication contains the main event loop, where all events
     from the operating system (e.g., timer and network events) and
@@ -634,10 +635,10 @@ void QCoreApplicationPrivate::initLocale()
     operations can call processEvents() to keep the application
     responsive.
 
-    In general, we recommend that you create a QCoreApplication or a
-    QApplication object in your \c main() function as early as
-    possible. exec() will not return until the event loop exits; e.g.,
-    when quit() is called.
+    In general, we recommend that you create a QCoreApplication,
+    QGuiApplication or a QApplication object in your \c main()
+    function as early as possible. exec() will not return until
+    the event loop exits; e.g., when quit() is called.
 
     Several static convenience functions are also provided. The
     QCoreApplication object is available from instance(). Events can
@@ -679,8 +680,8 @@ void QCoreApplicationPrivate::initLocale()
     instance, when converting between data types such as floats and
     strings, since the notation may differ between locales. To get
     around this problem, call the POSIX function \c{setlocale(LC_NUMERIC,"C")}
-    right after initializing QApplication or QCoreApplication to reset
-    the locale that is used for number formatting to "C"-locale.
+    right after initializing QApplication, QGuiApplication or QCoreApplication
+    to reset the locale that is used for number formatting to "C"-locale.
 
     \sa QGuiApplication, QAbstractEventDispatcher, QEventLoop,
     {Semaphores Example}, {Wait Conditions Example}
@@ -690,7 +691,7 @@ void QCoreApplicationPrivate::initLocale()
     \fn static QCoreApplication *QCoreApplication::instance()
 
     Returns a pointer to the application's QCoreApplication (or
-    QApplication) instance.
+    QGuiApplication/QApplication) instance.
 
     If no instance has been allocated, \c null is returned.
 */
@@ -705,7 +706,7 @@ QCoreApplication::QCoreApplication(QCoreApplicationPrivate &p)
     : QObject(p, 0)
 #endif
 {
-    init();
+    d_func()->q_ptr = this;
     // note: it is the subclasses' job to call
     // QCoreApplicationPrivate::eventDispatcher->startingUp();
 }
@@ -754,27 +755,26 @@ QCoreApplication::QCoreApplication(int &argc, char **argv
     : QObject(*new QCoreApplicationPrivate(argc, argv, _internal))
 #endif
 {
-    init();
+    d_func()->q_ptr = this;
+    d_func()->init();
 #ifndef QT_NO_QOBJECT
     QCoreApplicationPrivate::eventDispatcher->startingUp();
 #endif
 }
 
 
-// ### move to QCoreApplicationPrivate constructor?
-void QCoreApplication::init()
+void QCoreApplicationPrivate::init()
 {
-    d_ptr->q_ptr = this;
-    Q_D(QCoreApplication);
+    Q_Q(QCoreApplication);
 
-    QCoreApplicationPrivate::initLocale();
+    initLocale();
 
-    Q_ASSERT_X(!self, "QCoreApplication", "there should be only one application object");
-    QCoreApplication::self = this;
+    Q_ASSERT_X(!QCoreApplication::self, "QCoreApplication", "there should be only one application object");
+    QCoreApplication::self = q;
 
     // Store app name (so it's still available after QCoreApplication is destroyed)
     if (!coreappdata()->applicationNameSet)
-        coreappdata()->application = d_func()->appName();
+        coreappdata()->application = appName();
 
     QLoggingRegistry::instance()->init();
 
@@ -790,7 +790,7 @@ void QCoreApplication::init()
             // anywhere in the list, we can just linearly scan the lists and find the items that
             // have been removed. Once the original list is exhausted we know all the remaining
             // items have been added.
-            QStringList newPaths(libraryPaths());
+            QStringList newPaths(q->libraryPaths());
             for (int i = manualPaths->length(), j = appPaths->length(); i > 0 || j > 0; qt_noop()) {
                 if (--j < 0) {
                     newPaths.prepend((*manualPaths)[--i]);
@@ -810,28 +810,28 @@ void QCoreApplication::init()
 
 #ifndef QT_NO_QOBJECT
     // use the event dispatcher created by the app programmer (if any)
-    if (!QCoreApplicationPrivate::eventDispatcher)
-        QCoreApplicationPrivate::eventDispatcher = d->threadData->eventDispatcher.load();
+    if (!eventDispatcher)
+        eventDispatcher = threadData->eventDispatcher.load();
     // otherwise we create one
-    if (!QCoreApplicationPrivate::eventDispatcher)
-        d->createEventDispatcher();
-    Q_ASSERT(QCoreApplicationPrivate::eventDispatcher != 0);
+    if (!eventDispatcher)
+        createEventDispatcher();
+    Q_ASSERT(eventDispatcher);
 
-    if (!QCoreApplicationPrivate::eventDispatcher->parent()) {
-        QCoreApplicationPrivate::eventDispatcher->moveToThread(d->threadData->thread);
-        QCoreApplicationPrivate::eventDispatcher->setParent(this);
+    if (!eventDispatcher->parent()) {
+        eventDispatcher->moveToThread(threadData->thread);
+        eventDispatcher->setParent(q);
     }
 
-    d->threadData->eventDispatcher = QCoreApplicationPrivate::eventDispatcher;
-    d->eventDispatcherReady();
+    threadData->eventDispatcher = eventDispatcher;
+    eventDispatcherReady();
 #endif
 
 #ifdef QT_EVAL
     extern void qt_core_eval_init(QCoreApplicationPrivate::Type);
-    qt_core_eval_init(d->application_type);
+    qt_core_eval_init(application_type);
 #endif
 
-    d->processCommandLineArguments();
+    processCommandLineArguments();
 
     qt_call_pre_routines();
     qt_startup_hook();
@@ -841,7 +841,7 @@ void QCoreApplication::init()
 #endif
 
 #ifndef QT_NO_QOBJECT
-    QCoreApplicationPrivate::is_app_running = true; // No longer starting up.
+    is_app_running = true; // No longer starting up.
 #endif
 }
 
@@ -1871,7 +1871,7 @@ void QCoreApplication::quit()
 
     Installing or removing a QTranslator, or changing an installed QTranslator
     generates a \l{QEvent::LanguageChange}{LanguageChange} event for the
-    QCoreApplication instance. A QApplication instance will propagate the event
+    QCoreApplication instance. A QGuiApplication instance will propagate the event
     to all toplevel windows, where a reimplementation of changeEvent can
     re-translate the user interface by passing user-visible strings via the
     tr() function to the respective property setters. User-interface classes

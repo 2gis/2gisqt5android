@@ -47,7 +47,7 @@ T.TabButton {
                              label ? label.contentHeight + topPadding + bottomPadding : 0)
     baselineOffset: label ? label.y + label.baselineOffset : 0
 
-    padding: 6
+    padding: 12
 
     //! [label]
     label: Text {
@@ -67,8 +67,7 @@ T.TabButton {
 
     //! [background]
     background: Item {
-        height: parent.height - 1
-        implicitHeight: 26
+        implicitHeight: 48
     }
     //! [background]
 }

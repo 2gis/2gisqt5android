@@ -73,11 +73,7 @@ extern HRESULT GetClassObject(const GUID &clsid, const GUID &iid, void **ppUnk);
 extern ulong qAxLockCount();
 extern bool qax_winEventFilter(void *message);
 
-#if defined(Q_CC_BOR)
-extern "C" __stdcall HRESULT DumpIDL(const QString &outfile, const QString &ver);
-#else
 STDAPI DumpIDL(const QString &outfile, const QString &ver);
-#endif
 
 // Monitors the shutdown event
 static DWORD WINAPI MonitorProc(void* /* pv */)
@@ -142,7 +138,7 @@ bool qax_startServer(QAxFactory::ServerType type)
         CLSID clsid = qAxFactory()->classID(keys.at(object));
 
         // Create a QClassFactory (implemented in qaxserverbase.cpp)
-        HRESULT hRes = GetClassObject(clsid, IID_IClassFactory, (void**)&p);
+        HRESULT hRes = GetClassObject(clsid, IID_IClassFactory, reinterpret_cast<void **>(&p));
         if (SUCCEEDED(hRes))
             hRes = CoRegisterClassObject(clsid, p, CLSCTX_LOCAL_SERVER,
                 type == QAxFactory::MultipleInstances ? REGCLS_MULTIPLEUSE : REGCLS_SINGLEUSE,

@@ -13,3 +13,6 @@ SOURCES += \
 HEADERS += \
     mainwindow.h \
     todosmodel.h \
+
+target.path = $$[QT_INSTALL_EXAMPLES]/enginio/widgets/todos-cpp
+INSTALLS += target

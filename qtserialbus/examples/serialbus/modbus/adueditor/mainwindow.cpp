@@ -46,14 +46,16 @@
 #include <QModbusPdu>
 #include <QSerialPortInfo>
 
-QT_BEGIN_NAMESPACE
-Q_LOGGING_CATEGORY(QT_MODBUS, "qt.modbus")
-Q_LOGGING_CATEGORY(QT_MODBUS_LOW, "qt.modbus.lowlevel")
-QT_END_NAMESPACE
+#ifndef QT_STATIC
+ QT_BEGIN_NAMESPACE
+ Q_LOGGING_CATEGORY(QT_MODBUS, "qt.modbus")
+ Q_LOGGING_CATEGORY(QT_MODBUS_LOW, "qt.modbus.lowlevel")
+ QT_END_NAMESPACE
+#endif
 
 QT_USE_NAMESPACE
 
-MainWindow* s_instance = Q_NULLPTR;
+MainWindow *s_instance = nullptr;
 
 static void HandlerFunction(QtMsgType, const QMessageLogContext &, const QString &msg)
 {
@@ -85,10 +87,10 @@ MainWindow::MainWindow(QWidget *parent)
 MainWindow::~MainWindow()
 {
     disconnectAndDelete();
-    s_instance = Q_NULLPTR;
+    s_instance = nullptr;
 }
 
-MainWindow* MainWindow::instance()
+MainWindow *MainWindow::instance()
 {
     return s_instance;
 }
@@ -100,7 +102,7 @@ void MainWindow::on_sendButton_clicked()
     const QByteArray pduData = QByteArray::fromHex((isSerial ? pduSerialLine : pduTcpLine)->text()
         .toLatin1());
 
-    QModbusReply *reply = Q_NULLPTR;
+    QModbusReply *reply = nullptr;
     if (isCustom && pduData.isEmpty()) {
         qDebug() << "Error: Cannot send custom PDU without any data.";
         return;
@@ -113,8 +115,9 @@ void MainWindow::on_sendButton_clicked()
             pduData[0]), pduData.mid(1)), address);
     } else {
         qDebug() << "Send: Sending PDU with predefined function code.";
-        reply = m_device->sendRawRequest(QModbusRequest(QModbusRequest::FunctionCode((isSerial
-            ? fcSerialDrop : fcTcpDrop)->currentIndex()), pduData), address);
+        quint16 fc = (isSerial ? fcSerialDrop : fcTcpDrop)->currentText().left(4).toShort(0, 16);
+        reply = m_device->sendRawRequest(QModbusRequest(QModbusRequest::FunctionCode(fc), pduData),
+            address);
     }
 
     if (reply) {
@@ -134,7 +137,7 @@ void MainWindow::on_sendButton_clicked()
 void MainWindow::on_connectButton_clicked()
 {
     if (tcpRadio->isChecked()) {
-        ModbusTcpClient *device = new ModbusTcpClient;
+        auto device = new ModbusTcpClient;
         using signature = void (QSpinBox::*)(int);
         connect(ti1Spin, static_cast<signature>(&QSpinBox::valueChanged), device,
             &ModbusTcpClient::valueChanged);
@@ -225,5 +228,5 @@ void MainWindow::disconnectAndDelete()
     m_device->disconnectDevice();
     m_device->disconnect();
     delete m_device;
-    m_device = Q_NULLPTR;
+    m_device = nullptr;
 }

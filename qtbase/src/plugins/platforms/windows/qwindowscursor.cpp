@@ -97,9 +97,9 @@ QWindowsPixmapCursorCacheKey::QWindowsPixmapCursorCacheKey(const QCursor &c)
 HCURSOR QWindowsCursor::createPixmapCursor(QPixmap pixmap, const QPoint &hotSpot, qreal scaleFactor)
 {
     HCURSOR cur = 0;
-    scaleFactor /= pixmap.devicePixelRatioF();
-    if (!qFuzzyCompare(scaleFactor, 1)) {
-        pixmap = pixmap.scaled((scaleFactor * QSizeF(pixmap.size())).toSize(),
+    const qreal pixmapScaleFactor = scaleFactor / pixmap.devicePixelRatioF();
+    if (!qFuzzyCompare(pixmapScaleFactor, 1)) {
+        pixmap = pixmap.scaled((pixmapScaleFactor * QSizeF(pixmap.size())).toSize(),
                                Qt::KeepAspectRatio, Qt::SmoothTransformation);
     }
     QBitmap mask = pixmap.mask();
@@ -113,8 +113,8 @@ HCURSOR QWindowsCursor::createPixmapCursor(QPixmap pixmap, const QPoint &hotSpot
 
     ICONINFO ii;
     ii.fIcon     = 0;
-    ii.xHotspot  = hotSpot.x();
-    ii.yHotspot  = hotSpot.y();
+    ii.xHotspot  = DWORD(qRound(hotSpot.x() * scaleFactor));
+    ii.yHotspot  = DWORD(qRound(hotSpot.y() * scaleFactor));
     ii.hbmMask   = im;
     ii.hbmColor  = ic;
 
@@ -142,8 +142,8 @@ static HCURSOR createBitmapCursor(const QImage &bbits, const QImage &mbits,
     QScopedArrayPointer<uchar> xMask(new uchar[height * n]);
     int x = 0;
     for (int i = 0; i < height; ++i) {
-        const uchar *bits = bbits.scanLine(i);
-        const uchar *mask = mbits.scanLine(i);
+        const uchar *bits = bbits.constScanLine(i);
+        const uchar *mask = mbits.constScanLine(i);
         for (int j = 0; j < n; ++j) {
             uchar b = bits[j];
             uchar m = mask[j];
@@ -173,8 +173,8 @@ static HCURSOR createBitmapCursor(const QImage &bbits, const QImage &mbits,
             x += sysN;
         } else {
             int fillWidth = n > sysN ? sysN : n;
-            const uchar *bits = bbits.scanLine(i);
-            const uchar *mask = mbits.scanLine(i);
+            const uchar *bits = bbits.constScanLine(i);
+            const uchar *mask = mbits.constScanLine(i);
             for (int j = 0; j < fillWidth; ++j) {
                 uchar b = bits[j];
                 uchar m = mask[j];
@@ -246,9 +246,10 @@ static QSize systemCursorSize(const QPlatformScreen *screen = Q_NULLPTR)
     return primaryScreenCursorSize;
 }
 
+#if defined (Q_OS_WINCE) || defined (QT_NO_IMAGEFORMAT_PNG)
+
 static inline QSize standardCursorSize() { return QSize(32, 32); }
 
-#if defined (Q_OS_WINCE) || defined (QT_NO_IMAGEFORMAT_PNG)
 // Create pixmap cursors from data and scale the image if the cursor size is
 // higher than the standard 32. Note that bitmap cursors as produced by
 // createBitmapCursor() only work for standard sizes (32,48,64...), which does
@@ -570,7 +571,7 @@ HCURSOR QWindowsCursor::createCursorFromShape(Qt::CursorShape cursorShape, const
     for (const QWindowsStandardCursorMapping *s = standardCursors; s < sEnd; ++s) {
         if (s->shape == cursorShape) {
 #ifndef Q_OS_WINCE
-            return (HCURSOR)LoadImage(0, s->resource, IMAGE_CURSOR, 0, 0, LR_DEFAULTSIZE | LR_SHARED);
+            return static_cast<HCURSOR>(LoadImage(0, s->resource, IMAGE_CURSOR, 0, 0, LR_DEFAULTSIZE | LR_SHARED));
 #else
             return LoadCursor(0, s->resource);
 #endif

@@ -851,7 +851,7 @@ bool QQmlImportsPrivate::populatePluginPairVector(QVector<StaticPluginPair> &res
         // the list the first time called to only contain QML plugins:
         foreach (const QStaticPlugin &plugin, QPluginLoader::staticPlugins()) {
             if (qobject_cast<QQmlExtensionPlugin *>(plugin.instance()))
-               plugins.append(plugin);
+                plugins.append(plugin);
         }
     }
 

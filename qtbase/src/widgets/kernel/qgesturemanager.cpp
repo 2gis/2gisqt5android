@@ -545,12 +545,12 @@ bool QGestureManager::filterEvent(QObject *receiver, QEvent *event)
     // filter method.
     QWidgetWindow *widgetWindow = qobject_cast<QWidgetWindow *>(receiver);
 
-    if (widgetWindow)
+    if (widgetWindow && widgetWindow->widget())
         return filterEvent(widgetWindow->widget(), event);
 
-    if (!m_gestureToRecognizer.contains(static_cast<QGesture *>(receiver)))
+    QGesture *state = qobject_cast<QGesture *>(receiver);
+    if (!state || !m_gestureToRecognizer.contains(state))
         return false;
-    QGesture *state = static_cast<QGesture *>(receiver);
     QMultiMap<QObject *, Qt::GestureType> contexts;
     contexts.insert(state, state->gestureType());
     return filterEventThroughContexts(contexts, event);

@@ -51,10 +51,10 @@ namespace QtAndroid
 
     Q_ANDROIDEXTRAS_EXPORT void startIntentSender(const QAndroidJniObject &intentSender,
                                                   int receiverRequestCode,
-                                                  QAndroidActivityResultReceiver *resultReceiver = 0);
+                                                  QAndroidActivityResultReceiver *resultReceiver = nullptr);
     Q_ANDROIDEXTRAS_EXPORT void startActivity(const QAndroidJniObject &intent,
                                               int receiverRequestCode,
-                                              QAndroidActivityResultReceiver *resultReceiver = 0);
+                                              QAndroidActivityResultReceiver *resultReceiver = nullptr);
 
 }
 

@@ -107,6 +107,7 @@ QAppleOperatingSystemVersion qt_apple_os_version()
     // Use temporary variables so we can return 0.0.0 (unknown version)
     // in case of an error partway through determining the OS version
     qint32 major = 0, minor = 0, patch = 0;
+#if QT_MAC_DEPLOYMENT_TARGET_BELOW(__MAC_10_10, __IPHONE_8_0)
 #if defined(Q_OS_IOS)
     @autoreleasepool {
         NSArray *parts = [UIDevice.currentDevice.systemVersion componentsSeparatedByString:@"."];
@@ -130,6 +131,7 @@ QAppleOperatingSystemVersion qt_apple_os_version()
     if (pGestalt('sys3', &patch) != 0)
         return v;
 #endif
+#endif
     v.major = major;
     v.minor = minor;
     v.patch = patch;
@@ -148,7 +150,7 @@ QMacAutoReleasePool::~QMacAutoReleasePool()
     // Drain behaves the same as release, with the advantage that
     // if we're ever used in a garbage-collected environment, the
     // drain acts as a hint to the garbage collector to collect.
-    [pool drain];
+    [static_cast<NSAutoreleasePool*>(pool) drain];
 }
 
 // -------------------------------------------------------------------------

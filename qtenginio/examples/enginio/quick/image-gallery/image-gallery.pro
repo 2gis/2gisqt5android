@@ -13,3 +13,6 @@ OTHER_FILES += *.qml
 
 RESOURCES += \
     gallery.qrc
+
+target.path = $$[QT_INSTALL_EXAMPLES]/enginio/quick/image-gallery
+INSTALLS += target

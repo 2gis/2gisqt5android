@@ -54,7 +54,7 @@ QT_BEGIN_NAMESPACE
 class QtLabsMaterialStylePlugin : public QQmlExtensionPlugin
 {
     Q_OBJECT
-    Q_PLUGIN_METADATA(IID "org.qt-project.Qt.QQmlExtensionInterface/1.0")
+    Q_PLUGIN_METADATA(IID QQmlExtensionInterface_iid)
 
 public:
     ~QtLabsMaterialStylePlugin();
@@ -86,12 +86,10 @@ void QtLabsMaterialStylePlugin::initializeEngine(QQmlEngine *engine, const char 
 
     QQuickStyleSelector selector;
     if (selector.style() == QLatin1String("material")) {
-        if (QFont(QStringLiteral("Roboto")).family() == QLatin1String("Roboto")) {
-            QPlatformTheme *old = QGuiApplicationPrivate::platform_theme;
-            if (old) {
-                QQuickProxyTheme *theme = new QQuickMaterialTheme(old);
-                QGuiApplicationPrivate::platform_theme = theme;
-            }
+        QPlatformTheme *old = QGuiApplicationPrivate::platform_theme;
+        if (old) {
+            QQuickProxyTheme *theme = new QQuickMaterialTheme(old);
+            QGuiApplicationPrivate::platform_theme = theme;
         }
     }
 

@@ -148,6 +148,8 @@ QWebEngineUrlRequestInterceptor *BrowserContextAdapter::requestInterceptor()
 void BrowserContextAdapter::setRequestInterceptor(QWebEngineUrlRequestInterceptor *interceptor)
 {
     m_requestInterceptor = interceptor;
+    if (m_browserContext->url_request_getter_.get())
+        m_browserContext->url_request_getter_->updateRequestInterceptor();
 }
 
 void BrowserContextAdapter::addClient(BrowserContextAdapterClient *adapterClient)
@@ -165,7 +167,7 @@ void BrowserContextAdapter::cancelDownload(quint32 downloadId)
     downloadManagerDelegate()->cancelDownload(downloadId);
 }
 
-BrowserContextAdapter* BrowserContextAdapter::defaultContext()
+QSharedPointer<BrowserContextAdapter> BrowserContextAdapter::defaultContext()
 {
     return WebEngineContext::current()->defaultBrowserContext();
 }
@@ -221,8 +223,13 @@ QString BrowserContextAdapter::cookiesPath() const
     if (m_offTheRecord)
         return QString();
     QString basePath = dataPath();
-    if (!basePath.isEmpty())
-        return basePath % QLatin1String("/Coookies");
+    if (!basePath.isEmpty()) {
+        // This is a typo fix. We still need the old path in order to avoid breaking migration.
+        QDir coookiesFolder(basePath % QLatin1String("/Coookies"));
+        if (coookiesFolder.exists())
+            return coookiesFolder.path();
+        return basePath % QLatin1String("/Cookies");
+    }
     return QString();
 }
 
@@ -346,9 +353,14 @@ void BrowserContextAdapter::setHttpCacheMaxSize(int maxSize)
         m_browserContext->url_request_getter_->updateHttpCache();
 }
 
-QHash<QByteArray, QWebEngineUrlSchemeHandler *> &BrowserContextAdapter::customUrlSchemeHandlers()
+const QHash<QByteArray, QWebEngineUrlSchemeHandler *> &BrowserContextAdapter::customUrlSchemeHandlers() const
 {
     return m_customUrlSchemeHandlers;
+}
+
+const QList<QByteArray> BrowserContextAdapter::customUrlSchemes() const
+{
+    return m_customUrlSchemeHandlers.keys();
 }
 
 void BrowserContextAdapter::updateCustomUrlSchemeHandlers()
@@ -388,6 +400,12 @@ void BrowserContextAdapter::addCustomUrlSchemeHandler(const QByteArray &scheme, 
     updateCustomUrlSchemeHandlers();
 }
 
+void BrowserContextAdapter::clearCustomUrlSchemeHandlers()
+{
+    m_customUrlSchemeHandlers.clear();
+    updateCustomUrlSchemeHandlers();
+}
+
 UserScriptControllerHost *BrowserContextAdapter::userScriptController()
 {
     if (!m_userScriptController)
@@ -398,6 +416,11 @@ UserScriptControllerHost *BrowserContextAdapter::userScriptController()
 void BrowserContextAdapter::permissionRequestReply(const QUrl &origin, PermissionType type, bool reply)
 {
     static_cast<PermissionManagerQt*>(browserContext()->GetPermissionManager())->permissionRequestReply(origin, type, reply);
+}
+
+bool BrowserContextAdapter::checkPermission(const QUrl &origin, PermissionType type)
+{
+    return static_cast<PermissionManagerQt*>(browserContext()->GetPermissionManager())->checkPermission(origin, type);
 }
 
 QString BrowserContextAdapter::httpAcceptLanguageWithoutQualities() const
@@ -419,7 +442,21 @@ QString BrowserContextAdapter::httpAcceptLanguage() const
 
 void BrowserContextAdapter::setHttpAcceptLanguage(const QString &httpAcceptLanguage)
 {
+    if (m_httpAcceptLanguage == httpAcceptLanguage)
+        return;
     m_httpAcceptLanguage = httpAcceptLanguage;
+
+    std::vector<content::WebContentsImpl *> list = content::WebContentsImpl::GetAllWebContents();
+    Q_FOREACH (content::WebContentsImpl *web_contents, list) {
+        if (web_contents->GetBrowserContext() == m_browserContext.data()) {
+            content::RendererPreferences* rendererPrefs = web_contents->GetMutableRendererPrefs();
+            rendererPrefs->accept_languages = httpAcceptLanguageWithoutQualities().toStdString();
+            web_contents->GetRenderViewHost()->SyncRendererPrefs();
+        }
+    }
+
+    if (m_browserContext->url_request_getter_.get())
+        m_browserContext->url_request_getter_->updateUserAgent();
 }
 
 } // namespace QtWebEngineCore

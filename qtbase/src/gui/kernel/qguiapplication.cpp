@@ -190,6 +190,9 @@ bool QGuiApplicationPrivate::obey_desktop_settings = true;
 
 QInputDeviceManager *QGuiApplicationPrivate::m_inputDeviceManager = 0;
 
+// enable the fix for QTBUG-50199; TODO remove this check in 5.7
+bool QGuiApplicationPrivate::scrollNoPhaseAllowed = false;
+
 static qreal fontSmoothingGamma = 1.7;
 
 extern void qRegisterGuiVariant();
@@ -239,11 +242,13 @@ static inline void clearFontUnlocked()
     QGuiApplicationPrivate::app_font = 0;
 }
 
+// Using aggregate initialization instead of ctor so we can have a POD global static
+#define Q_WINDOW_GEOMETRY_SPECIFICATION_INITIALIZER { Qt::TopLeftCorner, -1, -1, -1, -1 }
+
 // Geometry specification for top level windows following the convention of the
 // -geometry command line arguments in X11 (see XParseGeometry).
 struct QWindowGeometrySpecification
 {
-    QWindowGeometrySpecification() : corner(Qt::TopLeftCorner), xOffset(-1), yOffset(-1), width(-1), height(-1) {}
     static QWindowGeometrySpecification fromArgument(const QByteArray &a);
     void applyTo(QWindow *window) const;
 
@@ -280,7 +285,7 @@ static inline int nextGeometryToken(const QByteArray &a, int &pos, char *op)
 
 QWindowGeometrySpecification QWindowGeometrySpecification::fromArgument(const QByteArray &a)
 {
-    QWindowGeometrySpecification result;
+    QWindowGeometrySpecification result = Q_WINDOW_GEOMETRY_SPECIFICATION_INITIALIZER;
     int pos = 0;
     for (int i = 0; i < 4; ++i) {
         char op;
@@ -337,7 +342,7 @@ void QWindowGeometrySpecification::applyTo(QWindow *window) const
     }
 }
 
-static QWindowGeometrySpecification windowGeometrySpecification;
+static QWindowGeometrySpecification windowGeometrySpecification = Q_WINDOW_GEOMETRY_SPECIFICATION_INITIALIZER;
 
 /*!
     \class QGuiApplication
@@ -576,7 +581,7 @@ QGuiApplication::QGuiApplication(int &argc, char **argv, int flags)
 QGuiApplication::QGuiApplication(QGuiApplicationPrivate &p)
     : QCoreApplication(p)
 {
-    d_func()->init(); }
+}
 
 /*!
     Destructs the application.
@@ -1259,6 +1264,8 @@ void QGuiApplicationPrivate::eventDispatcherReady()
 
 void QGuiApplicationPrivate::init()
 {
+    QCoreApplicationPrivate::init();
+
     QCoreApplicationPrivate::is_app_running = false; // Starting up.
 
     bool loadTestability = false;
@@ -1414,6 +1421,8 @@ void QGuiApplicationPrivate::init()
 
     if (layout_direction == Qt::LayoutDirectionAuto || force_reverse)
         QGuiApplication::setLayoutDirection(qt_detectRTLLanguage() ? Qt::RightToLeft : Qt::LeftToRight);
+
+    scrollNoPhaseAllowed = qEnvironmentVariableIsSet("QT_ENABLE_MOUSE_WHEEL_TRACKING");
 }
 
 extern void qt_cleanupFontDatabase();

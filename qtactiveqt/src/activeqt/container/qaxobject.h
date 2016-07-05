@@ -50,12 +50,12 @@ class QAxObject : public QObject, public QAxBase
     friend class QAxEventSink;
     Q_OBJECT_FAKE
 public:
-    QObject* qObject() const { return (QObject*)this; }
-    const char *className() const;
+    QObject* qObject() const Q_DECL_OVERRIDE { return static_cast<QObject *>(const_cast<QAxObject *>(this)); }
+    const char *className() const Q_DECL_OVERRIDE;
 
-    QAxObject(QObject *parent = 0);
-    QAxObject(const QString &c, QObject *parent = 0);
-    QAxObject(IUnknown *iface, QObject *parent = 0);
+    explicit QAxObject(QObject *parent = Q_NULLPTR);
+    explicit QAxObject(const QString &c, QObject *parent = Q_NULLPTR);
+    explicit QAxObject(IUnknown *iface, QObject *parent = Q_NULLPTR);
     ~QAxObject();
 
     bool doVerb(const QString &verb);
@@ -70,14 +70,14 @@ private:
 
 template <> inline QAxObject *qobject_cast<QAxObject*>(const QObject *o)
 {
-    void *result = o ? const_cast<QObject *>(o)->qt_metacast("QAxObject") : 0;
-    return (QAxObject*)(result);
+    void *result = o ? const_cast<QObject *>(o)->qt_metacast("QAxObject") : Q_NULLPTR;
+    return reinterpret_cast<QAxObject*>(result);
 }
 
 template <> inline QAxObject *qobject_cast<QAxObject*>(QObject *o)
 {
-    void *result = o ? o->qt_metacast("QAxObject") : 0;
-    return (QAxObject*)(result);
+    void *result = o ? o->qt_metacast("QAxObject") : Q_NULLPTR;
+    return reinterpret_cast<QAxObject*>(result);
 }
 
 QT_END_NAMESPACE

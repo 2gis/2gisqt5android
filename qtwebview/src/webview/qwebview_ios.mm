@@ -38,8 +38,8 @@
 #include "qwebview_p.h"
 #include "qwebviewloadrequest_p.h"
 
-#include <QtQuick/qquickitem.h>
 #include <QtCore/qmap.h>
+#include <QtCore/qvariant.h>
 
 #include <CoreFoundation/CoreFoundation.h>
 #include <UIKit/UIKit.h>
@@ -252,9 +252,9 @@ void QIosWebViewPrivate::setParentView(QObject *view)
     if (!uiWebView)
         return;
 
-    QWindow *window = qobject_cast<QWindow *>(view);
-    if (window != 0) {
-        UIView *parentView = reinterpret_cast<UIView *>(window->winId());
+    QWindow *w = qobject_cast<QWindow *>(view);
+    if (w) {
+        UIView *parentView = reinterpret_cast<UIView *>(w->winId());
         [parentView addSubview:uiWebView];
     } else {
         [uiWebView removeFromSuperview];
@@ -268,6 +268,9 @@ QObject *QIosWebViewPrivate::parentView() const
 
 void QIosWebViewPrivate::setGeometry(const QRect &geometry)
 {
+    if (!uiWebView)
+        return;
+
     [uiWebView setFrame:toCGRect(geometry)];
 }
 

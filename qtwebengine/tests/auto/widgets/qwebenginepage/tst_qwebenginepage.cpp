@@ -128,7 +128,6 @@ private Q_SLOTS:
     void modified();
     void contextMenuCrash();
     void updatePositionDependentActionsCrash();
-    void database();
     void createPluginWithPluginsEnabled();
     void createPluginWithPluginsDisabled();
     void destroyPlugin_data();
@@ -158,8 +157,6 @@ private Q_SLOTS:
     void undoActionHaveCustomText();
     void renderWidgetHostViewNotShowTopLevel();
     void getUserMediaRequest();
-
-    void viewModes();
 
     void crashTests_LazyInitializationOfMainFrame();
 
@@ -213,10 +210,6 @@ private Q_SLOTS:
     void setHtmlWithStylesheetResource();
     void setHtmlWithBaseURL();
     void setHtmlWithJSAlert();
-    void metaData();
-#if !defined(QT_NO_COMBOBOX)
-    void popupFocus();
-#endif
     void inputFieldFocus();
     void hitTestContent();
     void baseUrl_data();
@@ -241,6 +234,9 @@ private Q_SLOTS:
     void loadInSignalHandlers();
 
     void restoreHistory();
+    void toPlainTextLoadFinishedRace_data();
+    void toPlainTextLoadFinishedRace();
+    void setZoomFactor();
 
 private:
     QWebEngineView* m_view;
@@ -669,25 +665,6 @@ void tst_QWebEnginePage::loadHtml5Video()
 #endif
 }
 
-void tst_QWebEnginePage::viewModes()
-{
-#if !defined(QWEBENGINEPAGE_VIEW_MODES)
-    QSKIP("QWEBENGINEPAGE_VIEW_MODES");
-#else
-    m_view->setHtml("<body></body>");
-    m_page->setProperty("_q_viewMode", "minimized");
-
-    QVariant empty = evaluateJavaScriptSync(m_page, "window.styleMedia.matchMedium(\"(-webengine-view-mode)\")");
-    QVERIFY(empty.type() == QVariant::Bool && empty.toBool());
-
-    QVariant minimized = evaluateJavaScriptSync(m_page, "window.styleMedia.matchMedium(\"(-webengine-view-mode: minimized)\")");
-    QVERIFY(minimized.type() == QVariant::Bool && minimized.toBool());
-
-    QVariant maximized = evaluateJavaScriptSync(m_page, "window.styleMedia.matchMedium(\"(-webengine-view-mode: maximized)\")");
-    QVERIFY(maximized.type() == QVariant::Bool && !maximized.toBool());
-#endif
-}
-
 void tst_QWebEnginePage::modified()
 {
 #if !defined(QWEBENGINEPAGE_ISMODIFIED)
@@ -787,64 +764,6 @@ void tst_QWebEnginePage::contextMenuCrash()
     }
     QVERIFY(contextMenu);
     delete contextMenu;
-#endif
-}
-
-void tst_QWebEnginePage::database()
-{
-#if !defined(QWEBENGINEDATABASE)
-    QSKIP("QWEBENGINEDATABASE");
-#else
-    QString path = tmpDirPath();
-    m_page->settings()->setOfflineStoragePath(path);
-    QVERIFY(m_page->settings()->offlineStoragePath() == path);
-
-    QWebEngineSettings::setOfflineStorageDefaultQuota(1024 * 1024);
-    QVERIFY(QWebEngineSettings::offlineStorageDefaultQuota() == 1024 * 1024);
-
-    m_page->settings()->setAttribute(QWebEngineSettings::LocalStorageEnabled, true);
-    m_page->settings()->setAttribute(QWebEngineSettings::OfflineStorageDatabaseEnabled, true);
-
-    QString dbFileName = path + "Databases.db";
-
-    if (QFile::exists(dbFileName))
-        QFile::remove(dbFileName);
-
-    qRegisterMetaType<QWebEngineFrame*>("QWebEngineFrame*");
-    QSignalSpy spy(m_page, SIGNAL(databaseQuotaExceeded(QWebEngineFrame*,QString)));
-    m_view->setHtml(QString("<html><head><script>var db; db=openDatabase('testdb', '1.0', 'test database API', 50000); </script></head><body><div></div></body></html>"), QUrl("http://www.myexample.com"));
-    QTRY_COMPARE(spy.count(), 1);
-    evaluateJavaScriptSync(m_page, "var db2; db2=openDatabase('testdb', '1.0', 'test database API', 50000);");
-    QTRY_COMPARE(spy.count(),1);
-
-    evaluateJavaScriptSync(m_page, "localStorage.test='This is a test for local storage';");
-    m_view->setHtml(QString("<html><body id='b'>text</body></html>"), QUrl("http://www.myexample.com"));
-
-    QVariant s1 = evaluateJavaScriptSync(m_page, "localStorage.test");
-    QCOMPARE(s1.toString(), QString("This is a test for local storage"));
-
-    evaluateJavaScriptSync(m_page, "sessionStorage.test='This is a test for session storage';");
-    m_view->setHtml(QString("<html><body id='b'>text</body></html>"), QUrl("http://www.myexample.com"));
-    QVariant s2 = evaluateJavaScriptSync(m_page, "sessionStorage.test");
-    QCOMPARE(s2.toString(), QString("This is a test for session storage"));
-
-    m_view->setHtml(QString("<html><head></head><body><div></div></body></html>"), QUrl("http://www.myexample.com"));
-    evaluateJavaScriptSync(m_page, "var db3; db3=openDatabase('testdb', '1.0', 'test database API', 50000);db3.transaction(function(tx) { tx.executeSql('CREATE TABLE IF NOT EXISTS Test (text TEXT)', []); }, function(tx, result) { }, function(tx, error) { });");
-    QTest::qWait(200);
-
-    // Remove all databases.
-    QWebEngineSecurityOrigin origin = m_page->mainFrame()->securityOrigin();
-    QList<QWebEngineDatabase> dbs = origin.databases();
-    for (int i = 0; i < dbs.count(); i++) {
-        QString fileName = dbs[i].fileName();
-        QVERIFY(QFile::exists(fileName));
-        QWebEngineDatabase::removeDatabase(dbs[i]);
-        QVERIFY(!QFile::exists(fileName));
-    }
-    QVERIFY(!origin.databases().size());
-    // Remove removed test :-)
-    QWebEngineDatabase::removeAllDatabases();
-    QVERIFY(!origin.databases().size());
 #endif
 }
 
@@ -4061,9 +3980,7 @@ void tst_QWebEnginePage::setHtmlWithImageResource()
     page.setHtml(html);
     waitForSignal(&page, SIGNAL(loadFinished(bool)));
     QCOMPARE(evaluateJavaScriptSync(&page, "document.images.length").toInt(), 1);
-    QEXPECT_FAIL("", "https://bugs.webkit.org/show_bug.cgi?id=118659", Continue);
     QCOMPARE(evaluateJavaScriptSync(&page, "document.images[0].width").toInt(), 0);
-    QEXPECT_FAIL("", "https://bugs.webkit.org/show_bug.cgi?id=118659", Continue);
     QCOMPARE(evaluateJavaScriptSync(&page, "document.images[0].height").toInt(), 0);
 }
 
@@ -4156,90 +4073,6 @@ void tst_QWebEnginePage::setHtmlWithJSAlert()
     QCOMPARE(page.alerts, 1);
     QCOMPARE(toHtmlSync(&page), html);
 }
-
-void tst_QWebEnginePage::metaData()
-{
-#if !defined(QWEBENGINEPAGE_METADATA)
-    QSKIP("QWEBENGINEPAGE_METADATA");
-#else
-    m_view->setHtml("<html>"
-                    "    <head>"
-                    "        <meta name=\"description\" content=\"Test description\">"
-                    "        <meta name=\"keywords\" content=\"HTML, JavaScript, Css\">"
-                    "    </head>"
-                    "</html>");
-
-    QMultiMap<QString, QString> metaData = m_view->page()->metaData();
-
-    QCOMPARE(metaData.count(), 2);
-
-    QCOMPARE(metaData.value("description"), QString("Test description"));
-    QCOMPARE(metaData.value("keywords"), QString("HTML, JavaScript, Css"));
-    QCOMPARE(metaData.value("nonexistent"), QString());
-
-    m_view->setHtml("<html>"
-                    "    <head>"
-                    "        <meta name=\"samekey\" content=\"FirstValue\">"
-                    "        <meta name=\"samekey\" content=\"SecondValue\">"
-                    "    </head>"
-                    "</html>");
-
-    metaData = m_view->page()->metaData();
-
-    QCOMPARE(metaData.count(), 2);
-
-    QStringList values = metaData.values("samekey");
-    QCOMPARE(values.count(), 2);
-
-    QVERIFY(values.contains("FirstValue"));
-    QVERIFY(values.contains("SecondValue"));
-
-    QCOMPARE(metaData.value("nonexistent"), QString());
-#endif
-}
-
-#if !defined(QT_NO_COMBOBOX)
-void tst_QWebEnginePage::popupFocus()
-{
-#if !defined(QWEBENGINEELEMENT)
-    QSKIP("QWEBENGINEELEMENT");
-#else
-    QWebEngineView view;
-    view.setHtml("<html>"
-                 "    <body>"
-                 "        <select name=\"select\">"
-                 "            <option>1</option>"
-                 "            <option>2</option>"
-                 "        </select>"
-                 "        <input type=\"text\"> </input>"
-                 "        <textarea name=\"text_area\" rows=\"3\" cols=\"40\">"
-                 "This test checks whether showing and hiding a popup"
-                 "takes the focus away from the webpage."
-                 "        </textarea>"
-                 "    </body>"
-                 "</html>");
-    view.resize(400, 100);
-    // Call setFocus before show to work around http://bugreports.qt.nokia.com/browse/QTBUG-14762
-    view.setFocus();
-    view.show();
-    QTest::qWaitForWindowExposed(&view);
-    view.activateWindow();
-    QTRY_VERIFY(view.hasFocus());
-
-    // open the popup by clicking. check if focus is on the popup
-    const QWebEngineElement webCombo = view.page()->documentElement().findFirst(QLatin1String("select[name=select]"));
-    QTest::mouseClick(&view, Qt::LeftButton, 0, webCombo.geometry().center());
-
-    QComboBox* combo = view.findChild<QComboBox*>();
-    QVERIFY(combo != 0);
-    QTRY_VERIFY(!view.hasFocus() && combo->view()->hasFocus()); // Focus should be on the popup
-
-    // hide the popup and check if focus is on the page
-    combo->hidePopup();
-    QTRY_VERIFY(view.hasFocus()); // Focus should be back on the WebView
-#endif
-}
-#endif
 
 void tst_QWebEnginePage::inputFieldFocus()
 {
@@ -5113,6 +4946,62 @@ void tst_QWebEnginePage::restoreHistory()
 
     delete page;
     delete channel;
+}
+
+void tst_QWebEnginePage::toPlainTextLoadFinishedRace_data()
+{
+    QTest::addColumn<bool>("enableErrorPage");
+    QTest::newRow("disableErrorPage") << false;
+    QTest::newRow("enableErrorPage") << true;
+}
+
+void tst_QWebEnginePage::toPlainTextLoadFinishedRace()
+{
+    QFETCH(bool, enableErrorPage);
+
+    QWebEnginePage *page = new QWebEnginePage;
+    page->settings()->setAttribute(QWebEngineSettings::ErrorPageEnabled, enableErrorPage);
+    QSignalSpy spy(page, SIGNAL(loadFinished(bool)));
+
+    page->load(QUrl("data:text/plain,foobarbaz"));
+    QTRY_VERIFY(spy.count() == 1);
+    QCOMPARE(toPlainTextSync(page), QString("foobarbaz"));
+
+    page->load(QUrl("fail:unknown/scheme"));
+    QTRY_VERIFY(spy.count() == 2);
+    QString s = toPlainTextSync(page);
+    QVERIFY(s.contains("foobarbaz") == !enableErrorPage);
+
+    page->load(QUrl("data:text/plain,lalala"));
+    QTRY_VERIFY(spy.count() == 3);
+    QCOMPARE(toPlainTextSync(page), QString("lalala"));
+    delete page;
+    QVERIFY(spy.count() == 3);
+}
+
+void tst_QWebEnginePage::setZoomFactor()
+{
+    QWebEnginePage *page = new QWebEnginePage;
+
+    QVERIFY(qFuzzyCompare(page->zoomFactor(), 1.0));
+    page->setZoomFactor(2.5);
+    QVERIFY(qFuzzyCompare(page->zoomFactor(), 2.5));
+
+    const QUrl urlToLoad("qrc:/resources/test1.html");
+
+    QSignalSpy finishedSpy(m_page, SIGNAL(loadFinished(bool)));
+    m_page->setUrl(urlToLoad);
+    QTRY_COMPARE(finishedSpy.count(), 1);
+    QVERIFY(finishedSpy.at(0).first().toBool());
+    QVERIFY(qFuzzyCompare(page->zoomFactor(), 2.5));
+
+    page->setZoomFactor(5.5);
+    QVERIFY(qFuzzyCompare(page->zoomFactor(), 2.5));
+
+    page->setZoomFactor(0.1);
+    QVERIFY(qFuzzyCompare(page->zoomFactor(), 2.5));
+
+    delete page;
 }
 
 QTEST_MAIN(tst_QWebEnginePage)

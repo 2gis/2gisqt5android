@@ -41,6 +41,7 @@
 #include "permission_manager_qt.h"
 #include "qtwebenginecoreglobal_p.h"
 #include "resource_context_qt.h"
+#include "ssl_host_state_delegate_qt.h"
 #include "type_conversion.h"
 #include "url_request_context_getter_qt.h"
 
@@ -132,7 +133,9 @@ content::PushMessagingService *BrowserContextQt::GetPushMessagingService()
 
 content::SSLHostStateDelegate* BrowserContextQt::GetSSLHostStateDelegate()
 {
-    return 0;
+    if (!sslHostStateDelegate)
+        sslHostStateDelegate.reset(new SSLHostStateDelegateQt());
+    return sslHostStateDelegate.get();
 }
 
 scoped_ptr<content::ZoomLevelDelegate> BrowserContextQt::CreateZoomLevelDelegate(const base::FilePath&)
@@ -143,13 +146,13 @@ scoped_ptr<content::ZoomLevelDelegate> BrowserContextQt::CreateZoomLevelDelegate
 content::PermissionManager *BrowserContextQt::GetPermissionManager()
 {
     if (!permissionManager)
-        permissionManager.reset(new PermissionManagerQt(m_adapter));
+        permissionManager.reset(new PermissionManagerQt());
     return permissionManager.get();
 }
 
 net::URLRequestContextGetter *BrowserContextQt::CreateRequestContext(content::ProtocolHandlerMap *protocol_handlers, content::URLRequestInterceptorScopedVector request_interceptors)
 {
-    url_request_getter_ = new URLRequestContextGetterQt(m_adapter, protocol_handlers, request_interceptors.Pass());
+    url_request_getter_ = new URLRequestContextGetterQt(m_adapter->sharedFromThis(), protocol_handlers, request_interceptors.Pass());
     return url_request_getter_.get();
 }
 

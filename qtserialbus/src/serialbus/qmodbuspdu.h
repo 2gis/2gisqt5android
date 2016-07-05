@@ -92,11 +92,7 @@ public:
                 && (m_data.size() < 253);
     }
 
-#ifdef Q_QDOC
-    static const quint8 ExceptionByte;
-#else
     static const quint8 ExceptionByte = 0x80;
-#endif
     ExceptionCode exceptionCode() const {
         if (!m_data.size() || !isException())
             return ExtendedException;
@@ -115,7 +111,6 @@ public:
     QByteArray data() const { return m_data; }
     void setData(const QByteArray &newData) { m_data = newData; }
 
-#ifndef Q_QDOC
     template <typename ... Args> void encodeData(Args ... newData) {
         encode(std::forward<Args>(newData)...);
     }
@@ -123,18 +118,6 @@ public:
     template <typename ... Args> void decodeData(Args && ... newData) const {
         decode(std::forward<Args>(newData)...);
     }
-#else
-    // slightly modified signature to permit qdoc to have some notion of what's going on
-
-    template <typename ... Args> void encodeData(Args newData) {
-        encode(std::forward<Args>(newData)...);
-    }
-
-    template <typename ... Args> void decodeData(Args newData) const
-    {
-        decode(std::forward<Args>(newData)...);
-    }
-#endif
 
 protected:
     QModbusPdu(FunctionCode code, const QByteArray &newData)
@@ -145,7 +128,6 @@ protected:
     QModbusPdu(const QModbusPdu &) = default;
     QModbusPdu &operator=(const QModbusPdu &) = default;
 
-    // qdoc cannot deal with variadic templates
     template <typename ... Args>
     QModbusPdu(FunctionCode code, Args ... newData)
         : m_code(code)
@@ -166,7 +148,7 @@ private:
     }
     template <typename T> void decode(QDataStream *stream, T &t) const {
         static_assert(std::is_pod<T>::value, "Only POD types supported.");
-        static_assert(IsType<T, quint8*, quint16*>::value, "Only quint8* and quint16* supported.");
+        static_assert(IsType<T, quint8 *, quint16 *>::value, "Only quint8* and quint16* supported.");
         (*stream) >> *t;
     }
     template <typename T> void encode(QDataStream *stream, const QVector<T> &vector) {
@@ -177,6 +159,7 @@ private:
     }
 
     template<typename ... Args> void encode(Args ... newData) {
+        m_data.clear();
         if (sizeof...(Args)) {
             QDataStream stream(&m_data, QIODevice::WriteOnly);
             char tmp[1024] = { (encode(&stream, newData), void(), '0')... };
@@ -212,10 +195,9 @@ public:
         : QModbusPdu(code, newData)
     {}
 
-    Q_SERIALBUS_EXPORT static int minimumDataSize(const QModbusPdu &pdu);
-    Q_SERIALBUS_EXPORT static int calculateDataSize(const QModbusPdu &pdu, const QByteArray &data);
+    Q_SERIALBUS_EXPORT static int minimumDataSize(const QModbusRequest &pdu);
+    Q_SERIALBUS_EXPORT static int calculateDataSize(const QModbusRequest &pdu);
 
-    // TODO currently no way to document -> qdoc issue due to template usage
     template <typename ... Args>
     QModbusRequest(FunctionCode code, Args ... newData)
         : QModbusPdu(code, newData...)
@@ -235,10 +217,9 @@ public:
         : QModbusPdu(code, newData)
     {}
 
-    Q_SERIALBUS_EXPORT static int minimumDataSize(const QModbusPdu &pdu);
-    Q_SERIALBUS_EXPORT static int calculateDataSize(const QModbusPdu &pdu, const QByteArray &data);
+    Q_SERIALBUS_EXPORT static int minimumDataSize(const QModbusResponse &pdu);
+    Q_SERIALBUS_EXPORT static int calculateDataSize(const QModbusResponse &pdu);
 
-    // TODO currently no way to document -> qdoc issue due to template usage
     template <typename ... Args>
     QModbusResponse(FunctionCode code, Args ... newData)
         : QModbusPdu(code, newData...)

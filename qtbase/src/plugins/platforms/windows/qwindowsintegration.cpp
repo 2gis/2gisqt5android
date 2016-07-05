@@ -139,7 +139,8 @@ struct QWindowsIntegrationPrivate
 #  endif
 #endif
 #ifndef QT_NO_OPENGL
-    QSharedPointer<QWindowsStaticOpenGLContext> m_staticOpenGLContext;
+    QMutex m_staticContextLock;
+    QScopedPointer<QWindowsStaticOpenGLContext> m_staticOpenGLContext;
 #endif // QT_NO_OPENGL
     QScopedPointer<QPlatformInputContext> m_inputContext;
 #ifndef QT_NO_ACCESSIBILITY
@@ -318,10 +319,14 @@ QPlatformWindow *QWindowsIntegration::createPlatformWindow(QWindow *window) cons
 
     if (requested.flags != obtained.flags)
         window->setFlags(obtained.flags);
-    // Trigger geometry/screen change signals of QWindow.
+    // Trigger geometry change (unless it has a special state in which case setWindowState()
+    // will send the message) and screen change signals of QWindow.
     if ((obtained.flags & Qt::Desktop) != Qt::Desktop) {
-        if (requested.geometry != obtained.geometry)
+        const Qt::WindowState state = window->windowState();
+        if (state != Qt::WindowMaximized && state != Qt::WindowFullScreen
+            && requested.geometry != obtained.geometry) {
             QWindowSystemInterface::handleGeometryChange(window, obtained.geometry);
+        }
         QPlatformScreen *screen = result->screenForGeometry(obtained.geometry);
         if (screen && result->screen() != screen)
             QWindowSystemInterface::handleWindowScreenChanged(window, screen->screen());
@@ -341,13 +346,11 @@ QWindowsWindow *QWindowsIntegration::createPlatformWindowHelper(QWindow *window,
 QWindowsStaticOpenGLContext *QWindowsStaticOpenGLContext::doCreate()
 {
 #if defined(QT_OPENGL_DYNAMIC)
-    const QWindowsOpenGLTester::Renderers supportedRenderers = QWindowsOpenGLTester::supportedRenderers();
-
     QWindowsOpenGLTester::Renderer requestedRenderer = QWindowsOpenGLTester::requestedRenderer();
     switch (requestedRenderer) {
     case QWindowsOpenGLTester::DesktopGl:
         if (QWindowsStaticOpenGLContext *glCtx = QOpenGLStaticContext::create()) {
-            if ((supportedRenderers & QWindowsOpenGLTester::DisableRotationFlag)
+            if ((QWindowsOpenGLTester::supportedRenderers() & QWindowsOpenGLTester::DisableRotationFlag)
                 && !QWindowsScreen::setOrientationPreference(Qt::LandscapeOrientation)) {
                 qCWarning(lcQpaGl, "Unable to disable rotation.");
             }
@@ -373,6 +376,7 @@ QWindowsStaticOpenGLContext *QWindowsStaticOpenGLContext::doCreate()
         break;
     }
 
+    const QWindowsOpenGLTester::Renderers supportedRenderers = QWindowsOpenGLTester::supportedRenderers();
     if (supportedRenderers & QWindowsOpenGLTester::DesktopGl) {
         if (QWindowsStaticOpenGLContext *glCtx = QOpenGLStaticContext::create()) {
             if ((supportedRenderers & QWindowsOpenGLTester::DisableRotationFlag)
@@ -432,8 +436,9 @@ QWindowsStaticOpenGLContext *QWindowsIntegration::staticOpenGLContext()
     if (!integration)
         return 0;
     QWindowsIntegrationPrivate *d = integration->d.data();
+    QMutexLocker lock(&d->m_staticContextLock);
     if (d->m_staticOpenGLContext.isNull())
-        d->m_staticOpenGLContext = QSharedPointer<QWindowsStaticOpenGLContext>(QWindowsStaticOpenGLContext::create());
+        d->m_staticOpenGLContext.reset(QWindowsStaticOpenGLContext::create());
     return d->m_staticOpenGLContext.data();
 }
 #endif // !QT_NO_OPENGL
@@ -514,8 +519,8 @@ QVariant QWindowsIntegration::styleHint(QPlatformIntegration::StyleHint hint) co
     case QPlatformIntegration::FontSmoothingGamma:
         return QVariant(QWindowsFontDatabase::fontSmoothingGamma());
     case QPlatformIntegration::MouseDoubleClickInterval:
-        if (const int ms = GetDoubleClickTime())
-            return QVariant(ms);
+        if (const UINT ms = GetDoubleClickTime())
+            return QVariant(int(ms));
         break;
     case QPlatformIntegration::UseRtlExtensions:
         return QVariant(d->m_context.useRTLExtensions());

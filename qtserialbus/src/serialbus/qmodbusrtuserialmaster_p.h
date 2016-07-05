@@ -47,6 +47,7 @@
 
 #include <private/qmodbusadu_p.h>
 #include <private/qmodbusclient_p.h>
+#include <private/qmodbus_symbols_p.h>
 
 //
 //  W A R N I N G
@@ -96,20 +97,36 @@ public:
             }
 
             const QModbusSerialAdu tmpAdu(QModbusSerialAdu::Rtu, responseBuffer);
-            const QModbusResponse tmpPdu = tmpAdu.pdu();
-            int pduSizeWithoutFcode = QModbusResponse::calculateDataSize(tmpPdu, tmpPdu.data());
+            int pduSizeWithoutFcode = QModbusResponse::calculateDataSize(tmpAdu.pdu());
             if (pduSizeWithoutFcode < 0) {
                 // wait for more data
                 qCDebug(QT_MODBUS) << "(RTU client) Cannot calculate PDU size for function code:"
-                                   << tmpPdu.functionCode() << ", delaying pending frame";
+                                   << tmpAdu.pdu().functionCode() << ", delaying pending frame";
                 return;
             }
 
             // server address byte + function code byte + PDU size + 2 bytes CRC
-            const int aduSize = 2 + pduSizeWithoutFcode + 2;
+            int aduSize = 2 + pduSizeWithoutFcode + 2;
             if (tmpAdu.rawSize() < aduSize) {
                 qCDebug(QT_MODBUS) << "(RTU client) Incomplete ADU received, ignoring";
                 return;
+            }
+
+            // Special case for Diagnostics:ReturnQueryData. The response has no
+            // length indicator and is just a simple echo of what we have send.
+            if (tmpAdu.pdu().functionCode() == QModbusPdu::Diagnostics) {
+                const QModbusResponse response = tmpAdu.pdu();
+                if (canMatchRequestAndResponse(response, tmpAdu.serverAddress())) {
+                    quint16 subCode = 0xffff;
+                    response.decodeData(&subCode);
+                    if (subCode == Diagnostics::ReturnQueryData) {
+                        if (response.data() != m_current.requestPdu.data())
+                            return; // echo does not match request yet
+                        aduSize = 2 + response.dataSize() + 2;
+                        if (tmpAdu.rawSize() < aduSize)
+                            return; // echo matches, probably checksum missing
+                    }
+                }
             }
 
             const QModbusSerialAdu adu(QModbusSerialAdu::Rtu, responseBuffer.left(aduSize));
@@ -201,32 +218,37 @@ public:
             Q_Q(QModbusRtuSerialMaster);
             if (q->state() != QModbusDevice::ClosingState)
                 q->close();
+            m_sendTimer.stop();
+            m_responseTimer.stop();
         });
     }
 
-    void updateSerialPortConnectionInfo() {
+    void setupEnvironment() {
         if (m_serialPort) {
             m_serialPort->setPortName(m_comPort);
             m_serialPort->setParity(m_parity);
             m_serialPort->setBaudRate(m_baudRate);
             m_serialPort->setDataBits(m_dataBits);
             m_serialPort->setStopBits(m_stopBits);
-
-            // According to the Modbus specification, in RTU mode message frames
-            // are separated by a silent interval of at least 3.5 character times.
-            // Calculate the timeout if we are less than 19200 baud, use a fixed
-            // timeout for everything equal or greater than 19200 baud.
-            if (m_baudRate < 19200) {
-                // Example: 9600 baud, 11 bit per packet -> 872 char/sec
-                // so: 1000 ms / 872 char = 1.147 ms/char * 3.5 character
-                // Always round up because the spec requests at least 3.5 char.
-                m_timeoutThreeDotFiveMs = qCeil(3500. / (qreal(m_baudRate) / 11.));
-            } else {
-                // The spec recommends a timeout value of 1.750 msec. Without such
-                // precise single-shot timers use a approximated value of 1.750 msec.
-                m_timeoutThreeDotFiveMs = 2;
-            }
         }
+
+        // According to the Modbus specification, in RTU mode message frames
+        // are separated by a silent interval of at least 3.5 character times.
+        // Calculate the timeout if we are less than 19200 baud, use a fixed
+        // timeout for everything equal or greater than 19200 baud.
+        if (m_baudRate < 19200) {
+            // Example: 9600 baud, 11 bit per packet -> 872 char/sec
+            // so: 1000 ms / 872 char = 1.147 ms/char * 3.5 character
+            // Always round up because the spec requests at least 3.5 char.
+            m_timeoutThreeDotFiveMs = qCeil(3500. / (qreal(m_baudRate) / 11.));
+        } else {
+            // The spec recommends a timeout value of 1.750 msec. Without such
+            // precise single-shot timers use a approximated value of 1.750 msec.
+            m_timeoutThreeDotFiveMs = 2;
+        }
+
+        responseBuffer.clear();
+        m_state = QModbusRtuSerialMasterPrivate::Idle;
     }
 
     void scheduleNextRequest() {
@@ -236,11 +258,11 @@ public:
     }
 
     QModbusReply *enqueueRequest(const QModbusRequest &request, int serverAddress,
-        const QModbusDataUnit &unit, QModbusReply::ReplyType type) Q_DECL_OVERRIDE
+        const QModbusDataUnit &unit, QModbusReply::ReplyType type) override
     {
         Q_Q(QModbusRtuSerialMaster);
 
-        QModbusReply *reply = new QModbusReply(type, serverAddress, q);
+        auto reply = new QModbusReply(type, serverAddress, q);
         QueueElement element(reply, request, unit, m_numberOfRetries + 1);
         element.adu = QModbusSerialAdu::create(QModbusSerialAdu::Rtu, serverAddress, request);
         m_queue.enqueue(element);
@@ -345,7 +367,7 @@ public:
         return true;
     }
 
-    bool isOpen() const Q_DECL_OVERRIDE
+    bool isOpen() const override
     {
         if (m_serialPort)
             return m_serialPort->isOpen();
@@ -359,7 +381,7 @@ public:
     QByteArray responseBuffer;
 
     QQueue<QueueElement> m_queue;
-    QSerialPort *m_serialPort = Q_NULLPTR;
+    QSerialPort *m_serialPort = nullptr;
 
     int m_timeoutThreeDotFiveMs = 2; // A approximated value of 1.750 msec.
 };

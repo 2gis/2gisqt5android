@@ -49,6 +49,8 @@ T.ToolButton {
 
     padding: 6
 
+    property bool useSystemFocusVisuals: true
+
     //! [label]
     label: Text {
         x: control.leftPadding
@@ -62,7 +64,6 @@ T.ToolButton {
         elide: Text.ElideRight
         horizontalAlignment: Text.AlignHCenter
         verticalAlignment: Text.AlignVCenter
-        renderType: Text.NativeRendering
     }
     //! [label]
 

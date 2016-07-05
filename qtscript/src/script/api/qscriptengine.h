@@ -184,10 +184,10 @@ public:
 
 #ifndef QT_NO_QOBJECT
     QScriptValue newQObject(QObject *object, ValueOwnership ownership = QtOwnership,
-                            const QObjectWrapOptions &options = 0);
+                            const QObjectWrapOptions &options = QObjectWrapOptions());
     QScriptValue newQObject(const QScriptValue &scriptObject, QObject *qtObject,
                             ValueOwnership ownership = QtOwnership,
-                            const QObjectWrapOptions &options = 0);
+                            const QObjectWrapOptions &options = QObjectWrapOptions());
 
     QScriptValue newQMetaObject(const QMetaObject *metaObject, const QScriptValue &ctor = QScriptValue());
 
@@ -264,7 +264,7 @@ protected:
 
     QScriptEngine(QScriptEnginePrivate &dd);
 #else
-    QScriptEngine(QScriptEnginePrivate &dd, QObject *parent = 0);
+    explicit QScriptEngine(QScriptEnginePrivate &dd, QObject *parent = Q_NULLPTR);
 #endif
 
 private:

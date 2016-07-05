@@ -114,6 +114,7 @@ static void stackTrace()
     char cmd[512];
     qsnprintf(cmd, 512, "gdb --pid %d 2>/dev/null <<EOF\n"
                          "set prompt\n"
+                         "set height 0\n"
                          "thread apply all where full\n"
                          "detach\n"
                          "quit\n"
@@ -419,7 +420,7 @@ static void stackTrace()
    row of test data, so an unconditional call to QSKIP will produce one skip
    message in the test log for each row of test data.
 
-   If called from an _data function, the QSKIP() macro will stop execution of
+   If called from a _data function, the QSKIP() macro will stop execution of
    the _data function and will prevent execution of the associated test
    function.
 
@@ -644,6 +645,7 @@ static void stackTrace()
     \value Press    The key is pressed.
     \value Release  The key is released.
     \value Click    The key is clicked (pressed and released).
+    \value Shortcut A shortcut is activated. This value has been added in Qt 5.6.
 */
 
 /*! \enum QTest::MouseAction
@@ -1453,6 +1455,7 @@ namespace QTest
     static int keyDelay = -1;
     static int mouseDelay = -1;
     static int eventDelay = -1;
+    static int timeout = -1;
     static bool noCrashHandler = false;
 
 /*! \internal
@@ -1502,6 +1505,18 @@ int Q_TESTLIB_EXPORT defaultKeyDelay()
             keyDelay = defaultEventDelay();
     }
     return keyDelay;
+}
+
+static int defaultTimeout()
+{
+    if (timeout == -1) {
+        bool ok = false;
+        timeout = qEnvironmentVariableIntValue("QTEST_FUNCTION_TIMEOUT", &ok);
+
+        if (!ok || timeout <= 0)
+            timeout = 5*60*1000;
+    }
+    return timeout;
 }
 
 static bool isValidSlot(const QMetaMethod &sl)
@@ -1563,7 +1578,9 @@ static void qPrintDataTags(FILE *stream)
             member.resize(qstrlen(slot) + qstrlen("_data()") + 1);
             qsnprintf(member.data(), member.size(), "%s_data()", slot);
             invokeMethod(QTest::currentTestObject, member.constData());
-            for (int j = 0; j < table.dataCount(); ++j)
+            const int dataCount = table.dataCount();
+            localTags.reserve(dataCount);
+            for (int j = 0; j < dataCount; ++j)
                 localTags << QLatin1String(table.testData(j)->dataTag());
 
             // Print all tag combinations:
@@ -2115,7 +2132,7 @@ public:
 
     void beginTest() {
         QMutexLocker locker(&mutex);
-        timeout.store(5*60*1000);
+        timeout.store(defaultTimeout());
         waitCondition.wakeAll();
     }
 

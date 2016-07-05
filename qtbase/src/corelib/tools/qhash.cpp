@@ -1,4 +1,3 @@
-
 /****************************************************************************
 **
 ** Copyright (C) 2015 The Qt Company Ltd.
@@ -52,6 +51,7 @@
 #include <qbytearray.h>
 #include <qdatetime.h>
 #include <qbasicatomic.h>
+#include <qendian.h>
 #include <private/qsimd_p.h>
 
 #ifndef QT_BOOTSTRAPPED
@@ -106,24 +106,24 @@ static uint crc32(const Char *ptr, size_t len, uint h)
 
     p += 8;
     for ( ; p <= e; p += 8)
-        h2 = _mm_crc32_u64(h2, *reinterpret_cast<const qlonglong *>(p - 8));
+        h2 = _mm_crc32_u64(h2, qFromUnaligned<qlonglong>(p - 8));
     h = h2;
     p -= 8;
 
     len = e - p;
     if (len & 4) {
-        h = _mm_crc32_u32(h, *reinterpret_cast<const uint *>(p));
+        h = _mm_crc32_u32(h, qFromUnaligned<uint>(p));
         p += 4;
     }
 #  else
     p += 4;
     for ( ; p <= e; p += 4)
-        h = _mm_crc32_u32(h, *reinterpret_cast<const uint *>(p - 4));
+        h = _mm_crc32_u32(h, qFromUnaligned<uint>(p - 4));
     p -= 4;
     len = e - p;
 #  endif
     if (len & 2) {
-        h = _mm_crc32_u16(h, *reinterpret_cast<const ushort *>(p));
+        h = _mm_crc32_u16(h, qFromUnaligned<ushort>(p));
         p += 2;
     }
     if (sizeof(Char) == 1 && len & 1)
@@ -308,7 +308,7 @@ int qGlobalQHashSeed()
 /*! \relates QHash
     \since 5.6
 
-    Sets the global QHash seed.
+    Sets the global QHash seed to \a newSeed.
 
     Manually setting the global QHash seed value should be done only for testing
     and debugging purposes, when deterministic and reproducible behavior on a QHash

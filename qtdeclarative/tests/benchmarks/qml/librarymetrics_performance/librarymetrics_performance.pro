@@ -1,4 +1,4 @@
-CONFIG += testcase
+CONFIG += benchmark
 TEMPLATE = app
 TARGET = tst_librarymetrics_performance
 
@@ -7,3 +7,5 @@ macx:CONFIG -= app_bundle
 
 CONFIG += release
 SOURCES += tst_librarymetrics_performance.cpp
+
+RESOURCES += data

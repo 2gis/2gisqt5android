@@ -2,9 +2,6 @@ MODULE = clucene
 
 TARGET = QtCLucene
 QT = core
-CONFIG += internal_module
-
-load(qt_module)
 
 include(fulltextsearch.pri)
 
@@ -21,7 +18,7 @@ CONFIG += exceptions
 # otherwise mingw headers do not declare common functions like _i64tow
 win32-g++*:QMAKE_CXXFLAGS_CXX11 = -std=gnu++0x
 
-win32-msvc.net | win32-msvc2* | winrt-* | winphone-* {
+win32-msvc.net | win32-msvc2* | winrt-* | winphone-* | win32-icc {
     QMAKE_CFLAGS_RELEASE        -= -O2
     QMAKE_CXXFLAGS_RELEASE      -= -O2
     DEFINES += _SILENCE_STDEXT_HASH_DEPRECATION_WARNINGS
@@ -31,3 +28,6 @@ win32-msvc.net | win32-msvc2* | winrt-* | winphone-* {
 solaris* {
     DEFINES += Q_SOLARIS_VERSION=$$system(uname -r | sed -e 's/5\\.//')
 }
+
+CONFIG += internal_module
+load(qt_module)

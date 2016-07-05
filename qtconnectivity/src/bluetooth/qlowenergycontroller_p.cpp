@@ -32,6 +32,9 @@
 ****************************************************************************/
 
 #include "qlowenergycontroller_p.h"
+#ifndef QT_IOS_BLUETOOTH
+#include "dummy/dummy_helper_p.h"
+#endif
 
 QT_BEGIN_NAMESPACE
 
@@ -40,6 +43,9 @@ QLowEnergyControllerPrivate::QLowEnergyControllerPrivate()
       state(QLowEnergyController::UnconnectedState),
       error(QLowEnergyController::NoError)
 {
+#ifndef QT_IOS_BLUETOOTH
+    printDummyWarning();
+#endif
     registerQLowEnergyControllerMetaType();
 }
 

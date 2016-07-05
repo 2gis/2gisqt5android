@@ -1132,8 +1132,8 @@ MakefileGenerator::writeObj(QTextStream &t, const char *src)
 
     ProStringList::ConstIterator oit = objl.begin();
     ProStringList::ConstIterator sit = srcl.begin();
-    QString stringSrc("$src");
-    QString stringObj("$obj");
+    QLatin1String stringSrc("$src");
+    QLatin1String stringObj("$obj");
     for(;sit != srcl.end() && oit != objl.end(); ++oit, ++sit) {
         if((*sit).isEmpty())
             continue;
@@ -1611,7 +1611,7 @@ MakefileGenerator::replaceExtraCompilerVariables(
                 const ProKey funcname = var.mid(19).toKey();
                 val += project->expand(funcname, QList<ProStringList>() << ProStringList(in));
             } else if(var == QLatin1String("QMAKE_FILE_BASE") || var == QLatin1String("QMAKE_FILE_IN_BASE")) {
-                //filePath = true;
+                filePath = true;
                 for(int i = 0; i < in.size(); ++i) {
                     QFileInfo fi(fileInfo(Option::normalizePath(in.at(i))));
                     QString base = fi.completeBaseName();
@@ -1619,7 +1619,7 @@ MakefileGenerator::replaceExtraCompilerVariables(
                         base = fi.fileName();
                     val += base;
                 }
-            } else if(var == QLatin1String("QMAKE_FILE_EXT")) {
+            } else if (var == QLatin1String("QMAKE_FILE_EXT") || var == QLatin1String("QMAKE_FILE_IN_EXT")) {
                 filePath = true;
                 for(int i = 0; i < in.size(); ++i) {
                     QFileInfo fi(fileInfo(Option::normalizePath(in.at(i))));
@@ -1632,6 +1632,10 @@ MakefileGenerator::replaceExtraCompilerVariables(
                         ext = fi.fileName().remove(0, baseLen);
                     val += ext;
                 }
+            } else if (var == QLatin1String("QMAKE_FILE_IN_NAME")) {
+                filePath = true;
+                for (int i = 0; i < in.size(); ++i)
+                    val += fileInfo(Option::normalizePath(in.at(i))).fileName();
             } else if(var == QLatin1String("QMAKE_FILE_PATH") || var == QLatin1String("QMAKE_FILE_IN_PATH")) {
                 filePath = true;
                 for(int i = 0; i < in.size(); ++i)
@@ -1648,12 +1652,16 @@ MakefileGenerator::replaceExtraCompilerVariables(
                 filePath = true;
                 const ProKey funcname = var.mid(20).toKey();
                 val += project->expand(funcname, QList<ProStringList>() << ProStringList(out));
+            } else if (var == QLatin1String("QMAKE_FILE_OUT_PATH")) {
+                filePath = true;
+                for (int i = 0; i < out.size(); ++i)
+                    val += fileInfo(Option::normalizePath(out.at(i))).path();
             } else if(var == QLatin1String("QMAKE_FILE_OUT")) {
                 filePath = true;
                 for(int i = 0; i < out.size(); ++i)
                     val += fileInfo(Option::normalizePath(out.at(i))).filePath();
             } else if(var == QLatin1String("QMAKE_FILE_OUT_BASE")) {
-                //filePath = true;
+                filePath = true;
                 for(int i = 0; i < out.size(); ++i) {
                     QFileInfo fi(fileInfo(Option::normalizePath(out.at(i))));
                     QString base = fi.completeBaseName();
@@ -2282,7 +2290,7 @@ MakefileGenerator::writeHeader(QTextStream &t)
     t << "# Project:  " << fileFixify(project->projectFile()) << endl;
     t << "# Template: " << var("TEMPLATE") << endl;
     if(!project->isActiveConfig("build_pass"))
-        t << "# Command: " << build_args().replace("$(QMAKE)", var("QMAKE_QMAKE")) << endl;
+        t << "# Command: " << build_args().replace(QLatin1String("$(QMAKE)"), var("QMAKE_QMAKE")) << endl;
     t << "#############################################################################\n";
     t << endl;
     QString ofile = Option::fixPathToTargetOS(Option::output.fileName());
@@ -3177,7 +3185,7 @@ MakefileGenerator::pkgConfigFixPath(QString path) const
 {
     QString prefix = pkgConfigPrefix();
     if(path.startsWith(prefix))
-        path.replace(prefix, "${prefix}");
+        path.replace(prefix, QLatin1String("${prefix}"));
     return path;
 }
 
@@ -3329,7 +3337,7 @@ static QString windowsifyPath(const QString &str)
 {
     // The paths are escaped in prl files, so every slash needs to turn into two backslashes.
     // Then each backslash needs to be escaped for sed. And another level for C quoting here.
-    return QString(str).replace('/', "\\\\\\\\");
+    return QString(str).replace('/', QLatin1String("\\\\\\\\"));
 }
 
 QString MakefileGenerator::installMetaFile(const ProKey &replace_rule, const QString &src, const QString &dst)
@@ -3358,8 +3366,7 @@ QString MakefileGenerator::installMetaFile(const ProKey &replace_rule, const QSt
 
 QString MakefileGenerator::shellQuote(const QString &str)
 {
-    return isWindowsShell() ? QMakeInternal::IoUtils::shellQuoteWin(str)
-                            : QMakeInternal::IoUtils::shellQuoteUnix(str);
+    return isWindowsShell() ? IoUtils::shellQuoteWin(str) : IoUtils::shellQuoteUnix(str);
 }
 
 QT_END_NAMESPACE

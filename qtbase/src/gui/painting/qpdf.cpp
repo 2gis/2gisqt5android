@@ -1003,7 +1003,8 @@ void QPdfEngine::drawHyperlink(const QRectF &r, const QUrl &url)
     const uint annot = d->addXrefEntry(-1);
     const QByteArray urlascii = url.toEncoded();
     int len = urlascii.size();
-    QVarLengthArray<char> url_esc(0);
+    QVarLengthArray<char> url_esc;
+    url_esc.reserve(len + 1);
     for (int j = 0; j < len; j++) {
         if (urlascii[j] == '(' || urlascii[j] == ')' || urlascii[j] == '\\')
             url_esc.append('\\');
@@ -1195,7 +1196,7 @@ void QPdfEngine::setPen()
     switch(d->pen.joinStyle()) {
     case Qt::MiterJoin:
     case Qt::SvgMiterJoin:
-        *d->currentPage << d->pen.miterLimit() << "M ";
+        *d->currentPage << qMax(qreal(1.0), d->pen.miterLimit()) << "M ";
         pdfJoinStyle = 0;
         break;
     case Qt::BevelJoin:
@@ -1555,6 +1556,7 @@ void QPdfEnginePrivate::embedFont(QFontSubset *font)
     int toUnicode = requestObject();
 
     QFontEngine::Properties properties = font->fontEngine->properties();
+    QByteArray postscriptName = properties.postscriptName.replace(' ', '_');
 
     {
         qreal scale = 1000/properties.emSquare.toReal();
@@ -1568,7 +1570,7 @@ void QPdfEnginePrivate::embedFont(QFontSubset *font)
             s << (char)('A' + (tag % 26));
             tag /= 26;
         }
-        s <<  '+' << properties.postscriptName << "\n"
+        s <<  '+' << postscriptName << "\n"
             "/Flags " << 4 << "\n"
             "/FontBBox ["
           << properties.boundingBox.x()*scale
@@ -1611,7 +1613,7 @@ void QPdfEnginePrivate::embedFont(QFontSubset *font)
         QPdf::ByteStream s(&cid);
         s << "<< /Type /Font\n"
             "/Subtype /CIDFontType2\n"
-            "/BaseFont /" << properties.postscriptName << "\n"
+            "/BaseFont /" << postscriptName << "\n"
             "/CIDSystemInfo << /Registry (Adobe) /Ordering (Identity) /Supplement 0 >>\n"
             "/FontDescriptor " << fontDescriptor << "0 R\n"
             "/CIDToGIDMap /Identity\n"
@@ -1635,7 +1637,7 @@ void QPdfEnginePrivate::embedFont(QFontSubset *font)
         QPdf::ByteStream s(&font);
         s << "<< /Type /Font\n"
             "/Subtype /Type0\n"
-            "/BaseFont /" << properties.postscriptName << "\n"
+            "/BaseFont /" << postscriptName << "\n"
             "/Encoding /Identity-H\n"
             "/DescendantFonts [" << cidfont << "0 R]\n"
             "/ToUnicode " << toUnicode << "0 R"
@@ -2007,10 +2009,11 @@ int QPdfEnginePrivate::createShadingFunction(const QGradient *gradient, int from
     }
 
     QVector<QGradientBound> gradientBounds;
+    gradientBounds.reserve((to - from) * (numStops - 1));
 
     for (int step = from; step < to; ++step) {
         if (reflect && step % 2) {
-            for (int i = stops.size() - 1; i > 0; --i) {
+            for (int i = numStops - 1; i > 0; --i) {
                 QGradientBound b;
                 b.start = step + 1 - qBound(qreal(0), stops.at(i).first, qreal(1));
                 b.stop = step + 1 - qBound(qreal(0), stops.at(i - 1).first, qreal(1));
@@ -2019,7 +2022,7 @@ int QPdfEnginePrivate::createShadingFunction(const QGradient *gradient, int from
                 gradientBounds << b;
             }
         } else {
-            for (int i = 0; i < stops.size() - 1; ++i) {
+            for (int i = 0; i < numStops - 1; ++i) {
                 QGradientBound b;
                 b.start = step + qBound(qreal(0), stops.at(i).first, qreal(1));
                 b.stop = step + qBound(qreal(0), stops.at(i + 1).first, qreal(1));

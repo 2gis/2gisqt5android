@@ -73,6 +73,11 @@ inline QString toQt(const std::string &string)
     return QString::fromStdString(string);
 }
 
+inline QByteArray toQByteArray(const std::string &string)
+{
+    return QByteArray::fromStdString(string);
+}
+
 inline base::string16 toString16(const QString &qString)
 {
 #if defined(OS_WIN)
@@ -142,6 +147,8 @@ inline QImage toQImage(const SkBitmap &bitmap, QImage::Format format)
     SkPixelRef *pixelRef = bitmap.pixelRef();
     return QImage((uchar *)pixelRef->pixels(), bitmap.width(), bitmap.height(), format);
 }
+
+QImage toQImage(const SkBitmap &bitmap);
 
 inline QMatrix4x4 toQt(const SkMatrix44 &m)
 {

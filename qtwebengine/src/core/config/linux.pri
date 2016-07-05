@@ -18,11 +18,14 @@ GYP_CONFIG += \
     use_gio=0 \
     use_gnome_keyring=0 \
     use_kerberos=0 \
-    use_pango=0
+    use_pango=0 \
+    use_openssl=1
 
-!use?(nss) {
+use?(nss) {
+    GYP_CONFIG += use_nss_certs=1 \
+        use_openssl_certs=0
+} else {
     GYP_CONFIG += use_nss_certs=0 \
-        use_openssl=1 \
         use_openssl_certs=1
 }
 
@@ -40,6 +43,6 @@ use?(system_jsoncpp):  GYP_CONFIG += use_system_jsoncpp=1
 use?(system_opus):     GYP_CONFIG += use_system_opus=1
 use?(system_snappy):   GYP_CONFIG += use_system_snappy=1
 use?(system_vpx):      GYP_CONFIG += use_system_libvpx=1
-use?(system_icu):      GYP_CONFIG += use_system_icu=1
+use?(system_icu):      GYP_CONFIG += use_system_icu=1 icu_use_data_file_flag=0
 use?(system_ffmpeg):   GYP_CONFIG += use_system_ffmpeg=1
 

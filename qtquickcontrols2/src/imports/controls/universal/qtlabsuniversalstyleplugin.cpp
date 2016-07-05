@@ -55,7 +55,7 @@ QT_BEGIN_NAMESPACE
 class QtLabsUniversalStylePlugin: public QQmlExtensionPlugin
 {
     Q_OBJECT
-    Q_PLUGIN_METADATA(IID "org.qt-project.Qt.QQmlExtensionInterface/1.0")
+    Q_PLUGIN_METADATA(IID QQmlExtensionInterface_iid)
 
 public:
     ~QtLabsUniversalStylePlugin();
@@ -84,12 +84,10 @@ void QtLabsUniversalStylePlugin::initializeEngine(QQmlEngine *engine, const char
 {
     QQuickStyleSelector selector;
     if (selector.style() == QLatin1String("universal")) {
-        if (QFont(QStringLiteral("Segoe UI")).family() == QLatin1String("Segoe UI")) {
-            QPlatformTheme *old = QGuiApplicationPrivate::platform_theme;
-            if (old) {
-                QQuickProxyTheme *theme = new QQuickUniversalTheme(old);
-                QGuiApplicationPrivate::platform_theme = theme;
-            }
+        QPlatformTheme *old = QGuiApplicationPrivate::platform_theme;
+        if (old) {
+            QQuickProxyTheme *theme = new QQuickUniversalTheme(old);
+            QGuiApplicationPrivate::platform_theme = theme;
         }
     }
 

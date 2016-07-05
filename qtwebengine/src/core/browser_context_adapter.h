@@ -39,10 +39,10 @@
 
 #include "qtwebenginecoreglobal.h"
 
+#include <QEnableSharedFromThis>
 #include <QList>
 #include <QPointer>
 #include <QScopedPointer>
-#include <QSharedData>
 #include <QString>
 #include <QVector>
 
@@ -60,14 +60,14 @@ class DownloadManagerDelegateQt;
 class UserScriptControllerHost;
 class WebEngineVisitedLinksManager;
 
-class QWEBENGINE_EXPORT BrowserContextAdapter : public QSharedData
+class QWEBENGINE_EXPORT BrowserContextAdapter : public QEnableSharedFromThis<BrowserContextAdapter>
 {
 public:
     explicit BrowserContextAdapter(bool offTheRecord = false);
     explicit BrowserContextAdapter(const QString &storagePrefix);
     virtual ~BrowserContextAdapter();
 
-    static BrowserContextAdapter* defaultContext();
+    static QSharedPointer<BrowserContextAdapter> defaultContext();
     static QObject* globalQObjectRoot();
 
     WebEngineVisitedLinksManager *visitedLinksManager();
@@ -127,6 +127,8 @@ public:
         GeolocationPermission = 1,
 // Reserved:
 //        NotificationPermission = 2,
+        AudioCapturePermission = 3,
+        VideoCapturePermission = 4,
     };
 
     HttpCacheType httpCacheType() const;
@@ -144,20 +146,24 @@ public:
     bool trackVisitedLinks() const;
     bool persistVisitedLinks() const;
 
-    QHash<QByteArray, QWebEngineUrlSchemeHandler *> &customUrlSchemeHandlers();
-    void updateCustomUrlSchemeHandlers();
+    const QHash<QByteArray, QWebEngineUrlSchemeHandler *> &customUrlSchemeHandlers() const;
+    const QList<QByteArray> customUrlSchemes() const;
+    void clearCustomUrlSchemeHandlers();
     void addCustomUrlSchemeHandler(const QByteArray &, QWebEngineUrlSchemeHandler *);
     bool removeCustomUrlSchemeHandler(QWebEngineUrlSchemeHandler *);
     QWebEngineUrlSchemeHandler *takeCustomUrlSchemeHandler(const QByteArray &);
     UserScriptControllerHost *userScriptController();
 
     void permissionRequestReply(const QUrl &origin, PermissionType type, bool reply);
+    bool checkPermission(const QUrl &origin, PermissionType type);
 
     QString httpAcceptLanguageWithoutQualities() const;
     QString httpAcceptLanguage() const;
     void setHttpAcceptLanguage(const QString &httpAcceptLanguage);
 
 private:
+    void updateCustomUrlSchemeHandlers();
+
     QString m_name;
     bool m_offTheRecord;
     QScopedPointer<BrowserContextQt> m_browserContext;

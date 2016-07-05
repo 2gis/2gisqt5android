@@ -55,7 +55,7 @@ class Q_WINEXTRAS_EXPORT QWinThumbnailToolBar : public QObject
     Q_PROPERTY(QPixmap iconicLivePreviewPixmap READ iconicLivePreviewPixmap WRITE setIconicLivePreviewPixmap)
 
 public:
-    explicit QWinThumbnailToolBar(QObject *parent = 0);
+    explicit QWinThumbnailToolBar(QObject *parent = Q_NULLPTR);
     ~QWinThumbnailToolBar();
 
     void setWindow(QWindow *window);

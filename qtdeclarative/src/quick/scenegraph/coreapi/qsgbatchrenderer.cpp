@@ -489,11 +489,6 @@ void Updater::visitGeometryNode(Node *n)
             if (e->batch)
                 renderer->invalidateBatchAndOverlappingRenderOrders(e->batch);
         }
-        if (n->dirtyState & QSGNode::DirtyMaterial) {
-            Element *e = n->element();
-            if (e->batch && e->batch->isMaterialCompatible(e) == BatchBreaksOnCompare)
-                renderer->invalidateBatchAndOverlappingRenderOrders(e->batch);
-        }
     }
 
     SHADOWNODE_TRAVERSE(n) visitNode(*child);
@@ -1213,7 +1208,10 @@ void Renderer::nodeChanged(QSGNode *node, QSGNode::DirtyState state)
             if (e->isMaterialBlended != blended) {
                 m_rebuild |= Renderer::FullRebuild;
                 e->isMaterialBlended = blended;
-            } else if (!e->batch) {
+            } else if (e->batch) {
+                if (e->batch->isMaterialCompatible(e) == BatchBreaksOnCompare)
+                    invalidateBatchAndOverlappingRenderOrders(e->batch);
+            } else {
                 m_rebuild |= Renderer::BuildBatches;
             }
         }
@@ -2060,8 +2058,8 @@ Renderer::ClipType Renderer::updateStencilClip(const QSGClipNode *clip)
                 if (!m_clipProgram.isLinked()) {
                     QSGShaderSourceBuilder::initializeProgramFromFiles(
                         &m_clipProgram,
-                        QStringLiteral(":/scenegraph/shaders/stencilclip.vert"),
-                        QStringLiteral(":/scenegraph/shaders/stencilclip.frag"));
+                        QStringLiteral(":/qt-project.org/scenegraph/shaders/stencilclip.vert"),
+                        QStringLiteral(":/qt-project.org/scenegraph/shaders/stencilclip.frag"));
                     m_clipProgram.bindAttributeLocation("vCoord", 0);
                     m_clipProgram.link();
                     m_clipMatrixId = m_clipProgram.uniformLocation("matrix");
@@ -2654,7 +2652,9 @@ void Renderer::render()
         if (m_alphaBatches.size())
             std::sort(&m_alphaBatches.first(), &m_alphaBatches.last() + 1, qsg_sort_batch_increasing_order);
 
-        m_zRange = 1.0 / (m_nextRenderOrder);
+        m_zRange = m_nextRenderOrder != 0
+                 ? 1.0 / (m_nextRenderOrder)
+                 : 0;
     }
 
     if (Q_UNLIKELY(debug_render())) timeSorting = timer.restart();
@@ -3069,8 +3069,8 @@ void Renderer::visualize()
         VisualizeShader *prog = new VisualizeShader();
         QSGShaderSourceBuilder::initializeProgramFromFiles(
             prog,
-            QStringLiteral(":/scenegraph/shaders/visualization.vert"),
-            QStringLiteral(":/scenegraph/shaders/visualization.frag"));
+            QStringLiteral(":/qt-project.org/scenegraph/shaders/visualization.vert"),
+            QStringLiteral(":/qt-project.org/scenegraph/shaders/visualization.frag"));
         prog->bindAttributeLocation("v", 0);
         prog->link();
         prog->bind();

@@ -43,16 +43,41 @@
 
 #include <linux/can/error.h>
 #include <linux/can/raw.h>
+#include <errno.h>
 #include <unistd.h>
 #include <net/if.h>
 #include <sys/ioctl.h>
 #include <sys/time.h>
 
+#ifndef CANFD_MTU
+// CAN FD support was added by Linux kernel 3.6
+// For prior kernels we redefine the missing defines here
+// they are taken from linux/can/raw.h & linux/can.h
+
+enum {
+    CAN_RAW_FD_FRAMES = 5
+};
+
+#define CAN_MAX_DLEN 8
+#define CANFD_MAX_DLEN 64
+struct canfd_frame {
+    canid_t can_id;  /* 32 bit CAN_ID + EFF/RTR/ERR flags */
+    __u8    len;     /* frame payload length in byte */
+    __u8    flags;   /* additional flags for CAN FD */
+    __u8    __res0;  /* reserved / padding */
+    __u8    __res1;  /* reserved / padding */
+    __u8    data[CANFD_MAX_DLEN] __attribute__((aligned(8)));
+};
+#define CAN_MTU     (sizeof(struct can_frame))
+#define CANFD_MTU   (sizeof(struct canfd_frame))
+
+#endif
+
 QT_BEGIN_NAMESPACE
 
 SocketCanBackend::SocketCanBackend(const QString &name) :
     canSocket(-1),
-    notifier(0),
+    notifier(nullptr),
     canSocketName(name),
     canFdOptionEnabled(false)
 {
@@ -260,7 +285,7 @@ bool SocketCanBackend::connectSocket()
     delete notifier;
 
     notifier = new QSocketNotifier(canSocket, QSocketNotifier::Read, this);
-    connect(notifier.data(), &QSocketNotifier::activated,
+    connect(notifier, &QSocketNotifier::activated,
             this, &SocketCanBackend::readSocket);
 
     //apply all stored configurations
@@ -311,7 +336,7 @@ void SocketCanBackend::setConfigurationParameter(int key, const QVariant &value)
 
     QCanBusDevice::setConfigurationParameter(key, value);
 
-    // we need to check canfd option a lot -> cache it and avoid QVector lookup
+    // we need to check CAN FD option a lot -> cache it and avoid QVector lookup
     if (key == QCanBusDevice::CanFdKey)
         canFdOptionEnabled = value.toBool();
 }
@@ -345,7 +370,7 @@ bool SocketCanBackend::writeFrame(const QCanBusFrame &newData)
                               "maximal %2 bytes. Frame is discarded.").
                         arg(payloadSize).arg(canFdOptionEnabled ? CANFD_MAX_DLEN : CAN_MAX_DLEN);
         if (!canFdOptionEnabled && payloadSize <= CANFD_MAX_DLEN)
-            setError(tr("Sending CanFd frame although CanFd option not enabled."),
+            setError(tr("Sending CAN FD frame although CAN FD option not enabled."),
                      QCanBusDevice::WriteError);
         else
             setError(tr("Frame payload exceeds maximum CAN frame payload length."),
@@ -557,11 +582,11 @@ void SocketCanBackend::readSocket()
         if (bytesReceived <= 0) {
             break;
         } else if (bytesReceived != CANFD_MTU && bytesReceived != CAN_MTU) {
-            setError(tr("ERROR SocketCanBackend: incomplete can frame"),
+            setError(tr("ERROR SocketCanBackend: incomplete CAN frame"),
                      QCanBusDevice::CanBusError::ReadError);
             continue;
         } else if (frame.len > bytesReceived - offsetof(canfd_frame, data)) {
-            setError(tr("ERROR SocketCanBackend: invalid can frame length"),
+            setError(tr("ERROR SocketCanBackend: invalid CAN frame length"),
                      QCanBusDevice::CanBusError::ReadError);
             continue;
         }

@@ -52,6 +52,8 @@ private Q_SLOTS:
     void profileConstructors();
     void urlSchemeHandlers();
     void urlSchemeHandlerFailRequest();
+    void customUserAgent();
+    void httpAcceptLanguage();
 };
 
 void tst_QWebEngineProfile::defaultProfile()
@@ -182,9 +184,65 @@ void tst_QWebEngineProfile::urlSchemeHandlerFailRequest()
     QWebEngineView view;
     QSignalSpy loadFinishedSpy(&view, SIGNAL(loadFinished(bool)));
     view.setPage(new QWebEnginePage(&profile, &view));
+    view.settings()->setAttribute(QWebEngineSettings::ErrorPageEnabled, false);
     view.load(QUrl(QStringLiteral("foo://bar")));
     QVERIFY(loadFinishedSpy.wait());
-    QVERIFY(toPlainTextSync(view.page()).isEmpty());
+    QCOMPARE(toPlainTextSync(view.page()), QString());
+}
+
+void tst_QWebEngineProfile::customUserAgent()
+{
+    QString defaultUserAgent = QWebEngineProfile::defaultProfile()->httpUserAgent();
+    QWebEnginePage page;
+    QSignalSpy loadFinishedSpy(&page, SIGNAL(loadFinished(bool)));
+    page.setHtml(QStringLiteral("<html><body>Hello world!</body></html>"));
+    QTRY_COMPARE(loadFinishedSpy.count(), 1);
+
+    // First test the user-agent is default
+    QCOMPARE(evaluateJavaScriptSync(&page, QStringLiteral("navigator.userAgent")).toString(), defaultUserAgent);
+
+    const QString testUserAgent = QStringLiteral("tst_QWebEngineProfile 1.0");
+    QWebEngineProfile testProfile;
+    testProfile.setHttpUserAgent(testUserAgent);
+
+    // Test a new profile with custom user-agent works
+    QWebEnginePage page2(&testProfile);
+    QSignalSpy loadFinishedSpy2(&page2, SIGNAL(loadFinished(bool)));
+    page2.setHtml(QStringLiteral("<html><body>Hello again!</body></html>"));
+    QTRY_COMPARE(loadFinishedSpy2.count(), 1);
+    QCOMPARE(evaluateJavaScriptSync(&page2, QStringLiteral("navigator.userAgent")).toString(), testUserAgent);
+    QCOMPARE(evaluateJavaScriptSync(&page, QStringLiteral("navigator.userAgent")).toString(), defaultUserAgent);
+
+    // Test an existing page and profile with custom user-agent works
+    QWebEngineProfile::defaultProfile()->setHttpUserAgent(testUserAgent);
+    QCOMPARE(evaluateJavaScriptSync(&page, QStringLiteral("navigator.userAgent")).toString(), testUserAgent);
+}
+
+void tst_QWebEngineProfile::httpAcceptLanguage()
+{
+    QWebEnginePage page;
+    QSignalSpy loadFinishedSpy(&page, SIGNAL(loadFinished(bool)));
+    page.setHtml(QStringLiteral("<html><body>Hello world!</body></html>"));
+    QTRY_COMPARE(loadFinishedSpy.count(), 1);
+
+    QStringList defaultLanguages = evaluateJavaScriptSync(&page, QStringLiteral("navigator.languages")).toStringList();
+
+    const QString testLang = QStringLiteral("xx-YY");
+    QWebEngineProfile testProfile;
+    testProfile.setHttpAcceptLanguage(testLang);
+
+    // Test a completely new profile
+    QWebEnginePage page2(&testProfile);
+    QSignalSpy loadFinishedSpy2(&page2, SIGNAL(loadFinished(bool)));
+    page2.setHtml(QStringLiteral("<html><body>Hello again!</body></html>"));
+    QTRY_COMPARE(loadFinishedSpy2.count(), 1);
+    QCOMPARE(evaluateJavaScriptSync(&page2, QStringLiteral("navigator.languages")).toStringList(), QStringList(testLang));
+    // Test the old one wasn't affected
+    QCOMPARE(evaluateJavaScriptSync(&page, QStringLiteral("navigator.languages")).toStringList(), defaultLanguages);
+
+    // Test changing an existing page and profile
+    QWebEngineProfile::defaultProfile()->setHttpAcceptLanguage(testLang);
+    QCOMPARE(evaluateJavaScriptSync(&page, QStringLiteral("navigator.languages")).toStringList(), QStringList(testLang));
 }
 
 QTEST_MAIN(tst_QWebEngineProfile)

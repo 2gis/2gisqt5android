@@ -79,6 +79,10 @@ QT_BEGIN_NAMESPACE
     }
     \endqml
 
+    ApplicationWindow supports popups via its \l overlay property, which
+    ensures that popups are displayed above other content and that the
+    background is dimmed when a modal popup is visible.
+
     \note By default, an ApplicationWindow is not visible.
 
     \labs
@@ -99,6 +103,11 @@ public:
         , overlay(Q_NULLPTR)
         , activeFocusControl(Q_NULLPTR)
     { }
+
+    static QQuickApplicationWindowPrivate *get(QQuickApplicationWindow *window)
+    {
+        return window->d_func();
+    }
 
     void relayout();
 
@@ -222,6 +231,7 @@ QQuickApplicationWindow::~QQuickApplicationWindow()
         QQuickItemPrivate::get(d->header)->removeItemChangeListener(d, QQuickItemPrivate::ImplicitWidth | QQuickItemPrivate::ImplicitHeight);
     if (d->footer)
         QQuickItemPrivate::get(d->footer)->removeItemChangeListener(d, QQuickItemPrivate::ImplicitWidth | QQuickItemPrivate::ImplicitHeight);
+    d_ptr.reset();
 }
 
 /*!
@@ -242,8 +252,10 @@ void QQuickApplicationWindow::setHeader(QQuickItem *header)
 {
     Q_D(QQuickApplicationWindow);
     if (d->header != header) {
-        if (d->header)
+        if (d->header) {
             QQuickItemPrivate::get(d->header)->removeItemChangeListener(d, QQuickItemPrivate::ImplicitWidth | QQuickItemPrivate::ImplicitHeight);
+            d->header->setParentItem(Q_NULLPTR);
+        }
         d->header = header;
         if (header) {
             header->setParentItem(contentItem());
@@ -276,8 +288,10 @@ void QQuickApplicationWindow::setFooter(QQuickItem *footer)
 {
     Q_D(QQuickApplicationWindow);
     if (d->footer != footer) {
-        if (d->footer)
+        if (d->footer) {
             QQuickItemPrivate::get(d->footer)->removeItemChangeListener(d, QQuickItemPrivate::ImplicitWidth | QQuickItemPrivate::ImplicitHeight);
+            d->footer->setParentItem(Q_NULLPTR);
+        }
         d->footer = footer;
         if (footer) {
             footer->setParentItem(contentItem());
@@ -324,6 +338,7 @@ QQuickItem *QQuickApplicationWindow::contentItem() const
 
 /*!
     \qmlproperty Control Qt.labs.controls::ApplicationWindow::activeFocusControl
+    \readonly
 
     This property holds the control that currently has active focus, or \c null if there is
     no control with active focus.
@@ -387,7 +402,7 @@ QFont QQuickApplicationWindow::font() const
 void QQuickApplicationWindow::setFont(const QFont &f)
 {
     Q_D(QQuickApplicationWindow);
-    if (d->font == f)
+    if (d->font.resolve() == f.resolve() && d->font == f)
         return;
 
     QFont resolvedFont = f.resolve(QQuickControlPrivate::themeFont(QPlatformTheme::SystemFont));
@@ -408,11 +423,13 @@ void QQuickApplicationWindowPrivate::resolveFont()
 void QQuickApplicationWindowPrivate::updateFont(const QFont &f)
 {
     Q_Q(QQuickApplicationWindow);
+    const bool changed = font != f;
     font = f;
 
-    QQuickControlPrivate::updateFontRecur(q->contentItem(), f);
+    QQuickControlPrivate::updateFontRecur(q->QQuickWindow::contentItem(), f);
 
-    emit q->fontChanged();
+    if (changed)
+        emit q->fontChanged();
 }
 
 QLocale QQuickApplicationWindow::locale() const
@@ -428,7 +445,7 @@ void QQuickApplicationWindow::setLocale(const QLocale &locale)
         return;
 
     d->locale = locale;
-    QQuickControlPrivate::updateLocaleRecur(contentItem(), locale);
+    QQuickControlPrivate::updateLocaleRecur(QQuickWindow::contentItem(), locale);
     emit localeChanged();
 }
 
@@ -484,6 +501,9 @@ public:
 void QQuickApplicationWindowAttachedPrivate::windowChange(QQuickWindow *wnd)
 {
     Q_Q(QQuickApplicationWindowAttached);
+    if (window && !QQuickApplicationWindowPrivate::get(window))
+        window = Q_NULLPTR; // being deleted (QTBUG-52731)
+
     QQuickApplicationWindow *newWindow = qobject_cast<QQuickApplicationWindow *>(wnd);
     if (window != newWindow) {
         QQuickApplicationWindow *oldWindow = window;
@@ -531,6 +551,7 @@ QQuickApplicationWindowAttached::QQuickApplicationWindowAttached(QObject *parent
 
 /*!
     \qmlattachedproperty ApplicationWindow Qt.labs.controls::ApplicationWindow::window
+    \readonly
 
     This attached property holds the application window. The property can be attached
     to any item. The value is \c null if the item is not in an ApplicationWindow.
@@ -543,6 +564,7 @@ QQuickApplicationWindow *QQuickApplicationWindowAttached::window() const
 
 /*!
     \qmlattachedproperty Item Qt.labs.controls::ApplicationWindow::contentItem
+    \readonly
 
     This attached property holds the window content item. The property can be attached
     to any item. The value is \c null if the item is not in an ApplicationWindow.
@@ -555,6 +577,7 @@ QQuickItem *QQuickApplicationWindowAttached::contentItem() const
 
 /*!
     \qmlattachedproperty Control Qt.labs.controls::ApplicationWindow::activeFocusControl
+    \readonly
 
     This attached property holds the control that currently has active focus, or \c null
     if there is no control with active focus. The property can be attached to any item.
@@ -571,6 +594,7 @@ QQuickItem *QQuickApplicationWindowAttached::activeFocusControl() const
 
 /*!
     \qmlattachedproperty Item Qt.labs.controls::ApplicationWindow::header
+    \readonly
 
     This attached property holds the window header item. The property can be attached
     to any item. The value is \c null if the item is not in an ApplicationWindow, or
@@ -584,6 +608,7 @@ QQuickItem *QQuickApplicationWindowAttached::header() const
 
 /*!
     \qmlattachedproperty Item Qt.labs.controls::ApplicationWindow::footer
+    \readonly
 
     This attached property holds the window footer item. The property can be attached
     to any item. The value is \c null if the item is not in an ApplicationWindow, or
@@ -597,6 +622,7 @@ QQuickItem *QQuickApplicationWindowAttached::footer() const
 
 /*!
     \qmlattachedproperty Item Qt.labs.controls::ApplicationWindow::overlay
+    \readonly
 
     This attached property holds the window overlay item. The property can be attached
     to any item. The value is \c null if the item is not in an ApplicationWindow.

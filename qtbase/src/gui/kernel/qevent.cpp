@@ -726,8 +726,11 @@ QHoverEvent::~QHoverEvent()
 QWheelEvent::QWheelEvent(const QPointF &pos, int delta,
                          Qt::MouseButtons buttons, Qt::KeyboardModifiers modifiers,
                          Qt::Orientation orient)
-    : QInputEvent(Wheel, modifiers), p(pos), qt4D(delta), qt4O(orient), mouseState(buttons)
+    : QInputEvent(Wheel, modifiers), p(pos), qt4D(delta), qt4O(orient), mouseState(buttons),
+      ph(Qt::NoScrollPhase), src(Qt::MouseEventNotSynthesized)
 {
+    if (!QGuiApplicationPrivate::scrollNoPhaseAllowed)
+        ph = Qt::ScrollUpdate;
     g = QCursor::pos();
     if (orient == Qt::Vertical)
         angleD = QPoint(0, delta);
@@ -760,8 +763,11 @@ QWheelEvent::~QWheelEvent()
 QWheelEvent::QWheelEvent(const QPointF &pos, const QPointF& globalPos, int delta,
                          Qt::MouseButtons buttons, Qt::KeyboardModifiers modifiers,
                          Qt::Orientation orient)
-    : QInputEvent(Wheel, modifiers), p(pos), g(globalPos), qt4D(delta), qt4O(orient), mouseState(buttons)
+    : QInputEvent(Wheel, modifiers), p(pos), g(globalPos), qt4D(delta), qt4O(orient), mouseState(buttons),
+      ph(Qt::NoScrollPhase), src(Qt::MouseEventNotSynthesized)
 {
+    if (!QGuiApplicationPrivate::scrollNoPhaseAllowed)
+        ph = Qt::ScrollUpdate;
     if (orient == Qt::Vertical)
         angleD = QPoint(0, delta);
     else
@@ -796,8 +802,12 @@ QWheelEvent::QWheelEvent(const QPointF &pos, const QPointF& globalPos,
             QPoint pixelDelta, QPoint angleDelta, int qt4Delta, Qt::Orientation qt4Orientation,
             Qt::MouseButtons buttons, Qt::KeyboardModifiers modifiers)
     : QInputEvent(Wheel, modifiers), p(pos), g(globalPos), pixelD(pixelDelta),
-      angleD(angleDelta), qt4D(qt4Delta), qt4O(qt4Orientation), mouseState(buttons), ph(Qt::ScrollUpdate)
-{}
+      angleD(angleDelta), qt4D(qt4Delta), qt4O(qt4Orientation), mouseState(buttons), ph(Qt::NoScrollPhase),
+      src(Qt::MouseEventNotSynthesized)
+{
+    if (!QGuiApplicationPrivate::scrollNoPhaseAllowed)
+        ph = Qt::ScrollUpdate;
+}
 
 /*!
     Constructs a wheel event object.
@@ -3569,6 +3579,7 @@ static inline void formatTouchEvent(QDebug d, const QTouchEvent &t)
 {
     d << "QTouchEvent(";
     QtDebugUtils::formatQEnum(d, t.type());
+    d << " device: " << t.device()->name();
     d << " states: ";
     QtDebugUtils::formatQFlags(d, t.touchPointStates());
     d << ", " << t.touchPoints().size() << " points: " << t.touchPoints() << ')';

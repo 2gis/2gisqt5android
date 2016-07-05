@@ -53,6 +53,7 @@ TestCase {
         visible: true
         width: 400
         height: 400
+        font.pixelSize: 25
     }
 
     SignalSpy {
@@ -625,5 +626,159 @@ TestCase {
         compare(control.displayText, "789")
 
         control.destroy()
+    }
+
+    Component {
+        id: component
+        Pane {
+            id: panel
+            property alias button: _button;
+            property alias combobox: _combobox;
+            font.pixelSize: 30
+            Column {
+                Button {
+                    id: _button
+                    text: "Button"
+                    font.pixelSize: 20
+                }
+                ComboBox {
+                    id: _combobox
+                    model: ["ComboBox", "With"]
+                    delegate: ItemDelegate {
+                        width: _combobox.width
+                        text: _combobox.textRole ? (Array.isArray(_combobox.model) ? modelData[_combobox.textRole] : model[_combobox.textRole]) : modelData
+                        objectName: "delegate"
+                        checkable: true
+                        autoExclusive: true
+                        checked: _combobox.currentIndex === index
+                        highlighted: _combobox.highlightedIndex === index
+                        pressed: highlighted && _combobox.pressed
+                    }
+                }
+            }
+        }
+    }
+
+    function getChild(control, objname, idx) {
+        var index = idx
+        for (var i = index+1; i < control.children.length; i++)
+        {
+            if (control.children[i].objectName === objname) {
+                index = i
+                break
+            }
+        }
+        return index
+    }
+
+    function test_font() { // QTBUG_50984, QTBUG-51696
+        var control = component.createObject(window.contentItem)
+        verify(control)
+        verify(control.button)
+        verify(control.combobox)
+
+        waitForRendering(control)
+
+        control.forceActiveFocus()
+        verify(control.activeFocus)
+
+        compare(control.font.pixelSize, 30)
+        compare(control.button.font.pixelSize, 20)
+        compare(control.combobox.font.pixelSize, 30)
+
+        verify(control.combobox.popup)
+        var popup = control.combobox.popup
+        popup.open()
+
+        verify(popup.contentItem)
+
+        var listview = popup.contentItem
+        verify(listview.contentItem)
+        waitForRendering(listview)
+
+        var idx1 = getChild(listview.contentItem, "delegate", -1)
+        compare(listview.contentItem.children[idx1].font.pixelSize, 25)
+        var idx2 = getChild(listview.contentItem, "delegate", idx1)
+        compare(listview.contentItem.children[idx2].font.pixelSize, 25)
+
+        compare(listview.contentItem.children[idx1].font.pixelSize, 25)
+        compare(listview.contentItem.children[idx2].font.pixelSize, 25)
+
+        control.font.pixelSize = control.font.pixelSize + 10
+        compare(control.combobox.font.pixelSize, 40)
+        waitForRendering(listview)
+        compare(listview.contentItem.children[idx1].font.pixelSize, 25)
+        compare(listview.contentItem.children[idx2].font.pixelSize, 25)
+
+        control.combobox.font.pixelSize = control.combobox.font.pixelSize + 5
+        compare(control.combobox.font.pixelSize, 45)
+        waitForRendering(listview)
+
+        idx1 = getChild(listview.contentItem, "delegate", -1)
+        compare(listview.contentItem.children[idx1].font.pixelSize, 25)
+        idx2 = getChild(listview.contentItem, "delegate", idx1)
+        compare(listview.contentItem.children[idx2].font.pixelSize, 25)
+
+        control.destroy()
+    }
+
+    function test_activation_data() {
+        return [
+            { tag: "open:enter", key: Qt.Key_Enter, open: true },
+            { tag: "open:return", key: Qt.Key_Return, open: true },
+            { tag: "closed:enter", key: Qt.Key_Enter, open: false },
+            { tag: "closed:return", key: Qt.Key_Return, open: false }
+        ]
+    }
+
+    // QTBUG-51645
+    function test_activation(data) {
+        var control = comboBox.createObject(window.contentItem, {currentIndex: 1, model: ["Apple", "Orange", "Banana"]})
+        verify(control)
+
+        waitForRendering(control)
+        control.forceActiveFocus()
+        verify(control.activeFocus)
+
+        if (data.open)
+            keyClick(Qt.Key_Space)
+        compare(control.popup.visible, data.open)
+
+        compare(control.currentIndex, 1)
+        compare(control.currentText, "Orange")
+        compare(control.displayText, "Orange")
+
+        keyClick(data.key)
+
+        compare(control.currentIndex, 1)
+        compare(control.currentText, "Orange")
+        compare(control.displayText, "Orange")
+
+        control.destroy()
+    }
+
+    Component {
+        id: asyncLoader
+        Loader {
+            active: false
+            asynchronous: true
+            sourceComponent: ComboBox {
+                model: ["First", "Second", "Third"]
+            }
+        }
+    }
+
+    // QTBUG-51972
+    function test_async() {
+        var loader = asyncLoader.createObject(testCase)
+        verify(loader)
+
+        loader.active = true
+        tryCompare(loader, "status", Loader.Ready)
+        verify(loader.item)
+        compare(loader.item.currentText, "First")
+        compare(loader.item.displayText, "First")
+
+        loader.destroy()
     }
 }

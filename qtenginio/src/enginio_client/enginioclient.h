@@ -53,7 +53,7 @@ class ENGINIOCLIENT_EXPORT EnginioClient : public EnginioClientConnection
 
     Q_DECLARE_PRIVATE(EnginioClient)
 public:
-    explicit EnginioClient(QObject *parent = 0);
+    explicit EnginioClient(QObject *parent = Q_NULLPTR);
     ~EnginioClient();
 
     Q_INVOKABLE EnginioReply *customRequest(const QUrl &url, const QByteArray &httpOperation, const QJsonObject &data = QJsonObject());

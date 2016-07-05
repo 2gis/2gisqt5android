@@ -144,6 +144,13 @@ public:
         return *this;
     }
 };
+} // namespace QJsonPrivate
+
+template <typename T>
+class QTypeInfo<QJsonPrivate::q_littleendian<T> >
+    : public QTypeInfoMerger<QJsonPrivate::q_littleendian<T>, T> {};
+
+namespace QJsonPrivate {
 
 typedef q_littleendian<short> qle_short;
 typedef q_littleendian<unsigned short> qle_ushort;
@@ -395,7 +402,7 @@ public:
             // pack with itself, we'll discard the high part anyway
             chunk = _mm_packus_epi16(chunk, chunk);
             // unaligned 64-bit store
-            *(quint64*)&l[i] = _mm_cvtsi128_si64(chunk);
+            qToUnaligned(_mm_cvtsi128_si64(chunk), l + i);
             i += 8;
         }
 #  endif
@@ -788,7 +795,11 @@ public:
         if (reserve) {
             if (reserve < 128)
                 reserve = 128;
-            size = qMax(size + reserve, size *2);
+            size = qMax(size + reserve, qMin(size *2, (int)Value::MaxSize));
+            if (size > Value::MaxSize) {
+                qWarning("QJson: Document too large to store in data structure");
+                return 0;
+            }
         }
         char *raw = (char *)malloc(size);
         Q_CHECK_PTR(raw);

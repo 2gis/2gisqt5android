@@ -31,14 +31,25 @@
 **
 ****************************************************************************/
 
+#include <dshow.h>
+#ifdef min
+#undef min
+#endif
+#ifdef max
+#undef max
+#endif
+
 #include "directshowplayerservice.h"
 
+#ifndef Q_OS_WINCE
 #include "directshowaudioendpointcontrol.h"
-#include "directshowiosource.h"
 #include "directshowmetadatacontrol.h"
+#include "vmr9videowindowcontrol.h"
+#endif
+#include "directshowiosource.h"
 #include "directshowplayercontrol.h"
 #include "directshowvideorenderercontrol.h"
-#include "vmr9videowindowcontrol.h"
+
 
 #ifdef HAVE_EVR
 #include "directshowevrvideowindowcontrol.h"
@@ -52,6 +63,7 @@
 
 #include <QtCore/qcoreapplication.h>
 #include <QtCore/qdatetime.h>
+#include <QtCore/qdir.h>
 #include <QtCore/qthread.h>
 #include <QtCore/qvarlengtharray.h>
 
@@ -79,10 +91,14 @@ private:
 DirectShowPlayerService::DirectShowPlayerService(QObject *parent)
     : QMediaService(parent)
     , m_playerControl(0)
+#ifndef Q_OS_WINCE
     , m_metaDataControl(0)
+#endif
     , m_videoRendererControl(0)
+#ifndef Q_OS_WINCE
     , m_videoWindowControl(0)
     , m_audioEndpointControl(0)
+#endif
     , m_taskThread(0)
     , m_loop(qt_directShowEventLoop())
     , m_pendingTasks(0)
@@ -106,8 +122,10 @@ DirectShowPlayerService::DirectShowPlayerService(QObject *parent)
     , m_dontCacheNextSeekResult(false)
 {
     m_playerControl = new DirectShowPlayerControl(this);
+#ifndef Q_OS_WINCE
     m_metaDataControl = new DirectShowMetaDataControl(this);
     m_audioEndpointControl = new DirectShowAudioEndpointControl(this);
+#endif
 
     m_taskThread = new DirectShowPlayerServiceThread(this);
     m_taskThread->start();
@@ -138,10 +156,14 @@ DirectShowPlayerService::~DirectShowPlayerService()
     }
 
     delete m_playerControl;
+#ifndef Q_OS_WINCE
     delete m_audioEndpointControl;
     delete m_metaDataControl;
+#endif
     delete m_videoRendererControl;
+#ifndef Q_OS_WINCE
     delete m_videoWindowControl;
+#endif
 
     ::CloseHandle(m_taskHandle);
 }
@@ -150,12 +172,18 @@ QMediaControl *DirectShowPlayerService::requestControl(const char *name)
 {
     if (qstrcmp(name, QMediaPlayerControl_iid) == 0) {
         return m_playerControl;
+#ifndef Q_OS_WINCE
     } else if (qstrcmp(name, QAudioOutputSelectorControl_iid) == 0) {
         return m_audioEndpointControl;
     } else if (qstrcmp(name, QMetaDataReaderControl_iid) == 0) {
         return m_metaDataControl;
+#endif
     } else if (qstrcmp(name, QVideoRendererControl_iid) == 0) {
-        if (!m_videoRendererControl && !m_videoWindowControl) {
+        if (!m_videoRendererControl
+#ifndef Q_OS_WINCE
+            && !m_videoWindowControl
+#endif
+            ){
             m_videoRendererControl = new DirectShowVideoRendererControl(m_loop);
 
             connect(m_videoRendererControl, SIGNAL(filterChanged()),
@@ -163,6 +191,7 @@ QMediaControl *DirectShowPlayerService::requestControl(const char *name)
 
             return m_videoRendererControl;
         }
+#ifndef Q_OS_WINCE
     } else if (qstrcmp(name, QVideoWindowControl_iid) == 0) {
         if (!m_videoRendererControl && !m_videoWindowControl) {
             IBaseFilter *filter;
@@ -185,6 +214,7 @@ QMediaControl *DirectShowPlayerService::requestControl(const char *name)
 
             return m_videoWindowControl;
         }
+#endif
     }
     return 0;
 }
@@ -200,12 +230,14 @@ void DirectShowPlayerService::releaseControl(QMediaControl *control)
         delete m_videoRendererControl;
 
         m_videoRendererControl = 0;
+#ifndef Q_OS_WINCE
     } else if (control == m_videoWindowControl) {
         setVideoOutput(0);
 
         delete m_videoWindowControl;
 
         m_videoWindowControl = 0;
+#endif
     }
 }
 
@@ -231,7 +263,9 @@ void DirectShowPlayerService::load(const QMediaContent &media, QIODevice *stream
     m_seekable = false;
     m_atEnd = false;
     m_dontCacheNextSeekResult = false;
+#ifndef Q_OS_WINCE
     m_metaDataControl->reset();
+#endif
 
     if (m_resources.isEmpty() && !stream) {
         m_pendingTasks = 0;
@@ -300,8 +334,10 @@ void DirectShowPlayerService::doSetUrlSource(QMutexLocker *locker)
 
     if (!SUCCEEDED(hr)) {
         locker->unlock();
+        const QString urlString = m_url.isLocalFile()
+            ? QDir::toNativeSeparators(m_url.toLocalFile()) : m_url.toString();
         hr = m_graph->AddSourceFilter(
-                reinterpret_cast<const OLECHAR *>(m_url.toString().utf16()), L"Source", &source);
+                reinterpret_cast<const OLECHAR *>(urlString.utf16()), L"Source", &source);
         locker->relock();
     }
 
@@ -1135,7 +1171,9 @@ void DirectShowPlayerService::customEvent(QEvent *event)
         QMutexLocker locker(&m_mutex);
 
         m_playerControl->updateMediaInfo(m_duration, m_streamTypes, m_seekable);
+#ifndef Q_OS_WINCE
         m_metaDataControl->updateMetadata(m_graph, m_source, m_url.toString());
+#endif
 
         updateStatus();
     } else if (event->type() == QEvent::Type(Error)) {

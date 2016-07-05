@@ -165,7 +165,7 @@ public:
 
     void itemClicked();
 
-    void initItem(int index, QObject *object);
+    void createdItem(int index, QObject *object);
     void countChanged();
     void updateCurrentText();
     void increase();
@@ -235,7 +235,7 @@ void QQuickComboBoxPrivate::itemClicked()
     }
 }
 
-void QQuickComboBoxPrivate::initItem(int index, QObject *object)
+void QQuickComboBoxPrivate::createdItem(int index, QObject *object)
 {
     QQuickAbstractButton *button = qobject_cast<QQuickAbstractButton *>(object);
     if (button)
@@ -316,7 +316,7 @@ void QQuickComboBoxPrivate::createDelegateModel()
     if (oldModel) {
         disconnect(delegateModel, &QQmlInstanceModel::countChanged, this, &QQuickComboBoxPrivate::countChanged);
         disconnect(delegateModel, &QQmlInstanceModel::modelUpdated, this, &QQuickComboBoxPrivate::updateCurrentText);
-        disconnect(delegateModel, &QQmlInstanceModel::initItem, this, &QQuickComboBoxPrivate::initItem);
+        disconnect(delegateModel, &QQmlInstanceModel::createdItem, this, &QQuickComboBoxPrivate::createdItem);
     }
 
     ownModel = false;
@@ -336,7 +336,7 @@ void QQuickComboBoxPrivate::createDelegateModel()
     if (delegateModel) {
         connect(delegateModel, &QQmlInstanceModel::countChanged, this, &QQuickComboBoxPrivate::countChanged);
         connect(delegateModel, &QQmlInstanceModel::modelUpdated, this, &QQuickComboBoxPrivate::updateCurrentText);
-        connect(delegateModel, &QQmlInstanceModel::initItem, this, &QQuickComboBoxPrivate::initItem);
+        connect(delegateModel, &QQmlInstanceModel::createdItem, this, &QQuickComboBoxPrivate::createdItem);
     }
 
     emit q->delegateModelChanged();
@@ -447,6 +447,7 @@ void QQuickComboBox::setPressed(bool pressed)
 }
 
 /*!
+    \readonly
     \qmlproperty int Qt.labs.controls::ComboBox::highlightedIndex
 
     This property holds the index of the highlighted item in the combo box popup list.
@@ -754,7 +755,7 @@ void QQuickComboBox::keyReleaseEvent(QKeyEvent *event)
         break;
     case Qt::Key_Enter:
     case Qt::Key_Return:
-        d->hidePopup(true);
+        d->hidePopup(d->isPopupVisible());
         setPressed(false);
         event->accept();
         break;

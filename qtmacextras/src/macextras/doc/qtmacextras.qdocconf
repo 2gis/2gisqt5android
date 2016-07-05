@@ -7,7 +7,7 @@ version                 = $QT_VERSION
 exampledirs += ../../../examples/macextras \
                snippets
 
-examplesinstallpath     = qtmacextras/macextras
+examplesinstallpath     = macextras
 
 # Add a generic 'Qt Code Sample' thumbnail in Qt Creator for all examples
 manifestmeta.thumbnail.names += "QtMacExtras/*"

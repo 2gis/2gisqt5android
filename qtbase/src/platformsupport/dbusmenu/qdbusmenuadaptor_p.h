@@ -140,7 +140,7 @@ class QDBusMenuAdaptor: public QDBusAbstractAdaptor
 "  </interface>\n"
         "")
 public:
-    QDBusMenuAdaptor(QObject *parent);
+    QDBusMenuAdaptor(QDBusPlatformMenu *topLevelMenu);
     virtual ~QDBusMenuAdaptor();
 
 public: // PROPERTIES
@@ -157,7 +157,7 @@ public Q_SLOTS: // METHODS
     bool AboutToShow(int id);
     QList<int> AboutToShowGroup(const QList<int> &ids, QList<int> &idErrors);
     void Event(int id, const QString &eventId, const QDBusVariant &data, uint timestamp);
-    void EventGroup(const QDBusMenuEventList &events);
+    QList<int> EventGroup(const QDBusMenuEventList &events);
     QDBusMenuItemList GetGroupProperties(const QList<int> &ids, const QStringList &propertyNames);
     uint GetLayout(int parentId, int recursionDepth, const QStringList &propertyNames, QDBusMenuLayoutItem &layout);
     QDBusVariant GetProperty(int id, const QString &name);
@@ -166,6 +166,9 @@ Q_SIGNALS: // SIGNALS
     void ItemActivationRequested(int id, uint timestamp);
     void ItemsPropertiesUpdated(const QDBusMenuItemList &updatedProps, const QDBusMenuItemKeysList &removedProps);
     void LayoutUpdated(uint revision, int parent);
+
+private:
+    QDBusPlatformMenu *m_topLevelMenu;
 };
 
 QT_END_NAMESPACE

@@ -80,7 +80,7 @@ QT_BEGIN_NAMESPACE
 class QtLabsTemplatesPlugin: public QQmlExtensionPlugin
 {
     Q_OBJECT
-    Q_PLUGIN_METADATA(IID "org.qt-project.Qt.QQmlExtensionInterface/1.0")
+    Q_PLUGIN_METADATA(IID QQmlExtensionInterface_iid)
 
 public:
     void registerTypes(const char *uri);
@@ -132,6 +132,7 @@ void QtLabsTemplatesPlugin::registerTypes(const char *uri)
     qmlRegisterType<QQuickTumblerAttached>();
     qmlRegisterType<QQuickTumbler>(uri, 1, 0, "Tumbler");
 
+    qmlRegisterRevision<QQuickItem, 2>(uri, 1, 0);
     qmlRegisterRevision<QQuickWindow, 2>(uri, 1, 0);
     qmlRegisterRevision<QQuickText, 6>(uri, 1, 0);
     qmlRegisterRevision<QQuickTextInput, 6>(uri, 1, 0);

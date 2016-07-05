@@ -46,7 +46,7 @@ static bool hasAtlasTexture(const QVector<QSGTextureProvider *> &textureProvider
 {
     for (int i = 0; i < textureProviders.size(); ++i) {
         QSGTextureProvider *t = textureProviders.at(i);
-        if (t->texture() && t->texture()->isAtlasTexture())
+        if (t && t->texture() && t->texture()->isAtlasTexture())
             return true;
     }
     return false;
@@ -299,8 +299,8 @@ void QQuickCustomMaterialShader::compile()
 
         QSGShaderSourceBuilder::initializeProgramFromFiles(
             program(),
-            QStringLiteral(":/items/shaders/shadereffectfallback.vert"),
-            QStringLiteral(":/items/shaders/shadereffectfallback.frag"));
+            QStringLiteral(":/qt-project.org/items/shaders/shadereffectfallback.vert"),
+            QStringLiteral(":/qt-project.org/items/shaders/shadereffectfallback.frag"));
 
 #ifndef QT_NO_DEBUG
         for (int i = 0; i < attrCount; ++i) {
@@ -327,8 +327,6 @@ const char *QQuickCustomMaterialShader::fragmentShader() const
 
 bool QQuickShaderEffectMaterialKey::operator == (const QQuickShaderEffectMaterialKey &other) const
 {
-    if (className != other.className)
-        return false;
     for (int shaderType = 0; shaderType < ShaderTypeCount; ++shaderType) {
         if (sourceCode[shaderType] != other.sourceCode[shaderType])
             return false;
@@ -343,7 +341,7 @@ bool QQuickShaderEffectMaterialKey::operator != (const QQuickShaderEffectMateria
 
 uint qHash(const QQuickShaderEffectMaterialKey &key)
 {
-    uint hash = qHash((const void *)key.className);
+    uint hash = 1;
     typedef QQuickShaderEffectMaterialKey Key;
     for (int shaderType = 0; shaderType < Key::ShaderTypeCount; ++shaderType)
         hash = hash * 31337 + qHash(key.sourceCode[shaderType]);
@@ -491,6 +489,7 @@ QQuickShaderEffectNode::~QQuickShaderEffectNode()
 void QQuickShaderEffectNode::markDirtyTexture()
 {
     markDirty(DirtyMaterial);
+    Q_EMIT dirtyTexture();
 }
 
 void QQuickShaderEffectNode::textureProviderDestroyed(QObject *object)

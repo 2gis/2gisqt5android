@@ -21,7 +21,7 @@ exampledirs += \
                ../../../tests/auto \
 
 # Specify example install dir under QT_INSTALL_EXAMPLES
-examplesinstallpath = qtenginio/enginio/widgets
+examplesinstallpath = enginio/widgets
 
 depends += qtcore qtgui qtwidgets qtnetwork qtquick qtenginioqml qtenginiooverview
 

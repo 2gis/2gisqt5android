@@ -53,7 +53,7 @@ class Q_WINEXTRAS_EXPORT QWinTaskbarButton : public QObject
     Q_PROPERTY(QWindow *window READ window WRITE setWindow)
 
 public:
-    explicit QWinTaskbarButton(QObject *parent = 0);
+    explicit QWinTaskbarButton(QObject *parent = Q_NULLPTR);
     ~QWinTaskbarButton();
 
     void setWindow(QWindow *window);
