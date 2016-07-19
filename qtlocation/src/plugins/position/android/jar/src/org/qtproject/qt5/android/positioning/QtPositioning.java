@@ -258,8 +258,8 @@ public class QtPositioning implements LocationListener
                                             LocationManager.NETWORK_PROVIDER,
                                             updateInterval, 0);
                    } catch (SecurityException se) {
-                       se.printStackTrace();
-                       exceptionOccurred = true;
+                        se.printStackTrace();
+                        exceptionOccurred = true;
                    }
                 }
                 if (exceptionOccurred) {
