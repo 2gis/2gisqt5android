@@ -113,26 +113,33 @@ QGeoPositionInfoSource::Error QGeoPositionInfoSourceAndroid::error() const
     return m_error;
 }
 
+void QGeoPositionInfoSourceAndroid::setError(Error error)
+{
+    // qDebug() << "setError: " << error;
+    if (m_error != error)
+    {
+        m_error = error;
+        emit QGeoPositionInfoSource::error(m_error);
+    }
+}
+
 void QGeoPositionInfoSourceAndroid::startUpdates()
 {
     if (updatesRunning)
         return;
 
     if (preferredPositioningMethods() == 0) {
-        m_error = UnknownSourceError;
-        emit QGeoPositionInfoSource::error(m_error);
-
+        setError(UnknownSourceError);
         return;
     }
 
     updatesRunning = true;
     QGeoPositionInfoSource::Error error = AndroidPositioning::startUpdates(androidClassKeyForUpdate);
     //if (error != QGeoPositionInfoSource::NoError) { //TODO
-    if (error != 3) {
+    if (error != 3)
         updatesRunning = false;
-        m_error =  error;
-        emit QGeoPositionInfoSource::error(m_error);
-    }
+
+    setError(error);
 }
 
 void QGeoPositionInfoSourceAndroid::stopUpdates()
@@ -167,11 +174,10 @@ void QGeoPositionInfoSourceAndroid::requestUpdate(int timeout)
 
     QGeoPositionInfoSource::Error error = AndroidPositioning::requestUpdate(androidClassKeyForSingleRequest);
     //if (error != QGeoPositionInfoSource::NoError) { //TODO
-    if (error != 3) {
+    if (error != 3)
         m_requestTimer.stop();
-        m_error = error;
-        emit QGeoPositionInfoSource::error(m_error);
-    }
+
+    setError(error);
 }
 
 void QGeoPositionInfoSourceAndroid::processPositionUpdate(const QGeoPositionInfo &pInfo)
@@ -195,8 +201,7 @@ void QGeoPositionInfoSourceAndroid::processSinglePositionUpdate(const QGeoPositi
 
 void QGeoPositionInfoSourceAndroid::locationProviderDisabled()
 {
-    m_error = QGeoPositionInfoSource::ClosedError;
-    emit QGeoPositionInfoSource::error(m_error);
+    setError(QGeoPositionInfoSource::ClosedError);
 }
 
 void QGeoPositionInfoSourceAndroid::requestTimeout()
