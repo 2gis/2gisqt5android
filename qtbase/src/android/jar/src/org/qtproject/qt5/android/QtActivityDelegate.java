@@ -1046,6 +1046,28 @@ public class QtActivityDelegate
 
     }
 
+    private boolean isMediaKey(int keyCode)
+    {
+        return
+            keyCode == KeyEvent.KEYCODE_MEDIA_AUDIO_TRACK
+            || keyCode == KeyEvent.KEYCODE_MEDIA_CLOSE
+            || keyCode == KeyEvent.KEYCODE_MEDIA_EJECT
+            || keyCode == KeyEvent.KEYCODE_MEDIA_FAST_FORWARD
+            || keyCode == KeyEvent.KEYCODE_MEDIA_NEXT
+            || keyCode == KeyEvent.KEYCODE_MEDIA_PAUSE
+            || keyCode == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE
+            || keyCode == KeyEvent.KEYCODE_MEDIA_PREVIOUS
+            || keyCode == KeyEvent.KEYCODE_MEDIA_RECORD
+            || keyCode == KeyEvent.KEYCODE_MEDIA_REWIND
+            || keyCode == 273 // KeyEvent.KEYCODE_MEDIA_SKIP_BACKWARD, API 23+
+            || keyCode == 272 // KeyEvent.KEYCODE_MEDIA_SKIP_FORWARD, API 23+
+            || keyCode == 275 // KeyEvent.KEYCODE_MEDIA_STEP_BACKWARD, API 23+
+            || keyCode == 274 // KeyEvent.KEYCODE_MEDIA_STEP_FORWARD, API 23+
+            || keyCode == KeyEvent.KEYCODE_MEDIA_STOP
+            || keyCode == 226 // KeyEvent.KEYCODE_MEDIA_TOP_MENU, API 21+
+            ;
+    }
+
     public boolean onKeyDown(int keyCode, KeyEvent event)
     {
         if (!m_started)
@@ -1069,6 +1091,11 @@ public class QtActivityDelegate
             return false;
         }
 
+        if (isMediaKey(keyCode)
+            && System.getenv("QT_ANDROID_MEDIA_KEYS") == null) {
+            return false;
+        }
+
         m_lastChar = lc;
         if (keyCode == KeyEvent.KEYCODE_BACK) {
             m_backKeyPressedSent = !m_keyboardIsVisible;
@@ -1089,6 +1116,11 @@ public class QtActivityDelegate
             || keyCode == KeyEvent.KEYCODE_VOLUME_DOWN
             || keyCode == KeyEvent.KEYCODE_MUTE)
             && System.getenv("QT_ANDROID_VOLUME_KEYS") == null) {
+            return false;
+        }
+
+        if (isMediaKey(keyCode)
+            && System.getenv("QT_ANDROID_MEDIA_KEYS") == null) {
             return false;
         }
 
