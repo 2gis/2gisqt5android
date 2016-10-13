@@ -246,15 +246,6 @@ namespace QtAndroidInput
         QWindowSystemInterface::handleTouchEvent(window, touchDevice, m_touchPoints);
     }
 
-    static bool isTabletEventSupported(JNIEnv */*env*/, jobject /*thiz*/)
-    {
-#if defined QT_NO_TABLETEVENT
-        return false;
-#else
-        return true;
-#endif // QT_NO_TABLETEVENT
-    }
-
     static void tabletEvent(JNIEnv */*env*/, jobject /*thiz*/, jint /*winId*/, jint deviceId, jlong time, jint action,
         jint pointerType, jint buttonState, jfloat x, jfloat y, jfloat pressure)
     {
@@ -788,7 +779,6 @@ namespace QtAndroidInput
         {"mouseUp", "(III)V", (void *)mouseUp},
         {"mouseMove", "(III)V", (void *)mouseMove},
         {"longPress", "(III)V", (void *)longPress},
-        {"isTabletEventSupported", "()Z", (void *)isTabletEventSupported},
         {"tabletEvent", "(IIJIIIFFF)V", (void *)tabletEvent},
         {"keyDown", "(IIIZ)V", (void *)keyDown},
         {"keyUp", "(IIIZ)V", (void *)keyUp},
