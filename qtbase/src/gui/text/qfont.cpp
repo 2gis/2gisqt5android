@@ -70,7 +70,9 @@
 
 QT_BEGIN_NAMESPACE
 
-
+#ifndef QFONTCACHE_DECREASE_TRIGGER_LIMIT
+#  define QFONTCACHE_DECREASE_TRIGGER_LIMIT 256
+#endif
 
 bool QFontDef::exactMatch(const QFontDef &other) const
 {
@@ -725,7 +727,7 @@ void QFont::setFamily(const QString &family)
     Returns the requested font style name, it will be used to match the
     font with irregular styles (that can't be normalized in other style
     properties). It depends on system font support, thus only works for
-    OS X and X11 so far. On Windows irregular styles will be added
+    \macos and X11 so far. On Windows irregular styles will be added
     as separate font families so there is no need for this.
 
     \sa setFamily(), setStyle()
@@ -820,7 +822,7 @@ int QFont::pointSize() const
     \li Vertical hinting (light)
     \li Full hinting
     \row
-    \li Cocoa on OS X
+    \li Cocoa on \macos
     \li No hinting
     \li No hinting
     \li No hinting
@@ -2797,7 +2799,7 @@ void QFontCache::insertEngineData(const QFontDef &def, QFontEngineData *engineDa
 
     engineData->ref.ref();
     // Decrease now rather than waiting
-    if (total_cost > min_cost * 2)
+    if (total_cost > min_cost * 2 && engineDataCache.size() >= QFONTCACHE_DECREASE_TRIGGER_LIMIT)
         decreaseCache();
 
     engineDataCache.insert(def, engineData);
@@ -2846,7 +2848,7 @@ void QFontCache::insertEngine(const Key &key, QFontEngine *engine, bool insertMu
 #endif
     engine->ref.ref();
     // Decrease now rather than waiting
-    if (total_cost > min_cost * 2)
+    if (total_cost > min_cost * 2 && engineCache.size() >= QFONTCACHE_DECREASE_TRIGGER_LIMIT)
         decreaseCache();
 
     Engine data(engine);

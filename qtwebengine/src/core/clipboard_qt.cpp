@@ -53,6 +53,13 @@
 
 namespace QtWebEngineCore {
 
+static void registerMetaTypes()
+{
+    qRegisterMetaType<QClipboard::Mode>("QClipboard::Mode");
+}
+
+Q_CONSTRUCTOR_FUNCTION(registerMetaTypes)
+
 Q_GLOBAL_STATIC(ClipboardChangeObserver, clipboardChangeObserver)
 
 ClipboardChangeObserver::ClipboardChangeObserver()
@@ -282,6 +289,8 @@ void ClipboardQt::ReadAvailableTypes(ui::ClipboardType type, std::vector<base::s
 
     types->clear();
     const QMimeData *mimeData = QGuiApplication::clipboard()->mimeData(type == ui::CLIPBOARD_TYPE_COPY_PASTE ? QClipboard::Clipboard : QClipboard::Selection);
+    if (mimeData->hasImage())
+        types->push_back(toString16(QStringLiteral("image/png")));
     Q_FOREACH (const QString &mimeType, mimeData->formats())
         types->push_back(toString16(mimeType));
     *contains_filenames = false;
@@ -325,8 +334,6 @@ void ClipboardQt::ReadRTF(ui::ClipboardType type, std::string* result) const
 
 SkBitmap ClipboardQt::ReadImage(ui::ClipboardType type) const
 {
-    // FIXME: Untested, pasting image data seems to only be supported through
-    // FileReader.readAsDataURL in JavaScript and this isn't working down the pipe for some reason.
     const QMimeData *mimeData = QGuiApplication::clipboard()->mimeData(type == ui::CLIPBOARD_TYPE_COPY_PASTE ? QClipboard::Clipboard : QClipboard::Selection);
     QImage image = qvariant_cast<QImage>(mimeData->imageData());
 

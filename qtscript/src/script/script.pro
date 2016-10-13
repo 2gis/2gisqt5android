@@ -41,26 +41,8 @@ DEFINES += LOG_DISABLED=1
 
 include($$WEBKITDIR/JavaScriptCore/JavaScriptCore.pri)
 
-INCLUDEPATH += $$WEBKITDIR/JavaScriptCore
-INCLUDEPATH += $$WEBKITDIR/JavaScriptCore/parser
-INCLUDEPATH += $$WEBKITDIR/JavaScriptCore/bytecompiler
-INCLUDEPATH += $$WEBKITDIR/JavaScriptCore/debugger
-INCLUDEPATH += $$WEBKITDIR/JavaScriptCore/runtime
-INCLUDEPATH += $$WEBKITDIR/JavaScriptCore/wtf
-INCLUDEPATH += $$WEBKITDIR/JavaScriptCore/unicode
-INCLUDEPATH += $$WEBKITDIR/JavaScriptCore/interpreter
-INCLUDEPATH += $$WEBKITDIR/JavaScriptCore/jit
-INCLUDEPATH += $$WEBKITDIR/JavaScriptCore/profiler
-INCLUDEPATH += $$WEBKITDIR/JavaScriptCore/wrec
-INCLUDEPATH += $$WEBKITDIR/JavaScriptCore/API
-INCLUDEPATH += $$WEBKITDIR/JavaScriptCore/bytecode
-INCLUDEPATH += $$WEBKITDIR/JavaScriptCore/assembler
-INCLUDEPATH += $$WEBKITDIR/JavaScriptCore/generated
-
 # This line copied from WebCore.pro
 DEFINES += WTF_USE_JAVASCRIPTCORE_BINDINGS=1 WTF_CHANGES=1
-
-CONFIG(release, debug|release):DEFINES += NDEBUG
 
 # Avoid JSC C API functions being exported.
 DEFINES += JS_NO_EXPORT

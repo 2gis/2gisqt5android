@@ -217,14 +217,6 @@ private Q_SLOTS:
         pal.setColor(QPalette::Active, QPalette::Base, col);
         editor->setPalette(pal);
     }
-
-private:
-    static const QWidget *widget(const QStyleOptionViewItem &option)
-    {
-        if (const QStyleOptionViewItemV3 *v3 = qstyleoption_cast<const QStyleOptionViewItemV3 *>(&option))
-            return v3->widget;
-        return 0;
-    }
 };
 
 QScriptDebuggerLocalsItemDelegate::QScriptDebuggerLocalsItemDelegate(
@@ -306,7 +298,7 @@ void QScriptDebuggerLocalsItemDelegate::paint(QPainter *painter, const QStyleOpt
         QStyledItemDelegate::paint(painter, option, index);
     } else {
         // this is a top-level item.
-        const QTreeView *view = qobject_cast<const QTreeView*>(widget(option));
+        const QTreeView *view = qobject_cast<const QTreeView*>(option.widget);
         Q_ASSERT(view != 0);
 
         QStyleOptionButton buttonOption;

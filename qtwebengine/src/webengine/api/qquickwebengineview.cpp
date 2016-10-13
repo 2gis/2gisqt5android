@@ -86,6 +86,27 @@
 QT_BEGIN_NAMESPACE
 using namespace QtWebEngineCore;
 
+QQuickWebEngineView::WebAction editorActionForKeyEvent(QKeyEvent* event)
+{
+    static struct {
+        QKeySequence::StandardKey standardKey;
+        QQuickWebEngineView::WebAction action;
+    } editorActions[] = {
+        { QKeySequence::Cut, QQuickWebEngineView::Cut },
+        { QKeySequence::Copy, QQuickWebEngineView::Copy },
+        { QKeySequence::Paste, QQuickWebEngineView::Paste },
+        { QKeySequence::Undo, QQuickWebEngineView::Undo },
+        { QKeySequence::Redo, QQuickWebEngineView::Redo },
+        { QKeySequence::SelectAll, QQuickWebEngineView::SelectAll },
+        { QKeySequence::UnknownKey, QQuickWebEngineView::NoWebAction }
+    };
+    for (int i = 0; editorActions[i].standardKey != QKeySequence::UnknownKey; ++i)
+        if (event == editorActions[i].standardKey)
+            return editorActions[i].action;
+
+    return QQuickWebEngineView::NoWebAction;
+}
+
 #ifndef QT_NO_ACCESSIBILITY
 static QAccessibleInterface *webAccessibleFactory(const QString &, QObject *object)
 {
@@ -115,6 +136,8 @@ QQuickWebEngineViewPrivate::QQuickWebEngineViewPrivate()
     , m_dpiScale(1.0)
     , m_backgroundColor(Qt::white)
     , m_defaultZoomFactor(1.0)
+    // QTBUG-53467
+    , m_menuEnabled(true)
 {
     // The gold standard for mobile web content is 160 dpi, and the devicePixelRatio expected
     // is the (possibly quantized) ratio of device dpi to 160 dpi.
@@ -132,6 +155,8 @@ QQuickWebEngineViewPrivate::QQuickWebEngineViewPrivate()
         // 1x, 2x, 3x etc assets that fit an integral number of pixels.
         setDevicePixelRatio(qMax(1, qRound(webPixelRatio)));
     }
+    if (platform == QLatin1Literal("eglfs"))
+        m_menuEnabled = false;
 #ifndef QT_NO_ACCESSIBILITY
     QAccessible::installFactory(&webAccessibleFactory);
 #endif // QT_NO_ACCESSIBILITY
@@ -181,6 +206,12 @@ RenderWidgetHostViewQtDelegate *QQuickWebEngineViewPrivate::CreateRenderWidgetHo
 bool QQuickWebEngineViewPrivate::contextMenuRequested(const WebEngineContextMenuData &data)
 {
     Q_Q(QQuickWebEngineView);
+
+    if (!m_menuEnabled) {
+        qWarning("You are trying to open context menu on eglfs backend, which is not currently supported\n"
+                 "See QTBUG-53467.");
+        return false;
+    }
 
     // Assign the WebEngineView as the parent of the menu, so mouse events are properly propagated
     // on OSX.
@@ -320,7 +351,8 @@ void QQuickWebEngineViewPrivate::allowCertificateError(const QSharedPointer<Cert
     Q_Q(QQuickWebEngineView);
 
     QQuickWebEngineCertificateError *quickController = new QQuickWebEngineCertificateError(errorController);
-    QQmlEngine::setObjectOwnership(quickController, QQmlEngine::JavaScriptOwnership);
+    // mark the object for gc by creating temporary jsvalue
+    qmlEngine(q)->newQObject(quickController);
     Q_EMIT q->certificateError(quickController);
     if (!quickController->deferred() && !quickController->answered())
         quickController->rejectCertificate();
@@ -479,11 +511,23 @@ void QQuickWebEngineViewPrivate::focusContainer()
 void QQuickWebEngineViewPrivate::unhandledKeyEvent(QKeyEvent *event)
 {
     Q_Q(QQuickWebEngineView);
+#ifdef Q_OS_OSX
+    if (event->type() == QEvent::KeyPress) {
+        QQuickWebEngineView::WebAction action = editorActionForKeyEvent(event);
+        if (action != QQuickWebEngineView::NoWebAction) {
+            // Try triggering a registered short-cut
+            if (QGuiApplicationPrivate::instance()->shortcutMap.tryShortcut(event))
+                return;
+            q->triggerWebAction(action);
+            return;
+        }
+    }
+#endif
     if (q->parentItem())
         q->window()->sendEvent(q->parentItem(), event);
 }
 
-void QQuickWebEngineViewPrivate::adoptNewWindow(WebContentsAdapter *newWebContents, WindowOpenDisposition disposition, bool userGesture, const QRect &)
+void QQuickWebEngineViewPrivate::adoptNewWindow(QSharedPointer<WebContentsAdapter> newWebContents, WindowOpenDisposition disposition, bool userGesture, const QRect &)
 {
     Q_Q(QQuickWebEngineView);
     QQuickWebEngineNewViewRequest request;
@@ -618,6 +662,12 @@ WebEngineSettings *QQuickWebEngineViewPrivate::webEngineSettings() const
     return m_settings->d_ptr.data();
 }
 
+const QObject *QQuickWebEngineViewPrivate::holdingQObject() const
+{
+    Q_Q(const QQuickWebEngineView);
+    return q;
+}
+
 void QQuickWebEngineViewPrivate::setDevicePixelRatio(qreal devicePixelRatio)
 {
     Q_Q(QQuickWebEngineView);
@@ -678,7 +728,7 @@ QAccessible::State QQuickWebEngineViewAccessible::state() const
 class WebContentsAdapterOwner : public QObject
 {
 public:
-    typedef QExplicitlySharedDataPointer<QtWebEngineCore::WebContentsAdapter> AdapterPtr;
+    typedef QSharedPointer<QtWebEngineCore::WebContentsAdapter> AdapterPtr;
     WebContentsAdapterOwner(const AdapterPtr &ptr)
         : adapter(ptr)
     {}
@@ -705,9 +755,9 @@ void QQuickWebEngineViewPrivate::adoptWebContents(WebContentsAdapter *webContent
 
     // This throws away the WebContentsAdapter that has been used until now.
     // All its states, particularly the loading URL, are replaced by the adopted WebContentsAdapter.
-    WebContentsAdapterOwner *adapterOwner = new WebContentsAdapterOwner(adapter);
+    WebContentsAdapterOwner *adapterOwner = new WebContentsAdapterOwner(adapter->sharedFromThis());
     adapterOwner->deleteLater();
-    adapter = webContents;
+    adapter = webContents->sharedFromThis();
     adapter->initialize(this);
 
     // associate the webChannel with the new adapter
@@ -760,7 +810,7 @@ void QQuickWebEngineViewPrivate::ensureContentsAdapter()
 {
     Q_Q(QQuickWebEngineView);
     if (!adapter) {
-        adapter = new WebContentsAdapter();
+        adapter = QSharedPointer<WebContentsAdapter>::create();
         adapter->initialize(this);
         if (m_backgroundColor != Qt::white)
             adapter->backgroundColorChanged();
@@ -920,7 +970,7 @@ void QQuickWebEngineViewPrivate::setProfile(QQuickWebEngineProfile *profile)
     if (adapter && adapter->browserContext() != browserContextAdapter()->browserContext()) {
         // When the profile changes we need to create a new WebContentAdapter and reload the active URL.
         QUrl activeUrl = adapter->activeUrl();
-        adapter = 0;
+        adapter.reset();
         ensureContentsAdapter();
 
         if (!explicitUrl.isValid() && activeUrl.isValid())
@@ -943,14 +993,6 @@ void QQuickWebEngineView::setTestSupport(QQuickWebEngineTestSupport *testSupport
 
 #endif
 
-/*!
- * \qmlproperty bool WebEngineView::activeFocusOnPress
- * \since QtWebEngine 1.2
- *
- * This property specifies whether the view should gain active focus when pressed.
- * The default value is true.
- *
- */
 bool QQuickWebEngineView::activeFocusOnPress() const
 {
     Q_D(const QQuickWebEngineView);
@@ -999,6 +1041,12 @@ void QQuickWebEngineViewPrivate::renderProcessTerminated(
     Q_Q(QQuickWebEngineView);
     Q_EMIT q->renderProcessTerminated(static_cast<QQuickWebEngineView::RenderProcessTerminationStatus>(
                                       renderProcessExitStatus(terminationStatus)), exitCode);
+}
+
+bool QQuickWebEngineViewPrivate::isEnabled() const
+{
+    const Q_Q(QQuickWebEngineView);
+    return q->isEnabled();
 }
 
 bool QQuickWebEngineView::isLoading() const
@@ -1062,18 +1110,6 @@ qreal QQuickWebEngineView::zoomFactor() const
     return d->adapter->currentZoomFactor();
 }
 
-/*!
-    \qmlproperty bool WebEngineView::backgroundColor
-    \since QtWebEngine 1.2
-
-    Sets this property to change the color of the WebEngineView's background,
-    behing the document's body. You can set it to "transparent" or to a translucent
-    color to see through the document, or you can set this color to match your
-    web content in an hybrid app to prevent the white flashes that may appear
-    during loading.
-
-    The default value is white.
-*/
 QColor QQuickWebEngineView::backgroundColor() const
 {
     Q_D(const QQuickWebEngineView);

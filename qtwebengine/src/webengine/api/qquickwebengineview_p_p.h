@@ -68,6 +68,8 @@ class QQmlComponent;
 class QQmlContext;
 class QQuickWebEngineSettings;
 
+QQuickWebEngineView::WebAction editorActionForKeyEvent(QKeyEvent* event);
+
 #ifdef ENABLE_QML_TESTSUPPORT_API
 class QQuickWebEngineTestSupport;
 #endif
@@ -140,7 +142,7 @@ public:
     virtual void loadFinished(bool success, const QUrl &url, bool isErrorPage = false, int errorCode = 0, const QString &errorDescription = QString()) Q_DECL_OVERRIDE;
     virtual void focusContainer() Q_DECL_OVERRIDE;
     virtual void unhandledKeyEvent(QKeyEvent *event) Q_DECL_OVERRIDE;
-    virtual void adoptNewWindow(QtWebEngineCore::WebContentsAdapter *newWebContents, WindowOpenDisposition disposition, bool userGesture, const QRect &) Q_DECL_OVERRIDE;
+    virtual void adoptNewWindow(QSharedPointer<QtWebEngineCore::WebContentsAdapter> newWebContents, WindowOpenDisposition disposition, bool userGesture, const QRect &) Q_DECL_OVERRIDE;
     virtual bool isBeingAdopted() Q_DECL_OVERRIDE;
     virtual void close() Q_DECL_OVERRIDE;
     virtual void windowCloseRejected() Q_DECL_OVERRIDE;
@@ -163,7 +165,7 @@ public:
     virtual QObject *accessibilityParentObject() Q_DECL_OVERRIDE;
 #endif // QT_NO_ACCESSIBILITY
     virtual QtWebEngineCore::WebEngineSettings *webEngineSettings() const Q_DECL_OVERRIDE;
-    virtual void allowCertificateError(const QSharedPointer<CertificateErrorController> &errorController);
+    virtual void allowCertificateError(const QSharedPointer<CertificateErrorController> &errorController) Q_DECL_OVERRIDE;
     virtual void runGeolocationPermissionRequest(QUrl const&) Q_DECL_OVERRIDE;
     virtual void showValidationMessage(const QRect &anchor, const QString &mainText, const QString &subText) Q_DECL_OVERRIDE;
     virtual void hideValidationMessage() Q_DECL_OVERRIDE;
@@ -171,6 +173,8 @@ public:
     virtual void renderProcessTerminated(RenderProcessTerminationStatus terminationStatus,
                                      int exitCode) Q_DECL_OVERRIDE;
     virtual void requestGeometryChange(const QRect &geometry) Q_DECL_OVERRIDE { Q_UNUSED(geometry); }
+    virtual bool isEnabled() const Q_DECL_OVERRIDE;
+    const QObject *holdingQObject() const Q_DECL_OVERRIDE;
 
     virtual QSharedPointer<QtWebEngineCore::BrowserContextAdapter> browserContextAdapter() Q_DECL_OVERRIDE;
 
@@ -186,7 +190,7 @@ public:
     static QQuickWebEngineScript *userScripts_at(QQmlListProperty<QQuickWebEngineScript> *p, int idx);
     static void userScripts_clear(QQmlListProperty<QQuickWebEngineScript> *p);
 
-    QExplicitlySharedDataPointer<QtWebEngineCore::WebContentsAdapter> adapter;
+    QSharedPointer<QtWebEngineCore::WebContentsAdapter> adapter;
     QScopedPointer<QQuickWebEngineViewExperimental> e;
     QScopedPointer<QQuickWebEngineViewport> v;
     QScopedPointer<QQuickWebEngineHistory> m_history;
@@ -214,6 +218,8 @@ private:
     qreal m_dpiScale;
     QColor m_backgroundColor;
     qreal m_defaultZoomFactor;
+    // QTBUG-53467
+    bool m_menuEnabled;
 };
 
 #ifndef QT_NO_ACCESSIBILITY

@@ -1175,6 +1175,10 @@ inline int QXmlStreamReaderPrivate::fastScanLiteralContent()
             }
             // fall through
         default:
+            if (c < 0x20) {
+                putChar(c);
+                return n;
+            }
             textBuffer += QChar(c);
             ++n;
         }
@@ -3019,10 +3023,14 @@ void QXmlStreamWriterPrivate::checkIfASCIICompatibleCodec()
 {
 #ifndef QT_NO_TEXTCODEC
     Q_ASSERT(encoder);
-    // assumes ASCII-compatibility for all 8-bit encodings
-    QChar space = QLatin1Char(' ');
-    const QByteArray bytes = encoder->fromUnicode(&space, 1);
-    isCodecASCIICompatible = (bytes.count() == 1);
+    // test ASCII-compatibility using the letter 'a'
+    QChar letterA = QLatin1Char('a');
+    const QByteArray bytesA = encoder->fromUnicode(&letterA, 1);
+    const bool isCodecASCIICompatibleA = (bytesA.count() == 1) && (bytesA[0] == 0x61) ;
+    QChar letterLess = QLatin1Char('<');
+    const QByteArray bytesLess = encoder->fromUnicode(&letterLess, 1);
+    const bool isCodecASCIICompatibleLess = (bytesLess.count() == 1) && (bytesLess[0] == 0x3C) ;
+    isCodecASCIICompatible = isCodecASCIICompatibleA && isCodecASCIICompatibleLess ;
 #else
     isCodecASCIICompatible = true;
 #endif

@@ -539,8 +539,11 @@ static void quitQtAndroidPlugin(JNIEnv *env, jclass /*clazz*/)
 
 static void terminateQt(JNIEnv *env, jclass /*clazz*/)
 {
-    sem_wait(&m_terminateSemaphore);
-    sem_destroy(&m_terminateSemaphore);
+    // QAndroidEventDispatcherStopper is stopped when the user uses the task manager to kill the application
+    if (!QAndroidEventDispatcherStopper::instance()->stopped()) {
+        sem_wait(&m_terminateSemaphore);
+        sem_destroy(&m_terminateSemaphore);
+    }
     env->DeleteGlobalRef(m_applicationClass);
     env->DeleteGlobalRef(m_classLoaderObject);
     if (m_resourcesObj)
@@ -558,8 +561,11 @@ static void terminateQt(JNIEnv *env, jclass /*clazz*/)
     m_androidPlatformIntegration = nullptr;
     delete m_androidAssetsFileEngineHandler;
     m_androidAssetsFileEngineHandler = nullptr;
-    sem_post(&m_exitSemaphore);
-    pthread_join(m_qtAppThread, nullptr);
+
+    if (!QAndroidEventDispatcherStopper::instance()->stopped()) {
+        sem_post(&m_exitSemaphore);
+        pthread_join(m_qtAppThread, nullptr);
+    }
 }
 
 static void setSurface(JNIEnv *env, jobject /*thiz*/, jint id, jobject jSurface, jint w, jint h)
@@ -822,6 +828,11 @@ QT_END_NAMESPACE
 
 Q_DECL_EXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void */*reserved*/)
 {
+    static bool initialized = false;
+    if (initialized)
+        return JNI_VERSION_1_6;
+    initialized = true;
+
     QT_USE_NAMESPACE
     typedef union {
         JNIEnv *nativeEnvironment;

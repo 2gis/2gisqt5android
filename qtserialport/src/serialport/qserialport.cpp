@@ -107,7 +107,6 @@ QSerialPortPrivate::QSerialPortPrivate()
     , startAsyncWriteTimer(0)
     , originalEventMask(0)
     , triggeredEventMask(0)
-    , actualBytesToWrite(0)
 #elif defined(Q_OS_UNIX)
     , descriptor(-1)
     , readNotifier(0)
@@ -155,6 +154,8 @@ void QSerialPortPrivate::setError(const QSerialPortErrorInfo &errorInfo)
     \note The serial port is always opened with exclusive access
     (that is, no other process or thread can access an already opened serial port).
 
+    Use the close() method to close the port and cancel the I/O operations.
+
     Having successfully opened, QSerialPort tries to determine the current
     configuration of the port and initializes itself. You can reconfigure the
     port to the desired setting using the setBaudRate(), setDataBits(),
@@ -173,7 +174,19 @@ void QSerialPortPrivate::setError(const QSerialPortErrorInfo &errorInfo)
     QSerialPort's internal read buffer. You can limit the size of the read
     buffer using setReadBufferSize().
 
-    Use the close() method to close the port and cancel the I/O operations.
+    QSerialPort provides a set of functions that suspend the
+    calling thread until certain signals are emitted. These functions
+    can be used to implement blocking serial ports:
+
+    \list
+
+    \li waitForReadyRead() blocks calls until new data is available for
+    reading.
+
+    \li waitForBytesWritten() blocks calls until one payload of data has
+    been written to the serial port.
+
+    \endlist
 
     See the following example:
 
@@ -1260,13 +1273,7 @@ qint64 QSerialPort::bytesAvailable() const
 qint64 QSerialPort::bytesToWrite() const
 {
     Q_D(const QSerialPort);
-    qint64 bytes = QIODevice::bytesToWrite();
-#ifdef Q_OS_WIN32
-    bytes += d->actualBytesToWrite;
-#else
-    bytes += d->writeBuffer.size();
-#endif
-    return bytes;
+    return QIODevice::bytesToWrite() + d->writeBuffer.size();
 }
 
 /*!

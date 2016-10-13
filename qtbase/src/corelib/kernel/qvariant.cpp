@@ -945,6 +945,26 @@ static bool convert(const QVariant::Private *d, int t, void *result, bool *ok)
             }
         }
 #endif
+        if (QMetaType::typeFlags(t) & QMetaType::IsEnumeration) {
+            qlonglong value = qConvertToNumber(d, ok);
+            if (*ok) {
+                switch (QMetaType::sizeOf(t)) {
+                case 1:
+                    *static_cast<signed char *>(result) = value;
+                    return true;
+                case 2:
+                    *static_cast<qint16 *>(result) = value;
+                    return true;
+                case 4:
+                    *static_cast<qint32 *>(result) = value;
+                    return true;
+                case 8:
+                    *static_cast<qint64 *>(result) = value;
+                    return true;
+                }
+            }
+            return *ok;
+        }
         return false;
     }
     return true;
@@ -2702,7 +2722,7 @@ qlonglong QVariant::toLongLong(bool *ok) const
 }
 
 /*!
-    Returns the variant as as an unsigned long long int if the
+    Returns the variant as an unsigned long long int if the
     variant has type() \l QMetaType::ULongLong, \l QMetaType::Bool,
     \l QMetaType::QByteArray, \l QMetaType::QChar, \l QMetaType::Double,
     \l QMetaType::Int, \l QMetaType::LongLong, \l QMetaType::QString, or
@@ -2819,7 +2839,7 @@ static const quint32 qCanConvertMatrix[QVariant::LastCoreType + 1] =
 
 /*Int*/           1 << QVariant::UInt       | 1 << QVariant::String     | 1 << QVariant::Double
                 | 1 << QVariant::Bool       | 1 << QVariant::LongLong   | 1 << QVariant::ULongLong
-                | 1 << QVariant::Char       | 1 << QVariant::ByteArray,
+                | 1 << QVariant::Char       | 1 << QVariant::ByteArray  | 1 << QVariant::Int,
 
 /*UInt*/          1 << QVariant::Int        | 1 << QVariant::String     | 1 << QVariant::Double
                 | 1 << QVariant::Bool       | 1 << QVariant::LongLong   | 1 << QVariant::ULongLong
@@ -3540,6 +3560,8 @@ int QVariant::compare(const QVariant &v) const
         return v1.toTime() < v2.toTime() ? -1 : 1;
     case QVariant::DateTime:
         return v1.toDateTime() < v2.toDateTime() ? -1 : 1;
+    case QVariant::StringList:
+        return v1.toStringList() < v2.toStringList() ? -1 : 1;
     }
     int r = v1.toString().compare(v2.toString(), Qt::CaseInsensitive);
     if (r == 0) {

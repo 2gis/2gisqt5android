@@ -26,7 +26,7 @@
 ****************************************************************************/
 
 /*!
-    \title Mac Functions
+    \title macOS Functions
     \ingroup examples-qtmacextras
     \example macfunctions
     \brief Demonstrates using functions from the QtMac namespace.
@@ -36,5 +36,5 @@
 
     \include examples-run.qdocinc
 
-    \sa {Qt for OS X}, {Qt Mac Extras}
+    \sa {Qt for macOS}, {Qt Mac Extras}
 */

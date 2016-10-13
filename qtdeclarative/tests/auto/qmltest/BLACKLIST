@@ -3,3 +3,7 @@
 *
 [SelfTests::test_blacklistWithData:test2]
 *
+[tst_grabImage::test_equals]
+linux
+[ListView::test_listInteractiveCurrentIndexEnforce]
+linux

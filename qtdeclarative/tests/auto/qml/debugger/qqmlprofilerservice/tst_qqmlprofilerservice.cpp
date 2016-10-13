@@ -135,7 +135,7 @@ public:
     };
 
     QQmlProfilerClient(QQmlDebugConnection *connection)
-        : QQmlDebugClient(QLatin1String("CanvasFrameRate"), connection)
+        : QQmlDebugClient(QLatin1String("CanvasFrameRate"), connection), lastTimestamp(-1)
     {
     }
 
@@ -144,6 +144,8 @@ public:
     QVector<QQmlProfilerData> jsHeapMessages;
     QVector<QQmlProfilerData> asynchronousMessages;
     QVector<QQmlProfilerData> pixmapMessages;
+
+    qint64 lastTimestamp;
 
     void setTraceState(bool enabled, quint32 flushInterval = 0) {
         QByteArray message;
@@ -343,6 +345,10 @@ void QQmlProfilerClient::messageReceived(const QByteArray &message)
         break;
     }
     QVERIFY(stream.atEnd());
+
+    QVERIFY(data.time >= lastTimestamp);
+    lastTimestamp = data.time;
+
     if (data.messageType == QQmlProfilerClient::PixmapCacheEvent)
         pixmapMessages.append(data);
     else if (data.messageType == QQmlProfilerClient::SceneGraphFrame ||
@@ -642,11 +648,11 @@ void tst_QQmlProfilerService::scenegraphData()
     checkTraceReceived();
     checkJsHeap();
 
-    // check that at least one frame was rendered
-    // there should be a SGPolishAndSync + SGRendererFrame + SGRenderLoopFrame sequence
-    // (though we can't be sure to get the SGRenderLoopFrame in the threaded renderer)
+    // Check that at least one frame was rendered.
+    // There should be a SGContextFrame + SGRendererFrame + SGRenderLoopFrame sequence,
+    // but we can't be sure to get the SGRenderLoopFrame in the threaded renderer.
     //
-    // since the rendering happens in a different thread, there could be other unrelated events
+    // Since the rendering happens in a different thread, there could be other unrelated events
     // interleaved. Also, events could carry the same time stamps and be sorted in an unexpected way
     // if the clocks are acting up.
     qint64 contextFrameTime = -1;
@@ -675,8 +681,13 @@ void tst_QQmlProfilerService::scenegraphData()
 
     foreach (const QQmlProfilerData &msg, m_client->asynchronousMessages) {
         if (msg.detailType == QQmlProfilerClient::SceneGraphRenderLoopFrame) {
-            QVERIFY(msg.time >= renderFrameTime);
-            break;
+            if (msg.time >= contextFrameTime) {
+                // Make sure SceneGraphRenderLoopFrame is not between SceneGraphContextFrame and
+                // SceneGraphRendererFrame. A SceneGraphRenderLoopFrame before everything else is
+                // OK as the scene graph might decide to do an initial rendering.
+                QVERIFY(msg.time >= renderFrameTime);
+                break;
+            }
         }
     }
 }

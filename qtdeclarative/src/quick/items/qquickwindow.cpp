@@ -669,10 +669,10 @@ bool QQuickWindowPrivate::translateTouchToMouse(QQuickItem *item, QTouchEvent *e
                     lastMousePosition = me->windowPos();
 
                     bool accepted = me->isAccepted();
-                    bool delivered = deliverHoverEvent(contentItem, me->windowPos(), last, me->modifiers(), accepted);
+                    bool delivered = deliverHoverEvent(contentItem, me->windowPos(), last, me->modifiers(), me->timestamp(), accepted);
                     if (!delivered) {
                         //take care of any exits
-                        accepted = clearHover();
+                        accepted = clearHover(me->timestamp());
                     }
                     me->setAccepted(accepted);
                     break;
@@ -793,8 +793,10 @@ void QQuickWindowPrivate::setFocusInScope(QQuickItem *scope, QQuickItem *item, Q
     QQuickItemPrivate *scopePrivate = scope ? QQuickItemPrivate::get(scope) : 0;
     QQuickItemPrivate *itemPrivate = QQuickItemPrivate::get(item);
 
+    QQuickItem *oldActiveFocusItem = 0;
     QQuickItem *currentActiveFocusItem = activeFocusItem;
     QQuickItem *newActiveFocusItem = 0;
+    bool sendFocusIn = false;
 
     lastFocusReason = reason;
 
@@ -802,7 +804,6 @@ void QQuickWindowPrivate::setFocusInScope(QQuickItem *scope, QQuickItem *item, Q
 
     // Does this change the active focus?
     if (item == contentItem || scopePrivate->activeFocus) {
-        QQuickItem *oldActiveFocusItem = 0;
         oldActiveFocusItem = activeFocusItem;
         if (item->isEnabled()) {
             newActiveFocusItem = item;
@@ -821,8 +822,6 @@ void QQuickWindowPrivate::setFocusInScope(QQuickItem *scope, QQuickItem *item, Q
 #endif
 
             activeFocusItem = 0;
-            QFocusEvent event(QEvent::FocusOut, reason);
-            q->sendEvent(oldActiveFocusItem, &event);
 
             QQuickItem *afi = oldActiveFocusItem;
             while (afi && afi != scope) {
@@ -867,7 +866,19 @@ void QQuickWindowPrivate::setFocusInScope(QQuickItem *scope, QQuickItem *item, Q
             afi = afi->parentItem();
         }
         updateFocusItemTransform();
+        sendFocusIn = true;
+    }
 
+    // Now that all the state is changed, emit signals & events
+    // We must do this last, as this process may result in further changes to
+    // focus.
+    if (oldActiveFocusItem) {
+        QFocusEvent event(QEvent::FocusOut, reason);
+        q->sendEvent(oldActiveFocusItem, &event);
+    }
+
+    // Make sure that the FocusOut didn't result in another focus change.
+    if (sendFocusIn && activeFocusItem == newActiveFocusItem) {
         QFocusEvent event(QEvent::FocusIn, reason);
         q->sendEvent(newActiveFocusItem, &event);
     }
@@ -920,9 +931,6 @@ void QQuickWindowPrivate::clearFocusInScope(QQuickItem *scope, QQuickItem *item,
         activeFocusItem = 0;
 
         if (oldActiveFocusItem) {
-            QFocusEvent event(QEvent::FocusOut, reason);
-            q->sendEvent(oldActiveFocusItem, &event);
-
             QQuickItem *afi = oldActiveFocusItem;
             while (afi && afi != scope) {
                 if (QQuickItemPrivate::get(afi)->activeFocus) {
@@ -952,7 +960,18 @@ void QQuickWindowPrivate::clearFocusInScope(QQuickItem *scope, QQuickItem *item,
         Q_ASSERT(newActiveFocusItem == scope);
         activeFocusItem = scope;
         updateFocusItemTransform();
+    }
 
+    // Now that all the state is changed, emit signals & events
+    // We must do this last, as this process may result in further changes to
+    // focus.
+    if (oldActiveFocusItem) {
+        QFocusEvent event(QEvent::FocusOut, reason);
+        q->sendEvent(oldActiveFocusItem, &event);
+    }
+
+    // Make sure that the FocusOut didn't result in another focus change.
+    if (newActiveFocusItem && activeFocusItem == newActiveFocusItem) {
         QFocusEvent event(QEvent::FocusIn, reason);
         q->sendEvent(newActiveFocusItem, &event);
     }
@@ -1386,7 +1405,7 @@ QQuickItem *QQuickWindow::mouseGrabberItem() const
 }
 
 
-bool QQuickWindowPrivate::clearHover()
+bool QQuickWindowPrivate::clearHover(ulong timestamp)
 {
     Q_Q(QQuickWindow);
     if (hoverItems.isEmpty())
@@ -1396,7 +1415,7 @@ bool QQuickWindowPrivate::clearHover()
 
     bool accepted = false;
     foreach (QQuickItem* item, hoverItems)
-        accepted = sendHoverEvent(QEvent::HoverLeave, item, pos, pos, QGuiApplication::keyboardModifiers(), true) || accepted;
+        accepted = sendHoverEvent(QEvent::HoverLeave, item, pos, pos, QGuiApplication::keyboardModifiers(), timestamp, true) || accepted;
     hoverItems.clear();
     return accepted;
 }
@@ -1573,6 +1592,12 @@ bool QQuickWindowPrivate::deliverMouseEvent(QMouseEvent *event)
     }
 
     if (mouseGrabberItem) {
+        if (event->button() != Qt::NoButton
+            && mouseGrabberItem->acceptedMouseButtons()
+            && !(mouseGrabberItem->acceptedMouseButtons() & event->button())) {
+            event->ignore();
+            return false;
+        }
         QPointF localPos = mouseGrabberItem->mapFromScene(event->windowPos());
         QScopedPointer<QMouseEvent> me(cloneMouseEvent(event, &localPos));
         me->accept();
@@ -1646,13 +1671,15 @@ void QQuickWindow::mouseDoubleClickEvent(QMouseEvent *event)
 
 bool QQuickWindowPrivate::sendHoverEvent(QEvent::Type type, QQuickItem *item,
                                       const QPointF &scenePos, const QPointF &lastScenePos,
-                                      Qt::KeyboardModifiers modifiers, bool accepted)
+                                      Qt::KeyboardModifiers modifiers, ulong timestamp,
+                                      bool accepted)
 {
     Q_Q(QQuickWindow);
     const QTransform transform = QQuickItemPrivate::get(item)->windowToItemTransform();
 
     //create copy of event
     QHoverEvent hoverEvent(type, transform.map(scenePos), transform.map(lastScenePos), modifiers);
+    hoverEvent.setTimestamp(timestamp);
     hoverEvent.setAccepted(accepted);
 
     QSet<QQuickItem *> hasFiltered;
@@ -1688,10 +1715,10 @@ void QQuickWindow::mouseMoveEvent(QMouseEvent *event)
         d->lastMousePosition = event->windowPos();
 
         bool accepted = event->isAccepted();
-        bool delivered = d->deliverHoverEvent(d->contentItem, event->windowPos(), last, event->modifiers(), accepted);
+        bool delivered = d->deliverHoverEvent(d->contentItem, event->windowPos(), last, event->modifiers(), event->timestamp(), accepted);
         if (!delivered) {
             //take care of any exits
-            accepted = d->clearHover();
+            accepted = d->clearHover(event->timestamp());
         }
         event->setAccepted(accepted);
         return;
@@ -1701,7 +1728,7 @@ void QQuickWindow::mouseMoveEvent(QMouseEvent *event)
 }
 
 bool QQuickWindowPrivate::deliverHoverEvent(QQuickItem *item, const QPointF &scenePos, const QPointF &lastScenePos,
-                                         Qt::KeyboardModifiers modifiers, bool &accepted)
+                                         Qt::KeyboardModifiers modifiers, ulong timestamp, bool &accepted)
 {
     Q_Q(QQuickWindow);
     QQuickItemPrivate *itemPrivate = QQuickItemPrivate::get(item);
@@ -1717,7 +1744,7 @@ bool QQuickWindowPrivate::deliverHoverEvent(QQuickItem *item, const QPointF &sce
         QQuickItem *child = children.at(ii);
         if (!child->isVisible() || !child->isEnabled() || QQuickItemPrivate::get(child)->culled)
             continue;
-        if (deliverHoverEvent(child, scenePos, lastScenePos, modifiers, accepted))
+        if (deliverHoverEvent(child, scenePos, lastScenePos, modifiers, timestamp, accepted))
             return true;
     }
 
@@ -1726,7 +1753,7 @@ bool QQuickWindowPrivate::deliverHoverEvent(QQuickItem *item, const QPointF &sce
         if (item->contains(p)) {
             if (!hoverItems.isEmpty() && hoverItems[0] == item) {
                 //move
-                accepted = sendHoverEvent(QEvent::HoverMove, item, scenePos, lastScenePos, modifiers, accepted);
+                accepted = sendHoverEvent(QEvent::HoverMove, item, scenePos, lastScenePos, modifiers, timestamp, accepted);
             } else {
                 QList<QQuickItem *> itemsToHover;
                 QQuickItem* parent = item;
@@ -1737,12 +1764,12 @@ bool QQuickWindowPrivate::deliverHoverEvent(QQuickItem *item, const QPointF &sce
                 // Leaving from previous hovered items until we reach the item or one of its ancestors.
                 while (!hoverItems.isEmpty() && !itemsToHover.contains(hoverItems[0])) {
                     QQuickItem *hoverLeaveItem = hoverItems.takeFirst();
-                    sendHoverEvent(QEvent::HoverLeave, hoverLeaveItem, scenePos, lastScenePos, modifiers, accepted);
+                    sendHoverEvent(QEvent::HoverLeave, hoverLeaveItem, scenePos, lastScenePos, modifiers, timestamp, accepted);
                 }
 
                 if (!hoverItems.isEmpty() && hoverItems[0] == item){//Not entering a new Item
                     // ### Shouldn't we send moves for the parent items as well?
-                    accepted = sendHoverEvent(QEvent::HoverMove, item, scenePos, lastScenePos, modifiers, accepted);
+                    accepted = sendHoverEvent(QEvent::HoverMove, item, scenePos, lastScenePos, modifiers, timestamp, accepted);
                 } else {
                     // Enter items that are not entered yet.
                     int startIdx = -1;
@@ -1761,7 +1788,7 @@ bool QQuickWindowPrivate::deliverHoverEvent(QQuickItem *item, const QPointF &sce
                         // itemToHoverPrivate->window here prevents that case.
                         if (itemToHoverPrivate->window == q && itemToHoverPrivate->hoverEnabled) {
                             hoverItems.prepend(itemToHover);
-                            sendHoverEvent(QEvent::HoverEnter, itemToHover, scenePos, lastScenePos, modifiers, accepted);
+                            sendHoverEvent(QEvent::HoverEnter, itemToHover, scenePos, lastScenePos, modifiers, timestamp, accepted);
                         }
                     }
                 }

@@ -57,7 +57,7 @@ public:
     static EnginioQmlClientPrivate* get(EnginioClientConnection *client) { return static_cast<EnginioQmlClientPrivate*>(EnginioClientConnectionPrivate::get(client)); }
     static EnginioQmlClient* get(EnginioClientConnectionPrivate *client) { return static_cast<EnginioQmlClient*>(client->q_ptr); }
 
-    virtual void init();
+    virtual void init() Q_DECL_OVERRIDE;
     virtual void emitSessionTerminated() const Q_DECL_OVERRIDE;
     virtual void emitSessionAuthenticated(EnginioReplyState *reply) Q_DECL_OVERRIDE;
     virtual void emitSessionAuthenticationError(EnginioReplyState *reply) Q_DECL_OVERRIDE;

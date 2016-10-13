@@ -170,6 +170,10 @@ ExecutionEngine::ExecutionEngine(EvalISelFactory *factory)
                                              /* writable */ true, /* executable */ false,
                                              /* includesGuardPages */ true);
     jsStackBase = (Value *)jsStack->base();
+#ifdef V4_USE_VALGRIND
+    VALGRIND_MAKE_MEM_UNDEFINED(jsStackBase, 2*JSStackLimit);
+#endif
+
     jsStackTop = jsStackBase;
 
     exceptionValue = jsAlloca(1);
@@ -178,10 +182,6 @@ ExecutionEngine::ExecutionEngine(EvalISelFactory *factory)
     typedArrayPrototype = static_cast<Object *>(jsAlloca(NTypedArrayTypes));
     typedArrayCtors = static_cast<FunctionObject *>(jsAlloca(NTypedArrayTypes));
     jsStrings = jsAlloca(NJSStrings);
-
-#ifdef V4_USE_VALGRIND
-    VALGRIND_MAKE_MEM_UNDEFINED(jsStackBase, 2*JSStackLimit);
-#endif
 
     // set up stack limits
     jsStackLimit = jsStackBase + JSStackLimit/sizeof(Value);
@@ -1143,8 +1143,13 @@ static QVariant toVariant(QV4::ExecutionEngine *e, const QV4::Value &value, int 
         return value.integerValue();
     if (value.isNumber())
         return value.asDouble();
-    if (value.isString())
-        return value.stringValue()->toQString();
+    if (value.isString()) {
+        const QString &str = value.toQString();
+        // QChars are stored as a strings
+        if (typeHint == QVariant::Char && str.size() == 1)
+            return str.at(0);
+        return str;
+    }
     if (const QV4::QQmlLocaleData *ld = value.as<QV4::QQmlLocaleData>())
         return ld->d()->locale;
     if (const QV4::DateObject *d = value.as<DateObject>())
@@ -1284,9 +1289,9 @@ QV4::ReturnedValue QV4::ExecutionEngine::fromVariant(const QVariant &variant)
             case QMetaType::UShort:
                 return QV4::Encode((int)*reinterpret_cast<const unsigned short*>(ptr));
             case QMetaType::Char:
-                return newString(QChar::fromLatin1(*reinterpret_cast<const char *>(ptr)))->asReturnedValue();
+                return QV4::Encode((int)*reinterpret_cast<const char*>(ptr));
             case QMetaType::UChar:
-                return newString(QChar::fromLatin1(*reinterpret_cast<const unsigned char *>(ptr)))->asReturnedValue();
+                return QV4::Encode((int)*reinterpret_cast<const unsigned char*>(ptr));
             case QMetaType::QChar:
                 return newString(*reinterpret_cast<const QChar *>(ptr))->asReturnedValue();
             case QMetaType::QDateTime:

@@ -33,6 +33,7 @@ force_debug_info {
 # Copy this logic from qt_module.prf so that ninja can run according
 # to the same rules as the final module linking in core_module.pro.
 !host_build:if(win32|mac):!macx-xcode {
+    contains(QT_CONFIG, simulator_and_device): CONFIG += iphonesimulator_and_iphoneos
     contains(QT_CONFIG, debug_and_release):CONFIG += debug_and_release
     contains(QT_CONFIG, build_all):CONFIG += build_all
 }
@@ -80,6 +81,7 @@ contains(QT_ARCH, "arm") {
         else: GYP_CONFIG += arm_fpu=\"$$MFPU\" arm_neon=0 arm_neon_optional=0
     }
 
+    contains(QMAKE_CFLAGS, "-marm"): GYP_CONFIG += arm_thumb=0
     contains(QMAKE_CFLAGS, "-mthumb"): GYP_CONFIG += arm_thumb=1
 }
 
@@ -87,9 +89,16 @@ contains(QT_ARCH, "mips") {
     !cross_compile: GYP_CONFIG += sysroot=\"\"
     GYP_CONFIG += target_arch=mipsel
 
-    contains(QMAKE_CFLAGS, "mips32r6"): mips_arch_variant=\"r6\"
-    else: contains(QMAKE_CFLAGS, "mips32r2"): mips_arch_variant=\"r2\"
-    else: contains(QMAKE_CFLAGS, "mips32"): mips_arch_variant=\"r1\"
+    MARCH = $$extractCFlag("-march=.*")
+    !isEmpty(MARCH) {
+        equals(MARCH, "mips32r6"): GYP_CONFIG += mips_arch_variant=\"r6\"
+        else: equals(MARCH, "mips32r2"): GYP_CONFIG += mips_arch_variant=\"r2\"
+        else: equals(MARCH, "mips32"): GYP_CONFIG += mips_arch_variant=\"r1\"
+    } else {
+        contains(QMAKE_CFLAGS, "mips32r6"): GYP_CONFIG += mips_arch_variant=\"r6\"
+        else: contains(QMAKE_CFLAGS, "mips32r2"): GYP_CONFIG += mips_arch_variant=\"r2\"
+        else: contains(QMAKE_CFLAGS, "mips32"): GYP_CONFIG += mips_arch_variant=\"r1\"
+    }
 
     contains(QMAKE_CFLAGS, "-mdsp2"): GYP_CONFIG += mips_dsp_rev=2
     else: contains(QMAKE_CFLAGS, "-mdsp"): GYP_CONFIG += mips_dsp_rev=1
@@ -111,7 +120,7 @@ contains(WEBENGINE_CONFIG, use_proprietary_codecs): GYP_CONFIG += proprietary_co
 for (config, GYP_CONFIG): GYP_ARGS += "-D $$config"
 
 !build_pass {
-    message("Running gyp_qtwebengine \"$$OUT_PWD\" $${GYP_ARGS}...")
+    message("Running gyp_qtwebengine \"$$OUT_PWD\" $${GYP_ARGS}.")
     !system("python $$QTWEBENGINE_ROOT/tools/buildscripts/gyp_qtwebengine \"$$OUT_PWD\" $${GYP_ARGS}"): error("-- running gyp_qtwebengine failed --")
 }
 

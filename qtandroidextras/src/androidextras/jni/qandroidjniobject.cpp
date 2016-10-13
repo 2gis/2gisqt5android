@@ -735,7 +735,7 @@ QAndroidJniObject::QAndroidJniObject(const QJNIObjectPrivate &o) : d(new QJNIObj
 }
 
 template <>
-void QAndroidJniObject::callMethod<void>(const char *methodName, const char *sig, ...) const
+Q_ANDROIDEXTRAS_EXPORT void QAndroidJniObject::callMethod<void>(const char *methodName, const char *sig, ...) const
 {
     va_list args;
     va_start(args, sig);
@@ -744,7 +744,7 @@ void QAndroidJniObject::callMethod<void>(const char *methodName, const char *sig
 }
 
 template <>
-jboolean QAndroidJniObject::callMethod<jboolean>(const char *methodName, const char *sig, ...) const
+Q_ANDROIDEXTRAS_EXPORT jboolean QAndroidJniObject::callMethod<jboolean>(const char *methodName, const char *sig, ...) const
 {
     va_list args;
     va_start(args, sig);
@@ -754,7 +754,7 @@ jboolean QAndroidJniObject::callMethod<jboolean>(const char *methodName, const c
 }
 
 template <>
-jbyte QAndroidJniObject::callMethod<jbyte>(const char *methodName, const char *sig, ...) const
+Q_ANDROIDEXTRAS_EXPORT jbyte QAndroidJniObject::callMethod<jbyte>(const char *methodName, const char *sig, ...) const
 {
     va_list args;
     va_start(args, sig);
@@ -764,7 +764,7 @@ jbyte QAndroidJniObject::callMethod<jbyte>(const char *methodName, const char *s
 }
 
 template <>
-jchar QAndroidJniObject::callMethod<jchar>(const char *methodName, const char *sig, ...) const
+Q_ANDROIDEXTRAS_EXPORT jchar QAndroidJniObject::callMethod<jchar>(const char *methodName, const char *sig, ...) const
 {
     va_list args;
     va_start(args, sig);
@@ -774,7 +774,7 @@ jchar QAndroidJniObject::callMethod<jchar>(const char *methodName, const char *s
 }
 
 template <>
-jshort QAndroidJniObject::callMethod<jshort>(const char *methodName, const char *sig, ...) const
+Q_ANDROIDEXTRAS_EXPORT jshort QAndroidJniObject::callMethod<jshort>(const char *methodName, const char *sig, ...) const
 {
     va_list args;
     va_start(args, sig);
@@ -784,7 +784,7 @@ jshort QAndroidJniObject::callMethod<jshort>(const char *methodName, const char 
 }
 
 template <>
-jint QAndroidJniObject::callMethod<jint>(const char *methodName, const char *sig, ...) const
+Q_ANDROIDEXTRAS_EXPORT jint QAndroidJniObject::callMethod<jint>(const char *methodName, const char *sig, ...) const
 {
     va_list args;
     va_start(args, sig);
@@ -794,7 +794,7 @@ jint QAndroidJniObject::callMethod<jint>(const char *methodName, const char *sig
 }
 
 template <>
-jlong QAndroidJniObject::callMethod<jlong>(const char *methodName, const char *sig, ...) const
+Q_ANDROIDEXTRAS_EXPORT jlong QAndroidJniObject::callMethod<jlong>(const char *methodName, const char *sig, ...) const
 {
     va_list args;
     va_start(args, sig);
@@ -804,7 +804,7 @@ jlong QAndroidJniObject::callMethod<jlong>(const char *methodName, const char *s
 }
 
 template <>
-jfloat QAndroidJniObject::callMethod<jfloat>(const char *methodName, const char *sig, ...) const
+Q_ANDROIDEXTRAS_EXPORT jfloat QAndroidJniObject::callMethod<jfloat>(const char *methodName, const char *sig, ...) const
 {
     va_list args;
     va_start(args, sig);
@@ -814,7 +814,7 @@ jfloat QAndroidJniObject::callMethod<jfloat>(const char *methodName, const char 
 }
 
 template <>
-jdouble QAndroidJniObject::callMethod<jdouble>(const char *methodName, const char *sig, ...) const
+Q_ANDROIDEXTRAS_EXPORT jdouble QAndroidJniObject::callMethod<jdouble>(const char *methodName, const char *sig, ...) const
 {
     va_list args;
     va_start(args, sig);
@@ -835,139 +835,139 @@ QAndroidJniObject QAndroidJniObject::callObjectMethod(const char *methodName,
 }
 
 template <>
-void QAndroidJniObject::callMethod<void>(const char *methodName) const
+Q_ANDROIDEXTRAS_EXPORT void QAndroidJniObject::callMethod<void>(const char *methodName) const
 {
     callMethod<void>(methodName, "()V");
 }
 
 template <>
-jboolean QAndroidJniObject::callMethod<jboolean>(const char *methodName) const
+Q_ANDROIDEXTRAS_EXPORT jboolean QAndroidJniObject::callMethod<jboolean>(const char *methodName) const
 {
     return callMethod<jboolean>(methodName, "()Z");
 }
 
 template <>
-jbyte QAndroidJniObject::callMethod<jbyte>(const char *methodName) const
+Q_ANDROIDEXTRAS_EXPORT jbyte QAndroidJniObject::callMethod<jbyte>(const char *methodName) const
 {
     return callMethod<jbyte>(methodName, "()B");
 }
 
 template <>
-jchar QAndroidJniObject::callMethod<jchar>(const char *methodName) const
+Q_ANDROIDEXTRAS_EXPORT jchar QAndroidJniObject::callMethod<jchar>(const char *methodName) const
 {
     return callMethod<jchar>(methodName, "()C");
 }
 
 template <>
-jshort QAndroidJniObject::callMethod<jshort>(const char *methodName) const
+Q_ANDROIDEXTRAS_EXPORT jshort QAndroidJniObject::callMethod<jshort>(const char *methodName) const
 {
     return callMethod<jshort>(methodName, "()S");
 }
 
 template <>
-jint QAndroidJniObject::callMethod<jint>(const char *methodName) const
+Q_ANDROIDEXTRAS_EXPORT jint QAndroidJniObject::callMethod<jint>(const char *methodName) const
 {
     return callMethod<jint>(methodName, "()I");
 }
 
 template <>
-jlong QAndroidJniObject::callMethod<jlong>(const char *methodName) const
+Q_ANDROIDEXTRAS_EXPORT jlong QAndroidJniObject::callMethod<jlong>(const char *methodName) const
 {
     return callMethod<jlong>(methodName, "()J");
 }
 
 template <>
-jfloat QAndroidJniObject::callMethod<jfloat>(const char *methodName) const
+Q_ANDROIDEXTRAS_EXPORT jfloat QAndroidJniObject::callMethod<jfloat>(const char *methodName) const
 {
     return callMethod<jfloat>(methodName, "()F");
 }
 
 template <>
-jdouble QAndroidJniObject::callMethod<jdouble>(const char *methodName) const
+Q_ANDROIDEXTRAS_EXPORT jdouble QAndroidJniObject::callMethod<jdouble>(const char *methodName) const
 {
     return callMethod<jdouble>(methodName, "()D");
 }
 
 template <>
-QAndroidJniObject QAndroidJniObject::callObjectMethod<jobject>(const char *methodName) const
+Q_ANDROIDEXTRAS_EXPORT QAndroidJniObject QAndroidJniObject::callObjectMethod<jobject>(const char *methodName) const
 {
     return d->callObjectMethod(methodName, "()Ljava/lang/Object;");
 }
 
 template <>
-QAndroidJniObject QAndroidJniObject::callObjectMethod<jclass>(const char *methodName) const
+Q_ANDROIDEXTRAS_EXPORT QAndroidJniObject QAndroidJniObject::callObjectMethod<jclass>(const char *methodName) const
 {
     return d->callObjectMethod(methodName, "()Ljava/lang/Class;");
 }
 
 template <>
-QAndroidJniObject QAndroidJniObject::callObjectMethod<jstring>(const char *methodName) const
+Q_ANDROIDEXTRAS_EXPORT QAndroidJniObject QAndroidJniObject::callObjectMethod<jstring>(const char *methodName) const
 {
     return d->callObjectMethod(methodName, "()Ljava/lang/String;");
 }
 
 template <>
-QAndroidJniObject QAndroidJniObject::callObjectMethod<jobjectArray>(const char *methodName) const
+Q_ANDROIDEXTRAS_EXPORT QAndroidJniObject QAndroidJniObject::callObjectMethod<jobjectArray>(const char *methodName) const
 {
     return d->callObjectMethod(methodName, "()[Ljava/lang/Object;");
 }
 
 template <>
-QAndroidJniObject QAndroidJniObject::callObjectMethod<jbooleanArray>(const char *methodName) const
+Q_ANDROIDEXTRAS_EXPORT QAndroidJniObject QAndroidJniObject::callObjectMethod<jbooleanArray>(const char *methodName) const
 {
     return d->callObjectMethod(methodName, "()[Z");
 }
 
 template <>
-QAndroidJniObject QAndroidJniObject::callObjectMethod<jbyteArray>(const char *methodName) const
+Q_ANDROIDEXTRAS_EXPORT QAndroidJniObject QAndroidJniObject::callObjectMethod<jbyteArray>(const char *methodName) const
 {
     return d->callObjectMethod(methodName, "()[B");
 }
 
 template <>
-QAndroidJniObject QAndroidJniObject::callObjectMethod<jcharArray>(const char *methodName) const
+Q_ANDROIDEXTRAS_EXPORT QAndroidJniObject QAndroidJniObject::callObjectMethod<jcharArray>(const char *methodName) const
 {
     return d->callObjectMethod(methodName, "()[C");
 }
 
 template <>
-QAndroidJniObject QAndroidJniObject::callObjectMethod<jshortArray>(const char *methodName) const
+Q_ANDROIDEXTRAS_EXPORT QAndroidJniObject QAndroidJniObject::callObjectMethod<jshortArray>(const char *methodName) const
 {
     return d->callObjectMethod(methodName, "()[S");
 }
 
 template <>
-QAndroidJniObject QAndroidJniObject::callObjectMethod<jintArray>(const char *methodName) const
+Q_ANDROIDEXTRAS_EXPORT QAndroidJniObject QAndroidJniObject::callObjectMethod<jintArray>(const char *methodName) const
 {
     return d->callObjectMethod(methodName, "()[I");
 }
 
 template <>
-QAndroidJniObject QAndroidJniObject::callObjectMethod<jlongArray>(const char *methodName) const
+Q_ANDROIDEXTRAS_EXPORT QAndroidJniObject QAndroidJniObject::callObjectMethod<jlongArray>(const char *methodName) const
 {
     return d->callObjectMethod(methodName, "()[J");
 }
 
 template <>
-QAndroidJniObject QAndroidJniObject::callObjectMethod<jfloatArray>(const char *methodName) const
+Q_ANDROIDEXTRAS_EXPORT QAndroidJniObject QAndroidJniObject::callObjectMethod<jfloatArray>(const char *methodName) const
 {
     return d->callObjectMethod(methodName, "()[F");
 }
 
 template <>
-QAndroidJniObject QAndroidJniObject::callObjectMethod<jdoubleArray>(const char *methodName) const
+Q_ANDROIDEXTRAS_EXPORT QAndroidJniObject QAndroidJniObject::callObjectMethod<jdoubleArray>(const char *methodName) const
 {
     return d->callObjectMethod(methodName, "()[D");
 }
 
 template <>
-QAndroidJniObject QAndroidJniObject::callObjectMethod<jthrowable>(const char *methodName) const
+Q_ANDROIDEXTRAS_EXPORT QAndroidJniObject QAndroidJniObject::callObjectMethod<jthrowable>(const char *methodName) const
 {
     return d->callObjectMethod(methodName, "()Ljava/lang/Throwable;");
 }
 
 template <>
-void QAndroidJniObject::callStaticMethod<void>(const char *className,
+Q_ANDROIDEXTRAS_EXPORT void QAndroidJniObject::callStaticMethod<void>(const char *className,
                                         const char *methodName,
                                         const char *sig,
                                         ...)
@@ -979,7 +979,7 @@ void QAndroidJniObject::callStaticMethod<void>(const char *className,
 }
 
 template <>
-void QAndroidJniObject::callStaticMethod<void>(jclass clazz,
+Q_ANDROIDEXTRAS_EXPORT void QAndroidJniObject::callStaticMethod<void>(jclass clazz,
                                         const char *methodName,
                                         const char *sig,
                                         ...)
@@ -991,7 +991,7 @@ void QAndroidJniObject::callStaticMethod<void>(jclass clazz,
 }
 
 template <>
-jboolean QAndroidJniObject::callStaticMethod<jboolean>(const char *className,
+Q_ANDROIDEXTRAS_EXPORT jboolean QAndroidJniObject::callStaticMethod<jboolean>(const char *className,
                                                 const char *methodName,
                                                 const char *sig,
                                                 ...)
@@ -1004,7 +1004,7 @@ jboolean QAndroidJniObject::callStaticMethod<jboolean>(const char *className,
 }
 
 template <>
-jboolean QAndroidJniObject::callStaticMethod<jboolean>(jclass clazz,
+Q_ANDROIDEXTRAS_EXPORT jboolean QAndroidJniObject::callStaticMethod<jboolean>(jclass clazz,
                                                 const char *methodName,
                                                 const char *sig,
                                                 ...)
@@ -1017,7 +1017,7 @@ jboolean QAndroidJniObject::callStaticMethod<jboolean>(jclass clazz,
 }
 
 template <>
-jbyte QAndroidJniObject::callStaticMethod<jbyte>(const char *className,
+Q_ANDROIDEXTRAS_EXPORT jbyte QAndroidJniObject::callStaticMethod<jbyte>(const char *className,
                                           const char *methodName,
                                           const char *sig,
                                           ...)
@@ -1030,7 +1030,7 @@ jbyte QAndroidJniObject::callStaticMethod<jbyte>(const char *className,
 }
 
 template <>
-jbyte QAndroidJniObject::callStaticMethod<jbyte>(jclass clazz,
+Q_ANDROIDEXTRAS_EXPORT jbyte QAndroidJniObject::callStaticMethod<jbyte>(jclass clazz,
                                           const char *methodName,
                                           const char *sig,
                                           ...)
@@ -1043,7 +1043,7 @@ jbyte QAndroidJniObject::callStaticMethod<jbyte>(jclass clazz,
 }
 
 template <>
-jchar QAndroidJniObject::callStaticMethod<jchar>(const char *className,
+Q_ANDROIDEXTRAS_EXPORT jchar QAndroidJniObject::callStaticMethod<jchar>(const char *className,
                                           const char *methodName,
                                           const char *sig,
                                           ...)
@@ -1056,7 +1056,7 @@ jchar QAndroidJniObject::callStaticMethod<jchar>(const char *className,
 }
 
 template <>
-jchar QAndroidJniObject::callStaticMethod<jchar>(jclass clazz,
+Q_ANDROIDEXTRAS_EXPORT jchar QAndroidJniObject::callStaticMethod<jchar>(jclass clazz,
                                           const char *methodName,
                                           const char *sig,
                                           ...)
@@ -1070,7 +1070,7 @@ jchar QAndroidJniObject::callStaticMethod<jchar>(jclass clazz,
 
 
 template <>
-jshort QAndroidJniObject::callStaticMethod<jshort>(const char *className,
+Q_ANDROIDEXTRAS_EXPORT jshort QAndroidJniObject::callStaticMethod<jshort>(const char *className,
                                             const char *methodName,
                                             const char *sig,
                                             ...)
@@ -1083,7 +1083,7 @@ jshort QAndroidJniObject::callStaticMethod<jshort>(const char *className,
 }
 
 template <>
-jshort QAndroidJniObject::callStaticMethod<jshort>(jclass clazz,
+Q_ANDROIDEXTRAS_EXPORT jshort QAndroidJniObject::callStaticMethod<jshort>(jclass clazz,
                                             const char *methodName,
                                             const char *sig,
                                             ...)
@@ -1096,7 +1096,7 @@ jshort QAndroidJniObject::callStaticMethod<jshort>(jclass clazz,
 }
 
 template <>
-jint QAndroidJniObject::callStaticMethod<jint>(const char *className,
+Q_ANDROIDEXTRAS_EXPORT jint QAndroidJniObject::callStaticMethod<jint>(const char *className,
                                         const char *methodName,
                                         const char *sig,
                                         ...)
@@ -1109,7 +1109,7 @@ jint QAndroidJniObject::callStaticMethod<jint>(const char *className,
 }
 
 template <>
-jint QAndroidJniObject::callStaticMethod<jint>(jclass clazz,
+Q_ANDROIDEXTRAS_EXPORT jint QAndroidJniObject::callStaticMethod<jint>(jclass clazz,
                                         const char *methodName,
                                         const char *sig,
                                         ...)
@@ -1122,7 +1122,7 @@ jint QAndroidJniObject::callStaticMethod<jint>(jclass clazz,
 }
 
 template <>
-jlong QAndroidJniObject::callStaticMethod<jlong>(const char *className,
+Q_ANDROIDEXTRAS_EXPORT jlong QAndroidJniObject::callStaticMethod<jlong>(const char *className,
                                           const char *methodName,
                                           const char *sig,
                                           ...)
@@ -1135,7 +1135,7 @@ jlong QAndroidJniObject::callStaticMethod<jlong>(const char *className,
 }
 
 template <>
-jlong QAndroidJniObject::callStaticMethod<jlong>(jclass clazz,
+Q_ANDROIDEXTRAS_EXPORT jlong QAndroidJniObject::callStaticMethod<jlong>(jclass clazz,
                                           const char *methodName,
                                           const char *sig,
                                           ...)
@@ -1148,7 +1148,7 @@ jlong QAndroidJniObject::callStaticMethod<jlong>(jclass clazz,
 }
 
 template <>
-jfloat QAndroidJniObject::callStaticMethod<jfloat>(const char *className,
+Q_ANDROIDEXTRAS_EXPORT jfloat QAndroidJniObject::callStaticMethod<jfloat>(const char *className,
                                             const char *methodName,
                                             const char *sig,
                                             ...)
@@ -1161,7 +1161,7 @@ jfloat QAndroidJniObject::callStaticMethod<jfloat>(const char *className,
 }
 
 template <>
-jfloat QAndroidJniObject::callStaticMethod<jfloat>(jclass clazz,
+Q_ANDROIDEXTRAS_EXPORT jfloat QAndroidJniObject::callStaticMethod<jfloat>(jclass clazz,
                                             const char *methodName,
                                             const char *sig,
                                             ...)
@@ -1174,7 +1174,7 @@ jfloat QAndroidJniObject::callStaticMethod<jfloat>(jclass clazz,
 }
 
 template <>
-jdouble QAndroidJniObject::callStaticMethod<jdouble>(const char *className,
+Q_ANDROIDEXTRAS_EXPORT jdouble QAndroidJniObject::callStaticMethod<jdouble>(const char *className,
                                               const char *methodName,
                                               const char *sig,
                                               ...)
@@ -1187,7 +1187,7 @@ jdouble QAndroidJniObject::callStaticMethod<jdouble>(const char *className,
 }
 
 template <>
-jdouble QAndroidJniObject::callStaticMethod<jdouble>(jclass clazz,
+Q_ANDROIDEXTRAS_EXPORT jdouble QAndroidJniObject::callStaticMethod<jdouble>(jclass clazz,
                                               const char *methodName,
                                               const char *sig,
                                               ...)
@@ -1227,339 +1227,339 @@ QAndroidJniObject QAndroidJniObject::callStaticObjectMethod(jclass clazz,
 }
 
 template <>
-void QAndroidJniObject::callStaticMethod<void>(const char *className, const char *methodName)
+Q_ANDROIDEXTRAS_EXPORT void QAndroidJniObject::callStaticMethod<void>(const char *className, const char *methodName)
 {
     callStaticMethod<void>(className, methodName, "()V");
 }
 
 template <>
-void QAndroidJniObject::callStaticMethod<void>(jclass clazz, const char *methodName)
+Q_ANDROIDEXTRAS_EXPORT void QAndroidJniObject::callStaticMethod<void>(jclass clazz, const char *methodName)
 {
     callStaticMethod<void>(clazz, methodName, "()V");
 }
 
 template <>
-jboolean QAndroidJniObject::callStaticMethod<jboolean>(const char *className, const char *methodName)
+Q_ANDROIDEXTRAS_EXPORT jboolean QAndroidJniObject::callStaticMethod<jboolean>(const char *className, const char *methodName)
 {
     return callStaticMethod<jboolean>(className, methodName, "()Z");
 }
 
 template <>
-jboolean QAndroidJniObject::callStaticMethod<jboolean>(jclass clazz, const char *methodName)
+Q_ANDROIDEXTRAS_EXPORT jboolean QAndroidJniObject::callStaticMethod<jboolean>(jclass clazz, const char *methodName)
 {
     return callStaticMethod<jboolean>(clazz, methodName, "()Z");
 }
 
 template <>
-jbyte QAndroidJniObject::callStaticMethod<jbyte>(const char *className, const char *methodName)
+Q_ANDROIDEXTRAS_EXPORT jbyte QAndroidJniObject::callStaticMethod<jbyte>(const char *className, const char *methodName)
 {
     return callStaticMethod<jbyte>(className, methodName, "()B");
 }
 
 template <>
-jbyte QAndroidJniObject::callStaticMethod<jbyte>(jclass clazz, const char *methodName)
+Q_ANDROIDEXTRAS_EXPORT jbyte QAndroidJniObject::callStaticMethod<jbyte>(jclass clazz, const char *methodName)
 {
     return callStaticMethod<jbyte>(clazz, methodName, "()B");
 }
 
 template <>
-jchar QAndroidJniObject::callStaticMethod<jchar>(const char *className, const char *methodName)
+Q_ANDROIDEXTRAS_EXPORT jchar QAndroidJniObject::callStaticMethod<jchar>(const char *className, const char *methodName)
 {
     return callStaticMethod<jchar>(className, methodName, "()C");
 }
 
 template <>
-jchar QAndroidJniObject::callStaticMethod<jchar>(jclass clazz, const char *methodName)
+Q_ANDROIDEXTRAS_EXPORT jchar QAndroidJniObject::callStaticMethod<jchar>(jclass clazz, const char *methodName)
 {
     return callStaticMethod<jchar>(clazz, methodName, "()C");
 }
 
 template <>
-jshort QAndroidJniObject::callStaticMethod<jshort>(const char *className, const char *methodName)
+Q_ANDROIDEXTRAS_EXPORT jshort QAndroidJniObject::callStaticMethod<jshort>(const char *className, const char *methodName)
 {
     return callStaticMethod<jshort>(className, methodName, "()S");
 }
 
 template <>
-jshort QAndroidJniObject::callStaticMethod<jshort>(jclass clazz, const char *methodName)
+Q_ANDROIDEXTRAS_EXPORT jshort QAndroidJniObject::callStaticMethod<jshort>(jclass clazz, const char *methodName)
 {
     return callStaticMethod<jshort>(clazz, methodName, "()S");
 }
 
 template <>
-jint QAndroidJniObject::callStaticMethod<jint>(const char *className, const char *methodName)
+Q_ANDROIDEXTRAS_EXPORT jint QAndroidJniObject::callStaticMethod<jint>(const char *className, const char *methodName)
 {
     return callStaticMethod<jint>(className, methodName, "()I");
 }
 
 template <>
-jint QAndroidJniObject::callStaticMethod<jint>(jclass clazz, const char *methodName)
+Q_ANDROIDEXTRAS_EXPORT jint QAndroidJniObject::callStaticMethod<jint>(jclass clazz, const char *methodName)
 {
     return callStaticMethod<jint>(clazz, methodName, "()I");
 }
 
 template <>
-jlong QAndroidJniObject::callStaticMethod<jlong>(const char *className, const char *methodName)
+Q_ANDROIDEXTRAS_EXPORT jlong QAndroidJniObject::callStaticMethod<jlong>(const char *className, const char *methodName)
 {
     return callStaticMethod<jlong>(className, methodName, "()J");
 }
 
 template <>
-jlong QAndroidJniObject::callStaticMethod<jlong>(jclass clazz, const char *methodName)
+Q_ANDROIDEXTRAS_EXPORT jlong QAndroidJniObject::callStaticMethod<jlong>(jclass clazz, const char *methodName)
 {
     return callStaticMethod<jlong>(clazz, methodName, "()J");
 }
 
 template <>
-jfloat QAndroidJniObject::callStaticMethod<jfloat>(const char *className, const char *methodName)
+Q_ANDROIDEXTRAS_EXPORT jfloat QAndroidJniObject::callStaticMethod<jfloat>(const char *className, const char *methodName)
 {
     return callStaticMethod<jfloat>(className, methodName, "()F");
 }
 
 template <>
-jfloat QAndroidJniObject::callStaticMethod<jfloat>(jclass clazz, const char *methodName)
+Q_ANDROIDEXTRAS_EXPORT jfloat QAndroidJniObject::callStaticMethod<jfloat>(jclass clazz, const char *methodName)
 {
     return callStaticMethod<jfloat>(clazz, methodName, "()F");
 }
 
 template <>
-jdouble QAndroidJniObject::callStaticMethod<jdouble>(const char *className, const char *methodName)
+Q_ANDROIDEXTRAS_EXPORT jdouble QAndroidJniObject::callStaticMethod<jdouble>(const char *className, const char *methodName)
 {
     return callStaticMethod<jdouble>(className, methodName, "()D");
 }
 
 template <>
-jdouble QAndroidJniObject::callStaticMethod<jdouble>(jclass clazz, const char *methodName)
+Q_ANDROIDEXTRAS_EXPORT jdouble QAndroidJniObject::callStaticMethod<jdouble>(jclass clazz, const char *methodName)
 {
     return callStaticMethod<jdouble>(clazz, methodName, "()D");
 }
 
 template <>
-QAndroidJniObject QAndroidJniObject::callStaticObjectMethod<jobject>(const char *className,
+Q_ANDROIDEXTRAS_EXPORT QAndroidJniObject QAndroidJniObject::callStaticObjectMethod<jobject>(const char *className,
                                                                      const char *methodName)
 {
     return callStaticObjectMethod(className, methodName, "()Ljava/lang/Object;");
 }
 
 template <>
-QAndroidJniObject QAndroidJniObject::callStaticObjectMethod<jobject>(jclass clazz,
+Q_ANDROIDEXTRAS_EXPORT QAndroidJniObject QAndroidJniObject::callStaticObjectMethod<jobject>(jclass clazz,
                                                                      const char *methodName)
 {
     return callStaticObjectMethod(clazz, methodName, "()Ljava/lang/Object;");
 }
 
 template <>
-QAndroidJniObject QAndroidJniObject::callStaticObjectMethod<jclass>(const char *className,
+Q_ANDROIDEXTRAS_EXPORT QAndroidJniObject QAndroidJniObject::callStaticObjectMethod<jclass>(const char *className,
                                                                     const char *methodName)
 {
     return callStaticObjectMethod(className, methodName, "()Ljava/lang/Class;");
 }
 
 template <>
-QAndroidJniObject QAndroidJniObject::callStaticObjectMethod<jclass>(jclass clazz,
+Q_ANDROIDEXTRAS_EXPORT QAndroidJniObject QAndroidJniObject::callStaticObjectMethod<jclass>(jclass clazz,
                                                                     const char *methodName)
 {
     return callStaticObjectMethod(clazz, methodName, "()Ljava/lang/Class;");
 }
 
 template <>
-QAndroidJniObject QAndroidJniObject::callStaticObjectMethod<jstring>(const char *className,
+Q_ANDROIDEXTRAS_EXPORT QAndroidJniObject QAndroidJniObject::callStaticObjectMethod<jstring>(const char *className,
                                                        const char *methodName)
 {
     return callStaticObjectMethod(className, methodName, "()Ljava/lang/String;");
 }
 
 template <>
-QAndroidJniObject QAndroidJniObject::callStaticObjectMethod<jstring>(jclass clazz,
+Q_ANDROIDEXTRAS_EXPORT QAndroidJniObject QAndroidJniObject::callStaticObjectMethod<jstring>(jclass clazz,
                                                        const char *methodName)
 {
     return callStaticObjectMethod(clazz, methodName, "()Ljava/lang/String;");
 }
 
 template <>
-QAndroidJniObject QAndroidJniObject::callStaticObjectMethod<jobjectArray>(const char *className,
+Q_ANDROIDEXTRAS_EXPORT QAndroidJniObject QAndroidJniObject::callStaticObjectMethod<jobjectArray>(const char *className,
                                                                           const char *methodName)
 {
     return callStaticObjectMethod(className, methodName, "()[Ljava/lang/Object;");
 }
 
 template <>
-QAndroidJniObject QAndroidJniObject::callStaticObjectMethod<jobjectArray>(jclass clazz,
+Q_ANDROIDEXTRAS_EXPORT QAndroidJniObject QAndroidJniObject::callStaticObjectMethod<jobjectArray>(jclass clazz,
                                                                           const char *methodName)
 {
     return callStaticObjectMethod(clazz, methodName, "()[Ljava/lang/Object;");
 }
 
 template <>
-QAndroidJniObject QAndroidJniObject::callStaticObjectMethod<jbooleanArray>(const char *className,
+Q_ANDROIDEXTRAS_EXPORT QAndroidJniObject QAndroidJniObject::callStaticObjectMethod<jbooleanArray>(const char *className,
                                                              const char *methodName)
 {
     return callStaticObjectMethod(className, methodName, "()[Z");
 }
 
 template <>
-QAndroidJniObject QAndroidJniObject::callStaticObjectMethod<jbooleanArray>(jclass clazz,
+Q_ANDROIDEXTRAS_EXPORT QAndroidJniObject QAndroidJniObject::callStaticObjectMethod<jbooleanArray>(jclass clazz,
                                                              const char *methodName)
 {
     return callStaticObjectMethod(clazz, methodName, "()[Z");
 }
 
 template <>
-QAndroidJniObject QAndroidJniObject::callStaticObjectMethod<jbyteArray>(const char *className,
+Q_ANDROIDEXTRAS_EXPORT QAndroidJniObject QAndroidJniObject::callStaticObjectMethod<jbyteArray>(const char *className,
                                                           const char *methodName)
 {
     return callStaticObjectMethod(className, methodName, "()[B");
 }
 
 template <>
-QAndroidJniObject QAndroidJniObject::callStaticObjectMethod<jbyteArray>(jclass clazz,
+Q_ANDROIDEXTRAS_EXPORT QAndroidJniObject QAndroidJniObject::callStaticObjectMethod<jbyteArray>(jclass clazz,
                                                           const char *methodName)
 {
     return callStaticObjectMethod(clazz, methodName, "()[B");
 }
 
 template <>
-QAndroidJniObject QAndroidJniObject::callStaticObjectMethod<jcharArray>(const char *className,
+Q_ANDROIDEXTRAS_EXPORT QAndroidJniObject QAndroidJniObject::callStaticObjectMethod<jcharArray>(const char *className,
                                                           const char *methodName)
 {
     return callStaticObjectMethod(className, methodName, "()[C");
 }
 
 template <>
-QAndroidJniObject QAndroidJniObject::callStaticObjectMethod<jcharArray>(jclass clazz,
+Q_ANDROIDEXTRAS_EXPORT QAndroidJniObject QAndroidJniObject::callStaticObjectMethod<jcharArray>(jclass clazz,
                                                           const char *methodName)
 {
     return callStaticObjectMethod(clazz, methodName, "()[C");
 }
 
 template <>
-QAndroidJniObject QAndroidJniObject::callStaticObjectMethod<jshortArray>(const char *className,
+Q_ANDROIDEXTRAS_EXPORT QAndroidJniObject QAndroidJniObject::callStaticObjectMethod<jshortArray>(const char *className,
                                                            const char *methodName)
 {
     return callStaticObjectMethod(className, methodName, "()[S");
 }
 
 template <>
-QAndroidJniObject QAndroidJniObject::callStaticObjectMethod<jshortArray>(jclass clazz,
+Q_ANDROIDEXTRAS_EXPORT QAndroidJniObject QAndroidJniObject::callStaticObjectMethod<jshortArray>(jclass clazz,
                                                            const char *methodName)
 {
     return callStaticObjectMethod(clazz, methodName, "()[S");
 }
 
 template <>
-QAndroidJniObject QAndroidJniObject::callStaticObjectMethod<jintArray>(const char *className,
+Q_ANDROIDEXTRAS_EXPORT QAndroidJniObject QAndroidJniObject::callStaticObjectMethod<jintArray>(const char *className,
                                                          const char *methodName)
 {
     return callStaticObjectMethod(className, methodName, "()[I");
 }
 
 template <>
-QAndroidJniObject QAndroidJniObject::callStaticObjectMethod<jintArray>(jclass clazz,
+Q_ANDROIDEXTRAS_EXPORT QAndroidJniObject QAndroidJniObject::callStaticObjectMethod<jintArray>(jclass clazz,
                                                          const char *methodName)
 {
     return callStaticObjectMethod(clazz, methodName, "()[I");
 }
 
 template <>
-QAndroidJniObject QAndroidJniObject::callStaticObjectMethod<jlongArray>(const char *className,
+Q_ANDROIDEXTRAS_EXPORT QAndroidJniObject QAndroidJniObject::callStaticObjectMethod<jlongArray>(const char *className,
                                                           const char *methodName)
 {
     return callStaticObjectMethod(className, methodName, "()[J");
 }
 
 template <>
-QAndroidJniObject QAndroidJniObject::callStaticObjectMethod<jlongArray>(jclass clazz,
+Q_ANDROIDEXTRAS_EXPORT QAndroidJniObject QAndroidJniObject::callStaticObjectMethod<jlongArray>(jclass clazz,
                                                           const char *methodName)
 {
     return callStaticObjectMethod(clazz, methodName, "()[J");
 }
 
 template <>
-QAndroidJniObject QAndroidJniObject::callStaticObjectMethod<jfloatArray>(const char *className,
+Q_ANDROIDEXTRAS_EXPORT QAndroidJniObject QAndroidJniObject::callStaticObjectMethod<jfloatArray>(const char *className,
                                                            const char *methodName)
 {
     return callStaticObjectMethod(className, methodName, "()[F");
 }
 
 template <>
-QAndroidJniObject QAndroidJniObject::callStaticObjectMethod<jfloatArray>(jclass clazz,
+Q_ANDROIDEXTRAS_EXPORT QAndroidJniObject QAndroidJniObject::callStaticObjectMethod<jfloatArray>(jclass clazz,
                                                            const char *methodName)
 {
     return callStaticObjectMethod(clazz, methodName, "()[F");
 }
 
 template <>
-QAndroidJniObject QAndroidJniObject::callStaticObjectMethod<jdoubleArray>(const char *className,
+Q_ANDROIDEXTRAS_EXPORT QAndroidJniObject QAndroidJniObject::callStaticObjectMethod<jdoubleArray>(const char *className,
                                                             const char *methodName)
 {
     return callStaticObjectMethod(className, methodName, "()[D");
 }
 
 template <>
-QAndroidJniObject QAndroidJniObject::callStaticObjectMethod<jdoubleArray>(jclass clazz,
+Q_ANDROIDEXTRAS_EXPORT QAndroidJniObject QAndroidJniObject::callStaticObjectMethod<jdoubleArray>(jclass clazz,
                                                             const char *methodName)
 {
     return callStaticObjectMethod(clazz, methodName, "()[D");
 }
 
 template <>
-QAndroidJniObject QAndroidJniObject::callStaticObjectMethod<jthrowable>(const char *className,
+Q_ANDROIDEXTRAS_EXPORT QAndroidJniObject QAndroidJniObject::callStaticObjectMethod<jthrowable>(const char *className,
                                                                         const char *methodName)
 {
     return callStaticObjectMethod(className, methodName, "()Ljava/lang/Throwable;");
 }
 
 template <>
-QAndroidJniObject QAndroidJniObject::callStaticObjectMethod<jthrowable>(jclass clazz,
+Q_ANDROIDEXTRAS_EXPORT QAndroidJniObject QAndroidJniObject::callStaticObjectMethod<jthrowable>(jclass clazz,
                                                                         const char *methodName)
 {
     return callStaticObjectMethod(clazz, methodName, "()Ljava/lang/Throwable;");
 }
 
 template <>
-jboolean QAndroidJniObject::getField<jboolean>(const char *fieldName) const
+Q_ANDROIDEXTRAS_EXPORT jboolean QAndroidJniObject::getField<jboolean>(const char *fieldName) const
 {
     return d->getField<jboolean>(fieldName);
 }
 
 template <>
-jbyte QAndroidJniObject::getField<jbyte>(const char *fieldName) const
+Q_ANDROIDEXTRAS_EXPORT jbyte QAndroidJniObject::getField<jbyte>(const char *fieldName) const
 {
     return d->getField<jbyte>(fieldName);
 }
 
 template <>
-jchar QAndroidJniObject::getField<jchar>(const char *fieldName) const
+Q_ANDROIDEXTRAS_EXPORT jchar QAndroidJniObject::getField<jchar>(const char *fieldName) const
 {
     return d->getField<jchar>(fieldName);
 }
 
 template <>
-jshort QAndroidJniObject::getField<jshort>(const char *fieldName) const
+Q_ANDROIDEXTRAS_EXPORT jshort QAndroidJniObject::getField<jshort>(const char *fieldName) const
 {
     return d->getField<jshort>(fieldName);
 }
 
 template <>
-jint QAndroidJniObject::getField<jint>(const char *fieldName) const
+Q_ANDROIDEXTRAS_EXPORT jint QAndroidJniObject::getField<jint>(const char *fieldName) const
 {
     return d->getField<jint>(fieldName);
 }
 
 template <>
-jlong QAndroidJniObject::getField<jlong>(const char *fieldName) const
+Q_ANDROIDEXTRAS_EXPORT jlong QAndroidJniObject::getField<jlong>(const char *fieldName) const
 {
     return d->getField<jlong>(fieldName);
 }
 
 template <>
-jfloat QAndroidJniObject::getField<jfloat>(const char *fieldName) const
+Q_ANDROIDEXTRAS_EXPORT jfloat QAndroidJniObject::getField<jfloat>(const char *fieldName) const
 {
     return d->getField<jfloat>(fieldName);
 }
 
 template <>
-jdouble QAndroidJniObject::getField<jdouble>(const char *fieldName) const
+Q_ANDROIDEXTRAS_EXPORT jdouble QAndroidJniObject::getField<jdouble>(const char *fieldName) const
 {
     return d->getField<jdouble>(fieldName);
 }
@@ -1570,140 +1570,140 @@ QAndroidJniObject QAndroidJniObject::getObjectField(const char *fieldName, const
 }
 
 template <>
-QAndroidJniObject QAndroidJniObject::getObjectField<jobject>(const char *fieldName, const char *sig) const
+Q_ANDROIDEXTRAS_EXPORT QAndroidJniObject QAndroidJniObject::getObjectField<jobject>(const char *fieldName, const char *sig) const
 {
     return d->getObjectField(fieldName, sig);
 }
 
 template <>
-QAndroidJniObject QAndroidJniObject::getObjectField<jobject>(const char *fieldName) const
+Q_ANDROIDEXTRAS_EXPORT QAndroidJniObject QAndroidJniObject::getObjectField<jobject>(const char *fieldName) const
 {
     return d->getObjectField(fieldName, "Ljava/lang/Object;");
 }
 
 template <>
-QAndroidJniObject QAndroidJniObject::getObjectField<jclass>(const char *fieldName) const
+Q_ANDROIDEXTRAS_EXPORT QAndroidJniObject QAndroidJniObject::getObjectField<jclass>(const char *fieldName) const
 {
     return d->getObjectField(fieldName, "Ljava/lang/Class;");
 }
 
 template <>
-QAndroidJniObject QAndroidJniObject::getObjectField<jbooleanArray>(const char *fieldName) const
+Q_ANDROIDEXTRAS_EXPORT QAndroidJniObject QAndroidJniObject::getObjectField<jbooleanArray>(const char *fieldName) const
 {
     return d->getObjectField(fieldName, "[Z");
 }
 
 template <>
-QAndroidJniObject QAndroidJniObject::getObjectField<jbyteArray>(const char *fieldName) const
+Q_ANDROIDEXTRAS_EXPORT QAndroidJniObject QAndroidJniObject::getObjectField<jbyteArray>(const char *fieldName) const
 {
     return d->getObjectField(fieldName, "[B");
 }
 
 template <>
-QAndroidJniObject QAndroidJniObject::getObjectField<jcharArray>(const char *fieldName) const
+Q_ANDROIDEXTRAS_EXPORT QAndroidJniObject QAndroidJniObject::getObjectField<jcharArray>(const char *fieldName) const
 {
     return d->getObjectField(fieldName, "[C");
 }
 
 template <>
-QAndroidJniObject QAndroidJniObject::getObjectField<jshortArray>(const char *fieldName) const
+Q_ANDROIDEXTRAS_EXPORT QAndroidJniObject QAndroidJniObject::getObjectField<jshortArray>(const char *fieldName) const
 {
     return d->getObjectField(fieldName, "[S");
 }
 
 template <>
-QAndroidJniObject QAndroidJniObject::getObjectField<jintArray>(const char *fieldName) const
+Q_ANDROIDEXTRAS_EXPORT QAndroidJniObject QAndroidJniObject::getObjectField<jintArray>(const char *fieldName) const
 {
     return d->getObjectField(fieldName, "[I");
 }
 
 template <>
-QAndroidJniObject QAndroidJniObject::getObjectField<jlongArray>(const char *fieldName) const
+Q_ANDROIDEXTRAS_EXPORT QAndroidJniObject QAndroidJniObject::getObjectField<jlongArray>(const char *fieldName) const
 {
     return d->getObjectField(fieldName, "[J");
 }
 
 template <>
-QAndroidJniObject QAndroidJniObject::getObjectField<jfloatArray>(const char *fieldName) const
+Q_ANDROIDEXTRAS_EXPORT QAndroidJniObject QAndroidJniObject::getObjectField<jfloatArray>(const char *fieldName) const
 {
     return d->getObjectField(fieldName, "[F");
 }
 
 template <>
-QAndroidJniObject QAndroidJniObject::getObjectField<jdoubleArray>(const char *fieldName) const
+Q_ANDROIDEXTRAS_EXPORT QAndroidJniObject QAndroidJniObject::getObjectField<jdoubleArray>(const char *fieldName) const
 {
     return d->getObjectField(fieldName, "[D");
 }
 
 template <>
-QAndroidJniObject QAndroidJniObject::getObjectField<jstring>(const char *fieldName) const
+Q_ANDROIDEXTRAS_EXPORT QAndroidJniObject QAndroidJniObject::getObjectField<jstring>(const char *fieldName) const
 {
     return d->getObjectField(fieldName, "Ljava/lang/String;");
 }
 
 template <>
-QAndroidJniObject QAndroidJniObject::getObjectField<jthrowable>(const char *fieldName) const
+Q_ANDROIDEXTRAS_EXPORT QAndroidJniObject QAndroidJniObject::getObjectField<jthrowable>(const char *fieldName) const
 {
     return d->getObjectField(fieldName, "Ljava/lang/Throwable;");
 }
 
 template <>
-QAndroidJniObject QAndroidJniObject::getObjectField<jobjectArray>(const char *fieldName,
+Q_ANDROIDEXTRAS_EXPORT QAndroidJniObject QAndroidJniObject::getObjectField<jobjectArray>(const char *fieldName,
                                                     const char *sig) const
 {
     return d->getObjectField(fieldName, sig);
 }
 
 template <>
-void QAndroidJniObject::setField<jboolean>(const char *fieldName, jboolean value)
+Q_ANDROIDEXTRAS_EXPORT void QAndroidJniObject::setField<jboolean>(const char *fieldName, jboolean value)
 {
     d->setField<jboolean>(fieldName, value);
 }
 
 template <>
-void QAndroidJniObject::setField<jbyte>(const char *fieldName, jbyte value)
+Q_ANDROIDEXTRAS_EXPORT void QAndroidJniObject::setField<jbyte>(const char *fieldName, jbyte value)
 {
     d->setField<jbyte>(fieldName, value);
 }
 
 template <>
-void QAndroidJniObject::setField<jchar>(const char *fieldName, jchar value)
+Q_ANDROIDEXTRAS_EXPORT void QAndroidJniObject::setField<jchar>(const char *fieldName, jchar value)
 {
     d->setField<jchar>(fieldName, value);
 }
 
 template <>
-void QAndroidJniObject::setField<jshort>(const char *fieldName, jshort value)
+Q_ANDROIDEXTRAS_EXPORT void QAndroidJniObject::setField<jshort>(const char *fieldName, jshort value)
 {
     d->setField<jshort>(fieldName, value);
 }
 
 template <>
-void QAndroidJniObject::setField<jint>(const char *fieldName, jint value)
+Q_ANDROIDEXTRAS_EXPORT void QAndroidJniObject::setField<jint>(const char *fieldName, jint value)
 {
     d->setField<jint>(fieldName, value);
 }
 
 template <>
-void QAndroidJniObject::setField<jlong>(const char *fieldName, jlong value)
+Q_ANDROIDEXTRAS_EXPORT void QAndroidJniObject::setField<jlong>(const char *fieldName, jlong value)
 {
     d->setField<jlong>(fieldName, value);
 }
 
 template <>
-void QAndroidJniObject::setField<jfloat>(const char *fieldName, jfloat value)
+Q_ANDROIDEXTRAS_EXPORT void QAndroidJniObject::setField<jfloat>(const char *fieldName, jfloat value)
 {
     d->setField<jfloat>(fieldName, value);
 }
 
 template <>
-void QAndroidJniObject::setField<jdouble>(const char *fieldName, jdouble value)
+Q_ANDROIDEXTRAS_EXPORT void QAndroidJniObject::setField<jdouble>(const char *fieldName, jdouble value)
 {
     d->setField<jdouble>(fieldName, value);
 }
 
 template <>
-void QAndroidJniObject::setField<jobject>(const char *fieldName,
+Q_ANDROIDEXTRAS_EXPORT void QAndroidJniObject::setField<jobject>(const char *fieldName,
                                           const char *sig,
                                           jobject value)
 {
@@ -1711,7 +1711,7 @@ void QAndroidJniObject::setField<jobject>(const char *fieldName,
 }
 
 template <>
-void QAndroidJniObject::setField<jobjectArray>(const char *fieldName,
+Q_ANDROIDEXTRAS_EXPORT void QAndroidJniObject::setField<jobjectArray>(const char *fieldName,
                                         const char *sig,
                                         jobjectArray value)
 {
@@ -1719,177 +1719,177 @@ void QAndroidJniObject::setField<jobjectArray>(const char *fieldName,
 }
 
 template <>
-void QAndroidJniObject::setField<jobject>(const char *fieldName,
+Q_ANDROIDEXTRAS_EXPORT void QAndroidJniObject::setField<jobject>(const char *fieldName,
                                           jobject value)
 {
     setField<jobject>(fieldName, "Ljava/lang/Object;", value);
 }
 
 template <>
-void QAndroidJniObject::setField<jclass>(const char *fieldName,
+Q_ANDROIDEXTRAS_EXPORT void QAndroidJniObject::setField<jclass>(const char *fieldName,
                                          jclass value)
 {
     setField<jobject>(fieldName, "Ljava/lang/Class;", value);
 }
 
 template <>
-void QAndroidJniObject::setField<jstring>(const char *fieldName, jstring value)
+Q_ANDROIDEXTRAS_EXPORT void QAndroidJniObject::setField<jstring>(const char *fieldName, jstring value)
 {
     d->setField<jstring>(fieldName, value);
 }
 
 template <>
-void QAndroidJniObject::setField<jbooleanArray>(const char *fieldName, jbooleanArray value)
+Q_ANDROIDEXTRAS_EXPORT void QAndroidJniObject::setField<jbooleanArray>(const char *fieldName, jbooleanArray value)
 {
     d->setField<jbooleanArray>(fieldName, value);
 }
 
 template <>
-void QAndroidJniObject::setField<jbyteArray>(const char *fieldName, jbyteArray value)
+Q_ANDROIDEXTRAS_EXPORT void QAndroidJniObject::setField<jbyteArray>(const char *fieldName, jbyteArray value)
 {
     d->setField<jbyteArray>(fieldName, value);
 }
 
 template <>
-void QAndroidJniObject::setField<jcharArray>(const char *fieldName, jcharArray value)
+Q_ANDROIDEXTRAS_EXPORT void QAndroidJniObject::setField<jcharArray>(const char *fieldName, jcharArray value)
 {
     d->setField<jcharArray>(fieldName, value);
 }
 
 template <>
-void QAndroidJniObject::setField<jshortArray>(const char *fieldName, jshortArray value)
+Q_ANDROIDEXTRAS_EXPORT void QAndroidJniObject::setField<jshortArray>(const char *fieldName, jshortArray value)
 {
     d->setField<jshortArray>(fieldName, value);
 }
 
 template <>
-void QAndroidJniObject::setField<jintArray>(const char *fieldName, jintArray value)
+Q_ANDROIDEXTRAS_EXPORT void QAndroidJniObject::setField<jintArray>(const char *fieldName, jintArray value)
 {
     d->setField<jintArray>(fieldName, value);
 }
 
 template <>
-void QAndroidJniObject::setField<jlongArray>(const char *fieldName, jlongArray value)
+Q_ANDROIDEXTRAS_EXPORT void QAndroidJniObject::setField<jlongArray>(const char *fieldName, jlongArray value)
 {
     d->setField<jlongArray>(fieldName, value);
 }
 
 template <>
-void QAndroidJniObject::setField<jfloatArray>(const char *fieldName, jfloatArray value)
+Q_ANDROIDEXTRAS_EXPORT void QAndroidJniObject::setField<jfloatArray>(const char *fieldName, jfloatArray value)
 {
     d->setField<jfloatArray>(fieldName, value);
 }
 
 template <>
-void QAndroidJniObject::setField<jdoubleArray>(const char *fieldName, jdoubleArray value)
+Q_ANDROIDEXTRAS_EXPORT void QAndroidJniObject::setField<jdoubleArray>(const char *fieldName, jdoubleArray value)
 {
     d->setField<jdoubleArray>(fieldName, value);
 }
 
 template <>
-void QAndroidJniObject::setField<jthrowable>(const char *fieldName, jthrowable value)
+Q_ANDROIDEXTRAS_EXPORT void QAndroidJniObject::setField<jthrowable>(const char *fieldName, jthrowable value)
 {
     d->setField<jobject>(fieldName, "Ljava/lang/Throwable;", value);
 }
 
 template <>
-jboolean QAndroidJniObject::getStaticField<jboolean>(jclass clazz, const char *fieldName)
+Q_ANDROIDEXTRAS_EXPORT jboolean QAndroidJniObject::getStaticField<jboolean>(jclass clazz, const char *fieldName)
 {
     return QJNIObjectPrivate::getStaticField<jboolean>(clazz, fieldName);
 }
 
 template <>
-jboolean QAndroidJniObject::getStaticField<jboolean>(const char *className, const char *fieldName)
+Q_ANDROIDEXTRAS_EXPORT jboolean QAndroidJniObject::getStaticField<jboolean>(const char *className, const char *fieldName)
 {
     return QJNIObjectPrivate::getStaticField<jboolean>(className, fieldName);
 }
 
 template <>
-jbyte QAndroidJniObject::getStaticField<jbyte>(jclass clazz, const char *fieldName)
+Q_ANDROIDEXTRAS_EXPORT jbyte QAndroidJniObject::getStaticField<jbyte>(jclass clazz, const char *fieldName)
 {
     return QJNIObjectPrivate::getStaticField<jbyte>(clazz, fieldName);
 }
 
 template <>
-jbyte QAndroidJniObject::getStaticField<jbyte>(const char *className, const char *fieldName)
+Q_ANDROIDEXTRAS_EXPORT jbyte QAndroidJniObject::getStaticField<jbyte>(const char *className, const char *fieldName)
 {
     return QJNIObjectPrivate::getStaticField<jbyte>(className, fieldName);
 }
 
 template <>
-jchar QAndroidJniObject::getStaticField<jchar>(jclass clazz, const char *fieldName)
+Q_ANDROIDEXTRAS_EXPORT jchar QAndroidJniObject::getStaticField<jchar>(jclass clazz, const char *fieldName)
 {
     return QJNIObjectPrivate::getStaticField<jchar>(clazz, fieldName);
 }
 
 template <>
-jchar QAndroidJniObject::getStaticField<jchar>(const char *className, const char *fieldName)
+Q_ANDROIDEXTRAS_EXPORT jchar QAndroidJniObject::getStaticField<jchar>(const char *className, const char *fieldName)
 {
     return QJNIObjectPrivate::getStaticField<jchar>(className, fieldName);
 }
 
 template <>
-jshort QAndroidJniObject::getStaticField<jshort>(jclass clazz, const char *fieldName)
+Q_ANDROIDEXTRAS_EXPORT jshort QAndroidJniObject::getStaticField<jshort>(jclass clazz, const char *fieldName)
 {
     return QJNIObjectPrivate::getStaticField<jshort>(clazz, fieldName);
 }
 
 template <>
-jshort QAndroidJniObject::getStaticField<jshort>(const char *className, const char *fieldName)
+Q_ANDROIDEXTRAS_EXPORT jshort QAndroidJniObject::getStaticField<jshort>(const char *className, const char *fieldName)
 {
     return QJNIObjectPrivate::getStaticField<jshort>(className, fieldName);
 }
 
 template <>
-jint QAndroidJniObject::getStaticField<jint>(jclass clazz, const char *fieldName)
+Q_ANDROIDEXTRAS_EXPORT jint QAndroidJniObject::getStaticField<jint>(jclass clazz, const char *fieldName)
 {
     return QJNIObjectPrivate::getStaticField<jint>(clazz, fieldName);
 }
 
 template <>
-jint QAndroidJniObject::getStaticField<jint>(const char *className, const char *fieldName)
+Q_ANDROIDEXTRAS_EXPORT jint QAndroidJniObject::getStaticField<jint>(const char *className, const char *fieldName)
 {
     return QJNIObjectPrivate::getStaticField<jint>(className, fieldName);
 }
 
 template <>
-jlong QAndroidJniObject::getStaticField<jlong>(jclass clazz, const char *fieldName)
+Q_ANDROIDEXTRAS_EXPORT jlong QAndroidJniObject::getStaticField<jlong>(jclass clazz, const char *fieldName)
 {
     return QJNIObjectPrivate::getStaticField<jlong>(clazz, fieldName);
 }
 
 template <>
-jlong QAndroidJniObject::getStaticField<jlong>(const char *className, const char *fieldName)
+Q_ANDROIDEXTRAS_EXPORT jlong QAndroidJniObject::getStaticField<jlong>(const char *className, const char *fieldName)
 {
     return QJNIObjectPrivate::getStaticField<jlong>(className, fieldName);
 }
 
 template <>
-jfloat QAndroidJniObject::getStaticField<jfloat>(jclass clazz, const char *fieldName)
+Q_ANDROIDEXTRAS_EXPORT jfloat QAndroidJniObject::getStaticField<jfloat>(jclass clazz, const char *fieldName)
 {
     return QJNIObjectPrivate::getStaticField<jfloat>(clazz, fieldName);
 }
 
 template <>
-jfloat QAndroidJniObject::getStaticField<jfloat>(const char *className, const char *fieldName)
+Q_ANDROIDEXTRAS_EXPORT jfloat QAndroidJniObject::getStaticField<jfloat>(const char *className, const char *fieldName)
 {
     return QJNIObjectPrivate::getStaticField<jfloat>(className, fieldName);
 }
 
 template <>
-jdouble QAndroidJniObject::getStaticField<jdouble>(jclass clazz, const char *fieldName)
+Q_ANDROIDEXTRAS_EXPORT jdouble QAndroidJniObject::getStaticField<jdouble>(jclass clazz, const char *fieldName)
 {
     return QJNIObjectPrivate::getStaticField<jdouble>(clazz, fieldName);
 }
 
 template <>
-jdouble QAndroidJniObject::getStaticField<jdouble>(const char *className, const char *fieldName)
+Q_ANDROIDEXTRAS_EXPORT jdouble QAndroidJniObject::getStaticField<jdouble>(const char *className, const char *fieldName)
 {
     return QJNIObjectPrivate::getStaticField<jdouble>(className, fieldName);
 }
 
 template <>
-QAndroidJniObject QAndroidJniObject::getStaticObjectField<jobject>(jclass clazz,
+Q_ANDROIDEXTRAS_EXPORT QAndroidJniObject QAndroidJniObject::getStaticObjectField<jobject>(jclass clazz,
                                                      const char *fieldName,
                                                      const char *sig)
 {
@@ -1911,7 +1911,7 @@ QAndroidJniObject QAndroidJniObject::getStaticObjectField(const char *className,
 }
 
 template <>
-QAndroidJniObject QAndroidJniObject::getStaticObjectField<jobject>(const char *className,
+Q_ANDROIDEXTRAS_EXPORT QAndroidJniObject QAndroidJniObject::getStaticObjectField<jobject>(const char *className,
                                                      const char *fieldName,
                                                      const char *sig)
 {
@@ -1919,7 +1919,7 @@ QAndroidJniObject QAndroidJniObject::getStaticObjectField<jobject>(const char *c
 }
 
 template <>
-QAndroidJniObject QAndroidJniObject::getStaticObjectField<jobjectArray>(jclass clazz,
+Q_ANDROIDEXTRAS_EXPORT QAndroidJniObject QAndroidJniObject::getStaticObjectField<jobjectArray>(jclass clazz,
                                                           const char *fieldName,
                                                           const char *sig)
 {
@@ -1927,7 +1927,7 @@ QAndroidJniObject QAndroidJniObject::getStaticObjectField<jobjectArray>(jclass c
 }
 
 template <>
-QAndroidJniObject QAndroidJniObject::getStaticObjectField<jobjectArray>(const char *className,
+Q_ANDROIDEXTRAS_EXPORT QAndroidJniObject QAndroidJniObject::getStaticObjectField<jobjectArray>(const char *className,
                                                           const char *fieldName,
                                                           const char *sig)
 {
@@ -1935,195 +1935,195 @@ QAndroidJniObject QAndroidJniObject::getStaticObjectField<jobjectArray>(const ch
 }
 
 template <>
-QAndroidJniObject QAndroidJniObject::getStaticObjectField<jobject>(jclass clazz,
+Q_ANDROIDEXTRAS_EXPORT QAndroidJniObject QAndroidJniObject::getStaticObjectField<jobject>(jclass clazz,
                                                                    const char *fieldName)
 {
     return QJNIObjectPrivate::getStaticObjectField(clazz, fieldName, "Ljava/lang/Object;");
 }
 
 template <>
-QAndroidJniObject QAndroidJniObject::getStaticObjectField<jobject>(const char *className,
+Q_ANDROIDEXTRAS_EXPORT QAndroidJniObject QAndroidJniObject::getStaticObjectField<jobject>(const char *className,
                                                                    const char *fieldName)
 {
     return QJNIObjectPrivate::getStaticObjectField(className, fieldName, "Ljava/lang/Object;");
 }
 
 template <>
-QAndroidJniObject QAndroidJniObject::getStaticObjectField<jclass>(jclass clazz,
+Q_ANDROIDEXTRAS_EXPORT QAndroidJniObject QAndroidJniObject::getStaticObjectField<jclass>(jclass clazz,
                                                                    const char *fieldName)
 {
     return QJNIObjectPrivate::getStaticObjectField(clazz, fieldName, "Ljava/lang/Class;");
 }
 
 template <>
-QAndroidJniObject QAndroidJniObject::getStaticObjectField<jclass>(const char *className,
+Q_ANDROIDEXTRAS_EXPORT QAndroidJniObject QAndroidJniObject::getStaticObjectField<jclass>(const char *className,
                                                                   const char *fieldName)
 {
     return QJNIObjectPrivate::getStaticObjectField(className, fieldName, "Ljava/lang/Class;");
 }
 
 template <>
-QAndroidJniObject QAndroidJniObject::getStaticObjectField<jstring>(jclass clazz,
+Q_ANDROIDEXTRAS_EXPORT QAndroidJniObject QAndroidJniObject::getStaticObjectField<jstring>(jclass clazz,
                                                      const char *fieldName)
 {
     return QJNIObjectPrivate::getStaticObjectField(clazz, fieldName, "Ljava/lang/String;");
 }
 
 template <>
-QAndroidJniObject QAndroidJniObject::getStaticObjectField<jstring>(const char *className,
+Q_ANDROIDEXTRAS_EXPORT QAndroidJniObject QAndroidJniObject::getStaticObjectField<jstring>(const char *className,
                                                      const char *fieldName)
 {
     return QJNIObjectPrivate::getStaticObjectField(className, fieldName, "Ljava/lang/String;");
 }
 
 template <>
-QAndroidJniObject QAndroidJniObject::getStaticObjectField<jobjectArray>(jclass clazz,
+Q_ANDROIDEXTRAS_EXPORT QAndroidJniObject QAndroidJniObject::getStaticObjectField<jobjectArray>(jclass clazz,
                                                                         const char *fieldName)
 {
     return QJNIObjectPrivate::getStaticObjectField(clazz, fieldName, "[Ljava/lang/Object;");
 }
 
 template <>
-QAndroidJniObject QAndroidJniObject::getStaticObjectField<jobjectArray>(const char *className,
+Q_ANDROIDEXTRAS_EXPORT QAndroidJniObject QAndroidJniObject::getStaticObjectField<jobjectArray>(const char *className,
                                                                         const char *fieldName)
 {
     return QJNIObjectPrivate::getStaticObjectField(className, fieldName, "[Ljava/lang/Object;");
 }
 
 template <>
-QAndroidJniObject QAndroidJniObject::getStaticObjectField<jbooleanArray>(jclass clazz,
+Q_ANDROIDEXTRAS_EXPORT QAndroidJniObject QAndroidJniObject::getStaticObjectField<jbooleanArray>(jclass clazz,
                                                            const char *fieldName)
 {
     return QJNIObjectPrivate::getStaticObjectField(clazz, fieldName, "[Z");
 }
 
 template <>
-QAndroidJniObject QAndroidJniObject::getStaticObjectField<jbooleanArray>(const char *className,
+Q_ANDROIDEXTRAS_EXPORT QAndroidJniObject QAndroidJniObject::getStaticObjectField<jbooleanArray>(const char *className,
                                                            const char *fieldName)
 {
     return QJNIObjectPrivate::getStaticObjectField(className, fieldName, "[Z");
 }
 
 template <>
-QAndroidJniObject QAndroidJniObject::getStaticObjectField<jbyteArray>(jclass clazz,
+Q_ANDROIDEXTRAS_EXPORT QAndroidJniObject QAndroidJniObject::getStaticObjectField<jbyteArray>(jclass clazz,
                                                         const char *fieldName)
 {
     return QJNIObjectPrivate::getStaticObjectField(clazz, fieldName, "[B");
 }
 
 template <>
-QAndroidJniObject QAndroidJniObject::getStaticObjectField<jbyteArray>(const char *className,
+Q_ANDROIDEXTRAS_EXPORT QAndroidJniObject QAndroidJniObject::getStaticObjectField<jbyteArray>(const char *className,
                                                         const char *fieldName)
 {
     return QJNIObjectPrivate::getStaticObjectField(className, fieldName, "[B");;
 }
 
 template <>
-QAndroidJniObject QAndroidJniObject::getStaticObjectField<jcharArray>(jclass clazz,
+Q_ANDROIDEXTRAS_EXPORT QAndroidJniObject QAndroidJniObject::getStaticObjectField<jcharArray>(jclass clazz,
                                                         const char *fieldName)
 {
     return QJNIObjectPrivate::getStaticObjectField(clazz, fieldName, "[C");
 }
 
 template <>
-QAndroidJniObject QAndroidJniObject::getStaticObjectField<jcharArray>(const char *className,
+Q_ANDROIDEXTRAS_EXPORT QAndroidJniObject QAndroidJniObject::getStaticObjectField<jcharArray>(const char *className,
                                                         const char *fieldName)
 {
     return QJNIObjectPrivate::getStaticObjectField(className, fieldName, "[C");
 }
 
 template <>
-QAndroidJniObject QAndroidJniObject::getStaticObjectField<jshortArray>(jclass clazz,
+Q_ANDROIDEXTRAS_EXPORT QAndroidJniObject QAndroidJniObject::getStaticObjectField<jshortArray>(jclass clazz,
                                                          const char *fieldName)
 {
     return QJNIObjectPrivate::getStaticObjectField(clazz, fieldName, "[S");
 }
 
 template <>
-QAndroidJniObject QAndroidJniObject::getStaticObjectField<jshortArray>(const char *className,
+Q_ANDROIDEXTRAS_EXPORT QAndroidJniObject QAndroidJniObject::getStaticObjectField<jshortArray>(const char *className,
                                                          const char *fieldName)
 {
     return QJNIObjectPrivate::getStaticObjectField(className, fieldName, "[S");
 }
 
 template <>
-QAndroidJniObject QAndroidJniObject::getStaticObjectField<jintArray>(jclass clazz,
+Q_ANDROIDEXTRAS_EXPORT QAndroidJniObject QAndroidJniObject::getStaticObjectField<jintArray>(jclass clazz,
                                                        const char *fieldName)
 {
     return QJNIObjectPrivate::getStaticObjectField(clazz, fieldName, "[I");
 }
 
 template <>
-QAndroidJniObject QAndroidJniObject::getStaticObjectField<jintArray>(const char *className,
+Q_ANDROIDEXTRAS_EXPORT QAndroidJniObject QAndroidJniObject::getStaticObjectField<jintArray>(const char *className,
                                                        const char *fieldName)
 {
     return QJNIObjectPrivate::getStaticObjectField(className, fieldName, "[I");
 }
 
 template <>
-QAndroidJniObject QAndroidJniObject::getStaticObjectField<jlongArray>(jclass clazz,
+Q_ANDROIDEXTRAS_EXPORT QAndroidJniObject QAndroidJniObject::getStaticObjectField<jlongArray>(jclass clazz,
                                                         const char *fieldName)
 {
     return QJNIObjectPrivate::getStaticObjectField(clazz, fieldName, "[J");
 }
 
 template <>
-QAndroidJniObject QAndroidJniObject::getStaticObjectField<jlongArray>(const char *className,
+Q_ANDROIDEXTRAS_EXPORT QAndroidJniObject QAndroidJniObject::getStaticObjectField<jlongArray>(const char *className,
                                                         const char *fieldName)
 {
     return QJNIObjectPrivate::getStaticObjectField(className, fieldName, "[J");
 }
 
 template <>
-QAndroidJniObject QAndroidJniObject::getStaticObjectField<jfloatArray>(jclass clazz,
+Q_ANDROIDEXTRAS_EXPORT QAndroidJniObject QAndroidJniObject::getStaticObjectField<jfloatArray>(jclass clazz,
                                                          const char *fieldName)
 {
     return QJNIObjectPrivate::getStaticObjectField(clazz, fieldName, "[F");
 }
 
 template <>
-QAndroidJniObject QAndroidJniObject::getStaticObjectField<jfloatArray>(const char *className,
+Q_ANDROIDEXTRAS_EXPORT QAndroidJniObject QAndroidJniObject::getStaticObjectField<jfloatArray>(const char *className,
                                                          const char *fieldName)
 {
     return QJNIObjectPrivate::getStaticObjectField(className, fieldName, "[F");
 }
 
 template <>
-QAndroidJniObject QAndroidJniObject::getStaticObjectField<jdoubleArray>(jclass clazz,
+Q_ANDROIDEXTRAS_EXPORT QAndroidJniObject QAndroidJniObject::getStaticObjectField<jdoubleArray>(jclass clazz,
                                                           const char *fieldName)
 {
     return QJNIObjectPrivate::getStaticObjectField(clazz, fieldName, "[D");
 }
 
 template <>
-QAndroidJniObject QAndroidJniObject::getStaticObjectField<jdoubleArray>(const char *className,
+Q_ANDROIDEXTRAS_EXPORT QAndroidJniObject QAndroidJniObject::getStaticObjectField<jdoubleArray>(const char *className,
                                                           const char *fieldName)
 {
     return QJNIObjectPrivate::getStaticObjectField(className, fieldName, "[D");
 }
 
 template <>
-QAndroidJniObject QAndroidJniObject::getStaticObjectField<jthrowable>(jclass clazz,
+Q_ANDROIDEXTRAS_EXPORT QAndroidJniObject QAndroidJniObject::getStaticObjectField<jthrowable>(jclass clazz,
                                                                       const char *fieldName)
 {
     return QJNIObjectPrivate::getStaticObjectField(clazz, fieldName, "Ljava/lang/Throwable;");
 }
 
 template <>
-QAndroidJniObject QAndroidJniObject::getStaticObjectField<jthrowable>(const char *className,
+Q_ANDROIDEXTRAS_EXPORT QAndroidJniObject QAndroidJniObject::getStaticObjectField<jthrowable>(const char *className,
                                                                       const char *fieldName)
 {
     return QJNIObjectPrivate::getStaticObjectField(className, fieldName, "Ljava/lang/Throwable;");
 }
 
 template <>
-void QAndroidJniObject::setStaticField<jboolean>(jclass clazz, const char *fieldName, jboolean value)
+Q_ANDROIDEXTRAS_EXPORT void QAndroidJniObject::setStaticField<jboolean>(jclass clazz, const char *fieldName, jboolean value)
 {
     QJNIObjectPrivate::setStaticField<jboolean>(clazz, fieldName, value);
 }
 
 template <>
-void QAndroidJniObject::setStaticField<jboolean>(const char *className,
+Q_ANDROIDEXTRAS_EXPORT void QAndroidJniObject::setStaticField<jboolean>(const char *className,
                                           const char *fieldName,
                                           jboolean value)
 {
@@ -2131,13 +2131,13 @@ void QAndroidJniObject::setStaticField<jboolean>(const char *className,
 }
 
 template <>
-void QAndroidJniObject::setStaticField<jbyte>(jclass clazz, const char *fieldName, jbyte value)
+Q_ANDROIDEXTRAS_EXPORT void QAndroidJniObject::setStaticField<jbyte>(jclass clazz, const char *fieldName, jbyte value)
 {
     QJNIObjectPrivate::setStaticField<jbyte>(clazz, fieldName, value);
 }
 
 template <>
-void QAndroidJniObject::setStaticField<jbyte>(const char *className,
+Q_ANDROIDEXTRAS_EXPORT void QAndroidJniObject::setStaticField<jbyte>(const char *className,
                                        const char *fieldName,
                                        jbyte value)
 {
@@ -2145,13 +2145,13 @@ void QAndroidJniObject::setStaticField<jbyte>(const char *className,
 }
 
 template <>
-void QAndroidJniObject::setStaticField<jchar>(jclass clazz, const char *fieldName, jchar value)
+Q_ANDROIDEXTRAS_EXPORT void QAndroidJniObject::setStaticField<jchar>(jclass clazz, const char *fieldName, jchar value)
 {
     QJNIObjectPrivate::setStaticField<jchar>(clazz, fieldName, value);
 }
 
 template <>
-void QAndroidJniObject::setStaticField<jchar>(const char *className,
+Q_ANDROIDEXTRAS_EXPORT void QAndroidJniObject::setStaticField<jchar>(const char *className,
                                        const char *fieldName,
                                        jchar value)
 {
@@ -2159,13 +2159,13 @@ void QAndroidJniObject::setStaticField<jchar>(const char *className,
 }
 
 template <>
-void QAndroidJniObject::setStaticField<jshort>(jclass clazz, const char *fieldName, jshort value)
+Q_ANDROIDEXTRAS_EXPORT void QAndroidJniObject::setStaticField<jshort>(jclass clazz, const char *fieldName, jshort value)
 {
     QJNIObjectPrivate::setStaticField<jshort>(clazz, fieldName, value);
 }
 
 template <>
-void QAndroidJniObject::setStaticField<jshort>(const char *className,
+Q_ANDROIDEXTRAS_EXPORT void QAndroidJniObject::setStaticField<jshort>(const char *className,
                                         const char *fieldName,
                                         jshort value)
 {
@@ -2173,25 +2173,25 @@ void QAndroidJniObject::setStaticField<jshort>(const char *className,
 }
 
 template <>
-void QAndroidJniObject::setStaticField<jint>(jclass clazz, const char *fieldName, jint value)
+Q_ANDROIDEXTRAS_EXPORT void QAndroidJniObject::setStaticField<jint>(jclass clazz, const char *fieldName, jint value)
 {
     QJNIObjectPrivate::setStaticField<jint>(clazz, fieldName, value);
 }
 
 template <>
-void QAndroidJniObject::setStaticField<jint>(const char *className, const char *fieldName, jint value)
+Q_ANDROIDEXTRAS_EXPORT void QAndroidJniObject::setStaticField<jint>(const char *className, const char *fieldName, jint value)
 {
     QJNIObjectPrivate::setStaticField<jint>(className, fieldName, value);
 }
 
 template <>
-void QAndroidJniObject::setStaticField<jlong>(jclass clazz, const char *fieldName, jlong value)
+Q_ANDROIDEXTRAS_EXPORT void QAndroidJniObject::setStaticField<jlong>(jclass clazz, const char *fieldName, jlong value)
 {
     QJNIObjectPrivate::setStaticField<jlong>(clazz, fieldName, value);
 }
 
 template <>
-void QAndroidJniObject::setStaticField<jlong>(const char *className,
+Q_ANDROIDEXTRAS_EXPORT void QAndroidJniObject::setStaticField<jlong>(const char *className,
                                        const char *fieldName,
                                        jlong value)
 {
@@ -2199,13 +2199,13 @@ void QAndroidJniObject::setStaticField<jlong>(const char *className,
 }
 
 template <>
-void QAndroidJniObject::setStaticField<jfloat>(jclass clazz, const char *fieldName, jfloat value)
+Q_ANDROIDEXTRAS_EXPORT void QAndroidJniObject::setStaticField<jfloat>(jclass clazz, const char *fieldName, jfloat value)
 {
     QJNIObjectPrivate::setStaticField<jfloat>(clazz, fieldName, value);
 }
 
 template <>
-void QAndroidJniObject::setStaticField<jfloat>(const char *className,
+Q_ANDROIDEXTRAS_EXPORT void QAndroidJniObject::setStaticField<jfloat>(const char *className,
                                         const char *fieldName,
                                         jfloat value)
 {
@@ -2213,13 +2213,13 @@ void QAndroidJniObject::setStaticField<jfloat>(const char *className,
 }
 
 template <>
-void QAndroidJniObject::setStaticField<jdouble>(jclass clazz, const char *fieldName, jdouble value)
+Q_ANDROIDEXTRAS_EXPORT void QAndroidJniObject::setStaticField<jdouble>(jclass clazz, const char *fieldName, jdouble value)
 {
     QJNIObjectPrivate::setStaticField<jdouble>(clazz, fieldName, value);
 }
 
 template <>
-void QAndroidJniObject::setStaticField<jdouble>(const char *className,
+Q_ANDROIDEXTRAS_EXPORT void QAndroidJniObject::setStaticField<jdouble>(const char *className,
                                          const char *fieldName,
                                          jdouble value)
 {
@@ -2227,7 +2227,7 @@ void QAndroidJniObject::setStaticField<jdouble>(const char *className,
 }
 
 template <>
-void QAndroidJniObject::setStaticField<jobject>(jclass clazz,
+Q_ANDROIDEXTRAS_EXPORT void QAndroidJniObject::setStaticField<jobject>(jclass clazz,
                                          const char *fieldName,
                                          const char *sig,
                                          jobject value)
@@ -2236,7 +2236,7 @@ void QAndroidJniObject::setStaticField<jobject>(jclass clazz,
 }
 
 template <>
-void QAndroidJniObject::setStaticField<jobject>(const char *className,
+Q_ANDROIDEXTRAS_EXPORT void QAndroidJniObject::setStaticField<jobject>(const char *className,
                                          const char *fieldName,
                                          const char *sig,
                                          jobject value)
@@ -2245,7 +2245,7 @@ void QAndroidJniObject::setStaticField<jobject>(const char *className,
 }
 
 template <>
-void QAndroidJniObject::setStaticField<jclass>(const char *className,
+Q_ANDROIDEXTRAS_EXPORT void QAndroidJniObject::setStaticField<jclass>(const char *className,
                                                const char *fieldName,
                                                jclass value)
 {
@@ -2253,13 +2253,13 @@ void QAndroidJniObject::setStaticField<jclass>(const char *className,
 }
 
 template <>
-void QAndroidJniObject::setStaticField<jclass>(jclass clazz, const char *fieldName, jclass value)
+Q_ANDROIDEXTRAS_EXPORT void QAndroidJniObject::setStaticField<jclass>(jclass clazz, const char *fieldName, jclass value)
 {
     QJNIObjectPrivate::setStaticField<jobject>(clazz, fieldName, "Ljava/lang/Class;", value);
 }
 
 template <>
-void QAndroidJniObject::setStaticField<jstring>(const char *className,
+Q_ANDROIDEXTRAS_EXPORT void QAndroidJniObject::setStaticField<jstring>(const char *className,
                                          const char *fieldName,
                                          jstring value)
 {
@@ -2267,13 +2267,13 @@ void QAndroidJniObject::setStaticField<jstring>(const char *className,
 }
 
 template <>
-void QAndroidJniObject::setStaticField<jstring>(jclass clazz, const char *fieldName, jstring value)
+Q_ANDROIDEXTRAS_EXPORT void QAndroidJniObject::setStaticField<jstring>(jclass clazz, const char *fieldName, jstring value)
 {
     QJNIObjectPrivate::setStaticField<jobject>(clazz, fieldName, "Ljava/lang/String;", value);
 }
 
 template <>
-void QAndroidJniObject::setStaticField<jobjectArray>(const char *className,
+Q_ANDROIDEXTRAS_EXPORT void QAndroidJniObject::setStaticField<jobjectArray>(const char *className,
                                                      const char *fieldName,
                                                      jobjectArray value)
 {
@@ -2281,7 +2281,7 @@ void QAndroidJniObject::setStaticField<jobjectArray>(const char *className,
 }
 
 template <>
-void QAndroidJniObject::setStaticField<jobjectArray>(jclass clazz,
+Q_ANDROIDEXTRAS_EXPORT void QAndroidJniObject::setStaticField<jobjectArray>(jclass clazz,
                                                      const char *fieldName,
                                                      jobjectArray value)
 {
@@ -2289,7 +2289,7 @@ void QAndroidJniObject::setStaticField<jobjectArray>(jclass clazz,
 }
 
 template <>
-void QAndroidJniObject::setStaticField<jbooleanArray>(const char *className,
+Q_ANDROIDEXTRAS_EXPORT void QAndroidJniObject::setStaticField<jbooleanArray>(const char *className,
                                                const char *fieldName,
                                                jbooleanArray value)
 {
@@ -2297,7 +2297,7 @@ void QAndroidJniObject::setStaticField<jbooleanArray>(const char *className,
 }
 
 template <>
-void QAndroidJniObject::setStaticField<jbooleanArray>(jclass clazz,
+Q_ANDROIDEXTRAS_EXPORT void QAndroidJniObject::setStaticField<jbooleanArray>(jclass clazz,
                                                const char *fieldName,
                                                jbooleanArray value)
 {
@@ -2305,7 +2305,7 @@ void QAndroidJniObject::setStaticField<jbooleanArray>(jclass clazz,
 }
 
 template <>
-void QAndroidJniObject::setStaticField<jbyteArray>(const char *className,
+Q_ANDROIDEXTRAS_EXPORT void QAndroidJniObject::setStaticField<jbyteArray>(const char *className,
                                             const char *fieldName,
                                             jbyteArray value)
 {
@@ -2313,7 +2313,7 @@ void QAndroidJniObject::setStaticField<jbyteArray>(const char *className,
 }
 
 template <>
-void QAndroidJniObject::setStaticField<jbyteArray>(jclass clazz,
+Q_ANDROIDEXTRAS_EXPORT void QAndroidJniObject::setStaticField<jbyteArray>(jclass clazz,
                                             const char *fieldName,
                                             jbyteArray value)
 {
@@ -2321,7 +2321,7 @@ void QAndroidJniObject::setStaticField<jbyteArray>(jclass clazz,
 }
 
 template <>
-void QAndroidJniObject::setStaticField<jcharArray>(const char *className,
+Q_ANDROIDEXTRAS_EXPORT void QAndroidJniObject::setStaticField<jcharArray>(const char *className,
                                             const char *fieldName,
                                             jcharArray value)
 {
@@ -2329,7 +2329,7 @@ void QAndroidJniObject::setStaticField<jcharArray>(const char *className,
 }
 
 template <>
-void QAndroidJniObject::setStaticField<jcharArray>(jclass clazz,
+Q_ANDROIDEXTRAS_EXPORT void QAndroidJniObject::setStaticField<jcharArray>(jclass clazz,
                                             const char *fieldName,
                                             jcharArray value)
 {
@@ -2337,7 +2337,7 @@ void QAndroidJniObject::setStaticField<jcharArray>(jclass clazz,
 }
 
 template <>
-void QAndroidJniObject::setStaticField<jshortArray>(const char *className,
+Q_ANDROIDEXTRAS_EXPORT void QAndroidJniObject::setStaticField<jshortArray>(const char *className,
                                              const char *fieldName,
                                              jshortArray value)
 {
@@ -2345,7 +2345,7 @@ void QAndroidJniObject::setStaticField<jshortArray>(const char *className,
 }
 
 template <>
-void QAndroidJniObject::setStaticField<jshortArray>(jclass clazz,
+Q_ANDROIDEXTRAS_EXPORT void QAndroidJniObject::setStaticField<jshortArray>(jclass clazz,
                                              const char *fieldName,
                                              jshortArray value)
 {
@@ -2353,7 +2353,7 @@ void QAndroidJniObject::setStaticField<jshortArray>(jclass clazz,
 }
 
 template <>
-void QAndroidJniObject::setStaticField<jintArray>(const char *className,
+Q_ANDROIDEXTRAS_EXPORT void QAndroidJniObject::setStaticField<jintArray>(const char *className,
                                            const char *fieldName,
                                            jintArray value)
 {
@@ -2361,7 +2361,7 @@ void QAndroidJniObject::setStaticField<jintArray>(const char *className,
 }
 
 template <>
-void QAndroidJniObject::setStaticField<jintArray>(jclass clazz,
+Q_ANDROIDEXTRAS_EXPORT void QAndroidJniObject::setStaticField<jintArray>(jclass clazz,
                                            const char *fieldName,
                                            jintArray value)
 {
@@ -2369,7 +2369,7 @@ void QAndroidJniObject::setStaticField<jintArray>(jclass clazz,
 }
 
 template <>
-void QAndroidJniObject::setStaticField<jlongArray>(const char *className,
+Q_ANDROIDEXTRAS_EXPORT void QAndroidJniObject::setStaticField<jlongArray>(const char *className,
                                             const char *fieldName,
                                             jlongArray value)
 {
@@ -2377,7 +2377,7 @@ void QAndroidJniObject::setStaticField<jlongArray>(const char *className,
 }
 
 template <>
-void QAndroidJniObject::setStaticField<jlongArray>(jclass clazz,
+Q_ANDROIDEXTRAS_EXPORT void QAndroidJniObject::setStaticField<jlongArray>(jclass clazz,
                                             const char *fieldName,
                                             jlongArray value)
 {
@@ -2385,7 +2385,7 @@ void QAndroidJniObject::setStaticField<jlongArray>(jclass clazz,
 }
 
 template <>
-void QAndroidJniObject::setStaticField<jfloatArray>(const char *className,
+Q_ANDROIDEXTRAS_EXPORT void QAndroidJniObject::setStaticField<jfloatArray>(const char *className,
                                              const char *fieldName,
                                              jfloatArray value)
 {
@@ -2393,7 +2393,7 @@ void QAndroidJniObject::setStaticField<jfloatArray>(const char *className,
 }
 
 template <>
-void QAndroidJniObject::setStaticField<jfloatArray>(jclass clazz,
+Q_ANDROIDEXTRAS_EXPORT void QAndroidJniObject::setStaticField<jfloatArray>(jclass clazz,
                                              const char *fieldName,
                                              jfloatArray value)
 {
@@ -2401,7 +2401,7 @@ void QAndroidJniObject::setStaticField<jfloatArray>(jclass clazz,
 }
 
 template <>
-void QAndroidJniObject::setStaticField<jdoubleArray>(const char *className,
+Q_ANDROIDEXTRAS_EXPORT void QAndroidJniObject::setStaticField<jdoubleArray>(const char *className,
                                               const char *fieldName,
                                               jdoubleArray value)
 {
@@ -2409,7 +2409,7 @@ void QAndroidJniObject::setStaticField<jdoubleArray>(const char *className,
 }
 
 template <>
-void QAndroidJniObject::setStaticField<jdoubleArray>(jclass clazz,
+Q_ANDROIDEXTRAS_EXPORT void QAndroidJniObject::setStaticField<jdoubleArray>(jclass clazz,
                                               const char *fieldName,
                                               jdoubleArray value)
 {
@@ -2417,7 +2417,7 @@ void QAndroidJniObject::setStaticField<jdoubleArray>(jclass clazz,
 }
 
 template <>
-void QAndroidJniObject::setStaticField<jthrowable>(const char *className,
+Q_ANDROIDEXTRAS_EXPORT void QAndroidJniObject::setStaticField<jthrowable>(const char *className,
                                                    const char *fieldName,
                                                    jthrowable value)
 {
@@ -2425,7 +2425,7 @@ void QAndroidJniObject::setStaticField<jthrowable>(const char *className,
 }
 
 template <>
-void QAndroidJniObject::setStaticField<jthrowable>(jclass clazz,
+Q_ANDROIDEXTRAS_EXPORT void QAndroidJniObject::setStaticField<jthrowable>(jclass clazz,
                                                    const char *fieldName,
                                                    jthrowable value)
 {

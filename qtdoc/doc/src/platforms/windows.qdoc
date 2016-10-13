@@ -430,9 +430,8 @@
 
     \endlist
 
-    For the most up-to-date information about the \l{Qt WebEngine} dependencies,
-    see the \l{Qt WebEngine on Windows}{Qt WebEngine} wiki for Windows.
-
+    \l{Qt WebEngine} has additional build requirements which are listed in the
+    \l{Qt WebEngine Platform Notes}.
 */
 
 /*!
@@ -581,8 +580,18 @@
     plugins, and translations) that are required to run the application from
     that folder. It creates a sandbox for \l{Qt for WinRT}{Windows Runtime}
     or an installation tree for Windows desktop applications, which can be
-    easily bundled into an installation package. The tool can be found in
-    QTDIR/bin/windeployqt.
+    easily bundled into an installation package.
+
+    The tool can be found in \c{QTDIR/bin/windeployqt}. It takes an \c .exe file or
+    a directory that contains an \c .exe file as an argument, and scans the executable
+    for dependencies. If a directory is passed with the \c{--qmldir} argument,
+    \c windeployqt uses the \c qmlimportscanner tool to scan QML
+    files inside the directory for QML import dependencies.
+    Identified dependencies are then copied to the executable's
+    directory. The hardcoded local paths in Qt5Core.dll are furthermore replaced
+    with relative ones.
+
+    Additional arguments are described in the tools' help output:
 
     \badcode
     Usage: windeployqt [options] [files]
@@ -744,18 +753,14 @@
     is a subdirectory named \c {platforms}. \l{Qt Plugins} section has
     additional information about plugins and how Qt searches for them.
 
-    Qt relies on the \l{ICU} library for unicode support. You must
-    include the ICU DLLs that are located in the \c bin directory of your Qt
-    installation if Qt was configured to use ICU. The Qt version bundled in
-    the Qt5 package uses ICU, so deployment is needed there. The ICU DLLs are
-    version dependent and have to match the ones your Qt version was linked
-    against.
-
     If \l{ANGLE} (the default) is used, you additionally need to include both
     \c libEGL.dll and \c libGLESv2.dll from Qt's 'lib' directory as well as
     the HLSL compiler from DirectX. The HLSL compiler library,
     d3dcompiler_XX.dll, where XX is the version number that ANGLE (libGLESv2)
     was linked against.
+
+    If Qt was configured to link against ICU or OpenSSL, the respective DLL's
+    need to be added to the \c release folder, too.
 
     If your application depends on Qt WebEngine, you must deploy
     \c{<Qt install path>/bin/QtWebEngineProcess.exe} to the application install
@@ -852,7 +857,7 @@
         \li \c msvcp100.dll
     \endtable
 
-    If ICU was used, the archive must contain:
+    If Qt was configured to use ICU, the archive must contain:
 
     \table 100%
     \header
@@ -881,8 +886,8 @@
 
     An alternative to putting the plugins in the plugins subdirectory
     is to add a custom search path when you start your application
-    using QApplication::addLibraryPath() or
-    QApplication::setLibraryPaths().
+    using QCoreApplication::addLibraryPath() or
+    QCoreApplication::setLibraryPaths().
 
     \snippet snippets/code/doc_src_deployment.cpp 19
 
@@ -1079,7 +1084,7 @@
 
     \snippet snippets/code/doc_src_deployment.qdoc 54
 
-    Then qApp->libraryPaths() would return something like this:
+    Then QCoreApplication::libraryPaths() would return something like this:
 
     \list
     \li \c{C:/customPath/plugins}
@@ -1088,10 +1093,10 @@
     \endlist
 
     The executable will look for the plugins in these directories and
-    the same order as the QStringList returned by qApp->libraryPaths().
-    The newly added path is prepended to the qApp->libraryPaths() which
+    the same order as the QStringList returned by QCoreApplication::libraryPaths().
+    The newly added path is prepended to the QCoreApplication::libraryPaths() which
     means that it will be searched through first. However, if you use
-    qApp->setLibraryPaths(), you will be able to determine which paths
+    QCoreApplication::setLibraryPaths(), you will be able to determine which paths
     and in which order they will be searched.
 
     The \l{How to Create Qt Plugins} document outlines the issues you

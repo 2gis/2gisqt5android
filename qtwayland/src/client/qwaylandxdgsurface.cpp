@@ -39,28 +39,33 @@
 #include "qwaylandabstractdecoration_p.h"
 #include "qwaylandscreen_p.h"
 #include "qwaylandextendedsurface_p.h"
+#include "qwaylandxdgshell_p.h"
 
 
 QT_BEGIN_NAMESPACE
 
 namespace QtWaylandClient {
 
-QWaylandXdgSurface::QWaylandXdgSurface(struct ::xdg_surface *xdg_surface, QWaylandWindow *window)
+QWaylandXdgSurface::QWaylandXdgSurface(QWaylandXdgShell *shell, QWaylandWindow *window)
     : QWaylandShellSurface(window)
-    , QtWayland::xdg_surface(xdg_surface)
+    , QtWayland::xdg_surface(shell->get_xdg_surface(window->object()))
     , m_window(window)
+    , m_shell(shell)
     , m_maximized(false)
     , m_minimized(false)
     , m_fullscreen(false)
+    , m_active(false)
     , m_extendedWindow(Q_NULLPTR)
 {
     if (window->display()->windowExtension())
         m_extendedWindow = new QWaylandExtendedSurface(window);
-    m_size = m_window->window()->geometry().size();
 }
 
 QWaylandXdgSurface::~QWaylandXdgSurface()
 {
+    if (m_active)
+        window()->display()->handleWindowDeactivated(m_window);
+
     xdg_surface_destroy(object());
     delete m_extendedWindow;
 }
@@ -127,8 +132,7 @@ void QWaylandXdgSurface::updateTransientParent(QWindow *parent)
     QWaylandWindow *parent_wayland_window = static_cast<QWaylandWindow *>(parent->handle());
     if (!parent_wayland_window)
         return;
-    QtWayland::xdg_shell *shell = parent_wayland_window->display()->shellXdg();
-    set_parent(shell->get_xdg_surface(parent_wayland_window->object()));
+    set_parent(m_shell->get_xdg_surface(parent_wayland_window->object()));
 }
 
 void QWaylandXdgSurface::setTitle(const QString & title)
@@ -177,6 +181,7 @@ void QWaylandXdgSurface::xdg_surface_configure(int32_t width, int32_t height, st
     size_t numStates = states->size / sizeof(uint32_t);
     bool aboutToMaximize = false;
     bool aboutToFullScreen = false;
+    bool aboutToActivate = false;
 
     for (size_t i = 0; i < numStates; i++) {
         switch (state[i]) {
@@ -187,20 +192,27 @@ void QWaylandXdgSurface::xdg_surface_configure(int32_t width, int32_t height, st
             aboutToFullScreen = true;
             break;
         case XDG_SURFACE_STATE_RESIZING:
-            m_margins = m_window->frameMargins();
-            width -= m_margins.left() + m_margins.right();
-            height -= m_margins.top() + m_margins.bottom();
-            m_size = m_window->window()->geometry().size();
+            m_normalSize = QSize(width, height);
             break;
         case XDG_SURFACE_STATE_ACTIVATED:
-            // TODO: here about the missing window activation
+            aboutToActivate = true;
             break;
         default:
             break;
         }
     }
 
+    if (!m_active && aboutToActivate) {
+        m_active = true;
+        window()->display()->handleWindowActivated(m_window);
+    } else if (m_active && !aboutToActivate) {
+        m_active = false;
+        window()->display()->handleWindowDeactivated(m_window);
+    }
+
     if (!m_fullscreen && aboutToFullScreen) {
+        if (!m_maximized)
+            m_normalSize = m_window->window()->frameGeometry().size();
         m_fullscreen = true;
         m_window->window()->showFullScreen();
     } else if (m_fullscreen && !aboutToFullScreen) {
@@ -211,6 +223,8 @@ void QWaylandXdgSurface::xdg_surface_configure(int32_t width, int32_t height, st
             m_window->window()->showNormal();
         }
     } else if (!m_maximized && aboutToMaximize) {
+        if (!m_fullscreen)
+            m_normalSize = m_window->window()->frameGeometry().size();
         m_maximized = true;
         m_window->window()->showMaximized();
     } else if (m_maximized && !aboutToMaximize) {
@@ -218,14 +232,11 @@ void QWaylandXdgSurface::xdg_surface_configure(int32_t width, int32_t height, st
         m_window->window()->showNormal();
     }
 
-    if (width == 0 || height == 0) {
-        width = m_size.width();
-        height = m_size.height();
-    }
-
-    if (width > 0 && height > 0) {
-        m_margins = m_window->frameMargins();
-        m_window->configure(0, width + m_margins.left() + m_margins.right(), height + m_margins.top() + m_margins.bottom());
+    if (width <= 0 || height <= 0) {
+        if (!m_normalSize.isEmpty())
+            m_window->configure(0, m_normalSize.width(), m_normalSize.height());
+    } else {
+        m_window->configure(0, width, height);
     }
 
     ack_configure(serial);

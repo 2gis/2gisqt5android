@@ -51,7 +51,7 @@ CGContextRef currentCGContext()
 
     Sets the value shown on the application icon a.k.a badge to \a number.
 
-    Unlike its OS X counterpart, only numbers can be used.
+    Unlike its \macos counterpart, only numbers can be used.
 
     \sa applicationIconBadgeNumber(), setBadgeLabelText()
 */

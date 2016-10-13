@@ -636,7 +636,7 @@ int ffsll(quint64 i)
 #endif
 }
 #endif
-#elif defined(Q_OS_ANDROID) || defined(Q_OS_QNX) || defined(Q_OS_OSX) || defined(Q_OS_HAIKU)
+#elif defined(Q_OS_NETBSD) || defined(Q_OS_OPENBSD) || defined(Q_OS_ANDROID) || defined(Q_OS_QNX) || defined(Q_OS_OSX) || defined(Q_OS_HAIKU)
 # define ffsll __builtin_ffsll
 #endif
 
@@ -666,7 +666,11 @@ void qDetectCpuFeatures()
     // contains all the features that the code required. Qt 4 ran for years
     // like that, so it shouldn't be a problem.
 
-    qt_cpu_features.store(minFeature | quint32(QSimdInitialized));
+    qt_cpu_features[0].store(minFeature | quint32(QSimdInitialized));
+#ifndef Q_ATOMIC_INT64_IS_SUPPORTED
+    qt_cpu_features[1].store(minFeature >> 32);
+#endif
+
     return;
 # endif
 #endif

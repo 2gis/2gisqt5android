@@ -1480,7 +1480,7 @@ void QWindowsWindow::handleGeometryChange()
             QWindowSystemInterface::handleWindowScreenChanged(window(), newScreen->screen());
     }
     if (testFlag(SynchronousGeometryChangeEvent))
-        QWindowSystemInterface::flushWindowSystemEvents();
+        QWindowSystemInterface::flushWindowSystemEvents(QEventLoop::ExcludeUserInputEvents);
 
     qCDebug(lcQpaEvents) << __FUNCTION__ << this << window() << m_data.geometry;
 }
@@ -1568,18 +1568,19 @@ bool QWindowsWindow::handleWmPaint(HWND hwnd, UINT message,
         return false;
     PAINTSTRUCT ps;
 
-    // Observed painting problems with Aero style disabled (QTBUG-7865).
-    if (testFlag(OpenGLSurface) && testFlag(OpenGLDoubleBuffered))
-        InvalidateRect(hwnd, 0, false);
-
     BeginPaint(hwnd, &ps);
+
+    // Observed painting problems with Aero style disabled (QTBUG-7865).
+    // 5.8: Consider making it dependent on !DwmIsCompositionEnabled().
+    if (testFlag(OpenGLSurface) && testFlag(OpenGLDoubleBuffered))
+        SelectClipRgn(ps.hdc, NULL);
 
     // If the a window is obscured by another window (such as a child window)
     // we still need to send isExposed=true, for compatibility.
     // Our tests depend on it.
     fireExpose(QRegion(qrectFromRECT(ps.rcPaint)), true);
     if (!QWindowsContext::instance()->asyncExpose())
-        QWindowSystemInterface::flushWindowSystemEvents();
+        QWindowSystemInterface::flushWindowSystemEvents(QEventLoop::ExcludeUserInputEvents);
 
     EndPaint(hwnd, &ps);
     return true;
@@ -1643,7 +1644,7 @@ void QWindowsWindow::handleWindowStateChange(Qt::WindowState state)
     switch (state) {
     case Qt::WindowMinimized:
         handleHidden();
-        QWindowSystemInterface::flushWindowSystemEvents(); // Tell QQuickWindow to stop rendering now.
+        QWindowSystemInterface::flushWindowSystemEvents(QEventLoop::ExcludeUserInputEvents); // Tell QQuickWindow to stop rendering now.
         break;
     case Qt::WindowMaximized:
     case Qt::WindowFullScreen:
@@ -1666,7 +1667,7 @@ void QWindowsWindow::handleWindowStateChange(Qt::WindowState state)
             }
         }
         if (exposeEventsSent && !QWindowsContext::instance()->asyncExpose())
-            QWindowSystemInterface::flushWindowSystemEvents();
+            QWindowSystemInterface::flushWindowSystemEvents(QEventLoop::ExcludeUserInputEvents);
     }
         break;
     default:
@@ -1772,7 +1773,7 @@ void QWindowsWindow::setWindowState_sys(Qt::WindowState newState)
             if (!wasSync)
                 clearFlag(SynchronousGeometryChangeEvent);
             QWindowSystemInterface::handleGeometryChange(window(), r);
-            QWindowSystemInterface::flushWindowSystemEvents();
+            QWindowSystemInterface::flushWindowSystemEvents(QEventLoop::ExcludeUserInputEvents);
         } else if (newState != Qt::WindowMinimized) {
             // Restore saved state.
             unsigned newStyle = m_savedStyle ? m_savedStyle : style();
@@ -2401,9 +2402,10 @@ void QWindowsWindow::aboutToMakeCurrent()
 
 void QWindowsWindow::setHasBorderInFullScreenStatic(QWindow *window, bool border)
 {
-    if (!window->handle())
-        return;
-    static_cast<QWindowsWindow *>(window->handle())->setHasBorderInFullScreen(border);
+    if (QPlatformWindow *handle = window->handle())
+        static_cast<QWindowsWindow *>(handle)->setHasBorderInFullScreen(border);
+    else
+        qWarning("%s invoked without window handle; call has no effect.", Q_FUNC_INFO);
 }
 
 void QWindowsWindow::setHasBorderInFullScreen(bool border)

@@ -423,15 +423,13 @@ qint64 QFSFileEnginePrivate::nativeWrite(const char *data, qint64 len)
     if (fileHandle == INVALID_HANDLE_VALUE)
         return -1;
 
-    qint64 bytesToWrite = DWORD(len); // <- lossy
+    qint64 bytesToWrite = len;
 
     // Writing on Windows fails with ERROR_NO_SYSTEM_RESOURCES when
     // the chunks are too large, so we limit the block size to 32MB.
-    static const DWORD maxBlockSize = 32 * 1024 * 1024;
-
+    const DWORD blockSize = DWORD(qMin(bytesToWrite, qint64(32 * 1024 * 1024)));
     qint64 totalWritten = 0;
     do {
-        DWORD blockSize = qMin<DWORD>(bytesToWrite, maxBlockSize);
         DWORD bytesWritten;
         if (!WriteFile(fileHandle, data + totalWritten, blockSize, &bytesWritten, NULL)) {
             if (totalWritten == 0) {
@@ -626,7 +624,9 @@ QFileInfoList QFSFileEngine::drives()
     QFileInfoList ret;
 #if !defined(Q_OS_WINCE) && !defined(Q_OS_WINRT)
 #if defined(Q_OS_WIN32)
+    const UINT oldErrorMode = ::SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOOPENFILEERRORBOX);
     quint32 driveBits = (quint32) GetLogicalDrives() & 0x3ffffff;
+    ::SetErrorMode(oldErrorMode);
 #endif
     char driveName[] = "A:/";
 

@@ -289,6 +289,8 @@ qreal QQuickPathViewPrivate::positionOfIndex(qreal index) const
 // account the circular space.
 bool QQuickPathViewPrivate::isInBound(qreal position, qreal lower, qreal upper) const
 {
+    if (lower == upper)
+        return true;
     if (lower > upper) {
         if (position > upper && position > lower)
             position -= mappedRange;
@@ -1019,7 +1021,7 @@ void QQuickPathView::setHighlightMoveDuration(int duration)
 
 /*!
     \qmlproperty real QtQuick::PathView::dragMargin
-    This property holds the maximum distance from the path that initiate mouse dragging.
+    This property holds the maximum distance from the path that initiates mouse dragging.
 
     By default the path can only be dragged by clicking on an item.  If
     dragMargin is greater than zero, a drag can be initiated by clicking
@@ -1306,10 +1308,12 @@ void QQuickPathView::resetPathItemCount()
     allowing creation to occur across multiple frames and reducing the
     likelihood of skipping frames.
 
-    Setting this value can improve the smoothness of scrolling behavior at the expense
-    of additional memory usage.  It is not a substitute for creating efficient
-    delegates; the fewer objects and bindings in a delegate, the faster a view can be
-    moved.
+    \note Setting this property is not a replacement for creating efficient delegates.
+    It can improve the smoothness of scrolling behavior at the expense of additional
+    memory usage. The fewer objects and bindings in a delegate, the faster a
+    view can be scrolled. It is important to realize that setting cacheItemCount
+    will only postpone issues caused by slow-loading delegates, it is not a
+    solution for this scenario.
 
     \sa pathItemCount
 */
@@ -1455,7 +1459,7 @@ void QQuickPathView::positionViewAtIndex(int index, int mode)
 }
 
 /*!
-    \qmlmethod int QtQuick::PathView::indexAt(int x, int y)
+    \qmlmethod int QtQuick::PathView::indexAt(real x, real y)
 
     Returns the index of the item containing the point \a x, \a y in content
     coordinates.  If there is no item at the point specified, -1 is returned.
@@ -1479,7 +1483,7 @@ int QQuickPathView::indexAt(qreal x, qreal y) const
 }
 
 /*!
-    \qmlmethod Item QtQuick::PathView::itemAt(int x, int y)
+    \qmlmethod Item QtQuick::PathView::itemAt(real x, real y)
 
     Returns the item containing the point \a x, \a y in content
     coordinates.  If there is no item at the point specified, null is returned.
@@ -1852,6 +1856,14 @@ void QQuickPathView::updatePolish()
     refill();
 }
 
+static inline int currentIndexRemainder(int currentIndex, int modelCount) Q_DECL_NOTHROW
+{
+    if (currentIndex < 0)
+        return modelCount + currentIndex % modelCount;
+    else
+        return currentIndex % modelCount;
+}
+
 void QQuickPathView::componentComplete()
 {
     Q_D(QQuickPathView);
@@ -1863,7 +1875,7 @@ void QQuickPathView::componentComplete()
     if (d->model) {
         d->modelCount = d->model->count();
         if (d->modelCount && d->currentIndex != 0) // an initial value has been provided for currentIndex
-            d->offset = qmlMod(d->modelCount - d->currentIndex, d->modelCount);
+            d->offset = qmlMod(d->modelCount - currentIndexRemainder(d->currentIndex, d->modelCount), d->modelCount);
     }
 
     d->createHighlight();
@@ -1937,7 +1949,8 @@ void QQuickPathView::refill()
             qreal endPos;
             int startIdx = 0;
             qreal startPos = 0.0;
-            if (d->items.count()) {
+            const bool wasEmpty = d->items.isEmpty();
+            if (!wasEmpty) {
                 //Find the beginning and end, items may not be in sorted order
                 endPos = -1.0;
                 startPos = 2.0;
@@ -1996,7 +2009,8 @@ void QQuickPathView::refill()
             }
 
             //Prepend
-            idx = startIdx - 1;
+            idx = (wasEmpty ? d->calcCurrentIndex() : startIdx) - 1;
+
             if (idx < 0)
                 idx = d->modelCount - 1;
             nextPos = d->positionOfIndex(idx);
@@ -2035,27 +2049,33 @@ void QQuickPathView::refill()
                 idx = startIdx;
                 QQuickItem *lastItem = d->items[0];
                 while (idx != endIdx) {
-                    //This gets the reference from the delegate model, and will not re-create
-                    QQuickItem *item = d->getItem(idx, idx+1, nextPos >= 1.0);
-                    if (!item) {
-                        waiting = true;
-                        break;
-                    }
-                    if (!d->items.contains(item)) { //We found a hole
-                        nextPos = d->positionOfIndex(idx);
-                        qCDebug(lcItemViewDelegateLifecycle) << "middle insert" << idx << "@" << nextPos << (d->currentIndex == idx ? "current" : "") << "items count was" << d->items.count();
-                        if (d->currentIndex == idx) {
-                            currentVisible = true;
-                            d->currentItemOffset = nextPos;
+                    nextPos = d->positionOfIndex(idx);
+                    if (d->isInBound(nextPos, d->mappedRange - d->mappedCache, 1.0 + d->mappedCache)) {
+                        //This gets the reference from the delegate model, and will not re-create
+                        QQuickItem *item = d->getItem(idx, idx+1, nextPos >= 1.0);
+                        if (!item) {
+                            waiting = true;
+                            break;
                         }
-                        int lastListIdx = d->items.indexOf(lastItem);
-                        d->items.insert(lastListIdx + 1, item);
-                        d->updateItem(item, nextPos);
-                    } else {
-                        d->releaseItem(item);
+
+                        if (!d->items.contains(item)) { //We found a hole
+                            qCDebug(lcItemViewDelegateLifecycle) << "middle insert" << idx << "@" << nextPos
+                                                                 << (d->currentIndex == idx ? "current" : "")
+                                                                 << "items count was" << d->items.count();
+                            if (d->currentIndex == idx) {
+                                currentVisible = true;
+                                d->currentItemOffset = nextPos;
+                            }
+                            int lastListIdx = d->items.indexOf(lastItem);
+                            d->items.insert(lastListIdx + 1, item);
+                            d->updateItem(item, nextPos);
+                        } else {
+                            d->releaseItem(item);
+                        }
+
+                        lastItem = item;
                     }
 
-                    lastItem = item;
                     ++idx;
                     if (idx >= d->modelCount)
                         idx = 0;

@@ -112,7 +112,7 @@
     \li N'Ko
     \endlist
 
-    On OS X, the following languages are also supported:
+    On \macos, the following languages are also supported:
     \list
     \li Oriya
     \li Sinhala
@@ -354,10 +354,10 @@
         the Unicode Standard in the absence of higher-level protocols.
     \endlist
 
-    \section2 OS X
+    \section2 \macos
 
-    For details on OS X-specific translation, refer to the Qt for OS X issues
-    document \l{Qt for OS X - Specific Issues#Translating the Application Menu and Native Dialogs}{here}.
+    For details on \macos-specific translation, refer to the Qt for macOS issues
+    document \l{Qt for macOS - Specific Issues#Translating the Application Menu and Native Dialogs}{here}.
 
     \section1 Related Pages
 */
@@ -648,7 +648,7 @@
     TS files containing only entries with plural forms.
 
     See the \l{Qt Quarterly} Article
-    \l{http://doc.qt.digia.com/qq/qq19-plurals.html}
+    \l{http://doc.qt.io/archives/qq/qq19-plurals.html}
     {Plural Forms in Translations} for further details on this issue.
 
     Instead of \c %n, you can use \c %Ln to produce a localized

@@ -58,9 +58,23 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#ifdef Q_OS_NACL
+#elif !defined (Q_OS_VXWORKS)
+# if !defined(Q_OS_HPUX) || defined(__ia64)
+#  include <sys/select.h>
+# endif
+#  include <sys/time.h>
+#else
+#  include <selectLib.h>
+#endif
+
 #include <sys/wait.h>
 #include <errno.h>
 #include <fcntl.h>
+
+#if !defined(QT_POSIX_IPC) && !defined(QT_NO_SHAREDMEMORY) && !defined(Q_OS_ANDROID)
+#  include <sys/ipc.h>
+#endif
 
 #if defined(Q_OS_VXWORKS)
 #  include <ioLib.h>

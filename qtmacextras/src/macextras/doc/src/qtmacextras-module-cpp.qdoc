@@ -41,7 +41,7 @@
 /*!
     \module QtMacExtras
     \title Qt Mac Extras C++ Classes
-    \brief Provides classes and functions specific to OS X and iOS operating systems.
+    \brief Provides classes and functions specific to \macos and iOS operating systems.
 
     \ingroup modules
     \ingroup technology-apis

@@ -48,6 +48,7 @@
 #include <QtCore/QObject>
 #include <QtCore/QRect>
 #include <QtCore/QPointer>
+#include <QtCore/QVector>
 
 #include <QtCore/QWaitCondition>
 
@@ -127,15 +128,9 @@ public:
     QtWayland::wl_compositor *compositor() { return &mCompositor; }
     int compositorVersion() const { return mCompositorVersion; }
 
-    QtWayland::wl_shell *shell() { return mShell.data(); }
-    QtWayland::xdg_shell *shellXdg();
-
     QList<QWaylandInputDevice *> inputDevices() const { return mInputDevices; }
     QWaylandInputDevice *defaultInputDevice() const;
     QWaylandInputDevice *currentInputDevice() const { return defaultInputDevice(); }
-
-    QWaylandInputDevice *lastKeyboardFocusInputDevice() const;
-    void setLastKeyboardFocusInputDevice(QWaylandInputDevice *device);
 
     QWaylandDataDeviceManager *dndSelectionHandler() const { return mDndSelectionHandler.data(); }
 
@@ -153,6 +148,7 @@ public:
             : id(id_), interface(interface_), version(version_), registry(registry_) { }
     };
     QList<RegistryGlobal> globals() const { return mGlobals; }
+    bool hasRegistryGlobal(const QString &interfaceName);
 
     /* wl_registry_add_listener does not add but rather sets a listener, so this function is used
      * to enable many listeners at once. */
@@ -171,6 +167,10 @@ public:
     QWaylandWindow *lastInputWindow() const;
     void setLastInputDevice(QWaylandInputDevice *device, uint32_t serial, QWaylandWindow *window);
 
+    void handleWindowActivated(QWaylandWindow *window);
+    void handleWindowDeactivated(QWaylandWindow *window);
+    void handleKeyboardFocusChanged(QWaylandInputDevice *inputDevice);
+
 public slots:
     void blockingReadEvents();
     void flushRequests();
@@ -180,6 +180,9 @@ private:
     void exitWithError();
     void checkError() const;
 
+    void handleWaylandSync();
+    void requestWaylandSync();
+
     struct Listener {
         RegistryListener listener;
         void *data;
@@ -188,13 +191,10 @@ private:
     struct wl_display *mDisplay;
     QtWayland::wl_compositor mCompositor;
     struct wl_shm *mShm;
-    QScopedPointer<QtWayland::wl_shell> mShell;
-    QScopedPointer<QWaylandXdgShell> mShellXdg;
     QList<QWaylandScreen *> mScreens;
     QList<QWaylandInputDevice *> mInputDevices;
     QList<Listener> mRegistryListeners;
     QWaylandIntegration *mWaylandIntegration;
-    QWaylandInputDevice *mLastKeyboardFocusInputDevice;
     QScopedPointer<QWaylandDataDeviceManager> mDndSelectionHandler;
     QScopedPointer<QtWayland::qt_surface_extension> mWindowExtension;
     QScopedPointer<QtWayland::wl_subcompositor> mSubCompositor;
@@ -211,6 +211,10 @@ private:
     uint32_t mLastInputSerial;
     QWaylandInputDevice *mLastInputDevice;
     QPointer<QWaylandWindow> mLastInputWindow;
+    QWaylandWindow *mLastKeyboardFocus;
+    QVector<QWaylandWindow *> mActiveWindows;
+    struct wl_callback *mSyncCallback;
+    static const wl_callback_listener syncCallbackListener;
 
     void registry_global(uint32_t id, const QString &interface, uint32_t version) Q_DECL_OVERRIDE;
     void registry_global_remove(uint32_t id) Q_DECL_OVERRIDE;

@@ -610,15 +610,15 @@ void QMenuBar::initStyleOption(QStyleOptionMenuItem *option, const QAction *acti
     for items in the menu bar are only shown when the \uicontrol{Alt} key is
     pressed.
 
-    \section1 QMenuBar on OS X
+    \section1 QMenuBar on \macos
 
-    QMenuBar on OS X is a wrapper for using the system-wide menu bar.
+    QMenuBar on \macos is a wrapper for using the system-wide menu bar.
     If you have multiple menu bars in one dialog the outermost menu bar
     (normally inside a widget with widget flag Qt::Window) will
     be used for the system-wide menu bar.
 
-    Qt for OS X also provides a menu bar merging feature to make
-    QMenuBar conform more closely to accepted OS X menu bar layout.
+    Qt for \macos also provides a menu bar merging feature to make
+    QMenuBar conform more closely to accepted \macos menu bar layout.
     The merging functionality is based on string matching the title of
     a QMenu entry. These strings are translated (using QObject::tr())
     in the "QMenuBar" context. If an entry is moved its slots will still
@@ -657,7 +657,7 @@ void QMenuBar::initStyleOption(QStyleOptionMenuItem *option, const QAction *acti
 
     \b{Note:} The text used for the application name in the menu
     bar is obtained from the value set in the \c{Info.plist} file in
-    the application's bundle. See \l{Qt for OS X - Deployment}
+    the application's bundle. See \l{Qt for macOS - Deployment}
     for more information.
 
     \section1 QMenuBar on Windows CE
@@ -706,7 +706,6 @@ void QMenuBarPrivate::init()
     }
 #endif
     q->setBackgroundRole(QPalette::Button);
-    oldWindow = oldParent = 0;
     handleReparent();
     q->setMouseTracking(q->style()->styleHint(QStyle::SH_MenuBar_MouseTracking, 0, q));
 
@@ -903,7 +902,7 @@ void QMenuBar::setActiveAction(QAction *act)
 /*!
     Removes all the actions from the menu bar.
 
-    \note On OS X, menu items that have been merged to the system
+    \note On \macos, menu items that have been merged to the system
     menu bar are not removed by this function. One way to handle this
     would be to remove the extra actions yourself. You can set the
     \l{QAction::MenuRole}{menu role} on the different menus, so that
@@ -1330,30 +1329,41 @@ void QMenuBarPrivate::handleReparent()
 {
     Q_Q(QMenuBar);
     QWidget *newParent = q->parentWidget();
-    //Note: if parent is reparented, then window may change even if parent doesn't
 
-    // we need to install an event filter on parent, and remove the old one
+    //Note: if parent is reparented, then window may change even if parent doesn't.
+    // We need to install an avent filter on each parent up to the parent that is
+    // also a window (for shortcuts)
+    QWidget *newWindow = newParent ? newParent->window() : Q_NULLPTR;
 
-    if (oldParent != newParent) {
-        if (oldParent)
-            oldParent->removeEventFilter(q);
-        if (newParent)
-            newParent->installEventFilter(q);
+    QVector<QPointer<QWidget> > newParents;
+    // Remove event filters on ex-parents, keep them on still-parents
+    // The parents are always ordered in the vector
+    foreach (const QPointer<QWidget> &w, oldParents) {
+        if (w) {
+            if (newParent == w) {
+                newParents.append(w);
+                if (newParent != newWindow) //stop at the window
+                    newParent = newParent->parentWidget();
+            } else {
+                w->removeEventFilter(q);
+            }
+        }
     }
 
-    //we also need event filter on top-level (for shortcuts)
-    QWidget *newWindow = newParent ? newParent->window() : 0;
-
-    if (oldWindow != newWindow) {
-        if (oldParent && oldParent != oldWindow)
-            oldWindow->removeEventFilter(q);
-
-        if (newParent && newParent != newWindow)
-            newWindow->installEventFilter(q);
+    // At this point, newParent is the next one to be added to newParents
+    while (newParent && newParent != newWindow) {
+        //install event filters all the way up to (excluding) the window
+        newParents.append(newParent);
+        newParent->installEventFilter(q);
+        newParent = newParent->parentWidget();
     }
 
-    oldParent = newParent;
-    oldWindow = newWindow;
+    if (newParent && newWindow) {
+        // Install the event filter on the window
+        newParents.append(newParent);
+        newParent->installEventFilter(q);
+    }
+    oldParents = newParents;
 
     if (platformMenuBar) {
         if (newWindow) {
@@ -1465,10 +1475,9 @@ bool QMenuBar::event(QEvent *e)
 bool QMenuBar::eventFilter(QObject *object, QEvent *event)
 {
     Q_D(QMenuBar);
-    if (object == parent() && object) {
-        if (event->type() == QEvent::ParentChange) //GrandparentChange
+    if (object && (event->type() == QEvent::ParentChange)) //GrandparentChange
             d->handleReparent();
-    }
+
     if (object == d->leftWidget || object == d->rightWidget) {
         switch (event->type()) {
         case QEvent::ShowToParent:
@@ -1800,7 +1809,7 @@ QWidget *QMenuBar::cornerWidget(Qt::Corner corner) const
     \since 4.6
 
     This property specifies whether or not the menubar should be used as a native menubar on platforms
-    that support it. The currently supported platforms are OS X and Windows CE. On these platforms
+    that support it. The currently supported platforms are \macos and Windows CE. On these platforms
     if this property is \c true, the menubar is used in the native menubar and is not in the window of
     its parent, if false the menubar remains in the window. On other platforms the value of this
     attribute has no effect.

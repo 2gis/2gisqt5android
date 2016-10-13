@@ -134,31 +134,17 @@ QT_BEGIN_NAMESPACE
     \section2 Example Usage
 
     The following snippet shows a simple Map and the necessary Plugin type
-    to use it. The map is centered near Brisbane, Australia, zoomed out to the
-    minimum zoom level, with gesture interaction enabled.
+    to use it. The map is centered over Oslo, Norway, with zoom level 10.
 
-    \code
-    Plugin {
-        id: somePlugin
-        // code here to choose the plugin as necessary
-    }
+    \quotefromfile minimal_map/main.qml
+    \skipto import
+    \printuntil }
+    \printline }
+    \skipto Map
+    \printuntil }
+    \printline }
 
-    Map {
-        id: map
-
-        plugin: somePlugin
-
-        center {
-            latitude: -27
-            longitude: 153
-        }
-        zoomLevel: map.minimumZoomLevel
-
-        gesture.enabled: true
-    }
-    \endcode
-
-    \image api-map.png
+    \image minimal_map.png
 */
 
 /*!
@@ -167,6 +153,8 @@ QT_BEGIN_NAMESPACE
     This signal is emitted when the user clicks on a \a link in the copyright notice. The
     application should open the link in a browser or display its contents to the user.
 */
+
+static const qreal EARTH_MEAN_RADIUS = 6371007.2;
 
 QDeclarativeGeoMap::QDeclarativeGeoMap(QQuickItem *parent)
         : QQuickItem(parent),
@@ -182,7 +170,8 @@ QDeclarativeGeoMap::QDeclarativeGeoMap(QQuickItem *parent)
         m_componentCompleted(false),
         m_mappingManagerInitialized(false),
         m_color(QColor::fromRgbF(0.9, 0.9, 0.9)),
-        m_pendingFitViewport(false)
+        m_pendingFitViewport(false),
+        m_validRegion(false)
 {
     setAcceptHoverEvents(false);
     setAcceptedMouseButtons(Qt::LeftButton);
@@ -260,6 +249,43 @@ void QDeclarativeGeoMap::onMapChildrenChanged()
     copyrights->setCopyrightsZ(maxChildZ + 1);
 }
 
+static QDeclarativeGeoMapType *findMapType(const QList<QDeclarativeGeoMapType *> &types, const QGeoMapType &type)
+{
+    for (int i = 0; i < types.size(); ++i)
+        if (types[i]->mapType() == type)
+            return types[i];
+    return Q_NULLPTR;
+}
+
+void QDeclarativeGeoMap::onSupportedMapTypesChanged()
+{
+    QList<QDeclarativeGeoMapType *> supportedMapTypes;
+    QList<QGeoMapType> types = m_mappingManager->supportedMapTypes();
+    for (int i = 0; i < types.size(); ++i) {
+        // types that are present and get removed will be deleted at QObject destruction
+        QDeclarativeGeoMapType *type = findMapType(m_supportedMapTypes, types[i]);
+        if (!type)
+            type = new QDeclarativeGeoMapType(types[i], this);
+        supportedMapTypes.append(type);
+    }
+    m_supportedMapTypes.swap(supportedMapTypes);
+    if (m_supportedMapTypes.isEmpty()) {
+        m_map->setActiveMapType(QGeoMapType()); // no supported map types: setting an invalid one
+    } else {
+        bool hasMapType = false;
+        foreach (QDeclarativeGeoMapType *declarativeType, m_supportedMapTypes) {
+            if (declarativeType->mapType() == m_map->activeMapType())
+                hasMapType = true;
+        }
+        if (!hasMapType) {
+            QDeclarativeGeoMapType *type = m_supportedMapTypes.at(0);
+            m_activeMapType = type;
+            m_map->setActiveMapType(type->mapType());
+        }
+    }
+
+    emit supportedMapTypesChanged();
+}
 
 void QDeclarativeGeoMap::setError(QGeoServiceProvider::Error error, const QString &errorString)
 {
@@ -381,6 +407,10 @@ QQuickGeoMapGestureArea *QDeclarativeGeoMap::gesture()
 void QDeclarativeGeoMap::populateMap()
 {
     QObjectList kids = children();
+    QList<QQuickItem *> quickKids = childItems();
+    for (int i=0; i < quickKids.count(); ++i)
+        kids.append(quickKids.at(i));
+
     for (int i = 0; i < kids.size(); ++i) {
         // dispatch items appropriately
         QDeclarativeGeoMapItemView *mapView = qobject_cast<QDeclarativeGeoMapItemView *>(kids.at(i));
@@ -431,7 +461,6 @@ QSGNode *QDeclarativeGeoMap::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeDa
 
     return root;
 }
-
 
 /*!
     \qmlproperty Plugin QtLocation::Map::plugin
@@ -500,7 +529,7 @@ void QDeclarativeGeoMap::mappingManagerInitialized()
     connect(m_map->mapController(),
             SIGNAL(centerChanged(QGeoCoordinate)),
             this,
-            SIGNAL(centerChanged(QGeoCoordinate)));
+            SLOT(mapCenterChanged(QGeoCoordinate)));
     connect(m_map->mapController(),
             SIGNAL(zoomChanged(qreal)),
             this,
@@ -526,6 +555,7 @@ void QDeclarativeGeoMap::mappingManagerInitialized()
     m_map->prefetchData();
     m_map->update();
 
+    connect(m_mappingManager, SIGNAL(supportedMapTypesChanged()), this, SLOT(onSupportedMapTypesChanged()));
     emit minimumZoomLevelChanged();
     emit maximumZoomLevelChanged();
     emit supportedMapTypesChanged();
@@ -643,6 +673,8 @@ void QDeclarativeGeoMap::setZoomLevel(qreal zoomLevel)
         return;
 
     m_zoomLevel = zoomLevel;
+    m_validRegion = false;
+
     if (m_mappingManagerInitialized)
         m_map->mapController()->setZoom(m_zoomLevel);
     emit zoomLevelChanged(zoomLevel);
@@ -673,6 +705,7 @@ void QDeclarativeGeoMap::setCenter(const QGeoCoordinate &center)
         return;
 
     m_center = center;
+    m_validRegion = false;
 
     if (m_center.isValid() && m_mappingManagerInitialized) {
         m_map->mapController()->setCenter(m_center);
@@ -711,7 +744,7 @@ QGeoCoordinate QDeclarativeGeoMap::center() const
 */
 void QDeclarativeGeoMap::setVisibleRegion(const QGeoShape &shape)
 {
-    if (shape == m_region)
+    if (shape == m_region && m_validRegion)
         return;
 
     m_region = shape;
@@ -764,32 +797,63 @@ QColor QDeclarativeGeoMap::color() const
 
 void QDeclarativeGeoMap::fitViewportToGeoShape()
 {
-    if (!m_map) return;
+    int margins  = 10;
+    if (!m_map || width() <= margins || height() <= margins)
+        return;
 
-    double bboxWidth;
-    double bboxHeight;
-    QGeoCoordinate centerCoordinate;
+    QGeoCoordinate topLeft;
+    QGeoCoordinate bottomRight;
 
     switch (m_region.type()) {
     case QGeoShape::RectangleType:
     {
         QGeoRectangle rect = m_region;
-        QDoubleVector2D topLeftPoint = m_map->coordinateToItemPosition(rect.topLeft(), false);
-        QDoubleVector2D botRightPoint = m_map->coordinateToItemPosition(rect.bottomRight(), false);
-        bboxWidth = qAbs(topLeftPoint.x() - botRightPoint.x());
-        bboxHeight = qAbs(topLeftPoint.y() - botRightPoint.y());
-        centerCoordinate = rect.center();
+        topLeft = rect.topLeft();
+        bottomRight = rect.bottomRight();
         break;
     }
     case QGeoShape::CircleType:
     {
+        const double pi = M_PI;
         QGeoCircle circle = m_region;
-        centerCoordinate = circle.center();
-        QGeoCoordinate edge = centerCoordinate.atDistanceAndAzimuth(circle.radius(), 90);
-        QDoubleVector2D centerPoint = m_map->coordinateToItemPosition(centerCoordinate, false);
-        QDoubleVector2D edgePoint = m_map->coordinateToItemPosition(edge, false);
-        bboxWidth = qAbs(centerPoint.x() - edgePoint.x()) * 2;
-        bboxHeight = bboxWidth;
+        QGeoCoordinate centerCoordinate = circle.center();
+
+        // calculate geo bounding box of the circle
+        // circle tangential points with meridians and the north pole create
+        // spherical triangle, we use spherical law of sines
+        // sin(lon_delta_in_rad)/sin(r_in_rad) =
+        // sin(alpha_in_rad)/sin(pi/2 - lat_in_rad), where:
+        // * lon_delta_in_rad - delta of longitudes of circle center
+        //   and tangential points
+        // * r_in_rad - angular radius of the circle
+        // * lat_in_rad - latitude of circle center
+        // * alpha_in_rad - angle between meridian and radius to the circle =>
+        //   this is tangential point => sin(alpha) = 1
+        // * lat_delta_in_rad - delta of latitudes of circle center and
+        //   latitude of points where great circle (going through circle
+        //   center) crosses circle and the pole
+
+        double r_in_rad = circle.radius() / EARTH_MEAN_RADIUS; // angular r
+        double lat_delta_in_deg = r_in_rad * 180 / pi;
+        double lon_delta_in_deg = std::asin(std::sin(r_in_rad) /
+               std::cos(centerCoordinate.latitude() * pi / 180)) * 180 / pi;
+
+        topLeft.setLatitude(centerCoordinate.latitude() + lat_delta_in_deg);
+        topLeft.setLongitude(centerCoordinate.longitude() - lon_delta_in_deg);
+        bottomRight.setLatitude(centerCoordinate.latitude()
+                                - lat_delta_in_deg);
+        bottomRight.setLongitude(centerCoordinate.longitude()
+                                 + lon_delta_in_deg);
+
+        // adjust if circle reaches poles => cross all meridians and
+        // fit into Mercator projection bounds
+        if (topLeft.latitude() > 90 || bottomRight.latitude() < -90) {
+            topLeft.setLatitude(qMin(topLeft.latitude(), 85.05113));
+            topLeft.setLongitude(-180.0);
+            bottomRight.setLatitude(qMax(bottomRight.latitude(),
+                                                 -85.05113));
+            bottomRight.setLongitude(180.0);
+        }
         break;
     }
     case QGeoShape::UnknownType:
@@ -798,27 +862,37 @@ void QDeclarativeGeoMap::fitViewportToGeoShape()
         return;
     }
 
-    // position camera to the center of bounding box
-    setProperty("center", QVariant::fromValue(centerCoordinate));
+    // adjust zoom, use reference world to keep things simple
+    // otherwise we would need to do the error prone longitudes
+    // wrapping
+    QDoubleVector2D topLeftPoint =
+            m_map->referenceCoordinateToItemPosition(topLeft);
+    QDoubleVector2D bottomRightPoint =
+            m_map->referenceCoordinateToItemPosition(bottomRight);
 
-    //If the shape is empty we just change centerposition, not zoom
+    double bboxWidth = bottomRightPoint.x() - topLeftPoint.x();
+    double bboxHeight = bottomRightPoint.y() - topLeftPoint.y();
+
+    // find center of the bounding box
+    QGeoCoordinate centerCoordinate =
+            m_map->referenceItemPositionToCoordinate(
+                (topLeftPoint + bottomRightPoint)/2);
+
+    // position camera to the center of bounding box
+    setCenter(centerCoordinate);
+
+    // if the shape is empty we just change center position, not zoom
     if (bboxHeight == 0 && bboxWidth == 0)
         return;
 
-    // adjust zoom
-    double bboxWidthRatio = bboxWidth / (bboxWidth + bboxHeight);
-    double mapWidthRatio = width() / (width() + height());
-    double zoomRatio;
-
-    if (bboxWidthRatio > mapWidthRatio)
-        zoomRatio = bboxWidth / width();
-    else
-        zoomRatio = bboxHeight / height();
-
-    qreal newZoom = std::log10(zoomRatio) / std::log10(0.5);
-
-    newZoom = std::floor(qMax(minimumZoomLevel(), (m_map->mapController()->zoom() + newZoom)));
-    setProperty("zoomLevel", QVariant::fromValue(newZoom));
+    double zoomRatio = qMax(bboxWidth / (width() - margins),
+                            bboxHeight / (height() - margins));
+    // fixme: use log2 with c++11
+    zoomRatio = std::log(zoomRatio) / std::log(2.0);
+    double newZoom = qMax(minimumZoomLevel(), m_map->mapController()->zoom()
+                          - zoomRatio);
+    setZoomLevel(newZoom);
+    m_validRegion = true;
 }
 
 /*!
@@ -829,7 +903,14 @@ void QDeclarativeGeoMap::mapZoomLevelChanged(qreal zoom)
     if (zoom == m_zoomLevel)
         return;
     m_zoomLevel = zoom;
+    m_validRegion = false;
     emit zoomLevelChanged(m_zoomLevel);
+}
+
+void QDeclarativeGeoMap::mapCenterChanged(const QGeoCoordinate &center)
+{
+    m_validRegion = false;
+    emit centerChanged(center);
 }
 
 /*!

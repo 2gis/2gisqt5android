@@ -35,7 +35,7 @@ The Bluetooth API provides connectivity between Bluetooth enabled devices.
 
 Currently, the API is supported on the following platforms: \l{Qt for Android}{Android},
 \l{Qt for iOS}{iOS}, \l{Qt for Linux/X11}{Linux}
-(\l{http://www.bluez.org}{BlueZ 4.x/5.x}) and \l{Qt for OS X}{OS X}.
+(\l{http://www.bluez.org}{BlueZ 4.x/5.x}) and \l{Qt for macOS}{\macos}.
 
 \section1 Overview
 
@@ -62,6 +62,19 @@ import statement in your \c .qml file:
 \snippet doc_src_qtbluetooth.qml import
 
 \section1 Related Information
+
+\section2 Building Qt Bluetooth
+
+Despite the fact that the module can be built for all Qt platforms,
+the module is not ported to all of them. Not supported platforms such as Windows desktop
+employ a fake or dummy backend which is automatically selected when the
+platform is not supported. The dummy backend reports appropriate error messages
+and values which allow the Qt Bluetooth developer to detect at runtime that the
+current platform is not supported. The dummy backend is also selected on Linux if
+BlueZ development headers are not found during build time or Qt was built without
+Qt D-Bus support.
+
+The usage of the dummy backend is highlighted via an appropriate warning while building and running.
 
 \section2 Guides
 \list
@@ -98,7 +111,7 @@ The \l QtBluetooth module exports the following
     \li Enables logging of the iOS implementation
 \row
     \li qt.bluetooth.osx
-    \li Enables logging of the OS X implementation
+    \li Enables logging of the \macos implementation
 \endtable
 
 \section2 Examples

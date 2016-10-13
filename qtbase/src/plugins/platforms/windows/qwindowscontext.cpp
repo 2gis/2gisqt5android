@@ -41,6 +41,7 @@
 #include "qwindowsmime.h"
 #include "qwindowsinputcontext.h"
 #include "qwindowstabletsupport.h"
+#include "qwindowstheme.h"
 #include <private/qguiapplication_p.h>
 #ifndef QT_NO_ACCESSIBILITY
 # include "accessible/qwindowsaccessibility.h"
@@ -409,7 +410,9 @@ void QWindowsContext::setProcessDpiAwareness(QtWindows::ProcessDpiAwareness dpiA
     qCDebug(lcQpaWindows) << __FUNCTION__ << dpiAwareness;
     if (QWindowsContext::shcoredll.isValid()) {
         const HRESULT hr = QWindowsContext::shcoredll.setProcessDpiAwareness(dpiAwareness);
-        if (FAILED(hr)) {
+        // E_ACCESSDENIED means set externally (MSVC manifest or external app loading Qt plugin).
+        // Silence warning in that case unless debug is enabled.
+        if (FAILED(hr) && (hr != E_ACCESSDENIED || lcQpaWindows().isDebugEnabled())) {
             qWarning().noquote().nospace() << "SetProcessDpiAwareness("
                 << dpiAwareness << ") failed: " << QWindowsContext::comErrorString(hr)
                 << ", using " << QWindowsContext::processDpiAwareness();
@@ -843,6 +846,9 @@ QByteArray QWindowsContext::comErrorString(HRESULT hr)
     case E_UNEXPECTED:
         result += QByteArrayLiteral("E_UNEXPECTED");
         break;
+    case E_ACCESSDENIED:
+        result += QByteArrayLiteral("E_ACCESSDENIED");
+        break;
     case CO_E_ALREADYINITIALIZED:
         result += QByteArrayLiteral("CO_E_ALREADYINITIALIZED");
         break;
@@ -1002,6 +1008,8 @@ bool QWindowsContext::windowsProc(HWND hwnd, UINT message,
 #endif
     case QtWindows::DisplayChangedEvent:
         return d->m_screenManager.handleDisplayChange(wParam, lParam);
+        if (QWindowsTheme *t = QWindowsTheme::instance())
+            t->displayChanged();
     case QtWindows::SettingChangedEvent:
         return d->m_screenManager.handleScreenChanges();
     default:

@@ -12,10 +12,7 @@ SOURCES = \
     musicplayer.cpp \
     volumebutton.cpp
 
-RESOURCES += \
-    musicplayer.qrc
-
-RC_ICONS = images/musicplayer.ico
+RC_ICONS = images/qt-logo.ico
 
 target.path = $$[QT_INSTALL_EXAMPLES]/winextras/musicplayer
 INSTALLS += target

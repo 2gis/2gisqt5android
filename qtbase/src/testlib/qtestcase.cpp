@@ -65,6 +65,9 @@
 #if defined(HAVE_XCTEST)
 #include <QtTest/private/qxctestlogger_p.h>
 #endif
+#if defined Q_OS_MACOS
+#include <QtTest/private/qtestutil_macos_p.h>
+#endif
 
 #include <numeric>
 #include <algorithm>
@@ -1680,7 +1683,7 @@ Q_TESTLIB_EXPORT void qtest_qParseArgs(int argc, char *argv[], bool qml)
          " -mousedelay ms      : Set default delay for mouse simulation to ms milliseconds\n"
          " -maxwarnings n      : Sets the maximum amount of messages to output.\n"
          "                       0 means unlimited, default: 2000\n"
-         " -nocrashhandler     : Disables the crash handler\n"
+         " -nocrashhandler     : Disables the crash handler. Useful for debugging crashes.\n"
          "\n"
          " Benchmarking options:\n"
 #ifdef QTESTLIB_USE_VALGRIND
@@ -2514,7 +2517,7 @@ static bool debuggerPresent()
     if (fd == -1)
         return false;
     char buffer[2048];
-    ssize_t size = read(fd, buffer, sizeof(buffer));
+    ssize_t size = read(fd, buffer, sizeof(buffer) - 1);
     if (size == -1) {
         close(fd);
         return false;
@@ -2548,8 +2551,13 @@ static void qInvokeTestMethods(QObject *testObject)
     invokeMethod(testObject, "initTestCase_data()");
 
     QScopedPointer<WatchDog> watchDog;
-    if (!debuggerPresent())
+    if (!debuggerPresent()
+#ifdef QTESTLIB_USE_VALGRIND
+        && QBenchmarkGlobalData::current->mode() != QBenchmarkGlobalData::CallgrindChildProcess
+#endif
+       ) {
         watchDog.reset(new WatchDog);
+    }
 
     if (!QTestResult::skipCurrentTest() && !QTest::currentTestFailed()) {
         invokeMethod(testObject, "initTestCase()");
@@ -2910,6 +2918,9 @@ int QTest::qExec(QObject *testObject, int argc, char **argv)
 #if defined(Q_OS_MACX)
     bool macNeedsActivate = qApp && (qstrcmp(qApp->metaObject()->className(), "QApplication") == 0);
     IOPMAssertionID powerID;
+
+    // Don't restore saved window state for auto tests.
+    QTestPrivate::disableWindowRestore();
 #endif
 #ifndef QT_NO_EXCEPTIONS
     try {

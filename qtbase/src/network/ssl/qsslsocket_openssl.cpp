@@ -1240,6 +1240,11 @@ bool QSslSocketBackendPrivate::startHandshake()
 #endif
         if (!checkSslErrors())
             return false;
+        // A slot, attached to sslErrors signal can call
+        // abort/close/disconnetFromHost/etc; no need to
+        // continue handshake then.
+        if (q->state() != QAbstractSocket::ConnectedState)
+            return false;
     } else {
         sslErrors.clear();
     }
@@ -1368,8 +1373,12 @@ void QSslSocketBackendPrivate::_q_caRootLoaded(QSslCertificate cert, QSslCertifi
     if (plainSocket)
         plainSocket->resume();
     paused = false;
-    if (checkSslErrors() && ssl)
+    if (checkSslErrors() && ssl) {
+        bool willClose = (autoStartHandshake && pendingClose);
         continueHandshake();
+        if (!willClose)
+            transmit();
+    }
 }
 
 class QWindowsCaRootFetcherThread : public QThread

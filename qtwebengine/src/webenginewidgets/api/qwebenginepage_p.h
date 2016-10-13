@@ -67,6 +67,8 @@ class QWebEngineProfile;
 class QWebEngineSettings;
 class QWebEngineView;
 
+QWebEnginePage::WebAction editorActionForKeyEvent(QKeyEvent* event);
+
 class QWebEnginePagePrivate : public QtWebEngineCore::WebContentsAdapterClient
 {
 public:
@@ -93,7 +95,10 @@ public:
     virtual void loadFinished(bool success, const QUrl &url, bool isErrorPage = false, int errorCode = 0, const QString &errorDescription = QString()) Q_DECL_OVERRIDE;
     virtual void focusContainer() Q_DECL_OVERRIDE;
     virtual void unhandledKeyEvent(QKeyEvent *event) Q_DECL_OVERRIDE;
-    virtual void adoptNewWindow(QtWebEngineCore::WebContentsAdapter *newWebContents, WindowOpenDisposition disposition, bool userGesture, const QRect &initialGeometry) Q_DECL_OVERRIDE;
+    virtual void adoptNewWindow(QSharedPointer<QtWebEngineCore::WebContentsAdapter> newWebContents, WindowOpenDisposition disposition, bool userGesture, const QRect &initialGeometry) Q_DECL_OVERRIDE;
+    void adoptNewWindowImpl(QWebEnginePage *newPage,
+            const QSharedPointer<QtWebEngineCore::WebContentsAdapter> &newWebContents,
+            const QRect &initialGeometry);
     virtual bool isBeingAdopted() Q_DECL_OVERRIDE;
     virtual void close() Q_DECL_OVERRIDE;
     virtual void windowCloseRejected() Q_DECL_OVERRIDE;
@@ -124,6 +129,8 @@ public:
     virtual void renderProcessTerminated(RenderProcessTerminationStatus terminationStatus,
                                      int exitCode) Q_DECL_OVERRIDE;
     virtual void requestGeometryChange(const QRect &geometry) Q_DECL_OVERRIDE;
+    virtual bool isEnabled() const Q_DECL_OVERRIDE;
+    const QObject *holdingQObject() const Q_DECL_OVERRIDE;
 
     virtual QSharedPointer<QtWebEngineCore::BrowserContextAdapter> browserContextAdapter() Q_DECL_OVERRIDE;
 
@@ -139,7 +146,7 @@ public:
 
     void setFullScreenMode(bool);
 
-    QExplicitlySharedDataPointer<QtWebEngineCore::WebContentsAdapter> adapter;
+    QSharedPointer<QtWebEngineCore::WebContentsAdapter> adapter;
     QWebEngineHistory *history;
     QWebEngineProfile *profile;
     QWebEngineSettings *settings;

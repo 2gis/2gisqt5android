@@ -52,7 +52,7 @@
 #  include "qfilesystemwatcher_win_p.h"
 #elif defined(USE_INOTIFY)
 #  include "qfilesystemwatcher_inotify_p.h"
-#elif defined(Q_OS_FREEBSD) || defined(Q_OS_NETBSD) || defined(Q_OS_IOS)
+#elif defined(Q_OS_FREEBSD) || defined(Q_OS_NETBSD) || defined(Q_OS_OPENBSD) || defined(Q_OS_IOS)
 #  include "qfilesystemwatcher_kqueue_p.h"
 #elif defined(Q_OS_OSX)
 #  include "qfilesystemwatcher_fsevents_p.h"
@@ -68,7 +68,7 @@ QFileSystemWatcherEngine *QFileSystemWatcherPrivate::createNativeEngine(QObject 
     // there is a chance that inotify may fail on Linux pre-2.6.13 (August
     // 2005), so we can't just new inotify directly.
     return QInotifyFileSystemWatcherEngine::create(parent);
-#elif defined(Q_OS_FREEBSD) || defined(Q_OS_NETBSD) || defined(Q_OS_IOS)
+#elif defined(Q_OS_FREEBSD) || defined(Q_OS_NETBSD) || defined(Q_OS_OPENBSD) || defined(Q_OS_IOS)
     return QKqueueFileSystemWatcherEngine::create(parent);
 #elif defined(Q_OS_OSX)
     return QFseventsFileSystemWatcherEngine::create(parent);
@@ -185,7 +185,7 @@ void QFileSystemWatcherPrivate::_q_directoryChanged(const QString &path, bool re
     the file system monitor. Also note that your process may have
     other file descriptors open in addition to the ones for files
     being monitored, and these other open descriptors also count in
-    the total. OS X uses a different backend and does not
+    the total. \macos uses a different backend and does not
     suffer from this issue.
 
 

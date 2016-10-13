@@ -20,7 +20,7 @@ isEmpty(OUTPUT_DIR) {
 
 DEFINES += BUILDING_QT__=1
 building-libs {
-    win32-msvc2008|win32-msvc2010|win32-msvc2012|win32-msvc2013|win32-icc: INCLUDEPATH += $$PWD/JavaScriptCore/os-win32
+    contains(MSVC_VER, "(9|10|11|12)\.0"): INCLUDEPATH += $$PWD/JavaScriptCore/os-win32
 } else {
     CONFIG(QTDIR_build) {
         QT += webkit

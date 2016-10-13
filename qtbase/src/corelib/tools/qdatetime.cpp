@@ -2159,7 +2159,7 @@ static int qt_timezone()
         //   number of seconds west of UTC.
         // - It also takes DST into account, so we need to adjust it to always
         //   get the Standard Time offset.
-        return -t.tm_gmtoff + (t.tm_isdst ? SECS_PER_HOUR : 0L);
+        return -t.tm_gmtoff + (t.tm_isdst ? (long)SECS_PER_HOUR : 0L);
 #else
         return timezone;
 #endif // Q_OS_WIN
@@ -2698,7 +2698,7 @@ qint64 QDateTimePrivate::toMSecsSinceEpoch() const
 
     case Qt::TimeZone:
 #ifdef QT_BOOTSTRAPPED
-        break;
+        return 0;
 #else
         return zoneMSecsToEpochMSecs(m_msecs, m_timeZone);
 #endif
@@ -4118,8 +4118,6 @@ QDateTime QDateTime::currentDateTimeUtc()
 
 qint64 QDateTime::currentMSecsSinceEpoch() Q_DECL_NOTHROW
 {
-    QDate d;
-    QTime t;
     SYSTEMTIME st;
     memset(&st, 0, sizeof(SYSTEMTIME));
     GetSystemTime(&st);
@@ -4761,7 +4759,12 @@ QDataStream &operator>>(QDataStream &in, QDate &date)
 
 QDataStream &operator<<(QDataStream &out, const QTime &time)
 {
-    return out << quint32(time.mds);
+    if (out.version() >= QDataStream::Qt_4_0) {
+        return out << quint32(time.mds);
+    } else {
+        // Qt3 had no support for reading -1, QTime() was valid and serialized as 0
+        return out << quint32(time.isNull() ? 0 : time.mds);
+    }
 }
 
 /*!
@@ -4776,7 +4779,12 @@ QDataStream &operator>>(QDataStream &in, QTime &time)
 {
     quint32 ds;
     in >> ds;
-    time.mds = int(ds);
+    if (in.version() >= QDataStream::Qt_4_0) {
+        time.mds = int(ds);
+    } else {
+        // Qt3 would write 0 for a null time
+        time.mds = (ds == 0) ? QTime::NullTime : int(ds);
+    }
     return in;
 }
 

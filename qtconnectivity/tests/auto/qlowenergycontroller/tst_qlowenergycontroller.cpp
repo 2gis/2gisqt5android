@@ -250,7 +250,7 @@ void tst_QLowEnergyController::tst_connect()
     QList<QBluetoothHostInfo> localAdapters = QBluetoothLocalDevice::allDevices();
 
 #ifdef Q_OS_IOS
-    if (remoteDeviceInfo.isValid())
+    if (!remoteDeviceInfo.isValid())
 #else
     if (localAdapters.isEmpty() || !remoteDeviceInfo.isValid())
 #endif
@@ -349,7 +349,7 @@ void tst_QLowEnergyController::tst_connect()
 
         // initiate characteristic discovery
         foreach (QLowEnergyService *service, savedReferences) {
-            qDebug() << "Discoverying" << service->serviceUuid();
+            qDebug() << "Discovering" << service->serviceUuid();
             QSignalSpy stateSpy(service,
                                 SIGNAL(stateChanged(QLowEnergyService::ServiceState)));
             QSignalSpy errorSpy(service, SIGNAL(error(QLowEnergyService::ServiceError)));

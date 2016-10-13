@@ -699,7 +699,9 @@
 #      define Q_COMPILER_TEMPLATE_ALIAS
 #    endif
 #    if __has_feature(cxx_thread_local)
-#      define Q_COMPILER_THREAD_LOCAL
+#      if !defined(__FreeBSD__) /* FreeBSD clang fails on __cxa_thread_atexit */
+#        define Q_COMPILER_THREAD_LOCAL
+#      endif
 #    endif
 #    if __has_feature(cxx_user_literals)
 #      define Q_COMPILER_UDL
@@ -1008,16 +1010,18 @@
 #  define Q_COMPILER_DEFAULT_DELETE_MEMBERS
 #endif
 
-#if defined(__cpp_constexpr) && __cpp_constexpr-0 >= 201304
-# define Q_DECL_CONSTEXPR constexpr
-# define Q_DECL_RELAXED_CONSTEXPR constexpr
-# define Q_CONSTEXPR constexpr
-# define Q_RELAXED_CONSTEXPR constexpr
-#elif defined Q_COMPILER_CONSTEXPR
-# define Q_DECL_CONSTEXPR constexpr
-# define Q_DECL_RELAXED_CONSTEXPR
-# define Q_CONSTEXPR constexpr
-# define Q_RELAXED_CONSTEXPR const
+#if defined Q_COMPILER_CONSTEXPR
+# if defined(__cpp_constexpr) && __cpp_constexpr-0 >= 201304
+#  define Q_DECL_CONSTEXPR constexpr
+#  define Q_DECL_RELAXED_CONSTEXPR constexpr
+#  define Q_CONSTEXPR constexpr
+#  define Q_RELAXED_CONSTEXPR constexpr
+# else
+#  define Q_DECL_CONSTEXPR constexpr
+#  define Q_DECL_RELAXED_CONSTEXPR
+#  define Q_CONSTEXPR constexpr
+#  define Q_RELAXED_CONSTEXPR const
+# endif
 #else
 # define Q_DECL_CONSTEXPR
 # define Q_DECL_RELAXED_CONSTEXPR
@@ -1051,7 +1055,8 @@
 # define Q_DECL_NOTHROW Q_DECL_NOEXCEPT
 #endif
 
-#if defined(Q_COMPILER_ALIGNOF) && !defined(Q_ALIGNOF)
+#if defined(Q_COMPILER_ALIGNOF)
+#  undef Q_ALIGNOF
 #  define Q_ALIGNOF(x)  alignof(x)
 #endif
 

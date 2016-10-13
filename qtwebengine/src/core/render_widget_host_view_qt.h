@@ -226,11 +226,13 @@ private:
     bool m_didFirstVisuallyNonEmptyLayout;
     uint32 m_pendingOutputSurfaceId;
 
+    QMetaObject::Connection m_adapterClientDestroyedConnection;
     WebContentsAdapterClient *m_adapterClient;
     MultipleMouseClickHelper m_clickHelper;
 
     ui::TextInputType m_currentInputType;
     bool m_imeInProgress;
+    bool m_receivedEmptyImeText;
     QRect m_cursorRect;
     size_t m_anchorPositionWithinSelection;
     size_t m_cursorPositionWithinSelection;

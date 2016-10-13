@@ -55,8 +55,6 @@
 #include <qpa/qplatformdrag.h>
 #include <qpa/qwindowsysteminterface.h>
 
-#include <QDebug>
-
 QT_BEGIN_NAMESPACE
 
 namespace QtWaylandClient {
@@ -109,7 +107,10 @@ void QWaylandDataDevice::startDrag(QMimeData *mimeData, QWaylandWindow *icon)
 {
     m_dragSource.reset(new QWaylandDataSource(m_display->dndSelectionHandler(), mimeData));
     connect(m_dragSource.data(), &QWaylandDataSource::cancelled, this, &QWaylandDataDevice::dragSourceCancelled);
+
     QWaylandWindow *origin = m_display->currentInputDevice()->pointerFocus();
+    if (!origin)
+        origin = m_display->currentInputDevice()->touchFocus();
 
     start_drag(m_dragSource->object(), origin->object(), icon->object(), m_display->currentInputDevice()->serial());
 }
@@ -127,8 +128,6 @@ void QWaylandDataDevice::data_device_data_offer(struct ::wl_data_offer *id)
 void QWaylandDataDevice::data_device_drop()
 {
     QDrag *drag = static_cast<QWaylandDrag *>(QGuiApplicationPrivate::platformIntegration()->drag())->currentDrag();
-
-    qDebug() << Q_FUNC_INFO << drag << m_dragOffer.data();
 
     QMimeData *dragData = 0;
     Qt::DropActions supportedActions;
@@ -155,31 +154,29 @@ void QWaylandDataDevice::data_device_enter(uint32_t serial, wl_surface *surface,
     m_dragWindow = QWaylandWindow::fromWlSurface(surface)->window();
     m_dragPoint = QPoint(wl_fixed_to_int(x), wl_fixed_to_int(y));
 
-    QDrag *drag = static_cast<QWaylandDrag *>(QGuiApplicationPrivate::platformIntegration()->drag())->currentDrag();
-
     QMimeData *dragData = Q_NULLPTR;
     Qt::DropActions supportedActions;
+
+    m_dragOffer.reset(static_cast<QWaylandDataOffer *>(wl_data_offer_get_user_data(id)));
+    QDrag *drag = static_cast<QWaylandDrag *>(QGuiApplicationPrivate::platformIntegration()->drag())->currentDrag();
     if (drag) {
         dragData = drag->mimeData();
         supportedActions = drag->supportedActions();
-    } else {
-        m_dragOffer.reset(static_cast<QWaylandDataOffer *>(wl_data_offer_get_user_data(id)));
-        if (m_dragOffer) {
-            dragData = m_dragOffer->mimeData();
-            supportedActions = Qt::CopyAction | Qt::MoveAction | Qt::LinkAction;
-        }
+    } else if (m_dragOffer) {
+        dragData = m_dragOffer->mimeData();
+        supportedActions = Qt::CopyAction | Qt::MoveAction | Qt::LinkAction;
     }
 
     const QPlatformDragQtResponse &response = QWindowSystemInterface::handleDrag(m_dragWindow, dragData, m_dragPoint, supportedActions);
 
     if (drag) {
         static_cast<QWaylandDrag *>(QGuiApplicationPrivate::platformIntegration()->drag())->setResponse(response);
+    }
+
+    if (response.isAccepted()) {
+        wl_data_offer_accept(m_dragOffer->object(), m_enterSerial, m_dragOffer->firstFormat().toUtf8().constData());
     } else {
-        if (response.isAccepted()) {
-            wl_data_offer_accept(m_dragOffer->object(), m_enterSerial, m_dragOffer->firstFormat().toUtf8().constData());
-        } else {
-            wl_data_offer_accept(m_dragOffer->object(), m_enterSerial, 0);
-        }
+        wl_data_offer_accept(m_dragOffer->object(), m_enterSerial, 0);
     }
 }
 
@@ -218,12 +215,12 @@ void QWaylandDataDevice::data_device_motion(uint32_t time, wl_fixed_t x, wl_fixe
 
     if (drag) {
         static_cast<QWaylandDrag *>(QGuiApplicationPrivate::platformIntegration()->drag())->setResponse(response);
+    }
+
+    if (response.isAccepted()) {
+        wl_data_offer_accept(m_dragOffer->object(), m_enterSerial, m_dragOffer->firstFormat().toUtf8().constData());
     } else {
-        if (response.isAccepted()) {
-            wl_data_offer_accept(m_dragOffer->object(), m_enterSerial, m_dragOffer->firstFormat().toUtf8().constData());
-        } else {
-            wl_data_offer_accept(m_dragOffer->object(), m_enterSerial, 0);
-        }
+        wl_data_offer_accept(m_dragOffer->object(), m_enterSerial, 0);
     }
 }
 

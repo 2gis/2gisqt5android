@@ -70,10 +70,12 @@ Item {
     function doLayout() {
         if (!recursionGuard) {
             recursionGuard = true
+            blockUpdates = true;
             scrollHelper.contentWidth = flickableItem !== null ? flickableItem.contentWidth : 0
             scrollHelper.contentHeight = flickableItem !== null ? flickableItem.contentHeight : 0
             scrollHelper.availableWidth = viewport.width
             scrollHelper.availableHeight = viewport.height
+            blockUpdates = false;
             recursionGuard = false
         }
     }
@@ -129,6 +131,11 @@ Item {
         anchors.right: cornerFill.left
         anchors.leftMargin:  leftMargin
         anchors.bottomMargin: bottomMargin
+        onScrollAmountChanged: {
+            if (flickableItem && (flickableItem.atXBeginning || flickableItem.atXEnd)) {
+                value = flickableItem.contentX - flickableItem.originX
+            }
+        }
         onValueChanged: {
             if (!blockUpdates) {
                 flickableItem.contentX = value + flickableItem.originX
@@ -178,6 +185,11 @@ Item {
         anchors.top: parent.top
         anchors.topMargin: __scrollBarTopMargin + topMargin
         anchors.rightMargin: rightMargin
+        onScrollAmountChanged: {
+            if (flickableItem && (flickableItem.atYBeginning || flickableItem.atYEnd)) {
+                value = flickableItem.contentY - flickableItem.originY
+            }
+        }
         onValueChanged: {
             if (flickableItem && !blockUpdates && enabled) {
                 flickableItem.contentY = value + flickableItem.originY

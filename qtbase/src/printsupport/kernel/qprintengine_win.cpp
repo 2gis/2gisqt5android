@@ -388,6 +388,9 @@ int QWin32PrintEngine::metric(QPaintDevice::PaintDeviceMetric m) const
     case QPaintDevice::PdmDevicePixelRatio:
         val = 1;
         break;
+    case QPaintDevice::PdmDevicePixelRatioScaled:
+        val = 1 * QPaintDevice::devicePixelRatioFScale();
+        break;
     default:
         qWarning("QPrinter::metric: Invalid metric command");
         return 0;
@@ -915,13 +918,13 @@ void QWin32PrintEnginePrivate::initialize()
     Q_ASSERT(hPrinter);
     Q_ASSERT(pInfo);
 
+    initHDC();
+
     if (devMode) {
         num_copies = devMode->dmCopies;
         devMode->dmCollate = DMCOLLATE_TRUE;
         updatePageLayout();
     }
-
-    initHDC();
 
 #if defined QT_DEBUG_DRAW || defined QT_DEBUG_METRICS
     qDebug() << "QWin32PrintEngine::initialize()";

@@ -61,6 +61,10 @@ QT_BEGIN_NAMESPACE
 
 extern QRegion qt_dirtyRegion(QWidget *);
 
+#ifndef QT_NO_OPENGL
+Q_GLOBAL_STATIC(QPlatformTextureList, qt_dummy_platformTextureList)
+#endif
+
 /**
  * Flushes the contents of the \a backingStore into the screen area of \a widget.
  * \a tlwOffset is the position of the top level widget relative to the window surface.
@@ -103,6 +107,20 @@ void QWidgetBackingStore::qt_flush(QWidget *widget, const QRegion &region, QBack
         offset += widget->mapTo(tlw, QPoint());
 
 #ifndef QT_NO_OPENGL
+    const bool compositionWasActive = widget->d_func()->renderToTextureComposeActive;
+    if (!widgetTextures) {
+        widget->d_func()->renderToTextureComposeActive = false;
+        // Detect the case of falling back to the normal flush path when no
+        // render-to-texture widgets are visible anymore. We will force one
+        // last flush to go through the OpenGL-based composition to prevent
+        // artifacts. The next flush after this one will use the normal path.
+        if (compositionWasActive)
+            widgetTextures = qt_dummy_platformTextureList;
+    } else {
+        widget->d_func()->renderToTextureComposeActive = true;
+    }
+
+    // re-test since we may have been forced to this path via the dummy texture list above
     if (widgetTextures) {
         qt_window_private(tlw->windowHandle())->compositing = true;
         widget->window()->d_func()->sendComposeStatus(widget->window(), false);
@@ -978,8 +996,6 @@ static void findAllTextureWidgetsRecursively(QWidget *tlw, QWidget *widget)
     }
 }
 
-Q_GLOBAL_STATIC(QPlatformTextureList, qt_dummy_platformTextureList)
-
 static QPlatformTextureList *widgetTexturesFor(QWidget *tlw, QWidget *widget)
 {
     foreach (QPlatformTextureList *tl, QWidgetPrivate::get(tlw)->topData()->widgetTextures) {
@@ -1000,8 +1016,20 @@ static QPlatformTextureList *widgetTexturesFor(QWidget *tlw, QWidget *widget)
         static bool switchableWidgetComposition =
             QGuiApplicationPrivate::instance()->platformIntegration()
                 ->hasCapability(QPlatformIntegration::SwitchableWidgetComposition);
-        if (!switchableWidgetComposition)
+        if (!switchableWidgetComposition
+// The Windows compositor handles fullscreen OpenGL window specially. Besides
+// having trouble with popups, it also has issues with flip-flopping between
+// OpenGL-based and normal flushing. Therefore, stick with GL for fullscreen
+// windows (QTBUG-53515). Similary, translucent windows should not switch to
+// layered native windows (QTBUG-54734).
+#if defined(Q_OS_WIN) && !defined(Q_OS_WINRT) && !defined(Q_OS_WINCE)
+                || tlw->windowState().testFlag(Qt::WindowFullScreen)
+                || tlw->testAttribute(Qt::WA_TranslucentBackground)
+#endif
+                )
+        {
             return qt_dummy_platformTextureList();
+        }
     }
 
     return 0;
@@ -1201,9 +1229,19 @@ void QWidgetBackingStore::doSync()
         // We know for sure that the widget isn't overlapped if 'isMoved' is true.
         if (!wd->isMoved)
             wd->subtractOpaqueSiblings(wd->dirty, &hasDirtySiblingsAbove);
+
+        // Make a copy of the widget's dirty region, to restore it in case there is an opaque
+        // render-to-texture child that completely covers the widget, because otherwise the
+        // render-to-texture child won't be visible, due to its parent widget not being redrawn
+        // with a proper blending mask.
+        const QRegion dirtyBeforeSubtractedOpaqueChildren = wd->dirty;
+
         // Scrolled and moved widgets must draw all children.
         if (!wd->isScrolled && !wd->isMoved)
             wd->subtractOpaqueChildren(wd->dirty, w->rect());
+
+        if (wd->dirty.isEmpty() && wd->textureChildSeen)
+            wd->dirty = dirtyBeforeSubtractedOpaqueChildren;
 
         if (wd->dirty.isEmpty()) {
             resetWidget(w);

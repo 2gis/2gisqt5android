@@ -2197,10 +2197,12 @@ void QQuickListView::setOrientation(QQuickListView::Orientation orientation)
     Note that cacheBuffer is not a pixel buffer - it only maintains additional
     instantiated delegates.
 
-    Setting this value can improve the smoothness of scrolling behavior at the expense
-    of additional memory usage.  It is not a substitute for creating efficient
-    delegates; the fewer objects and bindings in a delegate, the faster a view can be
-    scrolled.
+    \note Setting this property is not a replacement for creating efficient delegates.
+    It can improve the smoothness of scrolling behavior at the expense of additional
+    memory usage. The fewer objects and bindings in a delegate, the faster a
+    view can be scrolled. It is important to realize that setting a cacheBuffer
+    will only postpone issues caused by slow-loading delegates, it is not a
+    solution for this scenario.
 
     The cacheBuffer operates outside of any display margins specified by
     displayMarginBeginning or displayMarginEnd.
@@ -3115,7 +3117,7 @@ bool QQuickListViewPrivate::applyInsertionChange(const QQmlChangeSet::Change &ch
         }
     }
 
-    int prevVisibleCount = visibleItems.count();
+    bool visibleAffected = false;
     if (insertResult->visiblePos.isValid() && pos < insertResult->visiblePos) {
         // Insert items before the visible item.
         int insertionIdx = index;
@@ -3138,6 +3140,7 @@ bool QQuickListViewPrivate::applyInsertionChange(const QQmlChangeSet::Change &ch
                 if (!item)
                     return false;
 
+                visibleAffected = true;
                 visibleItems.insert(insertionIdx, item);
                 if (insertionIdx == 0)
                     insertResult->changedFirstItem = true;
@@ -3169,6 +3172,9 @@ bool QQuickListViewPrivate::applyInsertionChange(const QQmlChangeSet::Change &ch
 
     } else {
         qreal to = buffer + displayMarginEnd + tempPos + size();
+
+        visibleAffected = count > 0 && pos < to;
+
         for (int i = 0; i < count && pos <= to; ++i) {
             FxViewItem *item = 0;
             if (change.isMove() && (item = currentChanges.removedItems.take(change.moveKey(modelIndex + i))))
@@ -3219,7 +3225,7 @@ bool QQuickListViewPrivate::applyInsertionChange(const QQmlChangeSet::Change &ch
 
     updateVisibleIndex();
 
-    return visibleItems.count() > prevVisibleCount;
+    return visibleAffected;
 }
 
 void QQuickListViewPrivate::translateAndTransitionItemsAfter(int afterModelIndex, const ChangeResult &insertionResult, const ChangeResult &removalResult)
@@ -3312,7 +3318,7 @@ void QQuickListViewPrivate::translateAndTransitionItemsAfter(int afterModelIndex
 */
 
 /*!
-    \qmlmethod int QtQuick::ListView::indexAt(int x, int y)
+    \qmlmethod int QtQuick::ListView::indexAt(real x, real y)
 
     Returns the index of the visible item containing the point \a x, \a y in content
     coordinates.  If there is no item at the point specified, or the item is
@@ -3325,7 +3331,7 @@ void QQuickListViewPrivate::translateAndTransitionItemsAfter(int afterModelIndex
 */
 
 /*!
-    \qmlmethod Item QtQuick::ListView::itemAt(int x, int y)
+    \qmlmethod Item QtQuick::ListView::itemAt(real x, real y)
 
     Returns the visible item containing the point \a x, \a y in content
     coordinates.  If there is no item at the point specified, or the item is

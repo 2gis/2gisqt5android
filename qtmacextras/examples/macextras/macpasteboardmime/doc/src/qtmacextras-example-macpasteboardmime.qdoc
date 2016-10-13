@@ -26,19 +26,19 @@
 ****************************************************************************/
 
 /*!
-    \title Mac Pasteboard MIME Converter
+    \title macOS: Pasteboard MIME Converter
     \ingroup examples-qtmacextras
     \example macpasteboardmime
     \brief Demonstrates using QMacPasteboardMime class.
 
     This example shows how to use QMacPasteboardMime to do conversion
     between a MIME type and a Uniform Type Identifier (UTI) format used
-    on OS X.
+    on \macos.
 
     The example creates a widget that accepts drag & drop events, and
     reads contents of dropped business cards in vCard format.
 
     \include examples-run.qdocinc
 
-    \sa {Qt for OS X}, {Qt Mac Extras}
+    \sa {Qt for macOS}, {Qt Mac Extras}
 */
