@@ -978,10 +978,12 @@ inline bool QUrlPrivate::setScheme(const QString &value, int len, bool doSetErro
             needsLowercasing = i;
             continue;
         }
-        if (p[i] >= '0' && p[i] <= '9' && i > 0)
-            continue;
-        if (p[i] == '+' || p[i] == '-' || p[i] == '.')
-            continue;
+        if (i) {
+            if (p[i] >= '0' && p[i] <= '9')
+                continue;
+            if (p[i] == '+' || p[i] == '-' || p[i] == '.')
+                continue;
+        }
 
         // found something else
         // don't call setError needlessly:
@@ -3165,8 +3167,8 @@ QUrl QUrl::resolved(const QUrl &relative) const
     if (!relative.d) return *this;
 
     QUrl t;
-    // be non strict and allow scheme in relative url
-    if (!relative.d->scheme.isEmpty() && relative.d->scheme != d->scheme) {
+    // Compatibility hack (mostly for qtdeclarative) : treat "file:relative.txt" as relative even though QUrl::isRelative() says false
+    if (!relative.d->scheme.isEmpty() && (!relative.isLocalFile() || QDir::isAbsolutePath(relative.d->path))) {
         t = relative;
         t.detach();
     } else {

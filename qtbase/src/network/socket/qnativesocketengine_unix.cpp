@@ -307,7 +307,7 @@ int QNativeSocketEnginePrivate::option(QNativeSocketEngine::SocketOption opt) co
     // handle non-getsockopt cases first
     if (opt == QNativeSocketEngine::BindExclusively || opt == QNativeSocketEngine::NonBlockingSocketOption
             || opt == QNativeSocketEngine::BroadcastSocketOption)
-        return true;
+        return -1;
 
     int n, level;
     int v = -1;
@@ -573,7 +573,9 @@ int QNativeSocketEnginePrivate::nativeAccept()
             setError(QAbstractSocket::SocketResourceError, NotSocketErrorString);
             break;
         case EPROTONOSUPPORT:
+#if !defined(Q_OS_OPENBSD)
         case EPROTO:
+#endif
         case EAFNOSUPPORT:
         case EINVAL:
             setError(QAbstractSocket::UnsupportedSocketOperationError, ProtocolUnsupportedErrorString);
@@ -904,8 +906,7 @@ qint64 QNativeSocketEnginePrivate::nativeReceiveDatagram(char *data, qint64 maxS
             if (cmsgptr->cmsg_level == IPPROTO_IP && cmsgptr->cmsg_type == IP_RECVIF
                     && cmsgptr->cmsg_len >= CMSG_LEN(sizeof(sockaddr_dl))) {
                 sockaddr_dl *sdl = reinterpret_cast<sockaddr_dl *>(CMSG_DATA(cmsgptr));
-
-                header->ifindex = LLINDEX(sdl);
+                header->ifindex = sdl->sdl_index;
             }
 #  endif
 #endif

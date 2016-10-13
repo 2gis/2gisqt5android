@@ -38,8 +38,8 @@
 #include "avfcameraservice.h"
 #include "avfcamerasession.h"
 #include "avfcameradebug.h"
+#include "avfmediacontainercontrol.h"
 
-//#include <QtCore/qmutexlocker.h>
 #include <QtCore/qmetaobject.h>
 #include <QtCore/qsysinfo.h>
 
@@ -67,37 +67,37 @@ bool qt_camera_service_isValid(AVFCameraService *service)
     return true;
 }
 
+enum WriterState
+{
+    WriterStateIdle,
+    WriterStateActive,
+    WriterStateAborted
+};
+
 } // unnamed namespace
 
 @interface QT_MANGLE_NAMESPACE(AVFMediaAssetWriter) (PrivateAPI)
 - (bool)addAudioCapture;
 - (bool)addWriterInputs;
 - (void)setQueues;
-- (NSDictionary *)videoSettings;
-- (NSDictionary *)audioSettings;
 - (void)updateDuration:(CMTime)newTimeStamp;
 @end
 
 @implementation QT_MANGLE_NAMESPACE(AVFMediaAssetWriter)
 
-- (id)initWithQueue:(dispatch_queue_t)writerQueue
-      delegate:(AVFMediaRecorderControlIOS *)delegate
+- (id)initWithDelegate:(AVFMediaRecorderControlIOS *)delegate
 {
-    Q_ASSERT(writerQueue);
     Q_ASSERT(delegate);
 
     if (self = [super init]) {
-        // "Shared" queue:
-        dispatch_retain(writerQueue);
-        m_writerQueue.reset(writerQueue);
-
         m_delegate = delegate;
         m_setStartTime = true;
-        m_stopped.store(true);
-        m_aborted.store(false);
+        m_state.store(WriterStateIdle);
         m_startTime = kCMTimeInvalid;
         m_lastTimeStamp = kCMTimeInvalid;
         m_durationInMs.store(0);
+        m_audioSettings = nil;
+        m_videoSettings = nil;
     }
 
     return self;
@@ -105,6 +105,9 @@ bool qt_camera_service_isValid(AVFCameraService *service)
 
 - (bool)setupWithFileURL:(NSURL *)fileURL
         cameraService:(AVFCameraService *)service
+        audioSettings:(NSDictionary *)audioSettings
+        videoSettings:(NSDictionary *)videoSettings
+        transform:(CGAffineTransform)transform
 {
     Q_ASSERT(fileURL);
 
@@ -114,6 +117,14 @@ bool qt_camera_service_isValid(AVFCameraService *service)
     }
 
     m_service = service;
+    m_audioSettings = audioSettings;
+    m_videoSettings = videoSettings;
+
+    m_writerQueue.reset(dispatch_queue_create("asset-writer-queue", DISPATCH_QUEUE_SERIAL));
+    if (!m_writerQueue) {
+        qDebugCamera() << Q_FUNC_INFO << "failed to create an asset writer's queue";
+        return false;
+    }
 
     m_videoQueue.reset(dispatch_queue_create("video-output-queue", DISPATCH_QUEUE_SERIAL));
     if (!m_videoQueue) {
@@ -127,7 +138,9 @@ bool qt_camera_service_isValid(AVFCameraService *service)
         // But we still can write video!
     }
 
-    m_assetWriter.reset([[AVAssetWriter alloc] initWithURL:fileURL fileType:AVFileTypeQuickTimeMovie error:nil]);
+    m_assetWriter.reset([[AVAssetWriter alloc] initWithURL:fileURL
+                                               fileType:m_service->mediaContainerControl()->fileType()
+                                               error:nil]);
     if (!m_assetWriter) {
         qDebugCamera() << Q_FUNC_INFO << "failed to create asset writer";
         return false;
@@ -145,25 +158,26 @@ bool qt_camera_service_isValid(AVFCameraService *service)
             [session removeInput:m_audioInput];
             m_audioOutput.reset();
             m_audioInput.reset();
+            m_audioCaptureDevice = 0;
         }
         m_assetWriter.reset();
         return false;
     }
+
+    m_cameraWriterInput.data().transform = transform;
+
     // Ready to start ...
     return true;
 }
 
 - (void)start
 {
-    // To be executed on a writer's queue.
-    const QMutexLocker lock(&m_writerMutex);
-    if (m_aborted.load())
-        return;
-
     [self setQueues];
 
     m_setStartTime = true;
-    m_stopped.store(false);
+
+    m_state.storeRelease(WriterStateActive);
+
     [m_assetWriter startWriting];
     AVCaptureSession *session = m_service->session()->captureSession();
     if (!session.running)
@@ -172,27 +186,36 @@ bool qt_camera_service_isValid(AVFCameraService *service)
 
 - (void)stop
 {
-    // To be executed on a writer's queue.
-    {
-    const QMutexLocker lock(&m_writerMutex);
-    if (m_aborted.load())
+    if (m_state.loadAcquire() != WriterStateActive)
         return;
 
-    if (m_stopped.load())
+    if ([m_assetWriter status] != AVAssetWriterStatusWriting)
         return;
 
-    m_stopped.store(true);
-    }
+    // Do this here so that -
+    // 1. '-abort' should not try calling finishWriting again and
+    // 2. async block (see below) will know if recorder control was deleted
+    //    before the block's execution:
+    m_state.storeRelease(WriterStateIdle);
+    // Now, since we have to ensure no sample buffers are
+    // appended after a call to finishWriting, we must
+    // ensure writer's queue sees this change in m_state
+    // _before_ we call finishWriting:
+    dispatch_sync(m_writerQueue, ^{});
+    // Done, but now we also want to prevent video queue
+    // from updating our viewfinder:
+    dispatch_sync(m_videoQueue, ^{});
 
+    // Now we're safe to stop:
     [m_assetWriter finishWritingWithCompletionHandler:^{
         // This block is async, so by the time it's executed,
         // it's possible that render control was deleted already ...
-        const QMutexLocker lock(&m_writerMutex);
-        if (m_aborted.load())
+        if (m_state.loadAcquire() == WriterStateAborted)
             return;
 
         AVCaptureSession *session = m_service->session()->captureSession();
-        [session stopRunning];
+        if (session.running)
+            [session stopRunning];
         [session removeOutput:m_audioOutput];
         [session removeInput:m_audioInput];
         QMetaObject::invokeMethod(m_delegate, "assetWriterFinished", Qt::QueuedConnection);
@@ -201,12 +224,26 @@ bool qt_camera_service_isValid(AVFCameraService *service)
 
 - (void)abort
 {
-    // To be executed on any thread (presumably, it's the main thread),
-    // prevents writer from accessing any shared object.
-    const QMutexLocker lock(&m_writerMutex);
-    m_aborted.store(true);
-    if (m_stopped.load())
+    // -abort is to be called from recorder control's dtor.
+
+    if (m_state.fetchAndStoreRelease(WriterStateAborted) != WriterStateActive) {
+        // Not recording, nothing to stop.
         return;
+    }
+
+    // From Apple's docs:
+    // "To guarantee that all sample buffers are successfully written,
+    //  you must ensure that all calls to appendSampleBuffer: and
+    //  appendPixelBuffer:withPresentationTime: have returned before
+    //  invoking this method."
+    //
+    // The only way we can ensure this is:
+    dispatch_sync(m_writerQueue, ^{});
+    // At this point next block (if any) on the writer's queue
+    // will see m_state preventing it from any further processing.
+    dispatch_sync(m_videoQueue, ^{});
+    // After this point video queue will not try to modify our
+    // viewfider, so we're safe to delete now.
 
     [m_assetWriter finishWritingWithCompletionHandler:^{
     }];
@@ -218,13 +255,12 @@ bool qt_camera_service_isValid(AVFCameraService *service)
     Q_ASSERT(m_setStartTime);
     Q_ASSERT(sampleBuffer);
 
-    const QMutexLocker lock(&m_writerMutex);
-    if (m_aborted.load() || m_stopped.load())
+    if (m_state.loadAcquire() != WriterStateActive)
         return;
 
     QMetaObject::invokeMethod(m_delegate, "assetWriterStarted", Qt::QueuedConnection);
 
-    m_durationInMs.store(0);
+    m_durationInMs.storeRelease(0);
     m_startTime = CMSampleBufferGetPresentationTimeStamp(sampleBuffer);
     m_lastTimeStamp = m_startTime;
     [m_assetWriter startSessionAtSourceTime:m_startTime];
@@ -233,10 +269,10 @@ bool qt_camera_service_isValid(AVFCameraService *service)
 
 - (void)writeVideoSampleBuffer:(CMSampleBufferRef)sampleBuffer
 {
+    // This code is executed only on a writer's queue.
     Q_ASSERT(sampleBuffer);
 
-    // This code is executed only on a writer's queue.
-    if (!m_aborted.load() && !m_stopped.load()) {
+    if (m_state.loadAcquire() == WriterStateActive) {
         if (m_setStartTime)
             [self setStartTimeFrom:sampleBuffer];
 
@@ -246,17 +282,15 @@ bool qt_camera_service_isValid(AVFCameraService *service)
         }
     }
 
-
     CFRelease(sampleBuffer);
 }
 
 - (void)writeAudioSampleBuffer:(CMSampleBufferRef)sampleBuffer
 {
-    // This code is executed only on a writer's queue.
-    // it does not touch any shared/external data.
     Q_ASSERT(sampleBuffer);
 
-    if (!m_aborted.load() && !m_stopped.load()) {
+    // This code is executed only on a writer's queue.
+    if (m_state.loadAcquire() == WriterStateActive) {
         if (m_setStartTime)
             [self setStartTimeFrom:sampleBuffer];
 
@@ -275,10 +309,7 @@ bool qt_camera_service_isValid(AVFCameraService *service)
 {
     Q_UNUSED(connection)
 
-    // This method can be called on either video or audio queue,
-    // never on a writer's queue, it needs access to a shared data, so
-    // lock is required.
-    if (m_stopped.load())
+    if (m_state.loadAcquire() != WriterStateActive)
         return;
 
     if (!CMSampleBufferDataIsReady(sampleBuffer)) {
@@ -289,8 +320,7 @@ bool qt_camera_service_isValid(AVFCameraService *service)
     CFRetain(sampleBuffer);
 
     if (captureOutput != m_audioOutput.data()) {
-        const QMutexLocker lock(&m_writerMutex);
-        if (m_aborted.load() || m_stopped.load()) {
+        if (m_state.load() != WriterStateActive) {
             CFRelease(sampleBuffer);
             return;
         }
@@ -322,20 +352,22 @@ bool qt_camera_service_isValid(AVFCameraService *service)
 
     AVCaptureSession *captureSession = m_service->session()->captureSession();
 
-    AVCaptureDevice *audioDevice = m_service->audioInputSelectorControl()->createCaptureDevice();
-    if (!audioDevice) {
+    m_audioCaptureDevice = m_service->audioInputSelectorControl()->createCaptureDevice();
+    if (!m_audioCaptureDevice) {
         qWarning() << Q_FUNC_INFO << "no audio input device available";
         return false;
     } else {
         NSError *error = nil;
-        m_audioInput.reset([[AVCaptureDeviceInput deviceInputWithDevice:audioDevice error:&error] retain]);
+        m_audioInput.reset([[AVCaptureDeviceInput deviceInputWithDevice:m_audioCaptureDevice error:&error] retain]);
 
         if (!m_audioInput || error) {
             qWarning() << Q_FUNC_INFO << "failed to create audio device input";
+            m_audioCaptureDevice = 0;
             m_audioInput.reset();
             return false;
         } else if (![captureSession canAddInput:m_audioInput]) {
             qWarning() << Q_FUNC_INFO << "could not connect the audio input";
+            m_audioCaptureDevice = 0;
             m_audioInput.reset();
             return false;
         } else {
@@ -350,6 +382,7 @@ bool qt_camera_service_isValid(AVFCameraService *service)
     } else {
         qDebugCamera() << Q_FUNC_INFO << "failed to add audio output";
         [captureSession removeInput:m_audioInput];
+        m_audioCaptureDevice = 0;
         m_audioInput.reset();
         m_audioOutput.reset();
         return false;
@@ -364,7 +397,9 @@ bool qt_camera_service_isValid(AVFCameraService *service)
              && m_service->videoOutput()->videoDataOutput());
     Q_ASSERT(m_assetWriter);
 
-    m_cameraWriterInput.reset([[AVAssetWriterInput alloc] initWithMediaType:AVMediaTypeVideo outputSettings:[self videoSettings]]);
+    m_cameraWriterInput.reset([[AVAssetWriterInput alloc] initWithMediaType:AVMediaTypeVideo
+                                                          outputSettings:m_videoSettings
+                                                          sourceFormatHint:m_service->session()->videoCaptureDevice().activeFormat.formatDescription]);
     if (!m_cameraWriterInput) {
         qDebugCamera() << Q_FUNC_INFO << "failed to create camera writer input";
         return false;
@@ -381,7 +416,10 @@ bool qt_camera_service_isValid(AVFCameraService *service)
     m_cameraWriterInput.data().expectsMediaDataInRealTime = YES;
 
     if (m_audioOutput) {
-        m_audioWriterInput.reset([[AVAssetWriterInput alloc] initWithMediaType:AVMediaTypeAudio outputSettings:[self audioSettings]]);
+        CMFormatDescriptionRef sourceFormat = m_audioCaptureDevice ? m_audioCaptureDevice.activeFormat.formatDescription : 0;
+        m_audioWriterInput.reset([[AVAssetWriterInput alloc] initWithMediaType:AVMediaTypeAudio
+                                                             outputSettings:m_audioSettings
+                                                             sourceFormatHint:sourceFormat]);
         if (!m_audioWriterInput) {
             qDebugCamera() << Q_FUNC_INFO << "failed to create audio writer input";
             // But we still can record video.
@@ -411,39 +449,6 @@ bool qt_camera_service_isValid(AVFCameraService *service)
     }
 }
 
-
-- (NSDictionary *)videoSettings
-{
-    // TODO: these settings should be taken from
-    // the video encoding settings control.
-    // For now we either take recommended (iOS >= 7.0)
-    // or some hardcoded values - they are still better than nothing (nil).
-#if QT_IOS_PLATFORM_SDK_EQUAL_OR_ABOVE(__IPHONE_7_0)
-    AVCaptureVideoDataOutput *videoOutput = m_service->videoOutput()->videoDataOutput();
-    if (QSysInfo::MacintoshVersion >= QSysInfo::MV_IOS_7_0 && videoOutput)
-        return [videoOutput recommendedVideoSettingsForAssetWriterWithOutputFileType:AVFileTypeQuickTimeMovie];
-#endif
-    NSDictionary *videoSettings = [NSDictionary dictionaryWithObjectsAndKeys:AVVideoCodecH264, AVVideoCodecKey,
-                                   [NSNumber numberWithInt:1280], AVVideoWidthKey,
-                                   [NSNumber numberWithInt:720], AVVideoHeightKey, nil];
-
-    return videoSettings;
-}
-
-- (NSDictionary *)audioSettings
-{
-    // TODO: these settings should be taken from
-    // the video/audio encoder settings control.
-    // For now we either take recommended (iOS >= 7.0)
-    // or nil - this seems to be good enough.
-#if QT_IOS_PLATFORM_SDK_EQUAL_OR_ABOVE(__IPHONE_7_0)
-    if (QSysInfo::MacintoshVersion >= QSysInfo::MV_IOS_7_0 && m_audioOutput)
-        return [m_audioOutput recommendedAudioSettingsForAssetWriterWithOutputFileType:AVFileTypeQuickTimeMovie];
-#endif
-
-    return nil;
-}
-
 - (void)updateDuration:(CMTime)newTimeStamp
 {
     Q_ASSERT(CMTimeCompare(m_startTime, kCMTimeInvalid));
@@ -454,7 +459,7 @@ bool qt_camera_service_isValid(AVFCameraService *service)
         if (!CMTimeCompare(duration, kCMTimeInvalid))
             return;
 
-        m_durationInMs.store(CMTimeGetSeconds(duration) * 1000);
+        m_durationInMs.storeRelease(CMTimeGetSeconds(duration) * 1000);
         m_lastTimeStamp = newTimeStamp;
     }
 }

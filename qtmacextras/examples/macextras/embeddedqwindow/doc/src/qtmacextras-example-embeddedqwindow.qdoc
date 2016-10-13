@@ -26,16 +26,16 @@
 ****************************************************************************/
 
 /*!
-    \title Embedded QWindow
+    \title macOS: Embedded QWindow
     \ingroup examples-qtmacextras
     \example embeddedqwindow
-    \brief Demonstrates embedding a QWindow into an view hierarchy of a Mac
-    OS X application.
+    \brief Demonstrates embedding a QWindow into an view hierarchy of a \macos
+    application.
 
-    This OS X-specific example shows how to create a view hierarchy
+    This \macos-specific example shows how to create a view hierarchy
     containing a QWindow, with handling of Qt's mouse and keyboard events.
 
     \include examples-run.qdocinc
 
-    \sa {Qt for OS X}, {Qt Mac Extras}
+    \sa {Qt for macOS}, {Qt Mac Extras}
 */

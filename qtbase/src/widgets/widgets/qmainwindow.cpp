@@ -1547,7 +1547,7 @@ bool QMainWindow::event(QEvent *event)
 
 /*!
     \property QMainWindow::unifiedTitleAndToolBarOnMac
-    \brief whether the window uses the unified title and toolbar look on OS X
+    \brief whether the window uses the unified title and toolbar look on \macos
 
     Note that the Qt 5 implementation has several limitations compared to Qt 4:
     \list
@@ -1717,10 +1717,20 @@ QMenu *QMainWindow::createPopupMenu()
         menu = new QMenu(this);
         for (int i = 0; i < dockwidgets.size(); ++i) {
             QDockWidget *dockWidget = dockwidgets.at(i);
-            if (dockWidget->parentWidget() == this
-                && !d->layout->layoutState.dockAreaLayout.indexOf(dockWidget).isEmpty()) {
-                menu->addAction(dockwidgets.at(i)->toggleViewAction());
+            // filter to find out if we own this QDockWidget
+            if (dockWidget->parentWidget() == this) {
+                if (d->layout->layoutState.dockAreaLayout.indexOf(dockWidget).isEmpty())
+                    continue;
+            } else if (QDockWidgetGroupWindow *dwgw =
+                           qobject_cast<QDockWidgetGroupWindow *>(dockWidget->parentWidget())) {
+                if (dwgw->parentWidget() != this)
+                    continue;
+                if (dwgw->layoutInfo()->indexOf(dockWidget).isEmpty())
+                    continue;
+            } else {
+                continue;
             }
+            menu->addAction(dockwidgets.at(i)->toggleViewAction());
         }
         menu->addSeparator();
     }

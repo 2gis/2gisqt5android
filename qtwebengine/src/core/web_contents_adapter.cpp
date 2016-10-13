@@ -68,6 +68,7 @@
 #include "content/public/common/page_zoom.h"
 #include "content/public/common/renderer_preferences.h"
 #include "content/public/common/url_constants.h"
+#include "content/public/common/url_utils.h"
 #include "content/public/common/web_preferences.h"
 #include "third_party/WebKit/public/web/WebFindOptions.h"
 
@@ -320,14 +321,14 @@ WebContentsAdapterPrivate::~WebContentsAdapterPrivate()
     webContents.reset();
 }
 
-QExplicitlySharedDataPointer<WebContentsAdapter> WebContentsAdapter::createFromSerializedNavigationHistory(QDataStream &input, WebContentsAdapterClient *adapterClient)
+QSharedPointer<WebContentsAdapter> WebContentsAdapter::createFromSerializedNavigationHistory(QDataStream &input, WebContentsAdapterClient *adapterClient)
 {
     int currentIndex;
     ScopedVector<content::NavigationEntry> entries;
     deserializeNavigationHistory(input, &currentIndex, &entries, adapterClient->browserContextAdapter()->browserContext());
 
     if (currentIndex == -1)
-        return QExplicitlySharedDataPointer<WebContentsAdapter>();
+        return QSharedPointer<WebContentsAdapter>();
 
     // Unlike WebCore, Chromium only supports Restoring to a new WebContents instance.
     content::WebContents* newWebContents = createBlankWebContents(adapterClient, adapterClient->browserContextAdapter()->browserContext());
@@ -345,7 +346,7 @@ QExplicitlySharedDataPointer<WebContentsAdapter> WebContentsAdapter::createFromS
             content::ChildProcessSecurityPolicy::GetInstance()->GrantReadFile(id, *file);
     }
 
-    return QExplicitlySharedDataPointer<WebContentsAdapter>(new WebContentsAdapter(newWebContents));
+    return QSharedPointer<WebContentsAdapter>::create(newWebContents);
 }
 
 WebContentsAdapter::WebContentsAdapter(content::WebContents *webContents)
@@ -393,6 +394,12 @@ void WebContentsAdapter::initialize(WebContentsAdapterClient *adapterClient)
 
     // This should only be necessary after having restored the history to a new WebContentsAdapter.
     d->webContents->GetController().LoadIfNecessary();
+
+    // Create an instance of WebEngineVisitedLinksManager to catch the first
+    // content::NOTIFICATION_RENDERER_PROCESS_CREATED event. This event will
+    // force to initialize visited links in VisitedLinkSlave.
+    // It must be done before creating a RenderView.
+    d->browserContextAdapter->visitedLinksManager();
 
     // Create a RenderView with the initial empty document
     content::RenderViewHost *rvh = d->webContents->GetRenderViewHost();
@@ -479,7 +486,12 @@ void WebContentsAdapter::setContent(const QByteArray &data, const QString &mimeT
     urlString.append(",");
     urlString.append(encodedData.constData(), encodedData.length());
 
-    content::NavigationController::LoadURLParams params((GURL(urlString)));
+    GURL dataUrlToLoad(urlString);
+    if (dataUrlToLoad.spec().size() > content::GetMaxURLChars()) {
+        d->adapterClient->loadFinished(false, baseUrl, false, net::ERR_ABORTED);
+        return;
+    }
+    content::NavigationController::LoadURLParams params((dataUrlToLoad));
     params.load_type = content::NavigationController::LOAD_TYPE_DATA;
     params.base_url_for_data_url = toGurl(baseUrl);
     params.virtual_url_for_data_url = baseUrl.isEmpty() ? GURL(url::kAboutBlankURL) : toGurl(baseUrl);
@@ -770,6 +782,9 @@ void WebContentsAdapter::stopFinding()
 {
     Q_D(WebContentsAdapter);
     d->webContentsDelegate->setLastSearchedString(QString());
+    // Clear any previous selection,
+    // but keep the renderer blue rectangle selection just like Chromium does.
+    d->webContents->Unselect();
     d->webContents->StopFinding(content::STOP_FIND_ACTION_KEEP_SELECTION);
 }
 

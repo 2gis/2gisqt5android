@@ -77,16 +77,8 @@ struct wl_surface *QWaylandDisplay::createSurface(void *handle)
 
 QWaylandShellSurface *QWaylandDisplay::createShellSurface(QWaylandWindow *window)
 {
-    if (mWaylandIntegration->shellIntegration())
-        return mWaylandIntegration->shellIntegration()->createShellSurface(window);
-
-    if (shellXdg()) {
-        return new QWaylandXdgSurface(shellXdg()->get_xdg_surface(window->object()), window);
-    } else if (shell()) {
-        return new QWaylandWlShellSurface(shell()->get_shell_surface(window->object()), window);
-    }
-
-    return Q_NULLPTR;
+    Q_ASSERT(mWaylandIntegration->shellIntegration());
+    return mWaylandIntegration->shellIntegration()->createShellSurface(window);
 }
 
 struct ::wl_region *QWaylandDisplay::createRegion(const QRegion &qregion)
@@ -118,19 +110,8 @@ QWaylandWindowManagerIntegration *QWaylandDisplay::windowManagerIntegration() co
     return mWindowManagerIntegration.data();
 }
 
-QWaylandInputDevice *QWaylandDisplay::lastKeyboardFocusInputDevice() const
-{
-    return mLastKeyboardFocusInputDevice;
-}
-
-void QWaylandDisplay::setLastKeyboardFocusInputDevice(QWaylandInputDevice *device)
-{
-    mLastKeyboardFocusInputDevice = device;
-}
-
 QWaylandDisplay::QWaylandDisplay(QWaylandIntegration *waylandIntegration)
     : mWaylandIntegration(waylandIntegration)
-    , mLastKeyboardFocusInputDevice(0)
     , mDndSelectionHandler(0)
     , mWindowExtension(0)
     , mSubCompositor(0)
@@ -141,6 +122,8 @@ QWaylandDisplay::QWaylandDisplay(QWaylandIntegration *waylandIntegration)
     , mLastInputSerial(0)
     , mLastInputDevice(0)
     , mLastInputWindow(0)
+    , mLastKeyboardFocus(Q_NULLPTR)
+    , mSyncCallback(Q_NULLPTR)
 {
     qRegisterMetaType<uint32_t>("uint32_t");
 
@@ -257,11 +240,6 @@ void QWaylandDisplay::registry_global(uint32_t id, const QString &interface, uin
         mCompositor.init(registry, id, mCompositorVersion);
     } else if (interface == QStringLiteral("wl_shm")) {
         mShm = static_cast<struct wl_shm *>(wl_registry_bind(registry, id, &wl_shm_interface,1));
-    } else if (interface == QStringLiteral("xdg_shell")
-               && qEnvironmentVariableIsSet("QT_WAYLAND_USE_XDG_SHELL")) {
-        mShellXdg.reset(new QWaylandXdgShell(registry,id));
-    } else if (interface == QStringLiteral("wl_shell")){
-        mShell.reset(new QtWayland::wl_shell(registry, id, 1));
     } else if (interface == QStringLiteral("wl_seat")) {
         QWaylandInputDevice *inputDevice = mWaylandIntegration->createInputDevice(this, version, id);
         mInputDevices.append(inputDevice);
@@ -308,6 +286,15 @@ void QWaylandDisplay::registry_global_remove(uint32_t id)
             break;
         }
     }
+}
+
+bool QWaylandDisplay::hasRegistryGlobal(const QString &interfaceName)
+{
+    Q_FOREACH (const RegistryGlobal &global, mGlobals)
+        if (global.interface == interfaceName)
+            return true;
+
+    return false;
 }
 
 void QWaylandDisplay::addRegistryListener(RegistryListener listener, void *data)
@@ -365,11 +352,6 @@ void QWaylandDisplay::forceRoundTrip()
         wl_callback_destroy(callback);
 }
 
-QtWayland::xdg_shell *QWaylandDisplay::shellXdg()
-{
-    return mShellXdg.data();
-}
-
 bool QWaylandDisplay::supportsWindowDecoration() const
 {
     static bool disabled = qgetenv("QT_WAYLAND_DISABLE_WINDOWDECORATION").toInt();
@@ -392,6 +374,70 @@ void QWaylandDisplay::setLastInputDevice(QWaylandInputDevice *device, uint32_t s
     mLastInputDevice = device;
     mLastInputSerial = serial;
     mLastInputWindow = win;
+}
+
+void QWaylandDisplay::handleWindowActivated(QWaylandWindow *window)
+{
+    if (mActiveWindows.contains(window))
+        return;
+
+    mActiveWindows.append(window);
+    requestWaylandSync();
+}
+
+void QWaylandDisplay::handleWindowDeactivated(QWaylandWindow *window)
+{
+    Q_ASSERT(!mActiveWindows.empty());
+
+    if (mActiveWindows.last() == window)
+        requestWaylandSync();
+
+    mActiveWindows.removeOne(window);
+}
+
+void QWaylandDisplay::handleKeyboardFocusChanged(QWaylandInputDevice *inputDevice)
+{
+    QWaylandWindow *keyboardFocus = inputDevice->keyboardFocus();
+
+    if (mLastKeyboardFocus == keyboardFocus)
+        return;
+
+    if (keyboardFocus && !keyboardFocus->shellManagesActiveState())
+        handleWindowActivated(keyboardFocus);
+
+    if (mLastKeyboardFocus && !mLastKeyboardFocus->shellManagesActiveState())
+        handleWindowDeactivated(mLastKeyboardFocus);
+
+    mLastKeyboardFocus = keyboardFocus;
+}
+
+void QWaylandDisplay::handleWaylandSync()
+{
+    // This callback is used to set the window activation because we may get an activate/deactivate
+    // pair, and the latter one would be lost in the QWindowSystemInterface queue, if we issue the
+    // handleWindowActivated() calls immediately.
+    QWindow *activeWindow = mActiveWindows.empty() ? Q_NULLPTR : mActiveWindows.last()->window();
+    if (activeWindow != QGuiApplication::focusWindow())
+        QWindowSystemInterface::handleWindowActivated(activeWindow);
+}
+
+const wl_callback_listener QWaylandDisplay::syncCallbackListener = {
+    [](void *data, struct wl_callback *callback, uint32_t time){
+        Q_UNUSED(time);
+        wl_callback_destroy(callback);
+        QWaylandDisplay *display = static_cast<QWaylandDisplay *>(data);
+        display->mSyncCallback = Q_NULLPTR;
+        display->handleWaylandSync();
+    }
+};
+
+void QWaylandDisplay::requestWaylandSync()
+{
+    if (mSyncCallback)
+        return;
+
+    mSyncCallback = wl_display_sync(mDisplay);
+    wl_callback_add_listener(mSyncCallback, &syncCallbackListener, this);
 }
 
 }

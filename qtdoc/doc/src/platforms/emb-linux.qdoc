@@ -552,13 +552,18 @@
 
   \section2 eglfs with other backends
 
-  Other backends, that are typically based on targeting the framebuffer
-  directly via the vendor's EGL implementation, usually provides limited or
-  no support for multiple displays. In some cases the \c {QT_QPA_EGLFS_FB}
-  environment variable can be used to specify the framebuffer to target,
-  similarly to linuxfb. Alternatively, driver-specific environment variables or
-  kernel parameters may also be available to control the used framebuffer. Refer
-  to the embedded board's documentation.
+  Other backends, that are typically based on targeting the framebuffer or a
+  composition API directly via the vendor's EGL implementation, usually provide
+  limited or no support for multiple displays. On i.MX6-based boards with
+  Vivante GPUs the \c{QT_QPA_EGLFS_FB} environment variable can be used to
+  specify the framebuffer to target, similarly to linuxfb. On the Raspberry Pi
+  the \c{QT_QPA_EGLFS_DISPMANX_ID} environment variable can be used to specify
+  the screen to output to. The value corresponds to one of the \c{DISPMANX_ID_}
+  constants, refer to the Dispmanx documentation. Note that these approaches,
+  unlike KMS/DRM, will not typically allow to output to multiple screens from
+  the same application. Alternatively, driver-specific environment variables or
+  kernel parameters may also be available as well to control the used
+  framebuffer. Refer to the embedded board's documentation.
 
   \section2 Video Memory
 
@@ -574,6 +579,20 @@
   \section2 linuxfb
 
   Use the \c fb plugin parameter to specify the framebuffer device to use.
+
+  \section1 Unix Signal Handlers
+
+  The console-oriented platform plugins like eglfs and linuxfb install signal
+  handlers by default to capture interrupt (\c SIGINT), suspend and continue
+  (\c SIGTSTP, \c SIGCONT) and termination (\c SIGTERM). This way the keyboard,
+  terminal cursor, and possibly other graphics state can be restored when the
+  application terminates or gets suspended due to \c kill, or \c{Ctrl+C} or
+  \c{Ctrl+Z}. (although terminating or suspending via the keyboard is only
+  possible when \c{QT_QPA_ENABLE_TERMINAL_KEYBOARD} is set, as outlined above in
+  the Input section). However, in some cases capturing \c SIGINT can be
+  undesirable as it may conflict with remote debugging for instance. Therefore,
+  the environment variable \c{QT_QPA_NO_SIGNAL_HANDLER} is provided to opt out
+  from all built-in signal handling.
 
   \section1 Platform Plugins for Windowing Systems on Embedded Linux Devices
 

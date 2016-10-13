@@ -264,6 +264,7 @@ Configure::Configure(int& argc, char** argv) : verbose(0)
     dictionary[ "LIBJPEG" ]         = "auto";
     dictionary[ "LIBPNG" ]          = "auto";
     dictionary[ "FREETYPE" ]        = "yes";
+    dictionary[ "FREETYPE_FROM" ]   = "default";
     dictionary[ "HARFBUZZ" ]        = "qt";
 
     dictionary[ "ACCESSIBILITY" ]   = "yes";
@@ -313,6 +314,12 @@ Configure::Configure(int& argc, char** argv) : verbose(0)
         dictionary["QT_GCC_MAJOR_VERSION"] = parts.value(0, zero);
         dictionary["QT_GCC_MINOR_VERSION"] = parts.value(1, zero);
         dictionary["QT_GCC_PATCH_VERSION"] = parts.value(2, zero);
+    } else if (dictionary["QMAKESPEC"].contains(QString("msvc"))) {
+        const QString zero = QStringLiteral("0");
+        const QStringList parts = Environment::msvcVersion().split(QLatin1Char('.'));
+        dictionary["QT_CL_MAJOR_VERSION"] = parts.value(0, zero);
+        dictionary["QT_CL_MINOR_VERSION"] = parts.value(1, zero);
+        dictionary["QT_CL_PATCH_VERSION"] = parts.value(2, zero);
     }
 }
 
@@ -634,12 +641,16 @@ void Configure::parseCmdLine()
         }
 
         // Text Rendering --------------------------------------------
-        else if (configCmdLine.at(i) == "-no-freetype")
+        else if (configCmdLine.at(i) == "-no-freetype") {
             dictionary[ "FREETYPE" ] = "no";
-        else if (configCmdLine.at(i) == "-qt-freetype")
+            dictionary[ "FREETYPE_FROM" ] = "commandline";
+        } else if (configCmdLine.at(i) == "-qt-freetype") {
             dictionary[ "FREETYPE" ] = "yes";
-        else if (configCmdLine.at(i) == "-system-freetype")
+            dictionary[ "FREETYPE_FROM" ] = "commandline";
+        } else if (configCmdLine.at(i) == "-system-freetype") {
             dictionary[ "FREETYPE" ] = "system";
+            dictionary[ "FREETYPE_FROM" ] = "commandline";
+        }
 
         else if (configCmdLine.at(i) == "-no-harfbuzz")
             dictionary[ "HARFBUZZ" ] = "no";
@@ -2004,7 +2015,7 @@ bool Configure::displayHelp()
         }
 
         desc("ANGLE", "yes",       "-angle",            "Use the ANGLE implementation of OpenGL ES 2.0.");
-        desc("ANGLE", "no",        "-no-angle",         "Do not use ANGLE.\nSee http://code.google.com/p/angleproject/\n");
+        desc("ANGLE", "no",        "-no-angle",         "Do not use ANGLE.\nSee https://chromium.googlesource.com/angle/angle/+/master/README.md\n");
         // Qt\Windows only options go below here --------------------------------------------------------------------------------
         desc("\nQt for Windows only:\n\n");
 
@@ -2588,6 +2599,9 @@ void Configure::autoDetection()
     if (dictionary["FONT_CONFIG"] == "auto")
         dictionary["FONT_CONFIG"] = checkAvailability("FONT_CONFIG") ? "yes" : "no";
 
+    if ((dictionary["FONT_CONFIG"] == "yes") && (dictionary["FREETYPE_FROM"] == "default"))
+        dictionary["FREETYPE"] = "system";
+
     if (dictionary["DIRECTWRITE"] == "auto")
         dictionary["DIRECTWRITE"] = checkAvailability("DIRECTWRITE") ? "yes" : "no";
 
@@ -2714,6 +2728,22 @@ bool Configure::verifyConfiguration()
                 dictionary.value("XQMAKESPEC").startsWith("winrt")) {
             cout << "ERROR: Option -no-opengl is not valid for WinRT." << endl;
             dictionary[ "DONE" ] = "error";
+        }
+    }
+
+    if ((dictionary["FONT_CONFIG"] == "yes") && (dictionary["FREETYPE_FROM"] == "commandline")) {
+        if (dictionary["FREETYPE"] == "yes") {
+            cout << "WARNING: Bundled FreeType can't be used."
+                    "  FontConfig use requires system FreeType." << endl;
+            dictionary["FREETYPE"] = "system";
+            dictionary["FREETYPE_FROM"] = "override";
+            prompt = true;
+        } else if (dictionary["FREETYPE"] == "no") {
+            cout << "WARNING: FreeType can't be disabled."
+                    "  FontConfig use requires system FreeType." << endl;
+            dictionary["FREETYPE"] = "system";
+            dictionary["FREETYPE_FROM"] = "override";
+            prompt = true;
         }
     }
 
@@ -2963,7 +2993,7 @@ void Configure::generateOutputVars()
         qtConfig += "accessibility";
 
     if (!qmakeLibs.isEmpty())
-        qmakeVars += "LIBS           += " + formatPaths(qmakeLibs);
+        qmakeVars += "EXTRA_LIBS += " + formatPaths(qmakeLibs);
 
     if (!dictionary["QT_LFLAGS_SQLITE"].isEmpty())
         qmakeVars += "QT_LFLAGS_SQLITE += " + dictionary["QT_LFLAGS_SQLITE"];
@@ -3081,9 +3111,9 @@ void Configure::generateOutputVars()
         qtConfig += "rpath";
 
     if (!qmakeDefines.isEmpty())
-        qmakeVars += QString("DEFINES        += ") + qmakeDefines.join(' ');
+        qmakeVars += QString("EXTRA_DEFINES += ") + qmakeDefines.join(' ');
     if (!qmakeIncludes.isEmpty())
-        qmakeVars += QString("INCLUDEPATH    += ") + formatPaths(qmakeIncludes);
+        qmakeVars += QString("EXTRA_INCLUDEPATH += ") + formatPaths(qmakeIncludes);
     if (!opensslLibs.isEmpty())
         qmakeVars += opensslLibs;
     if (dictionary[ "OPENSSL" ] == "linked") {
@@ -3605,6 +3635,10 @@ void Configure::generateQConfigPri()
             configStream << "QT_GCC_MAJOR_VERSION = " << dictionary["QT_GCC_MAJOR_VERSION"] << endl
                          << "QT_GCC_MINOR_VERSION = " << dictionary["QT_GCC_MINOR_VERSION"] << endl
                          << "QT_GCC_PATCH_VERSION = " << dictionary["QT_GCC_PATCH_VERSION"] << endl;
+        } else if (!dictionary["QT_CL_MAJOR_VERSION"].isEmpty()) {
+            configStream << "QT_CL_MAJOR_VERSION = " << dictionary["QT_CL_MAJOR_VERSION"] << endl
+                         << "QT_CL_MINOR_VERSION = " << dictionary["QT_CL_MINOR_VERSION"] << endl
+                         << "QT_CL_PATCH_VERSION = " << dictionary["QT_CL_PATCH_VERSION"] << endl;
         }
 
         if (dictionary.value("XQMAKESPEC").startsWith("wince")) {

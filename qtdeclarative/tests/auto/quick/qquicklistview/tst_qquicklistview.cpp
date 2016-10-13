@@ -254,6 +254,7 @@ private slots:
 
     void QTBUG_50105();
     void QTBUG_50097_stickyHeader_positionViewAtIndex();
+    void itemFiltered();
 
 private:
     template <class T> void items(const QUrl &source);
@@ -633,6 +634,8 @@ void tst_QQuickListView::inserted_more(QQuickItemView::VerticalLayoutDirection v
     }
     listview->setContentY(contentY);
 
+    QQuickItemViewPrivate::get(listview)->layout();
+
     QList<QPair<QString, QString> > newData;
     for (int i=0; i<insertCount; i++)
         newData << qMakePair(QString("value %1").arg(i), QString::number(i));
@@ -653,6 +656,14 @@ void tst_QQuickListView::inserted_more(QQuickItemView::VerticalLayoutDirection v
     else
         QCOMPARE(item0->y(), itemsOffsetAfterMove);
 #endif
+
+    QList<FxViewItem *> visibleItems = QQuickItemViewPrivate::get(listview)->visibleItems;
+    for (QList<FxViewItem *>::const_iterator itemIt = visibleItems.begin(); itemIt != visibleItems.end(); ++itemIt) {
+        FxViewItem *item = *itemIt;
+        if (item->item->position().y() >= 0 && item->item->position().y() < listview->height()) {
+            QVERIFY(!QQuickItemPrivate::get(item->item)->culled);
+        }
+    }
 
     QList<QQuickItem*> items = findItems<QQuickItem>(contentItem, "wrapper");
     int firstVisibleIndex = -1;
@@ -773,6 +784,11 @@ void tst_QQuickListView::inserted_more_data()
     QTest::newRow("add multiple, after visible, content not at start")
             << 80.0     // show 4-19
             << 20 << 3
+            << 0.0;
+
+    QTest::newRow("add multiple, within visible, content at start")
+            << 0.0
+            << 2 << 50
             << 0.0;
 }
 
@@ -8264,6 +8280,37 @@ void tst_QQuickListView::QTBUG_50097_stickyHeader_positionViewAtIndex()
     QTRY_COMPARE(listview->contentY(), 400.0); // a full page of items down, sans the original negative header position
     listview->setProperty("currentPage", 1);
     QTRY_COMPARE(listview->contentY(), -100.0); // back to the same position: header visible, items not under the header.
+}
+
+void tst_QQuickListView::itemFiltered()
+{
+    QStringListModel model(QStringList() << "one" << "two" << "three" << "four" << "five" << "six");
+    QSortFilterProxyModel proxy1;
+    proxy1.setSourceModel(&model);
+    proxy1.setSortRole(Qt::DisplayRole);
+    proxy1.setDynamicSortFilter(true);
+    proxy1.sort(0);
+
+    QSortFilterProxyModel proxy2;
+    proxy2.setSourceModel(&proxy1);
+    proxy2.setFilterRole(Qt::DisplayRole);
+    proxy2.setFilterRegExp("^[^ ]*$");
+    proxy2.setDynamicSortFilter(true);
+
+    QScopedPointer<QQuickView> window(createView());
+    window->engine()->rootContext()->setContextProperty("_model", &proxy2);
+    QQmlComponent component(window->engine());
+    component.setData("import QtQuick 2.4; ListView { "
+                      "anchors.fill: parent; model: _model; delegate: Text { width: parent.width;"
+                      "text: model.display; } }",
+                      QUrl());
+    window->setContent(QUrl(), &component, component.create());
+
+    window->show();
+    QTest::qWaitForWindowExposed(window.data());
+
+    // this should not crash
+    model.setData(model.index(2), QStringLiteral("modified three"), Qt::DisplayRole);
 }
 
 QTEST_MAIN(tst_QQuickListView)

@@ -85,7 +85,7 @@ QT_BEGIN_NAMESPACE
     to replace or extend the default behavior of the static functions
     in QAccessible.
 
-    Qt supports Microsoft Active Accessibility (MSAA), OS X
+    Qt supports Microsoft Active Accessibility (MSAA), \macos
     Accessibility, and the Unix/X11 AT-SPI standard. Other backends
     can be supported using QAccessibleBridge.
 
@@ -755,7 +755,7 @@ void QAccessible::deleteAccessibleInterface(Id id)
 */
 QAccessible::Id QAccessible::uniqueId(QAccessibleInterface *iface)
 {
-    Id id = QAccessibleCache::instance()->idToInterface.key(iface);
+    Id id = QAccessibleCache::instance()->idForInterface(iface);
     if (!id)
         id = registerAccessibleInterface(iface);
     return id;
@@ -768,7 +768,7 @@ QAccessible::Id QAccessible::uniqueId(QAccessibleInterface *iface)
 */
 QAccessibleInterface *QAccessible::accessibleInterface(Id id)
 {
-    return QAccessibleCache::instance()->idToInterface.value(id);
+    return QAccessibleCache::instance()->interfaceForId(id);
 }
 
 

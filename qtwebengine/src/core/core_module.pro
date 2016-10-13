@@ -14,6 +14,8 @@ load(qt_module)
 api_library_name = qtwebenginecoreapi$$qtPlatformTargetSuffix()
 api_library_path = $$OUT_PWD/api/$$getConfigDir()
 
+# Do not precompile any headers. We are only interested in the linker step.
+PRECOMPILED_HEADER =
 
 LIBS_PRIVATE += -L$$api_library_path
 CONFIG *= no_smart_library_merge
@@ -110,6 +112,13 @@ icu.files = $$OUT_PWD/$$getConfigDir()/icudtl.dat
 
         QMAKE_EXTRA_COMPILERS += locales2build
     }
+}
+
+!win32:!build_pass:debug_and_release {
+    # Special GNU make target that ensures linking isn't done for both debug and release builds
+    # at the same time.
+    notParallel.target = .NOTPARALLEL
+    QMAKE_EXTRA_TARGETS += notParallel
 }
 
 OTHER_FILES = \

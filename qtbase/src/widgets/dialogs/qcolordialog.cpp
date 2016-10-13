@@ -168,8 +168,6 @@ private:
 
 namespace {
 
-struct QWellArrayData;
-
 class QWellArray : public QWidget
 {
     Q_OBJECT
@@ -188,8 +186,6 @@ public:
     virtual void setSelected(int row, int col);
 
     QSize sizeHint() const Q_DECL_OVERRIDE;
-
-    virtual void setCellBrush(int row, int col, const QBrush &);
 
     inline int cellWidth() const
         { return cellw; }
@@ -257,7 +253,6 @@ private:
     int curCol;
     int selRow;
     int selCol;
-    QWellArrayData *d;
 };
 
 void QWellArray::paintEvent(QPaintEvent *e)
@@ -307,15 +302,10 @@ void QWellArray::paintEvent(QPaintEvent *e)
     }
 }
 
-struct QWellArrayData {
-    QBrush *brush;
-};
-
 QWellArray::QWellArray(int rows, int cols, QWidget *parent)
     : QWidget(parent)
         ,nrows(rows), ncols(cols)
 {
-    d = 0;
     setFocusPolicy(Qt::StrongFocus);
     cellw = 28;
     cellh = 24;
@@ -364,14 +354,12 @@ void QWellArray::paintCell(QPainter* p, int row, int col, const QRect &rect)
  */
 void QWellArray::paintCellContents(QPainter *p, int row, int col, const QRect &r)
 {
-    if (d) {
-        p->fillRect(r, d->brush[row*numCols()+col]);
-    } else {
-        p->fillRect(r, Qt::white);
-        p->setPen(Qt::black);
-        p->drawLine(r.topLeft(), r.bottomRight());
-        p->drawLine(r.topRight(), r.bottomLeft());
-    }
+    Q_UNUSED(row);
+    Q_UNUSED(col);
+    p->fillRect(r, Qt::white);
+    p->setPen(Qt::black);
+    p->drawLine(r.topLeft(), r.bottomRight());
+    p->drawLine(r.topRight(), r.bottomLeft());
 }
 
 void QWellArray::mousePressEvent(QMouseEvent *e)
@@ -445,17 +433,6 @@ void QWellArray::focusInEvent(QFocusEvent*)
 {
     updateCell(curRow, curCol);
     emit currentChanged(curRow, curCol);
-}
-
-void QWellArray::setCellBrush(int row, int col, const QBrush &b)
-{
-    if (!d) {
-        d = new QWellArrayData;
-        int i = numRows()*numCols();
-        d->brush = new QBrush[i];
-    }
-    if (row >= 0 && row < numRows() && col >= 0 && col < numCols())
-        d->brush[row*numCols()+col] = b;
 }
 
 /*!\reimp
@@ -558,8 +535,8 @@ QColor QColorDialog::customColor(int index)
 /*!
     Sets the custom color at \a index to the QColor \a color value.
 
-    \note This function does not apply to the Native Color Dialog on the Mac
-    OS X platform. If you still require this function, use the
+    \note This function does not apply to the Native Color Dialog on the
+    \macos platform. If you still require this function, use the
     QColorDialog::DontUseNativeDialog option.
 */
 void QColorDialog::setCustomColor(int index, QColor color)
@@ -580,8 +557,8 @@ QColor QColorDialog::standardColor(int index)
 /*!
     Sets the standard color at \a index to the QColor \a color value.
 
-    \note This function does not apply to the Native Color Dialog on the Mac
-    OS X platform. If you still require this function, use the
+    \note This function does not apply to the Native Color Dialog on the
+    \macos platform. If you still require this function, use the
     QColorDialog::DontUseNativeDialog option.
 */
 void QColorDialog::setStandardColor(int index, QColor color)
@@ -2196,7 +2173,8 @@ QColor QColorDialog::getColor(const QColor &initial, QWidget *parent, const QStr
 
 QRgb QColorDialog::getRgba(QRgb initial, bool *ok, QWidget *parent)
 {
-    QColor color(getColor(QColor(initial), parent, QString(), ShowAlphaChannel));
+    const QColor color = getColor(QColor::fromRgba(initial), parent, QString(),
+                                  ShowAlphaChannel);
     QRgb result = color.isValid() ? color.rgba() : initial;
     if (ok)
         *ok = color.isValid();

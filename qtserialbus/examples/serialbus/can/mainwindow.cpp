@@ -44,6 +44,7 @@
 
 #include <QCanBusFrame>
 #include <QCanBus>
+#include <QCloseEvent>
 #include <QTimer>
 
 #include <QtCore/qbytearray.h>
@@ -116,7 +117,7 @@ void MainWindow::connectDevice()
 
     m_canDevice = QCanBus::instance()->createDevice(p.backendName.toLocal8Bit(), p.deviceInterfaceName);
     if (!m_canDevice) {
-        showStatusMessage(tr("Connection error"));
+        showStatusMessage(tr("Error creating device: %1").arg(p.backendName));
         return;
     }
 
@@ -133,18 +134,25 @@ void MainWindow::connectDevice()
     }
 
     if (!m_canDevice->connectDevice()) {
+        showStatusMessage(tr("Connection error: %1").arg(m_canDevice->errorString()));
+
         delete m_canDevice;
         m_canDevice = nullptr;
-
-        showStatusMessage(tr("Connection error"));
     } else {
         m_ui->actionConnect->setEnabled(false);
         m_ui->actionDisconnect->setEnabled(true);
 
         m_ui->sendMessagesBox->setEnabled(true);
 
-        showStatusMessage(tr("Backend: %1, Connected to: %2")
-                          .arg(p.backendName).arg(p.deviceInterfaceName));
+        QVariant bitRate = m_canDevice->configurationParameter(QCanBusDevice::BitRateKey);
+        if (bitRate.isValid()) {
+            showStatusMessage(tr("Backend: %1, connected to %2 at %3 kBit/s")
+                    .arg(p.backendName).arg(p.deviceInterfaceName)
+                    .arg(bitRate.toInt() / 1000));
+        } else {
+            showStatusMessage(tr("Backend: %1, connected to %2")
+                    .arg(p.backendName).arg(p.deviceInterfaceName));
+        }
     }
 }
 
@@ -168,6 +176,12 @@ void MainWindow::disconnectDevice()
 void MainWindow::framesWritten(qint64 count)
 {
     qDebug() << "Number of frames written:" << count;
+}
+
+void MainWindow::closeEvent(QCloseEvent *event)
+{
+    m_connectDialog->close();
+    event->accept();
 }
 
 static QByteArray dataToHex(const QByteArray &data)
@@ -195,12 +209,15 @@ void MainWindow::checkMessages()
     if (frame.frameType() == QCanBusFrame::ErrorFrame) {
         interpretError(view, frame);
     } else {
-        view += QLatin1String("Id: ");
-        view += QString::number(id, 16).toUpper();
+        const char *format =
+                frame.hasExtendedFrameFormat() ? "Id: %08X" : "Id:      %03X";
+        view += QString::asprintf(format, static_cast<uint>(id));
         view += QLatin1String(" bytes: ");
         view += QString::number(dataLength, 10);
-        view += QLatin1String(" data: ");
-        view += dataToHex(frame.payload());
+        if (frame.frameType() != QCanBusFrame::RemoteRequestFrame) {
+            view += QLatin1String(" data: ");
+            view += dataToHex(frame.payload());
+        }
     }
 
     if (frame.frameType() == QCanBusFrame::RemoteRequestFrame) {

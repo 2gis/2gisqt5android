@@ -34,9 +34,12 @@
 #ifndef QGEOTILEDMAPPINGMANAGERENGINEOSM_H
 #define QGEOTILEDMAPPINGMANAGERENGINEOSM_H
 
-#include <QtLocation/QGeoServiceProvider>
+#include "qgeotileproviderosm.h"
 
+#include <QtLocation/QGeoServiceProvider>
 #include <QtLocation/private/qgeotiledmappingmanagerengine_p.h>
+
+#include <QVector>
 
 QT_BEGIN_NAMESPACE
 
@@ -44,15 +47,25 @@ class QGeoTiledMappingManagerEngineOsm : public QGeoTiledMappingManagerEngine
 {
     Q_OBJECT
 
+    friend class QGeoTiledMapOsm;
 public:
     QGeoTiledMappingManagerEngineOsm(const QVariantMap &parameters,
                                      QGeoServiceProvider::Error *error, QString *errorString);
     ~QGeoTiledMappingManagerEngineOsm();
 
     QGeoMap *createMap();
+    const QVector<QGeoTileProviderOsm *> &providers();
     QString customCopyright() const;
 
+protected Q_SLOTS:
+    void onProviderResolutionFinished(const QGeoTileProviderOsm *provider);
+    void onProviderResolutionError(const QGeoTileProviderOsm *provider, QNetworkReply::NetworkError error);
+
+protected:
+    void updateMapTypes();
+
 private:
+    QVector<QGeoTileProviderOsm *> m_providers;
     QString m_customCopyright;
 };
 

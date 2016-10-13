@@ -76,7 +76,6 @@ int main(int argc, char *argv[])
     app.setOrganizationName("QtWinExtras");
     app.setOrganizationDomain("qt-project.org");
     app.setApplicationDisplayName("QtWinExtras Music Player");
-    app.setWindowIcon(QIcon(":/logo.png"));
 
     associateFileTypes(QStringList(".mp3"));
 

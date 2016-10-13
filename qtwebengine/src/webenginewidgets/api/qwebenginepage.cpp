@@ -75,7 +75,10 @@
 #include <QMimeData>
 #include <QStandardPaths>
 #include <QStyle>
+#include <QTimer>
 #include <QUrl>
+
+#include <private/qguiapplication_p.h>
 
 QT_BEGIN_NAMESPACE
 
@@ -96,14 +99,35 @@ static QWebEnginePage::WebWindowType toWindowType(WebContentsAdapterClient::Wind
     }
 }
 
+QWebEnginePage::WebAction editorActionForKeyEvent(QKeyEvent* event)
+{
+    static struct {
+        QKeySequence::StandardKey standardKey;
+        QWebEnginePage::WebAction action;
+    } editorActions[] = {
+        { QKeySequence::Cut, QWebEnginePage::Cut },
+        { QKeySequence::Copy, QWebEnginePage::Copy },
+        { QKeySequence::Paste, QWebEnginePage::Paste },
+        { QKeySequence::Undo, QWebEnginePage::Undo },
+        { QKeySequence::Redo, QWebEnginePage::Redo },
+        { QKeySequence::SelectAll, QWebEnginePage::SelectAll },
+        { QKeySequence::UnknownKey, QWebEnginePage::NoWebAction }
+    };
+    for (int i = 0; editorActions[i].standardKey != QKeySequence::UnknownKey; ++i)
+        if (event == editorActions[i].standardKey)
+            return editorActions[i].action;
+
+    return QWebEnginePage::NoWebAction;
+}
+
 QWebEnginePagePrivate::QWebEnginePagePrivate(QWebEngineProfile *_profile)
-    : adapter(new WebContentsAdapter)
+    : adapter(QSharedPointer<WebContentsAdapter>::create())
     , history(new QWebEngineHistory(new QWebEngineHistoryPrivate(this)))
     , profile(_profile ? _profile : QWebEngineProfile::defaultProfile())
     , settings(new QWebEngineSettings(profile->settings()))
     , view(0)
     , isLoading(false)
-    , scriptCollection(new QWebEngineScriptCollectionPrivate(browserContextAdapter()->userScriptController(), adapter.data()))
+    , scriptCollection(new QWebEngineScriptCollectionPrivate(browserContextAdapter()->userScriptController(), adapter))
     , m_isBeingAdopted(false)
     , m_backgroundColor(Qt::white)
     , fullscreenMode(false)
@@ -226,11 +250,24 @@ void QWebEnginePagePrivate::focusContainer()
 
 void QWebEnginePagePrivate::unhandledKeyEvent(QKeyEvent *event)
 {
+#ifdef Q_OS_OSX
+    Q_Q(QWebEnginePage);
+    if (event->type() == QEvent::KeyPress) {
+        QWebEnginePage::WebAction action = editorActionForKeyEvent(event);
+        if (action != QWebEnginePage::NoWebAction) {
+            // Try triggering a registered short-cut
+            if (QGuiApplicationPrivate::instance()->shortcutMap.tryShortcut(event))
+                return;
+            q->triggerAction(action);
+            return;
+        }
+    }
+#endif
     if (view && view->parentWidget())
         QGuiApplication::sendEvent(view->parentWidget(), event);
 }
 
-void QWebEnginePagePrivate::adoptNewWindow(WebContentsAdapter *newWebContents, WindowOpenDisposition disposition, bool userGesture, const QRect &initialGeometry)
+void QWebEnginePagePrivate::adoptNewWindow(QSharedPointer<WebContentsAdapter> newWebContents, WindowOpenDisposition disposition, bool userGesture, const QRect &initialGeometry)
 {
     Q_Q(QWebEnginePage);
     Q_UNUSED(userGesture);
@@ -239,6 +276,25 @@ void QWebEnginePagePrivate::adoptNewWindow(WebContentsAdapter *newWebContents, W
     if (!newPage)
         return;
 
+    if (newPage->d_func() == this) {
+        // If createWindow returns /this/ we must delay the adoption.
+        Q_ASSERT(q == newPage);
+        // WebContents might be null if we just opened a new page for navigation, in that case
+        // avoid referencing newWebContents so that it is deleted and WebContentsDelegateQt::OpenURLFromTab
+        // will fall back to navigating current page.
+        if (newWebContents->webContents()) {
+            QTimer::singleShot(0, q, [this, newPage, newWebContents, initialGeometry] () {
+                adoptNewWindowImpl(newPage, newWebContents, initialGeometry);
+            });
+        }
+    } else {
+        adoptNewWindowImpl(newPage, newWebContents, initialGeometry);
+    }
+}
+
+void QWebEnginePagePrivate::adoptNewWindowImpl(QWebEnginePage *newPage,
+        const QSharedPointer<WebContentsAdapter> &newWebContents, const QRect &initialGeometry)
+{
     // Mark the new page as being in the process of being adopted, so that a second mouse move event
     // sent by newWebContents->initialize() gets filtered in RenderWidgetHostViewQt::forwardEvent.
     // The first mouse move event is being sent by q->createWindow(). This is necessary because
@@ -251,12 +307,11 @@ void QWebEnginePagePrivate::adoptNewWindow(WebContentsAdapter *newWebContents, W
     newPage->d_func()->m_isBeingAdopted = true;
 
     // Overwrite the new page's WebContents with ours.
-    if (newPage->d_func() != this) {
-        newPage->d_func()->adapter = newWebContents;
-        newWebContents->initialize(newPage->d_func());
-        if (!initialGeometry.isEmpty())
-            emit newPage->geometryChangeRequested(initialGeometry);
-    }
+    newPage->d_func()->adapter = newWebContents;
+    newWebContents->initialize(newPage->d_func());
+    newPage->d_func()->scriptCollection.d->rebindToContents(newWebContents);
+    if (!initialGeometry.isEmpty())
+        emit newPage->geometryChangeRequested(initialGeometry);
 
     // Page has finished the adoption process.
     newPage->d_func()->m_isBeingAdopted = false;
@@ -414,16 +469,13 @@ void QWebEnginePagePrivate::_q_webActionTriggered(bool checked)
 
 void QWebEnginePagePrivate::recreateFromSerializedHistory(QDataStream &input)
 {
-    QExplicitlySharedDataPointer<WebContentsAdapter> newWebContents = WebContentsAdapter::createFromSerializedNavigationHistory(input, this);
+    QSharedPointer<WebContentsAdapter> newWebContents = WebContentsAdapter::createFromSerializedNavigationHistory(input, this);
     if (newWebContents) {
-        // Keep the old adapter referenced so the user-scripts are not
-        // unregistered immediately.
-        QExplicitlySharedDataPointer<WebContentsAdapter> oldWebContents = adapter;
-        adapter = newWebContents.data();
+        adapter = std::move(newWebContents);
         adapter->initialize(this);
         if (webChannel)
             adapter->setWebChannel(webChannel);
-        scriptCollection.d->rebindToContents(adapter.data());
+        scriptCollection.d->rebindToContents(adapter);
     }
 }
 
@@ -438,6 +490,12 @@ void QWebEnginePagePrivate::setFullScreenMode(bool fullscreen)
 QSharedPointer<BrowserContextAdapter> QWebEnginePagePrivate::browserContextAdapter()
 {
     return profile->d_ptr->browserContext();
+}
+
+const QObject *QWebEnginePagePrivate::holdingQObject() const
+{
+    Q_Q(const QWebEnginePage);
+    return q;
 }
 
 QWebEnginePage::QWebEnginePage(QObject* parent)
@@ -1069,6 +1127,15 @@ void QWebEnginePagePrivate::requestGeometryChange(const QRect &geometry)
 {
     Q_Q(QWebEnginePage);
     Q_EMIT q->geometryChangeRequested(geometry);
+}
+
+bool QWebEnginePagePrivate::isEnabled() const
+{
+    const Q_Q(QWebEnginePage);
+    const QWidget *view = q->view();
+    if (view)
+        return view->isEnabled();
+    return true;
 }
 
 QMenu *QWebEnginePage::createStandardContextMenu()

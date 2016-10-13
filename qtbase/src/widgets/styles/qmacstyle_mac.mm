@@ -1907,7 +1907,7 @@ NSView *QMacStylePrivate::cocoaControl(QCocoaWidget widget) const
         }
         case QCocoaPushButton: {
             NSButton *bc = (NSButton *)bv;
-            bc.buttonType = NSMomentaryPushButton;
+            bc.buttonType = NSMomentaryLightButton;
             bc.bezelStyle = NSRoundedBezelStyle;
             break;
         }
@@ -2961,7 +2961,7 @@ int QMacStyle::styleHint(StyleHint sh, const QStyleOption *opt, const QWidget *w
             QImage img;
 
             QSize pixmapSize = opt->rect.size();
-            if (pixmapSize.isValid()) {
+            if (!pixmapSize.isEmpty()) {
                 QPixmap pix(pixmapSize);
                 pix.fill(QColor(fillR, fillG, fillB));
                 QPainter pix_paint(&pix);
@@ -5978,12 +5978,10 @@ void QMacStyle::drawComplexControl(ComplexControl cc, const QStyleOptionComplex 
 #ifndef QT_NO_ACCESSIBILITY
             if (QStyleHelper::hasAncestor(opt->styleObject, QAccessible::ToolBar)) {
                 if (tb->subControls & SC_ToolButtonMenu) {
-                    QStyleOption arrowOpt(0);
+                    QStyleOption arrowOpt = *tb;
                     arrowOpt.rect = proxy()->subControlRect(cc, tb, SC_ToolButtonMenu, widget);
                     arrowOpt.rect.setY(arrowOpt.rect.y() + arrowOpt.rect.height() / 2);
                     arrowOpt.rect.setHeight(arrowOpt.rect.height() / 2);
-                    arrowOpt.state = tb->state;
-                    arrowOpt.palette = tb->palette;
                     proxy()->drawPrimitive(PE_IndicatorArrowDown, &arrowOpt, p, widget);
                 } else if ((tb->features & QStyleOptionToolButton::HasMenu)
                             && (tb->toolButtonStyle != Qt::ToolButtonTextOnly && !tb->icon.isNull())) {
@@ -7223,7 +7221,7 @@ static CGColorSpaceRef qt_mac_colorSpaceForDeviceType(const QPaintDevice *paintD
     returned if it can't be obtained. It is the caller's responsibility to
     CGContextRelease the context when finished using it.
 
-    \warning This function is only available on OS X.
+    \warning This function is only available on \macos.
     \warning This function is duplicated in the Cocoa platform plugin.
 */
 

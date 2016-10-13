@@ -32,9 +32,8 @@
     \brief The platforms supported by Qt.
 
     Qt is a commercial and open source licensed cross-platform application
-    and UI framework. It is developed by The Qt Company, a solely owned
-    entity of Digia Plc, together with the Qt Project Community under an
-    open source governance model.
+    and UI framework. It is developed by The Qt Company, together with the
+    Qt Project Community under an open source governance model.
 
     Using Qt, you can write GUI applications once and deploy them
     across desktop, mobile and embedded operating systems without
@@ -106,7 +105,7 @@
             \li \l{Platform and Compiler Notes - Android#Deployment}{Android}
             \li \l{Qt for iOS}{iOS}
             \li \l{Qt for Linux/X11 - Deployment}{Linux/X11}
-            \li \l{Qt for OS X - Deployment}{OS X}
+            \li \l{Qt for macOS - Deployment}{\macos}
             \li \l{Qt for Windows - Deployment}{Windows}
         \endlist
     \endlist
@@ -134,6 +133,10 @@
     they are tested automatically for every change submitted on that
     platform/compiler combination against the test suite available as part of
     Qt.
+
+    \note Individual modules might be available only on some platforms, or
+    they might not support all configurations. For more information, see the
+    documentation for each module.
 
     \b {See also}: \l {http://doc.qt.io/QtForDeviceCreation/qtee-supported-platforms.html}
                       {Qt for Device Creation: Supported Platforms}.

@@ -35,6 +35,8 @@
 #include "avfmediaplayerservice.h"
 #include "avfvideooutput.h"
 
+#include <qpointer.h>
+
 #import <AVFoundation/AVFoundation.h>
 
 QT_USE_NAMESPACE
@@ -105,15 +107,23 @@ static void *AVFMediaPlayerSessionObserverCurrentItemObservationContext = &AVFMe
         //Create an asset for inspection of a resource referenced by a given URL.
         //Load the values for the asset keys "tracks", "playable".
 
-        AVURLAsset *asset = [AVURLAsset URLAssetWithURL:m_URL options:nil];
-        NSArray *requestedKeys = [NSArray arrayWithObjects:AVF_TRACKS_KEY, AVF_PLAYABLE_KEY, nil];
+        // use __block to avoid maintaining strong references on variables captured by the
+        // following block callback
+        __block AVURLAsset *asset = [[AVURLAsset URLAssetWithURL:m_URL options:nil] retain];
+        __block NSArray *requestedKeys = [[NSArray arrayWithObjects:AVF_TRACKS_KEY, AVF_PLAYABLE_KEY, nil] retain];
+
+        __block AVFMediaPlayerSessionObserver *blockSelf = self;
+        QPointer<AVFMediaPlayerSession> session(m_session);
 
         // Tells the asset to load the values of any of the specified keys that are not already loaded.
         [asset loadValuesAsynchronouslyForKeys:requestedKeys completionHandler:
          ^{
              dispatch_async( dispatch_get_main_queue(),
                            ^{
-                                [self prepareToPlayAsset:asset withKeys:requestedKeys];
+                                if (session)
+                                    [blockSelf prepareToPlayAsset:asset withKeys:requestedKeys];
+                                 [asset release];
+                                 [requestedKeys release];
                             });
          }];
     }
@@ -458,15 +468,19 @@ void AVFMediaPlayerSession::setMedia(const QMediaContent &content, QIODevice *st
     m_requestedPosition = -1;
     Q_EMIT positionChanged(position());
 
-    QMediaPlayer::MediaStatus oldMediaStatus = m_mediaStatus;
+    const QMediaPlayer::MediaStatus oldMediaStatus = m_mediaStatus;
+    const QMediaPlayer::State oldState = m_state;
 
     if (content.isNull() || content.canonicalUrl().isEmpty()) {
         m_mediaStatus = QMediaPlayer::NoMedia;
-        if (m_state != QMediaPlayer::StoppedState)
-            Q_EMIT stateChanged(m_state = QMediaPlayer::StoppedState);
+        m_state = QMediaPlayer::StoppedState;
 
         if (m_mediaStatus != oldMediaStatus)
             Q_EMIT mediaStatusChanged(m_mediaStatus);
+
+        if (m_state != oldState)
+            Q_EMIT stateChanged(m_state);
+
         return;
     } else {
 
@@ -777,14 +791,15 @@ void AVFMediaPlayerSession::processEOS()
 #endif
     Q_EMIT positionChanged(position());
     m_mediaStatus = QMediaPlayer::EndOfMedia;
+    m_state = QMediaPlayer::StoppedState;
 
     // At this point, frames should not be rendered anymore.
     // Clear the output layer to make sure of that.
     if (m_videoOutput)
         m_videoOutput->setLayer(0);
 
-    Q_EMIT stateChanged(m_state = QMediaPlayer::StoppedState);
     Q_EMIT mediaStatusChanged(m_mediaStatus);
+    Q_EMIT stateChanged(m_state);
 }
 
 void AVFMediaPlayerSession::processLoadStateChange()
@@ -864,7 +879,11 @@ void AVFMediaPlayerSession::processMediaLoadError()
         m_requestedPosition = -1;
         Q_EMIT positionChanged(position());
     }
+
+    m_mediaStatus = QMediaPlayer::InvalidMedia;
+    m_state = QMediaPlayer::StoppedState;
+
     Q_EMIT error(QMediaPlayer::FormatError, tr("Failed to load media"));
-    Q_EMIT mediaStatusChanged(m_mediaStatus = QMediaPlayer::InvalidMedia);
-    Q_EMIT stateChanged(m_state = QMediaPlayer::StoppedState);
+    Q_EMIT mediaStatusChanged(m_mediaStatus);
+    Q_EMIT stateChanged(m_state);
 }

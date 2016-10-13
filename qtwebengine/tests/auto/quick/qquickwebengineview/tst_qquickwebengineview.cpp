@@ -22,6 +22,7 @@
 
 #include <QScopedPointer>
 #include <QtCore/qelapsedtimer.h>
+#include <QtGui/qpa/qwindowsysteminterface.h>
 #include <QtQml/QQmlEngine>
 #include <QtTest/QtTest>
 #include <private/qquickwebengineview_p.h>
@@ -61,6 +62,9 @@ private Q_SLOTS:
     void inputMethodHints();
     void basicRenderingSanity();
     void setZoomFactor();
+    void stopSettingFocusWhenDisabled();
+    void stopSettingFocusWhenDisabled_data();
+    void inputEventForwardingDisabledWhenActiveFocusOnPressDisabled();
 
 private:
     inline QQuickWebEngineView *newWebEngineView();
@@ -479,6 +483,157 @@ void tst_QQuickWebEngineView::setZoomFactor()
 
     view->setZoomFactor(5.5);
     QVERIFY(qFuzzyCompare(view->zoomFactor(), 2.5));
+}
+
+void tst_QQuickWebEngineView::stopSettingFocusWhenDisabled()
+{
+    QFETCH(bool, viewEnabled);
+    QFETCH(bool, activeFocusResult);
+
+    QQuickWebEngineView *view = webEngineView();
+    m_window->show();
+    view->setSize(QSizeF(640, 480));
+    view->setEnabled(viewEnabled);
+    view->loadHtml("<html><head><title>Title</title></head><body>Hello"
+                   "<input id=\"input\" type=\"text\"></body></html>");
+    QVERIFY(waitForLoadSucceeded(view));
+
+    // When enabled, the view should get active focus after the page is loaded.
+    QTRY_COMPARE_WITH_TIMEOUT(view->hasActiveFocus(), activeFocusResult, 1000);
+    view->runJavaScript("document.getElementById(\"input\").focus()");
+    QTRY_COMPARE_WITH_TIMEOUT(view->hasActiveFocus(), activeFocusResult, 1000);
+}
+
+void tst_QQuickWebEngineView::stopSettingFocusWhenDisabled_data()
+{
+    QTest::addColumn<bool>("viewEnabled");
+    QTest::addColumn<bool>("activeFocusResult");
+
+    QTest::newRow("enabled view gets active focus") << true << true;
+    QTest::newRow("disabled view does not get active focus") << false << false;
+}
+
+class MouseTouchEventRecordingItem : public QQuickItem {
+    Q_OBJECT
+public:
+    explicit MouseTouchEventRecordingItem(QQuickItem* child, QQuickItem *parent = 0) :
+        QQuickItem(parent), m_eventCounter(0), m_child(child) {
+        setFlag(ItemHasContents);
+        setAcceptedMouseButtons(Qt::AllButtons);
+        setAcceptHoverEvents(true);
+    }
+
+    bool event(QEvent *event) Q_DECL_OVERRIDE
+    {
+        switch (event->type()) {
+        case QEvent::TabletPress:
+        case QEvent::TabletRelease:
+        case QEvent::TabletMove:
+        case QEvent::MouseButtonPress:
+        case QEvent::MouseButtonRelease:
+        case QEvent::MouseButtonDblClick:
+        case QEvent::MouseMove:
+        case QEvent::TouchBegin:
+        case QEvent::TouchUpdate:
+        case QEvent::TouchEnd:
+        case QEvent::TouchCancel:
+            ++m_eventCounter;
+            event->accept();
+            return true;
+        default:
+            break;
+        }
+        return QQuickItem::event(event);
+    }
+
+    void clearEventCount()
+    {
+        m_eventCounter = 0;
+    }
+
+    int eventCount()
+    {
+        return m_eventCounter;
+    }
+
+public Q_SLOTS:
+    void changeWidth() {
+        if (m_child)
+            setWidth(m_child->width());
+    }
+
+    void changeHeight() {
+        if (m_child)
+            setHeight(m_child->height());
+    }
+
+private:
+    int m_eventCounter;
+    QQuickItem *m_child;
+};
+
+void tst_QQuickWebEngineView::inputEventForwardingDisabledWhenActiveFocusOnPressDisabled()
+{
+    QQuickWebEngineView *view = webEngineView();
+    MouseTouchEventRecordingItem item(view);
+    item.setParentItem(m_window->contentItem());
+
+    // Resize the event recorder whenever the view is resized, so that all event positions
+    // are contained in both of the item regions.
+    QObject::connect(view, &QQuickItem::widthChanged, &item,
+                     &MouseTouchEventRecordingItem::changeWidth);
+    QObject::connect(view, &QQuickItem::heightChanged, &item,
+                     &MouseTouchEventRecordingItem::changeHeight);
+    view->setParentItem(&item);
+    view->setSize(QSizeF(640, 480));
+    m_window->show();
+
+    // Simulate click and move of mouse, so that last known position in the application
+    // is updated, thus a mouse move event is not generated when we don't expect it.
+    QTest::mouseClick(view->window(), Qt::LeftButton);
+    QTRY_COMPARE(item.eventCount(), 2);
+    item.clearEventCount();
+
+    // First disable view, so it does not receive focus on page load.
+    view->setEnabled(false);
+    view->setActiveFocusOnPress(false);
+    view->loadHtml("<html><head>"
+                   "<script>"
+                   "window.onload = function() { document.getElementById(\"input\").focus(); }"
+                   "</script>"
+                   "<title>Title</title></head><body>Hello"
+                   "<input id=\"input\" type=\"text\"></body></html>");
+    QVERIFY(waitForLoadSucceeded(view));
+    QTRY_COMPARE_WITH_TIMEOUT(view->hasActiveFocus(), false, 1000);
+
+    // Enable the view back so we can try to interact with it.
+    view->setEnabled(true);
+
+    // Click on the view, to try and set focus.
+    QTest::mouseClick(view->window(), Qt::LeftButton);
+
+    // View should not have focus after click, because setActiveFocusOnPress is false.
+    QTRY_COMPARE_WITH_TIMEOUT(view->hasActiveFocus(), false, 1000);
+
+    // Now test sending various input events, to check that indeed all the input events are not
+    // forwarded to Chromium, but rather processed and accepted by the view's parent item.
+    QTest::mousePress(view->window(), Qt::LeftButton);
+    QTest::mouseRelease(view->window(), Qt::LeftButton);
+
+    QTouchDevice *device = new QTouchDevice;
+    device->setType(QTouchDevice::TouchScreen);
+    QWindowSystemInterface::registerTouchDevice(device);
+
+    QTest::touchEvent(view->window(), device).press(0, QPoint(0,0), view->window());
+    QTest::touchEvent(view->window(), device).move(0, QPoint(1, 1), view->window());
+    QTest::touchEvent(view->window(), device).release(0, QPoint(1, 1), view->window());
+
+    // We expect to catch 7 events - click = 2, press + release = 2, touches = 3.
+    QCOMPARE(item.eventCount(), 7);
+
+    // Manually forcing focus should still be possible.
+    view->forceActiveFocus();
+    QTRY_COMPARE_WITH_TIMEOUT(view->hasActiveFocus(), true, 1000);
 }
 
 QTEST_MAIN(tst_QQuickWebEngineView)

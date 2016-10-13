@@ -1013,7 +1013,7 @@ QWindow *QGuiApplication::topLevelAt(const QPoint &pos)
 
     \list
         \li \c android
-        \li \c cocoa is a platform plugin for OS X.
+        \li \c cocoa is a platform plugin for \macos.
         \li \c directfb
         \li \c eglfs is a platform plugin for running Qt5 applications on top of
             EGL and  OpenGL ES 2.0 without an actual windowing system (like X11
@@ -3275,28 +3275,6 @@ bool QGuiApplication::isSavingSession() const
     return d->is_saving_session;
 }
 
-/*!
-    \since 5.2
-
-    Function that can be used to sync Qt state with the Window Systems state.
-
-    This function will first empty Qts events by calling QCoreApplication::processEvents(),
-    then the platform plugin will sync up with the windowsystem, and finally Qts events
-    will be delived by another call to QCoreApplication::processEvents();
-
-    This function is timeconsuming and its use is discouraged.
-*/
-void QGuiApplication::sync()
-{
-    QCoreApplication::processEvents();
-    if (QGuiApplicationPrivate::platform_integration
-            && QGuiApplicationPrivate::platform_integration->hasCapability(QPlatformIntegration::SyncState)) {
-        QGuiApplicationPrivate::platform_integration->sync();
-        QCoreApplication::processEvents();
-        QWindowSystemInterface::flushWindowSystemEvents();
-    }
-}
-
 void QGuiApplicationPrivate::commitData()
 {
     Q_Q(QGuiApplication);
@@ -3320,6 +3298,28 @@ void QGuiApplicationPrivate::saveState()
     is_saving_session = false;
 }
 #endif //QT_NO_SESSIONMANAGER
+
+/*!
+    \since 5.2
+
+    Function that can be used to sync Qt state with the Window Systems state.
+
+    This function will first empty Qts events by calling QCoreApplication::processEvents(),
+    then the platform plugin will sync up with the windowsystem, and finally Qts events
+    will be delived by another call to QCoreApplication::processEvents();
+
+    This function is timeconsuming and its use is discouraged.
+*/
+void QGuiApplication::sync()
+{
+    QCoreApplication::processEvents();
+    if (QGuiApplicationPrivate::platform_integration
+            && QGuiApplicationPrivate::platform_integration->hasCapability(QPlatformIntegration::SyncState)) {
+        QGuiApplicationPrivate::platform_integration->sync();
+        QCoreApplication::processEvents();
+        QWindowSystemInterface::flushWindowSystemEvents();
+    }
+}
 
 /*!
     \property QGuiApplication::layoutDirection
@@ -3567,7 +3567,8 @@ QPixmap QGuiApplicationPrivate::getPixmapCursor(Qt::CursorShape cshape)
 
 void QGuiApplicationPrivate::notifyThemeChanged()
 {
-    if (!(applicationResourceFlags & ApplicationPaletteExplicitlySet)) {
+    if (!(applicationResourceFlags & ApplicationPaletteExplicitlySet) &&
+        !QCoreApplication::testAttribute(Qt::AA_SetPalette)) {
         clearPalette();
         initPalette();
     }

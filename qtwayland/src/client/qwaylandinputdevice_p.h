@@ -185,7 +185,6 @@ public:
     xkb_keymap *mXkbMap;
     xkb_state *mXkbState;
 #endif
-    struct wl_callback *mFocusCallback;
     uint32_t mNativeModifiers;
 
     int mRepeatKey;
@@ -196,9 +195,6 @@ public:
     xkb_keysym_t mRepeatSym;
 #endif
     QTimer mRepeatTimer;
-
-    static const wl_callback_listener callback;
-    static void focusCallback(void *data, struct wl_callback *callback, uint32_t time);
 
     Qt::KeyboardModifiers modifiers() const;
 
@@ -222,7 +218,7 @@ public:
 
     void pointer_enter(uint32_t serial, struct wl_surface *surface,
                        wl_fixed_t sx, wl_fixed_t sy) Q_DECL_OVERRIDE;
-    void pointer_leave(uint32_t time, struct wl_surface *surface);
+    void pointer_leave(uint32_t time, struct wl_surface *surface) Q_DECL_OVERRIDE;
     void pointer_motion(uint32_t time,
                         wl_fixed_t sx, wl_fixed_t sy) Q_DECL_OVERRIDE;
     void pointer_button(uint32_t serial, uint32_t time,

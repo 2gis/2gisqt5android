@@ -2314,8 +2314,8 @@ QModelIndex QTreeView::moveCursor(CursorAction cursorAction, Qt::KeyboardModifie
                     int visualColumn = d->header->visualIndex(current.column()) + 1;
                     while (visualColumn < d->model->columnCount(current.parent()) && isColumnHidden(d->header->logicalIndex(visualColumn)))
                         visualColumn++;
-
-                    QModelIndex next = current.sibling(current.row(), visualColumn);
+                    const int newColumn = d->header->logicalIndex(visualColumn);
+                    const QModelIndex next = current.sibling(current.row(), newColumn);
                     if (next.isValid())
                         return next;
                 }
@@ -3244,7 +3244,8 @@ void QTreeViewPrivate::drawAnimatedOperation(QPainter *painter) const
 QPixmap QTreeViewPrivate::renderTreeToPixmapForAnimation(const QRect &rect) const
 {
     Q_Q(const QTreeView);
-    QPixmap pixmap(rect.size());
+    QPixmap pixmap(rect.size() * q->devicePixelRatio());
+    pixmap.setDevicePixelRatio(q->devicePixelRatio());
     if (rect.size().isEmpty())
         return pixmap;
     pixmap.fill(Qt::transparent); //the base might not be opaque, and we don't want uninitialized pixels.

@@ -103,12 +103,12 @@
     To close the socket, call disconnectFromHost(). QAbstractSocket enters
     QAbstractSocket::ClosingState. After all pending data has been written to
     the socket, QAbstractSocket actually closes the socket, enters
-    QAbstractSocket::ClosedState, and emits disconnected(). If you want to
-    abort a connection immediately, discarding all pending data, call abort()
-    instead. If the remote host closes the connection, QAbstractSocket will
-    emit error(QAbstractSocket::RemoteHostClosedError), during which the socket
-    state will still be ConnectedState, and then the disconnected() signal
-    will be emitted.
+    QAbstractSocket::UnconnectedState, and emits disconnected(). If you want
+    to abort a connection immediately, discarding all pending data, call
+    abort() instead. If the remote host closes the connection,
+    QAbstractSocket will emit error(QAbstractSocket::RemoteHostClosedError),
+    during which the socket state will still be ConnectedState, and then the
+    disconnected() signal will be emitted.
 
     The port and address of the connected peer is fetched by calling
     peerPort() and peerAddress(). peerName() returns the host name of
@@ -420,7 +420,7 @@
     allowed to rebind, even if they pass ReuseAddressHint. This option
     provides more security than ShareAddress, but on certain operating
     systems, it requires you to run the server with administrator privileges.
-    On Unix and OS X, not sharing is the default behavior for binding
+    On Unix and \macos, not sharing is the default behavior for binding
     an address and port, so this option is ignored. On Windows, this
     option uses the SO_EXCLUSIVEADDRUSE socket option.
 
@@ -430,7 +430,7 @@
     socket option.
 
     \value DefaultForPlatform The default option for the current platform.
-    On Unix and OS X, this is equivalent to (DontShareAddress
+    On Unix and \macos, this is equivalent to (DontShareAddress
     + ReuseAddressHint), and on Windows, its equivalent to ShareAddress.
 */
 

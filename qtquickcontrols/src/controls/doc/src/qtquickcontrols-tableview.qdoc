@@ -243,7 +243,7 @@
     \endcode
 
     \b Example: To iterate over selected indexes, you can pass a callback function.
-                \a rowIndex is passed as as an argument to the callback function.
+                \a rowIndex is passed as an argument to the callback function.
     \code
         tableview.selection.forEach( function(rowIndex) {console.log(rowIndex)} )
     \endcode
@@ -288,12 +288,12 @@
 */
 
 /*!
-    \qmlpropertygroup TableView::section
+    \qmlpropertygroup QtQuick.Controls::TableView::section
     \qmlproperty string TableView::section.property
     \qmlproperty enumeration TableView::section.criteria
     \qmlproperty Component TableView::section.delegate
     \qmlproperty enumeration TableView::section.labelPositioning
 
     These properties determine the section labels.
-    \sa ListView::section
+    \sa {QtQuick::ListView::section}{ListView.section}
 */

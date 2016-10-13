@@ -744,6 +744,7 @@ public:
 #endif
 #ifndef QT_NO_OPENGL
     uint renderToTextureReallyDirty : 1;
+    uint renderToTextureComposeActive : 1;
 #endif
 
     // *************************** Platform specific ************************************
@@ -757,7 +758,6 @@ public:
 
     void setWindowRole();
     void sendStartupMessage(const char *message) const;
-    void setNetWmWindowTypes();
     void x11UpdateIsOpaque();
     bool isBackgroundInherited() const;
     void updateX11AcceptFocus();
@@ -854,6 +854,8 @@ public:
     static bool qt_widget_rgn(QWidget *, short, RgnHandle, bool);
     void registerTouchWindow(bool enable = true);
 #endif
+    void setNetWmWindowTypes(bool skipIfMissing = false);
+
     bool stealKeyboardGrab(bool grab);
     bool stealMouseGrab(bool grab);
 };

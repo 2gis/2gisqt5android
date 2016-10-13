@@ -167,8 +167,10 @@ protected:
 private Q_SLOTS:
     void mappingManagerInitialized();
     void mapZoomLevelChanged(qreal zoom);
+    void mapCenterChanged(const QGeoCoordinate &center);
     void pluginReady();
     void onMapChildrenChanged();
+    void onSupportedMapTypesChanged();
 
 private:
     void setupMapView(QDeclarativeGeoMapItemView *view);
@@ -198,6 +200,7 @@ private:
     QGeoShape m_region;
     QColor m_color;
     bool m_pendingFitViewport;
+    bool m_validRegion;
 
     friend class QDeclarativeGeoMapItem;
     friend class QDeclarativeGeoMapItemView;

@@ -8,6 +8,5 @@
     <file alias="backward-32.png">images/media-seek-backward-32.png</file>
     <file alias="forward-32.png">images/media-seek-forward-32.png</file>
     <file alias="stop-32.png">images/media-stop-32.png</file>
-    <file alias="quickplayer.png">images/quickplayer.png</file>
 </qresource>
 </RCC>

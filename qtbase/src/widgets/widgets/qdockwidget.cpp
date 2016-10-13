@@ -805,7 +805,8 @@ void QDockWidgetPrivate::endDrag(bool abort)
                 } else {
                     setResizerActive(false);
                 }
-                undockedGeometry = q->geometry();
+                if (q->isFloating()) // Might not be floating when dragging a QDockWidgetGroupWindow
+                    undockedGeometry = q->geometry();
                 q->activateWindow();
             } else {
                 // The tab was not plugged back in the QMainWindow but the QDockWidget cannot
@@ -1386,8 +1387,6 @@ void QDockWidget::changeEvent(QEvent *event)
                 if (QDockAreaLayoutInfo *info = winLayout->layoutState.dockAreaLayout.info(this))
                     info->updateTabBar();
             }
-            if (QDockWidgetGroupWindow *p = qobject_cast<QDockWidgetGroupWindow *>(parent()))
-                p->adjustFlags();
         }
 #endif // QT_NO_TABBAR
         break;
@@ -1445,8 +1444,6 @@ bool QDockWidget::event(QEvent *event)
     switch (event->type()) {
 #ifndef QT_NO_ACTION
     case QEvent::Hide:
-        if (d->state && d->state->dragging)
-            d->endDrag(true);
         if (layout != 0)
             layout->keepSize(this);
         d->toggleViewAction->setChecked(false);
@@ -1479,9 +1476,6 @@ bool QDockWidget::event(QEvent *event)
         }
         if (!isFloating() && layout != 0 && onTop)
             layout->raise(this);
-        if (QDockWidgetGroupWindow *p = qobject_cast<QDockWidgetGroupWindow *>(parent()))
-            p->adjustFlags();
-
         break;
     }
     case QEvent::WindowActivate:

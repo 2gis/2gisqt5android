@@ -508,7 +508,7 @@
       'use_custom_libcxx%': 0,
 
       # Use system libc++ instead of the default C++ library, usually libstdc++.
-      # This is intended for iOS builds only.
+      # This is intended for Linux/*BSD and iOS builds only.
       'use_system_libcxx%': 0,
 
       # Use a modified version of Clang to intercept allocated types and sizes
@@ -4354,6 +4354,14 @@
               '-fcolor-diagnostics',
             ],
           }],
+          ['clang==1 and use_system_libcxx==1', {
+            'cflags_cc': [
+              '-stdlib=libc++'
+            ],
+            'ldflags': [
+              '-stdlib=libc++'
+            ],
+          }],
           # Common options for AddressSanitizer, LeakSanitizer,
           # ThreadSanitizer and MemorySanitizer.
           ['asan==1 or lsan==1 or tsan==1 or msan==1 or ubsan==1 or ubsan_vptr==1', {
@@ -4704,6 +4712,26 @@
                   '-Wno-narrowing',
                   # TODO(thakis): Remove, http://crbug.com/263960
                   '-Wno-literal-suffix',
+                ],
+              }],
+            ],
+          }],
+          ['gcc_version>=60 and clang==0', {
+            'target_conditions': [
+              ['_toolset=="target"', {
+                'cflags_cc': [
+                  # V8 needs this, see https://bugs.chromium.org/p/v8/issues/detail?id=3782
+                  '-fno-delete-null-pointer-checks',
+                ],
+              }],
+            ],
+          }],
+          ['host_gcc_version>=60 and clang==0 and host_clang==0', {
+            'target_conditions': [
+              ['_toolset=="host"', {
+                'cflags_cc': [
+                  # V8 needs this, see https://bugs.chromium.org/p/v8/issues/detail?id=3782
+                  '-fno-delete-null-pointer-checks',
                 ],
               }],
             ],

@@ -100,6 +100,7 @@ public:
 
     QString httpCachePath() const;
     QString cookiesPath() const;
+    QString channelIdPath() const;
 
     QString httpUserAgent() const;
     void setHttpUserAgent(const QString &userAgent);
@@ -163,6 +164,7 @@ public:
 
 private:
     void updateCustomUrlSchemeHandlers();
+    void resetVisitedLinksManager();
 
     QString m_name;
     bool m_offTheRecord;

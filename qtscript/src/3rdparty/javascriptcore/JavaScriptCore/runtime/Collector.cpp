@@ -559,7 +559,7 @@ static inline void *currentThreadStackBaseQNX()
     static pthread_t stackThread;
     pthread_t thread = pthread_self();
     if (stackBase == 0 || thread != stackThread) {
-        struct _debug_thread_info threadInfo;
+        debug_thread_t threadInfo;
         memset(&threadInfo, 0, sizeof(threadInfo));
         threadInfo.tid = pthread_self();
         int fd = open("/proc/self", O_RDONLY);

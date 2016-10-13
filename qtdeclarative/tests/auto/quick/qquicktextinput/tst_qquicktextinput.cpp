@@ -158,6 +158,7 @@ private slots:
 #endif
     void readOnly();
     void focusOnPress();
+    void focusOnPressOnlyOneItem();
 
     void openInputPanel();
     void setHAlignClearCache();
@@ -3409,16 +3410,15 @@ void tst_qquicktextinput::focusOnPress()
     QCOMPARE(textInputObject->hasFocus(), false);
     QCOMPARE(textInputObject->hasActiveFocus(), false);
 
-    QPoint centerPoint(window.width()/2, window.height()/2);
     Qt::KeyboardModifiers noModifiers = 0;
-    QTest::mousePress(&window, Qt::LeftButton, noModifiers, centerPoint);
+    QTest::mousePress(&window, Qt::LeftButton, noModifiers);
     QGuiApplication::processEvents();
     QCOMPARE(textInputObject->hasFocus(), true);
     QCOMPARE(textInputObject->hasActiveFocus(), true);
     QCOMPARE(focusSpy.count(), 1);
     QCOMPARE(activeFocusSpy.count(), 1);
     QCOMPARE(textInputObject->selectedText(), QString());
-    QTest::mouseRelease(&window, Qt::LeftButton, noModifiers, centerPoint);
+    QTest::mouseRelease(&window, Qt::LeftButton, noModifiers);
 
     textInputObject->setFocusOnPress(false);
     QCOMPARE(textInputObject->focusOnPress(), false);
@@ -3432,13 +3432,13 @@ void tst_qquicktextinput::focusOnPress()
 
     // Wait for double click timeout to expire before clicking again.
     QTest::qWait(400);
-    QTest::mousePress(&window, Qt::LeftButton, noModifiers, centerPoint);
+    QTest::mousePress(&window, Qt::LeftButton, noModifiers);
     QGuiApplication::processEvents();
     QCOMPARE(textInputObject->hasFocus(), false);
     QCOMPARE(textInputObject->hasActiveFocus(), false);
     QCOMPARE(focusSpy.count(), 2);
     QCOMPARE(activeFocusSpy.count(), 2);
-    QTest::mouseRelease(&window, Qt::LeftButton, noModifiers, centerPoint);
+    QTest::mouseRelease(&window, Qt::LeftButton, noModifiers);
 
     textInputObject->setFocusOnPress(true);
     QCOMPARE(textInputObject->focusOnPress(), true);
@@ -3448,14 +3448,54 @@ void tst_qquicktextinput::focusOnPress()
     textInputObject->setProperty("selectOnFocus", true);
 
     QTest::qWait(400);
-    QTest::mousePress(&window, Qt::LeftButton, noModifiers, centerPoint);
+    QTest::mousePress(&window, Qt::LeftButton, noModifiers);
     QGuiApplication::processEvents();
     QCOMPARE(textInputObject->hasFocus(), true);
     QCOMPARE(textInputObject->hasActiveFocus(), true);
     QCOMPARE(focusSpy.count(), 3);
     QCOMPARE(activeFocusSpy.count(), 3);
     QCOMPARE(textInputObject->selectedText(), textInputObject->text());
-    QTest::mouseRelease(&window, Qt::LeftButton, noModifiers, centerPoint);
+    QTest::mouseRelease(&window, Qt::LeftButton, noModifiers);
+}
+
+void tst_qquicktextinput::focusOnPressOnlyOneItem()
+{
+    QQuickView window(testFileUrl("focusOnlyOneOnPress.qml"));
+    window.show();
+    window.requestActivate();
+    QTest::qWaitForWindowActive(&window);
+
+    QQuickTextInput *first = window.rootObject()->findChild<QQuickTextInput*>("first");
+    QQuickTextInput *second = window.rootObject()->findChild<QQuickTextInput*>("second");
+    QQuickTextInput *third = window.rootObject()->findChild<QQuickTextInput*>("third");
+
+    // second is focused onComplete
+    QVERIFY(second->hasActiveFocus());
+
+    // and first will try focus when we press it
+    QVERIFY(first->focusOnPress());
+
+    // write some text to start editing
+    QTest::keyClick(&window, Qt::Key_A);
+
+    // click the first input. naturally, we are giving focus on press, but
+    // second's editingFinished also attempts to assign focus. lastly, focus
+    // should bounce back to second from first's editingFinished signal.
+    //
+    // this is a contrived example to be sure, but at the end of this, the
+    // important thing is that only one thing should have activeFocus.
+    Qt::KeyboardModifiers noModifiers = 0;
+    QTest::mousePress(&window, Qt::LeftButton, noModifiers, QPoint(10, 10));
+
+    // make sure the press is processed.
+    QGuiApplication::processEvents();
+
+    QVERIFY(second->hasActiveFocus()); // make sure it's still there
+    QVERIFY(!third->hasActiveFocus()); // make sure it didn't end up anywhere else
+    QVERIFY(!first->hasActiveFocus()); // make sure it didn't end up anywhere else
+
+    // reset state
+    QTest::mouseRelease(&window, Qt::LeftButton, noModifiers, QPoint(10, 10));
 }
 
 void tst_qquicktextinput::openInputPanel()
@@ -3479,23 +3519,22 @@ void tst_qquicktextinput::openInputPanel()
     QCOMPARE(qApp->inputMethod()->isVisible(), false);
 
     // input panel should open on focus
-    QPoint centerPoint(view.width()/2, view.height()/2);
     Qt::KeyboardModifiers noModifiers = 0;
-    QTest::mousePress(&view, Qt::LeftButton, noModifiers, centerPoint);
+    QTest::mousePress(&view, Qt::LeftButton, noModifiers);
     QGuiApplication::processEvents();
     QVERIFY(input->hasActiveFocus());
     QCOMPARE(qApp->focusObject(), input);
     QCOMPARE(qApp->inputMethod()->isVisible(), true);
-    QTest::mouseRelease(&view, Qt::LeftButton, noModifiers, centerPoint);
+    QTest::mouseRelease(&view, Qt::LeftButton, noModifiers);
 
     // input panel should be re-opened when pressing already focused TextInput
     qApp->inputMethod()->hide();
     QCOMPARE(qApp->inputMethod()->isVisible(), false);
     QVERIFY(input->hasActiveFocus());
-    QTest::mousePress(&view, Qt::LeftButton, noModifiers, centerPoint);
+    QTest::mousePress(&view, Qt::LeftButton, noModifiers);
     QGuiApplication::processEvents();
     QCOMPARE(qApp->inputMethod()->isVisible(), true);
-    QTest::mouseRelease(&view, Qt::LeftButton, noModifiers, centerPoint);
+    QTest::mouseRelease(&view, Qt::LeftButton, noModifiers);
 
     // input panel should stay visible if focus is lost to another text inputor
     QSignalSpy inputPanelVisibilitySpy(qApp->inputMethod(), SIGNAL(visibleChanged()));
@@ -3518,8 +3557,8 @@ void tst_qquicktextinput::openInputPanel()
     input->setReadOnly(true);
     input->setFocus(true);
     QCOMPARE(qApp->inputMethod()->isVisible(), false);
-    QTest::mousePress(&view, Qt::LeftButton, noModifiers, centerPoint);
-    QTest::mouseRelease(&view, Qt::LeftButton, noModifiers, centerPoint);
+    QTest::mousePress(&view, Qt::LeftButton, noModifiers);
+    QTest::mouseRelease(&view, Qt::LeftButton, noModifiers);
     QGuiApplication::processEvents();
     QCOMPARE(qApp->inputMethod()->isVisible(), false);
 
@@ -3528,8 +3567,8 @@ void tst_qquicktextinput::openInputPanel()
     input->setFocus(false);
     input->setFocus(true);
     QCOMPARE(qApp->inputMethod()->isVisible(), false);
-    QTest::mousePress(&view, Qt::LeftButton, noModifiers, centerPoint);
-    QTest::mouseRelease(&view, Qt::LeftButton, noModifiers, centerPoint);
+    QTest::mousePress(&view, Qt::LeftButton, noModifiers);
+    QTest::mouseRelease(&view, Qt::LeftButton, noModifiers);
     QCOMPARE(qApp->inputMethod()->isVisible(), false);
 }
 

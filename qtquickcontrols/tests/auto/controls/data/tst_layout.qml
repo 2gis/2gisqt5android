@@ -53,5 +53,16 @@ TestCase {
         var object = Qt.createQmlObject('import QtQuick 2.2; import QtQuick.Layouts 1.0; QtObject { Layout.fillWidth: true }', testCase, '');
         object.destroy()
     }
+
+    function test_defaultPropertyAliasCrash() {
+        var containerUserComponent = Qt.createComponent("layout/ContainerUser.qml");
+        compare(containerUserComponent.status, Component.Ready);
+
+        var containerUser = containerUserComponent.createObject(testCase);
+        verify(containerUser);
+
+        // Shouldn't crash.
+        containerUser.destroy();
+    }
 }
 

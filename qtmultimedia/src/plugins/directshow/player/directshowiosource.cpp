@@ -42,9 +42,18 @@
 
 static const GUID directshow_subtypes[] =
 {
+    MEDIASUBTYPE_NULL,
     MEDIASUBTYPE_Avi,
+    MEDIASUBTYPE_Asf,
+    MEDIASUBTYPE_MPEG1Video,
+    MEDIASUBTYPE_QTMovie,
     MEDIASUBTYPE_WAVE,
-    MEDIASUBTYPE_NULL
+    MEDIASUBTYPE_AIFF,
+    MEDIASUBTYPE_AU,
+    MEDIASUBTYPE_DssVideo,
+    MEDIASUBTYPE_MPEG1Audio,
+    MEDIASUBTYPE_MPEG1System,
+    MEDIASUBTYPE_MPEG1VideoCD
 };
 
 DirectShowIOSource::DirectShowIOSource(DirectShowEventLoop *loop)
@@ -57,9 +66,16 @@ DirectShowIOSource::DirectShowIOSource(DirectShowEventLoop *loop)
     , m_allocator(0)
     , m_peerPin(0)
     , m_pinId(QLatin1String("Data"))
+    , m_queriedForAsyncReader(false)
 {
+    // This filter has only one possible output type, that is, a stream of data
+    // with no particular subtype. The graph builder will try every demux/decode filters
+    // to find one able to decode the stream.
+    //
+    // The filter works in pull mode, the downstream filter is responsible for requesting
+    // samples from this one.
+    //
     QVector<AM_MEDIA_TYPE> mediaTypes;
-
     AM_MEDIA_TYPE type =
     {
         MEDIATYPE_Stream,  // majortype
@@ -130,6 +146,7 @@ HRESULT DirectShowIOSource::QueryInterface(REFIID riid, void **ppvObject)
     } else if (riid == IID_IPin) {
         *ppvObject = static_cast<IPin *>(this);
     } else if (riid == IID_IAsyncReader) {
+        m_queriedForAsyncReader = true;
         *ppvObject = static_cast<IAsyncReader *>(m_reader);
     } else {
         *ppvObject = 0;
@@ -324,116 +341,72 @@ ULONG DirectShowIOSource::GetMiscFlags()
 // IPin
 HRESULT DirectShowIOSource::Connect(IPin *pReceivePin, const AM_MEDIA_TYPE *pmt)
 {
-    QMutexLocker locker(&m_mutex);
-    if (!pReceivePin) {
+    if (!pReceivePin)
         return E_POINTER;
-    } else if (m_state != State_Stopped) {
-        return VFW_E_NOT_STOPPED;
-    } else if (m_peerPin) {
-        return VFW_E_ALREADY_CONNECTED;
-    } else {
-        HRESULT hr = VFW_E_TYPE_NOT_ACCEPTED;
 
+    QMutexLocker locker(&m_mutex);
+
+    if (m_state != State_Stopped)
+        return VFW_E_NOT_STOPPED;
+
+    if (m_peerPin)
+        return VFW_E_ALREADY_CONNECTED;
+
+    // If we get a type from the graph manager, check that we support that
+    if (pmt && pmt->majortype != MEDIATYPE_Stream)
+        return VFW_E_TYPE_NOT_ACCEPTED;
+
+    // This filter only works in pull mode, the downstream filter must query for the
+    // AsyncReader interface during ReceiveConnection().
+    // If it doesn't, we can't connect to it.
+    m_queriedForAsyncReader = false;
+    HRESULT hr = 0;
+    // Negotiation of media type
+    // - Complete'ish type (Stream with subtype specified).
+    if (pmt && pmt->subtype != MEDIASUBTYPE_NULL /* aka. GUID_NULL */) {
+         hr = pReceivePin->ReceiveConnection(this, pmt);
+         // Update the media type for the current connection.
+         if (SUCCEEDED(hr))
+             m_connectionMediaType = *pmt;
+    } else if (pmt && pmt->subtype == MEDIATYPE_NULL) { // - Partial type (Stream, but no subtype specified).
+        m_connectionMediaType = *pmt;
+        // Check if the receiving pin accepts any of the streaming subtypes.
+        QVector<AM_MEDIA_TYPE>::const_iterator cit = m_mediaTypes.constBegin();
+        while (cit != m_mediaTypes.constEnd()) {
+            m_connectionMediaType.subtype = cit->subtype;
+            hr = pReceivePin->ReceiveConnection(this, &m_connectionMediaType);
+            if (SUCCEEDED(hr))
+                break;
+            ++cit;
+        }
+    } else { // - No media type specified.
+        // Check if the receiving pin accepts any of the streaming types.
+        QVector<AM_MEDIA_TYPE>::const_iterator cit = m_mediaTypes.constBegin();
+        while (cit != m_mediaTypes.constEnd()) {
+            hr = pReceivePin->ReceiveConnection(this, cit);
+            if (SUCCEEDED(hr)) {
+                m_connectionMediaType = *cit;
+                break;
+            }
+            ++cit;
+        }
+    }
+
+    if (SUCCEEDED(hr) && m_queriedForAsyncReader) {
         m_peerPin = pReceivePin;
         m_peerPin->AddRef();
-
-        if (!pmt) {
-            IEnumMediaTypes *mediaTypes = 0;
-            if (pReceivePin->EnumMediaTypes(&mediaTypes) == S_OK) {
-                for (AM_MEDIA_TYPE *type = 0;
-                        mediaTypes->Next(1, &type, 0) == S_OK;
-                        DirectShowMediaType::deleteType(type)) {
-                    switch (tryConnect(pReceivePin, type)) {
-                        case S_OK:
-                            DirectShowMediaType::freeData(type);
-                            mediaTypes->Release();
-                            return S_OK;
-                        case VFW_E_NO_TRANSPORT:
-                            hr = VFW_E_NO_TRANSPORT;
-                            break;
-                        default:
-                            break;
-                    }
-                }
-                mediaTypes->Release();
-            }
-            AM_MEDIA_TYPE type =
-            {
-                MEDIATYPE_Stream,  // majortype
-                MEDIASUBTYPE_NULL, // subtype
-                TRUE,              // bFixedSizeSamples
-                FALSE,             // bTemporalCompression
-                1,                 // lSampleSize
-                GUID_NULL,         // formattype
-                0,                 // pUnk
-                0,                 // cbFormat
-                0,                 // pbFormat
-            };
-
-            static const int count = sizeof(directshow_subtypes) / sizeof(GUID);
-
-            for (int i = 0; i < count; ++i) {
-                type.subtype = directshow_subtypes[i];
-
-                switch (tryConnect(pReceivePin, &type)) {
-                case S_OK:
-                    return S_OK;
-                case VFW_E_NO_TRANSPORT:
-                    hr = VFW_E_NO_TRANSPORT;
-                    break;
-                default:
-                    break;
-                }
-            }
-        } else if (pmt->majortype == MEDIATYPE_Stream &&  (hr = tryConnect(pReceivePin, pmt))) {
-            return S_OK;
-        }
-
-        m_peerPin->Release();
-        m_peerPin = 0;
-
-        m_mediaType.clear();
-
-        return hr;
-    }
-}
-
-HRESULT DirectShowIOSource::tryConnect(IPin *pin, const AM_MEDIA_TYPE *type)
-{
-    m_mediaType = *type;
-
-    HRESULT hr = pin->ReceiveConnection(this, type);
-
-    if (!SUCCEEDED(hr)) {
+    } else {
+        pReceivePin->Disconnect();
         if (m_allocator) {
             m_allocator->Release();
             m_allocator = 0;
         }
-    } else if (!m_allocator) {
-        hr = VFW_E_NO_TRANSPORT;
+        if (!m_queriedForAsyncReader)
+            hr = VFW_E_NO_TRANSPORT;
 
-        if (IMemInputPin *memPin = com_cast<IMemInputPin>(pin, IID_IMemInputPin)) {
-            if ((m_allocator = com_new<IMemAllocator>(CLSID_MemoryAllocator))) {
-                ALLOCATOR_PROPERTIES properties;
-                if (memPin->GetAllocatorRequirements(&properties) == S_OK
-                        || m_allocator->GetProperties(&properties) == S_OK) {
-                    if (properties.cbAlign == 0)
-                        properties.cbAlign = 1;
-
-                    ALLOCATOR_PROPERTIES actualProperties;
-                    if (SUCCEEDED(hr = m_allocator->SetProperties(&properties, &actualProperties)))
-                        hr = memPin->NotifyAllocator(m_allocator, TRUE);
-                }
-                if (!SUCCEEDED(hr)) {
-                    m_allocator->Release();
-                    m_allocator = 0;
-                }
-            }
-            memPin->Release();
-        }
-        if (!SUCCEEDED(hr))
-            pin->Disconnect();
+        m_connectionMediaType.clear();
     }
+
     return hr;
 }
 
@@ -447,6 +420,8 @@ HRESULT DirectShowIOSource::ReceiveConnection(IPin *pConnector, const AM_MEDIA_T
 
 HRESULT DirectShowIOSource::Disconnect()
 {
+    QMutexLocker locker(&m_mutex);
+
     if (!m_peerPin) {
         return S_FALSE;
     } else if (m_state != State_Stopped) {
@@ -464,8 +439,6 @@ HRESULT DirectShowIOSource::Disconnect()
 
         m_peerPin->Release();
         m_peerPin = 0;
-
-        m_mediaType.clear();
 
         return S_OK;
     }
@@ -504,7 +477,7 @@ HRESULT DirectShowIOSource::ConnectionMediaType(AM_MEDIA_TYPE *pmt)
 
             return VFW_E_NOT_CONNECTED;
         } else {
-            DirectShowMediaType::copy(pmt, m_mediaType);
+            DirectShowMediaType::copy(pmt, m_connectionMediaType);
 
             return S_OK;
         }

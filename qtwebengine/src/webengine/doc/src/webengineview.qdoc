@@ -47,8 +47,11 @@
     \section2 Loading Web Pages
 
     An application can load pages into the WebEngineView, using either the \l url property or the
-    \l loadHtml method and navigate within the view's session history. The history is represented
-    by a WebEngineHistory data model that is held by the \l navigationHistory property.
+    \l loadHtml method and navigate within the view's session history. The GET
+    method is always used to load URLs.
+
+    The history is represented by a WebEngineHistory data model that is held by
+    the \l navigationHistory property.
 
     The following sample QML application loads a web page using the \c url property:
 
@@ -471,10 +474,9 @@
 */
 
 /*!
-    \qmlsignal WebEngineView::loadingChanged(loadRequest)
+    \qmlsignal WebEngineView::loadingChanged(WebEngineLoadRequest loadRequest)
 
     This signal is emitted when a page load begins, ends, or fails.
-    The corresponding handler is \c onLoadingChanged.
 
     When handling the signal with \c onLoadingChanged, various read-only
     parameters are available on the \a loadRequest:
@@ -504,33 +506,27 @@
 */
 
 /*!
-    \qmlsignal WebEngineView::certificateError(error)
+    \qmlsignal WebEngineView::certificateError(WebEngineCertificateError error)
     \since QtWebEngine 1.1
 
     This signal is emitted when an invalid certificate error is raised while loading a given request.
 
     The certificate error can be handled by using the methods of the WebEngineCertificateError
     type.
-
-    The corresponding handler is \c onCertificateError.
-
-    \sa WebEngineCertificateError
 */
 
 /*!
-    \qmlsignal WebEngineView::linkHovered(hoveredUrl)
+    \qmlsignal WebEngineView::linkHovered(url hoveredUrl)
 
     Within a mouse-driven interface, this signal is emitted when a mouse
     pointer passes over a link, corresponding to the \c{mouseover} DOM
     event. This event may also occur in touch interfaces for \c{mouseover}
     events that are not cancelled with \c{preventDefault()}. \a{hoveredUrl}
     provides the link's location.
-
-    The corresponding handler is \c onLinkHovered.
 */
 
 /*!
-    \qmlsignal WebEngineView::javaScriptConsoleMessage(JavaScriptConsoleMessageLevel level, message, lineNumber, sourceID)
+    \qmlsignal WebEngineView::javaScriptConsoleMessage(JavaScriptConsoleMessageLevel level, string message, int lineNumber, string sourceID)
     This signal is emitted when a JavaScript program tries to print a \a message to the web browser's console.
 
     For example, in case of evaluation errors the source URL may be provided in \a sourceID as well
@@ -539,14 +535,14 @@
     \a level indicates the severity of the event that triggered the message, that is, whether it
     was triggered by an error or a less severe event.
 
-    The corresponding handler is \c onJavaScriptConsoleMessage. If no handler is specified,
-    the view will log the messages into a \c js \l{QLoggingCategory}{logging category}.
+    If no handler is specified, the view will log the messages into a \c js
+    \l{QLoggingCategory}{logging category}.
 
     \sa{Console Logging}
 */
 
 /*!
-    \qmlsignal WebEngineView::newViewRequested(request)
+    \qmlsignal WebEngineView::newViewRequested(WebEngineViewRequest request)
     \since QtWebEngine 1.1
 
     This signal is emitted when a page load is requested to happen in a separate
@@ -561,9 +557,7 @@
 
     \snippet snippets/qtwebengine_webengineview_newviewrequested.qml 0
 
-    The corresponding handler is \c onNewViewRequested.
-
-    \sa WebEngineNewViewRequest, NewViewDestination, {WebEngine Quick Nano Browser}
+    \sa NewViewDestination, {WebEngine Quick Nano Browser}
 */
 
 /*!
@@ -573,13 +567,11 @@
     This signal is emitted when the web page requests fullscreen mode through the
     JavaScript API.
 
-    The corresponding handler is \c onFullScreenRequested.
-
-    \sa WebEngineFullScreenRequest, isFullScreen
+    \sa isFullScreen
 */
 
 /*!
-    \qmlsignal WebEngineView::activeFocusOnPressChanged(bool)
+    \qmlsignal WebEngineView::activeFocusOnPressChanged(bool activeFocusOnPress)
     \since QtWebEngine 1.2
 
     This signal is emitted when the ability of the web engine view to get focus when clicked
@@ -613,8 +605,6 @@
 
     This signal is emitted whenever the page requests the web browser window to be closed,
     for example through the JavaScript \c{window.close()} call.
-
-    The corresponding handler is \c onWindowCloseRequested.
 */
 
 /*!
@@ -622,18 +612,18 @@
 
     Describes various high-level error types:
 
-    \value WebEngineView::NoErrorDomain
-    \value WebEngineView::InternalErrorDomain
+    \value WebEngineView.NoErrorDomain
+    \value WebEngineView.InternalErrorDomain
             Content fails to be interpreted by Qt WebEngine.
-    \value WebEngineView::ConnectionErrorDomain
+    \value WebEngineView.ConnectionErrorDomain
             Error results from faulty network connection.
-    \value WebEngineView::CertificateErrorDomain
+    \value WebEngineView.CertificateErrorDomain
             Error related to the SSL/TLS certficate.
-    \value WebEngineView::HttpErrorDomain
+    \value WebEngineView.HttpErrorDomain
             Error related to the HTTP connection.
-    \value WebEngineView::FtpErrorDomain
+    \value WebEngineView.FtpErrorDomain
             Error related to the FTP connection.
-    \value WebEngineView::DnsErrorDomain
+    \value WebEngineView.DnsErrorDomain
             Error related to the DNS connection.
 */
 
@@ -642,11 +632,11 @@
 
     Indicates the severity of a JavaScript console message:
 
-    \value  InfoMessageLevel
+    \value  WebEngineView.InfoMessageLevel
             Message is purely informative and can safely be ignored.
-    \value  WarningMessageLevel
+    \value  WebEngineView.WarningMessageLevel
             Message indicates there might be a problem that may need attention.
-    \value  ErrorMessageLevel
+    \value  WebEngineView.ErrorMessageLevel
             Message indicates there has been an error.
 */
 
@@ -655,11 +645,11 @@
 
     Reflects a page's load status:
 
-    \value  LoadStartedStatus
+    \value  WebEngineView.LoadStartedStatus
             Page is currently loading.
-    \value  LoadSucceededStatus
+    \value  WebEngineView.LoadSucceededStatus
             Page has successfully loaded, and is not currently loading.
-    \value  LoadFailedStatus
+    \value  WebEngineView.LoadFailedStatus
             Page has failed to load, and is not currently loading.
 */
 
@@ -668,16 +658,16 @@
 
     Describes how to open a new view:
 
-    \value WebEngineView::NewViewInWindow
+    \value WebEngineView.NewViewInWindow
             In a separate Window.
-    \value WebEngineView::NewViewInTab
+    \value WebEngineView.NewViewInTab
             In a tab of the same window.
-    \value WebEngineView::NewViewInDialog
+    \value WebEngineView.NewViewInDialog
             In a Window without a tab bar, toolbar, or URL bar.
-    \value WebEngineView::NewViewInBackgroundTab
+    \value WebEngineView.NewViewInBackgroundTab
             In a tab of the same window, without hiding the currently visible web engine view.
 
-    \sa WebEngineNewViewRequest::destination
+    \sa {WebEngineNewViewRequest::destination}{WebEngineNewViewRequest.destination}
 */
 
 /*!
@@ -686,8 +676,10 @@
     Describes the options available to the findText() function. The options
     can be OR-ed together from the following list:
 
-    \value FindBackward Searches backwards instead of forwards.
-    \value FindCaseSensitively By default findText() works case insensitive. Specifying
+    \value  WebEngineView.FindBackward
+            Searches backwards instead of forwards.
+    \value  WebEngineView.FindFlags FindCaseSensitively
+            By default findText() works case insensitive. Specifying
             this option changes the behavior to a case sensitive find operation.
 
     \sa findText()
@@ -699,13 +691,13 @@
 
     Describes the status with which the render process terminated:
 
-    \value  NormalTerminationStatus
+    \value  WebEngineView.NormalTerminationStatus
             The render process terminated normally.
-    \value  AbnormalTerminationStatus
+    \value  WebEngineView.AbnormalTerminationStatus
             The render process terminated with a non-zero exit status.
-    \value  CrashedTerminationStatus
+    \value  WebEngineView.CrashedTerminationStatus
             The render process crashed, for example because of a segmentation fault.
-    \value  KilledTerminationStatus
+    \value  WebEngineView.KilledTerminationStatus
             The render process was killed, for example by \c SIGKILL or task manager kill.
 */
 
@@ -715,66 +707,68 @@
 
     Describes the types of action that can be performed on a web page:
 
-    \value  NoWebAction
+    \value  WebEngineView.NoWebAction
             No action is triggered.
-    \value  Back
+    \value  WebEngineView.Back
             Navigate back in the history of navigated links.
-    \value  Forward
+    \value  WebEngineView.Forward
             Navigate forward in the history of navigated links.
-    \value  Stop
+    \value  WebEngineView.Stop
             Stop loading the current page.
-    \value  Reload
+    \value  WebEngineView.Reload
             Reload the current page.
-    \value  ReloadAndBypassCache
+    \value  WebEngineView.ReloadAndBypassCache
             Reload the current page, but do not use any local cache.
-    \value  Cut
+    \value  WebEngineView.Cut
             Cut the content currently selected into the clipboard.
-    \value  Copy
+    \value  WebEngineView.Copy
             Copy the content currently selected into the clipboard.
-    \value  Paste
+    \value  WebEngineView.Paste
             Paste content from the clipboard.
-    \value  Undo
+    \value  WebEngineView.Undo
             Undo the last editing action.
-    \value  Redo
+    \value  WebEngineView.Redo
             Redo the last editing action.
-    \value  SelectAll
+    \value  WebEngineView.SelectAll
             Select all content.
-    \value  PasteAndMatchStyle
+    \value  WebEngineView.PasteAndMatchStyle
             Paste content from the clipboard with current style.
-    \value  OpenLinkInThisWindow
+    \value  WebEngineView.OpenLinkInThisWindow
             Open the current link in the current window. (Added in Qt 5.6)
-    \value  OpenLinkInNewWindow
+    \value  WebEngineView.OpenLinkInNewWindow
             Open the current link in a new window. (Added in Qt 5.6)
-    \value  OpenLinkInNewTab
+    \value  WebEngineView.OpenLinkInNewTab
             Open the current link in a new tab. (Added in Qt 5.6)
-    \value  CopyLinkToClipboard
+    \value  WebEngineView.CopyLinkToClipboard
             Copy the current link to the clipboard. (Added in Qt 5.6)
-    \value  CopyImageToClipboard
+    \value  WebEngineView.CopyImageToClipboard
             Copy the clicked image to the clipboard. (Added in Qt 5.6)
-    \value  CopyImageUrlToClipboard
+    \value  WebEngineView.CopyImageUrlToClipboard
             Copy the clicked image's URL to the clipboard. (Added in Qt 5.6)
-    \value  CopyMediaUrlToClipboard
+    \value  WebEngineView.CopyMediaUrlToClipboard
             Copy the hovered audio or video's URL to the clipboard. (Added in Qt 5.6)
-    \value  ToggleMediaControls
+    \value  WebEngineView.ToggleMediaControls
             Toggle between showing and hiding the controls for the hovered audio or video element.
             (Added in Qt 5.6)
-    \value  ToggleMediaLoop
+    \value  WebEngineView.ToggleMediaLoop
             Toggle whether the hovered audio or video should loop on completetion or not.
            (Added in Qt 5.6)
-    \value  ToggleMediaPlayPause
+    \value  WebEngineView.ToggleMediaPlayPause
             Toggle the play/pause state of the hovered audio or video element. (Added in Qt 5.6)
-    \value  ToggleMediaMute
+    \value  WebEngineView.ToggleMediaMute
             Mute or unmute the hovered audio or video element. (Added in Qt 5.6)
-    \value  DownloadLinkToDisk
-            Download the current link to the disk. (Added in Qt 5.6)
-    \value  DownloadImageToDisk
+    \value  WebEngineView.DownloadLinkToDisk
+            Download the current link to the disk. To implement download
+            actions, connect to the QWebEngineProfile::downloadRequested signal.
+            (Added in Qt 5.6)
+    \value  WebEngineView.DownloadImageToDisk
             Download the highlighted image to the disk. (Added in Qt 5.6)
-    \value  DownloadMediaToDisk
+    \value  WebEngineView.DownloadMediaToDisk
             Download the hovered audio or video to the disk. (Added in Qt 5.6)
-    \value  InspectElement
+    \value  WebEngineView.InspectElement
             Trigger any attached Web Inspector to inspect the highlighed element.
            (Added in Qt 5.6)
-    \value  ExitFullScreen
+    \value  WebEngineView.ExitFullScreen
             Exit the fullscreen mode. (Added in Qt 5.6)
 
     \omitvalue WebActionCount
@@ -786,16 +780,36 @@
     Describes the platform feature access categories that the user may be asked to grant or deny
     access to:
 
-    \value  Geolocation
+    \value  WebEngineView.Geolocation
             Location hardware or service.
-    \value  MediaAudioCapture
+    \value  WebEngineView.MediaAudioCapture
             Audio capture devices, such as microphones.
-    \value  MediaVideoCapture
+    \value  WebEngineView.MediaVideoCapture
             Video devices, such as cameras.
-    \value  MediaAudioVideoCapture
+    \value  WebEngineView.MediaAudioVideoCapture
             Both audio and video capture devices.
 
     \sa featurePermissionRequested(), grantFeaturePermission()
+*/
+
+/*!
+    \qmlproperty bool WebEngineView::activeFocusOnPress
+    \since QtWebEngine 1.2
+
+    Specifies whether the view should gain active focus when pressed.
+    The default value is \c true.
+*/
+
+/*!
+    \qmlproperty bool WebEngineView::backgroundColor
+    \since QtWebEngine 1.2
+
+    Changes the color of the WebEngineView's background, behind the document's
+    body. Can be set to \c "transparent" or to a translucent color to see
+    through the document or to match the web content in a hybrid app to prevent
+    the white flashes that may appear during loading.
+
+    The default value is white.
 */
 
 /*!

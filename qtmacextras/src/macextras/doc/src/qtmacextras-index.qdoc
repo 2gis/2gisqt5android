@@ -41,10 +41,10 @@
 /*!
     \page qtmacextras-index.html
     \title Qt Mac Extras
-    \brief Provides functionality specific to the OS X operating system.
+    \brief Provides functionality specific to the \macos operating system.
 
     Qt Mac Extras provide classes and functions that enable you to use
-    miscellaneous functionality specific to the OS X and iOS operating systems.
+    miscellaneous functionality specific to the \macos and iOS operating systems.
 
     \section1 Getting Started
 

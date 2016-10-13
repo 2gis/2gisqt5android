@@ -1,6 +1,6 @@
 /****************************************************************************
 **
-** Copyright (C) 2015 The Qt Company Ltd.
+** Copyright (C) 2016 The Qt Company Ltd.
 ** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtWebEngine module of the Qt Toolkit.
@@ -483,12 +483,25 @@ static inline double currentTimeForEvent(const QInputEvent* event)
 
 static WebMouseEvent::Button mouseButtonForEvent(QMouseEvent *event)
 {
-    if (event->button() == Qt::LeftButton || (event->buttons() & Qt::LeftButton))
+    if (event->button() == Qt::LeftButton)
         return WebMouseEvent::ButtonLeft;
-    else if (event->button() == Qt::RightButton || (event->buttons() & Qt::RightButton))
+    else if (event->button() == Qt::RightButton)
         return WebMouseEvent::ButtonRight;
-    else if (event->button() == Qt::MidButton || (event->buttons() & Qt::MidButton))
+    else if (event->button() == Qt::MidButton)
         return WebMouseEvent::ButtonMiddle;
+
+    if (event->type() != QEvent::MouseMove)
+        return WebMouseEvent::ButtonNone;
+
+    // This is technically wrong, mouse move should always have ButtonNone,
+    // but it is consistent with aura and selection code depends on it:
+    if (event->buttons() & Qt::LeftButton)
+        return WebMouseEvent::ButtonLeft;
+    else if (event->buttons() & Qt::RightButton)
+        return WebMouseEvent::ButtonRight;
+    else if (event->buttons() & Qt::MidButton)
+        return WebMouseEvent::ButtonMiddle;
+
     return WebMouseEvent::ButtonNone;
 }
 
@@ -656,14 +669,11 @@ blink::WebMouseWheelEvent WebEventFactory::toWebWheelEvent(QWheelEvent *ev, doub
     webEvent.modifiers = modifiersForEvent(ev);
     webEvent.timeStampSeconds = currentTimeForEvent(ev);
 
-    if (ev->orientation() == Qt::Horizontal)
-        webEvent.wheelTicksX = ev->delta() / 120.0f;
-    else
-        webEvent.wheelTicksY = ev->delta() / 120.0f;
+    webEvent.wheelTicksX = static_cast<float>(ev->angleDelta().x()) / QWheelEvent::DefaultDeltasPerStep;
+    webEvent.wheelTicksY = static_cast<float>(ev->angleDelta().y()) / QWheelEvent::DefaultDeltasPerStep;
 
-
-    // Since we report the scroll by the pixel, convert the delta to pixel distance using standard scroll step.
-    // Use the same single scroll step as QTextEdit (in QTextEditPrivate::init [h,v]bar->setSingleStep)
+    // We can't use the device specific QWheelEvent::pixelDelta(), so we calculate
+    // a pixel delta based on ticks and scroll per line.
     static const float cDefaultQtScrollStep = 20.f;
 
     webEvent.deltaX = webEvent.wheelTicksX * wheelScrollLines * cDefaultQtScrollStep;

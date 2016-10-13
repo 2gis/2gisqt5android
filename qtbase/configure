@@ -543,7 +543,7 @@ if [ "$BUILD_ON_MAC" = "yes" ]; then
         exit 2
     fi
 
-    if ! /usr/bin/xcrun -find xcrun >/dev/null 2>&1; then
+    if ! /usr/bin/xcrun -find xcodebuild >/dev/null 2>&1; then
         echo >&2
         echo "   Xcode not set up properly. You may need to confirm the license" >&2
         echo "   agreement by running /usr/bin/xcodebuild without arguments." >&2
@@ -643,6 +643,7 @@ CFG_XRANDR=runtime
 CFG_XRENDER=auto
 CFG_MITSHM=auto
 CFG_OPENGL=auto
+CFG_OPENGLES3=yes # still depends on CFG_OPENGL, so auto in practice
 CFG_OPENVG=auto
 CFG_OPENVG_LC_INCLUDES=no
 CFG_OPENVG_SHIVA=auto
@@ -708,7 +709,6 @@ CFG_LIBINPUT=auto
 CFG_OBSOLETE_WAYLAND=no
 CFG_EVDEV=auto
 CFG_TSLIB=auto
-CFG_NIS=auto
 CFG_CUPS=auto
 CFG_ICONV=auto
 CFG_DBUS=auto
@@ -1276,6 +1276,13 @@ while [ "$#" -gt 0 ]; do
             [ "$VAL" = "yes" ] || [ "$VAL" = "no" ] ||
             [ "$VAL" = "es2" ]; then
             CFG_OPENGL="$VAL"
+        else
+            UNKNOWN_OPT=yes
+        fi
+        ;;
+    opengles3)
+        if [ "$VAL" = "no" ]; then
+            CFG_OPENGLES3="no"
         else
             UNKNOWN_OPT=yes
         fi
@@ -2033,13 +2040,6 @@ while [ "$#" -gt 0 ]; do
             UNKNOWN_OPT=yes
         fi
         ;;
-    nis)
-        if [ "$VAL" = "yes" ] || [ "$VAL" = "no" ]; then
-            CFG_NIS="$VAL"
-        else
-            UNKNOWN_OPT=yes
-        fi
-        ;;
     largefile)
         if [ "$VAL" = "yes" ] || [ "$VAL" = "no" ]; then
             CFG_LARGEFILE="$VAL"
@@ -2639,9 +2639,6 @@ Additional options:
     -silent ............ Reduce the build output so that warnings and errors
                          can be seen more easily.
 
-    -no-nis ............ Do not compile NIS support.
- *  -nis ............... Compile NIS support.
-
     -no-cups ........... Do not compile CUPS support.
  *  -cups .............. Compile CUPS support.
                          Requires cups/cups.h and libcups.so.2.
@@ -2870,10 +2867,17 @@ if [ -z "$PLATFORM" ]; then
         PLATFORM=ultrix-g++
         ;;
      FreeBSD:*)
-        PLATFORM=freebsd-clang
-        PLATFORM_NOTES="
-            - Also available for FreeBSD: freebsd-icc
-        "
+        if [ "$(uname -r | cut -d. -f1)" -ge 10 ]; then
+            PLATFORM=freebsd-clang
+            PLATFORM_NOTES="
+                - Also available for FreeBSD: freebsd-g++
+            "
+        else
+            PLATFORM=freebsd-g++
+            PLATFORM_NOTES="
+                - Also available for FreeBSD: freebsd-clang
+            "
+        fi
         ;;
      OpenBSD:*)
         PLATFORM=openbsd-g++
@@ -3012,7 +3016,10 @@ case "$XPLATFORM" in
     *unsupported*)
         ;;
     *android-g++*)
-        XPLATFORM_ANDROID=yes
+        XPLATFORM_ANDROID=g++
+        ;;
+    *android-clang*)
+        XPLATFORM_ANDROID=clang
         ;;
 esac
 
@@ -3216,9 +3223,12 @@ if ( [ "$CFG_XCB" = "system" ] || [ "$CFG_XCB" = "qt" ] ) && [ "$CFG_XKBCOMMON" 
     exit 101
 fi
 
-if [ "$XPLATFORM_ANDROID" = "yes" ]; then
+if [ "$XPLATFORM_ANDROID" != "no" ]; then
     if [ "$CFG_DBUS" = "auto" ]; then
         CFG_DBUS="no"
+    fi
+    if [ "$CFG_EGLFS" = "auto" ]; then
+        CFG_EGLFS="no"
     fi
     if [ -z "$CFG_DEFAULT_ANDROID_NDK_HOST" ]; then
         case $PLATFORM in
@@ -3423,8 +3433,7 @@ if [ "$XPLATFORM_IOS" = "yes" ]; then
     # If the user passes -sdk on the command line we build a SDK-specific Qt build.
     # Otherwise we build a joined simulator and device build, which is the default.
     if [ -z "$OPT_MAC_SDK" ]; then
-         QT_CONFIG="$QT_CONFIG build_all"
-         QTCONFIG_CONFIG="$QTCONFIG_CONFIG iphonesimulator_and_iphoneos"
+         QT_CONFIG="$QT_CONFIG build_all simulator_and_device"
     fi
 fi
 
@@ -3438,7 +3447,7 @@ QMAKE_CONF_COMPILER=`getXQMakeConf QMAKE_CXX`
 
 TEST_COMPILER=$QMAKE_CONF_COMPILER
 
-if [ "$XPLATFORM_ANDROID" = "yes" ] ; then
+if [ "$XPLATFORM_ANDROID" != "no" ] ; then
     ANDROID_NDK_TOOLCHAIN_PREFIX=
     ANDROID_NDK_TOOLS_PREFIX=
     ANDROID_PLATFORM_ARCH=
@@ -3478,7 +3487,11 @@ if [ "$XPLATFORM_ANDROID" = "yes" ] ; then
             exit 1
             ;;
     esac
-    QMAKE_CONF_COMPILER=$CFG_DEFAULT_ANDROID_NDK_ROOT/toolchains/$ANDROID_NDK_TOOLCHAIN_PREFIX-$CFG_DEFAULT_ANDROID_NDK_TOOLCHAIN_VERSION/prebuilt/$CFG_DEFAULT_ANDROID_NDK_HOST/bin/$ANDROID_NDK_TOOLS_PREFIX-g++
+    if [ "$XPLATFORM_ANDROID" = "g++" ] ; then
+        QMAKE_CONF_COMPILER=$CFG_DEFAULT_ANDROID_NDK_ROOT/toolchains/$ANDROID_NDK_TOOLCHAIN_PREFIX-$CFG_DEFAULT_ANDROID_NDK_TOOLCHAIN_VERSION/prebuilt/$CFG_DEFAULT_ANDROID_NDK_HOST/bin/$ANDROID_NDK_TOOLS_PREFIX-g++
+    else
+        QMAKE_CONF_COMPILER=$CFG_DEFAULT_ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/$CFG_DEFAULT_ANDROID_NDK_HOST/bin/clang++
+    fi
     TEST_COMPILER="$QMAKE_CONF_COMPILER --sysroot=$CFG_DEFAULT_ANDROID_NDK_ROOT/platforms/$CFG_DEFAULT_ANDROID_PLATFORM/$ANDROID_PLATFORM_ARCH/"
     if [ "$CFG_ANDROID_STYLE_ASSETS" = "yes" ]; then
         QMAKE_CONFIG="$QMAKE_CONFIG android-style-assets"
@@ -4280,7 +4293,12 @@ compileTest()
     if [ "$CFG_SHARED" = "no" ]; then
         test_config="$QMAKE_CONFIG static"
     fi
-    "$unixtests/compile.test" "$XQMAKESPEC" "$test_config" $OPT_VERBOSE "$relpath" "$outpath" "$path" "$name" $I_FLAGS $D_FLAGS $L_FLAGS "$@"
+    TEST_CONFIG_FLAGS=
+    if [ -z "$PKG_CONFIG" ]; then
+        TEST_CONFIG_FLAGS="QT_CONFIG+=no-pkg-config"
+    fi
+    echo $ECHO_N "checking for $name... $ECHO_C"
+    "$unixtests/compile.test" "$XQMAKESPEC" "$test_config" $OPT_VERBOSE "$relpath" "$outpath" "$path" "$name" $I_FLAGS $D_FLAGS $L_FLAGS $TEST_CONFIG_FLAGS "$@"
 }
 
 compileTestWithPkgConfig()
@@ -4579,7 +4597,7 @@ elif [ "$CFG_ARCH" != "mips" ]; then
 fi
 
 [ "$XPLATFORM_MINGW" = "yes" ] && QMakeVar add styles "windowsxp windowsvista"
-[ "$XPLATFORM_ANDROID" = "yes" ] && QMakeVar add styles "android"
+[ "$XPLATFORM_ANDROID" != "no" ] && QMakeVar add styles "android"
 
 # check IPC support
 if ! compileTest unix/ipc_sysv "ipc_sysv" ; then
@@ -4742,9 +4760,13 @@ if [ "$CFG_LIBPNG" = "auto" ]; then
 fi
 
 # detect dl
-if ! compileTest unix/libdl "libdl"; then
-    QMakeVar add DEFINES QT_NO_DYNAMIC_LIBRARY
+if compileTest unix/dlopen "dlopen"; then
     QMAKE_CONFIG="$QMAKE_CONFIG no-libdl"
+else
+    if ! compileTest unix/libdl "libdl"; then
+        QMAKE_CONFIG="$QMAKE_CONFIG no-libdl"
+        QMakeVar add DEFINES QT_NO_DYNAMIC_LIBRARY
+    fi
 fi
 
 if [ "$CFG_EGLFS" = "yes" ]; then
@@ -4763,8 +4785,9 @@ for _SQLDR in $CFG_SQL_AVAILABLE; do
 		[ -z "$CFG_MYSQL_CONFIG" ] && CFG_MYSQL_CONFIG=`"$WHICH" mysql_config`
                 if [ -x "$CFG_MYSQL_CONFIG" ]; then
                     QT_CFLAGS_MYSQL=`$CFG_MYSQL_CONFIG --include 2>/dev/null | filterIncludeOptions`
-                    QT_LFLAGS_MYSQL_R=`$CFG_MYSQL_CONFIG --libs_r 2>/dev/null | filterLibraryOptions`
-                    QT_LFLAGS_MYSQL=`$CFG_MYSQL_CONFIG --libs 2>/dev/null | filterLibraryOptions`
+                    # -rdynamic should not be returned by mysql_config, but is on RHEL 6.6
+                    QT_LFLAGS_MYSQL_R=`$CFG_MYSQL_CONFIG --libs_r 2>/dev/null | filterLibraryOptions | sed "s/-rdynamic//"`
+                    QT_LFLAGS_MYSQL=`$CFG_MYSQL_CONFIG --libs 2>/dev/null | filterLibraryOptions | sed "s/-rdynamic//"`
 		    QT_MYSQL_VERSION=`$CFG_MYSQL_CONFIG --version 2>/dev/null`
                     QT_MYSQL_VERSION_MAJOR=`echo $QT_MYSQL_VERSION | cut -d . -f 1`
                 fi
@@ -5008,23 +5031,6 @@ for _SQLDR in $CFG_SQL_AVAILABLE; do
             ;;
         esac
 done
-
-# auto-detect NIS support
-if [ "$CFG_NIS" != "no" ]; then
-    if compileTest unix/nis "NIS"; then
-        CFG_NIS=yes
-    else
-        if [ "$CFG_NIS" = "yes" ] && [ "$CFG_CONFIGURE_EXIT_ON_ERROR" = "yes" ]; then
-            echo "NIS support cannot be enabled due to functionality tests!"
-            echo " Turn on verbose messaging (-v) to $0 to see the final report."
-            echo " If you believe this message is in error you may use the continue"
-            echo " switch (-continue) to $0 to continue."
-            exit 101
-        else
-            CFG_NIS=no
-        fi
-    fi
-fi
 
 # auto-detect CUPS support
 if [ "$CFG_CUPS" != "no" ]; then
@@ -5347,7 +5353,7 @@ fi
 # compile-time differentiation and including the version specific (but backwards
 # compatible) ES headers (for example, GLES3/gl31.h). Other than that, there is
 # no difference in the configuration, even the library is the same.
-if [ "$CFG_OPENGL" = "es2" ]; then
+if [ "$CFG_OPENGL" = "es2" ] && [ "$CFG_OPENGLES3" = "yes" ]; then
     if compileTestWithPkgConfig glesv2 unix/opengles3 "OpenGL ES 3.0" ""; then
         # Add a define for ES3, in addition to ES and ES2.
         QCONFIG_FLAGS="$QCONFIG_FLAGS QT_OPENGL_ES_3"
@@ -5359,6 +5365,7 @@ if [ "$CFG_OPENGL" = "es2" ]; then
 fi
 
 # auto-detect FontConfig support
+ORIG_CFG_FREETYPE="$CFG_FREETYPE"
 if [ "$CFG_FONTCONFIG" != "no" ]; then
     if [ -n "$PKG_CONFIG" ] && $PKG_CONFIG --exists fontconfig --exists freetype2 2>/dev/null; then
         QT_CFLAGS_FONTCONFIG=`$PKG_CONFIG --cflags fontconfig --cflags freetype2 2>/dev/null`
@@ -5553,6 +5560,11 @@ if [ "$CFG_XCB" != "no" ]; then
 
         if [ "$CFG_XCB" = "qt" ]; then
             QT_CONFIG="$QT_CONFIG xcb-qt"
+
+            if compileTest qpa/xcb-glx "xcb-glx" $QMAKE_CFLAGS_XCB $QMAKE_LIBS_XCB; then
+                CFG_XCB_GLX=yes
+                QT_CONFIG="$QT_CONFIG xcb-glx"
+            fi
         else
             CFG_XCB="system"
             if [ -n "$PKG_CONFIG" ] && $PKG_CONFIG --exists "xcb >= 1.5" 2>/dev/null; then
@@ -6433,7 +6445,6 @@ elif [ "$CFG_ZLIB" = "system" ]; then
 fi
 
 [ "$CFG_MTDEV" = "yes" ] && QT_CONFIG="$QT_CONFIG mtdev"
-[ "$CFG_NIS" = "yes" ] && QT_CONFIG="$QT_CONFIG nis"
 [ "$CFG_CUPS" = "yes" ] && QT_CONFIG="$QT_CONFIG cups"
 [ "$CFG_ICONV" = "yes" ] && QT_CONFIG="$QT_CONFIG iconv"
 [ "$CFG_ICONV" = "sun" ] && QT_CONFIG="$QT_CONFIG sun-libiconv"
@@ -6691,7 +6702,7 @@ case "$QMAKE_CONF_COMPILER" in
     # Clang
     COMPILER_VERSION=`${QMAKE_CONF_COMPILER} -v 2>&1 | sed -n -E '
 /^Apple (clang|LLVM) version /{s///; s/^([0-9]*)\.([0-9]*).*$/QT_APPLE_CLANG_MAJOR_VERSION=\1; QT_APPLE_CLANG_MINOR_VERSION=\2/;p;q;}
-/^clang version /{s///; s/^([0-9]*)\.([0-9]*).*$/QT_CLANG_MAJOR_VERSION=\1; QT_CLANG_MINOR_VERSION=\2/;p;q;}'`
+/^(FreeBSD )?clang version /{s///; s/^([0-9]*)\.([0-9]*).*$/QT_CLANG_MAJOR_VERSION=\1; QT_CLANG_MINOR_VERSION=\2/;p;q;}'`
     eval "$COMPILER_VERSION"
     ;;
 *icpc)
@@ -6858,7 +6869,6 @@ QMakeVar set sql-plugins "$SQL_PLUGINS"
 [ "$CFG_INOTIFY" = "no" ]    && QCONFIG_FLAGS="$QCONFIG_FLAGS QT_NO_INOTIFY"
 [ "$CFG_EVENTFD" = "no" ]    && QCONFIG_FLAGS="$QCONFIG_FLAGS QT_NO_EVENTFD"
 [ "$CFG_CLOEXEC" = "yes" ]   && QCONFIG_FLAGS="$QCONFIG_FLAGS QT_THREADSAFE_CLOEXEC=1"
-[ "$CFG_NIS" = "no" ]        && QCONFIG_FLAGS="$QCONFIG_FLAGS QT_NO_NIS"
 [ "$CFG_OPENSSL" = "no" ]    && QCONFIG_FLAGS="$QCONFIG_FLAGS QT_NO_OPENSSL"
 [ "$CFG_OPENSSL" = "linked" ]&& QCONFIG_FLAGS="$QCONFIG_FLAGS QT_LINKED_OPENSSL"
 [ "$CFG_OPENSSL" = "no" ] && [ "$CFG_SECURETRANSPORT" = "no" ] && QCONFIG_FLAGS="$QCONFIG_FLAGS QT_NO_SSL"
@@ -7330,7 +7340,6 @@ report_support "    libproxy.............." "$CFG_LIBPROXY"
 report_support "    OpenSSL .............." "$CFG_OPENSSL" yes "loading libraries at run-time" linked "linked to the libraries"
 [ "$XPLATFORM_MAC" = "yes" ] && \
     report_support "    SecureTransport ......" "$CFG_SECURETRANSPORT"
-report_support "  NIS ...................." "$CFG_NIS"
 report_support "  OpenGL / OpenVG:"
 report_support "    EGL .................." "$CFG_EGL"
 report_support "    OpenGL ..............." "$CFG_OPENGL" yes "Desktop OpenGL" es2 "OpenGL ES 2.0+"
@@ -7403,6 +7412,15 @@ if [ "$CFG_SHARED" = "no" ]; then
     echo "WARNING: Using static linking will disable the use of dynamically"
     echo "loaded plugins. Make sure to import all needed static plugins,"
     echo "or compile needed modules into the library."
+fi
+if [ "$CFG_FREETYPE" = "system" ]; then
+    if [ "$ORIG_CFG_FREETYPE" = "qt" ]; then
+        echo
+        echo "WARNING: Bundled FreeType can't be used. FontConfig use requires system FreeType."
+    elif [ "$ORIG_CFG_FREETYPE" = "no" ]; then
+        echo
+        echo "WARNING: FreeType can't be disabled. FontConfig use requires system FreeType."
+    fi
 fi
 if [ "$CFG_OPENSSL" = "linked" ] && [ "$OPENSSL_LIBS" = "" ]; then
     echo

@@ -414,21 +414,44 @@ void QQuickItemKeyFilter::componentComplete()
 
 /*!
     \qmlproperty Item QtQuick::KeyNavigation::left
+
+    This property holds the item to assign focus to
+    when the left cursor key is pressed.
+*/
+
+/*!
     \qmlproperty Item QtQuick::KeyNavigation::right
+
+    This property holds the item to assign focus to
+    when the right cursor key is pressed.
+*/
+
+/*!
     \qmlproperty Item QtQuick::KeyNavigation::up
+
+    This property holds the item to assign focus to
+    when the up cursor key is pressed.
+*/
+
+/*!
     \qmlproperty Item QtQuick::KeyNavigation::down
 
-    These properties hold the item to assign focus to
-    when the left, right, up or down cursor keys
-    are pressed.
+    This property holds the item to assign focus to
+    when the down cursor key is pressed.
 */
 
 /*!
     \qmlproperty Item QtQuick::KeyNavigation::tab
+
+    This property holds the item to assign focus to
+    when the Tab key is pressed.
+*/
+
+/*!
     \qmlproperty Item QtQuick::KeyNavigation::backtab
 
-    These properties hold the item to assign focus to
-    when the Tab key or Shift+Tab key combination (Backtab) are pressed.
+    This property holds the item to assign focus to
+    when the Shift+Tab key combination (Backtab) is pressed.
 */
 
 QQuickKeyNavigationAttached::QQuickKeyNavigationAttached(QObject *parent)
@@ -5692,6 +5715,8 @@ bool QQuickItemPrivate::setEffectiveVisibleRecur(bool newEffectiveVisible)
         QQuickWindowPrivate *windowPriv = QQuickWindowPrivate::get(window);
         if (windowPriv->mouseGrabberItem == q)
             q->ungrabMouse();
+        if (!effectiveVisible)
+            q->ungrabTouchPoints();
     }
 
     bool childVisibilityChanged = false;
@@ -5740,6 +5765,8 @@ void QQuickItemPrivate::setEffectiveEnableRecur(QQuickItem *scope, bool newEffec
         QQuickWindowPrivate *windowPriv = QQuickWindowPrivate::get(window);
         if (windowPriv->mouseGrabberItem == q)
             q->ungrabMouse();
+        if (!effectiveEnable)
+            q->ungrabTouchPoints();
         if (scope && !effectiveEnable && activeFocus) {
             windowPriv->clearFocusInScope(
                     scope, q, Qt::OtherFocusReason, QQuickWindowPrivate::DontChangeFocusProperty | QQuickWindowPrivate::DontChangeSubFocusItem);

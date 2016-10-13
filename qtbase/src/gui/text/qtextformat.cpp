@@ -357,9 +357,10 @@ void QTextFormatPrivate::recalcFont() const
                 f.setPixelSize(props.at(i).value.toInt());
                 break;
             case QTextFormat::FontWeight: {
-                int weight = props.at(i).value.toInt();
-                if (weight == 0) weight = QFont::Normal;
-                f.setWeight(weight);
+                const QVariant weightValue = props.at(i).value;
+                int weight = weightValue.toInt();
+                if (weight >= 0 && weightValue.isValid())
+                    f.setWeight(weight);
                 break; }
             case QTextFormat::FontItalic:
                 f.setItalic(props.at(i).value.toBool());
@@ -1327,7 +1328,7 @@ bool QTextFormat::operator==(const QTextFormat &rhs) const
     \value WaveUnderline        The text is underlined using a wave shaped line.
     \value SpellCheckUnderline  The underline is drawn depending on the QStyle::SH_SpellCeckUnderlineStyle
                                 style hint of the QApplication style. By default this is mapped to
-                                WaveUnderline, on OS X it is mapped to DashDotLine.
+                                WaveUnderline, on \macos it is mapped to DashDotLine.
 
     \sa Qt::PenStyle
 */

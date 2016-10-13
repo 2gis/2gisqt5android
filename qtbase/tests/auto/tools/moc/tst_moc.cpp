@@ -1935,6 +1935,20 @@ void tst_Moc::warnings_data()
         << 1
         << QString("IGNORE_ALL_STDOUT")
         << QString(":2: Error: Macro invoked with too few parameters for a use of '#'");
+
+    QTest::newRow("QTBUG-54609: crash on invalid input")
+        << QByteArray::fromBase64("EAkJCQkJbGFzcyBjbGFzcyBiYWkcV2kgTUEKcGYjZGVmaW5lIE1BKFEs/4D/FoQ=")
+        << QStringList()
+        << 1
+        << QString("IGNORE_ALL_STDOUT")
+        << QString(":-1: Error: Unexpected character in macro argument list.");
+
+    QTest::newRow("QTBUG-54815: Crash on invalid input")
+        << QByteArray("class M{(})F<{}d000000000000000#0")
+        << QStringList()
+        << 0
+        << QString()
+        << QString("standard input:1: Note: No relevant classes found. No output generated.");
 }
 
 void tst_Moc::warnings()
@@ -1950,7 +1964,7 @@ void tst_Moc::warnings()
 
 #ifdef Q_CC_MSVC
     // for some reasons, moc compiled with MSVC uses a different output format
-    QRegExp lineNumberRe(":(\\d+):");
+    QRegExp lineNumberRe(":(-?\\d+):");
     lineNumberRe.setMinimal(true);
     expectedStdErr.replace(lineNumberRe, "(\\1):");
 #endif
