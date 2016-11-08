@@ -1,3 +1,5 @@
+/qtbase/config.tests/.qmake.cache
+/qtbase/.*.vars
 /qtbase/include/QtCore/qfeatures.h
 /qtbase/include/QtCore/qconfig.h
 /qtbase/include/QtCore/QtConfig
