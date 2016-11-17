@@ -3286,6 +3286,10 @@ if [ "$XPLATFORM_ANDROID" != "no" ]; then
         DeviceVar set DEFAULT_ANDROID_NDK_TOOLCHAIN_VERSION "$CFG_DEFAULT_ANDROID_NDK_TOOLCHAIN_VERSION"
 fi
 
+if [ ! -z "$QT_CCACHE_PATH" ]; then
+    DeviceVar set CCACHE_PATH "$QT_CCACHE_PATH"
+fi
+
 if [ -d "$PLATFORM" ]; then
   QMAKESPEC="$PLATFORM"
 else
