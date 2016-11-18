@@ -144,8 +144,14 @@ public class QtApplication extends Application
 
         for (Method m : m_delegateMethods.get(methodName)) {
             if (m.getParameterTypes().length == args.length) {
-                result.methodReturns = invokeDelegateMethod(m, args);
-                result.invoked = true;
+                try {
+                    result.methodReturns = m.invoke(m_delegateObject, args);
+                    result.invoked = true;
+                } catch (final Throwable throwable) {
+                    result.methodReturns = null;
+                    result.invoked = false;
+                    throwable.printStackTrace();
+                }
                 return result;
             }
         }
