@@ -718,10 +718,16 @@ public class QtActivity extends Activity
     @Override
     public boolean dispatchKeyEvent(KeyEvent event)
     {
-        if (QtApplication.m_delegateObject != null && QtApplication.dispatchKeyEvent != null)
-            return (Boolean) QtApplication.invokeDelegateMethod(QtApplication.dispatchKeyEvent, event);
-        else
-            return super.dispatchKeyEvent(event);
+        try {
+            if (QtApplication.m_delegateObject != null && QtApplication.dispatchKeyEvent != null)
+                return (Boolean) QtApplication.invokeDelegateMethod(QtApplication.dispatchKeyEvent, event);
+            else
+                return super.dispatchKeyEvent(event);
+        } catch (final Throwable throwable) {
+            Log.e(QtApplication.QtTAG, "Failed to call `dispatchKeyEvent`", throwable);
+        }
+
+        return false;
     }
     public boolean super_dispatchKeyEvent(KeyEvent event)
     {
@@ -732,10 +738,16 @@ public class QtActivity extends Activity
     @Override
     public boolean dispatchPopulateAccessibilityEvent(AccessibilityEvent event)
     {
-        if (QtApplication.m_delegateObject != null && QtApplication.dispatchPopulateAccessibilityEvent != null)
-            return (Boolean) QtApplication.invokeDelegateMethod(QtApplication.dispatchPopulateAccessibilityEvent, event);
-        else
-            return super.dispatchPopulateAccessibilityEvent(event);
+        try {
+            if (QtApplication.m_delegateObject != null && QtApplication.dispatchPopulateAccessibilityEvent != null)
+                return (Boolean) QtApplication.invokeDelegateMethod(QtApplication.dispatchPopulateAccessibilityEvent, event);
+            else
+                return super.dispatchPopulateAccessibilityEvent(event);
+        } catch (final Throwable throwable) {
+            Log.e(QtApplication.QtTAG, "Failed to call `dispatchPopulateAccessibilityEvent`", throwable);
+        }
+
+        return false;
     }
     public boolean super_dispatchPopulateAccessibilityEvent(AccessibilityEvent event)
     {
@@ -746,10 +758,16 @@ public class QtActivity extends Activity
     @Override
     public boolean dispatchTouchEvent(MotionEvent ev)
     {
-        if (QtApplication.m_delegateObject != null && QtApplication.dispatchTouchEvent != null)
-            return (Boolean) QtApplication.invokeDelegateMethod(QtApplication.dispatchTouchEvent, ev);
-        else
-            return super.dispatchTouchEvent(ev);
+        try {
+            if (QtApplication.m_delegateObject != null && QtApplication.dispatchTouchEvent != null)
+                return (Boolean) QtApplication.invokeDelegateMethod(QtApplication.dispatchTouchEvent, ev);
+            else
+                return super.dispatchTouchEvent(ev);
+        } catch (final Throwable throwable) {
+            Log.e(QtApplication.QtTAG, "Failed to call `dispatchTouchEvent`", throwable);
+        }
+
+        return false;
     }
     public boolean super_dispatchTouchEvent(MotionEvent event)
     {
@@ -760,10 +778,16 @@ public class QtActivity extends Activity
     @Override
     public boolean dispatchTrackballEvent(MotionEvent ev)
     {
-        if (QtApplication.m_delegateObject != null && QtApplication.dispatchTrackballEvent != null)
-            return (Boolean) QtApplication.invokeDelegateMethod(QtApplication.dispatchTrackballEvent, ev);
-        else
-            return super.dispatchTrackballEvent(ev);
+        try {
+            if (QtApplication.m_delegateObject != null && QtApplication.dispatchTrackballEvent != null)
+                return (Boolean) QtApplication.invokeDelegateMethod(QtApplication.dispatchTrackballEvent, ev);
+            else
+                return super.dispatchTrackballEvent(ev);
+        } catch (final Throwable throwable) {
+            Log.e(QtApplication.QtTAG, "Failed to call `dispatchTrackballEvent`", throwable);
+        }
+
+        return false;
     }
     public boolean super_dispatchTrackballEvent(MotionEvent event)
     {
@@ -1107,10 +1131,16 @@ public class QtActivity extends Activity
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event)
     {
-        if (QtApplication.m_delegateObject != null && QtApplication.onKeyDown != null)
-            return (Boolean) QtApplication.invokeDelegateMethod(QtApplication.onKeyDown, keyCode, event);
-        else
-            return super.onKeyDown(keyCode, event);
+        try {
+            if (QtApplication.m_delegateObject != null && QtApplication.onKeyDown != null)
+                return (Boolean) QtApplication.invokeDelegateMethod(QtApplication.onKeyDown, keyCode, event);
+            else
+                return super.onKeyDown(keyCode, event);
+        } catch (final Throwable throwable) {
+            Log.e(QtApplication.QtTAG, "Failed to call `onKeyDown`", throwable);
+        }
+
+        return false;
     }
     public boolean super_onKeyDown(int keyCode, KeyEvent event)
     {
@@ -1122,10 +1152,16 @@ public class QtActivity extends Activity
     @Override
     public boolean onKeyMultiple(int keyCode, int repeatCount, KeyEvent event)
     {
-        if (QtApplication.m_delegateObject != null && QtApplication.onKeyMultiple != null)
-            return (Boolean) QtApplication.invokeDelegateMethod(QtApplication.onKeyMultiple, keyCode, repeatCount, event);
-        else
-            return super.onKeyMultiple(keyCode, repeatCount, event);
+        try {
+            if (QtApplication.m_delegateObject != null && QtApplication.onKeyMultiple != null)
+                return (Boolean) QtApplication.invokeDelegateMethod(QtApplication.onKeyMultiple, keyCode, repeatCount, event);
+            else
+                return super.onKeyMultiple(keyCode, repeatCount, event);
+        } catch (final Throwable throwable) {
+            Log.e(QtApplication.QtTAG, "Failed to call `onKeyMultiple`", throwable);
+        }
+
+        return false;
     }
     public boolean super_onKeyMultiple(int keyCode, int repeatCount, KeyEvent event)
     {
@@ -1136,10 +1172,16 @@ public class QtActivity extends Activity
     @Override
     public boolean onKeyUp(int keyCode, KeyEvent event)
     {
-        if (QtApplication.m_delegateObject != null  && QtApplication.onKeyDown != null)
-            return (Boolean) QtApplication.invokeDelegateMethod(QtApplication.onKeyUp, keyCode, event);
-        else
-            return super.onKeyUp(keyCode, event);
+        try {
+            if (QtApplication.m_delegateObject != null  && QtApplication.onKeyUp != null)
+                return (Boolean) QtApplication.invokeDelegateMethod(QtApplication.onKeyUp, keyCode, event);
+            else
+                return super.onKeyUp(keyCode, event);
+        } catch (final Throwable throwable) {
+            Log.e(QtApplication.QtTAG, "Failed to call `onKeyUp`", throwable);
+        }
+
+        return false;
     }
     public boolean super_onKeyUp(int keyCode, KeyEvent event)
     {
@@ -1404,10 +1446,16 @@ public class QtActivity extends Activity
     @Override
     public boolean onTouchEvent(MotionEvent event)
     {
-        if (QtApplication.m_delegateObject != null  && QtApplication.onTouchEvent != null)
-            return (Boolean) QtApplication.invokeDelegateMethod(QtApplication.onTouchEvent, event);
-        else
-            return super.onTouchEvent(event);
+        try {
+            if (QtApplication.m_delegateObject != null  && QtApplication.onTouchEvent != null)
+                return (Boolean) QtApplication.invokeDelegateMethod(QtApplication.onTouchEvent, event);
+            else
+                return super.onTouchEvent(event);
+        } catch (final Throwable throwable) {
+            Log.e(QtApplication.QtTAG, "Failed to call `onTouchEvent`", throwable);
+        }
+
+        return false;
     }
     public boolean super_onTouchEvent(MotionEvent event)
     {
@@ -1418,10 +1466,16 @@ public class QtActivity extends Activity
     @Override
     public boolean onTrackballEvent(MotionEvent event)
     {
-        if (QtApplication.m_delegateObject != null  && QtApplication.onTrackballEvent != null)
-            return (Boolean) QtApplication.invokeDelegateMethod(QtApplication.onTrackballEvent, event);
-        else
-            return super.onTrackballEvent(event);
+        try {
+            if (QtApplication.m_delegateObject != null  && QtApplication.onTrackballEvent != null)
+                return (Boolean) QtApplication.invokeDelegateMethod(QtApplication.onTrackballEvent, event);
+            else
+                return super.onTrackballEvent(event);
+        } catch (final Throwable throwable) {
+            Log.e(QtApplication.QtTAG, "Failed to call `onTrackballEvent`", throwable);
+        }
+
+        return false;
     }
     public boolean super_onTrackballEvent(MotionEvent event)
     {
@@ -1518,10 +1572,16 @@ public class QtActivity extends Activity
     @Override
     public boolean onKeyLongPress(int keyCode, KeyEvent event)
     {
-        if (QtApplication.m_delegateObject != null  && QtApplication.onKeyLongPress != null)
-            return (Boolean) QtApplication.invokeDelegateMethod(QtApplication.onKeyLongPress, keyCode, event);
-        else
-            return super.onKeyLongPress(keyCode, event);
+        try {
+            if (QtApplication.m_delegateObject != null  && QtApplication.onKeyLongPress != null)
+                return (Boolean) QtApplication.invokeDelegateMethod(QtApplication.onKeyLongPress, keyCode, event);
+            else
+                return super.onKeyLongPress(keyCode, event);
+        } catch (final Throwable throwable) {
+            Log.e(QtApplication.QtTAG, "Failed to call `onKeyLongPress`", throwable);
+        }
+
+        return false;
     }
     public boolean super_onKeyLongPress(int keyCode, KeyEvent event)
     {
